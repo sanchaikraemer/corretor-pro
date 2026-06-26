@@ -783,9 +783,18 @@ async function init() {
   await renderRoute();
 
   const params = new URLSearchParams(location.search);
-  if (params.get("share_error")) {
+  const shareError = params.get("share_error");
+  if (shareError) {
     cleanShareQuery();
-    showToast("O arquivo compartilhado não pôde ser recebido. Envie um ZIP exportado do WhatsApp.", "error", 6500);
+    const messages = {
+      sem_arquivo: "O WhatsApp não enviou nenhum arquivo. Ao exportar a conversa, escolha “Incluir mídias” e compartilhe o arquivo.",
+      leitura: "Não foi possível ler o arquivo compartilhado. Exporte a conversa de novo e compartilhe.",
+      muito_grande: "Esta conversa é muito grande. Exporte um período menor e compartilhe novamente.",
+      armazenamento: "Não foi possível salvar o arquivo no aparelho. Verifique o espaço livre e tente outra vez.",
+      arquivo_invalido: "O WhatsApp não enviou um arquivo válido. Exporte a conversa com “Incluir mídias”.",
+      falha_ao_receber: "Houve uma falha ao receber o arquivo. Tente compartilhar novamente."
+    };
+    showToast(messages[shareError] || "O arquivo compartilhado não pôde ser recebido. Envie um ZIP exportado do WhatsApp.", "error", 8000);
   }
 
   const pending = await getPendingShare().catch(() => null);

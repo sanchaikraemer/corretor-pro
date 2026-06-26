@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v015";
+const BUILD_ID = "corretor-pro-v016";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -41,6 +41,11 @@ function ensureZipName(name) {
 }
 
 async function saveIncomingFile(file) {
+  // Lê os bytes de verdade. No Android, arquivos compartilhados por content://
+  // costumam vir "preguiçosos" (file.size pode ser 0 até a leitura), então
+  // forçar arrayBuffer garante que o ZIP com áudios seja salvo por inteiro.
+  const buffer = await file.arrayBuffer();
+  const type = file.type || "application/zip";
   const db = await openShareDatabase();
   try {
     await new Promise((resolve, reject) => {
@@ -48,9 +53,9 @@ async function saveIncomingFile(file) {
       transaction.objectStore(SHARE_STORE).put({
         id: SHARE_RECORD_ID,
         name: ensureZipName(file.name),
-        type: file.type || "application/zip",
-        size: file.size,
-        blob: file.slice(0, file.size, file.type || "application/zip"),
+        type,
+        size: buffer.byteLength,
+        blob: new Blob([buffer], { type }),
         receivedAt: new Date().toISOString()
       });
       transaction.oncomplete = () => resolve();
@@ -65,10 +70,11 @@ async function saveIncomingFile(file) {
 async function handleShareTarget(request) {
   const home = new URL("/", request.url);
 
+  // 1) Lê o multipart do compartilhamento.
+  let file;
   try {
     const formData = await request.formData();
-    let file = formData.get("conversation");
-
+    file = formData.get("conversation");
     if (!(file instanceof File)) {
       for (const value of formData.values()) {
         if (value instanceof File) {
@@ -77,25 +83,32 @@ async function handleShareTarget(request) {
         }
       }
     }
-
-    // O Android nem sempre preserva a extensão .zip no nome do arquivo
-    // compartilhado. Por isso aceitamos qualquer arquivo não vazio dentro do
-    // limite de tamanho e deixamos o app validar o conteúdo do ZIP (via JSZip).
-    const isFile = file instanceof File;
-    const validSize = isFile && file.size > 0 && file.size <= 500 * 1024 * 1024;
-
-    if (!isFile || !validSize) {
-      home.searchParams.set("share_error", "arquivo_invalido");
-      return Response.redirect(home.href, 303);
-    }
-
-    await saveIncomingFile(file);
-    home.searchParams.set("recebido", "1");
-    return Response.redirect(home.href, 303);
   } catch (error) {
-    home.searchParams.set("share_error", "falha_ao_receber");
+    home.searchParams.set("share_error", "leitura");
     return Response.redirect(home.href, 303);
   }
+
+  // 2) Confere que veio um arquivo (sem exigir extensão .zip nem tamanho > 0:
+  //    o app valida o conteúdo depois, e o tamanho pode vir 0 no Android).
+  if (!(file instanceof File)) {
+    home.searchParams.set("share_error", "sem_arquivo");
+    return Response.redirect(home.href, 303);
+  }
+  if (file.size > 500 * 1024 * 1024) {
+    home.searchParams.set("share_error", "muito_grande");
+    return Response.redirect(home.href, 303);
+  }
+
+  // 3) Salva o arquivo recebido para o app processar.
+  try {
+    await saveIncomingFile(file);
+  } catch (error) {
+    home.searchParams.set("share_error", "armazenamento");
+    return Response.redirect(home.href, 303);
+  }
+
+  home.searchParams.set("recebido", "1");
+  return Response.redirect(home.href, 303);
 }
 
 self.addEventListener("install", event => {
