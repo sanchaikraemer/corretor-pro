@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v017";
+const BUILD_ID = "corretor-pro-v018";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -41,10 +41,9 @@ function ensureZipName(name) {
 }
 
 async function saveIncomingFile(file) {
-  // Lê os bytes de verdade. No Android, arquivos compartilhados por content://
-  // costumam vir "preguiçosos" (file.size pode ser 0 até a leitura), então
-  // forçar arrayBuffer garante que o ZIP com áudios seja salvo por inteiro.
-  const buffer = await file.arrayBuffer();
+  // Guarda o próprio arquivo (File é um Blob). O IndexedDB persiste os bytes
+  // reais sem carregar tudo na memória — seguro mesmo para ZIPs grandes, e
+  // resolve o caso do Android reportar tamanho 0 antes da leitura.
   const type = file.type || "application/zip";
   const db = await openShareDatabase();
   try {
@@ -54,8 +53,8 @@ async function saveIncomingFile(file) {
         id: SHARE_RECORD_ID,
         name: ensureZipName(file.name),
         type,
-        size: buffer.byteLength,
-        blob: new Blob([buffer], { type }),
+        size: file.size,
+        blob: file,
         receivedAt: new Date().toISOString()
       });
       transaction.oncomplete = () => resolve();
@@ -94,7 +93,7 @@ async function handleShareTarget(request) {
     home.searchParams.set("share_error", "sem_arquivo");
     return Response.redirect(home.href, 303);
   }
-  if (file.size > 500 * 1024 * 1024) {
+  if (file.size > 1024 * 1024 * 1024) {
     home.searchParams.set("share_error", "muito_grande");
     return Response.redirect(home.href, 303);
   }

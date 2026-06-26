@@ -38,7 +38,7 @@ const syncDialog = document.querySelector("#sync-dialog");
 const syncForm = document.querySelector("#sync-form");
 const syncInput = document.querySelector("#sync-input");
 
-const APP_VERSION = "v017";
+const APP_VERSION = "v018";
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
   records: [],
@@ -791,7 +791,7 @@ async function init() {
     const messages = {
       sem_arquivo: "O WhatsApp não enviou nenhum arquivo. Ao exportar a conversa, escolha “Incluir mídias” e compartilhe o arquivo.",
       leitura: "Não foi possível ler o arquivo compartilhado. Exporte a conversa de novo e compartilhe.",
-      muito_grande: "Esta conversa é muito grande. Exporte um período menor e compartilhe novamente.",
+      muito_grande: "Esta conversa passou de 1 GB (as fotos e vídeos contam). Ao exportar, prefira um período menor para reduzir o tamanho.",
       armazenamento: "Não foi possível salvar o arquivo no aparelho. Verifique o espaço livre e tente outra vez.",
       arquivo_invalido: "O WhatsApp não enviou um arquivo válido. Exporte a conversa com “Incluir mídias”.",
       falha_ao_receber: "Houve uma falha ao receber o arquivo. Tente compartilhar novamente."
