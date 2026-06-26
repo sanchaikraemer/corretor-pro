@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=024";
+} from "./db.js?v=025";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=024";
+} from "./whatsapp.js?v=025";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v024";
+const APP_VERSION = "v025";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -691,6 +691,66 @@ function renderTextList(items) {
   return `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
+function getActionableAnalysisAlert(record, analysis) {
+  const alert = String(analysis?.alertaInformacaoIncompleta || "").trim();
+  const incompleteAudioCount = (record.timeline || []).filter(
+    item => item.type === "audio" && item.transcriptionStatus !== "done"
+  ).length;
+
+  if (incompleteAudioCount > 0) {
+    return alert || `${incompleteAudioCount} áudio${incompleteAudioCount === 1 ? " não foi transcrito" : "s não foram transcritos"}. A análise pode estar incompleta.`;
+  }
+  if (!alert) return "";
+
+  const normalized = normalizeComparable(alert);
+  const criticalPatterns = [
+    /imagem ilegivel/,
+    /proposta ilegivel/,
+    /nao foi possivel (?:ler|analisar|identificar)/,
+    /informac(?:ao|oes) essencia(?:l|is)/,
+    /dados insuficientes/,
+    /valor(?:es)? principa(?:l|is) nao (?:foi|foram) identificado/,
+    /proposta nao (?:foi )?identificada/
+  ];
+  return criticalPatterns.some(pattern => pattern.test(normalized)) ? alert : "";
+}
+
+function renderFullAnalysisDetails(analysis) {
+  return `
+    <details class="analysis-details">
+      <summary>
+        <span>Ver análise completa</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+      </summary>
+      <div class="analysis-details-content">
+        <div class="analysis-facts">
+          <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
+          <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
+          <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
+        </div>
+        <div class="analysis-grid">
+          <div class="analysis-block">
+            <h3>Sinais de interesse</h3>
+            ${renderTextList(analysis.sinaisInteresse)}
+          </div>
+          <div class="analysis-block">
+            <h3>Produtos paralelos</h3>
+            ${renderTextList(analysis.produtosParalelos)}
+          </div>
+          <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Última solicitação do cliente</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Último compromisso do cliente</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
+          <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
+          <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
+        </div>
+      </div>
+    </details>`;
+}
+
 function renderAnalysisSection(record) {
   const analysis = record.metadata?.analiseComercial;
   const analyzing = state.analyzingKey === record.conversationKey;
@@ -718,8 +778,12 @@ function renderAnalysisSection(record) {
 
   const generatedLabel = formatSavedDate(analysis.generatedAt);
   const suggestions = Array.isArray(analysis.mensagensSugeridas) ? analysis.mensagensSugeridas : [];
+  const proposal = record.metadata?.propostaImagem;
+  const proposalWasAnalyzed = Boolean(proposal && isSafeProposalDataUrl(proposal.dataUrl));
+  const actionableAlert = getActionableAnalysisAlert(record, analysis);
+
   return `
-    <section class="analysis-card">
+    <section class="analysis-card analysis-card-compact">
       <div class="section-heading-row analysis-heading">
         <div>
           <span class="section-eyebrow">Inteligência comercial</span>
@@ -734,46 +798,47 @@ function renderAnalysisSection(record) {
         <span>${Number(analysis.messageCount || 0)} mensagens</span>
         ${generatedLabel ? `<span>${escapeHtml(generatedLabel)}</span>` : ""}
       </div>
-      <div class="analysis-summary">
-        <strong>Leitura atual</strong>
-        <p>${escapeHtml(analysis.resumo || "")}</p>
+      ${proposalWasAnalyzed && !actionableAlert ? `
+        <div class="analysis-status analysis-status-success">
+          <span class="analysis-status-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
+          </span>
+          <div><strong>Proposta analisada com sucesso</strong><span>A retomada já considera a proposta enviada e o contexto da conversa.</span></div>
+        </div>` : ""}
+      <div class="analysis-compact-grid">
+        <article class="analysis-compact-item">
+          <span>Leitura atual</span>
+          <p>${escapeHtml(analysis.resumo || "Não identificada")}</p>
+        </article>
+        <article class="analysis-compact-item">
+          <span>O que falta definir</span>
+          <p>${escapeHtml(analysis.pendenciaReal || analysis.pendenciaFinanceira || "Não identificado")}</p>
+        </article>
+        <article class="analysis-compact-item">
+          <span>Próximo passo</span>
+          <p>${escapeHtml(analysis.proximoPasso || "Não identificado")}</p>
+        </article>
       </div>
-      <div class="analysis-facts">
-        <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
-        <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
-        <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
-      </div>
-      <div class="analysis-grid">
-        <div class="analysis-block">
-          <h3>Sinais de interesse</h3>
-          ${renderTextList(analysis.sinaisInteresse)}
+      ${renderFullAnalysisDetails(analysis)}
+      ${actionableAlert ? `<div class="analysis-alert" role="alert">${escapeHtml(actionableAlert)}</div>` : ""}
+    </section>
+    <section class="suggestions-panel">
+      <div class="suggestions-heading-row">
+        <div>
+          <span class="section-eyebrow">Próxima ação</span>
+          <h2>Sugestões de resposta</h2>
         </div>
-        <div class="analysis-block">
-          <h3>Produtos paralelos</h3>
-          ${renderTextList(analysis.produtosParalelos)}
-        </div>
-        <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
-        <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
-        <div class="analysis-block"><h3>Última solicitação do cliente</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
-        <div class="analysis-block"><h3>Último compromisso do cliente</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
-        <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
-        <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
-        <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
-        <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
-        <div class="analysis-block emphasis"><h3>Pendência real</h3><p>${escapeHtml(analysis.pendenciaReal || "Não identificada")}</p></div>
-        <div class="analysis-block emphasis"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
-        <div class="analysis-block emphasis"><h3>Próximo passo</h3><p>${escapeHtml(analysis.proximoPasso || "Não identificado")}</p></div>
+        <span>${suggestions.length} sugestões para este momento</span>
       </div>
-      ${analysis.alertaInformacaoIncompleta ? `<div class="analysis-alert">${escapeHtml(analysis.alertaInformacaoIncompleta)}</div>` : ""}
-      <div class="suggestions-section">
-        <h3>Sugestões de resposta</h3>
+      <div class="suggestions-list">
         ${suggestions.map((suggestion, index) => `
           <article class="suggestion-card">
-            <div class="suggestion-heading">
+            <span class="suggestion-number" aria-hidden="true">${index + 1}</span>
+            <div class="suggestion-body">
               <strong>${escapeHtml(suggestion.titulo || `Opção ${index + 1}`)}</strong>
-              <button type="button" data-copy-suggestion="${index}">Copiar</button>
+              <p>${escapeHtml(suggestion.mensagem || "")}</p>
             </div>
-            <p>${escapeHtml(suggestion.mensagem || "")}</p>
+            <button type="button" data-copy-suggestion="${index}">Copiar</button>
           </article>`).join("") || `<p class="analysis-empty-value">Nenhuma sugestão foi gerada.</p>`}
       </div>
     </section>`;

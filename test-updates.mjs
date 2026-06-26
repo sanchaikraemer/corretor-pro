@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v024 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v024"/);
+test("v025 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v025"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v024/);
-  assert.match(htmlSource, /app\.js\?v=024/);
-  assert.match(htmlSource, /styles\.css\?v=024/);
-  assert.match(appSource, /db\.js\?v=024/);
-  assert.match(appSource, /whatsapp\.js\?v=024/);
+  assert.match(workerSource, /corretor-pro-v025/);
+  assert.match(htmlSource, /app\.js\?v=025/);
+  assert.match(htmlSource, /styles\.css\?v=025/);
+  assert.match(appSource, /db\.js\?v=025/);
+  assert.match(appSource, /whatsapp\.js\?v=025/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v024 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v024<\/span>/);
+test("versão v025 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v025<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -391,4 +391,33 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
     if (oldModel === undefined) delete process.env.OPENAI_ANALYSIS_MODEL;
     else process.env.OPENAI_ANALYSIS_MODEL = oldModel;
   }
+});
+
+test("v025 reduz a análise visível e mantém detalhes recolhidos", () => {
+  assert.match(appSource, /analysis-compact-grid/);
+  assert.match(appSource, /Leitura atual/);
+  assert.match(appSource, /O que falta definir/);
+  assert.match(appSource, /Próximo passo/);
+  assert.match(appSource, /<details class="analysis-details">/);
+  assert.match(appSource, /Ver análise completa/);
+  assert.match(stylesSource, /\.analysis-compact-grid/);
+  assert.match(stylesSource, /\.analysis-details summary/);
+});
+
+test("v025 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+  assert.match(appSource, /getActionableAnalysisAlert/);
+  assert.match(appSource, /Proposta analisada com sucesso/);
+  assert.match(appSource, /analysis-status-success/);
+  assert.match(appSource, /actionableAlert \? `<div class="analysis-alert"/);
+  assert.match(serverSource, /retorne uma string vazia quando não houver falta de informação/);
+  assert.match(serverSource, /Não use esse campo para confirmar que a proposta foi lida/);
+  assert.match(stylesSource, /\.analysis-status-success/);
+});
+
+test("v025 mantém sugestões visíveis e numeradas fora da análise completa", () => {
+  assert.match(appSource, /class="suggestions-panel"/);
+  assert.match(appSource, /class="suggestion-number"/);
+  assert.match(appSource, /data-copy-suggestion/);
+  assert.match(stylesSource, /\.suggestions-panel/);
+  assert.match(stylesSource, /grid-template-columns: 25px minmax\(0, 1fr\) auto/);
 });

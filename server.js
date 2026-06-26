@@ -99,6 +99,8 @@ REGRAS GERAIS:
 - Leia os valores e condições visíveis na imagem, mas não invente números ou informações ilegíveis. Quando algo não estiver claro, diga que não foi identificado.
 - Dê mais peso às mensagens mais recentes, sem perder compromissos anteriores ainda pendentes.
 - Diferencie claramente o que o cliente pediu, o que o corretor prometeu e o que já foi efetivamente entregue.
+- No campo alertaInformacaoIncompleta, retorne uma string vazia quando não houver falta de informação que realmente prejudique a análise. Não use esse campo para confirmar que a proposta foi lida, dizer que não há áudio pendente ou registrar detalhes menores.
+- Preencha alertaInformacaoIncompleta somente quando houver áudio sem transcrição, imagem ilegível ou ausência de dado essencial que impeça uma conclusão confiável.
 - Se houver áudio não transcrito, avise que a análise pode estar incompleta.
 - As mensagens sugeridas devem continuar exatamente de onde a conversa parou, aproveitar a pendência real e considerar a proposta já enviada.
 - Não use retomadas genéricas como “ainda tem interesse?” ou “seguiram outro caminho?”.
