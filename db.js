@@ -65,6 +65,37 @@ export function getDeviceId() {
   return value;
 }
 
+const SYNC_CODE_KEY = "corretor-pro-sync-code";
+
+// Normaliza o código de sincronia para que celular e PC cheguem ao mesmo
+// valor mesmo digitando com maiúsculas, acentos ou espaços diferentes.
+export function normalizeSyncCode(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function getSyncCode() {
+  return (localStorage.getItem(SYNC_CODE_KEY) || "").trim();
+}
+
+export function setSyncCode(value) {
+  const clean = normalizeSyncCode(value);
+  if (clean) localStorage.setItem(SYNC_CODE_KEY, clean);
+  else localStorage.removeItem(SYNC_CODE_KEY);
+  return clean;
+}
+
+// Chave usada na nuvem: o código de sincronia (compartilhado entre aparelhos)
+// quando definido, ou a identidade local do aparelho como reserva.
+export function getRemoteKey() {
+  return getSyncCode() || getDeviceId();
+}
+
 export async function listAtendimentos() {
   const db = await openAppDatabase();
   try {

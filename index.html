@@ -93,6 +93,24 @@
     </form>
   </dialog>
 
+  <dialog id="sync-dialog" class="rename-dialog">
+    <form method="dialog" id="sync-form">
+      <div class="dialog-heading">
+        <h2>Sincronizar aparelhos</h2>
+        <button class="icon-button dialog-close" value="cancel" aria-label="Fechar" type="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <label for="sync-input">Código de sincronia</label>
+      <input id="sync-input" name="code" autocomplete="off" maxlength="60" placeholder="ex: corretor-sanchai">
+      <p class="dialog-hint">Digite o <strong>mesmo código</strong> no celular e no computador para os atendimentos aparecerem nos dois. Escolha algo só seu e difícil de adivinhar. Para desligar, apague o código e salve.</p>
+      <div class="dialog-actions">
+        <button class="secondary-button" value="cancel" type="submit">Cancelar</button>
+        <button class="primary-button" value="save" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/jszip.min.js"></script>
   <script type="module" src="/app.js"></script>
 </body>

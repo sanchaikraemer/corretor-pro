@@ -897,6 +897,30 @@ button { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 0 0 4px rgba(5,150,105,.12);
 }
 
+.dialog-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--gray);
+}
+
+button.storage-note {
+  width: 100%;
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+
+button.storage-note:hover {
+  border-color: var(--emerald);
+  color: var(--emerald-dark, #065F46);
+}
+
+button.storage-note strong { font-weight: 600; }
+
 .dialog-actions {
   margin-top: 18px;
   display: grid;

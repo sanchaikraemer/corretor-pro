@@ -1,10 +1,13 @@
 import {
   getAtendimento,
-  getDeviceId,
   getPendingShare,
+  getRemoteKey,
+  getSyncCode,
   listAtendimentos,
+  normalizeSyncCode,
   removePendingShare,
-  saveAtendimento
+  saveAtendimento,
+  setSyncCode
 } from "./db.js";
 import {
   inferLeadName,
@@ -31,6 +34,9 @@ const toast = document.querySelector("#toast");
 const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
+const syncDialog = document.querySelector("#sync-dialog");
+const syncForm = document.querySelector("#sync-form");
+const syncInput = document.querySelector("#sync-input");
 
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
@@ -236,6 +242,7 @@ function renderList() {
   state.currentKey = null;
   setListHeader();
 
+  const syncCode = getSyncCode();
   const cards = state.records.map(record => {
     const moment = formatCardDate(record.ultimaMensagemAt || record.updatedAt);
     return `
@@ -258,10 +265,12 @@ function renderList() {
       <div class="list-surface">
         ${renderInstallCard()}
         ${state.records.length ? `<section class="attendance-list">${cards}</section>` : renderEmptyState()}
-        <div class="storage-note">
+        <button class="storage-note" type="button" data-sync-open>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-          <span>Os atendimentos ficam salvos neste dispositivo.</span>
-        </div>
+          <span>${syncCode
+            ? `Sincronizando entre aparelhos com o código <strong>${escapeHtml(syncCode)}</strong>. Toque para alterar.`
+            : `Atendimentos salvos só neste aparelho. <strong>Toque para sincronizar</strong> com o computador.`}</span>
+        </button>
       </div>
     </section>`;
 }
@@ -375,9 +384,9 @@ async function refreshRecords() {
 }
 
 async function pullRemoteRecords() {
-  const deviceId = getDeviceId();
+  const remoteKey = getRemoteKey();
   try {
-    const response = await fetch(`/api/atendimentos?device_id=${encodeURIComponent(deviceId)}`, {
+    const response = await fetch(`/api/atendimentos?device_id=${encodeURIComponent(remoteKey)}`, {
       headers: { Accept: "application/json" }
     });
     if (!response.ok) return;
@@ -397,14 +406,68 @@ async function pullRemoteRecords() {
 
 async function pushRemoteRecord(record) {
   try {
-    await fetch("/api/atendimentos", {
+    const response = await fetch("/api/atendimentos", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(record)
+      body: JSON.stringify({ ...record, deviceId: getRemoteKey() })
     });
+    return await response.json().catch(() => ({}));
   } catch {
     // O registro já foi salvo localmente. A cópia remota é complementar nesta fase.
+    return null;
   }
+}
+
+async function isCloudConfigured() {
+  try {
+    const response = await fetch("/api/health", { headers: { Accept: "application/json" } });
+    const data = await response.json();
+    return Boolean(data?.supabaseConfigured);
+  } catch {
+    return false;
+  }
+}
+
+async function applySyncCode(rawCode) {
+  const candidate = normalizeSyncCode(rawCode);
+  if (candidate && candidate.length < 8) {
+    showToast("O código precisa ter ao menos 8 caracteres. Ex.: corretor-sanchai.", "error", 7000);
+    return;
+  }
+
+  const clean = setSyncCode(rawCode);
+
+  if (!clean) {
+    await refreshRecords();
+    renderRoute();
+    showToast("Sincronização desligada. Os atendimentos ficam apenas neste aparelho.");
+    return;
+  }
+
+  if (!(await isCloudConfigured())) {
+    renderRoute();
+    showToast(
+      "Código salvo, mas o banco na nuvem (Supabase) ainda não está configurado na Vercel. A sincronia começa assim que você configurar.",
+      "error",
+      9000
+    );
+    return;
+  }
+
+  showToast("Sincronizando atendimentos com a nuvem…");
+  for (const record of state.records) {
+    await pushRemoteRecord(record);
+  }
+  await pullRemoteRecords();
+  await refreshRecords();
+  renderRoute();
+  showToast(`Sincronização ativada com o código "${clean}". Use o mesmo código no outro aparelho.`, "success", 8000);
+}
+
+function openSyncDialog() {
+  syncInput.value = getSyncCode();
+  syncDialog.showModal();
+  requestAnimationFrame(() => syncInput.select());
 }
 
 function buildAudioMap(zip) {
@@ -572,7 +635,7 @@ async function processIncomingZip(pending) {
     const merged = mergeTimeline(existing?.timeline, parsedTimeline);
     const lastItem = merged.timeline[merged.timeline.length - 1];
     const now = new Date().toISOString();
-    const deviceId = getDeviceId();
+    const deviceId = getRemoteKey();
 
     const record = {
       id: existing?.id || globalThis.crypto?.randomUUID?.() || `attendance-${Date.now()}`,
@@ -679,6 +742,11 @@ function bindEvents() {
       installApp();
       return;
     }
+    const syncTrigger = event.target.closest("[data-sync-open]");
+    if (syncTrigger) {
+      openSyncDialog();
+      return;
+    }
     const card = event.target.closest("[data-attendance]");
     if (card) navigateToAttendance(card.dataset.attendance);
   });
@@ -687,6 +755,14 @@ function bindEvents() {
     event.preventDefault();
     if (event.submitter?.value === "save") await saveRenamedAttendance();
     renameDialog.close();
+  });
+
+  syncForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const code = syncInput.value;
+    const save = event.submitter?.value === "save";
+    syncDialog.close();
+    if (save) await applySyncCode(code);
   });
 }
 
