@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v027 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v027"/);
+test("v028 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v028"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v027/);
-  assert.match(htmlSource, /app\.js\?v=027/);
-  assert.match(htmlSource, /styles\.css\?v=027/);
-  assert.match(appSource, /db\.js\?v=027/);
-  assert.match(appSource, /whatsapp\.js\?v=027/);
+  assert.match(workerSource, /corretor-pro-v028/);
+  assert.match(htmlSource, /app\.js\?v=028/);
+  assert.match(htmlSource, /styles\.css\?v=028/);
+  assert.match(appSource, /db\.js\?v=028/);
+  assert.match(appSource, /whatsapp\.js\?v=028/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v027 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v027<\/span>/);
+test("versão v028 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v028<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -260,7 +260,7 @@ test("análise comercial usa período selecionado, áudio e proposta já enviada
   assert.match(appSource, /fetch\("\/api\/analisar"/);
   assert.match(appSource, /incompleteAudioCount/);
   assert.match(appSource, /proposalImage/);
-  assert.match(serverSource, /efetivamente ENVIADA/);
+  assert.match(serverSource, /efetivamente ENVIADA ao contato desta conversa/);
   assert.match(serverSource, /detail: "high"/);
   assert.match(serverSource, /gpt-5\.4-mini/);
   assert.match(serverSource, /type: "json_schema"/);
@@ -271,7 +271,7 @@ test("análise comercial usa período selecionado, áudio e proposta já enviada
 test("inteligência comercial parte da proposta já enviada e não reinicia a negociação", () => {
   assert.match(serverSource, /AÇÃO COMERCIAL MAIS RECENTE/);
   assert.match(serverSource, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES/);
-  assert.match(serverSource, /CUMPRIDO — a proposta anexada comprova o envio/);
+  assert.match(serverSource, /CUMPRIDO EM RELAÇÃO AO/);
   assert.match(serverSource, /Nunca use como próximo passo/);
   assert.match(serverSource, /Na primeira simulação que te enviei/);
   assert.match(serverSource, /O mesmo imóvel não pode aparecer ao mesmo tempo como produto principal e produto paralelo/);
@@ -314,6 +314,7 @@ test("revisão automática corrige análise que ignora a proposta já enviada", 
       url: "/api/analisar",
       body: {
         leadName: "Jamil Contalex",
+        contactType: "cliente",
         period: "60 dias",
         messages: "25/06/2026 09:06 - Jamil: Me passa o plano para eu olhar com meu filho.\n25/06/2026 09:07 - Sanchai: Já te mando opções.",
         messageCount: 2,
@@ -361,6 +362,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
       url: "/api/analisar",
       body: {
         leadName: "Jamil Contalex",
+        contactType: "cliente",
         period: "30 dias",
         messages: "25/06/2026 09:06 - Jamil: Vou analisar com meu filho.\n\n25/06/2026 09:07 - Sanchai: Certo, já te mando opções.",
         messageCount: 2,
@@ -378,8 +380,8 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
     assert.equal(captured.input[0].content[1].type, "input_image");
     assert.equal(captured.input[0].content[1].detail, "high");
     assert.match(captured.input[0].content[0].text, /PROPOSTA EM IMAGEM: sim/);
-    assert.match(captured.input[0].content[0].text, /ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: proposta efetivamente enviada/);
-    assert.match(captured.input[0].content[0].text, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: CUMPRIDO/);
+    assert.match(captured.input[0].content[0].text, /ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: proposta efetivamente enviada ao cliente direto/);
+    assert.match(captured.input[0].content[0].text, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: CUMPRIDO EM RELAÇÃO AO CLIENTE DIRETO/);
     assert.match(captured.instructions, /Nunca use como próximo passo/);
     assert.match(captured.instructions, /não pode aparecer ao mesmo tempo como produto principal e produto paralelo/);
     assert.equal(captured.text.format.type, "json_schema");
@@ -393,7 +395,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v027 reduz a análise visível e mantém detalhes recolhidos", () => {
+test("v028 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(appSource, /analysis-compact-grid/);
   assert.match(appSource, /Leitura atual/);
   assert.match(appSource, /O que falta definir/);
@@ -404,7 +406,7 @@ test("v027 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(stylesSource, /\.analysis-details summary/);
 });
 
-test("v027 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+test("v028 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
@@ -414,7 +416,7 @@ test("v027 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
-test("v027 mantém sugestões visíveis e numeradas fora da análise completa", () => {
+test("v028 mantém sugestões visíveis e numeradas fora da análise completa", () => {
   assert.match(appSource, /class="suggestions-panel"/);
   assert.match(appSource, /class="suggestion-number"/);
   assert.match(appSource, /data-copy-suggestion/);
@@ -423,7 +425,7 @@ test("v027 mantém sugestões visíveis e numeradas fora da análise completa", 
 });
 
 
-test("v027 registra Atendido agora imediatamente e inicia espera de 48 horas", () => {
+test("v028 registra Atendido agora imediatamente e inicia espera de 48 horas", () => {
   assert.match(appSource, /data-attended-now/);
   assert.match(appSource, /async function markAttendedNow/);
   assert.match(appSource, /async function registerLeadAttended/);
@@ -465,13 +467,46 @@ test("durante 48 horas o sistema não oferece nova análise", () => {
   assert.match(stylesSource, /\.analysis-waiting-badge/);
 });
 
-test("reimportação diferencia mensagem do corretor e resposta do cliente", () => {
-  assert.match(appSource, /const latestAddedItem = merged\.addedItems/);
+test("reimportação diferencia mensagem do corretor e resposta do contato usando o horário real", () => {
+  assert.match(appSource, /const addedWithTime = merged\.addedItems/);
+  assert.match(appSource, /timelineItemTimestamp\(latestAddedItem\)/);
   assert.match(appSource, /isClientTimelineItem\(latestAddedItem, originalLeadName\)/);
   assert.match(appSource, /statusAtendimento = "nova_resposta_cliente"/);
+  assert.match(appSource, /novaRespostaClienteAt = movementAt/);
   assert.match(appSource, /statusAtendimento = "aguardando_resposta"/);
   assert.match(appSource, /origemUltimaMovimentacao = "mensagem_cliente"/);
   assert.match(appSource, /origemUltimaMovimentacao = "mensagem_corretor"/);
+});
+
+test("tipo de contato aparece uma única vez enquanto não foi classificado", () => {
+  assert.match(appSource, /function renderContactTypeSelector/);
+  assert.match(appSource, /if \(getContactType\(record\)\) return ""/);
+  assert.match(appSource, /data-contact-type="cliente"/);
+  assert.match(appSource, /data-contact-type="corretor"/);
+  assert.match(appSource, /async function setContactType/);
+  assert.match(appSource, /tipoContato: type/);
+  assert.match(appSource, /tipoContatoDefinidoEm: now/);
+  assert.match(appSource, /delete metadata\.analiseComercial/);
+  assert.match(stylesSource, /\.contact-type-card/);
+  assert.match(stylesSource, /\.contact-type-options/);
+});
+
+test("análise diferencia cliente direto de corretor parceiro", () => {
+  assert.match(appSource, /contactType: getContactType\(record\)/);
+  assert.match(appSource, /Selecione primeiro se este contato é cliente ou corretor/);
+  assert.match(serverSource, /TIPO DE CONTATO:/);
+  assert.match(serverSource, /CORRETOR PARCEIRO — intermediário/);
+  assert.match(serverSource, /Não trate o corretor parceiro como comprador/);
+  assert.match(serverSource, /As mensagens sugeridas devem ser dirigidas ao corretor parceiro/);
+  assert.match(serverSource, /body\.contactType !== "cliente"/);
+});
+
+test("nova resposta mostra o horário real da mensagem, não o horário da importação", () => {
+  assert.match(appSource, /function latestContactMessageDate/);
+  assert.match(appSource, /const responseDate = latestContactMessageDate\(record\)/);
+  assert.match(appSource, /activityDate: responseDate/);
+  assert.match(appSource, /novaRespostaClienteAt/);
+  assert.doesNotMatch(appSource, /Recebida .*lastReceivedAt/);
 });
 
 test("lista usa a última movimentação, não apenas a última mensagem", () => {

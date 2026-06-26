@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=027";
+} from "./db.js?v=028";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=027";
+} from "./whatsapp.js?v=028";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v027";
+const APP_VERSION = "v028";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -96,6 +96,29 @@ function isClientTimelineItem(item, originalLeadName) {
   const author = normalizeComparable(item?.author);
   const lead = normalizeComparable(originalLeadName);
   return Boolean(author && lead && author === lead);
+}
+
+function getContactType(record) {
+  const type = record?.metadata?.tipoContato;
+  return type === "cliente" || type === "corretor" ? type : null;
+}
+
+function getContactRoleText(record, form = "response") {
+  const broker = getContactType(record) === "corretor";
+  if (form === "waiting") return broker ? "Aguardando resposta do corretor parceiro" : "Aguardando resposta do cliente";
+  if (form === "new") return broker ? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente";
+  if (form === "target") return broker ? "ao corretor parceiro" : "ao cliente";
+  return broker ? "corretor parceiro" : "cliente";
+}
+
+function latestContactMessageDate(record) {
+  const originalLeadName = record?.metadata?.originalLeadName || record?.nomeLead;
+  const timestamps = (record?.timeline || [])
+    .filter(item => isClientTimelineItem(item, originalLeadName))
+    .map(timelineItemTimestamp)
+    .filter(Number.isFinite);
+  if (!timestamps.length) return null;
+  return new Date(Math.max(...timestamps));
 }
 
 function isStandalone() {
@@ -220,7 +243,11 @@ function getLeadWorkflowState(record, now = Date.now()) {
   const activityDate = getLatestActivityDate(record);
 
   if (status === "nova_resposta_cliente") {
-    return { mode: "client_response", activityDate, waitingUntil: null };
+    const responseDate = latestContactMessageDate(record)
+      || getValidDate(record?.metadata?.novaRespostaClienteAt)
+      || getValidDate(record?.ultimaMensagemAt)
+      || activityDate;
+    return { mode: "client_response", activityDate: responseDate, responseDate, waitingUntil: null };
   }
 
   if (status === "aguardando_resposta") {
@@ -469,6 +496,7 @@ function buildAnalysisRequest(record, timeline) {
   const proposal = record.metadata?.propostaImagem;
   return {
     leadName: record.nomeLead,
+    contactType: getContactType(record),
     period: selectedPeriodLabel(),
     messages: formatTimelineForCopy(timeline),
     messageCount: timeline.length,
@@ -481,6 +509,10 @@ function buildAnalysisRequest(record, timeline) {
 async function analyzeCurrentAttendance() {
   const record = await getCurrentRecord();
   if (!record || state.analyzingKey) return;
+  if (!getContactType(record)) {
+    showToast("Selecione primeiro se este contato é cliente ou corretor.", "error", 6500);
+    return;
+  }
   const workflow = getLeadWorkflowState(record);
   if (workflow.mode === "waiting") {
     showToast(`Aguarde a resposta do cliente. ${formatWaitRemaining(workflow.waitingUntil)}.`);
@@ -547,7 +579,7 @@ async function copySuggestedMessage(index) {
     return;
   }
 
-  await registerLeadAttended(record, "sugestao_copiada", "Mensagem copiada e atendimento registrado. Aguardando resposta do cliente.");
+  await registerLeadAttended(record, "sugestao_copiada", `Mensagem copiada e atendimento registrado. ${getContactRoleText(record, "waiting")}.`);
 }
 
 async function copySelectedMessages() {
@@ -653,11 +685,11 @@ function renderList() {
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
     const statusText = workflow.mode === "waiting"
-      ? `Aguardando resposta · ${formatAttendedNowLabel(record, true)}`
+      ? `${getContactRoleText(record, "waiting")} · ${formatAttendedNowLabel(record, true)}`
       : workflow.mode === "followup_due"
         ? "Retomada disponível · 48h sem resposta"
         : workflow.mode === "client_response"
-          ? `Nova resposta do cliente · ${moment.date.toLowerCase()} às ${moment.time}`
+          ? `${getContactRoleText(record, "new")} · ${moment.date.toLowerCase()} às ${moment.time}`
           : "";
     const statusClass = workflow.mode === "waiting"
       ? " waiting-client"
@@ -763,6 +795,7 @@ function renderProposalSection(record) {
   const hasSafeImage = proposal && isSafeProposalDataUrl(proposal.dataUrl);
   const busy = state.proposalBusy;
   const attachedLabel = formatSavedDate(proposal?.attachedAt);
+  const proposalTarget = getContactRoleText(record, "target");
 
   return `
     <section class="proposal-card">
@@ -773,7 +806,7 @@ function renderProposalSection(record) {
         </div>
         ${hasSafeImage ? `<span class="proposal-status">Já enviada</span>` : ""}
       </div>
-      <p class="section-description">Anexe um print da proposta enviada ao cliente. A análise considerará automaticamente que ela já foi enviada.</p>
+      <p class="section-description">Anexe um print da proposta enviada ${escapeHtml(proposalTarget)}. A análise considerará automaticamente que ela já foi enviada.</p>
       <input id="proposal-image-input" type="file" accept="image/jpeg,image/png,image/webp" data-proposal-input hidden>
       ${hasSafeImage ? `
         <div class="proposal-preview">
@@ -823,7 +856,8 @@ function getActionableAnalysisAlert(record, analysis) {
   return criticalPatterns.some(pattern => pattern.test(normalized)) ? alert : "";
 }
 
-function renderFullAnalysisDetails(analysis) {
+function renderFullAnalysisDetails(analysis, record) {
+  const clientLabel = getContactType(record) === "corretor" ? "cliente final" : "cliente";
   return `
     <details class="analysis-details">
       <summary>
@@ -847,8 +881,8 @@ function renderFullAnalysisDetails(analysis) {
           </div>
           <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
           <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Última solicitação do cliente</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Último compromisso do cliente</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Última solicitação do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Último compromisso do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
           <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
           <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
           <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
@@ -933,7 +967,7 @@ function renderAnalysisSection(record) {
           <p>${escapeHtml(analysis.proximoPasso || "Não identificado")}</p>
         </article>
       </div>
-      ${renderFullAnalysisDetails(analysis)}
+      ${renderFullAnalysisDetails(analysis, record)}
       ${actionableAlert ? `<div class="analysis-alert" role="alert">${escapeHtml(actionableAlert)}</div>` : ""}
     </section>
     <section class="suggestions-panel">
@@ -958,6 +992,20 @@ function renderAnalysisSection(record) {
     </section>`;
 }
 
+function renderContactTypeSelector(record) {
+  if (getContactType(record)) return "";
+  return `
+    <section class="contact-type-card" aria-labelledby="contact-type-title">
+      <span class="section-eyebrow">Primeira importação</span>
+      <h2 id="contact-type-title">Este contato é:</h2>
+      <p>Escolha uma vez para a inteligência interpretar corretamente as próximas conversas.</p>
+      <div class="contact-type-options" role="group" aria-label="Tipo de contato">
+        <button type="button" data-contact-type="cliente">Cliente</button>
+        <button type="button" data-contact-type="corretor">Corretor</button>
+      </div>
+    </section>`;
+}
+
 function renderDetail(record) {
   if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
@@ -971,11 +1019,11 @@ function renderDetail(record) {
   const waitingForClient = workflow.mode === "waiting";
   const attendedNowLabel = formatAttendedNowLabel(record);
   const workflowTitle = waitingForClient
-    ? "Aguardando resposta do cliente"
+    ? getContactRoleText(record, "waiting")
     : workflow.mode === "followup_due"
       ? "48 horas sem resposta"
       : workflow.mode === "client_response"
-        ? "Nova resposta do cliente"
+        ? getContactRoleText(record, "new")
         : "Atendimento salvo";
   const workflowSubtitle = waitingForClient
     ? `${attendedNowLabel} · ${formatWaitRemaining(workflow.waitingUntil)}`
@@ -1010,6 +1058,7 @@ function renderDetail(record) {
 
   app.innerHTML = `
     <section class="detail-page">
+      ${renderContactTypeSelector(record)}
       <section class="status-card${workflowClass}">
         <span class="status-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
@@ -1438,8 +1487,13 @@ async function processIncomingZip(pending) {
       lastReceivedAt: pending.receivedAt || now
     };
     if (merged.added > 0) {
-      const latestAddedItem = merged.addedItems[merged.addedItems.length - 1];
-      const movementAt = getValidDate(latestAddedItem?.timestamp)?.toISOString() || now;
+      const addedWithTime = merged.addedItems
+        .map(item => ({ item, timestamp: timelineItemTimestamp(item) }))
+        .filter(entry => Number.isFinite(entry.timestamp))
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const latestAddedItem = addedWithTime.at(-1)?.item || merged.addedItems[merged.addedItems.length - 1];
+      const movementTimestamp = timelineItemTimestamp(latestAddedItem) ?? timelineItemTimestamp(lastItem);
+      const movementAt = Number.isFinite(movementTimestamp) ? new Date(movementTimestamp).toISOString() : now;
       nextMetadata.ultimaMovimentacaoAt = movementAt;
 
       if (isClientTimelineItem(latestAddedItem, originalLeadName)) {
@@ -1535,6 +1589,33 @@ async function saveRenamedAttendance() {
   showToast("Nome atualizado.");
 }
 
+async function setContactType(type) {
+  if (type !== "cliente" && type !== "corretor") return;
+  const record = await getCurrentRecord();
+  if (!record || getContactType(record)) return;
+
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(record.metadata || {}),
+    tipoContato: type,
+    tipoContatoDefinidoEm: now
+  };
+  delete metadata.analiseComercial;
+  const updated = { ...record, metadata, updatedAt: now };
+
+  try {
+    await saveAtendimento(updated);
+    updateRecordInState(updated);
+    renderDetail(updated);
+    showToast(type === "corretor" ? "Contato definido como corretor parceiro." : "Contato definido como cliente.");
+    pushRemoteRecord(updated).then(result => {
+      if (!result) showToast("A classificação ficou salva neste aparelho, mas a nuvem não confirmou a atualização.", "error", 7000);
+    });
+  } catch {
+    showToast("Não foi possível salvar o tipo de contato.", "error", 7000);
+  }
+}
+
 async function registerLeadAttended(record, source, successMessage) {
   if (!record) return null;
   const now = new Date().toISOString();
@@ -1556,7 +1637,7 @@ async function registerLeadAttended(record, source, successMessage) {
     await saveAtendimento(updated);
     updateRecordInState(updated);
     renderDetail(updated);
-    showToast(successMessage || "Atendimento registrado agora. Aguardando resposta do cliente.");
+    showToast(successMessage || `Atendimento registrado agora. ${getContactRoleText(updated, "waiting")}.`);
 
     pushRemoteRecord(updated).then(result => {
       if (!result) {
@@ -1573,7 +1654,7 @@ async function registerLeadAttended(record, source, successMessage) {
 async function markAttendedNow() {
   const record = await getCurrentRecord();
   if (!record) return;
-  await registerLeadAttended(record, "atendido_agora", "Atendimento registrado agora. Aguardando resposta do cliente.");
+  await registerLeadAttended(record, "atendido_agora", `Atendimento registrado agora. ${getContactRoleText(record, "waiting")}.`);
 }
 
 async function deleteCurrentLead() {
@@ -1632,6 +1713,12 @@ function bindEvents() {
     const installTrigger = event.target.closest("[data-install]");
     if (installTrigger) {
       installApp();
+      return;
+    }
+
+    const contactTypeTrigger = event.target.closest("[data-contact-type]");
+    if (contactTypeTrigger) {
+      await setContactType(contactTypeTrigger.dataset.contactType);
       return;
     }
 

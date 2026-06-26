@@ -76,8 +76,15 @@ Analise a conversa cronologicamente e identifique com precisão: última pessoa 
 HIERARQUIA DOS FATOS:
 1. As mensagens mostram a evolução da negociação.
 2. Quando houver uma imagem de proposta anexada, trate esse anexo como a AÇÃO COMERCIAL MAIS RECENTE, ocorrida depois das mensagens apresentadas.
-3. A proposta anexada é a última proposta efetivamente ENVIADA ao cliente. Portanto, o compromisso anterior de enviar uma condição, simulação, valores ou opções deve ser considerado CUMPRIDO.
+3. A proposta anexada é a última proposta efetivamente ENVIADA ao contato desta conversa. Se o contato for corretor parceiro, isso não prova que o cliente final já a recebeu. Portanto, o compromisso anterior de enviar uma condição, simulação, valores ou opções deve ser considerado CUMPRIDO.
 4. O próximo passo deve partir do que já foi entregue, nunca reiniciar a negociação.
+
+TIPO DE CONTATO:
+- O pedido informa se a conversa é com CLIENTE DIRETO ou CORRETOR PARCEIRO.
+- Se for CLIENTE DIRETO, trate a pessoa da conversa como potencial comprador e dirija as sugestões diretamente a ela.
+- Se for CORRETOR PARCEIRO, a pessoa da conversa é intermediária e existe um cliente final de terceiro. Não trate o corretor parceiro como comprador, interessado final ou participante pessoal da decisão.
+- Em conversa com CORRETOR PARCEIRO, diferencie o que o corretor relata sobre o cliente final do que ele próprio solicita. As mensagens sugeridas devem ser dirigidas ao corretor parceiro e ajudá-lo a conduzir o cliente, usando construções como “seu cliente”, “para você conduzir” ou equivalentes naturais quando pertinente.
+- Nos campos que mencionam “cliente”, interprete como cliente final quando a conversa for com corretor parceiro. Se o cliente final não estiver identificado, não invente nome, intenção ou decisão.
 
 REGRAS OBRIGATÓRIAS SOBRE PROPOSTA ANEXADA:
 - Nunca diga que o corretor ainda precisa enviar a proposta anexada, os mesmos números ou a mesma condição.
@@ -322,6 +329,7 @@ function isSafeProposalImage(value) {
 function isValidAnalysisRequest(body) {
   if (!body || typeof body !== "object") return false;
   if (typeof body.leadName !== "string" || !body.leadName.trim() || body.leadName.length > 200) return false;
+  if (body.contactType !== "cliente" && body.contactType !== "corretor") return false;
   if (typeof body.period !== "string" || body.period.length > 40) return false;
   if (typeof body.messages !== "string" || !body.messages.trim() || body.messages.length > MAX_ANALYSIS_MESSAGES_CHARS) return false;
   if (body.proposalImage != null && !isSafeProposalImage(body.proposalImage)) return false;
@@ -348,14 +356,19 @@ function buildAnalysisInput(body) {
   const proposalDate = body.proposalAttachedAt
     ? new Date(body.proposalAttachedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
     : "data não informada";
+  const contactTypeLabel = body.contactType === "corretor"
+    ? "CORRETOR PARCEIRO — intermediário; existe um cliente final de terceiro"
+    : "CLIENTE DIRETO — potencial comprador desta conversa";
+  const proposalRecipient = body.contactType === "corretor" ? "corretor parceiro" : "cliente direto";
   return [
-    `LEAD: ${body.leadName.trim()}`,
+    `CONTATO: ${body.leadName.trim()}`,
+    `TIPO DE CONTATO: ${contactTypeLabel}`,
     `PERÍODO ANALISADO: ${body.period || "não informado"}`,
     `QUANTIDADE DE MENSAGENS: ${Number(body.messageCount || 0)}`,
     `ÁUDIOS SEM TRANSCRIÇÃO: ${incompleteAudioCount}`,
     `PROPOSTA EM IMAGEM: ${hasProposal ? "sim" : "não anexada"}`,
-    `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao cliente em ${proposalDate}` : "nenhuma proposta anexada"}`,
-    `STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: ${hasProposal ? "CUMPRIDO — a proposta anexada comprova o envio" : "avaliar pela conversa"}`,
+    `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao ${proposalRecipient} em ${proposalDate}` : "nenhuma proposta anexada"}`,
+    `STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: ${hasProposal ? `CUMPRIDO EM RELAÇÃO AO ${proposalRecipient.toUpperCase()} — a proposta anexada comprova esse envio` : "avaliar pela conversa"}`,
     "",
     "CONVERSA ANTERIOR À PROPOSTA:",
     body.messages.trim()
