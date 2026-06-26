@@ -921,6 +921,14 @@ button.storage-note:hover {
 
 button.storage-note strong { font-weight: 600; }
 
+.build-tag {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--gray);
+  opacity: .7;
+}
+
 .dialog-actions {
   margin-top: 18px;
   display: grid;

@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v016";
+const BUILD_ID = "corretor-pro-v017";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;

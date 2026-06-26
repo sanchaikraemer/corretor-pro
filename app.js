@@ -38,6 +38,7 @@ const syncDialog = document.querySelector("#sync-dialog");
 const syncForm = document.querySelector("#sync-form");
 const syncInput = document.querySelector("#sync-input");
 
+const APP_VERSION = "v017";
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
   records: [],
@@ -271,6 +272,7 @@ function renderList() {
             ? `Sincronizando entre aparelhos com o código <strong>${escapeHtml(syncCode)}</strong>. Toque para alterar.`
             : `Atendimentos salvos só neste aparelho. <strong>Toque para sincronizar</strong> com o computador.`}</span>
         </button>
+        <p class="build-tag">Corretor Pro ${APP_VERSION}</p>
       </div>
     </section>`;
 }
