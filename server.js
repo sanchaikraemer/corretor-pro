@@ -73,15 +73,32 @@ const ANALYSIS_INSTRUCTIONS = `Você é o motor de inteligência comercial do Co
 
 Analise a conversa cronologicamente e identifique com precisão: última pessoa a falar, último compromisso do cliente, última solicitação do cliente, último compromisso assumido pelo corretor, produto principal atual, opções paralelas, participantes da decisão, etapa da negociação, nível de interesse, sinais objetivos, objeção relevante, pendência financeira, pendência real, quem deve agir agora e próximo passo.
 
-REGRAS OBRIGATÓRIAS:
-- A imagem anexada, quando existir, é a última proposta que JÁ FOI ENVIADA ao cliente. Nunca diga que o corretor ainda vai enviar essa mesma proposta.
+HIERARQUIA DOS FATOS:
+1. As mensagens mostram a evolução da negociação.
+2. Quando houver uma imagem de proposta anexada, trate esse anexo como a AÇÃO COMERCIAL MAIS RECENTE, ocorrida depois das mensagens apresentadas.
+3. A proposta anexada é a última proposta efetivamente ENVIADA ao cliente. Portanto, o compromisso anterior de enviar uma condição, simulação, valores ou opções deve ser considerado CUMPRIDO.
+4. O próximo passo deve partir do que já foi entregue, nunca reiniciar a negociação.
+
+REGRAS OBRIGATÓRIAS SOBRE PROPOSTA ANEXADA:
+- Nunca diga que o corretor ainda precisa enviar a proposta anexada, os mesmos números ou a mesma condição.
+- Nunca use como próximo passo: “enviar as opções”, “enviar a proposta”, “mandar os números”, “organizar a condição”, “mostrar como ficam entrada e parcelas” ou equivalentes, quando isso já estiver visível no anexo.
+- Não escreva sugestões como “posso te mandar uma visão”, “quer que eu te envie essa leitura?”, “vou organizar a condição” ou “posso te mostrar os números”, pois a proposta já foi enviada.
+- Se não houver resposta do cliente depois da proposta, a pendência real é entender a reação dele e qual componente precisa ser ajustado: entrada, parcelas mensais, parcelas anuais/reforços, valor nas chaves, saldo, prazo ou composição geral.
+- É permitido oferecer NOVAS composições, mas somente depois de reconhecer a primeira simulação já enviada. Exemplo de lógica correta: “Na primeira simulação que te enviei, qual ponto você prefere ajustar: a entrada ou as parcelas?”.
+- Quando a decisão envolver filho, cônjuge, sócio ou outra pessoa, use isso para facilitar a análise conjunta, sem transferir toda a decisão para essa pessoa.
+- O campo proximoPasso deve indicar uma ação posterior à proposta, como confirmar entendimento, identificar ajuste ou montar alternativas novas a partir da composição existente.
+
+REGRAS DE PRODUTO E OBJEÇÃO:
+- Diferencie o produto atual de produtos apenas mencionados no passado.
+- O mesmo imóvel não pode aparecer ao mesmo tempo como produto principal e produto paralelo, mesmo quando for citado por nomes diferentes, endereço, lançamento ou número da unidade.
+- Não reabra comparação com outros imóveis se o cliente já indicou uma unidade preferida e a conversa está na etapa financeira, salvo se ele tiver pedido essa comparação depois da proposta.
+- Não transforme confusão de preço sobre outro imóvel em objeção de preço do produto atual.
+- Classifique o interesse apenas por evidências da conversa, não por otimismo.
+
+REGRAS GERAIS:
 - Leia os valores e condições visíveis na imagem, mas não invente números ou informações ilegíveis. Quando algo não estiver claro, diga que não foi identificado.
 - Dê mais peso às mensagens mais recentes, sem perder compromissos anteriores ainda pendentes.
 - Diferencie claramente o que o cliente pediu, o que o corretor prometeu e o que já foi efetivamente entregue.
-- Quando houver proposta anexada, compare as condições visíveis com o pedido mais recente do cliente e identifique qual ponto ainda precisa ser ajustado.
-- Se o cliente mencionar que analisará com filho, cônjuge, sócio ou outra pessoa, registre isso como participação na decisão sem presumir que essa pessoa decide sozinha.
-- Diferencie o produto atual de produtos apenas mencionados no passado.
-- Classifique o interesse apenas por evidências da conversa, não por otimismo.
 - Se houver áudio não transcrito, avise que a análise pode estar incompleta.
 - As mensagens sugeridas devem continuar exatamente de onde a conversa parou, aproveitar a pendência real e considerar a proposta já enviada.
 - Não use retomadas genéricas como “ainda tem interesse?” ou “seguiram outro caminho?”.
@@ -90,7 +107,9 @@ REGRAS OBRIGATÓRIAS:
 - Não pressione e não ofereça uma saída fácil para encerrar a conversa.
 - Abra alternativas sem abandonar o produto principal.
 - Cada sugestão deve soar como um corretor experiente, natural e objetivo, ter preferencialmente até 400 caracteres e terminar com uma única pergunta principal.
-- Gere exatamente três sugestões, com abordagens realmente diferentes e coerentes com o diagnóstico.`;
+- Gere exatamente três sugestões com abordagens diferentes, porém todas coerentes com a MESMA etapa da negociação. Quando houver proposta anexada, priorize: (1) ajuste direto da composição; (2) facilitação da decisão conjunta; (3) comparação entre novas composições financeiras do mesmo produto. Não use comparação de imóveis como terceira opção sem solicitação recente do cliente.
+
+Antes de responder, faça uma verificação silenciosa: se existe proposta anexada, confirme que nenhum campo nem sugestão trata a proposta como ainda não enviada.`;
 
 function configuredSupabase() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -231,7 +250,7 @@ async function handleHealth(_req, res) {
   return send(res, 200, {
     ok: true,
     app: "Corretor Pro",
-    version: "v023",
+    version: "v024",
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     supabaseConfigured: configuredSupabase(),
     timestamp: new Date().toISOString()
@@ -324,16 +343,113 @@ function extractOpenAIText(payload) {
 function buildAnalysisInput(body) {
   const hasProposal = Boolean(body.proposalImage);
   const incompleteAudioCount = Math.max(0, Number(body.incompleteAudioCount || 0));
+  const proposalDate = body.proposalAttachedAt
+    ? new Date(body.proposalAttachedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    : "data não informada";
   return [
     `LEAD: ${body.leadName.trim()}`,
     `PERÍODO ANALISADO: ${body.period || "não informado"}`,
     `QUANTIDADE DE MENSAGENS: ${Number(body.messageCount || 0)}`,
     `ÁUDIOS SEM TRANSCRIÇÃO: ${incompleteAudioCount}`,
-    `PROPOSTA EM IMAGEM: ${hasProposal ? "sim — considere que já foi enviada ao cliente" : "não anexada"}`,
+    `PROPOSTA EM IMAGEM: ${hasProposal ? "sim" : "não anexada"}`,
+    `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao cliente em ${proposalDate}` : "nenhuma proposta anexada"}`,
+    `STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: ${hasProposal ? "CUMPRIDO — a proposta anexada comprova o envio" : "avaliar pela conversa"}`,
     "",
-    "CONVERSA:",
+    "CONVERSA ANTERIOR À PROPOSTA:",
     body.messages.trim()
   ].join("\n");
+}
+
+function extractUnitIdentifiers(value) {
+  return new Set((String(value || "").match(/\b\d{3,4}\b/g) || []).filter(number => !/^20\d{2}$/.test(number)));
+}
+
+function sameUnitAppearsAsParallel(analysis) {
+  const mainUnits = extractUnitIdentifiers(analysis?.produtoPrincipal);
+  if (!mainUnits.size) return false;
+  return (analysis?.produtosParalelos || []).some(item => {
+    const parallelUnits = extractUnitIdentifiers(item);
+    return [...parallelUnits].some(unit => mainUnits.has(unit));
+  });
+}
+
+function proposalAnalysisNeedsRepair(analysis) {
+  if (!analysis || typeof analysis !== "object") return true;
+  const suggestions = Array.isArray(analysis.mensagensSugeridas) ? analysis.mensagensSugeridas : [];
+  const combined = [
+    analysis.pendenciaReal,
+    analysis.proximoPasso,
+    ...suggestions.flatMap(item => [item?.titulo, item?.mensagem])
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const restartsNegotiation = [
+    /enviar (?:as |uma |a )?(?:opções|proposta|simulação|condição|números|valores)/i,
+    /mandar (?:as |uma |a )?(?:opções|proposta|simulação|condição|números|valores|visão)/i,
+    /organizar (?:a |uma )?condição/i,
+    /mostrar como ficam (?:a )?(?:entrada|parcelas|condição)/i,
+    /te envie essa leitura/i,
+    /te mandar uma visão/i,
+    /comparar .*alternativas próximas/i,
+    /comparar .*outro (?:imóvel|apartamento)/i
+  ].some(pattern => pattern.test(combined));
+
+  return restartsNegotiation || sameUnitAppearsAsParallel(analysis);
+}
+
+function buildAnalysisContent(body, additionalText = "") {
+  const text = [buildAnalysisInput(body), additionalText].filter(Boolean).join("\n\n");
+  const content = [{ type: "input_text", text }];
+  if (body.proposalImage) {
+    content.push({ type: "input_image", image_url: body.proposalImage, detail: "high" });
+  }
+  return content;
+}
+
+async function requestStructuredAnalysis({ apiKey, model, content, instructions }) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      instructions,
+      input: [{ role: "user", content }],
+      max_output_tokens: 2600,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "corretor_pro_analise",
+          strict: true,
+          schema: ANALYSIS_SCHEMA
+        }
+      }
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || "A OpenAI não conseguiu analisar o atendimento.");
+    error.status = response.status;
+    throw error;
+  }
+
+  const outputText = extractOpenAIText(payload);
+  if (!outputText) {
+    const error = new Error("A análise não retornou um resultado utilizável.");
+    error.code = "ANALYSIS_EMPTY";
+    throw error;
+  }
+
+  try {
+    return JSON.parse(outputText);
+  } catch {
+    const error = new Error("A análise retornou em um formato inesperado. Tente novamente.");
+    error.code = "ANALYSIS_INVALID_JSON";
+    throw error;
+  }
 }
 
 async function handleAnalisar(req, res) {
@@ -364,69 +480,48 @@ async function handleAnalisar(req, res) {
     });
   }
 
-  const content = [
-    { type: "input_text", text: buildAnalysisInput(body) }
-  ];
-  if (body.proposalImage) {
-    content.push({ type: "input_image", image_url: body.proposalImage, detail: "high" });
-  }
-
   const model = process.env.OPENAI_ANALYSIS_MODEL || "gpt-5.4-mini";
   try {
-    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        store: false,
-        instructions: ANALYSIS_INSTRUCTIONS,
-        input: [{ role: "user", content }],
-        max_output_tokens: 2600,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "corretor_pro_analise",
-            strict: true,
-            schema: ANALYSIS_SCHEMA
-          }
-        }
-      })
+    let analysis = await requestStructuredAnalysis({
+      apiKey,
+      model,
+      content: buildAnalysisContent(body),
+      instructions: ANALYSIS_INSTRUCTIONS
     });
 
-    const payload = await openaiResponse.json().catch(() => ({}));
-    if (!openaiResponse.ok) {
-      return send(res, openaiResponse.status >= 500 ? 502 : 400, {
-        code: "ANALYSIS_FAILED",
-        error: payload?.error?.message || "A OpenAI não conseguiu analisar o atendimento."
+    let qualityReviewApplied = false;
+    if (body.proposalImage && proposalAnalysisNeedsRepair(analysis)) {
+      qualityReviewApplied = true;
+      const correctionContext = [
+        "REVISÃO OBRIGATÓRIA:",
+        "A análise anterior abaixo contrariou a regra de que a proposta já foi enviada ou confundiu o produto principal com alternativas.",
+        "Refaça todos os campos necessários, preserve apenas fatos sustentados e gere três mensagens que partam da primeira simulação já entregue.",
+        "Não ofereça reenviar os mesmos números e não compare com outros imóveis sem pedido recente do cliente.",
+        "",
+        "ANÁLISE ANTERIOR A CORRIGIR:",
+        JSON.stringify(analysis)
+      ].join("\n");
+
+      analysis = await requestStructuredAnalysis({
+        apiKey,
+        model,
+        content: buildAnalysisContent(body, correctionContext),
+        instructions: `${ANALYSIS_INSTRUCTIONS}\n\nEsta é uma etapa de correção. A resposta final deve eliminar integralmente a contradição identificada.`
       });
     }
 
-    const outputText = extractOpenAIText(payload);
-    if (!outputText) {
-      return send(res, 502, {
-        code: "ANALYSIS_EMPTY",
-        error: "A análise não retornou um resultado utilizável."
-      });
+    return send(res, 200, { analysis, model, qualityReviewApplied });
+  } catch (error) {
+    if (error?.code === "ANALYSIS_EMPTY") {
+      return send(res, 502, { code: "ANALYSIS_EMPTY", error: error.message });
     }
-
-    let analysis;
-    try {
-      analysis = JSON.parse(outputText);
-    } catch {
-      return send(res, 502, {
-        code: "ANALYSIS_INVALID_JSON",
-        error: "A análise retornou em um formato inesperado. Tente novamente."
-      });
+    if (error?.code === "ANALYSIS_INVALID_JSON") {
+      return send(res, 502, { code: "ANALYSIS_INVALID_JSON", error: error.message });
     }
-
-    return send(res, 200, { analysis, model });
-  } catch {
-    return send(res, 502, {
-      code: "ANALYSIS_CONNECTION_ERROR",
-      error: "Não foi possível comunicar com a OpenAI para analisar o atendimento."
+    const responseStatus = Number(error?.status);
+    return send(res, responseStatus ? (responseStatus >= 500 ? 502 : 400) : 502, {
+      code: "ANALYSIS_FAILED",
+      error: error?.message || "Não foi possível comunicar com a OpenAI para analisar o atendimento."
     });
   }
 }

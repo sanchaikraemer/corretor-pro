@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v023 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v023"/);
+test("v024 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v024"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v023/);
-  assert.match(htmlSource, /app\.js\?v=023/);
-  assert.match(htmlSource, /styles\.css\?v=023/);
-  assert.match(appSource, /db\.js\?v=023/);
-  assert.match(appSource, /whatsapp\.js\?v=023/);
+  assert.match(workerSource, /corretor-pro-v024/);
+  assert.match(htmlSource, /app\.js\?v=024/);
+  assert.match(htmlSource, /styles\.css\?v=024/);
+  assert.match(appSource, /db\.js\?v=024/);
+  assert.match(appSource, /whatsapp\.js\?v=024/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v023 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v023<\/span>/);
+test("versão v024 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v024<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -260,12 +260,79 @@ test("análise comercial usa período selecionado, áudio e proposta já enviada
   assert.match(appSource, /fetch\("\/api\/analisar"/);
   assert.match(appSource, /incompleteAudioCount/);
   assert.match(appSource, /proposalImage/);
-  assert.match(serverSource, /JÁ FOI ENVIADA/);
+  assert.match(serverSource, /efetivamente ENVIADA/);
   assert.match(serverSource, /detail: "high"/);
   assert.match(serverSource, /gpt-5\.4-mini/);
   assert.match(serverSource, /type: "json_schema"/);
   assert.match(serverSource, /mensagensSugeridas/);
   assert.match(appSource, /data-copy-suggestion/);
+});
+
+test("inteligência comercial parte da proposta já enviada e não reinicia a negociação", () => {
+  assert.match(serverSource, /AÇÃO COMERCIAL MAIS RECENTE/);
+  assert.match(serverSource, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES/);
+  assert.match(serverSource, /CUMPRIDO — a proposta anexada comprova o envio/);
+  assert.match(serverSource, /Nunca use como próximo passo/);
+  assert.match(serverSource, /Na primeira simulação que te enviei/);
+  assert.match(serverSource, /O mesmo imóvel não pode aparecer ao mesmo tempo como produto principal e produto paralelo/);
+  assert.match(serverSource, /Não reabra comparação com outros imóveis/);
+  assert.match(serverSource, /Não transforme confusão de preço sobre outro imóvel/);
+  assert.match(serverSource, /nenhum campo nem sugestão trata a proposta como ainda não enviada/);
+});
+
+test("revisão automática corrige análise que ignora a proposta já enviada", async () => {
+  const oldKey = process.env.OPENAI_API_KEY;
+  const oldFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "test-key";
+  let calls = 0;
+
+  const invalidAnalysis = {
+    ...sampleAnalysis,
+    produtosParalelos: ["Personalité", "Lançamento da Venâncio - unidade 1301"],
+    proximoPasso: "Enviar as opções de pagamento e mostrar como ficam entrada e parcelas",
+    mensagensSugeridas: [
+      { titulo: "Retomar", mensagem: "Jamil, posso te organizar a condição do 1301 e te mostrar os números?" },
+      { titulo: "Com o filho", mensagem: "Posso te mandar uma visão direta da proposta para conversar com seu filho?" },
+      { titulo: "Comparar", mensagem: "Quer que eu compare o 1301 com alternativas próximas?" }
+    ]
+  };
+
+  globalThis.fetch = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { output_text: JSON.stringify(calls === 1 ? invalidAnalysis : sampleAnalysis) };
+      }
+    };
+  };
+
+  try {
+    const result = await invoke({
+      method: "POST",
+      url: "/api/analisar",
+      body: {
+        leadName: "Jamil Contalex",
+        period: "60 dias",
+        messages: "25/06/2026 09:06 - Jamil: Me passa o plano para eu olhar com meu filho.\n25/06/2026 09:07 - Sanchai: Já te mando opções.",
+        messageCount: 2,
+        incompleteAudioCount: 0,
+        proposalImage: "data:image/png;base64,iVBORw0KGgo=",
+        proposalAttachedAt: "2026-06-26T12:00:00.000Z"
+      }
+    });
+
+    assert.equal(result.status, 200);
+    assert.equal(calls, 2);
+    assert.equal(result.payload.qualityReviewApplied, true);
+    assert.match(result.payload.analysis.proximoPasso, /ajustar a entrada ou as parcelas/i);
+    assert.doesNotMatch(result.payload.analysis.mensagensSugeridas.map(item => item.mensagem).join(" "), /posso te organizar a condição|alternativas próximas/i);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = oldKey;
+  }
 });
 
 test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estruturado", async () => {
@@ -311,6 +378,10 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
     assert.equal(captured.input[0].content[1].type, "input_image");
     assert.equal(captured.input[0].content[1].detail, "high");
     assert.match(captured.input[0].content[0].text, /PROPOSTA EM IMAGEM: sim/);
+    assert.match(captured.input[0].content[0].text, /ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: proposta efetivamente enviada/);
+    assert.match(captured.input[0].content[0].text, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: CUMPRIDO/);
+    assert.match(captured.instructions, /Nunca use como próximo passo/);
+    assert.match(captured.instructions, /não pode aparecer ao mesmo tempo como produto principal e produto paralelo/);
     assert.equal(captured.text.format.type, "json_schema");
     assert.equal(captured.text.format.strict, true);
   } finally {

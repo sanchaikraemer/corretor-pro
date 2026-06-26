@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=023";
+} from "./db.js?v=024";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=023";
+} from "./whatsapp.js?v=024";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v023";
+const APP_VERSION = "v024";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
