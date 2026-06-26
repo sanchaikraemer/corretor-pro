@@ -489,13 +489,20 @@ async function processIncomingZip(pending) {
   showProcessing();
 
   try {
-    if (!pending?.blob || !/\.zip$/i.test(pending.name || "")) {
+    if (!pending?.blob) {
       throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
     }
     if (!globalThis.JSZip) throw new Error("O leitor de ZIP não foi carregado.");
 
+    // Não exigimos a extensão .zip no nome (o Android nem sempre a preserva).
+    // O JSZip valida o conteúdo: se não for um ZIP legível, o erro aparece aqui.
     setProcessing("read", 8, "Abrindo o ZIP recebido pelo compartilhamento.");
-    const zip = await globalThis.JSZip.loadAsync(pending.blob);
+    let zip;
+    try {
+      zip = await globalThis.JSZip.loadAsync(pending.blob);
+    } catch {
+      throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
+    }
     const txtEntries = Object.values(zip.files).filter(entry => !entry.dir && /\.txt$/i.test(entry.name));
     if (!txtEntries.length) throw new Error("Nenhum arquivo de conversa .txt foi encontrado no ZIP.");
 

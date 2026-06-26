@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v013-express";
+const BUILD_ID = "corretor-pro-v014";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -35,6 +35,11 @@ function openShareDatabase() {
   });
 }
 
+function ensureZipName(name) {
+  const base = String(name || "").trim() || "conversa-whatsapp";
+  return /\.zip$/i.test(base) ? base : `${base}.zip`;
+}
+
 async function saveIncomingFile(file) {
   const db = await openShareDatabase();
   try {
@@ -42,7 +47,7 @@ async function saveIncomingFile(file) {
       const transaction = db.transaction(SHARE_STORE, "readwrite");
       transaction.objectStore(SHARE_STORE).put({
         id: SHARE_RECORD_ID,
-        name: file.name || "conversa-whatsapp.zip",
+        name: ensureZipName(file.name),
         type: file.type || "application/zip",
         size: file.size,
         blob: file.slice(0, file.size, file.type || "application/zip"),
@@ -73,10 +78,13 @@ async function handleShareTarget(request) {
       }
     }
 
-    const validName = file instanceof File && /\.zip$/i.test(file.name || "");
-    const validSize = file instanceof File && file.size > 0 && file.size <= 500 * 1024 * 1024;
+    // O Android nem sempre preserva a extensão .zip no nome do arquivo
+    // compartilhado. Por isso aceitamos qualquer arquivo não vazio dentro do
+    // limite de tamanho e deixamos o app validar o conteúdo do ZIP (via JSZip).
+    const isFile = file instanceof File;
+    const validSize = isFile && file.size > 0 && file.size <= 500 * 1024 * 1024;
 
-    if (!validName || !validSize) {
+    if (!isFile || !validSize) {
       home.searchParams.set("share_error", "arquivo_invalido");
       return Response.redirect(home.href, 303);
     }
