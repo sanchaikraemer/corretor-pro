@@ -5,19 +5,20 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=021";
+} from "./db.js?v=022";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=021";
+} from "./whatsapp.js?v=022";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
 const brandButton = document.querySelector("#brand-button");
 const installButton = document.querySelector("#install-button");
+const headerVersion = document.querySelector("#header-version");
 const editNameButton = document.querySelector("#edit-name-button");
 const detailHeader = document.querySelector("#detail-header");
 const detailHeaderTitle = document.querySelector("#detail-header-title");
@@ -32,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v021";
+const APP_VERSION = "v022";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -46,7 +47,9 @@ const state = {
   toastTimer: null,
   syncing: false,
   syncTimer: null,
-  cloudAvailable: null
+  cloudAvailable: null,
+  detailPeriod: "30",
+  deletingKeys: new Set()
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -165,6 +168,110 @@ function formatCardDate(value) {
   return { date: dateLabel, time: timeFormatter.format(date) };
 }
 
+const DETAIL_PERIODS = [
+  { value: "30", label: "30 dias" },
+  { value: "60", label: "60 dias" },
+  { value: "90", label: "90 dias" },
+  { value: "all", label: "Todo período" }
+];
+
+function timelineItemTimestamp(item) {
+  const direct = Date.parse(item?.timestamp || "");
+  if (Number.isFinite(direct)) return direct;
+
+  const match = String(item?.date || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!match) return null;
+  const [, dayText, monthText, yearText] = match;
+  const [hourText = "0", minuteText = "0"] = String(item?.time || "00:00").split(":");
+  const rawYear = Number(yearText);
+  const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+  const parsed = new Date(
+    year,
+    Number(monthText) - 1,
+    Number(dayText),
+    Number(hourText),
+    Number(minuteText),
+    0,
+    0
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function filterTimelineByPeriod(timeline, period = state.detailPeriod) {
+  const items = Array.isArray(timeline) ? timeline : [];
+  if (period === "all") return items;
+
+  const days = Number(period);
+  if (![30, 60, 90].includes(days)) return items;
+
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffTime = cutoff.getTime();
+
+  return items.filter(item => {
+    const timestamp = timelineItemTimestamp(item);
+    return timestamp !== null && timestamp >= cutoffTime;
+  });
+}
+
+function selectedPeriodLabel() {
+  return DETAIL_PERIODS.find(option => option.value === state.detailPeriod)?.label || "30 dias";
+}
+
+function formatTimelineForCopy(timeline) {
+  return timeline.map(item => {
+    const timestamp = timelineItemTimestamp(item);
+    const date = item.date || (timestamp !== null ? dateOnlyFormatter.format(new Date(timestamp)) : "Sem data");
+    const time = item.time || (timestamp !== null ? timeFormatter.format(new Date(timestamp)) : "");
+    const author = String(item.author || "Sem identificação").trim();
+    const audioLabel = item.type === "audio"
+      ? (item.transcriptionStatus === "done" ? "[Áudio transcrito] " : "[Áudio não transcrito] ")
+      : "";
+    const text = String(item.text || "").trim();
+    return `${date}${time ? ` ${time}` : ""} - ${author}: ${audioLabel}${text}`.trim();
+  }).join("\n\n");
+}
+
+async function writeToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  }
+}
+
+async function copySelectedMessages() {
+  if (!state.currentKey) return;
+  const record = state.records.find(item => item.conversationKey === state.currentKey)
+    || await getAtendimento(state.currentKey);
+  if (!record) return;
+
+  const timeline = filterTimelineByPeriod(record.timeline);
+  if (!timeline.length) {
+    showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()}.`, "error");
+    return;
+  }
+
+  const copied = await writeToClipboard(formatTimelineForCopy(timeline));
+  if (!copied) {
+    showToast("Não foi possível copiar as mensagens.", "error");
+    return;
+  }
+  showToast(`${timeline.length} mensagem${timeline.length === 1 ? " copiada" : "s copiadas"}.`);
+}
+
 function renderInstallCard() {
   if (isStandalone()) return "";
 
@@ -272,7 +379,6 @@ function renderList() {
             ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
             : "Os atendimentos deste link são <strong>atualizados automaticamente</strong>."}</span>
         </div>
-        <p class="build-tag">Corretor Pro ${APP_VERSION}</p>
       </div>
     </section>`;
 }
@@ -332,6 +438,7 @@ function renderTimelineItem(item, record) {
 }
 
 function renderDetail(record) {
+  if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
   setDetailHeader(record);
 
@@ -341,10 +448,19 @@ function renderDetail(record) {
     : `Atualizado em ${dateOnlyFormatter.format(updated)} às ${timeFormatter.format(updated)}`;
 
   const failedAudios = (record.timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done");
-  const groups = groupTimelineByDate(record.timeline);
+  const filteredTimeline = filterTimelineByPeriod(record.timeline);
+  const groups = groupTimelineByDate(filteredTimeline);
   const timelineHtml = groups.map(group => `
     <div class="timeline-day"><span>${escapeHtml(group.label)}</span></div>
     ${group.items.map(item => renderTimelineItem(item, record)).join("")}
+  `).join("");
+  const periodOptions = DETAIL_PERIODS.map(option => `
+    <button
+      class="period-option${state.detailPeriod === option.value ? " active" : ""}"
+      type="button"
+      data-detail-period="${option.value}"
+      aria-pressed="${state.detailPeriod === option.value ? "true" : "false"}"
+    >${escapeHtml(option.label)}</button>
   `).join("");
 
   app.innerHTML = `
@@ -363,7 +479,20 @@ function renderDetail(record) {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
           <div><strong>Informação incompleta</strong><span>${failedAudios.length} áudio${failedAudios.length === 1 ? " não foi transcrito" : "s não foram transcritos"} mesmo após novas tentativas. A conversa pode estar sem informações importantes.</span></div>
         </section>` : ""}
-      <section class="timeline">${timelineHtml || "<p>Nenhuma mensagem disponível.</p>"}</section>
+      <section class="message-toolbar" aria-label="Período das mensagens">
+        <div class="period-filter">
+          <span class="period-filter-label">Mostrar mensagens de:</span>
+          <div class="period-options" role="group" aria-label="Selecionar período">
+            ${periodOptions}
+          </div>
+          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? "" : "s"}</span>
+        </div>
+        <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          Copiar
+        </button>
+      </section>
+      <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
         <span>Somente mensagens escritas e transcrições de áudio são exibidas. Imagens, vídeos, PDFs e outras mídias são ignorados.</span>
@@ -416,6 +545,7 @@ async function pullRemoteRecords() {
     if (!state.cloudAvailable) return false;
 
     for (const remote of payload.records) {
+      if (state.deletingKeys.has(remote.conversationKey)) continue;
       const local = await getAtendimento(remote.conversationKey);
 
       if (remote.metadata?.deletedAt) {
@@ -838,22 +968,34 @@ async function saveRenamedAttendance() {
 
 async function deleteCurrentLead() {
   if (!state.currentKey) return;
-  const record = await getAtendimento(state.currentKey);
+  const record = state.records.find(item => item.conversationKey === state.currentKey)
+    || await getAtendimento(state.currentKey);
   if (!record) return;
 
   const confirmed = window.confirm(`Excluir o lead "${record.nomeLead}"? Esta ação removerá o atendimento deste site em todos os aparelhos.`);
   if (!confirmed) return;
 
-  const remoteDeleted = await deleteRemoteRecord(record);
-  if (!remoteDeleted) {
-    showToast("Não foi possível excluir o lead agora. Verifique a conexão e tente novamente.", "error", 7000);
-    return;
-  }
+  const previousRecords = [...state.records];
+  state.deletingKeys.add(record.conversationKey);
+  state.records = state.records.filter(item => item.conversationKey !== record.conversationKey);
+  state.currentKey = null;
+  state.detailPeriod = "30";
+  history.replaceState({}, "", `${location.pathname}${location.search}#/`);
+  renderList();
 
-  await deleteAtendimento(record.conversationKey);
-  await refreshRecords();
-  navigateToList();
-  showToast("Lead excluído.");
+  try {
+    await deleteAtendimento(record.conversationKey);
+    const remoteDeleted = await deleteRemoteRecord(record);
+    if (!remoteDeleted) throw new Error("Falha ao excluir na nuvem.");
+    showToast("Lead excluído.");
+  } catch {
+    await saveAtendimento(record).catch(() => null);
+    state.records = previousRecords;
+    renderList();
+    showToast("Não foi possível concluir a exclusão. O lead foi restaurado.", "error", 7000);
+  } finally {
+    state.deletingKeys.delete(record.conversationKey);
+  }
 }
 
 function bindEvents() {
@@ -882,6 +1024,25 @@ function bindEvents() {
       installApp();
       return;
     }
+
+    const periodTrigger = event.target.closest("[data-detail-period]");
+    if (periodTrigger) {
+      const nextPeriod = periodTrigger.dataset.detailPeriod;
+      if (DETAIL_PERIODS.some(option => option.value === nextPeriod)) {
+        state.detailPeriod = nextPeriod;
+        const record = state.records.find(item => item.conversationKey === state.currentKey)
+          || await getAtendimento(state.currentKey);
+        if (record) renderDetail(record);
+      }
+      return;
+    }
+
+    const copyTrigger = event.target.closest("[data-copy-messages]");
+    if (copyTrigger) {
+      await copySelectedMessages();
+      return;
+    }
+
     const deleteTrigger = event.target.closest("[data-delete-lead]");
     if (deleteTrigger) {
       await deleteCurrentLead();
@@ -925,6 +1086,7 @@ async function init() {
   // Lê o ZIP na thread principal (sem web workers): evita arquivos extras e
   // funciona offline. Só lemos texto e áudios pequenos, então é leve.
   globalThis.zip?.configure?.({ useWebWorkers: false });
+  if (headerVersion) headerVersion.textContent = APP_VERSION;
   bindEvents();
   await registerServiceWorker();
   await syncLocalRecordsToCloud();

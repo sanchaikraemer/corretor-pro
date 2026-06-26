@@ -136,6 +136,21 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: 10px;
 }
 
+.header-version {
+  min-width: 38px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 999px;
+  color: var(--white);
+  background: rgba(255,255,255,.1);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: .02em;
+  flex: 0 0 auto;
+}
+
 .install-button,
 .primary-button,
 .secondary-button {
@@ -510,9 +525,110 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: 10px;
 }
 
+.message-toolbar {
+  width: min(100%, 860px);
+  margin: 0 auto 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+.period-filter {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.period-filter-label,
+.period-result {
+  color: var(--gray);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.period-filter-label {
+  font-weight: 600;
+}
+
+.period-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.period-option {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--charcoal);
+  background: var(--gray-light);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.period-option.active {
+  border-color: var(--emerald);
+  color: var(--white);
+  background: var(--emerald-dark);
+}
+
+.copy-messages-button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--white);
+  background: var(--emerald);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.copy-messages-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.copy-messages-button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
 .timeline {
   width: min(100%, 860px);
   margin: 0 auto;
+}
+
+.timeline-empty {
+  margin: 18px 0;
+  padding: 28px 18px;
+  border: 1px dashed #D1D5DB;
+  border-radius: 14px;
+  color: var(--gray);
+  background: var(--gray-light);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .timeline-day {
@@ -1002,6 +1118,15 @@ button.storage-note strong { font-weight: 600; }
 
 .delete-lead-button:hover {
   background: #FEF2F2;
+}
+
+@media (max-width: 520px) {
+  .app-header { gap: 7px; }
+  .header-version { min-width: 34px; padding-inline: 6px; }
+  .message-toolbar { align-items: stretch; flex-direction: column; }
+  .copy-messages-button { width: 100%; }
+  .period-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .period-option { padding-inline: 4px; }
 }
 
 @media (min-width: 700px) {

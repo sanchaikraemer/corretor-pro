@@ -26,17 +26,17 @@ async function invoke({ method, url, body }) {
   return { status: res.statusCode, payload: JSON.parse(res.body || "{}") };
 }
 
-test("v021 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v021"/);
+test("v022 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v022"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v021/);
-  assert.match(htmlSource, /app\.js\?v=021/);
-  assert.match(appSource, /db\.js\?v=021/);
-  assert.match(appSource, /whatsapp\.js\?v=021/);
+  assert.match(workerSource, /corretor-pro-v022/);
+  assert.match(htmlSource, /app\.js\?v=022/);
+  assert.match(appSource, /db\.js\?v=022/);
+  assert.match(appSource, /whatsapp\.js\?v=022/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -165,4 +165,42 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
     if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
   }
+});
+
+
+test("versão v022 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v022<\/span>/);
+  assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
+  assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
+});
+
+test("detalhe começa em 30 dias e permite 60, 90 ou todo o período", () => {
+  assert.match(appSource, /detailPeriod: "30"/);
+  assert.match(appSource, /\{ value: "30", label: "30 dias" \}/);
+  assert.match(appSource, /\{ value: "60", label: "60 dias" \}/);
+  assert.match(appSource, /\{ value: "90", label: "90 dias" \}/);
+  assert.match(appSource, /\{ value: "all", label: "Todo período" \}/);
+  assert.match(appSource, /filterTimelineByPeriod/);
+  assert.match(appSource, /data-detail-period/);
+});
+
+test("botão Copiar usa somente as mensagens do período selecionado", () => {
+  assert.match(appSource, /data-copy-messages/);
+  assert.match(appSource, /copySelectedMessages/);
+  assert.match(appSource, /formatTimelineForCopy/);
+  assert.match(appSource, /navigator\.clipboard\.writeText/);
+  assert.match(appSource, /const timeline = filterTimelineByPeriod\(record\.timeline\)/);
+});
+
+test("exclusão retira o lead da tela antes de aguardar banco e nuvem", () => {
+  const start = appSource.indexOf("async function deleteCurrentLead()");
+  const end = appSource.indexOf("function bindEvents()", start);
+  const source = appSource.slice(start, end);
+  const removeFromState = source.indexOf("state.records = state.records.filter");
+  const renderImmediately = source.indexOf("renderList()");
+  const waitLocalDelete = source.indexOf("await deleteAtendimento");
+  assert.ok(removeFromState >= 0);
+  assert.ok(renderImmediately > removeFromState);
+  assert.ok(waitLocalDelete > renderImmediately);
+  assert.match(source, /O lead foi restaurado/);
 });
