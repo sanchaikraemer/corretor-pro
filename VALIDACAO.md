@@ -15,3 +15,14 @@ Executado antes da entrega:
 - logotipo aprovado aplicado no cabeçalho, processamento e ícone do aplicativo.
 
 A transcrição real depende de `OPENAI_API_KEY` configurada na Vercel.
+
+
+## Validação da versão 0.1.4 / v020
+
+- atualização automática pelo mesmo link, sem código manual de sincronia;
+- nova tentativa automática de transcrição de áudio;
+- aviso persistente quando falta informação de áudio;
+- exclusão de lead local e na nuvem;
+- proteção para uma versão antiga não restaurar um lead já excluído;
+- 15 testes automatizados aprovados;
+- verificação de sintaxe e build concluídos.

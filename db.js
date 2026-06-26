@@ -54,48 +54,6 @@ async function openShareDatabase() {
   });
 }
 
-export function getDeviceId() {
-  const key = "corretor-pro-device-id";
-  let value = localStorage.getItem(key);
-  if (value) return value;
-
-  value = globalThis.crypto?.randomUUID?.()
-    || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  localStorage.setItem(key, value);
-  return value;
-}
-
-const SYNC_CODE_KEY = "corretor-pro-sync-code";
-
-// Normaliza o código de sincronia para que celular e PC cheguem ao mesmo
-// valor mesmo digitando com maiúsculas, acentos ou espaços diferentes.
-export function normalizeSyncCode(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export function getSyncCode() {
-  return (localStorage.getItem(SYNC_CODE_KEY) || "").trim();
-}
-
-export function setSyncCode(value) {
-  const clean = normalizeSyncCode(value);
-  if (clean) localStorage.setItem(SYNC_CODE_KEY, clean);
-  else localStorage.removeItem(SYNC_CODE_KEY);
-  return clean;
-}
-
-// Chave usada na nuvem: o código de sincronia (compartilhado entre aparelhos)
-// quando definido, ou a identidade local do aparelho como reserva.
-export function getRemoteKey() {
-  return getSyncCode() || getDeviceId();
-}
-
 export async function listAtendimentos() {
   const db = await openAppDatabase();
   try {
@@ -138,6 +96,19 @@ export async function saveAtendimento(record) {
       store.put(record);
     });
     return record;
+  } finally {
+    db.close();
+  }
+}
+
+
+export async function deleteAtendimento(conversationKey) {
+  if (!conversationKey) return;
+  const db = await openAppDatabase();
+  try {
+    await runTransaction(db, ATTENDANCE_STORE, "readwrite", store => {
+      store.delete(conversationKey);
+    });
   } finally {
     db.close();
   }

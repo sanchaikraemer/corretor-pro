@@ -1,13 +1,10 @@
 import {
+  deleteAtendimento,
   getAtendimento,
   getPendingShare,
-  getRemoteKey,
-  getSyncCode,
   listAtendimentos,
-  normalizeSyncCode,
   removePendingShare,
-  saveAtendimento,
-  setSyncCode
+  saveAtendimento
 } from "./db.js";
 import {
   inferLeadName,
@@ -34,18 +31,22 @@ const toast = document.querySelector("#toast");
 const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
-const syncDialog = document.querySelector("#sync-dialog");
-const syncForm = document.querySelector("#sync-form");
-const syncInput = document.querySelector("#sync-input");
 
-const APP_VERSION = "v019";
+const APP_VERSION = "v020";
+const CLOUD_WORKSPACE = "corretor-pro-site";
+const AUTO_SYNC_INTERVAL_MS = 15000;
+const MAX_TRANSCRIPTION_ATTEMPTS = 3;
+const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
   records: [],
   currentKey: null,
   installPrompt: null,
   processing: false,
-  toastTimer: null
+  toastTimer: null,
+  syncing: false,
+  syncTimer: null,
+  cloudAvailable: null
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -243,7 +244,6 @@ function renderList() {
   state.currentKey = null;
   setListHeader();
 
-  const syncCode = getSyncCode();
   const cards = state.records.map(record => {
     const moment = formatCardDate(record.ultimaMensagemAt || record.updatedAt);
     return `
@@ -266,12 +266,12 @@ function renderList() {
       <div class="list-surface">
         ${renderInstallCard()}
         ${state.records.length ? `<section class="attendance-list">${cards}</section>` : renderEmptyState()}
-        <button class="storage-note" type="button" data-sync-open>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-          <span>${syncCode
-            ? `Sincronizando entre aparelhos com o código <strong>${escapeHtml(syncCode)}</strong>. Toque para alterar.`
-            : `Atendimentos salvos só neste aparelho. <strong>Toque para sincronizar</strong> com o computador.`}</span>
-        </button>
+        <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
+          <span>${state.cloudAvailable === false
+            ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
+            : "Os atendimentos deste link são <strong>atualizados automaticamente</strong>."}</span>
+        </div>
         <p class="build-tag">Corretor Pro ${APP_VERSION}</p>
       </div>
     </section>`;
@@ -340,6 +340,7 @@ function renderDetail(record) {
     ? "Atualizado recentemente"
     : `Atualizado em ${dateOnlyFormatter.format(updated)} às ${timeFormatter.format(updated)}`;
 
+  const failedAudios = (record.timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done");
   const groups = groupTimelineByDate(record.timeline);
   const timelineHtml = groups.map(group => `
     <div class="timeline-day"><span>${escapeHtml(group.label)}</span></div>
@@ -357,11 +358,17 @@ function renderDetail(record) {
           <span>${escapeHtml(updatedLabel)}</span>
         </div>
       </section>
+      ${failedAudios.length ? `
+        <section class="audio-warning" role="alert">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
+          <div><strong>Informação incompleta</strong><span>${failedAudios.length} áudio${failedAudios.length === 1 ? " não foi transcrito" : "s não foram transcritos"} mesmo após novas tentativas. A conversa pode estar sem informações importantes.</span></div>
+        </section>` : ""}
       <section class="timeline">${timelineHtml || "<p>Nenhuma mensagem disponível.</p>"}</section>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
         <span>Somente mensagens escritas e transcrições de áudio são exibidas. Imagens, vídeos, PDFs e outras mídias são ignorados.</span>
       </div>
+      <button class="delete-lead-button" type="button" data-delete-lead>Excluir lead</button>
     </section>`;
 }
 
@@ -385,25 +392,54 @@ async function refreshRecords() {
   state.records = await listAtendimentos();
 }
 
+async function fetchRemoteRecords() {
+  const response = await fetch(`/api/atendimentos?device_id=${encodeURIComponent(CLOUD_WORKSPACE)}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error("Não foi possível atualizar os atendimentos.");
+  const payload = await response.json();
+  return {
+    storage: payload.storage || "local",
+    records: Array.isArray(payload.records) ? payload.records : []
+  };
+}
+
 async function pullRemoteRecords() {
-  const remoteKey = getRemoteKey();
+  if (state.syncing || state.processing) return false;
+  state.syncing = true;
+  let changed = false;
+
   try {
-    const response = await fetch(`/api/atendimentos?device_id=${encodeURIComponent(remoteKey)}`, {
-      headers: { Accept: "application/json" }
-    });
-    if (!response.ok) return;
-    const payload = await response.json();
-    if (!Array.isArray(payload.records)) return;
+    const payload = await fetchRemoteRecords();
+    state.cloudAvailable = payload.storage === "supabase";
+    if (!state.cloudAvailable) return false;
 
     for (const remote of payload.records) {
       const local = await getAtendimento(remote.conversationKey);
+
+      if (remote.metadata?.deletedAt) {
+        if (local) {
+          await deleteAtendimento(remote.conversationKey);
+          changed = true;
+        }
+        continue;
+      }
+
       const localTime = Date.parse(local?.updatedAt || 0) || 0;
       const remoteTime = Date.parse(remote.updatedAt || 0) || 0;
-      if (!local || remoteTime > localTime) await saveAtendimento(remote);
+      if (!local || remoteTime > localTime) {
+        await saveAtendimento(remote);
+        changed = true;
+      }
     }
   } catch {
-    // O armazenamento local mantém o app funcional sem conexão ou Supabase.
+    // Sem conexão, a cópia local continua disponível e a próxima atualização tenta de novo.
+  } finally {
+    state.syncing = false;
   }
+
+  return changed;
 }
 
 async function pushRemoteRecord(record) {
@@ -411,65 +447,70 @@ async function pushRemoteRecord(record) {
     const response = await fetch("/api/atendimentos", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ ...record, deviceId: getRemoteKey() })
+      body: JSON.stringify({ ...record, deviceId: CLOUD_WORKSPACE })
     });
+    if (!response.ok) return null;
     return await response.json().catch(() => ({}));
   } catch {
-    // O registro já foi salvo localmente. A cópia remota é complementar nesta fase.
+    // O registro fica local e será reenviado quando o site abrir novamente.
     return null;
   }
 }
 
-async function isCloudConfigured() {
+async function deleteRemoteRecord(record) {
   try {
-    const response = await fetch("/api/health", { headers: { Accept: "application/json" } });
-    const data = await response.json();
-    return Boolean(data?.supabaseConfigured);
+    const query = new URLSearchParams({
+      device_id: CLOUD_WORKSPACE,
+      conversation_key: record.conversationKey
+    });
+    const response = await fetch(`/api/atendimentos?${query}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" }
+    });
+    return response.ok;
   } catch {
     return false;
   }
 }
 
-async function applySyncCode(rawCode) {
-  const candidate = normalizeSyncCode(rawCode);
-  if (candidate && candidate.length < 8) {
-    showToast("O código precisa ter ao menos 8 caracteres. Ex.: corretor-sanchai.", "error", 7000);
-    return;
+async function syncLocalRecordsToCloud() {
+  const localRecords = await listAtendimentos();
+  for (const record of localRecords) {
+    const migrated = record.deviceId === CLOUD_WORKSPACE
+      ? record
+      : {
+          ...record,
+          id: globalThis.crypto?.randomUUID?.() || `attendance-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          deviceId: CLOUD_WORKSPACE
+        };
+    if (migrated !== record) await saveAtendimento(migrated);
+    await pushRemoteRecord(migrated);
   }
-
-  const clean = setSyncCode(rawCode);
-
-  if (!clean) {
-    await refreshRecords();
-    renderRoute();
-    showToast("Sincronização desligada. Os atendimentos ficam apenas neste aparelho.");
-    return;
-  }
-
-  if (!(await isCloudConfigured())) {
-    renderRoute();
-    showToast(
-      "Código salvo, mas o banco na nuvem (Supabase) ainda não está configurado na Vercel. A sincronia começa assim que você configurar.",
-      "error",
-      9000
-    );
-    return;
-  }
-
-  showToast("Sincronizando atendimentos com a nuvem…");
-  for (const record of state.records) {
-    await pushRemoteRecord(record);
-  }
-  await pullRemoteRecords();
-  await refreshRecords();
-  renderRoute();
-  showToast(`Sincronização ativada com o código "${clean}". Use o mesmo código no outro aparelho.`, "success", 8000);
+  return pullRemoteRecords();
 }
 
-function openSyncDialog() {
-  syncInput.value = getSyncCode();
-  syncDialog.showModal();
-  requestAnimationFrame(() => syncInput.select());
+async function refreshFromCloud({ render = true } = {}) {
+  const changed = await pullRemoteRecords();
+  if (!changed) return false;
+
+  await refreshRecords();
+  if (render) {
+    const routeKey = getRouteKey();
+    if (routeKey && !state.records.some(item => item.conversationKey === routeKey)) {
+      navigateToList();
+      showToast("Este lead foi excluído em outro aparelho.");
+    } else {
+      await renderRoute();
+    }
+  }
+  return true;
+}
+
+function startAutomaticSync() {
+  clearInterval(state.syncTimer);
+  state.syncTimer = setInterval(() => {
+    refreshFromCloud().catch(() => null);
+  }, AUTO_SYNC_INTERVAL_MS);
 }
 
 function getZipLib() {
@@ -532,6 +573,40 @@ async function transcribeAudio(entry, fullName) {
   return { text, status: text ? "done" : "empty" };
 }
 
+function wait(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function transcribeAudioWithRetry(entry, fullName, onRetry) {
+  let lastResult = { text: "", status: "error" };
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_TRANSCRIPTION_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await transcribeAudio(entry, fullName);
+      lastResult = result;
+      if (result.status === "done" && result.text) return { ...result, attempts: attempt };
+      if (result.status === "missing" || result.status === "too_large") return { ...result, attempts: attempt };
+    } catch (error) {
+      if (error.fatal) {
+        return { text: error.message, status: "error", attempts: attempt };
+      }
+      lastError = error;
+    }
+
+    if (attempt < MAX_TRANSCRIPTION_ATTEMPTS) {
+      onRetry?.(attempt + 1);
+      await wait(TRANSCRIPTION_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  return {
+    text: lastResult.text || lastError?.message || "Não foi possível transcrever este áudio.",
+    status: "error",
+    attempts: MAX_TRANSCRIPTION_ATTEMPTS
+  };
+}
+
 function mergeTimeline(existingTimeline, incomingTimeline) {
   const merged = new Map();
   for (const item of existingTimeline || []) merged.set(item.fingerprint, item);
@@ -540,13 +615,17 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
   for (const incoming of incomingTimeline) {
     const previous = merged.get(incoming.fingerprint);
     if (previous) {
-      merged.set(incoming.fingerprint, {
-        ...incoming,
-        text: incoming.type === "audio" && previous.text ? previous.text : incoming.text,
-        transcriptionStatus: incoming.type === "audio"
-          ? previous.transcriptionStatus || incoming.transcriptionStatus
-          : undefined
-      });
+      if (incoming.type === "audio") {
+        const incomingDone = incoming.transcriptionStatus === "done" && incoming.text;
+        const previousDone = previous.transcriptionStatus === "done" && previous.text;
+        merged.set(incoming.fingerprint, incomingDone
+          ? { ...previous, ...incoming }
+          : previousDone
+            ? { ...incoming, text: previous.text, transcriptionStatus: "done", transcriptionAttempts: previous.transcriptionAttempts }
+            : { ...previous, ...incoming });
+      } else {
+        merged.set(incoming.fingerprint, { ...previous, ...incoming });
+      }
       continue;
     }
     merged.set(incoming.fingerprint, incoming);
@@ -623,23 +702,34 @@ async function processIncomingZip(pending) {
       const audioEntry = audioMap.get(normalizeFileName(item.audioFile));
       if (!audioEntry) {
         item.transcriptionStatus = "missing";
+        item.transcriptionAttempts = 0;
         item.text = "Não foi possível localizar este áudio dentro do ZIP.";
         completedAudios += 1;
         continue;
       }
 
       try {
-        const result = await transcribeAudio(audioEntry, audioEntry.filename);
+        const result = await transcribeAudioWithRetry(
+          audioEntry,
+          audioEntry.filename,
+          nextAttempt => setProcessing(
+            "transcribe",
+            32 + (completedAudios / Math.max(audioItems.length, 1)) * 43,
+            `O áudio ${completedAudios + 1} falhou. Tentando novamente (${nextAttempt}/${MAX_TRANSCRIPTION_ATTEMPTS}).`
+          )
+        );
         item.text = result.text || (
           result.status === "too_large"
-            ? "Este áudio ultrapassa o limite desta primeira versão."
-            : "O áudio não retornou texto."
+            ? "Este áudio ultrapassa o limite permitido para transcrição."
+            : "O áudio não retornou texto após novas tentativas."
         );
         item.transcriptionStatus = result.status;
+        item.transcriptionAttempts = result.attempts;
       } catch (error) {
         if (error.fatal) throw error;
-        item.text = "Não foi possível transcrever este áudio.";
+        item.text = "Não foi possível transcrever este áudio após 3 tentativas.";
         item.transcriptionStatus = "error";
+        item.transcriptionAttempts = MAX_TRANSCRIPTION_ATTEMPTS;
       }
 
       completedAudios += 1;
@@ -657,7 +747,7 @@ async function processIncomingZip(pending) {
     const merged = mergeTimeline(existing?.timeline, parsedTimeline);
     const lastItem = merged.timeline[merged.timeline.length - 1];
     const now = new Date().toISOString();
-    const deviceId = getRemoteKey();
+    const deviceId = CLOUD_WORKSPACE;
 
     const record = {
       id: existing?.id || globalThis.crypto?.randomUUID?.() || `attendance-${Date.now()}`,
@@ -674,6 +764,7 @@ async function processIncomingZip(pending) {
         txtFile: txtEntry.filename,
         totalItens: merged.timeline.length,
         totalAudios: merged.timeline.filter(item => item.type === "audio").length,
+        audiosNaoTranscritos: merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
         ignoredMedia: true,
         lastReceivedAt: pending.receivedAt || now
       },
@@ -693,7 +784,14 @@ async function processIncomingZip(pending) {
     await refreshRecords();
     navigateToAttendance(conversationKey);
 
-    if (existing) {
+    const unresolvedAudios = merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length;
+    if (unresolvedAudios) {
+      showToast(
+        `${unresolvedAudios} áudio${unresolvedAudios === 1 ? " não foi transcrito" : "s não foram transcritos"} após novas tentativas. O atendimento está com informação incompleta.`,
+        "error",
+        9000
+      );
+    } else if (existing) {
       showToast(merged.added ? `${merged.added} novo${merged.added === 1 ? " item adicionado" : "s itens adicionados"}.` : "Nenhuma mensagem nova foi encontrada.");
     } else {
       showToast("Atendimento criado e salvo.");
@@ -738,6 +836,26 @@ async function saveRenamedAttendance() {
   showToast("Nome atualizado.");
 }
 
+async function deleteCurrentLead() {
+  if (!state.currentKey) return;
+  const record = await getAtendimento(state.currentKey);
+  if (!record) return;
+
+  const confirmed = window.confirm(`Excluir o lead "${record.nomeLead}"? Esta ação removerá o atendimento deste site em todos os aparelhos.`);
+  if (!confirmed) return;
+
+  const remoteDeleted = await deleteRemoteRecord(record);
+  if (!remoteDeleted) {
+    showToast("Não foi possível excluir o lead agora. Verifique a conexão e tente novamente.", "error", 7000);
+    return;
+  }
+
+  await deleteAtendimento(record.conversationKey);
+  await refreshRecords();
+  navigateToList();
+  showToast("Lead excluído.");
+}
+
 function bindEvents() {
   window.addEventListener("hashchange", renderRoute);
   window.addEventListener("beforeinstallprompt", event => {
@@ -758,15 +876,15 @@ function bindEvents() {
   installButton.addEventListener("click", installApp);
   editNameButton.addEventListener("click", openRenameDialog);
 
-  app.addEventListener("click", event => {
+  app.addEventListener("click", async event => {
     const installTrigger = event.target.closest("[data-install]");
     if (installTrigger) {
       installApp();
       return;
     }
-    const syncTrigger = event.target.closest("[data-sync-open]");
-    if (syncTrigger) {
-      openSyncDialog();
+    const deleteTrigger = event.target.closest("[data-delete-lead]");
+    if (deleteTrigger) {
+      await deleteCurrentLead();
       return;
     }
     const card = event.target.closest("[data-attendance]");
@@ -779,13 +897,11 @@ function bindEvents() {
     renameDialog.close();
   });
 
-  syncForm.addEventListener("submit", async event => {
-    event.preventDefault();
-    const code = syncInput.value;
-    const save = event.submitter?.value === "save";
-    syncDialog.close();
-    if (save) await applySyncCode(code);
+  window.addEventListener("focus", () => refreshFromCloud().catch(() => null));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshFromCloud().catch(() => null);
   });
+
 }
 
 async function registerServiceWorker() {
@@ -803,9 +919,10 @@ async function init() {
   globalThis.zip?.configure?.({ useWebWorkers: false });
   bindEvents();
   await registerServiceWorker();
-  await pullRemoteRecords();
+  await syncLocalRecordsToCloud();
   await refreshRecords();
   await renderRoute();
+  startAutomaticSync();
 
   const params = new URLSearchParams(location.search);
   const shareError = params.get("share_error");

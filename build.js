@@ -33,7 +33,7 @@ for (const file of staticFiles) {
 
 fs.writeFileSync(
   path.join(output, "version.json"),
-  JSON.stringify({ version: "0.1.3", builtAt: new Date().toISOString() }, null, 2)
+  JSON.stringify({ version: "0.1.4", builtAt: new Date().toISOString() }, null, 2)
 );
 
-console.log("Corretor Pro 0.1.3: pasta public criada com todos os arquivos do app.");
+console.log("Corretor Pro 0.1.4: pasta public criada com todos os arquivos do app.");

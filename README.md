@@ -1,8 +1,8 @@
-# Corretor Pro — pacote único completo 0.1.3
+# Corretor Pro — pacote único completo 0.1.4
 
 Todos os arquivos que você precisa enviar estão na raiz. Não há pastas para selecionar no computador.
 
-Durante a publicação, o próprio `build.js` cria a pasta `public` dentro da Vercel. O `server.js` concentra as três rotas de funcionamento: health check, transcrição e atendimentos.
+Durante a publicação, o próprio `build.js` cria a pasta `public` dentro da Vercel. O `server.js` concentra as rotas de funcionamento: health check, transcrição, atendimentos e exclusão de leads.
 
 ## Para atualizar o GitHub
 
@@ -24,5 +24,8 @@ Na Vercel, configure `OPENAI_API_KEY`.
 - lê textos e transcreve `.opus`;
 - monta uma linha do tempo única;
 - ignora imagens, vídeos e PDFs;
-- salva localmente no aparelho;
-- permite Supabase opcional.
+- salva localmente e mantém a mesma base atualizada automaticamente pelo link;
+- tenta transcrever novamente quando um áudio falha;
+- avisa quando a conversa ficou com áudio não transcrito;
+- permite excluir um lead;
+- usa o Supabase para manter os dados iguais em todos os acessos ao site.

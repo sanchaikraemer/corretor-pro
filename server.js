@@ -138,7 +138,7 @@ async function handleHealth(_req, res) {
   return send(res, 200, {
     ok: true,
     app: "Corretor Pro",
-    version: "0.1.3",
+    version: "0.1.4",
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     supabaseConfigured: configuredSupabase(),
     timestamp: new Date().toISOString()
@@ -198,6 +198,19 @@ async function handleTranscrever(req, res, url) {
   }
 }
 
+async function fetchExistingRow(deviceId, conversationKey) {
+  const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
+  target.searchParams.set("device_id", `eq.${deviceId}`);
+  target.searchParams.set("conversation_key", `eq.${conversationKey}`);
+  target.searchParams.set("select", "*");
+  target.searchParams.set("limit", "1");
+
+  const response = await fetch(target, { headers: supabaseHeaders() });
+  const payload = await response.json().catch(() => []);
+  if (!response.ok) throw new Error("Falha ao consultar atendimento existente.");
+  return Array.isArray(payload) ? payload[0] || null : null;
+}
+
 async function handleListAtendimentos(req, res, url) {
   const query = getQuery(req, url);
   const deviceId = String(query.device_id || "").trim();
@@ -241,6 +254,21 @@ async function handleSaveAtendimento(req, res) {
   if (!configuredSupabase()) return send(res, 200, { storage: "local", saved: false });
 
   try {
+    const existing = await fetchExistingRow(record.deviceId, record.conversationKey);
+    const existingTime = Date.parse(existing?.updated_at || 0) || 0;
+    const incomingTime = Date.parse(record.updatedAt || 0) || 0;
+    const deletedTime = Date.parse(existing?.metadata?.deletedAt || 0) || 0;
+    const receivedTime = Date.parse(record.metadata?.lastReceivedAt || 0) || 0;
+    const wouldRestoreWithoutNewImport = deletedTime && receivedTime <= deletedTime;
+    if (existing && (existingTime >= incomingTime || wouldRestoreWithoutNewImport)) {
+      return send(res, 200, {
+        storage: "supabase",
+        saved: false,
+        ignoredStale: true,
+        record: fromDatabaseRow(existing)
+      });
+    }
+
     const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
     target.searchParams.set("on_conflict", "device_id,conversation_key");
 
@@ -264,6 +292,51 @@ async function handleSaveAtendimento(req, res) {
   }
 }
 
+async function handleDeleteAtendimento(req, res, url) {
+  const query = getQuery(req, url);
+  const deviceId = String(query.device_id || "").trim();
+  const conversationKey = String(query.conversation_key || "").trim();
+  if (!deviceId || !conversationKey) {
+    return send(res, 400, { error: "device_id e conversation_key são obrigatórios." });
+  }
+  if (!configuredSupabase()) {
+    return send(res, 200, { storage: "local", deleted: true });
+  }
+
+  try {
+    const existing = await fetchExistingRow(deviceId, conversationKey);
+    if (!existing) return send(res, 200, { storage: "supabase", deleted: true });
+
+    const now = new Date().toISOString();
+    const metadata = {
+      ...(existing.metadata || {}),
+      deletedAt: now
+    };
+    const tombstone = {
+      ...existing,
+      ultima_mensagem_at: null,
+      ultima_mensagem_resumo: null,
+      timeline: [],
+      metadata,
+      updated_at: now
+    };
+
+    const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
+    target.searchParams.set("on_conflict", "device_id,conversation_key");
+    const response = await fetch(target, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=representation" }),
+      body: JSON.stringify(tombstone)
+    });
+    if (!response.ok) {
+      return send(res, 502, { error: "Não foi possível excluir o lead no Supabase." });
+    }
+    return send(res, 200, { storage: "supabase", deleted: true, deletedAt: now });
+  } catch {
+    return send(res, 502, { error: "Falha de comunicação com o Supabase." });
+  }
+}
+
 export default async function handler(req, res) {
   const host = getHeader(req, "host") || "localhost";
   const url = new URL(req.url || "/", `http://${host}`);
@@ -275,6 +348,7 @@ export default async function handler(req, res) {
     if (route === "/transcrever" && method === "POST") return handleTranscrever(req, res, url);
     if (route === "/atendimentos" && method === "GET") return handleListAtendimentos(req, res, url);
     if (route === "/atendimentos" && method === "POST") return handleSaveAtendimento(req, res);
+    if (route === "/atendimentos" && method === "DELETE") return handleDeleteAtendimento(req, res, url);
     return send(res, 404, { error: "Rota não encontrada." });
   } catch {
     return send(res, 500, { error: "Erro interno do Corretor Pro." });
