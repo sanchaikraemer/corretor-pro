@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=028";
+} from "./db.js?v=029";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=028";
+} from "./whatsapp.js?v=029";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v028";
+const APP_VERSION = "v029";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -685,11 +685,11 @@ function renderList() {
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
     const statusText = workflow.mode === "waiting"
-      ? `${getContactRoleText(record, "waiting")} · ${formatAttendedNowLabel(record, true)}`
+      ? getContactRoleText(record, "waiting")
       : workflow.mode === "followup_due"
-        ? "Retomada disponível · 48h sem resposta"
+        ? "Retomada disponível"
         : workflow.mode === "client_response"
-          ? `${getContactRoleText(record, "new")} · ${moment.date.toLowerCase()} às ${moment.time}`
+          ? getContactRoleText(record, "new")
           : "";
     const statusClass = workflow.mode === "waiting"
       ? " waiting-client"
