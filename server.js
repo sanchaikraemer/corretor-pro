@@ -1,7 +1,8 @@
-import express from "express";
+// Corretor Pro — handler HTTP sem dependências externas.
+// Funciona como função serverless da Vercel (export default (req, res)).
 
-const app = express();
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
+const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const TABLE = "corretor_pro_atendimentos";
 
 function configuredSupabase() {
@@ -73,8 +74,68 @@ function isValidRecord(record) {
   );
 }
 
-app.get("/api/health", (_request, response) => {
-  response.set("Cache-Control", "no-store").status(200).json({
+function readStream(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", chunk => {
+      size += chunk.length;
+      if (limit && size > limit) {
+        tooLarge = true;
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve({ buffer: Buffer.concat(chunks), tooLarge, size }));
+    req.on("error", reject);
+  });
+}
+
+async function readRawBody(req, limit) {
+  if (Buffer.isBuffer(req.body)) {
+    return { buffer: req.body, tooLarge: req.body.length > limit, size: req.body.length };
+  }
+  if (typeof req.body === "string") {
+    const buffer = Buffer.from(req.body);
+    return { buffer, tooLarge: buffer.length > limit, size: buffer.length };
+  }
+  return readStream(req, limit);
+}
+
+async function readJsonBody(req, limit) {
+  if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+  const { buffer, tooLarge } = await readStream(req, limit);
+  if (tooLarge) {
+    const error = new Error("entity.too.large");
+    error.code = "TOO_LARGE";
+    throw error;
+  }
+  if (!buffer.length) return {};
+  return JSON.parse(buffer.toString("utf8"));
+}
+
+function getQuery(req, url) {
+  if (req.query && typeof req.query === "object") return req.query;
+  return Object.fromEntries(url.searchParams.entries());
+}
+
+function getHeader(req, name) {
+  const value = req.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function send(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(payload));
+}
+
+async function handleHealth(_req, res) {
+  return send(res, 200, {
     ok: true,
     app: "Corretor Pro",
     version: "0.1.3",
@@ -82,130 +143,140 @@ app.get("/api/health", (_request, response) => {
     supabaseConfigured: configuredSupabase(),
     timestamp: new Date().toISOString()
   });
-});
+}
 
-app.post(
-  "/api/transcrever",
-  express.raw({ type: () => true, limit: MAX_AUDIO_BYTES }),
-  async (request, response) => {
-    response.set("Cache-Control", "no-store");
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return response.status(503).json({
-        code: "OPENAI_NOT_CONFIGURED",
-        error: "A chave da OpenAI ainda não foi configurada na Vercel."
-      });
-    }
-
-    const audioBuffer = Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body || []);
-    if (!audioBuffer.length) return response.status(400).json({ error: "O áudio recebido está vazio." });
-    if (audioBuffer.length > MAX_AUDIO_BYTES) {
-      return response.status(413).json({
-        code: "AUDIO_TOO_LARGE",
-        error: "Este áudio ultrapassa o limite de 4 MB desta primeira versão."
-      });
-    }
-
-    try {
-      const filename = safeFilename(request.query?.filename || request.get("x-file-name"));
-      const form = new FormData();
-      form.append("file", new Blob([audioBuffer], { type: "audio/ogg" }), filename);
-      form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1");
-      form.append("language", "pt");
-      form.append("response_format", "json");
-
-      const openaiResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form
-      });
-
-      const payload = await openaiResponse.json().catch(() => ({}));
-      if (!openaiResponse.ok) {
-        return response.status(openaiResponse.status >= 500 ? 502 : 400).json({
-          code: "TRANSCRIPTION_FAILED",
-          error: payload?.error?.message || "A OpenAI não conseguiu transcrever o áudio."
-        });
-      }
-
-      return response.status(200).json({
-        text: String(payload.text || "").trim(),
-        model: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1"
-      });
-    } catch {
-      return response.status(500).json({
-        code: "TRANSCRIPTION_ERROR",
-        error: "Não foi possível preparar o áudio para transcrição."
-      });
-    }
+async function handleTranscrever(req, res, url) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return send(res, 503, {
+      code: "OPENAI_NOT_CONFIGURED",
+      error: "A chave da OpenAI ainda não foi configurada na Vercel."
+    });
   }
-);
 
-app.get("/api/atendimentos", async (request, response) => {
-  response.set("Cache-Control", "no-store");
-  const deviceId = String(request.query?.device_id || "").trim();
-  if (!deviceId) return response.status(400).json({ error: "device_id é obrigatório." });
-  if (!configuredSupabase()) return response.status(200).json({ storage: "local", records: [] });
+  const { buffer, tooLarge } = await readRawBody(req, MAX_AUDIO_BYTES);
+  if (tooLarge || buffer.length > MAX_AUDIO_BYTES) {
+    return send(res, 413, {
+      code: "AUDIO_TOO_LARGE",
+      error: "Este áudio ultrapassa o limite de 4 MB desta primeira versão."
+    });
+  }
+  if (!buffer.length) return send(res, 400, { error: "O áudio recebido está vazio." });
 
   try {
-    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
-    url.searchParams.set("device_id", `eq.${deviceId}`);
-    url.searchParams.set("select", "*");
-    url.searchParams.set("order", "ultima_mensagem_at.desc.nullslast");
+    const query = getQuery(req, url);
+    const filename = safeFilename(query.filename || getHeader(req, "x-file-name"));
+    const form = new FormData();
+    form.append("file", new Blob([buffer], { type: "audio/ogg" }), filename);
+    form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1");
+    form.append("language", "pt");
+    form.append("response_format", "json");
 
-    const supabaseResponse = await fetch(url, { headers: supabaseHeaders() });
+    const openaiResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form
+    });
+
+    const payload = await openaiResponse.json().catch(() => ({}));
+    if (!openaiResponse.ok) {
+      return send(res, openaiResponse.status >= 500 ? 502 : 400, {
+        code: "TRANSCRIPTION_FAILED",
+        error: payload?.error?.message || "A OpenAI não conseguiu transcrever o áudio."
+      });
+    }
+
+    return send(res, 200, {
+      text: String(payload.text || "").trim(),
+      model: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1"
+    });
+  } catch {
+    return send(res, 500, {
+      code: "TRANSCRIPTION_ERROR",
+      error: "Não foi possível preparar o áudio para transcrição."
+    });
+  }
+}
+
+async function handleListAtendimentos(req, res, url) {
+  const query = getQuery(req, url);
+  const deviceId = String(query.device_id || "").trim();
+  if (!deviceId) return send(res, 400, { error: "device_id é obrigatório." });
+  if (!configuredSupabase()) return send(res, 200, { storage: "local", records: [] });
+
+  try {
+    const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
+    target.searchParams.set("device_id", `eq.${deviceId}`);
+    target.searchParams.set("select", "*");
+    target.searchParams.set("order", "ultima_mensagem_at.desc.nullslast");
+
+    const supabaseResponse = await fetch(target, { headers: supabaseHeaders() });
     const payload = await supabaseResponse.json().catch(() => []);
     if (!supabaseResponse.ok) {
-      return response.status(502).json({ error: "Não foi possível consultar os atendimentos no Supabase." });
+      return send(res, 502, { error: "Não foi possível consultar os atendimentos no Supabase." });
     }
-    return response.status(200).json({ storage: "supabase", records: payload.map(fromDatabaseRow) });
+    return send(res, 200, { storage: "supabase", records: payload.map(fromDatabaseRow) });
   } catch {
-    return response.status(502).json({ error: "Falha de comunicação com o Supabase." });
+    return send(res, 502, { error: "Falha de comunicação com o Supabase." });
   }
-});
+}
 
-app.post("/api/atendimentos", express.json({ limit: "8mb" }), async (request, response) => {
-  response.set("Cache-Control", "no-store");
-  const record = request.body;
+async function handleSaveAtendimento(req, res) {
+  let record;
+  try {
+    record = await readJsonBody(req, MAX_JSON_BYTES);
+  } catch (error) {
+    if (error?.code === "TOO_LARGE") {
+      return send(res, 413, {
+        code: "AUDIO_TOO_LARGE",
+        error: "Este arquivo ultrapassa o limite desta primeira versão."
+      });
+    }
+    return send(res, 400, { error: "Dados do atendimento incompletos ou inválidos." });
+  }
 
   if (!isValidRecord(record)) {
-    return response.status(400).json({ error: "Dados do atendimento incompletos ou inválidos." });
+    return send(res, 400, { error: "Dados do atendimento incompletos ou inválidos." });
   }
-  if (!configuredSupabase()) return response.status(200).json({ storage: "local", saved: false });
+  if (!configuredSupabase()) return send(res, 200, { storage: "local", saved: false });
 
   try {
-    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
-    url.searchParams.set("on_conflict", "device_id,conversation_key");
+    const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
+    target.searchParams.set("on_conflict", "device_id,conversation_key");
 
-    const supabaseResponse = await fetch(url, {
+    const supabaseResponse = await fetch(target, {
       method: "POST",
       headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=representation" }),
       body: JSON.stringify(toDatabaseRow(record))
     });
     const payload = await supabaseResponse.json().catch(() => []);
     if (!supabaseResponse.ok) {
-      return response.status(502).json({ error: "Não foi possível salvar o atendimento no Supabase." });
+      return send(res, 502, { error: "Não foi possível salvar o atendimento no Supabase." });
     }
     const saved = Array.isArray(payload) ? payload[0] : payload;
-    return response.status(200).json({
+    return send(res, 200, {
       storage: "supabase",
       saved: true,
       record: saved ? fromDatabaseRow(saved) : record
     });
   } catch {
-    return response.status(502).json({ error: "Falha de comunicação com o Supabase." });
+    return send(res, 502, { error: "Falha de comunicação com o Supabase." });
   }
-});
+}
 
-app.use((error, _request, response, _next) => {
-  if (error?.type === "entity.too.large") {
-    return response.status(413).json({
-      code: "AUDIO_TOO_LARGE",
-      error: "Este arquivo ultrapassa o limite desta primeira versão."
-    });
+export default async function handler(req, res) {
+  const host = getHeader(req, "host") || "localhost";
+  const url = new URL(req.url || "/", `http://${host}`);
+  const route = url.pathname.replace(/^\/api/, "") || "/";
+  const method = (req.method || "GET").toUpperCase();
+
+  try {
+    if (route === "/health" && method === "GET") return handleHealth(req, res);
+    if (route === "/transcrever" && method === "POST") return handleTranscrever(req, res, url);
+    if (route === "/atendimentos" && method === "GET") return handleListAtendimentos(req, res, url);
+    if (route === "/atendimentos" && method === "POST") return handleSaveAtendimento(req, res);
+    return send(res, 404, { error: "Rota não encontrada." });
+  } catch {
+    return send(res, 500, { error: "Erro interno do Corretor Pro." });
   }
-  return response.status(500).json({ error: "Erro interno do Corretor Pro." });
-});
-
-export default app;
+}

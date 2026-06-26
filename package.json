@@ -6,11 +6,8 @@
   "description": "PWA do Corretor Pro para receber conversas exportadas do WhatsApp, transcrever áudios e montar atendimentos textuais.",
   "scripts": {
     "build": "node build.js",
-    "check": "node --check app.js && node --check db.js && node --check whatsapp.js && node --check service-worker.js && node --check server.js && node --check build.js",
+    "check": "node --check app.js && node --check db.js && node --check whatsapp.js && node --check service-worker.js && node --check server.js && node --check api/[...path].js && node --check build.js",
     "test": "node --test test-*.mjs"
-  },
-  "dependencies": {
-    "express": "5.1.0"
   },
   "engines": {
     "node": ">=20"
