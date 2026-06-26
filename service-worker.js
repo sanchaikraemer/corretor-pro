@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v025";
+const BUILD_ID = "corretor-pro-v026";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -8,10 +8,10 @@ const SHARE_RECORD_ID = "latest";
 const CORE_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css?v=025",
-  "/app.js?v=025",
-  "/db.js?v=025",
-  "/whatsapp.js?v=025",
+  "/styles.css?v=026",
+  "/app.js?v=026",
+  "/db.js?v=026",
+  "/whatsapp.js?v=026",
   "/manifest.webmanifest",
   "/share-target.html",
   "/zip.min.js",

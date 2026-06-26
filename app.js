@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=025";
+} from "./db.js?v=026";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=025";
+} from "./whatsapp.js?v=026";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v025";
+const APP_VERSION = "v026";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -171,6 +171,20 @@ function formatCardDate(value) {
       ? "Ontem"
       : shortDateFormatter.format(date);
   return { date: dateLabel, time: timeFormatter.format(date) };
+}
+
+function getAttendedNowDate(record) {
+  if (record?.metadata?.statusAtendimento !== "aguardando_resposta") return null;
+  const date = new Date(record.metadata?.atendidoAgoraAt || "");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatAttendedNowLabel(record, compact = false) {
+  const date = getAttendedNowDate(record);
+  if (!date) return "";
+  const moment = formatCardDate(date.toISOString());
+  if (compact) return `${moment.date.toLowerCase()} às ${moment.time}`;
+  return `Atendido ${moment.date.toLowerCase()} às ${moment.time}`;
 }
 
 const DETAIL_PERIODS = [
@@ -559,12 +573,14 @@ function renderList() {
 
   const cards = state.records.map(record => {
     const moment = formatCardDate(record.ultimaMensagemAt || record.updatedAt);
+    const waitingForClient = Boolean(getAttendedNowDate(record));
     return `
-      <button class="attendance-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+      <button class="attendance-card${waitingForClient ? " waiting-client" : ""}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
         <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
+          ${waitingForClient ? `<span class="attendance-status"><i aria-hidden="true"></i>Aguardando resposta · ${escapeHtml(formatAttendedNowLabel(record, true))}</span>` : ""}
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
@@ -853,6 +869,8 @@ function renderDetail(record) {
   const updatedLabel = Number.isNaN(updated.getTime())
     ? "Atualizado recentemente"
     : `Atualizado em ${dateOnlyFormatter.format(updated)} às ${timeFormatter.format(updated)}`;
+  const waitingForClient = Boolean(getAttendedNowDate(record));
+  const attendedNowLabel = formatAttendedNowLabel(record);
 
   const failedAudios = (record.timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done");
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
@@ -872,14 +890,15 @@ function renderDetail(record) {
 
   app.innerHTML = `
     <section class="detail-page">
-      <section class="status-card">
+      <section class="status-card${waitingForClient ? " waiting-client" : ""}">
         <span class="status-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
         </span>
         <div class="status-copy">
-          <strong>Atendimento salvo</strong>
-          <span>${escapeHtml(updatedLabel)}</span>
+          <strong>${waitingForClient ? "Aguardando resposta do cliente" : "Atendimento salvo"}</strong>
+          <span>${escapeHtml(waitingForClient ? attendedNowLabel : updatedLabel)}</span>
         </div>
+        ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">
@@ -1271,6 +1290,20 @@ async function processIncomingZip(pending) {
     const lastItem = merged.timeline[merged.timeline.length - 1];
     const now = new Date().toISOString();
     const deviceId = CLOUD_WORKSPACE;
+    const nextMetadata = {
+      ...(existing?.metadata || {}),
+      originalLeadName,
+      txtFile: txtEntry.filename,
+      totalItens: merged.timeline.length,
+      totalAudios: merged.timeline.filter(item => item.type === "audio").length,
+      audiosNaoTranscritos: merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
+      ignoredMedia: true,
+      lastReceivedAt: pending.receivedAt || now
+    };
+    if (merged.added > 0) {
+      delete nextMetadata.statusAtendimento;
+      delete nextMetadata.atendidoAgoraAt;
+    }
 
     const record = {
       id: existing?.id || globalThis.crypto?.randomUUID?.() || `attendance-${Date.now()}`,
@@ -1281,16 +1314,7 @@ async function processIncomingZip(pending) {
       ultimaMensagemAt: lastItem?.timestamp || now,
       ultimaMensagemResumo: lastItem?.text || "Áudio recebido",
       timeline: merged.timeline,
-      metadata: {
-        ...(existing?.metadata || {}),
-        originalLeadName,
-        txtFile: txtEntry.filename,
-        totalItens: merged.timeline.length,
-        totalAudios: merged.timeline.filter(item => item.type === "audio").length,
-        audiosNaoTranscritos: merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
-        ignoredMedia: true,
-        lastReceivedAt: pending.receivedAt || now
-      },
+      metadata: nextMetadata,
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
@@ -1357,6 +1381,37 @@ async function saveRenamedAttendance() {
   await refreshRecords();
   renderDetail(updated);
   showToast("Nome atualizado.");
+}
+
+async function markAttendedNow() {
+  const record = await getCurrentRecord();
+  if (!record) return;
+
+  const now = new Date().toISOString();
+  const updated = {
+    ...record,
+    metadata: {
+      ...(record.metadata || {}),
+      statusAtendimento: "aguardando_resposta",
+      atendidoAgoraAt: now
+    },
+    updatedAt: now
+  };
+
+  try {
+    await saveAtendimento(updated);
+    updateRecordInState(updated);
+    renderDetail(updated);
+    showToast("Atendimento registrado agora. Aguardando resposta do cliente.");
+
+    pushRemoteRecord(updated).then(result => {
+      if (!result) {
+        showToast("O atendimento foi registrado neste aparelho, mas a nuvem não confirmou a atualização.", "error", 7000);
+      }
+    });
+  } catch {
+    showToast("Não foi possível registrar o atendimento agora.", "error", 7000);
+  }
 }
 
 async function deleteCurrentLead() {
@@ -1451,6 +1506,12 @@ function bindEvents() {
     const copySuggestionTrigger = event.target.closest("[data-copy-suggestion]");
     if (copySuggestionTrigger) {
       await copySuggestedMessage(Number(copySuggestionTrigger.dataset.copySuggestion));
+      return;
+    }
+
+    const attendedNowTrigger = event.target.closest("[data-attended-now]");
+    if (attendedNowTrigger) {
+      await markAttendedNow();
       return;
     }
 

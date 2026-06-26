@@ -384,6 +384,30 @@ button { -webkit-tap-highlight-color: transparent; }
   -webkit-box-orient: vertical;
 }
 
+.attendance-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  color: var(--emerald-dark);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.attendance-status i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--emerald);
+}
+
+.attendance-card.waiting-client {
+  border-color: #B7E5D3;
+  background: linear-gradient(90deg, #FFFFFF, #F8FFFC);
+}
+
 .attendance-time {
   align-self: start;
   color: var(--emerald-dark);
@@ -512,6 +536,11 @@ button { -webkit-tap-highlight-color: transparent; }
   flex: 0 0 auto;
 }
 
+.status-copy {
+  min-width: 0;
+  flex: 1;
+}
+
 .status-copy strong {
   display: block;
   color: var(--emerald-dark);
@@ -523,6 +552,30 @@ button { -webkit-tap-highlight-color: transparent; }
   margin-top: 2px;
   color: var(--gray);
   font-size: 10px;
+}
+
+.status-card.waiting-client {
+  border-color: #9FDDC5;
+  background: linear-gradient(90deg, #ECFDF5, #F8FFFC);
+}
+
+.attended-now-button {
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--white);
+  background: var(--emerald);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.attended-now-button:hover {
+  background: var(--emerald-dark);
 }
 
 .message-toolbar {
@@ -1630,6 +1683,8 @@ button.storage-note strong { font-weight: 600; }
 @media (max-width: 520px) {
   .app-header { gap: 7px; }
   .header-version { min-width: 34px; padding-inline: 6px; }
+  .status-card { flex-wrap: wrap; }
+  .attended-now-button { width: 100%; margin-left: 0; }
   .message-toolbar { align-items: stretch; flex-direction: column; }
   .copy-messages-button { width: 100%; }
   .period-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
