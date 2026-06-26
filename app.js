@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=022";
+} from "./db.js?v=023";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=022";
+} from "./whatsapp.js?v=023";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,11 +33,14 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v022";
+const APP_VERSION = "v023";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
 const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
+const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
+const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
+const MAX_PROPOSAL_DIMENSION = 2000;
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
   records: [],
@@ -49,7 +52,9 @@ const state = {
   syncTimer: null,
   cloudAvailable: null,
   detailPeriod: "30",
-  deletingKeys: new Set()
+  deletingKeys: new Set(),
+  analyzingKey: null,
+  proposalBusy: false
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -252,6 +257,207 @@ async function writeToClipboard(text) {
   }
 }
 
+
+function isSafeProposalDataUrl(value) {
+  return /^data:image\/(?:jpeg|png|webp);base64,[a-zA-Z0-9+/=]+$/.test(String(value || ""));
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem da proposta."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("A imagem selecionada não pôde ser aberta."));
+    image.src = source;
+  });
+}
+
+function proposalCanvasDataUrl(image, maxDimension, quality) {
+  const largestSide = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height);
+  const scale = Math.min(1, maxDimension / Math.max(largestSide, 1));
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Não foi possível preparar a imagem da proposta.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", quality),
+    width,
+    height
+  };
+}
+
+async function prepareProposalImage(file) {
+  if (!(file instanceof File)) throw new Error("Selecione uma imagem da proposta.");
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || "")) {
+    throw new Error("Use uma imagem JPG, PNG ou WebP.");
+  }
+  if (file.size > MAX_PROPOSAL_SOURCE_BYTES) {
+    throw new Error("A imagem ultrapassa 12 MB. Faça um print menor e tente novamente.");
+  }
+
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImageElement(source);
+  const dimensions = [MAX_PROPOSAL_DIMENSION, 1700, 1400, 1150];
+  const qualities = [0.92, 0.84, 0.76, 0.68];
+  let prepared = null;
+
+  for (const dimension of dimensions) {
+    for (const quality of qualities) {
+      prepared = proposalCanvasDataUrl(image, dimension, quality);
+      if (prepared.dataUrl.length <= MAX_PROPOSAL_DATA_URL_LENGTH) break;
+    }
+    if (prepared?.dataUrl.length <= MAX_PROPOSAL_DATA_URL_LENGTH) break;
+  }
+
+  if (!prepared || prepared.dataUrl.length > MAX_PROPOSAL_DATA_URL_LENGTH) {
+    throw new Error("Não foi possível reduzir o print sem perder legibilidade. Recorte apenas a proposta e tente novamente.");
+  }
+
+  return {
+    name: String(file.name || "proposta.jpg").slice(0, 160),
+    type: "image/jpeg",
+    dataUrl: prepared.dataUrl,
+    width: prepared.width,
+    height: prepared.height,
+    attachedAt: new Date().toISOString(),
+    consideredSent: true
+  };
+}
+
+function updateRecordInState(record) {
+  const index = state.records.findIndex(item => item.conversationKey === record.conversationKey);
+  if (index >= 0) state.records[index] = record;
+  else state.records.unshift(record);
+}
+
+async function getCurrentRecord() {
+  if (!state.currentKey) return null;
+  return state.records.find(item => item.conversationKey === state.currentKey)
+    || await getAtendimento(state.currentKey);
+}
+
+async function attachProposalImage(file) {
+  if (state.proposalBusy) return;
+  const record = await getCurrentRecord();
+  if (!record) return;
+
+  state.proposalBusy = true;
+  renderDetail(record);
+  try {
+    const proposal = await prepareProposalImage(file);
+    const now = new Date().toISOString();
+    const metadata = {
+      ...(record.metadata || {}),
+      propostaImagem: proposal
+    };
+    delete metadata.analiseComercial;
+    const updated = { ...record, metadata, updatedAt: now };
+    await saveAtendimento(updated);
+    updateRecordInState(updated);
+    renderDetail(updated);
+    showToast("Proposta anexada. Ela será considerada como já enviada ao cliente.");
+    pushRemoteRecord(updated).then(result => {
+      if (!result) showToast("A proposta ficou salva neste aparelho, mas a nuvem não confirmou a atualização.", "error", 7000);
+    });
+  } catch (error) {
+    renderDetail(record);
+    showToast(error?.message || "Não foi possível anexar a proposta.", "error", 7000);
+  } finally {
+    state.proposalBusy = false;
+    const latest = await getCurrentRecord();
+    if (latest) renderDetail(latest);
+  }
+}
+
+function buildAnalysisRequest(record, timeline) {
+  const proposal = record.metadata?.propostaImagem;
+  return {
+    leadName: record.nomeLead,
+    period: selectedPeriodLabel(),
+    messages: formatTimelineForCopy(timeline),
+    messageCount: timeline.length,
+    incompleteAudioCount: (timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
+    proposalImage: proposal && isSafeProposalDataUrl(proposal.dataUrl) ? proposal.dataUrl : null,
+    proposalAttachedAt: proposal?.attachedAt || null
+  };
+}
+
+async function analyzeCurrentAttendance() {
+  const record = await getCurrentRecord();
+  if (!record || state.analyzingKey) return;
+  const timeline = filterTimelineByPeriod(record.timeline);
+  if (!timeline.length) {
+    showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()} para analisar.`, "error");
+    return;
+  }
+
+  state.analyzingKey = record.conversationKey;
+  renderDetail(record);
+  try {
+    const response = await fetch("/api/analisar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(buildAnalysisRequest(record, timeline))
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.analysis) {
+      throw new Error(payload.error || "Não foi possível analisar este atendimento.");
+    }
+
+    const now = new Date().toISOString();
+    const updated = {
+      ...record,
+      metadata: {
+        ...(record.metadata || {}),
+        analiseComercial: {
+          ...payload.analysis,
+          generatedAt: now,
+          period: selectedPeriodLabel(),
+          messageCount: timeline.length,
+          proposalAttachedAt: record.metadata?.propostaImagem?.attachedAt || null
+        }
+      },
+      updatedAt: now
+    };
+    await saveAtendimento(updated);
+    updateRecordInState(updated);
+    renderDetail(updated);
+    showToast("Análise concluída.");
+    pushRemoteRecord(updated).catch(() => null);
+  } catch (error) {
+    renderDetail(record);
+    showToast(error?.message || "Não foi possível analisar este atendimento.", "error", 8000);
+  } finally {
+    state.analyzingKey = null;
+    const latest = await getCurrentRecord();
+    if (latest) renderDetail(latest);
+  }
+}
+
+async function copySuggestedMessage(index) {
+  const record = await getCurrentRecord();
+  const suggestions = record?.metadata?.analiseComercial?.mensagensSugeridas;
+  const suggestion = Array.isArray(suggestions) ? suggestions[index] : null;
+  const text = String(suggestion?.mensagem || "").trim();
+  if (!text) return;
+  const copied = await writeToClipboard(text);
+  showToast(copied ? "Mensagem copiada." : "Não foi possível copiar a mensagem.", copied ? "normal" : "error");
+}
+
 async function copySelectedMessages() {
   if (!state.currentKey) return;
   const record = state.records.find(item => item.conversationKey === state.currentKey)
@@ -437,6 +643,142 @@ function renderTimelineItem(item, record) {
     </article>`;
 }
 
+
+function formatSavedDate(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return `${dateOnlyFormatter.format(date)} às ${timeFormatter.format(date)}`;
+}
+
+function renderProposalSection(record) {
+  const proposal = record.metadata?.propostaImagem;
+  const hasSafeImage = proposal && isSafeProposalDataUrl(proposal.dataUrl);
+  const busy = state.proposalBusy;
+  const attachedLabel = formatSavedDate(proposal?.attachedAt);
+
+  return `
+    <section class="proposal-card">
+      <div class="section-heading-row">
+        <div>
+          <span class="section-eyebrow">Contexto financeiro</span>
+          <h2>Última proposta</h2>
+        </div>
+        ${hasSafeImage ? `<span class="proposal-status">Já enviada</span>` : ""}
+      </div>
+      <p class="section-description">Anexe um print da proposta enviada ao cliente. A análise considerará automaticamente que ela já foi enviada.</p>
+      <input id="proposal-image-input" type="file" accept="image/jpeg,image/png,image/webp" data-proposal-input hidden>
+      ${hasSafeImage ? `
+        <div class="proposal-preview">
+          <img src="${escapeHtml(proposal.dataUrl)}" alt="Print da última proposta enviada">
+          <div class="proposal-preview-copy">
+            <strong>${escapeHtml(proposal.name || "Proposta anexada")}</strong>
+            <span>${attachedLabel ? `Anexada em ${escapeHtml(attachedLabel)}` : "Proposta atual"}</span>
+            <small>A última imagem anexada substitui a anterior.</small>
+          </div>
+        </div>
+        <button class="secondary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
+          ${busy ? "Preparando imagem..." : "Trocar print da proposta"}
+        </button>` : `
+        <button class="primary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
+          ${busy ? "Preparando imagem..." : "Anexar print da proposta"}
+        </button>`}
+    </section>`;
+}
+
+function renderTextList(items) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return `<span class="analysis-empty-value">Não identificado</span>`;
+  return `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function renderAnalysisSection(record) {
+  const analysis = record.metadata?.analiseComercial;
+  const analyzing = state.analyzingKey === record.conversationKey;
+  const actionLabel = analyzing
+    ? "Analisando conversa e proposta..."
+    : analysis
+      ? "Atualizar análise"
+      : "Analisar atendimento";
+
+  if (!analysis) {
+    return `
+      <section class="analysis-card analysis-card-empty">
+        <div class="section-heading-row">
+          <div>
+            <span class="section-eyebrow">Inteligência comercial</span>
+            <h2>Análise do atendimento</h2>
+          </div>
+        </div>
+        <p class="section-description">A análise usa as mensagens do período selecionado, as transcrições dos áudios e o print da proposta, quando anexado.</p>
+        <button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>
+          ${escapeHtml(actionLabel)}
+        </button>
+      </section>`;
+  }
+
+  const generatedLabel = formatSavedDate(analysis.generatedAt);
+  const suggestions = Array.isArray(analysis.mensagensSugeridas) ? analysis.mensagensSugeridas : [];
+  return `
+    <section class="analysis-card">
+      <div class="section-heading-row analysis-heading">
+        <div>
+          <span class="section-eyebrow">Inteligência comercial</span>
+          <h2>Análise do atendimento</h2>
+        </div>
+        <button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>
+          ${escapeHtml(actionLabel)}
+        </button>
+      </div>
+      <div class="analysis-meta">
+        <span>${escapeHtml(analysis.period || selectedPeriodLabel())}</span>
+        <span>${Number(analysis.messageCount || 0)} mensagens</span>
+        ${generatedLabel ? `<span>${escapeHtml(generatedLabel)}</span>` : ""}
+      </div>
+      <div class="analysis-summary">
+        <strong>Leitura atual</strong>
+        <p>${escapeHtml(analysis.resumo || "")}</p>
+      </div>
+      <div class="analysis-facts">
+        <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
+        <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
+        <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
+      </div>
+      <div class="analysis-grid">
+        <div class="analysis-block">
+          <h3>Sinais de interesse</h3>
+          ${renderTextList(analysis.sinaisInteresse)}
+        </div>
+        <div class="analysis-block">
+          <h3>Produtos paralelos</h3>
+          ${renderTextList(analysis.produtosParalelos)}
+        </div>
+        <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
+        <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
+        <div class="analysis-block"><h3>Última solicitação do cliente</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
+        <div class="analysis-block"><h3>Último compromisso do cliente</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
+        <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
+        <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
+        <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
+        <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
+        <div class="analysis-block emphasis"><h3>Pendência real</h3><p>${escapeHtml(analysis.pendenciaReal || "Não identificada")}</p></div>
+        <div class="analysis-block emphasis"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
+        <div class="analysis-block emphasis"><h3>Próximo passo</h3><p>${escapeHtml(analysis.proximoPasso || "Não identificado")}</p></div>
+      </div>
+      ${analysis.alertaInformacaoIncompleta ? `<div class="analysis-alert">${escapeHtml(analysis.alertaInformacaoIncompleta)}</div>` : ""}
+      <div class="suggestions-section">
+        <h3>Sugestões de resposta</h3>
+        ${suggestions.map((suggestion, index) => `
+          <article class="suggestion-card">
+            <div class="suggestion-heading">
+              <strong>${escapeHtml(suggestion.titulo || `Opção ${index + 1}`)}</strong>
+              <button type="button" data-copy-suggestion="${index}">Copiar</button>
+            </div>
+            <p>${escapeHtml(suggestion.mensagem || "")}</p>
+          </article>`).join("") || `<p class="analysis-empty-value">Nenhuma sugestão foi gerada.</p>`}
+      </div>
+    </section>`;
+}
+
 function renderDetail(record) {
   if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
@@ -492,6 +834,8 @@ function renderDetail(record) {
           Copiar
         </button>
       </section>
+      ${renderProposalSection(record)}
+      ${renderAnalysisSection(record)}
       <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
@@ -582,7 +926,7 @@ async function pushRemoteRecord(record) {
     if (!response.ok) return null;
     return await response.json().catch(() => ({}));
   } catch {
-    // O registro fica local e será reenviado quando o site abrir novamente.
+    // O registro continua disponível localmente; uma nova alteração poderá tentar o envio outra vez.
     return null;
   }
 }
@@ -601,22 +945,6 @@ async function deleteRemoteRecord(record) {
   } catch {
     return false;
   }
-}
-
-async function syncLocalRecordsToCloud() {
-  const localRecords = await listAtendimentos();
-  for (const record of localRecords) {
-    const migrated = record.deviceId === CLOUD_WORKSPACE
-      ? record
-      : {
-          ...record,
-          id: globalThis.crypto?.randomUUID?.() || `attendance-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          deviceId: CLOUD_WORKSPACE
-        };
-    if (migrated !== record) await saveAtendimento(migrated);
-    await pushRemoteRecord(migrated);
-  }
-  return pullRemoteRecords();
 }
 
 async function refreshFromCloud({ render = true } = {}) {
@@ -1043,6 +1371,24 @@ function bindEvents() {
       return;
     }
 
+    const attachProposalTrigger = event.target.closest("[data-attach-proposal]");
+    if (attachProposalTrigger) {
+      app.querySelector("[data-proposal-input]")?.click();
+      return;
+    }
+
+    const analyzeTrigger = event.target.closest("[data-analyze-attendance]");
+    if (analyzeTrigger) {
+      await analyzeCurrentAttendance();
+      return;
+    }
+
+    const copySuggestionTrigger = event.target.closest("[data-copy-suggestion]");
+    if (copySuggestionTrigger) {
+      await copySuggestedMessage(Number(copySuggestionTrigger.dataset.copySuggestion));
+      return;
+    }
+
     const deleteTrigger = event.target.closest("[data-delete-lead]");
     if (deleteTrigger) {
       await deleteCurrentLead();
@@ -1050,6 +1396,14 @@ function bindEvents() {
     }
     const card = event.target.closest("[data-attendance]");
     if (card) navigateToAttendance(card.dataset.attendance);
+  });
+
+  app?.addEventListener("change", async event => {
+    const input = event.target.closest("[data-proposal-input]");
+    if (!input) return;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file) await attachProposalImage(file);
   });
 
   renameForm?.addEventListener("submit", async event => {
@@ -1088,11 +1442,11 @@ async function init() {
   globalThis.zip?.configure?.({ useWebWorkers: false });
   if (headerVersion) headerVersion.textContent = APP_VERSION;
   bindEvents();
-  await registerServiceWorker();
-  await syncLocalRecordsToCloud();
   await refreshRecords();
   await renderRoute();
   startAutomaticSync();
+  registerServiceWorker().catch(() => null);
+  refreshFromCloud().catch(() => null);
 
   const params = new URLSearchParams(location.search);
   const shareError = params.get("share_error");

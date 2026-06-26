@@ -8,6 +8,7 @@ const htmlSource = fs.readFileSync(new URL("./index.html", import.meta.url), "ut
 const dbSource = fs.readFileSync(new URL("./db.js", import.meta.url), "utf8");
 const serverSource = fs.readFileSync(new URL("./server.js", import.meta.url), "utf8");
 const workerSource = fs.readFileSync(new URL("./service-worker.js", import.meta.url), "utf8");
+const stylesSource = fs.readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
 function makeResponse() {
   return {
@@ -26,19 +27,59 @@ async function invoke({ method, url, body }) {
   return { status: res.statusCode, payload: JSON.parse(res.body || "{}") };
 }
 
-test("v022 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v022"/);
+const sampleAnalysis = {
+  resumo: "O cliente demonstrou preferência pela unidade 1301 e já recebeu uma primeira simulação.",
+  produtoPrincipal: "Renaissance 1301",
+  produtosParalelos: ["Personalité", "Prime 303"],
+  etapa: "análise financeira",
+  nivelInteresse: "alto",
+  sinaisInteresse: ["Indicou a unidade específica", "Pediu condição parcelada"],
+  objecaoPrincipal: "Composição do pagamento durante a construção",
+  ultimaPessoaAFalar: "Sanchai",
+  ultimaSolicitacaoCliente: "Receber uma condição parcelada para analisar com o filho",
+  ultimoCompromissoCliente: "Analisar a simulação com o filho",
+  ultimoCompromissoCorretor: "Enviar opções de pagamento",
+  participantesDecisao: "Jamil e o filho",
+  propostaResumo: "Primeira simulação do apartamento 1301 já enviada",
+  pendenciaFinanceira: "Definir se o ajuste deve ocorrer na entrada ou nas parcelas",
+  pendenciaReal: "Entender qual parte da primeira simulação precisa ser ajustada",
+  quemDeveProximoPasso: "Corretor",
+  proximoPasso: "Perguntar se o cliente prefere ajustar a entrada ou as parcelas",
+  alertaInformacaoIncompleta: "",
+  mensagensSugeridas: [
+    { titulo: "Direta", mensagem: "Jamil, na primeira simulação, qual ponto você prefere ajustar: a entrada ou as parcelas?" },
+    { titulo: "Comparativa", mensagem: "Jamil, posso montar duas alternativas para comparar com a primeira. Você prefere reduzir a entrada ou o valor das parcelas?" },
+    { titulo: "Planejamento", mensagem: "Jamil, considerando a simulação enviada, qual parte precisa ficar mais confortável para vocês: entrada ou parcelas?" }
+  ]
+};
+
+test("v023 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v023"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v022/);
-  assert.match(htmlSource, /app\.js\?v=022/);
-  assert.match(appSource, /db\.js\?v=022/);
-  assert.match(appSource, /whatsapp\.js\?v=022/);
+  assert.match(workerSource, /corretor-pro-v023/);
+  assert.match(htmlSource, /app\.js\?v=023/);
+  assert.match(htmlSource, /styles\.css\?v=023/);
+  assert.match(appSource, /db\.js\?v=023/);
+  assert.match(appSource, /whatsapp\.js\?v=023/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
+});
+
+test("carregamento inicial mostra dados locais antes de consultar a nuvem", () => {
+  const start = appSource.indexOf("async function init()");
+  const source = appSource.slice(start);
+  const localRead = source.indexOf("await refreshRecords()");
+  const firstRender = source.indexOf("await renderRoute()");
+  const remoteRefresh = source.indexOf("refreshFromCloud().catch");
+  assert.ok(localRead >= 0);
+  assert.ok(firstRender > localRead);
+  assert.ok(remoteRefresh > firstRender);
+  assert.doesNotMatch(source, /syncLocalRecordsToCloud\(\)/);
+  assert.doesNotMatch(appSource, /async function syncLocalRecordsToCloud/);
 });
 
 test("áudios têm novas tentativas e aviso persistente de informação incompleta", () => {
@@ -167,9 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-
-test("versão v022 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v022<\/span>/);
+test("versão v023 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v023<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -203,4 +243,81 @@ test("exclusão retira o lead da tela antes de aguardar banco e nuvem", () => {
   assert.ok(renderImmediately > removeFromState);
   assert.ok(waitLocalDelete > renderImmediately);
   assert.match(source, /O lead foi restaurado/);
+});
+
+test("proposta pode ser anexada como print e substitui a anterior", () => {
+  assert.match(appSource, /accept="image\/jpeg,image\/png,image\/webp"/);
+  assert.match(appSource, /prepareProposalImage/);
+  assert.match(appSource, /MAX_PROPOSAL_SOURCE_BYTES/);
+  assert.match(appSource, /propostaImagem: proposal/);
+  assert.match(appSource, /delete metadata\.analiseComercial/);
+  assert.match(appSource, /A última imagem anexada substitui a anterior/);
+  assert.match(stylesSource, /\.proposal-card/);
+});
+
+test("análise comercial usa período selecionado, áudio e proposta já enviada", () => {
+  assert.match(appSource, /data-analyze-attendance/);
+  assert.match(appSource, /fetch\("\/api\/analisar"/);
+  assert.match(appSource, /incompleteAudioCount/);
+  assert.match(appSource, /proposalImage/);
+  assert.match(serverSource, /JÁ FOI ENVIADA/);
+  assert.match(serverSource, /detail: "high"/);
+  assert.match(serverSource, /gpt-5\.4-mini/);
+  assert.match(serverSource, /type: "json_schema"/);
+  assert.match(serverSource, /mensagensSugeridas/);
+  assert.match(appSource, /data-copy-suggestion/);
+});
+
+test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estruturado", async () => {
+  const oldKey = process.env.OPENAI_API_KEY;
+  const oldModel = process.env.OPENAI_ANALYSIS_MODEL;
+  const oldFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "test-key";
+  delete process.env.OPENAI_ANALYSIS_MODEL;
+  let captured;
+
+  globalThis.fetch = async (url, options = {}) => {
+    assert.equal(url, "https://api.openai.com/v1/responses");
+    captured = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { output_text: JSON.stringify(sampleAnalysis) };
+      }
+    };
+  };
+
+  try {
+    const result = await invoke({
+      method: "POST",
+      url: "/api/analisar",
+      body: {
+        leadName: "Jamil Contalex",
+        period: "30 dias",
+        messages: "25/06/2026 09:06 - Jamil: Vou analisar com meu filho.\n\n25/06/2026 09:07 - Sanchai: Certo, já te mando opções.",
+        messageCount: 2,
+        incompleteAudioCount: 0,
+        proposalImage: "data:image/png;base64,iVBORw0KGgo=",
+        proposalAttachedAt: "2026-06-26T12:00:00.000Z"
+      }
+    });
+
+    assert.equal(result.status, 200);
+    assert.equal(result.payload.analysis.produtoPrincipal, "Renaissance 1301");
+    assert.equal(result.payload.analysis.mensagensSugeridas.length, 3);
+    assert.equal(captured.model, "gpt-5.4-mini");
+    assert.equal(captured.store, false);
+    assert.equal(captured.input[0].content[1].type, "input_image");
+    assert.equal(captured.input[0].content[1].detail, "high");
+    assert.match(captured.input[0].content[0].text, /PROPOSTA EM IMAGEM: sim/);
+    assert.equal(captured.text.format.type, "json_schema");
+    assert.equal(captured.text.format.strict, true);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = oldKey;
+    if (oldModel === undefined) delete process.env.OPENAI_ANALYSIS_MODEL;
+    else process.env.OPENAI_ANALYSIS_MODEL = oldModel;
+  }
 });
