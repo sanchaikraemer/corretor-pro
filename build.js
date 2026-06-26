@@ -10,7 +10,7 @@ const staticFiles = [
   "service-worker.js",
   "share-target.html",
   "manifest.webmanifest",
-  "jszip.min.js",
+  "zip.min.js",
   "logo-mark.png",
   "icon-192.png",
   "icon-512.png",

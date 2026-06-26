@@ -5,7 +5,7 @@ import fs from "node:fs";
 const required = [
   "index.html", "styles.css", "app.js", "db.js", "whatsapp.js",
   "service-worker.js", "share-target.html", "manifest.webmanifest",
-  "jszip.min.js", "logo-mark.png", "icon-192.png", "icon-512.png",
+  "zip.min.js", "logo-mark.png", "icon-192.png", "icon-512.png",
   "apple-touch-icon.png", "server.js", "api/[...path].js", "build.js", "package.json", "vercel.json"
 ];
 

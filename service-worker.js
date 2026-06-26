@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v018";
+const BUILD_ID = "corretor-pro-v019";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -14,7 +14,7 @@ const CORE_ASSETS = [
   "/whatsapp.js",
   "/manifest.webmanifest",
   "/share-target.html",
-  "/jszip.min.js",
+  "/zip.min.js",
   "/icon-192.png",
   "/icon-512.png",
   "/apple-touch-icon.png",
@@ -93,7 +93,7 @@ async function handleShareTarget(request) {
     home.searchParams.set("share_error", "sem_arquivo");
     return Response.redirect(home.href, 303);
   }
-  if (file.size > 1024 * 1024 * 1024) {
+  if (file.size > 2 * 1024 * 1024 * 1024) {
     home.searchParams.set("share_error", "muito_grande");
     return Response.redirect(home.href, 303);
   }

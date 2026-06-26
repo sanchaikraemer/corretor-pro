@@ -38,7 +38,7 @@ const syncDialog = document.querySelector("#sync-dialog");
 const syncForm = document.querySelector("#sync-form");
 const syncInput = document.querySelector("#sync-input");
 
-const APP_VERSION = "v018";
+const APP_VERSION = "v019";
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const state = {
   records: [],
@@ -472,22 +472,36 @@ function openSyncDialog() {
   requestAnimationFrame(() => syncInput.select());
 }
 
-function buildAudioMap(zip) {
+function getZipLib() {
+  const z = globalThis.zip;
+  if (!z?.ZipReader) throw new Error("O leitor de ZIP não foi carregado.");
+  return z;
+}
+
+// Mapeia apenas os áudios .opus -> entrada do ZIP. As fotos, vídeos e PDFs
+// ficam de fora: nunca são lidos nem baixados, só os áudios e o texto entram.
+function buildAudioMap(entries) {
   const map = new Map();
-  for (const entry of Object.values(zip.files)) {
-    if (entry.dir || !/\.opus$/i.test(entry.name)) continue;
-    map.set(normalizeFileName(entry.name), entry.name);
+  for (const entry of entries) {
+    if (entry.directory || !/\.opus$/i.test(entry.filename)) continue;
+    map.set(normalizeFileName(entry.filename), entry);
   }
   return map;
 }
 
-async function transcribeAudio(zip, fullName) {
-  const entry = zip.files[fullName];
+async function transcribeAudio(entry, fullName) {
   if (!entry) {
     return { text: "", status: "missing" };
   }
 
-  const blob = await entry.async("blob");
+  const z = getZipLib();
+  let blob;
+  try {
+    // Lê só este áudio de dentro do ZIP (sem carregar o restante do arquivo).
+    blob = await entry.getData(new z.BlobWriter("audio/ogg"));
+  } catch {
+    return { text: "", status: "missing" };
+  }
   if (blob.size > 4 * 1024 * 1024) {
     return { text: "", status: "too_large" };
   }
@@ -557,31 +571,35 @@ async function processIncomingZip(pending) {
     if (!pending?.blob) {
       throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
     }
-    if (!globalThis.JSZip) throw new Error("O leitor de ZIP não foi carregado.");
+    const z = getZipLib();
 
-    // Não exigimos a extensão .zip no nome (o Android nem sempre a preserva).
-    // O JSZip valida o conteúdo: se não for um ZIP legível, o erro aparece aqui.
+    // Lê o ZIP sob demanda: só o índice + o texto + os áudios .opus são lidos.
+    // Fotos, vídeos e PDFs ficam no arquivo mas nunca são carregados, então o
+    // tamanho total do ZIP não pesa no aparelho.
     setProcessing("read", 8, "Abrindo o ZIP recebido pelo compartilhamento.");
-    let zip;
+    let entries;
+    let zipReader;
     try {
-      zip = await globalThis.JSZip.loadAsync(pending.blob);
+      zipReader = new z.ZipReader(new z.BlobReader(pending.blob));
+      entries = await zipReader.getEntries();
     } catch {
       throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
     }
-    const txtEntries = Object.values(zip.files).filter(entry => !entry.dir && /\.txt$/i.test(entry.name));
+
+    const txtEntries = entries.filter(entry => !entry.directory && /\.txt$/i.test(entry.filename));
     if (!txtEntries.length) throw new Error("Nenhum arquivo de conversa .txt foi encontrado no ZIP.");
 
     const txtEntry = txtEntries[0];
-    const rawText = await txtEntry.async("string");
+    const rawText = await txtEntry.getData(new z.TextWriter());
     const parsedTimeline = parseWhatsappTxt(rawText);
     if (!parsedTimeline.length) throw new Error("O TXT foi encontrado, mas nenhuma mensagem pôde ser lida.");
 
     setProcessing("audio", 25, "Localizando somente os áudios .opus da conversa.");
-    const originalLeadName = inferLeadName(pending.name || txtEntry.name);
+    const originalLeadName = inferLeadName(pending.name || txtEntry.filename);
     const conversationKey = makeConversationKey(originalLeadName);
     const existing = await getAtendimento(conversationKey);
     const existingByFingerprint = new Map((existing?.timeline || []).map(item => [item.fingerprint, item]));
-    const audioMap = buildAudioMap(zip);
+    const audioMap = buildAudioMap(entries);
     const audioItems = parsedTimeline.filter(item => item.type === "audio");
 
     setProcessing(
@@ -602,8 +620,8 @@ async function processIncomingZip(pending) {
         continue;
       }
 
-      const fullName = audioMap.get(normalizeFileName(item.audioFile));
-      if (!fullName) {
+      const audioEntry = audioMap.get(normalizeFileName(item.audioFile));
+      if (!audioEntry) {
         item.transcriptionStatus = "missing";
         item.text = "Não foi possível localizar este áudio dentro do ZIP.";
         completedAudios += 1;
@@ -611,7 +629,7 @@ async function processIncomingZip(pending) {
       }
 
       try {
-        const result = await transcribeAudio(zip, fullName);
+        const result = await transcribeAudio(audioEntry, audioEntry.filename);
         item.text = result.text || (
           result.status === "too_large"
             ? "Este áudio ultrapassa o limite desta primeira versão."
@@ -633,6 +651,8 @@ async function processIncomingZip(pending) {
       );
     }
 
+    try { await zipReader.close(); } catch { /* leitor sem recursos a liberar */ }
+
     setProcessing("timeline", 82, "Unindo mensagens escritas e transcrições na ordem correta.");
     const merged = mergeTimeline(existing?.timeline, parsedTimeline);
     const lastItem = merged.timeline[merged.timeline.length - 1];
@@ -651,7 +671,7 @@ async function processIncomingZip(pending) {
       metadata: {
         ...(existing?.metadata || {}),
         originalLeadName,
-        txtFile: txtEntry.name,
+        txtFile: txtEntry.filename,
         totalItens: merged.timeline.length,
         totalAudios: merged.timeline.filter(item => item.type === "audio").length,
         ignoredMedia: true,
@@ -778,6 +798,9 @@ async function registerServiceWorker() {
 }
 
 async function init() {
+  // Lê o ZIP na thread principal (sem web workers): evita arquivos extras e
+  // funciona offline. Só lemos texto e áudios pequenos, então é leve.
+  globalThis.zip?.configure?.({ useWebWorkers: false });
   bindEvents();
   await registerServiceWorker();
   await pullRemoteRecords();
@@ -791,7 +814,7 @@ async function init() {
     const messages = {
       sem_arquivo: "O WhatsApp não enviou nenhum arquivo. Ao exportar a conversa, escolha “Incluir mídias” e compartilhe o arquivo.",
       leitura: "Não foi possível ler o arquivo compartilhado. Exporte a conversa de novo e compartilhe.",
-      muito_grande: "Esta conversa passou de 1 GB (as fotos e vídeos contam). Ao exportar, prefira um período menor para reduzir o tamanho.",
+      muito_grande: "Esta conversa passou de 2 GB. Ao exportar, prefira um período menor para reduzir o tamanho.",
       armazenamento: "Não foi possível salvar o arquivo no aparelho. Verifique o espaço livre e tente outra vez.",
       arquivo_invalido: "O WhatsApp não enviou um arquivo válido. Exporte a conversa com “Incluir mídias”.",
       falha_ao_receber: "Houve uma falha ao receber o arquivo. Tente compartilhar novamente."
