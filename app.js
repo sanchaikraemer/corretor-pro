@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=026";
+} from "./db.js?v=027";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=026";
+} from "./whatsapp.js?v=027";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,9 +33,11 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v026";
+const APP_VERSION = "v027";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
+const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
+const WAITING_UI_REFRESH_MS = 60 * 1000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
 const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
 const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
@@ -50,6 +52,7 @@ const state = {
   toastTimer: null,
   syncing: false,
   syncTimer: null,
+  waitingTimer: null,
   cloudAvailable: null,
   detailPeriod: "30",
   deletingKeys: new Set(),
@@ -87,6 +90,12 @@ function normalizeComparable(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function isClientTimelineItem(item, originalLeadName) {
+  const author = normalizeComparable(item?.author);
+  const lead = normalizeComparable(originalLeadName);
+  return Boolean(author && lead && author === lead);
 }
 
 function isStandalone() {
@@ -177,6 +186,64 @@ function getAttendedNowDate(record) {
   if (record?.metadata?.statusAtendimento !== "aguardando_resposta") return null;
   const date = new Date(record.metadata?.atendidoAgoraAt || "");
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getValidDate(value) {
+  const date = new Date(value || "");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getLatestActivityDate(record) {
+  const candidates = [
+    record?.metadata?.ultimaMovimentacaoAt,
+    record?.metadata?.atendidoAgoraAt,
+    record?.ultimaMensagemAt,
+    record?.createdAt
+  ]
+    .map(getValidDate)
+    .filter(Boolean);
+
+  if (!candidates.length) return new Date();
+  return candidates.reduce((latest, current) => current.getTime() > latest.getTime() ? current : latest);
+}
+
+function getReanalysisAvailableDate(record) {
+  if (record?.metadata?.statusAtendimento !== "aguardando_resposta") return null;
+  const explicit = getValidDate(record.metadata?.reanaliseDisponivelEm);
+  if (explicit) return explicit;
+  const attended = getAttendedNowDate(record);
+  return attended ? new Date(attended.getTime() + REANALYSIS_WAIT_MS) : null;
+}
+
+function getLeadWorkflowState(record, now = Date.now()) {
+  const status = record?.metadata?.statusAtendimento;
+  const activityDate = getLatestActivityDate(record);
+
+  if (status === "nova_resposta_cliente") {
+    return { mode: "client_response", activityDate, waitingUntil: null };
+  }
+
+  if (status === "aguardando_resposta") {
+    const waitingUntil = getReanalysisAvailableDate(record);
+    const expired = waitingUntil ? waitingUntil.getTime() <= now : false;
+    return {
+      mode: expired ? "followup_due" : "waiting",
+      activityDate,
+      waitingUntil
+    };
+  }
+
+  return { mode: "idle", activityDate, waitingUntil: null };
+}
+
+function formatWaitRemaining(waitingUntil) {
+  if (!waitingUntil) return "";
+  const remaining = waitingUntil.getTime() - Date.now();
+  if (remaining <= 0) return "Retomada liberada";
+  const totalMinutes = Math.ceil(remaining / 60000);
+  if (totalMinutes < 60) return `Nova retomada em ${totalMinutes} min`;
+  const hours = Math.ceil(totalMinutes / 60);
+  return `Nova retomada em ${hours}h`;
 }
 
 function formatAttendedNowLabel(record, compact = false) {
@@ -356,6 +423,7 @@ function updateRecordInState(record) {
   const index = state.records.findIndex(item => item.conversationKey === record.conversationKey);
   if (index >= 0) state.records[index] = record;
   else state.records.unshift(record);
+  state.records.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
 }
 
 async function getCurrentRecord() {
@@ -413,6 +481,11 @@ function buildAnalysisRequest(record, timeline) {
 async function analyzeCurrentAttendance() {
   const record = await getCurrentRecord();
   if (!record || state.analyzingKey) return;
+  const workflow = getLeadWorkflowState(record);
+  if (workflow.mode === "waiting") {
+    showToast(`Aguarde a resposta do cliente. ${formatWaitRemaining(workflow.waitingUntil)}.`);
+    return;
+  }
   const timeline = filterTimelineByPeriod(record.timeline);
   if (!timeline.length) {
     showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()} para analisar.`, "error");
@@ -469,7 +542,12 @@ async function copySuggestedMessage(index) {
   const text = String(suggestion?.mensagem || "").trim();
   if (!text) return;
   const copied = await writeToClipboard(text);
-  showToast(copied ? "Mensagem copiada." : "Não foi possível copiar a mensagem.", copied ? "normal" : "error");
+  if (!copied) {
+    showToast("Não foi possível copiar a mensagem.", "error");
+    return;
+  }
+
+  await registerLeadAttended(record, "sugestao_copiada", "Mensagem copiada e atendimento registrado. Aguardando resposta do cliente.");
 }
 
 async function copySelectedMessages() {
@@ -572,15 +650,29 @@ function renderList() {
   setListHeader();
 
   const cards = state.records.map(record => {
-    const moment = formatCardDate(record.ultimaMensagemAt || record.updatedAt);
-    const waitingForClient = Boolean(getAttendedNowDate(record));
+    const workflow = getLeadWorkflowState(record);
+    const moment = formatCardDate(workflow.activityDate.toISOString());
+    const statusText = workflow.mode === "waiting"
+      ? `Aguardando resposta · ${formatAttendedNowLabel(record, true)}`
+      : workflow.mode === "followup_due"
+        ? "Retomada disponível · 48h sem resposta"
+        : workflow.mode === "client_response"
+          ? `Nova resposta do cliente · ${moment.date.toLowerCase()} às ${moment.time}`
+          : "";
+    const statusClass = workflow.mode === "waiting"
+      ? " waiting-client"
+      : workflow.mode === "followup_due"
+        ? " followup-due"
+        : workflow.mode === "client_response"
+          ? " client-response"
+          : "";
     return `
-      <button class="attendance-card${waitingForClient ? " waiting-client" : ""}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+      <button class="attendance-card${statusClass}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
         <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          ${waitingForClient ? `<span class="attendance-status"><i aria-hidden="true"></i>Aguardando resposta · ${escapeHtml(formatAttendedNowLabel(record, true))}</span>` : ""}
+          ${statusText ? `<span class="attendance-status"><i aria-hidden="true"></i>${escapeHtml(statusText)}</span>` : ""}
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
@@ -770,11 +862,17 @@ function renderFullAnalysisDetails(analysis) {
 function renderAnalysisSection(record) {
   const analysis = record.metadata?.analiseComercial;
   const analyzing = state.analyzingKey === record.conversationKey;
+  const workflow = getLeadWorkflowState(record);
+  const waitingForClient = workflow.mode === "waiting";
   const actionLabel = analyzing
     ? "Analisando conversa e proposta..."
-    : analysis
-      ? "Atualizar análise"
-      : "Analisar atendimento";
+    : workflow.mode === "client_response"
+      ? "Analisar nova resposta"
+      : workflow.mode === "followup_due"
+        ? "Reanalisar para retomada"
+        : analysis
+          ? "Atualizar análise"
+          : "Analisar atendimento";
 
   if (!analysis) {
     return `
@@ -786,9 +884,9 @@ function renderAnalysisSection(record) {
           </div>
         </div>
         <p class="section-description">A análise usa as mensagens do período selecionado, as transcrições dos áudios e o print da proposta, quando anexado.</p>
-        <button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>
-          ${escapeHtml(actionLabel)}
-        </button>
+        ${waitingForClient
+          ? `<div class="analysis-waiting-note"><strong>Aguardando resposta do cliente</strong><span>${escapeHtml(formatWaitRemaining(workflow.waitingUntil))}</span></div>`
+          : `<button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
       </section>`;
   }
 
@@ -805,9 +903,9 @@ function renderAnalysisSection(record) {
           <span class="section-eyebrow">Inteligência comercial</span>
           <h2>Análise do atendimento</h2>
         </div>
-        <button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>
-          ${escapeHtml(actionLabel)}
-        </button>
+        ${waitingForClient
+          ? `<span class="analysis-waiting-badge">Aguardando cliente</span>`
+          : `<button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
       </div>
       <div class="analysis-meta">
         <span>${escapeHtml(analysis.period || selectedPeriodLabel())}</span>
@@ -869,8 +967,30 @@ function renderDetail(record) {
   const updatedLabel = Number.isNaN(updated.getTime())
     ? "Atualizado recentemente"
     : `Atualizado em ${dateOnlyFormatter.format(updated)} às ${timeFormatter.format(updated)}`;
-  const waitingForClient = Boolean(getAttendedNowDate(record));
+  const workflow = getLeadWorkflowState(record);
+  const waitingForClient = workflow.mode === "waiting";
   const attendedNowLabel = formatAttendedNowLabel(record);
+  const workflowTitle = waitingForClient
+    ? "Aguardando resposta do cliente"
+    : workflow.mode === "followup_due"
+      ? "48 horas sem resposta"
+      : workflow.mode === "client_response"
+        ? "Nova resposta do cliente"
+        : "Atendimento salvo";
+  const workflowSubtitle = waitingForClient
+    ? `${attendedNowLabel} · ${formatWaitRemaining(workflow.waitingUntil)}`
+    : workflow.mode === "followup_due"
+      ? "A reanálise para uma nova retomada já está liberada."
+      : workflow.mode === "client_response"
+        ? `Recebida ${formatCardDate(workflow.activityDate.toISOString()).date.toLowerCase()} às ${formatCardDate(workflow.activityDate.toISOString()).time}`
+        : updatedLabel;
+  const workflowClass = workflow.mode === "waiting"
+    ? " waiting-client"
+    : workflow.mode === "followup_due"
+      ? " followup-due"
+      : workflow.mode === "client_response"
+        ? " client-response"
+        : "";
 
   const failedAudios = (record.timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done");
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
@@ -890,13 +1010,13 @@ function renderDetail(record) {
 
   app.innerHTML = `
     <section class="detail-page">
-      <section class="status-card${waitingForClient ? " waiting-client" : ""}">
+      <section class="status-card${workflowClass}">
         <span class="status-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
         </span>
         <div class="status-copy">
-          <strong>${waitingForClient ? "Aguardando resposta do cliente" : "Atendimento salvo"}</strong>
-          <span>${escapeHtml(waitingForClient ? attendedNowLabel : updatedLabel)}</span>
+          <strong>${escapeHtml(workflowTitle)}</strong>
+          <span>${escapeHtml(workflowSubtitle)}</span>
         </div>
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
@@ -1055,6 +1175,14 @@ function startAutomaticSync() {
   }, AUTO_SYNC_INTERVAL_MS);
 }
 
+function startWaitingStatusTimer() {
+  clearInterval(state.waitingTimer);
+  state.waitingTimer = setInterval(() => {
+    const hasWaitingLead = state.records.some(record => record?.metadata?.statusAtendimento === "aguardando_resposta");
+    if (hasWaitingLead && document.visibilityState === "visible") renderRoute().catch(() => null);
+  }, WAITING_UI_REFRESH_MS);
+}
+
 function getZipLib() {
   const z = globalThis.zip;
   if (!z?.ZipReader) throw new Error("O leitor de ZIP não foi carregado.");
@@ -1154,6 +1282,7 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
   for (const item of existingTimeline || []) merged.set(item.fingerprint, item);
 
   let added = 0;
+  const addedItems = [];
   for (const incoming of incomingTimeline) {
     const previous = merged.get(incoming.fingerprint);
     if (previous) {
@@ -1172,6 +1301,7 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
     }
     merged.set(incoming.fingerprint, incoming);
     added += 1;
+    addedItems.push(incoming);
   }
 
   const timeline = [...merged.values()].sort((a, b) => {
@@ -1181,7 +1311,14 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
     return (a.sourceOrder || 0) - (b.sourceOrder || 0);
   });
 
-  return { timeline, added };
+  addedItems.sort((a, b) => {
+    const aTime = Date.parse(a.timestamp || 0) || 0;
+    const bTime = Date.parse(b.timestamp || 0) || 0;
+    if (aTime !== bTime) return aTime - bTime;
+    return (a.sourceOrder || 0) - (b.sourceOrder || 0);
+  });
+
+  return { timeline, added, addedItems };
 }
 
 async function processIncomingZip(pending) {
@@ -1301,8 +1438,23 @@ async function processIncomingZip(pending) {
       lastReceivedAt: pending.receivedAt || now
     };
     if (merged.added > 0) {
-      delete nextMetadata.statusAtendimento;
-      delete nextMetadata.atendidoAgoraAt;
+      const latestAddedItem = merged.addedItems[merged.addedItems.length - 1];
+      const movementAt = getValidDate(latestAddedItem?.timestamp)?.toISOString() || now;
+      nextMetadata.ultimaMovimentacaoAt = movementAt;
+
+      if (isClientTimelineItem(latestAddedItem, originalLeadName)) {
+        nextMetadata.statusAtendimento = "nova_resposta_cliente";
+        nextMetadata.novaRespostaClienteAt = movementAt;
+        nextMetadata.origemUltimaMovimentacao = "mensagem_cliente";
+        delete nextMetadata.atendidoAgoraAt;
+        delete nextMetadata.reanaliseDisponivelEm;
+      } else {
+        nextMetadata.statusAtendimento = "aguardando_resposta";
+        nextMetadata.atendidoAgoraAt = movementAt;
+        nextMetadata.reanaliseDisponivelEm = new Date(Date.parse(movementAt) + REANALYSIS_WAIT_MS).toISOString();
+        nextMetadata.origemUltimaMovimentacao = "mensagem_corretor";
+        delete nextMetadata.novaRespostaClienteAt;
+      }
     }
 
     const record = {
@@ -1383,17 +1535,19 @@ async function saveRenamedAttendance() {
   showToast("Nome atualizado.");
 }
 
-async function markAttendedNow() {
-  const record = await getCurrentRecord();
-  if (!record) return;
-
+async function registerLeadAttended(record, source, successMessage) {
+  if (!record) return null;
   const now = new Date().toISOString();
+  const reanalysisAvailableAt = new Date(Date.parse(now) + REANALYSIS_WAIT_MS).toISOString();
   const updated = {
     ...record,
     metadata: {
       ...(record.metadata || {}),
       statusAtendimento: "aguardando_resposta",
-      atendidoAgoraAt: now
+      atendidoAgoraAt: now,
+      ultimaMovimentacaoAt: now,
+      origemUltimaMovimentacao: source,
+      reanaliseDisponivelEm: reanalysisAvailableAt
     },
     updatedAt: now
   };
@@ -1402,16 +1556,24 @@ async function markAttendedNow() {
     await saveAtendimento(updated);
     updateRecordInState(updated);
     renderDetail(updated);
-    showToast("Atendimento registrado agora. Aguardando resposta do cliente.");
+    showToast(successMessage || "Atendimento registrado agora. Aguardando resposta do cliente.");
 
     pushRemoteRecord(updated).then(result => {
       if (!result) {
         showToast("O atendimento foi registrado neste aparelho, mas a nuvem não confirmou a atualização.", "error", 7000);
       }
     });
+    return updated;
   } catch {
     showToast("Não foi possível registrar o atendimento agora.", "error", 7000);
+    return null;
   }
+}
+
+async function markAttendedNow() {
+  const record = await getCurrentRecord();
+  if (!record) return;
+  await registerLeadAttended(record, "atendido_agora", "Atendimento registrado agora. Aguardando resposta do cliente.");
 }
 
 async function deleteCurrentLead() {
@@ -1571,6 +1733,7 @@ async function init() {
   await refreshRecords();
   await renderRoute();
   startAutomaticSync();
+  startWaitingStatusTimer();
   registerServiceWorker().catch(() => null);
   refreshFromCloud().catch(() => null);
 

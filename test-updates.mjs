@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v026 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v026"/);
+test("v027 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v027"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v026/);
-  assert.match(htmlSource, /app\.js\?v=026/);
-  assert.match(htmlSource, /styles\.css\?v=026/);
-  assert.match(appSource, /db\.js\?v=026/);
-  assert.match(appSource, /whatsapp\.js\?v=026/);
+  assert.match(workerSource, /corretor-pro-v027/);
+  assert.match(htmlSource, /app\.js\?v=027/);
+  assert.match(htmlSource, /styles\.css\?v=027/);
+  assert.match(appSource, /db\.js\?v=027/);
+  assert.match(appSource, /whatsapp\.js\?v=027/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v026 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v026<\/span>/);
+test("versão v027 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v027<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -393,7 +393,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v026 reduz a análise visível e mantém detalhes recolhidos", () => {
+test("v027 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(appSource, /analysis-compact-grid/);
   assert.match(appSource, /Leitura atual/);
   assert.match(appSource, /O que falta definir/);
@@ -404,7 +404,7 @@ test("v026 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(stylesSource, /\.analysis-details summary/);
 });
 
-test("v026 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+test("v027 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
@@ -414,7 +414,7 @@ test("v026 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
-test("v026 mantém sugestões visíveis e numeradas fora da análise completa", () => {
+test("v027 mantém sugestões visíveis e numeradas fora da análise completa", () => {
   assert.match(appSource, /class="suggestions-panel"/);
   assert.match(appSource, /class="suggestion-number"/);
   assert.match(appSource, /data-copy-suggestion/);
@@ -423,18 +423,21 @@ test("v026 mantém sugestões visíveis e numeradas fora da análise completa", 
 });
 
 
-test("v026 registra Atendido agora imediatamente e aguarda resposta do cliente", () => {
+test("v027 registra Atendido agora imediatamente e inicia espera de 48 horas", () => {
   assert.match(appSource, /data-attended-now/);
   assert.match(appSource, /async function markAttendedNow/);
+  assert.match(appSource, /async function registerLeadAttended/);
   assert.match(appSource, /statusAtendimento: "aguardando_resposta"/);
   assert.match(appSource, /atendidoAgoraAt: now/);
+  assert.match(appSource, /reanaliseDisponivelEm: reanalysisAvailableAt/);
+  assert.match(appSource, /REANALYSIS_WAIT_MS = 48 \* 60 \* 60 \* 1000/);
   assert.match(appSource, /Aguardando resposta do cliente/);
   assert.match(appSource, /class="attendance-status"/);
   assert.match(stylesSource, /\.attended-now-button/);
   assert.match(stylesSource, /\.attendance-card\.waiting-client/);
 
-  const start = appSource.indexOf("async function markAttendedNow()");
-  const end = appSource.indexOf("async function deleteCurrentLead()", start);
+  const start = appSource.indexOf("async function registerLeadAttended(");
+  const end = appSource.indexOf("async function markAttendedNow()", start);
   const source = appSource.slice(start, end);
   const localSave = source.indexOf("await saveAtendimento(updated)");
   const renderImmediate = source.indexOf("renderDetail(updated)");
@@ -444,8 +447,36 @@ test("v026 registra Atendido agora imediatamente e aguarda resposta do cliente",
   assert.ok(cloudPush > renderImmediate);
 });
 
-test("nova atualização da conversa encerra automaticamente o estado aguardando resposta", () => {
-  assert.match(appSource, /if \(merged\.added > 0\)/);
-  assert.match(appSource, /delete nextMetadata\.statusAtendimento/);
-  assert.match(appSource, /delete nextMetadata\.atendidoAgoraAt/);
+test("copiar sugestão também registra o lead como atendido", () => {
+  const start = appSource.indexOf("async function copySuggestedMessage");
+  const end = appSource.indexOf("async function copySelectedMessages", start);
+  const source = appSource.slice(start, end);
+  assert.match(source, /await writeToClipboard/);
+  assert.match(source, /registerLeadAttended\(record, "sugestao_copiada"/);
+  assert.match(source, /Mensagem copiada e atendimento registrado/);
+});
+
+test("durante 48 horas o sistema não oferece nova análise", () => {
+  assert.match(appSource, /workflow\.mode === "waiting"/);
+  assert.match(appSource, /analysis-waiting-badge/);
+  assert.match(appSource, /Aguarde a resposta do cliente/);
+  assert.match(appSource, /Reanalisar para retomada/);
+  assert.match(appSource, /startWaitingStatusTimer/);
+  assert.match(stylesSource, /\.analysis-waiting-badge/);
+});
+
+test("reimportação diferencia mensagem do corretor e resposta do cliente", () => {
+  assert.match(appSource, /const latestAddedItem = merged\.addedItems/);
+  assert.match(appSource, /isClientTimelineItem\(latestAddedItem, originalLeadName\)/);
+  assert.match(appSource, /statusAtendimento = "nova_resposta_cliente"/);
+  assert.match(appSource, /statusAtendimento = "aguardando_resposta"/);
+  assert.match(appSource, /origemUltimaMovimentacao = "mensagem_cliente"/);
+  assert.match(appSource, /origemUltimaMovimentacao = "mensagem_corretor"/);
+});
+
+test("lista usa a última movimentação, não apenas a última mensagem", () => {
+  assert.match(appSource, /function getLatestActivityDate/);
+  assert.match(appSource, /formatCardDate\(workflow\.activityDate\.toISOString\(\)\)/);
+  assert.match(dbSource, /metadata\?\.ultimaMovimentacaoAt/);
+  assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });

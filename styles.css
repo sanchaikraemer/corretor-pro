@@ -408,6 +408,22 @@ button { -webkit-tap-highlight-color: transparent; }
   background: linear-gradient(90deg, #FFFFFF, #F8FFFC);
 }
 
+.attendance-card.followup-due {
+  border-color: #F2D28B;
+  background: linear-gradient(90deg, #FFFFFF, #FFFBEB);
+}
+
+.attendance-card.followup-due .attendance-status { color: #9A6700; }
+.attendance-card.followup-due .attendance-status i { background: #D99A00; }
+
+.attendance-card.client-response {
+  border-color: #9FD8C2;
+  background: linear-gradient(90deg, #FFFFFF, #F0FDF8);
+}
+
+.attendance-card.client-response .attendance-status { color: #047857; }
+.attendance-card.client-response .attendance-status i { background: #059669; }
+
 .attendance-time {
   align-self: start;
   color: var(--emerald-dark);
@@ -557,6 +573,18 @@ button { -webkit-tap-highlight-color: transparent; }
 .status-card.waiting-client {
   border-color: #9FDDC5;
   background: linear-gradient(90deg, #ECFDF5, #F8FFFC);
+}
+
+.status-card.followup-due {
+  border-color: #F2D28B;
+  background: linear-gradient(90deg, #FFFBEB, #FFFFFF);
+}
+
+.status-card.followup-due .status-copy strong { color: #9A6700; }
+
+.status-card.client-response {
+  border-color: #9FD8C2;
+  background: linear-gradient(90deg, #ECFDF5, #FFFFFF);
 }
 
 .attended-now-button {
@@ -1259,6 +1287,30 @@ button.storage-note strong { font-weight: 600; }
   background: var(--white);
   white-space: nowrap;
 }
+
+.analysis-waiting-badge {
+  padding: 7px 10px;
+  border: 1px solid #A7F3D0;
+  border-radius: 999px;
+  color: var(--emerald-dark);
+  background: var(--soft-green);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analysis-waiting-note {
+  padding: 12px 13px;
+  border: 1px solid #CDEFE2;
+  border-radius: 13px;
+  display: grid;
+  gap: 3px;
+  color: var(--emerald-dark);
+  background: var(--soft-green);
+}
+
+.analysis-waiting-note strong { font-size: 10px; }
+.analysis-waiting-note span { color: var(--gray); font-size: 9px; }
 
 .primary-action-button:disabled,
 .secondary-action-button:disabled,

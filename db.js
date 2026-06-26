@@ -65,8 +65,18 @@ export async function listAtendimentos() {
     });
 
     return records.sort((a, b) => {
-      const aTime = Date.parse(a.ultimaMensagemAt || a.updatedAt || 0) || 0;
-      const bTime = Date.parse(b.ultimaMensagemAt || b.updatedAt || 0) || 0;
+      const aTime = Math.max(
+        Date.parse(a?.metadata?.ultimaMovimentacaoAt || 0) || 0,
+        Date.parse(a?.metadata?.atendidoAgoraAt || 0) || 0,
+        Date.parse(a.ultimaMensagemAt || 0) || 0,
+        Date.parse(a.createdAt || 0) || 0
+      );
+      const bTime = Math.max(
+        Date.parse(b?.metadata?.ultimaMovimentacaoAt || 0) || 0,
+        Date.parse(b?.metadata?.atendidoAgoraAt || 0) || 0,
+        Date.parse(b.ultimaMensagemAt || 0) || 0,
+        Date.parse(b.createdAt || 0) || 0
+      );
       return bTime - aTime;
     });
   } finally {
