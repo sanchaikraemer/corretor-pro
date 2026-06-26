@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#065F46">
+  <meta name="description" content="Corretor Pro transforma conversas exportadas do WhatsApp em atendimentos textuais organizados.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Corretor Pro">
+  <title>Corretor Pro</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header id="app-header" class="app-header">
+    <button id="back-button" class="icon-button back-button" type="button" aria-label="Voltar" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
+
+    <button id="brand-button" class="brand" type="button" aria-label="Ir para atendimentos">
+      <img src="/logo-mark.png" alt="" width="52" height="52">
+      <span class="brand-name"><span>CORRETOR</span><strong>PRO</strong></span>
+    </button>
+
+    <div id="detail-header" class="detail-header" hidden>
+      <strong id="detail-header-title"></strong>
+      <span id="detail-header-subtitle"></span>
+    </div>
+
+    <button id="install-button" class="install-button" type="button" hidden>Instalar</button>
+    <button id="edit-name-button" class="icon-button" type="button" aria-label="Editar nome" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    </button>
+  </header>
+
+  <main id="app" class="app-main" aria-live="polite"></main>
+
+  <section id="processing-overlay" class="processing-overlay" aria-live="assertive" aria-modal="true" role="dialog" hidden>
+    <div class="processing-shell">
+      <div class="processing-brand" aria-hidden="true">
+        <img src="/logo-mark.png" alt="" width="62" height="62">
+        <span><b>CORRETOR</b><strong>PRO</strong></span>
+      </div>
+
+      <div class="processing-card">
+        <p class="eyebrow">Recebido do WhatsApp</p>
+        <h1 id="processing-title">Processando conversa</h1>
+        <p id="processing-description" class="processing-description">Abrindo o arquivo enviado pelo WhatsApp.</p>
+
+        <ol class="processing-steps">
+          <li data-step="read"><span>1</span>Lendo conversa</li>
+          <li data-step="audio"><span>2</span>Localizando áudios</li>
+          <li data-step="transcribe"><span>3</span>Transcrevendo áudios</li>
+          <li data-step="timeline"><span>4</span>Montando linha do tempo</li>
+          <li data-step="save"><span>5</span>Salvando atendimento</li>
+        </ol>
+
+        <div class="progress-row">
+          <p id="progress-label" class="progress-label">0%</p>
+          <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+        </div>
+
+        <div class="processing-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
+          <span>Somente mensagens escritas e transcrições de áudio entram no atendimento.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <dialog id="rename-dialog" class="rename-dialog">
+    <form method="dialog" id="rename-form">
+      <div class="dialog-heading">
+        <h2>Editar nome</h2>
+        <button class="icon-button dialog-close" value="cancel" aria-label="Fechar" type="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <label for="rename-input">Nome do atendimento</label>
+      <input id="rename-input" name="name" autocomplete="off" maxlength="120" required>
+      <div class="dialog-actions">
+        <button class="secondary-button" value="cancel" type="submit">Cancelar</button>
+        <button class="primary-button" value="save" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/jszip.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

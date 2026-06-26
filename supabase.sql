@@ -12,14 +12,10 @@ create table if not exists public.corretor_pro_atendimentos (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint corretor_pro_atendimentos_device_conversa_unique
-    unique (device_id, conversation_key)
+  unique (device_id, conversation_key)
 );
 
-create index if not exists corretor_pro_atendimentos_device_updated_idx
-  on public.corretor_pro_atendimentos (device_id, updated_at desc);
+create index if not exists corretor_pro_atendimentos_device_idx
+  on public.corretor_pro_atendimentos (device_id, ultima_mensagem_at desc);
 
 alter table public.corretor_pro_atendimentos enable row level security;
-
--- O frontend nunca acessa esta tabela diretamente. As operações passam pelas
--- funções da Vercel usando SUPABASE_SERVICE_ROLE_KEY no servidor.

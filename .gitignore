@@ -1,7 +1,5 @@
+dist/
+public/
 node_modules/
-.vercel/
 .env
-.env.*
-!.env.example
-.DS_Store
-npm-debug.log*
+.vercel

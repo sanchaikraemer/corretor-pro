@@ -1,31 +1,39 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const required = [
-  "public/index.html",
-  "public/styles.css",
-  "public/app.js",
-  "public/db.js",
-  "public/whatsapp.js",
-  "public/manifest.webmanifest",
-  "public/service-worker.js",
-  "public/share-target.html",
-  "public/vendor/jszip.min.js",
-  "public/assets/logo-mark.png",
-  "public/icons/icon-192.png",
-  "public/icons/icon-512.png",
-  "public/icons/apple-touch-icon.png"
+const staticFiles = [
+  "index.html",
+  "styles.css",
+  "app.js",
+  "db.js",
+  "whatsapp.js",
+  "service-worker.js",
+  "share-target.html",
+  "manifest.webmanifest",
+  "jszip.min.js",
+  "logo-mark.png",
+  "icon-192.png",
+  "icon-512.png",
+  "apple-touch-icon.png"
 ];
 
-const missing = required.filter(file => !fs.existsSync(path.resolve(file)));
+const missing = staticFiles.filter(file => !fs.existsSync(path.resolve(file)));
 if (missing.length) {
   console.error("Arquivos obrigatórios ausentes:\n" + missing.join("\n"));
   process.exit(1);
 }
 
-const version = {
-  version: "0.1.1",
-  builtAt: new Date().toISOString()
-};
-fs.writeFileSync(path.resolve("public/version.json"), JSON.stringify(version, null, 2));
-console.log(`Corretor Pro ${version.version} validado para publicação.`);
+const output = path.resolve("public");
+fs.rmSync(output, { recursive: true, force: true });
+fs.mkdirSync(output, { recursive: true });
+
+for (const file of staticFiles) {
+  fs.copyFileSync(path.resolve(file), path.join(output, file));
+}
+
+fs.writeFileSync(
+  path.join(output, "version.json"),
+  JSON.stringify({ version: "0.1.3", builtAt: new Date().toISOString() }, null, 2)
+);
+
+console.log("Corretor Pro 0.1.3: pasta public criada com todos os arquivos do app.");
