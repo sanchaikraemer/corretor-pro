@@ -26,14 +26,19 @@ async function invoke({ method, url, body }) {
   return { status: res.statusCode, payload: JSON.parse(res.body || "{}") };
 }
 
-test("v020 usa atualização automática pelo mesmo link, sem código manual", () => {
-  assert.match(appSource, /const APP_VERSION = "v020"/);
+test("v021 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v021"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v020/);
+  assert.match(workerSource, /corretor-pro-v021/);
+  assert.match(htmlSource, /app\.js\?v=021/);
+  assert.match(appSource, /db\.js\?v=021/);
+  assert.match(appSource, /whatsapp\.js\?v=021/);
+  assert.match(workerSource, /networkFirstPaths/);
+  assert.match(appSource, /controllerchange/);
 });
 
 test("áudios têm novas tentativas e aviso persistente de informação incompleta", () => {

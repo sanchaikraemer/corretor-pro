@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js";
+} from "./db.js?v=021";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js";
+} from "./whatsapp.js?v=021";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -32,7 +32,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v020";
+const APP_VERSION = "v021";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -871,12 +871,12 @@ function bindEvents() {
     showToast("Corretor Pro instalado.");
   });
 
-  backButton.addEventListener("click", navigateToList);
-  brandButton.addEventListener("click", navigateToList);
-  installButton.addEventListener("click", installApp);
-  editNameButton.addEventListener("click", openRenameDialog);
+  backButton?.addEventListener("click", navigateToList);
+  brandButton?.addEventListener("click", navigateToList);
+  installButton?.addEventListener("click", installApp);
+  editNameButton?.addEventListener("click", openRenameDialog);
 
-  app.addEventListener("click", async event => {
+  app?.addEventListener("click", async event => {
     const installTrigger = event.target.closest("[data-install]");
     if (installTrigger) {
       installApp();
@@ -891,7 +891,7 @@ function bindEvents() {
     if (card) navigateToAttendance(card.dataset.attendance);
   });
 
-  renameForm.addEventListener("submit", async event => {
+  renameForm?.addEventListener("submit", async event => {
     event.preventDefault();
     if (event.submitter?.value === "save") await saveRenamedAttendance();
     renameDialog.close();
@@ -907,7 +907,15 @@ function bindEvents() {
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
-    await navigator.serviceWorker.register("/service-worker.js", { scope: "/" });
+    let reloadingForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    });
+
+    const registration = await navigator.serviceWorker.register("/service-worker.js", { scope: "/" });
+    registration.update().catch(() => null);
   } catch {
     showToast("Não foi possível ativar a instalação do aplicativo.", "error");
   }

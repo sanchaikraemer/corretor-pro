@@ -1,4 +1,4 @@
-const BUILD_ID = "corretor-pro-v020";
+const BUILD_ID = "corretor-pro-v021";
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
 const SHARE_DB_VERSION = 1;
@@ -8,10 +8,10 @@ const SHARE_RECORD_ID = "latest";
 const CORE_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/db.js",
-  "/whatsapp.js",
+  "/styles.css?v=021",
+  "/app.js?v=021",
+  "/db.js?v=021",
+  "/whatsapp.js?v=021",
   "/manifest.webmanifest",
   "/share-target.html",
   "/zip.min.js",
@@ -153,6 +153,30 @@ self.addEventListener("fetch", event => {
         })
         .catch(() => caches.match("/index.html"))
     );
+    return;
+  }
+
+  const networkFirstPaths = new Set([
+    "/index.html",
+    "/styles.css",
+    "/app.js",
+    "/db.js",
+    "/whatsapp.js"
+  ]);
+
+  if (networkFirstPaths.has(url.pathname)) {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request, { cache: "no-store" });
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(STATIC_CACHE).then(cache => cache.put(request, copy)).catch(() => null);
+        }
+        return response;
+      } catch {
+        return (await caches.match(request)) || (await caches.match(url.pathname)) || Response.error();
+      }
+    })());
     return;
   }
 
