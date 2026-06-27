@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=030">
+  <link rel="stylesheet" href="/styles.css?v=031">
 </head>
 <body>
   <header id="app-header" class="app-header">
@@ -33,7 +33,7 @@
       <span id="detail-header-subtitle"></span>
     </div>
 
-    <span id="header-version" class="header-version" aria-label="Versão do sistema">v030</span>
+    <span id="header-version" class="header-version" aria-label="Versão do sistema">v031</span>
     <button id="install-button" class="install-button" type="button" hidden>Instalar</button>
     <button id="edit-name-button" class="icon-button" type="button" aria-label="Editar nome" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -54,9 +54,31 @@
         <h1 id="processing-title">Processando conversa</h1>
         <p id="processing-description" class="processing-description">Abrindo o arquivo enviado pelo WhatsApp.</p>
 
+        <div id="processing-live" class="processing-live">
+          <span class="processing-spinner" aria-hidden="true"></span>
+          <div>
+            <strong id="processing-current">Abrindo o arquivo recebido</strong>
+            <span id="processing-count">Preparando a conversa</span>
+          </div>
+          <time id="processing-elapsed">Tempo decorrido: 00:00</time>
+        </div>
+
+        <div id="audio-period-panel" class="audio-period-panel" hidden>
+          <strong>Quais áudios devem ser transcritos?</strong>
+          <p>Todas as mensagens escritas serão importadas. Escolha apenas o período dos áudios.</p>
+          <div class="audio-period-options" role="group" aria-label="Período dos áudios">
+            <button type="button" data-audio-import-period="30" aria-pressed="false">30 dias</button>
+            <button type="button" data-audio-import-period="60" aria-pressed="false">60 dias</button>
+            <button class="active" type="button" data-audio-import-period="90" aria-pressed="true">90 dias</button>
+            <button type="button" data-audio-import-period="all" aria-pressed="false">Todo o período</button>
+          </div>
+          <span id="audio-period-summary" class="audio-period-summary"></span>
+          <button id="audio-period-continue" class="audio-period-continue" type="button">Continuar importação</button>
+        </div>
+
         <ol class="processing-steps">
           <li data-step="read"><span>1</span>Lendo conversa</li>
-          <li data-step="audio"><span>2</span>Localizando áudios</li>
+          <li data-step="audio"><span>2</span>Selecionando áudios</li>
           <li data-step="transcribe"><span>3</span>Transcrevendo áudios</li>
           <li data-step="timeline"><span>4</span>Montando linha do tempo</li>
           <li data-step="save"><span>5</span>Salvando atendimento</li>
@@ -64,13 +86,15 @@
 
         <div class="progress-row">
           <p id="progress-label" class="progress-label">0%</p>
-          <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+          <div class="progress-track" role="progressbar" aria-label="Progresso da importação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-bar"></span></div>
         </div>
 
         <div class="processing-note">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
           <span>Somente mensagens escritas e transcrições de áudio entram no atendimento.</span>
         </div>
+
+        <button id="cancel-import-button" class="cancel-import-button" type="button">Cancelar importação</button>
       </div>
     </div>
   </section>
@@ -96,7 +120,7 @@
 
 
 
-  <script src="/zip.min.js?v=030"></script>
-  <script type="module" src="/app.js?v=030"></script>
+  <script src="/zip.min.js?v=031"></script>
+  <script type="module" src="/app.js?v=031"></script>
 </body>
 </html>

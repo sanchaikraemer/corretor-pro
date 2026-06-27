@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=030";
+} from "./db.js?v=031";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=030";
+} from "./whatsapp.js?v=031";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -28,12 +28,20 @@ const processingTitle = document.querySelector("#processing-title");
 const processingDescription = document.querySelector("#processing-description");
 const progressBar = document.querySelector("#progress-bar");
 const progressLabel = document.querySelector("#progress-label");
+const processingLive = document.querySelector("#processing-live");
+const processingCurrent = document.querySelector("#processing-current");
+const processingCount = document.querySelector("#processing-count");
+const processingElapsed = document.querySelector("#processing-elapsed");
+const audioPeriodPanel = document.querySelector("#audio-period-panel");
+const audioPeriodSummary = document.querySelector("#audio-period-summary");
+const audioPeriodContinueButton = document.querySelector("#audio-period-continue");
+const cancelImportButton = document.querySelector("#cancel-import-button");
 const toast = document.querySelector("#toast");
 const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v030";
+const APP_VERSION = "v031";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -44,6 +52,13 @@ const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const MAX_PROPOSAL_DIMENSION = 2000;
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
+const AUDIO_IMPORT_PERIODS = [
+  { value: "30", label: "30 dias" },
+  { value: "60", label: "60 dias" },
+  { value: "90", label: "90 dias" },
+  { value: "all", label: "Todo o período" }
+];
+const FINAL_AUDIO_STATUSES = new Set(["done", "outside_period", "missing", "too_large", "empty", "error"]);
 const state = {
   records: [],
   currentKey: null,
@@ -57,7 +72,15 @@ const state = {
   detailPeriod: "30",
   deletingKeys: new Set(),
   analyzingKey: null,
-  proposalBusy: false
+  proposalBusy: false,
+  processingStartedAt: null,
+  processingElapsedTimer: null,
+  importAbortController: null,
+  importCancelled: false,
+  audioPeriodSelection: "90",
+  audioPeriodResolver: null,
+  audioPeriodCandidates: [],
+  audioPeriodReferenceTimestamp: null
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -163,11 +186,30 @@ function showToast(message, type = "normal", duration = 4200) {
   }, duration);
 }
 
+function formatElapsedTime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateProcessingElapsed() {
+  if (!processingElapsed || !state.processingStartedAt) return;
+  processingElapsed.textContent = `Tempo decorrido: ${formatElapsedTime(Date.now() - state.processingStartedAt)}`;
+}
+
+function setProcessingTelemetry(current, count = "") {
+  if (processingLive) processingLive.hidden = false;
+  if (processingCurrent) processingCurrent.textContent = current || "Processando...";
+  if (processingCount) processingCount.textContent = count;
+}
+
 function setProcessing(step, percent, description, title = "Processando conversa") {
   processingTitle.textContent = title;
   processingDescription.textContent = description;
   const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
   progressBar.style.width = `${safePercent}%`;
+  progressBar.parentElement?.setAttribute("aria-valuenow", String(safePercent));
   progressLabel.textContent = `${safePercent}%`;
 
   const activeIndex = PROCESSING_STEPS.indexOf(step);
@@ -177,17 +219,112 @@ function setProcessing(step, percent, description, title = "Processando conversa
   });
 }
 
+function setAudioPeriodSelection(value) {
+  if (!AUDIO_IMPORT_PERIODS.some(option => option.value === value)) return;
+  state.audioPeriodSelection = value;
+  audioPeriodPanel?.querySelectorAll("[data-audio-import-period]").forEach(button => {
+    const active = button.dataset.audioImportPeriod === value;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  updateAudioPeriodSummary();
+}
+
+function getLatestTimelineTimestamp(timeline) {
+  const timestamps = (timeline || []).map(timelineItemTimestamp).filter(Number.isFinite);
+  return timestamps.length ? Math.max(...timestamps) : Date.now();
+}
+
+function isAudioWithinSelectedPeriod(item, period = state.audioPeriodSelection, referenceTimestamp = state.audioPeriodReferenceTimestamp) {
+  if (period === "all") return true;
+  const timestamp = timelineItemTimestamp(item);
+  if (!Number.isFinite(timestamp)) return true;
+  const reference = Number.isFinite(referenceTimestamp) ? referenceTimestamp : Date.now();
+  const cutoff = reference - (Number(period) * 24 * 60 * 60 * 1000);
+  return timestamp >= cutoff;
+}
+
+function updateAudioPeriodSummary() {
+  if (!audioPeriodSummary) return;
+  const total = state.audioPeriodCandidates.length;
+  const selected = state.audioPeriodCandidates.filter(item => isAudioWithinSelectedPeriod(item)).length;
+  const label = AUDIO_IMPORT_PERIODS.find(option => option.value === state.audioPeriodSelection)?.label || "90 dias";
+  audioPeriodSummary.textContent = total
+    ? `${selected} de ${total} áudio${total === 1 ? "" : "s"} novo${total === 1 ? "" : "s"} serão transcritos nos últimos ${label.toLowerCase()}.`
+    : "Nenhum áudio novo precisa ser transcrito.";
+}
+
+function waitForAudioPeriodSelection(candidates, referenceTimestamp) {
+  state.audioPeriodCandidates = candidates;
+  state.audioPeriodReferenceTimestamp = referenceTimestamp;
+  setAudioPeriodSelection("90");
+  if (audioPeriodPanel) audioPeriodPanel.hidden = false;
+  if (processingLive) processingLive.hidden = true;
+  setProcessing("audio", 1, "Escolha o período dos áudios. Todas as mensagens escritas serão importadas.", "Selecionar período dos áudios");
+  return new Promise(resolve => {
+    state.audioPeriodResolver = resolve;
+  });
+}
+
+function createImportCancelledError() {
+  const error = new Error("Importação cancelada.");
+  error.code = "IMPORT_CANCELLED";
+  return error;
+}
+
+function throwIfImportCancelled() {
+  if (state.importCancelled) throw createImportCancelledError();
+}
+
 function showProcessing() {
   state.processing = true;
+  state.importCancelled = false;
+  state.importAbortController = new AbortController();
+  state.processingStartedAt = Date.now();
+  state.audioPeriodSelection = "90";
+  state.audioPeriodCandidates = [];
+  state.audioPeriodReferenceTimestamp = null;
   processingOverlay.hidden = false;
+  if (audioPeriodPanel) audioPeriodPanel.hidden = true;
+  if (processingLive) processingLive.hidden = false;
+  if (cancelImportButton) {
+    cancelImportButton.disabled = false;
+    cancelImportButton.textContent = "Cancelar importação";
+  }
   document.body.style.overflow = "hidden";
-  setProcessing("read", 3, "Abrindo o arquivo enviado pelo WhatsApp.", "Processando conversa");
+  clearInterval(state.processingElapsedTimer);
+  state.processingElapsedTimer = setInterval(updateProcessingElapsed, 1000);
+  updateProcessingElapsed();
+  setProcessingTelemetry("Abrindo o arquivo recebido", "Preparando a conversa");
+  setProcessing("read", 0, "Abrindo o arquivo enviado pelo WhatsApp.", "Processando conversa");
 }
 
 function hideProcessing() {
   state.processing = false;
+  clearInterval(state.processingElapsedTimer);
+  state.processingElapsedTimer = null;
+  state.processingStartedAt = null;
+  state.importAbortController = null;
+  state.audioPeriodResolver = null;
+  state.audioPeriodCandidates = [];
   processingOverlay.hidden = true;
+  if (audioPeriodPanel) audioPeriodPanel.hidden = true;
   document.body.style.overflow = "";
+}
+
+async function cancelCurrentImport() {
+  if (!state.processing || state.importCancelled || cancelImportButton?.disabled) return;
+  state.importCancelled = true;
+  state.importAbortController?.abort();
+  state.audioPeriodResolver?.(null);
+  state.audioPeriodResolver = null;
+  if (cancelImportButton) {
+    cancelImportButton.disabled = true;
+    cancelImportButton.textContent = "Cancelando...";
+  }
+  setProcessingTelemetry("Interrompendo o processamento", "Nenhum atendimento parcial será salvo");
+  processingTitle.textContent = "Cancelando importação";
+  processingDescription.textContent = "Aguarde enquanto encerramos a leitura com segurança.";
 }
 
 function formatCardDate(value) {
@@ -339,7 +476,11 @@ function formatTimelineForCopy(timeline) {
     const time = item.time || (timestamp !== null ? timeFormatter.format(new Date(timestamp)) : "");
     const author = String(item.author || "Sem identificação").trim();
     const audioLabel = item.type === "audio"
-      ? (item.transcriptionStatus === "done" ? "[Áudio transcrito] " : "[Áudio não transcrito] ")
+      ? item.transcriptionStatus === "done"
+        ? "[Áudio transcrito] "
+        : item.transcriptionStatus === "outside_period"
+          ? "[Áudio fora do período] "
+          : "[Áudio não transcrito] "
       : "";
     const text = String(item.text || "").trim();
     return `${date}${time ? ` ${time}` : ""} - ${author}: ${audioLabel}${text}`.trim();
@@ -500,7 +641,7 @@ function buildAnalysisRequest(record, timeline) {
     period: selectedPeriodLabel(),
     messages: formatTimelineForCopy(timeline),
     messageCount: timeline.length,
-    incompleteAudioCount: (timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
+    incompleteAudioCount: (timeline || []).filter(isAudioFailure).length,
     proposalImage: proposal && isSafeProposalDataUrl(proposal.dataUrl) ? proposal.dataUrl : null,
     proposalAttachedAt: proposal?.attachedAt || null
   };
@@ -756,17 +897,19 @@ function renderTimelineItem(item, record) {
     : "";
 
   if (item.type === "audio") {
-    const failed = item.transcriptionStatus !== "done";
+    const outsidePeriod = isAudioOutsidePeriod(item);
+    const failed = isAudioFailure(item);
+    const label = outsidePeriod ? "Áudio fora do período" : failed ? "Áudio não transcrito" : "Áudio transcrito";
     return `
       <article class="timeline-item${leadClass}">
         <div class="timeline-meta">
           <span class="timeline-author">${escapeHtml(item.author)}</span>
           <time class="timeline-time">${escapeHtml(item.time || "")}</time>
         </div>
-        <div class="transcription-block${failed ? " error" : ""}">
+        <div class="transcription-block${failed ? " error" : outsidePeriod ? " skipped" : ""}">
           <span class="transcription-label">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M8 6v12M4 9v6M16 5v14M20 8v8"/></svg>
-            ${failed ? "Áudio não transcrito" : "Áudio transcrito"}
+            ${label}
           </span>
           <p class="timeline-text">${escapeHtml(item.text || fallbackText)}</p>
         </div>
@@ -834,9 +977,7 @@ function renderTextList(items) {
 
 function getActionableAnalysisAlert(record, analysis) {
   const alert = String(analysis?.alertaInformacaoIncompleta || "").trim();
-  const incompleteAudioCount = (record.timeline || []).filter(
-    item => item.type === "audio" && item.transcriptionStatus !== "done"
-  ).length;
+  const incompleteAudioCount = (record.timeline || []).filter(isAudioFailure).length;
 
   if (incompleteAudioCount > 0) {
     return alert || `${incompleteAudioCount} áudio${incompleteAudioCount === 1 ? " não foi transcrito" : "s não foram transcritos"}. A análise pode estar incompleta.`;
@@ -1040,7 +1181,7 @@ function renderDetail(record) {
         ? " client-response"
         : "";
 
-  const failedAudios = (record.timeline || []).filter(item => item.type === "audio" && item.transcriptionStatus !== "done");
+  const failedAudios = (record.timeline || []).filter(isAudioFailure);
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
   const groups = groupTimelineByDate(filteredTimeline);
   const timelineHtml = groups.map(group => `
@@ -1249,7 +1390,7 @@ function buildAudioMap(entries) {
   return map;
 }
 
-async function transcribeAudio(entry, fullName) {
+async function transcribeAudio(entry, fullName, signal) {
   if (!entry) {
     return { text: "", status: "missing" };
   }
@@ -1272,7 +1413,8 @@ async function transcribeAudio(entry, fullName) {
       "Content-Type": "audio/ogg",
       "X-File-Name": encodeURIComponent(fullName)
     },
-    body: blob
+    body: blob,
+    signal
   });
 
   let payload = {};
@@ -1292,21 +1434,37 @@ async function transcribeAudio(entry, fullName) {
   return { text, status: text ? "done" : "empty" };
 }
 
-function wait(milliseconds) {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
+function wait(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createImportCancelledError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(createImportCancelledError());
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
-async function transcribeAudioWithRetry(entry, fullName, onRetry) {
+async function transcribeAudioWithRetry(entry, fullName, onRetry, signal) {
   let lastResult = { text: "", status: "error" };
   let lastError = null;
 
   for (let attempt = 1; attempt <= MAX_TRANSCRIPTION_ATTEMPTS; attempt += 1) {
+    throwIfImportCancelled();
     try {
-      const result = await transcribeAudio(entry, fullName);
+      const result = await transcribeAudio(entry, fullName, signal);
       lastResult = result;
       if (result.status === "done" && result.text) return { ...result, attempts: attempt };
       if (result.status === "missing" || result.status === "too_large") return { ...result, attempts: attempt };
     } catch (error) {
+      if (error?.name === "AbortError" || error?.code === "IMPORT_CANCELLED") throw createImportCancelledError();
       if (error.fatal) {
         return { text: error.message, status: "error", attempts: attempt };
       }
@@ -1315,7 +1473,7 @@ async function transcribeAudioWithRetry(entry, fullName, onRetry) {
 
     if (attempt < MAX_TRANSCRIPTION_ATTEMPTS) {
       onRetry?.(attempt + 1);
-      await wait(TRANSCRIPTION_RETRY_DELAY_MS * attempt);
+      await wait(TRANSCRIPTION_RETRY_DELAY_MS * attempt, signal);
     }
   }
 
@@ -1337,12 +1495,9 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
     if (previous) {
       if (incoming.type === "audio") {
         const incomingDone = incoming.transcriptionStatus === "done" && incoming.text;
-        const previousDone = previous.transcriptionStatus === "done" && previous.text;
         merged.set(incoming.fingerprint, incomingDone
           ? { ...previous, ...incoming }
-          : previousDone
-            ? { ...incoming, text: previous.text, transcriptionStatus: "done", transcriptionAttempts: previous.transcriptionAttempts }
-            : { ...previous, ...incoming });
+          : { ...incoming, ...previous });
       } else {
         merged.set(incoming.fingerprint, { ...previous, ...incoming });
       }
@@ -1370,26 +1525,35 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
   return { timeline, added, addedItems };
 }
 
+function isAudioOutsidePeriod(item) {
+  return item?.type === "audio" && item?.transcriptionStatus === "outside_period";
+}
+
+function isAudioFailure(item) {
+  return item?.type === "audio" && item?.transcriptionStatus !== "done" && !isAudioOutsidePeriod(item);
+}
+
 async function processIncomingZip(pending) {
   if (state.processing) return;
   showProcessing();
 
+  let zipReader = null;
   try {
     if (!pending?.blob) {
       throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
     }
     const z = getZipLib();
+    const signal = state.importAbortController?.signal;
 
-    // Lê o ZIP sob demanda: só o índice + o texto + os áudios .opus são lidos.
-    // Fotos, vídeos e PDFs ficam no arquivo mas nunca são carregados, então o
-    // tamanho total do ZIP não pesa no aparelho.
-    setProcessing("read", 8, "Abrindo o ZIP recebido pelo compartilhamento.");
+    setProcessingTelemetry(pending.name || "Conversa do WhatsApp", "Lendo o arquivo recebido");
+    setProcessing("read", 0, "Abrindo o ZIP recebido pelo compartilhamento.");
     let entries;
-    let zipReader;
     try {
       zipReader = new z.ZipReader(new z.BlobReader(pending.blob));
       entries = await zipReader.getEntries();
-    } catch {
+      throwIfImportCancelled();
+    } catch (error) {
+      if (state.importCancelled) throw createImportCancelledError();
       throw new Error("O arquivo recebido não é um ZIP válido do WhatsApp.");
     }
 
@@ -1397,92 +1561,147 @@ async function processIncomingZip(pending) {
     if (!txtEntries.length) throw new Error("Nenhum arquivo de conversa .txt foi encontrado no ZIP.");
 
     const txtEntry = txtEntries[0];
+    setProcessingTelemetry(txtEntry.filename, "Lendo mensagens escritas");
     const rawText = await txtEntry.getData(new z.TextWriter());
+    throwIfImportCancelled();
     const parsedTimeline = parseWhatsappTxt(rawText);
     if (!parsedTimeline.length) throw new Error("O TXT foi encontrado, mas nenhuma mensagem pôde ser lida.");
 
-    setProcessing("audio", 25, "Localizando somente os áudios .opus da conversa.");
+    setProcessing("audio", 1, "Localizando somente os áudios .opus da conversa.");
+    setProcessingTelemetry("Localizando áudios", `${parsedTimeline.length} itens encontrados na conversa`);
     const originalLeadName = inferLeadName(pending.name || txtEntry.filename);
     const conversationKey = makeConversationKey(originalLeadName);
     const existing = await getAtendimento(conversationKey);
+    throwIfImportCancelled();
     const existingByFingerprint = new Map((existing?.timeline || []).map(item => [item.fingerprint, item]));
     const audioMap = buildAudioMap(entries);
     const audioItems = parsedTimeline.filter(item => item.type === "audio");
+    const newAudioItems = audioItems.filter(item => !existingByFingerprint.has(item.fingerprint));
+    const referenceTimestamp = getLatestTimelineTimestamp(parsedTimeline);
 
-    setProcessing(
-      "transcribe",
-      audioItems.length ? 32 : 75,
-      audioItems.length
-        ? `${audioItems.length} áudio${audioItems.length === 1 ? "" : "s"} encontrado${audioItems.length === 1 ? "" : "s"}. Iniciando transcrição.`
-        : "Nenhum áudio .opus encontrado."
-    );
+    let selectedPeriod = "90";
+    if (newAudioItems.length) {
+      selectedPeriod = await waitForAudioPeriodSelection(newAudioItems, referenceTimestamp);
+      if (!selectedPeriod || state.importCancelled) throw createImportCancelledError();
+    }
+    if (audioPeriodPanel) audioPeriodPanel.hidden = true;
+    if (processingLive) processingLive.hidden = false;
 
-    let completedAudios = 0;
-    for (const item of audioItems) {
-      const previous = existingByFingerprint.get(item.fingerprint);
-      if (previous?.transcriptionStatus === "done" && previous.text) {
-        item.text = previous.text;
-        item.transcriptionStatus = "done";
-        completedAudios += 1;
-        continue;
-      }
-
-      const audioEntry = audioMap.get(normalizeFileName(item.audioFile));
-      if (!audioEntry) {
-        item.transcriptionStatus = "missing";
+    const selectedAudioItems = [];
+    for (const item of newAudioItems) {
+      if (isAudioWithinSelectedPeriod(item, selectedPeriod, referenceTimestamp)) {
+        selectedAudioItems.push(item);
+      } else {
+        item.text = "Não transcrito por estar fora do período selecionado.";
+        item.transcriptionStatus = "outside_period";
         item.transcriptionAttempts = 0;
-        item.text = "Não foi possível localizar este áudio dentro do ZIP.";
+        item.transcriptionPeriod = selectedPeriod;
+      }
+    }
+
+    const totalToTranscribe = selectedAudioItems.length;
+    let completedAudios = 0;
+    if (totalToTranscribe) {
+      setProcessing("transcribe", 1, `Transcrevendo ${totalToTranscribe} áudio${totalToTranscribe === 1 ? "" : "s"} novo${totalToTranscribe === 1 ? "" : "s"}.`);
+      for (let index = 0; index < selectedAudioItems.length; index += 1) {
+        throwIfImportCancelled();
+        const item = selectedAudioItems[index];
+        const audioEntry = audioMap.get(normalizeFileName(item.audioFile));
+        const beforePercent = 1 + (completedAudios / Math.max(totalToTranscribe, 1)) * 91;
+        setProcessing(
+          "transcribe",
+          beforePercent,
+          `Processando áudio ${index + 1} de ${totalToTranscribe}.`
+        );
+        setProcessingTelemetry(
+          audioEntry?.filename || item.audioFile || `Áudio ${index + 1}`,
+          `${completedAudios} concluído${completedAudios === 1 ? "" : "s"} · ${totalToTranscribe - completedAudios} restante${totalToTranscribe - completedAudios === 1 ? "" : "s"}`
+        );
+
+        if (!audioEntry) {
+          item.transcriptionStatus = "missing";
+          item.transcriptionAttempts = 0;
+          item.text = "Não foi possível localizar este áudio dentro do ZIP.";
+        } else {
+          try {
+            const result = await transcribeAudioWithRetry(
+              audioEntry,
+              audioEntry.filename,
+              nextAttempt => {
+                setProcessing(
+                  "transcribe",
+                  beforePercent,
+                  `O áudio ${index + 1} falhou. Tentando novamente (${nextAttempt}/${MAX_TRANSCRIPTION_ATTEMPTS}).`
+                );
+                setProcessingTelemetry(
+                  audioEntry.filename,
+                  `${completedAudios} concluído${completedAudios === 1 ? "" : "s"} · nova tentativa em andamento`
+                );
+              },
+              signal
+            );
+            item.text = result.text || (
+              result.status === "too_large"
+                ? "Este áudio ultrapassa o limite permitido para transcrição."
+                : "O áudio não retornou texto após novas tentativas."
+            );
+            item.transcriptionStatus = result.status;
+            item.transcriptionAttempts = result.attempts;
+            item.transcriptionPeriod = selectedPeriod;
+          } catch (error) {
+            if (error?.code === "IMPORT_CANCELLED" || error?.name === "AbortError") throw createImportCancelledError();
+            if (error.fatal) throw error;
+            item.text = "Não foi possível transcrever este áudio após 3 tentativas.";
+            item.transcriptionStatus = "error";
+            item.transcriptionAttempts = MAX_TRANSCRIPTION_ATTEMPTS;
+            item.transcriptionPeriod = selectedPeriod;
+          }
+        }
+
         completedAudios += 1;
-        continue;
-      }
-
-      try {
-        const result = await transcribeAudioWithRetry(
-          audioEntry,
-          audioEntry.filename,
-          nextAttempt => setProcessing(
-            "transcribe",
-            32 + (completedAudios / Math.max(audioItems.length, 1)) * 43,
-            `O áudio ${completedAudios + 1} falhou. Tentando novamente (${nextAttempt}/${MAX_TRANSCRIPTION_ATTEMPTS}).`
-          )
+        const progress = 1 + (completedAudios / Math.max(totalToTranscribe, 1)) * 91;
+        setProcessing(
+          "transcribe",
+          progress,
+          `${completedAudios} de ${totalToTranscribe} áudio${totalToTranscribe === 1 ? "" : "s"} concluído${completedAudios === 1 ? "" : "s"}.`
         );
-        item.text = result.text || (
-          result.status === "too_large"
-            ? "Este áudio ultrapassa o limite permitido para transcrição."
-            : "O áudio não retornou texto após novas tentativas."
+        setProcessingTelemetry(
+          audioEntry?.filename || item.audioFile || `Áudio ${index + 1}`,
+          `${completedAudios} concluído${completedAudios === 1 ? "" : "s"} · ${totalToTranscribe - completedAudios} restante${totalToTranscribe - completedAudios === 1 ? "" : "s"}`
         );
-        item.transcriptionStatus = result.status;
-        item.transcriptionAttempts = result.attempts;
-      } catch (error) {
-        if (error.fatal) throw error;
-        item.text = "Não foi possível transcrever este áudio após 3 tentativas.";
-        item.transcriptionStatus = "error";
-        item.transcriptionAttempts = MAX_TRANSCRIPTION_ATTEMPTS;
       }
-
-      completedAudios += 1;
-      const progress = 32 + (completedAudios / Math.max(audioItems.length, 1)) * 43;
+    } else {
       setProcessing(
         "transcribe",
-        progress,
-        `Transcrevendo áudio ${completedAudios} de ${audioItems.length}.`
+        92,
+        newAudioItems.length
+          ? "Nenhum áudio novo está dentro do período selecionado."
+          : "Nenhum áudio novo precisa ser transcrito."
+      );
+      setProcessingTelemetry(
+        newAudioItems.length ? "Áudios antigos mantidos fora do período" : "Mensagens prontas",
+        `${newAudioItems.length} áudio${newAudioItems.length === 1 ? "" : "s"} novo${newAudioItems.length === 1 ? "" : "s"}`
       );
     }
 
-    try { await zipReader.close(); } catch { /* leitor sem recursos a liberar */ }
-
-    setProcessing("timeline", 82, "Unindo mensagens escritas e transcrições na ordem correta.");
+    throwIfImportCancelled();
+    setProcessing("timeline", 94, "Unindo mensagens escritas e transcrições na ordem correta.");
+    setProcessingTelemetry("Montando linha do tempo", `${parsedTimeline.length} itens analisados`);
     const merged = mergeTimeline(existing?.timeline, parsedTimeline);
     const lastItem = merged.timeline[merged.timeline.length - 1];
     const now = new Date().toISOString();
     const deviceId = CLOUD_WORKSPACE;
+    const failedAudioCount = merged.timeline.filter(isAudioFailure).length;
+    const outsidePeriodAudioCount = merged.timeline.filter(isAudioOutsidePeriod).length;
     const nextMetadata = {
       ...(existing?.metadata || {}),
       originalLeadName,
       txtFile: txtEntry.filename,
       totalItens: merged.timeline.length,
       totalAudios: merged.timeline.filter(item => item.type === "audio").length,
-      audiosNaoTranscritos: merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length,
+      audiosNaoTranscritos: failedAudioCount,
+      audiosForaPeriodo: outsidePeriodAudioCount,
+      periodoAudioUltimaImportacao: selectedPeriod,
       ignoredMedia: true,
       lastReceivedAt: pending.receivedAt || now
     };
@@ -1525,36 +1744,48 @@ async function processIncomingZip(pending) {
       updatedAt: now
     };
 
-    setProcessing("save", 94, "Salvando o atendimento neste aparelho.");
+    throwIfImportCancelled();
+    if (cancelImportButton) {
+      cancelImportButton.disabled = true;
+      cancelImportButton.textContent = "Finalizando...";
+    }
+    setProcessing("save", 97, "Salvando o atendimento neste aparelho.");
+    setProcessingTelemetry("Salvando atendimento", `${merged.added} novo${merged.added === 1 ? " item" : "s itens"}`);
     await saveAtendimento(record);
     await pushRemoteRecord(record);
     await removePendingShare();
 
     setProcessing("save", 100, "Atendimento pronto.", "Conversa processada");
+    setProcessingTelemetry("Importação concluída", `${merged.timeline.length} itens no histórico`);
     await new Promise(resolve => setTimeout(resolve, 350));
     hideProcessing();
     cleanShareQuery();
     await refreshRecords();
     navigateToAttendance(conversationKey);
 
-    const unresolvedAudios = merged.timeline.filter(item => item.type === "audio" && item.transcriptionStatus !== "done").length;
-    if (unresolvedAudios) {
+    if (failedAudioCount) {
       showToast(
-        `${unresolvedAudios} áudio${unresolvedAudios === 1 ? " não foi transcrito" : "s não foram transcritos"} após novas tentativas. O atendimento está com informação incompleta.`,
+        `${failedAudioCount} áudio${failedAudioCount === 1 ? " não foi transcrito" : "s não foram transcritos"} após novas tentativas. O atendimento está com informação incompleta.`,
         "error",
         9000
       );
+    } else if (outsidePeriodAudioCount) {
+      showToast(`${outsidePeriodAudioCount} áudio${outsidePeriodAudioCount === 1 ? " antigo ficou" : "s antigos ficaram"} fora do período selecionado.`);
     } else if (existing) {
       showToast(merged.added ? `${merged.added} novo${merged.added === 1 ? " item adicionado" : "s itens adicionados"}.` : "Nenhuma mensagem nova foi encontrada.");
     } else {
       showToast("Atendimento criado e salvo.");
     }
   } catch (error) {
+    const cancelled = error?.code === "IMPORT_CANCELLED" || state.importCancelled || error?.name === "AbortError";
+    if (cancelled) await removePendingShare().catch(() => null);
     hideProcessing();
     cleanShareQuery();
     await refreshRecords();
-    renderRoute();
-    showToast(error?.message || "Não foi possível processar a conversa.", "error", 7000);
+    await renderRoute();
+    showToast(cancelled ? "Importação cancelada. Nenhum atendimento parcial foi salvo." : (error?.message || "Não foi possível processar a conversa."), cancelled ? "normal" : "error", 7000);
+  } finally {
+    try { await zipReader?.close(); } catch { /* leitor sem recursos a liberar */ }
   }
 }
 
@@ -1708,6 +1939,16 @@ function bindEvents() {
   brandButton?.addEventListener("click", navigateToList);
   installButton?.addEventListener("click", installApp);
   editNameButton?.addEventListener("click", openRenameDialog);
+  cancelImportButton?.addEventListener("click", cancelCurrentImport);
+  audioPeriodPanel?.addEventListener("click", event => {
+    const trigger = event.target.closest("[data-audio-import-period]");
+    if (trigger) setAudioPeriodSelection(trigger.dataset.audioImportPeriod);
+  });
+  audioPeriodContinueButton?.addEventListener("click", () => {
+    const resolve = state.audioPeriodResolver;
+    state.audioPeriodResolver = null;
+    resolve?.(state.audioPeriodSelection);
+  });
 
   app?.addEventListener("click", async event => {
     const installTrigger = event.target.closest("[data-install]");
