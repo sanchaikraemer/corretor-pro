@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=031";
+} from "./db.js?v=032";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=031";
+} from "./whatsapp.js?v=032";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -41,7 +41,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v031";
+const APP_VERSION = "v032";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -975,6 +975,48 @@ function renderTextList(items) {
   return `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
+function splitTextIntoPoints(text, limit = 3) {
+  const value = String(text || "").trim();
+  if (!value) return [];
+  const normalized = value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[-•]\s*/g, '. ')
+    .trim();
+  const parts = normalized
+    .split(/(?<=[.!?;])\s+|\s{2,}/)
+    .map(part => part.trim().replace(/^[•\-]\s*/, '').trim())
+    .filter(Boolean);
+  if (!parts.length) return [normalized];
+  return parts.slice(0, limit);
+}
+
+function renderPointList(items, fallback) {
+  const list = (Array.isArray(items) ? items : []).filter(Boolean).slice(0, 4);
+  const source = list.length ? list : splitTextIntoPoints(fallback, 4);
+  if (!source.length) return `<p class="analysis-empty-value">Não identificado</p>`;
+  return `<ul class="analysis-point-list">${source.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderInlineIcon(kind) {
+  const icons = {
+    leitura: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>',
+    pendencia: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m15.5 8.5-7 7"/><path d="m8.5 8.5 7 7"/></svg>',
+    proximo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="m15 5 5 7-5 7"/></svg>',
+    periodo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
+    mensagens: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    horario: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+    sucesso: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>'
+  };
+  return icons[kind] || icons.leitura;
+}
+
+function summarizeSuggestionMessage(text) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+  const sentence = splitTextIntoPoints(value, 1)[0] || value;
+  return sentence.length > 120 ? `${sentence.slice(0, 117).trim()}...` : sentence;
+}
+
 function getActionableAnalysisAlert(record, analysis) {
   const alert = String(analysis?.alertaInformacaoIncompleta || "").trim();
   const incompleteAudioCount = (record.timeline || []).filter(isAudioFailure).length;
@@ -1070,9 +1112,20 @@ function renderAnalysisSection(record) {
   const proposal = record.metadata?.propostaImagem;
   const proposalWasAnalyzed = Boolean(proposal && isSafeProposalDataUrl(proposal.dataUrl));
   const actionableAlert = getActionableAnalysisAlert(record, analysis);
+  const readingPoints = (Array.isArray(analysis.sinaisInteresse) && analysis.sinaisInteresse.length)
+    ? analysis.sinaisInteresse
+    : splitTextIntoPoints(analysis.resumo, 3);
+  const pendingPoints = splitTextIntoPoints(analysis.pendenciaReal || analysis.pendenciaFinanceira, 4);
+  if (analysis.participantesDecisao) pendingPoints.push(`Confirmar alinhamento com ${analysis.participantesDecisao}.`);
+  const nextStepPoints = splitTextIntoPoints(analysis.proximoPasso, 4);
+  const miniFacts = [
+    { icon: 'periodo', value: analysis.period || selectedPeriodLabel(), label: 'Período analisado' },
+    { icon: 'mensagens', value: `${Number(analysis.messageCount || 0)} mensagens`, label: 'Troca de mensagens' },
+    { icon: 'horario', value: generatedLabel || 'Análise recente', label: 'Análise realizada' }
+  ];
 
   return `
-    <section class="analysis-card analysis-card-compact">
+    <section class="analysis-card analysis-card-rich">
       <div class="section-heading-row analysis-heading">
         <div>
           <span class="section-eyebrow">Inteligência comercial</span>
@@ -1082,36 +1135,52 @@ function renderAnalysisSection(record) {
           ? `<span class="analysis-waiting-badge">Aguardando cliente</span>`
           : `<button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
       </div>
-      <div class="analysis-meta">
-        <span>${escapeHtml(analysis.period || selectedPeriodLabel())}</span>
-        <span>${Number(analysis.messageCount || 0)} mensagens</span>
-        ${generatedLabel ? `<span>${escapeHtml(generatedLabel)}</span>` : ""}
+      <div class="analysis-meta analysis-meta-rich">
+        ${miniFacts.map(item => `
+          <article class="analysis-meta-card">
+            <span class="analysis-meta-icon">${renderInlineIcon(item.icon)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+            <small>${escapeHtml(item.label)}</small>
+          </article>`).join('')}
+        ${proposalWasAnalyzed && !actionableAlert ? `
+          <div class="analysis-status analysis-status-success analysis-status-inline">
+            <span class="analysis-status-icon" aria-hidden="true">${renderInlineIcon('sucesso')}</span>
+            <div><strong>Proposta analisada com sucesso</strong><span>A retomada já considera a proposta enviada e o contexto da conversa.</span></div>
+          </div>` : ''}
       </div>
-      ${proposalWasAnalyzed && !actionableAlert ? `
-        <div class="analysis-status analysis-status-success">
-          <span class="analysis-status-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
-          </span>
-          <div><strong>Proposta analisada com sucesso</strong><span>A retomada já considera a proposta enviada e o contexto da conversa.</span></div>
-        </div>` : ""}
-      <div class="analysis-compact-grid">
-        <article class="analysis-compact-item">
-          <span>Leitura atual</span>
-          <p>${escapeHtml(analysis.resumo || "Não identificada")}</p>
+      <div class="analysis-feature-grid">
+        <article class="analysis-feature-card">
+          <div class="analysis-feature-icon">${renderInlineIcon('leitura')}</div>
+          <h3>Leitura atual</h3>
+          ${renderPointList(readingPoints, analysis.resumo)}
+          <details class="mini-details">
+            <summary>Ver detalhes</summary>
+            <p>${escapeHtml(analysis.resumo || 'Não identificado')}</p>
+          </details>
         </article>
-        <article class="analysis-compact-item">
-          <span>O que falta definir</span>
-          <p>${escapeHtml(analysis.pendenciaReal || analysis.pendenciaFinanceira || "Não identificado")}</p>
+        <article class="analysis-feature-card">
+          <div class="analysis-feature-icon">${renderInlineIcon('pendencia')}</div>
+          <h3>O que falta definir</h3>
+          ${renderPointList(pendingPoints, analysis.pendenciaReal || analysis.pendenciaFinanceira)}
+          <details class="mini-details">
+            <summary>Ver detalhes</summary>
+            <p>${escapeHtml(analysis.pendenciaReal || analysis.pendenciaFinanceira || 'Não identificado')}</p>
+          </details>
         </article>
-        <article class="analysis-compact-item">
-          <span>Próximo passo</span>
-          <p>${escapeHtml(analysis.proximoPasso || "Não identificado")}</p>
+        <article class="analysis-feature-card">
+          <div class="analysis-feature-icon">${renderInlineIcon('proximo')}</div>
+          <h3>Próximo passo</h3>
+          ${renderPointList(nextStepPoints, analysis.proximoPasso)}
+          <details class="mini-details">
+            <summary>Ver detalhes</summary>
+            <p>${escapeHtml(analysis.proximoPasso || 'Não identificado')}</p>
+          </details>
         </article>
       </div>
       ${renderFullAnalysisDetails(analysis, record)}
       ${actionableAlert ? `<div class="analysis-alert" role="alert">${escapeHtml(actionableAlert)}</div>` : ""}
     </section>
-    <section class="suggestions-panel">
+    <section class="suggestions-panel suggestions-panel-grid">
       <div class="suggestions-heading-row">
         <div>
           <span class="section-eyebrow">Próxima ação</span>
@@ -1119,13 +1188,17 @@ function renderAnalysisSection(record) {
         </div>
         <span>${suggestions.length} sugestões para este momento</span>
       </div>
-      <div class="suggestions-list">
+      <div class="suggestions-grid">
         ${suggestions.map((suggestion, index) => `
-          <article class="suggestion-card">
+          <article class="suggestion-card suggestion-card-grid">
             <span class="suggestion-number" aria-hidden="true">${index + 1}</span>
             <div class="suggestion-body">
               <strong>${escapeHtml(suggestion.titulo || `Opção ${index + 1}`)}</strong>
-              <p>${escapeHtml(suggestion.mensagem || "")}</p>
+              <p class="suggestion-summary">${escapeHtml(summarizeSuggestionMessage(suggestion.mensagem || ''))}</p>
+              <details class="mini-details suggestion-details">
+                <summary>Ver sugestão</summary>
+                <p>${escapeHtml(suggestion.mensagem || '')}</p>
+              </details>
             </div>
             <button type="button" data-copy-suggestion="${index}">Copiar</button>
           </article>`).join("") || `<p class="analysis-empty-value">Nenhuma sugestão foi gerada.</p>`}
@@ -1230,7 +1303,16 @@ function renderDetail(record) {
       </section>
       ${renderAnalysisSection(record)}
       ${renderProposalSection(record)}
-      <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
+      <details class="history-panel">
+        <summary>
+          <div>
+            <span class="section-eyebrow">Histórico da conversa</span>
+            <strong>Abrir mensagens do período selecionado</strong>
+          </div>
+          <span class="history-panel-count">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? '' : 's'}</span>
+        </summary>
+        <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
+      </details>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
         <span>Somente mensagens escritas e transcrições de áudio são exibidas. Imagens, vídeos, PDFs e outras mídias são ignorados.</span>
