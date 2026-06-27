@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=032";
+} from "./db.js?v=033";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=032";
+} from "./whatsapp.js?v=033";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -41,7 +41,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v032";
+const APP_VERSION = "v033";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -1194,11 +1194,7 @@ function renderAnalysisSection(record) {
             <span class="suggestion-number" aria-hidden="true">${index + 1}</span>
             <div class="suggestion-body">
               <strong>${escapeHtml(suggestion.titulo || `Opção ${index + 1}`)}</strong>
-              <p class="suggestion-summary">${escapeHtml(summarizeSuggestionMessage(suggestion.mensagem || ''))}</p>
-              <details class="mini-details suggestion-details">
-                <summary>Ver sugestão</summary>
-                <p>${escapeHtml(suggestion.mensagem || '')}</p>
-              </details>
+              <p class="suggestion-message-full">${escapeHtml(suggestion.mensagem || '')}</p>
             </div>
             <button type="button" data-copy-suggestion="${index}">Copiar</button>
           </article>`).join("") || `<p class="analysis-empty-value">Nenhuma sugestão foi gerada.</p>`}
