@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=029";
+} from "./db.js?v=030";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=029";
+} from "./whatsapp.js?v=030";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -33,7 +33,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v029";
+const APP_VERSION = "v030";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -689,7 +689,7 @@ function renderList() {
       : workflow.mode === "followup_due"
         ? "Retomada disponível"
         : workflow.mode === "client_response"
-          ? getContactRoleText(record, "new")
+          ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
           : "";
     const statusClass = workflow.mode === "waiting"
       ? " waiting-client"
@@ -1087,8 +1087,8 @@ function renderDetail(record) {
           Copiar
         </button>
       </section>
-      ${renderProposalSection(record)}
       ${renderAnalysisSection(record)}
+      ${renderProposalSection(record)}
       <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>

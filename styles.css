@@ -1653,12 +1653,16 @@ button.storage-note strong { font-weight: 600; }
 .suggestion-body strong {
   display: block;
   color: var(--emerald-dark);
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .suggestions-panel .suggestion-card p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
+  color: var(--charcoal);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .suggestions-panel .suggestion-card > button {

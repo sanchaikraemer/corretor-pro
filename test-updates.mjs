@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v029 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v029"/);
+test("v030 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v030"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v029/);
-  assert.match(htmlSource, /app\.js\?v=029/);
-  assert.match(htmlSource, /styles\.css\?v=029/);
-  assert.match(appSource, /db\.js\?v=029/);
-  assert.match(appSource, /whatsapp\.js\?v=029/);
+  assert.match(workerSource, /corretor-pro-v030/);
+  assert.match(htmlSource, /app\.js\?v=030/);
+  assert.match(htmlSource, /styles\.css\?v=030/);
+  assert.match(appSource, /db\.js\?v=030/);
+  assert.match(appSource, /whatsapp\.js\?v=030/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v029 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v029<\/span>/);
+test("versão v030 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v030<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -395,7 +395,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v029 reduz a análise visível e mantém detalhes recolhidos", () => {
+test("v030 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(appSource, /analysis-compact-grid/);
   assert.match(appSource, /Leitura atual/);
   assert.match(appSource, /O que falta definir/);
@@ -406,7 +406,7 @@ test("v029 reduz a análise visível e mantém detalhes recolhidos", () => {
   assert.match(stylesSource, /\.analysis-details summary/);
 });
 
-test("v029 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+test("v030 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
@@ -416,7 +416,7 @@ test("v029 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
-test("v029 mantém sugestões visíveis e numeradas fora da análise completa", () => {
+test("v030 mantém sugestões visíveis e numeradas fora da análise completa", () => {
   assert.match(appSource, /class="suggestions-panel"/);
   assert.match(appSource, /class="suggestion-number"/);
   assert.match(appSource, /data-copy-suggestion/);
@@ -425,7 +425,7 @@ test("v029 mantém sugestões visíveis e numeradas fora da análise completa", 
 });
 
 
-test("v029 registra Atendido agora imediatamente e inicia espera de 48 horas", () => {
+test("v030 registra Atendido agora imediatamente e inicia espera de 48 horas", () => {
   assert.match(appSource, /data-attended-now/);
   assert.match(appSource, /async function markAttendedNow/);
   assert.match(appSource, /async function registerLeadAttended/);
@@ -516,7 +516,7 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v029 mostra o horário da movimentação uma única vez no card", () => {
+test("v030 mostra o horário da movimentação uma única vez no card", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
@@ -524,9 +524,33 @@ test("v029 mostra o horário da movimentação uma única vez no card", () => {
   const statusEnd = renderListSource.indexOf("const statusClass", statusStart);
   const statusSource = renderListSource.slice(statusStart, statusEnd);
   assert.match(statusSource, /\? getContactRoleText\(record, "waiting"\)/);
-  assert.match(statusSource, /\? getContactRoleText\(record, "new"\)/);
+  assert.match(statusSource, /getContactType\(record\) === "corretor" \? "" : getContactRoleText\(record, "new"\)/);
   assert.match(renderListSource, /<span class="attendance-time">/);
   assert.doesNotMatch(statusSource, /moment\.date|moment\.time|formatAttendedNowLabel/);
   assert.doesNotMatch(statusSource, /Retomada disponível · 48h sem resposta/);
 });
 
+
+
+test("v030 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
+  const renderListStart = appSource.indexOf("function renderList()");
+  const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
+  const renderListSource = appSource.slice(renderListStart, renderListEnd);
+  assert.match(renderListSource, /getContactType\(record\) === "corretor" \? "" : getContactRoleText\(record, "new"\)/);
+  assert.match(appSource, /if \(form === "new"\) return broker \? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente"/);
+});
+
+test("v030 mostra inteligência comercial antes do contexto financeiro", () => {
+  const renderStart = appSource.indexOf("function renderDetail(record)");
+  const renderEnd = appSource.indexOf("async function renderRoute", renderStart);
+  const renderSource = appSource.slice(renderStart, renderEnd);
+  const analysisPosition = renderSource.indexOf("${renderAnalysisSection(record)}");
+  const proposalPosition = renderSource.indexOf("${renderProposalSection(record)}");
+  assert.ok(analysisPosition >= 0);
+  assert.ok(proposalPosition > analysisPosition);
+});
+
+test("v030 aumenta a fonte das sugestões de resposta", () => {
+  assert.match(stylesSource, /\.suggestion-body strong \{[\s\S]*font-size: 13px;/);
+  assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.65;/);
+});
