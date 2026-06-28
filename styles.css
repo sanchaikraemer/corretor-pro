@@ -1196,7 +1196,42 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .toast.error { background: #991B1B; }
 
-.rename-dialog {
+.list-hero-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-hero-heading h1 { margin: 0; }
+
+.add-lead-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1.5px solid var(--emerald);
+  color: var(--emerald-dark);
+  background: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.add-lead-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.rename-dialog,
+.add-lead-dialog {
   width: min(calc(100% - 28px), 430px);
   padding: 0;
   border: 0;
@@ -1206,12 +1241,14 @@ button { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 24px 70px rgba(0,0,0,.25);
 }
 
-.rename-dialog::backdrop {
+.rename-dialog::backdrop,
+.add-lead-dialog::backdrop {
   background: rgba(31,41,55,.72);
   backdrop-filter: blur(6px);
 }
 
-.rename-dialog form { padding: 22px; }
+.rename-dialog form,
+.add-lead-dialog form { padding: 22px; }
 
 .dialog-heading {
   display: flex;
@@ -1231,14 +1268,23 @@ button { -webkit-tap-highlight-color: transparent; }
   background: var(--gray-light);
 }
 
-.rename-dialog label {
+.rename-dialog label,
+.add-lead-dialog label {
   display: block;
   margin-bottom: 7px;
   font-size: 11px;
   font-weight: 600;
 }
 
-.rename-dialog input {
+.rename-dialog label + label,
+.add-lead-dialog label + * + label,
+.add-lead-dialog label + label {
+  margin-top: 14px;
+}
+
+.rename-dialog input,
+.add-lead-dialog input,
+.add-lead-dialog textarea {
   width: 100%;
   min-height: 46px;
   border: 1px solid #D1D5DB;
@@ -1247,11 +1293,59 @@ button { -webkit-tap-highlight-color: transparent; }
   color: var(--charcoal);
   background: var(--white);
   outline: 0;
+  font-family: inherit;
+  font-size: 14px;
 }
 
-.rename-dialog input:focus {
+.add-lead-dialog textarea {
+  min-height: 72px;
+  padding: 10px 13px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.rename-dialog input:focus,
+.add-lead-dialog input:focus,
+.add-lead-dialog textarea:focus {
   border-color: var(--emerald);
   box-shadow: 0 0 0 4px rgba(5,150,105,.12);
+}
+
+.manual-lead-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manual-lead-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manual-lead-row span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.manual-lead-row strong {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.manual-lead-obs p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--charcoal);
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .dialog-hint {

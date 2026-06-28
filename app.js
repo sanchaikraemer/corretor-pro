@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=036";
+} from "./db.js?v=037";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=036";
+} from "./whatsapp.js?v=037";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -40,8 +40,10 @@ const toast = document.querySelector("#toast");
 const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
+const addLeadDialog = document.querySelector("#add-lead-dialog");
+const addLeadForm = document.querySelector("#add-lead-form");
 
-const APP_VERSION = "v036";
+const APP_VERSION = "v037";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -816,7 +818,13 @@ function renderList() {
   app.innerHTML = `
     <section class="list-page">
       <div class="list-hero">
-        <h1>Atendimentos</h1>
+        <div class="list-hero-heading">
+          <h1>Atendimentos</h1>
+          <button class="add-lead-button" type="button" data-add-lead>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Adicionar
+          </button>
+        </div>
         <p>Conversas recebidas e organizadas em texto, na ordem em que aconteceram.</p>
       </div>
       <div class="list-surface">
@@ -1175,6 +1183,45 @@ function renderContactTypeSelector(record) {
     </section>`;
 }
 
+function renderManualLeadSection(record) {
+  const { telefone, empreendimento, observacoes } = record.metadata || {};
+  if (!telefone && !empreendimento && !observacoes) return "";
+  return `
+    <section class="manual-lead-card">
+      ${empreendimento ? `<div class="manual-lead-row"><span>Empreendimento</span><strong>${escapeHtml(empreendimento)}</strong></div>` : ""}
+      ${telefone ? `<div class="manual-lead-row"><span>Telefone</span><strong>${escapeHtml(telefone)}</strong></div>` : ""}
+      ${observacoes ? `<div class="manual-lead-row manual-lead-obs"><span>Observações</span><p>${escapeHtml(observacoes)}</p></div>` : ""}
+    </section>`;
+}
+
+async function createManualLead(name, phone, empreendimento, notes) {
+  const now = new Date().toISOString();
+  const conversationKey = makeConversationKey(name) + "-" + Date.now();
+  const record = {
+    id: globalThis.crypto?.randomUUID?.() || `manual-${Date.now()}`,
+    deviceId: CLOUD_WORKSPACE,
+    conversationKey,
+    nomeLead: name.trim(),
+    arquivoOrigem: null,
+    ultimaMensagemAt: now,
+    ultimaMensagemResumo: empreendimento || "Atendimento manual",
+    timeline: [],
+    metadata: {
+      manualEntry: true,
+      telefone: phone || null,
+      empreendimento: empreendimento || null,
+      observacoes: notes || null,
+      ultimaMovimentacaoAt: now
+    },
+    createdAt: now,
+    updatedAt: now
+  };
+  await saveAtendimento(record);
+  await pushRemoteRecord(record);
+  await refreshRecords();
+  navigateToAttendance(record.conversationKey);
+}
+
 function renderDetail(record) {
   if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
@@ -1232,6 +1279,7 @@ function renderDetail(record) {
         </div>
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
+      ${renderManualLeadSection(record)}
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
@@ -2033,6 +2081,13 @@ function bindEvents() {
       await deleteCurrentLead();
       return;
     }
+    const addLeadTrigger = event.target.closest("[data-add-lead]");
+    if (addLeadTrigger) {
+      addLeadForm?.reset();
+      addLeadDialog?.showModal();
+      return;
+    }
+
     const card = event.target.closest("[data-attendance]");
     if (card) navigateToAttendance(card.dataset.attendance);
   });
@@ -2049,6 +2104,20 @@ function bindEvents() {
     event.preventDefault();
     if (event.submitter?.value === "save") await saveRenamedAttendance();
     renameDialog.close();
+  });
+
+  addLeadForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (event.submitter?.value === "save") {
+      const data = new FormData(addLeadForm);
+      await createManualLead(
+        data.get("name"),
+        data.get("phone"),
+        data.get("empreendimento"),
+        data.get("notes")
+      );
+    }
+    addLeadDialog.close();
   });
 
   window.addEventListener("focus", () => refreshFromCloud().catch(() => null));
