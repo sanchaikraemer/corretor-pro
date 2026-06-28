@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=034";
+} from "./db.js?v=035";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=034";
+} from "./whatsapp.js?v=035";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -41,11 +41,9 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v034";
+const APP_VERSION = "v035";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
-const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
-const WAITING_UI_REFRESH_MS = 60 * 1000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
 const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
 const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
@@ -67,7 +65,6 @@ const state = {
   toastTimer: null,
   syncing: false,
   syncTimer: null,
-  waitingTimer: null,
   cloudAvailable: null,
   detailPeriod: "30",
   deletingKeys: new Set(),
@@ -367,15 +364,7 @@ function getLatestActivityDate(record) {
   return candidates.reduce((latest, current) => current.getTime() > latest.getTime() ? current : latest);
 }
 
-function getReanalysisAvailableDate(record) {
-  if (record?.metadata?.statusAtendimento !== "aguardando_resposta") return null;
-  const explicit = getValidDate(record.metadata?.reanaliseDisponivelEm);
-  if (explicit) return explicit;
-  const attended = getAttendedNowDate(record);
-  return attended ? new Date(attended.getTime() + REANALYSIS_WAIT_MS) : null;
-}
-
-function getLeadWorkflowState(record, now = Date.now()) {
+function getLeadWorkflowState(record) {
   const status = record?.metadata?.statusAtendimento;
   const activityDate = getLatestActivityDate(record);
 
@@ -384,30 +373,14 @@ function getLeadWorkflowState(record, now = Date.now()) {
       || getValidDate(record?.metadata?.novaRespostaClienteAt)
       || getValidDate(record?.ultimaMensagemAt)
       || activityDate;
-    return { mode: "client_response", activityDate: responseDate, responseDate, waitingUntil: null };
+    return { mode: "client_response", activityDate: responseDate, responseDate };
   }
 
   if (status === "aguardando_resposta") {
-    const waitingUntil = getReanalysisAvailableDate(record);
-    const expired = waitingUntil ? waitingUntil.getTime() <= now : false;
-    return {
-      mode: expired ? "followup_due" : "waiting",
-      activityDate,
-      waitingUntil
-    };
+    return { mode: "waiting", activityDate };
   }
 
-  return { mode: "idle", activityDate, waitingUntil: null };
-}
-
-function formatWaitRemaining(waitingUntil) {
-  if (!waitingUntil) return "";
-  const remaining = waitingUntil.getTime() - Date.now();
-  if (remaining <= 0) return "Retomada liberada";
-  const totalMinutes = Math.ceil(remaining / 60000);
-  if (totalMinutes < 60) return `Nova retomada em ${totalMinutes} min`;
-  const hours = Math.ceil(totalMinutes / 60);
-  return `Nova retomada em ${hours}h`;
+  return { mode: "idle", activityDate };
 }
 
 function formatAttendedNowLabel(record, compact = false) {
@@ -654,11 +627,6 @@ async function analyzeCurrentAttendance() {
     showToast("Selecione primeiro se este contato é cliente ou corretor.", "error", 6500);
     return;
   }
-  const workflow = getLeadWorkflowState(record);
-  if (workflow.mode === "waiting") {
-    showToast(`Aguarde a resposta do cliente. ${formatWaitRemaining(workflow.waitingUntil)}.`);
-    return;
-  }
   const timeline = filterTimelineByPeriod(record.timeline);
   if (!timeline.length) {
     showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()} para analisar.`, "error");
@@ -827,18 +795,14 @@ function renderList() {
     const moment = formatCardDate(workflow.activityDate.toISOString());
     const statusText = workflow.mode === "waiting"
       ? getContactRoleText(record, "waiting")
-      : workflow.mode === "followup_due"
-        ? "Retomada disponível"
-        : workflow.mode === "client_response"
-          ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
-          : "";
+      : workflow.mode === "client_response"
+        ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
+        : "";
     const statusClass = workflow.mode === "waiting"
       ? " waiting-client"
-      : workflow.mode === "followup_due"
-        ? " followup-due"
-        : workflow.mode === "client_response"
-          ? " client-response"
-          : "";
+      : workflow.mode === "client_response"
+        ? " client-response"
+        : "";
     return `
       <button class="attendance-card${statusClass}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
         <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
@@ -1080,16 +1044,13 @@ function renderAnalysisSection(record) {
   const analysis = record.metadata?.analiseComercial;
   const analyzing = state.analyzingKey === record.conversationKey;
   const workflow = getLeadWorkflowState(record);
-  const waitingForClient = workflow.mode === "waiting";
   const actionLabel = analyzing
     ? "Analisando conversa e proposta..."
     : workflow.mode === "client_response"
       ? "Analisar nova resposta"
-      : workflow.mode === "followup_due"
-        ? "Reanalisar para retomada"
-        : analysis
-          ? "Atualizar análise"
-          : "Analisar atendimento";
+      : analysis
+        ? "Atualizar análise"
+        : "Analisar atendimento";
 
   if (!analysis) {
     return `
@@ -1228,25 +1189,19 @@ function renderDetail(record) {
   const attendedNowLabel = formatAttendedNowLabel(record);
   const workflowTitle = waitingForClient
     ? getContactRoleText(record, "waiting")
-    : workflow.mode === "followup_due"
-      ? "48 horas sem resposta"
-      : workflow.mode === "client_response"
-        ? getContactRoleText(record, "new")
-        : "Atendimento salvo";
+    : workflow.mode === "client_response"
+      ? getContactRoleText(record, "new")
+      : "Atendimento salvo";
   const workflowSubtitle = waitingForClient
-    ? `${attendedNowLabel} · ${formatWaitRemaining(workflow.waitingUntil)}`
-    : workflow.mode === "followup_due"
-      ? "A reanálise para uma nova retomada já está liberada."
-      : workflow.mode === "client_response"
-        ? `Recebida ${formatCardDate(workflow.activityDate.toISOString()).date.toLowerCase()} às ${formatCardDate(workflow.activityDate.toISOString()).time}`
-        : updatedLabel;
+    ? attendedNowLabel
+    : workflow.mode === "client_response"
+      ? `Recebida ${formatCardDate(workflow.activityDate.toISOString()).date.toLowerCase()} às ${formatCardDate(workflow.activityDate.toISOString()).time}`
+      : updatedLabel;
   const workflowClass = workflow.mode === "waiting"
     ? " waiting-client"
-    : workflow.mode === "followup_due"
-      ? " followup-due"
-      : workflow.mode === "client_response"
-        ? " client-response"
-        : "";
+    : workflow.mode === "client_response"
+      ? " client-response"
+      : "";
 
   const failedAudios = (record.timeline || []).filter(isAudioFailure);
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
@@ -1284,11 +1239,11 @@ function renderDetail(record) {
         </section>` : ""}
       <section class="message-toolbar" aria-label="Período das mensagens">
         <div class="period-filter">
-          <span class="period-filter-label">Mostrar mensagens de:</span>
+          <span class="period-filter-label">Período da análise:</span>
           <div class="period-options" role="group" aria-label="Selecionar período">
             ${periodOptions}
           </div>
-          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? "" : "s"}</span>
+          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? " será considerada" : "s serão consideradas"} na análise</span>
         </div>
         <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
@@ -1439,14 +1394,6 @@ function startAutomaticSync() {
   state.syncTimer = setInterval(() => {
     refreshFromCloud().catch(() => null);
   }, AUTO_SYNC_INTERVAL_MS);
-}
-
-function startWaitingStatusTimer() {
-  clearInterval(state.waitingTimer);
-  state.waitingTimer = setInterval(() => {
-    const hasWaitingLead = state.records.some(record => record?.metadata?.statusAtendimento === "aguardando_resposta");
-    if (hasWaitingLead && document.visibilityState === "visible") renderRoute().catch(() => null);
-  }, WAITING_UI_REFRESH_MS);
 }
 
 function getZipLib() {
@@ -1800,7 +1747,7 @@ async function processIncomingZip(pending) {
       } else {
         nextMetadata.statusAtendimento = "aguardando_resposta";
         nextMetadata.atendidoAgoraAt = movementAt;
-        nextMetadata.reanaliseDisponivelEm = new Date(Date.parse(movementAt) + REANALYSIS_WAIT_MS).toISOString();
+        delete nextMetadata.reanaliseDisponivelEm;
         nextMetadata.origemUltimaMovimentacao = "mensagem_corretor";
         delete nextMetadata.novaRespostaClienteAt;
       }
@@ -1926,17 +1873,17 @@ async function setContactType(type) {
 async function registerLeadAttended(record, source, successMessage) {
   if (!record) return null;
   const now = new Date().toISOString();
-  const reanalysisAvailableAt = new Date(Date.parse(now) + REANALYSIS_WAIT_MS).toISOString();
+  const metadata = {
+    ...(record.metadata || {}),
+    statusAtendimento: "aguardando_resposta",
+    atendidoAgoraAt: now,
+    ultimaMovimentacaoAt: now,
+    origemUltimaMovimentacao: source
+  };
+  delete metadata.reanaliseDisponivelEm;
   const updated = {
     ...record,
-    metadata: {
-      ...(record.metadata || {}),
-      statusAtendimento: "aguardando_resposta",
-      atendidoAgoraAt: now,
-      ultimaMovimentacaoAt: now,
-      origemUltimaMovimentacao: source,
-      reanaliseDisponivelEm: reanalysisAvailableAt
-    },
+    metadata,
     updatedAt: now
   };
 
@@ -2137,7 +2084,6 @@ async function init() {
   await refreshRecords();
   await renderRoute();
   startAutomaticSync();
-  startWaitingStatusTimer();
   registerServiceWorker().catch(() => null);
   refreshFromCloud().catch(() => null);
 
