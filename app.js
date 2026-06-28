@@ -1090,9 +1090,7 @@ function renderAnalysisSection(record) {
           <span class="section-eyebrow">Inteligência comercial</span>
           <h2>Análise do atendimento</h2>
         </div>
-        ${waitingForClient
-          ? ""
-          : `<button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
+        <button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>
       </div>
       <div class="analysis-meta analysis-meta-rich">
         ${miniFacts.map(item => `
