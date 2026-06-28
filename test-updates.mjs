@@ -542,7 +542,7 @@ test("v035 mostra o horário da movimentação uma única vez no card", () => {
   const statusStart = renderListSource.indexOf("const statusText");
   const statusEnd = renderListSource.indexOf("const statusClass", statusStart);
   const statusSource = renderListSource.slice(statusStart, statusEnd);
-  assert.match(statusSource, /\? getContactRoleText\(record, "waiting"\)/);
+  assert.doesNotMatch(statusSource, /\? getContactRoleText\(record, "waiting"\)/);
   assert.match(statusSource, /getContactType\(record\) === "corretor" \? "" : getContactRoleText\(record, "new"\)/);
   assert.match(renderListSource, /<span class="attendance-time">/);
   assert.doesNotMatch(statusSource, /moment\.date|moment\.time|formatAttendedNowLabel/);

@@ -793,11 +793,9 @@ function renderList() {
   const cards = state.records.map(record => {
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
-    const statusText = workflow.mode === "waiting"
-      ? getContactRoleText(record, "waiting")
-      : workflow.mode === "client_response"
-        ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
-        : "";
+    const statusText = workflow.mode === "client_response"
+      ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
+      : "";
     const statusClass = workflow.mode === "waiting"
       ? " waiting-client"
       : workflow.mode === "client_response"
