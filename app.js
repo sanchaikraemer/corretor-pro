@@ -1077,8 +1077,11 @@ function renderAnalysisSection(record) {
   const pendingPoints = splitTextIntoPoints(analysis.pendenciaReal || analysis.pendenciaFinanceira, 4);
   if (analysis.participantesDecisao) pendingPoints.push(`Confirmar alinhamento com ${analysis.participantesDecisao}.`);
   const nextStepPoints = splitTextIntoPoints(analysis.proximoPasso, 4);
+  const analysisperiod = analysis.period || selectedPeriodLabel();
+  const currentPeriod = selectedPeriodLabel();
+  const periodMismatch = !analyzing && analysisperiod !== currentPeriod;
   const miniFacts = [
-    { icon: 'periodo', value: analysis.period || selectedPeriodLabel(), label: 'Período analisado' },
+    { icon: 'periodo', value: analysisperiod, label: 'Período analisado' },
     { icon: 'mensagens', value: `${Number(analysis.messageCount || 0)} mensagens`, label: 'Troca de mensagens' },
     { icon: 'horario', value: generatedLabel || 'Análise recente', label: 'Análise realizada' }
   ];
@@ -1092,6 +1095,7 @@ function renderAnalysisSection(record) {
         </div>
         <button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>
       </div>
+      ${periodMismatch ? `<p class="analysis-period-hint">Análise feita com ${escapeHtml(analysisperiod)} · ao atualizar usará ${escapeHtml(currentPeriod)}</p>` : ''}
       <div class="analysis-meta analysis-meta-rich">
         ${miniFacts.map(item => `
           <article class="analysis-meta-card">
