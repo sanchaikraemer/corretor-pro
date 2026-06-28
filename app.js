@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=033";
+} from "./db.js?v=034";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=033";
+} from "./whatsapp.js?v=034";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -41,7 +41,7 @@ const renameDialog = document.querySelector("#rename-dialog");
 const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 
-const APP_VERSION = "v033";
+const APP_VERSION = "v034";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const REANALYSIS_WAIT_MS = 48 * 60 * 60 * 1000;
@@ -1101,9 +1101,7 @@ function renderAnalysisSection(record) {
           </div>
         </div>
         <p class="section-description">A análise usa as mensagens do período selecionado, as transcrições dos áudios e o print da proposta, quando anexado.</p>
-        ${waitingForClient
-          ? `<div class="analysis-waiting-note"><strong>Aguardando resposta do cliente</strong><span>${escapeHtml(formatWaitRemaining(workflow.waitingUntil))}</span></div>`
-          : `<button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
+        <button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(analyzing ? actionLabel : "Analisar atendimento")}</button>
       </section>`;
   }
 
@@ -1132,7 +1130,7 @@ function renderAnalysisSection(record) {
           <h2>Análise do atendimento</h2>
         </div>
         ${waitingForClient
-          ? `<span class="analysis-waiting-badge">Aguardando cliente</span>`
+          ? ""
           : `<button class="analysis-refresh-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(actionLabel)}</button>`}
       </div>
       <div class="analysis-meta analysis-meta-rich">
