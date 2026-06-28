@@ -151,6 +151,19 @@ button { -webkit-tap-highlight-color: transparent; }
   flex: 0 0 auto;
 }
 
+.lead-count {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.24);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .install-button,
 .primary-button,
 .secondary-button {

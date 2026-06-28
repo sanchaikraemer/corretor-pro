@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=038";
+} from "./db.js?v=039";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=038";
+} from "./whatsapp.js?v=039";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -42,8 +42,9 @@ const renameForm = document.querySelector("#rename-form");
 const renameInput = document.querySelector("#rename-input");
 const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
+const leadCount = document.querySelector("#lead-count");
 
-const APP_VERSION = "v038";
+const APP_VERSION = "v039";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -773,6 +774,11 @@ function setListHeader() {
   detailHeader.hidden = true;
   editNameButton.hidden = true;
   installButton.hidden = isStandalone() || !state.installPrompt;
+  if (leadCount) {
+    const n = state.records.length;
+    leadCount.textContent = `${n} lead${n === 1 ? "" : "s"}`;
+    leadCount.hidden = n === 0;
+  }
 }
 
 function setDetailHeader(record) {
@@ -781,6 +787,7 @@ function setDetailHeader(record) {
   detailHeader.hidden = false;
   editNameButton.hidden = false;
   installButton.hidden = true;
+  if (leadCount) leadCount.hidden = true;
 
   detailHeaderTitle.textContent = record.nomeLead;
   const last = new Date(record.ultimaMensagemAt || record.updatedAt || Date.now());
