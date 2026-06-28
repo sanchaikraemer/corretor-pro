@@ -53,18 +53,18 @@ const sampleAnalysis = {
   ]
 };
 
-test("v037 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v037"/);
+test("v038 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  assert.match(appSource, /const APP_VERSION = "v038"/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v037/);
-  assert.match(htmlSource, /app\.js\?v=037/);
-  assert.match(htmlSource, /styles\.css\?v=037/);
-  assert.match(appSource, /db\.js\?v=037/);
-  assert.match(appSource, /whatsapp\.js\?v=037/);
+  assert.match(workerSource, /corretor-pro-v038/);
+  assert.match(htmlSource, /app\.js\?v=038/);
+  assert.match(htmlSource, /styles\.css\?v=038/);
+  assert.match(appSource, /db\.js\?v=038/);
+  assert.match(appSource, /whatsapp\.js\?v=038/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +208,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v037 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v037<\/span>/);
+test("versão v038 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v038<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -395,7 +395,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v037 mantém análise objetiva, visual e detalhes recolhidos", () => {
+test("v038 mantém análise objetiva, visual e detalhes recolhidos", () => {
   assert.match(appSource, /analysis-feature-grid/);
   assert.match(appSource, /analysis-feature-card/);
   assert.match(appSource, /analysis-point-list/);
@@ -408,7 +408,7 @@ test("v037 mantém análise objetiva, visual e detalhes recolhidos", () => {
   assert.match(stylesSource, /\.analysis-details summary/);
 });
 
-test("v037 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+test("v038 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
@@ -418,7 +418,7 @@ test("v037 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
-test("v037 mantém sugestões completas, visíveis e numeradas", () => {
+test("v038 mantém sugestões completas, visíveis e numeradas", () => {
   assert.match(appSource, /suggestions-panel-grid/);
   assert.match(appSource, /class="suggestion-number"/);
   assert.match(appSource, /suggestion-message-full/);
@@ -429,7 +429,7 @@ test("v037 mantém sugestões completas, visíveis e numeradas", () => {
 });
 
 
-test("v037 registra Atendido agora sem timer ou bloqueio por tempo", () => {
+test("v038 registra Atendido agora sem timer ou bloqueio por tempo", () => {
   assert.match(appSource, /data-attended-now/);
   assert.match(appSource, /async function markAttendedNow/);
   assert.match(appSource, /async function registerLeadAttended/);
@@ -462,7 +462,7 @@ test("copiar sugestão também registra o lead como atendido", () => {
   assert.match(source, /Mensagem copiada e atendimento registrado/);
 });
 
-test("v037 mantém análise sempre disponível e remove bloqueios por timer", () => {
+test("v038 mantém análise sempre disponível e remove bloqueios por timer", () => {
   assert.doesNotMatch(appSource, /formatWaitRemaining/);
   assert.doesNotMatch(appSource, /followup_due/);
   assert.doesNotMatch(appSource, /startWaitingStatusTimer/);
@@ -478,7 +478,7 @@ test("v037 mantém análise sempre disponível e remove bloqueios por timer", ()
   assert.match(renderSource, /Atualizar análise/);
 });
 
-test("v037 usa o seletor como período da análise, cópia e histórico", () => {
+test("v038 usa o seletor como período da análise, cópia e histórico", () => {
   assert.match(appSource, /Período da análise:/);
   assert.match(appSource, /serão consideradas.*na análise/);
   assert.match(appSource, /filterTimelineByPeriod\(record\.timeline\)/);
@@ -535,7 +535,7 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v037 mostra o horário da movimentação uma única vez no card", () => {
+test("v038 mostra o horário da movimentação uma única vez no card", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
@@ -551,7 +551,7 @@ test("v037 mostra o horário da movimentação uma única vez no card", () => {
 
 
 
-test("v037 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
+test("v038 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
@@ -559,7 +559,7 @@ test("v037 remove apenas o status de nova mensagem do corretor parceiro no card"
   assert.match(appSource, /if \(form === "new"\) return broker \? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente"/);
 });
 
-test("v037 mostra inteligência comercial antes do contexto financeiro", () => {
+test("v038 mostra inteligência comercial antes do contexto financeiro", () => {
   const renderStart = appSource.indexOf("function renderDetail(record)");
   const renderEnd = appSource.indexOf("async function renderRoute", renderStart);
   const renderSource = appSource.slice(renderStart, renderEnd);
@@ -569,12 +569,12 @@ test("v037 mostra inteligência comercial antes do contexto financeiro", () => {
   assert.ok(proposalPosition > analysisPosition);
 });
 
-test("v037 aumenta a fonte das sugestões de resposta", () => {
+test("v038 aumenta a fonte das sugestões de resposta", () => {
   assert.match(stylesSource, /\.suggestion-body strong \{[\s\S]*font-size: 13px;/);
   assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.65;/);
 });
 
-test("v037 permite escolher o período dos áudios com 90 dias pré-selecionado", () => {
+test("v038 permite escolher o período dos áudios com 90 dias pré-selecionado", () => {
   assert.match(appSource, /const AUDIO_IMPORT_PERIODS = \[/);
   assert.match(appSource, /\{ value: "30", label: "30 dias" \}/);
   assert.match(appSource, /\{ value: "60", label: "60 dias" \}/);
@@ -586,7 +586,7 @@ test("v037 permite escolher o período dos áudios com 90 dias pré-selecionado"
   assert.match(appSource, /waitForAudioPeriodSelection/);
 });
 
-test("v037 transcreve apenas áudios novos e marca os antigos fora do período", () => {
+test("v038 transcreve apenas áudios novos e marca os antigos fora do período", () => {
   assert.match(appSource, /const newAudioItems = audioItems\.filter\(item => !existingByFingerprint\.has\(item\.fingerprint\)\)/);
   assert.match(appSource, /transcriptionStatus = "outside_period"/);
   assert.match(appSource, /Não transcrito por estar fora do período selecionado/);
@@ -595,7 +595,7 @@ test("v037 transcreve apenas áudios novos e marca os antigos fora do período",
   assert.match(appSource, /const failedAudios = \(record\.timeline \|\| \[\]\)\.filter\(isAudioFailure\)/);
 });
 
-test("v037 mostra progresso real, atividade contínua e tempo decorrido", () => {
+test("v038 mostra progresso real, atividade contínua e tempo decorrido", () => {
   assert.match(appSource, /1 \+ \(completedAudios \/ Math\.max\(totalToTranscribe, 1\)\) \* 91/);
   assert.doesNotMatch(appSource, /32 \+ \(completedAudios/);
   assert.match(appSource, /setProcessingTelemetry/);
@@ -608,7 +608,7 @@ test("v037 mostra progresso real, atividade contínua e tempo decorrido", () => 
   assert.match(stylesSource, /@keyframes progress-shimmer/);
 });
 
-test("v037 permite cancelar sem salvar atendimento parcial", () => {
+test("v038 permite cancelar sem salvar atendimento parcial", () => {
   assert.match(htmlSource, /id="cancel-import-button"/);
   assert.match(appSource, /async function cancelCurrentImport/);
   assert.match(appSource, /new AbortController\(\)/);
@@ -620,7 +620,7 @@ test("v037 permite cancelar sem salvar atendimento parcial", () => {
   assert.ok(finalizingAt >= 0 && finalizingAt < saveAt);
 });
 
-test("v037 aumenta os textos da análise sem alterar as sugestões já aprovadas", () => {
+test("v038 aumenta os textos da análise sem alterar as sugestões já aprovadas", () => {
   assert.match(stylesSource, /\.analysis-summary p \{[\s\S]*font-size: 12px;/);
   assert.match(stylesSource, /\.analysis-compact-item p \{[\s\S]*font-size: 12px;/);
   assert.match(stylesSource, /\.analysis-block p,[\s\S]*font-size: 11px;/);
@@ -628,7 +628,7 @@ test("v037 aumenta os textos da análise sem alterar as sugestões já aprovadas
   assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;/);
 });
 
-test("v037 não repete aguardando resposta dentro da inteligência comercial", () => {
+test("v038 não repete aguardando resposta dentro da inteligência comercial", () => {
   const start = appSource.indexOf("function renderAnalysisSection(record)");
   const end = appSource.indexOf("function renderContactTypeSelector(record)", start);
   const source = appSource.slice(start, end);

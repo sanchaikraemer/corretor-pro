@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=037";
+} from "./db.js?v=038";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=037";
+} from "./whatsapp.js?v=038";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -43,7 +43,7 @@ const renameInput = document.querySelector("#rename-input");
 const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 
-const APP_VERSION = "v037";
+const APP_VERSION = "v038";
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -379,7 +379,8 @@ function getLeadWorkflowState(record) {
   }
 
   if (status === "aguardando_resposta") {
-    return { mode: "waiting", activityDate };
+    const waitingDate = getAttendedNowDate(record) || activityDate;
+    return { mode: "waiting", activityDate: waitingDate };
   }
 
   return { mode: "idle", activityDate };
