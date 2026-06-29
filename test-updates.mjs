@@ -53,18 +53,20 @@ const sampleAnalysis = {
   ]
 };
 
-test("v039 mantém atualização automática e evita mistura de arquivos em cache", () => {
-  assert.match(appSource, /const APP_VERSION = "v039"/);
+test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
+  const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
+  assert.match(versionSource, /app: "v040"/);
+  assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
-  assert.match(workerSource, /corretor-pro-v039/);
-  assert.match(htmlSource, /app\.js\?v=039/);
-  assert.match(htmlSource, /styles\.css\?v=039/);
-  assert.match(appSource, /db\.js\?v=039/);
-  assert.match(appSource, /whatsapp\.js\?v=039/);
+  assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
+  assert.match(htmlSource, /app\.js\?v=040/);
+  assert.match(htmlSource, /styles\.css\?v=040/);
+  assert.match(appSource, /db\.js\?v=040/);
+  assert.match(appSource, /whatsapp\.js\?v=040/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -208,8 +210,8 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
   }
 });
 
-test("versão v039 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v039<\/span>/);
+test("versão v040 aparece no cabeçalho superior", () => {
+  assert.match(htmlSource, /id="header-version"[^>]*>v040<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -395,7 +397,7 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v039 mantém análise objetiva, visual e detalhes recolhidos", () => {
+test("v040 mantém análise objetiva, visual e detalhes recolhidos", () => {
   assert.match(appSource, /analysis-feature-grid/);
   assert.match(appSource, /analysis-feature-card/);
   assert.match(appSource, /analysis-point-list/);
@@ -408,7 +410,7 @@ test("v039 mantém análise objetiva, visual e detalhes recolhidos", () => {
   assert.match(stylesSource, /\.analysis-details summary/);
 });
 
-test("v039 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
+test("v040 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
@@ -418,7 +420,7 @@ test("v039 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
-test("v039 mantém sugestões completas, visíveis e numeradas", () => {
+test("v040 mantém sugestões completas, visíveis e numeradas", () => {
   assert.match(appSource, /suggestions-panel-grid/);
   assert.match(appSource, /class="suggestion-number"/);
   assert.match(appSource, /suggestion-message-full/);
@@ -429,7 +431,7 @@ test("v039 mantém sugestões completas, visíveis e numeradas", () => {
 });
 
 
-test("v039 registra Atendido agora sem timer ou bloqueio por tempo", () => {
+test("v040 registra Atendido agora sem timer ou bloqueio por tempo", () => {
   assert.match(appSource, /data-attended-now/);
   assert.match(appSource, /async function markAttendedNow/);
   assert.match(appSource, /async function registerLeadAttended/);
@@ -462,7 +464,7 @@ test("copiar sugestão também registra o lead como atendido", () => {
   assert.match(source, /Mensagem copiada e atendimento registrado/);
 });
 
-test("v039 mantém análise sempre disponível e remove bloqueios por timer", () => {
+test("v040 mantém análise sempre disponível e remove bloqueios por timer", () => {
   assert.doesNotMatch(appSource, /formatWaitRemaining/);
   assert.doesNotMatch(appSource, /followup_due/);
   assert.doesNotMatch(appSource, /startWaitingStatusTimer/);
@@ -478,7 +480,7 @@ test("v039 mantém análise sempre disponível e remove bloqueios por timer", ()
   assert.match(renderSource, /Atualizar análise/);
 });
 
-test("v039 usa o seletor como período da análise, cópia e histórico", () => {
+test("v040 usa o seletor como período da análise, cópia e histórico", () => {
   assert.match(appSource, /Período da análise:/);
   assert.match(appSource, /serão consideradas.*na análise/);
   assert.match(appSource, /filterTimelineByPeriod\(record\.timeline\)/);
@@ -489,7 +491,7 @@ test("v039 usa o seletor como período da análise, cópia e histórico", () => 
 test("reimportação diferencia mensagem do corretor e resposta do contato usando o horário real", () => {
   assert.match(appSource, /const addedWithTime = merged\.addedItems/);
   assert.match(appSource, /timelineItemTimestamp\(latestAddedItem\)/);
-  assert.match(appSource, /isClientTimelineItem\(latestAddedItem, originalLeadName\)/);
+  assert.match(appSource, /isClientTimelineItem\(latestAddedItem\)/);
   assert.match(appSource, /statusAtendimento = "nova_resposta_cliente"/);
   assert.match(appSource, /novaRespostaClienteAt = movementAt/);
   assert.match(appSource, /statusAtendimento = "aguardando_resposta"/);
@@ -535,7 +537,7 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v039 mostra o horário da movimentação uma única vez no card", () => {
+test("v040 mostra o horário da movimentação uma única vez no card", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
@@ -551,7 +553,7 @@ test("v039 mostra o horário da movimentação uma única vez no card", () => {
 
 
 
-test("v039 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
+test("v040 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
@@ -559,7 +561,7 @@ test("v039 remove apenas o status de nova mensagem do corretor parceiro no card"
   assert.match(appSource, /if \(form === "new"\) return broker \? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente"/);
 });
 
-test("v039 mostra inteligência comercial antes do contexto financeiro", () => {
+test("v040 mostra inteligência comercial antes do contexto financeiro", () => {
   const renderStart = appSource.indexOf("function renderDetail(record)");
   const renderEnd = appSource.indexOf("async function renderRoute", renderStart);
   const renderSource = appSource.slice(renderStart, renderEnd);
@@ -569,12 +571,12 @@ test("v039 mostra inteligência comercial antes do contexto financeiro", () => {
   assert.ok(proposalPosition > analysisPosition);
 });
 
-test("v039 aumenta a fonte das sugestões de resposta", () => {
+test("v040 aumenta a fonte das sugestões de resposta", () => {
   assert.match(stylesSource, /\.suggestion-body strong \{[\s\S]*font-size: 13px;/);
   assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.65;/);
 });
 
-test("v039 permite escolher o período dos áudios com 90 dias pré-selecionado", () => {
+test("v040 permite escolher o período dos áudios com 90 dias pré-selecionado", () => {
   assert.match(appSource, /const AUDIO_IMPORT_PERIODS = \[/);
   assert.match(appSource, /\{ value: "30", label: "30 dias" \}/);
   assert.match(appSource, /\{ value: "60", label: "60 dias" \}/);
@@ -586,8 +588,10 @@ test("v039 permite escolher o período dos áudios com 90 dias pré-selecionado"
   assert.match(appSource, /waitForAudioPeriodSelection/);
 });
 
-test("v039 transcreve apenas áudios novos e marca os antigos fora do período", () => {
-  assert.match(appSource, /const newAudioItems = audioItems\.filter\(item => !existingByFingerprint\.has\(item\.fingerprint\)\)/);
+test("v040 transcreve áudios novos e tenta novamente os que falharam", () => {
+  assert.match(appSource, /function shouldRetryAudio/);
+  assert.match(appSource, /const audioItemsToProcess = audioItems\.filter/);
+  assert.match(appSource, /!previous \|\| shouldRetryAudio\(previous\)/);
   assert.match(appSource, /transcriptionStatus = "outside_period"/);
   assert.match(appSource, /Não transcrito por estar fora do período selecionado/);
   assert.match(appSource, /Áudio fora do período/);
@@ -595,7 +599,7 @@ test("v039 transcreve apenas áudios novos e marca os antigos fora do período",
   assert.match(appSource, /const failedAudios = \(record\.timeline \|\| \[\]\)\.filter\(isAudioFailure\)/);
 });
 
-test("v039 mostra progresso real, atividade contínua e tempo decorrido", () => {
+test("v040 mostra progresso real, atividade contínua e tempo decorrido", () => {
   assert.match(appSource, /1 \+ \(completedAudios \/ Math\.max\(totalToTranscribe, 1\)\) \* 91/);
   assert.doesNotMatch(appSource, /32 \+ \(completedAudios/);
   assert.match(appSource, /setProcessingTelemetry/);
@@ -608,7 +612,7 @@ test("v039 mostra progresso real, atividade contínua e tempo decorrido", () => 
   assert.match(stylesSource, /@keyframes progress-shimmer/);
 });
 
-test("v039 permite cancelar sem salvar atendimento parcial", () => {
+test("v040 permite cancelar sem salvar atendimento parcial", () => {
   assert.match(htmlSource, /id="cancel-import-button"/);
   assert.match(appSource, /async function cancelCurrentImport/);
   assert.match(appSource, /new AbortController\(\)/);
@@ -620,7 +624,7 @@ test("v039 permite cancelar sem salvar atendimento parcial", () => {
   assert.ok(finalizingAt >= 0 && finalizingAt < saveAt);
 });
 
-test("v039 aumenta os textos da análise sem alterar as sugestões já aprovadas", () => {
+test("v040 aumenta os textos da análise sem alterar as sugestões já aprovadas", () => {
   assert.match(stylesSource, /\.analysis-summary p \{[\s\S]*font-size: 12px;/);
   assert.match(stylesSource, /\.analysis-compact-item p \{[\s\S]*font-size: 12px;/);
   assert.match(stylesSource, /\.analysis-block p,[\s\S]*font-size: 11px;/);
@@ -628,7 +632,7 @@ test("v039 aumenta os textos da análise sem alterar as sugestões já aprovadas
   assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;/);
 });
 
-test("v039 não repete aguardando resposta dentro da inteligência comercial", () => {
+test("v040 não repete aguardando resposta dentro da inteligência comercial", () => {
   const start = appSource.indexOf("function renderAnalysisSection(record)");
   const end = appSource.indexOf("function renderContactTypeSelector(record)", start);
   const source = appSource.slice(start, end);
@@ -637,3 +641,109 @@ test("v039 não repete aguardando resposta dentro da inteligência comercial", (
   assert.match(appSource, /workflowTitle = waitingForClient/);
 });
 
+
+
+test("v040 usa DNA da conversa e sobreposição de mensagens para separar homônimos", () => {
+  assert.match(appSource, /function makeConversationDna/);
+  assert.match(appSource, /function timelineOverlap/);
+  assert.match(appSource, /resolveConversationIdentity/);
+  assert.match(appSource, /conversationDna: identity\.dna/);
+  assert.match(appSource, /keyAlreadyUsed \? `\$\{baseKey\}-\$\{dna\}` : baseKey/);
+});
+
+test("v040 identifica Sanchai como usuário do app e os demais autores como contato", () => {
+  assert.match(appSource, /const APP_USER_NAME = "Sanchai"/);
+  assert.match(appSource, /APP_USER_ALIASES = new Set\(\["sanchai", "voce"\]\)/);
+  assert.match(appSource, /function isOwnTimelineItem/);
+  assert.match(appSource, /!\s*isOwnTimelineItem\(item\)/);
+  assert.match(appSource, /usuarioApp: APP_USER_NAME/);
+  assert.match(serverSource, /CORRETOR\/USUÁRIO DO APP:/);
+});
+
+test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", () => {
+  assert.match(appSource, /summary: "1"/);
+  assert.match(appSource, /remoteSummaries: new Map\(\)/);
+  assert.match(appSource, /function mergeLocalAndRemoteSummaries/);
+  assert.match(appSource, /async function fetchRemoteRecord/);
+  assert.match(appSource, /async function ensureFullRecord/);
+  assert.match(serverSource, /function toSummaryRecord/);
+  assert.match(serverSource, /const summaryOnly = String\(query\.summary/);
+  assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
+});
+
+test("v040 usa uma fonte central de versão em app, servidor, build e cache", () => {
+  const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
+  const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
+  const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+  assert.match(versionSource, /app: "v040"/);
+  assert.match(versionSource, /package: "0\.40\.0"/);
+  assert.match(serverSource, /VERSION_INFO\.app/);
+  assert.match(workerSource, /CORRETOR_PRO_VERSION/);
+  assert.match(buildSource, /VERSION_INFO\.app/);
+  assert.equal(pkg.version, "0.40.0");
+});
+
+test("v040 trata corretamente Todo o período nas mensagens de interface", () => {
+  assert.match(appSource, /function periodSentenceLabel/);
+  assert.match(appSource, /function selectedPeriodSentenceLabel/);
+  assert.doesNotMatch(appSource, /nos últimos \$\{label\.toLowerCase\(\)\}/);
+});
+
+test("API de sincronização retorna cards leves e detalhe completo sob demanda", async () => {
+  const oldUrl = process.env.SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const oldFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  const row = {
+    id: "lead-id",
+    device_id: "corretor-pro-site",
+    conversation_key: "lead-1",
+    nome_lead: "Lead 1",
+    arquivo_origem: "Conversa.zip",
+    ultima_mensagem_at: "2026-06-26T12:00:00.000Z",
+    ultima_mensagem_resumo: "Mensagem recente",
+    timeline: [{ fingerprint: "x", text: "Histórico completo" }],
+    metadata: {
+      statusAtendimento: "aguardando_resposta",
+      conversationDna: "abc123",
+      propostaImagem: { dataUrl: "data:image/jpeg;base64,AAAA" },
+      analiseComercial: { resumo: "pesado" }
+    },
+    created_at: "2026-06-25T12:00:00.000Z",
+    updated_at: "2026-06-26T12:00:00.000Z"
+  };
+  const urls = [];
+  globalThis.fetch = async url => {
+    urls.push(String(url));
+    return { ok: true, async json() { return [row]; } };
+  };
+
+  try {
+    const summary = await invoke({
+      method: "GET",
+      url: "/api/atendimentos?device_id=corretor-pro-site&summary=1"
+    });
+    assert.equal(summary.status, 200);
+    assert.equal(summary.payload.records[0]._summaryOnly, true);
+    assert.equal(summary.payload.records[0].timeline, undefined);
+    assert.equal(summary.payload.records[0].metadata.propostaImagem, undefined);
+    assert.match(urls[0], /select=id%2Cdevice_id%2Cconversation_key/);
+    assert.doesNotMatch(urls[0], /timeline/);
+
+    const detail = await invoke({
+      method: "GET",
+      url: "/api/atendimentos?device_id=corretor-pro-site&conversation_key=lead-1"
+    });
+    assert.equal(detail.status, 200);
+    assert.equal(detail.payload.record.timeline.length, 1);
+    assert.equal(detail.payload.record.metadata.propostaImagem.dataUrl, "data:image/jpeg;base64,AAAA");
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+  }
+});

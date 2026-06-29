@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=039";
+} from "./db.js?v=040";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=039";
+} from "./whatsapp.js?v=040";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,10 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const APP_VERSION = "v039";
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v040", package: "0.40.0" };
+const APP_VERSION = VERSION_INFO.app;
+const APP_USER_NAME = "Sanchai";
+const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
 const CLOUD_WORKSPACE = "corretor-pro-site";
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
@@ -59,9 +62,9 @@ const AUDIO_IMPORT_PERIODS = [
   { value: "90", label: "90 dias" },
   { value: "all", label: "Todo o período" }
 ];
-const FINAL_AUDIO_STATUSES = new Set(["done", "outside_period", "missing", "too_large", "empty", "error"]);
 const state = {
   records: [],
+  remoteSummaries: new Map(),
   currentKey: null,
   installPrompt: null,
   processing: false,
@@ -115,10 +118,107 @@ function normalizeComparable(value) {
     .trim();
 }
 
-function isClientTimelineItem(item, originalLeadName) {
+function isOwnTimelineItem(item) {
   const author = normalizeComparable(item?.author);
-  const lead = normalizeComparable(originalLeadName);
-  return Boolean(author && lead && author === lead);
+  return Boolean(author && APP_USER_ALIASES.has(author));
+}
+
+function isClientTimelineItem(item) {
+  const author = normalizeComparable(item?.author);
+  // Em conversa individual do WhatsApp, todo autor que não seja o usuário do
+  // app é o contato atendido — não há terceiros na exportação.
+  return Boolean(author) && !isOwnTimelineItem(item);
+}
+
+function stableHash(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function makeConversationDna(timeline) {
+  const items = Array.isArray(timeline) ? timeline.filter(Boolean) : [];
+  const anchors = items.slice(0, 12).map(item => {
+    const content = item.type === "audio" ? item.audioFile : item.text;
+    return [
+      item.timestamp || "",
+      normalizeComparable(item.author),
+      item.type || "message",
+      normalizeComparable(content)
+    ].join("|");
+  });
+  return stableHash(anchors.join("||"));
+}
+
+function timelineOverlap(existingTimeline, incomingTimeline) {
+  const existing = new Set((existingTimeline || []).map(item => item?.fingerprint).filter(Boolean));
+  if (!existing.size) return 0;
+  let overlap = 0;
+  for (const item of incomingTimeline || []) {
+    if (item?.fingerprint && existing.has(item.fingerprint)) overlap += 1;
+  }
+  return overlap;
+}
+
+function sameOriginalContact(record, originalLeadName) {
+  const savedName = record?.metadata?.originalLeadName || record?.nomeLead;
+  return normalizeComparable(savedName) === normalizeComparable(originalLeadName);
+}
+
+async function resolveConversationIdentity(originalLeadName, parsedTimeline) {
+  const dna = makeConversationDna(parsedTimeline);
+  const baseKey = makeConversationKey(originalLeadName);
+  const localRecords = await listAtendimentos();
+  const allCandidates = [...localRecords];
+
+  for (const summary of state.remoteSummaries.values()) {
+    if (summary?.metadata?.deletedAt) continue;
+    if (!allCandidates.some(item => item.conversationKey === summary.conversationKey)) {
+      allCandidates.push(summary);
+    }
+  }
+
+  const sameName = allCandidates.filter(record => !record?.metadata?.deletedAt && sameOriginalContact(record, originalLeadName));
+  let matched = sameName.find(record => record?.metadata?.conversationDna === dna) || null;
+
+  if (!matched) {
+    const withTimeline = sameName.filter(candidate => Array.isArray(candidate.timeline));
+    const summaryOnly = sameName.filter(candidate => candidate?._summaryOnly);
+    const fetched = await Promise.all(
+      summaryOnly.map(candidate => fetchRemoteRecord(candidate.conversationKey))
+    );
+    const detailedCandidates = [...withTimeline, ...fetched.filter(Boolean)];
+    const scored = detailedCandidates
+      .map(record => ({ record, overlap: timelineOverlap(record.timeline, parsedTimeline) }))
+      .sort((a, b) => b.overlap - a.overlap);
+    const best = scored[0];
+    const minimumOverlap = Math.min(3, Math.max(1, Math.ceil(parsedTimeline.length * 0.05)));
+    if (best?.overlap >= minimumOverlap) matched = best.record;
+  }
+
+  if (matched?._summaryOnly) {
+    matched = await fetchRemoteRecord(matched.conversationKey) || matched;
+  }
+
+  if (matched && Array.isArray(matched.timeline)) {
+    return { conversationKey: matched.conversationKey, existing: matched, dna };
+  }
+
+  const legacy = await getAtendimento(baseKey);
+  if (legacy && timelineOverlap(legacy.timeline, parsedTimeline) > 0) {
+    return { conversationKey: legacy.conversationKey, existing: legacy, dna };
+  }
+
+  const keyAlreadyUsed = allCandidates.some(record => record.conversationKey === baseKey);
+  return {
+    conversationKey: keyAlreadyUsed ? `${baseKey}-${dna}` : baseKey,
+    existing: null,
+    dna
+  };
 }
 
 function getContactType(record) {
@@ -137,7 +237,7 @@ function getContactRoleText(record, form = "response") {
 function latestContactMessageDate(record) {
   const originalLeadName = record?.metadata?.originalLeadName || record?.nomeLead;
   const timestamps = (record?.timeline || [])
-    .filter(item => isClientTimelineItem(item, originalLeadName))
+    .filter(item => isClientTimelineItem(item))
     .map(timelineItemTimestamp)
     .filter(Number.isFinite);
   if (!timestamps.length) return null;
@@ -244,14 +344,24 @@ function isAudioWithinSelectedPeriod(item, period = state.audioPeriodSelection, 
   return timestamp >= cutoff;
 }
 
+function periodSentenceLabel(value) {
+  if (value === "all" || value === "Todo o período") return "todo o período";
+  const label = AUDIO_IMPORT_PERIODS.find(option => option.value === value)?.label || String(value || "90 dias");
+  return `os últimos ${label.toLowerCase()}`;
+}
+
+function selectedPeriodSentenceLabel() {
+  return state.detailPeriod === "all" ? "todo o período" : `os últimos ${selectedPeriodLabel().toLowerCase()}`;
+}
+
 function updateAudioPeriodSummary() {
   if (!audioPeriodSummary) return;
   const total = state.audioPeriodCandidates.length;
   const selected = state.audioPeriodCandidates.filter(item => isAudioWithinSelectedPeriod(item)).length;
-  const label = AUDIO_IMPORT_PERIODS.find(option => option.value === state.audioPeriodSelection)?.label || "90 dias";
+  const periodLabel = periodSentenceLabel(state.audioPeriodSelection);
   audioPeriodSummary.textContent = total
-    ? `${selected} de ${total} áudio${total === 1 ? "" : "s"} novo${total === 1 ? "" : "s"} serão transcritos nos últimos ${label.toLowerCase()}.`
-    : "Nenhum áudio novo precisa ser transcrito.";
+    ? `${selected} de ${total} áudio${total === 1 ? "" : "s"} novo${total === 1 ? "" : "s"} serão transcritos considerando ${periodLabel}.`
+    : "Nenhum áudio novo ou com falha precisa ser transcrito.";
 }
 
 function waitForAudioPeriodSelection(candidates, referenceTimestamp) {
@@ -571,10 +681,57 @@ function updateRecordInState(record) {
   state.records.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
 }
 
+function isSummaryOnly(record) {
+  return Boolean(record?._summaryOnly || !Array.isArray(record?.timeline));
+}
+
+function recordUpdatedTime(record) {
+  return Date.parse(record?.updatedAt || 0) || 0;
+}
+
+async function fetchRemoteRecord(conversationKey) {
+  if (!conversationKey) return null;
+  try {
+    const query = new URLSearchParams({
+      device_id: CLOUD_WORKSPACE,
+      conversation_key: conversationKey
+    });
+    const response = await fetch(`/api/atendimentos?${query}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => ({}));
+    return payload.record || null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureFullRecord(conversationKey) {
+  if (!conversationKey) return null;
+  const local = await getAtendimento(conversationKey);
+  const summary = state.remoteSummaries.get(conversationKey);
+  const localIsCurrent = local && (!summary || recordUpdatedTime(local) >= recordUpdatedTime(summary));
+  if (localIsCurrent && Array.isArray(local.timeline)) return local;
+
+  if (summary && !summary.metadata?.deletedAt) {
+    const remote = await fetchRemoteRecord(conversationKey);
+    if (remote && Array.isArray(remote.timeline)) {
+      await saveAtendimento(remote);
+      updateRecordInState(remote);
+      return remote;
+    }
+  }
+
+  const inMemory = state.records.find(item => item.conversationKey === conversationKey);
+  if (inMemory && !isSummaryOnly(inMemory)) return inMemory;
+  return local || null;
+}
+
 async function getCurrentRecord() {
   if (!state.currentKey) return null;
-  return state.records.find(item => item.conversationKey === state.currentKey)
-    || await getAtendimento(state.currentKey);
+  return ensureFullRecord(state.currentKey);
 }
 
 async function attachProposalImage(file) {
@@ -614,6 +771,7 @@ function buildAnalysisRequest(record, timeline) {
   const proposal = record.metadata?.propostaImagem;
   return {
     leadName: record.nomeLead,
+    appUserName: record.metadata?.usuarioApp || APP_USER_NAME,
     contactType: getContactType(record),
     period: selectedPeriodLabel(),
     messages: formatTimelineForCopy(timeline),
@@ -633,7 +791,7 @@ async function analyzeCurrentAttendance() {
   }
   const timeline = filterTimelineByPeriod(record.timeline);
   if (!timeline.length) {
-    showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()} para analisar.`, "error");
+    showToast(`Não há mensagens em ${selectedPeriodSentenceLabel()} para analisar.`, "error");
     return;
   }
 
@@ -703,7 +861,7 @@ async function copySelectedMessages() {
 
   const timeline = filterTimelineByPeriod(record.timeline);
   if (!timeline.length) {
-    showToast(`Não há mensagens em ${selectedPeriodLabel().toLowerCase()}.`, "error");
+    showToast(`Não há mensagens em ${selectedPeriodSentenceLabel()}.`, "error");
     return;
   }
 
@@ -1203,13 +1361,18 @@ function renderManualLeadSection(record) {
 }
 
 async function createManualLead(name, phone, empreendimento, notes) {
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName) {
+    showToast("Informe o nome do lead para continuar.", "error");
+    return;
+  }
   const now = new Date().toISOString();
-  const conversationKey = makeConversationKey(name) + "-" + Date.now();
+  const conversationKey = makeConversationKey(trimmedName) + "-" + Date.now();
   const record = {
     id: globalThis.crypto?.randomUUID?.() || `manual-${Date.now()}`,
     deviceId: CLOUD_WORKSPACE,
     conversationKey,
-    nomeLead: name.trim(),
+    nomeLead: trimmedName,
     arquivoOrigem: null,
     ultimaMensagemAt: now,
     ultimaMensagemResumo: empreendimento || "Atendimento manual",
@@ -1316,7 +1479,7 @@ function renderDetail(record) {
           </div>
           <span class="history-panel-count">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? '' : 's'}</span>
         </summary>
-        <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodLabel().toLowerCase())}.</p>`}</section>
+        <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodSentenceLabel())}.</p>`}</section>
       </details>
       <div class="detail-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
@@ -1333,7 +1496,7 @@ async function renderRoute() {
     return;
   }
 
-  const record = state.records.find(item => item.conversationKey === key) || await getAtendimento(key);
+  const record = await ensureFullRecord(key);
   if (!record) {
     showToast("Este atendimento não foi encontrado.", "error");
     navigateToList();
@@ -1342,12 +1505,32 @@ async function renderRoute() {
   renderDetail(record);
 }
 
+function mergeLocalAndRemoteSummaries(localRecords) {
+  const merged = new Map();
+  for (const local of localRecords || []) merged.set(local.conversationKey, local);
+
+  for (const summary of state.remoteSummaries.values()) {
+    if (summary?.metadata?.deletedAt) {
+      merged.delete(summary.conversationKey);
+      continue;
+    }
+    const local = merged.get(summary.conversationKey);
+    if (!local || recordUpdatedTime(summary) > recordUpdatedTime(local)) {
+      merged.set(summary.conversationKey, { ...summary, _summaryOnly: true });
+    }
+  }
+
+  return [...merged.values()].sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
+}
+
 async function refreshRecords() {
-  state.records = await listAtendimentos();
+  const localRecords = await listAtendimentos();
+  state.records = mergeLocalAndRemoteSummaries(localRecords);
 }
 
 async function fetchRemoteRecords() {
-  const response = await fetch(`/api/atendimentos?device_id=${encodeURIComponent(CLOUD_WORKSPACE)}`, {
+  const query = new URLSearchParams({ device_id: CLOUD_WORKSPACE, summary: "1" });
+  const response = await fetch(`/api/atendimentos?${query}`, {
     headers: { Accept: "application/json" },
     cache: "no-store"
   });
@@ -1369,27 +1552,28 @@ async function pullRemoteRecords() {
     state.cloudAvailable = payload.storage === "supabase";
     if (!state.cloudAvailable) return false;
 
+    const previous = state.remoteSummaries;
+    const next = new Map();
     for (const remote of payload.records) {
       if (state.deletingKeys.has(remote.conversationKey)) continue;
-      const local = await getAtendimento(remote.conversationKey);
+      next.set(remote.conversationKey, remote);
+      const old = previous.get(remote.conversationKey);
+      if (!old || recordUpdatedTime(old) !== recordUpdatedTime(remote) || Boolean(old.metadata?.deletedAt) !== Boolean(remote.metadata?.deletedAt)) {
+        changed = true;
+      }
 
       if (remote.metadata?.deletedAt) {
+        const local = await getAtendimento(remote.conversationKey);
         if (local) {
           await deleteAtendimento(remote.conversationKey);
           changed = true;
         }
-        continue;
-      }
-
-      const localTime = Date.parse(local?.updatedAt || 0) || 0;
-      const remoteTime = Date.parse(remote.updatedAt || 0) || 0;
-      if (!local || remoteTime > localTime) {
-        await saveAtendimento(remote);
-        changed = true;
       }
     }
+    if (previous.size !== next.size) changed = true;
+    state.remoteSummaries = next;
   } catch {
-    // Sem conexão, a cópia local continua disponível e a próxima atualização tenta de novo.
+    state.cloudAvailable = false;
   } finally {
     state.syncing = false;
   }
@@ -1573,10 +1757,16 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
     const previous = merged.get(incoming.fingerprint);
     if (previous) {
       if (incoming.type === "audio") {
+        const previousDone = previous.transcriptionStatus === "done" && previous.text;
         const incomingDone = incoming.transcriptionStatus === "done" && incoming.text;
-        merged.set(incoming.fingerprint, incomingDone
-          ? { ...previous, ...incoming }
-          : { ...incoming, ...previous });
+        if (previousDone && !incomingDone) {
+          // Mantém transcrição bem-sucedida anterior; novo texto de erro é descartado.
+          merged.set(incoming.fingerprint, { ...incoming, ...previous });
+        } else {
+          // Transcrição nova bem-sucedida ou ambas com falha: incoming prevalece,
+          // inclusive o texto de erro mais recente.
+          merged.set(incoming.fingerprint, { ...previous, ...incoming });
+        }
       } else {
         merged.set(incoming.fingerprint, { ...previous, ...incoming });
       }
@@ -1610,6 +1800,13 @@ function isAudioOutsidePeriod(item) {
 
 function isAudioFailure(item) {
   return item?.type === "audio" && item?.transcriptionStatus !== "done" && !isAudioOutsidePeriod(item);
+}
+
+function shouldRetryAudio(previous) {
+  if (!previous || previous.type !== "audio") return false;
+  const status = previous.transcriptionStatus;
+  if (status === "done" || status === "outside_period" || status === "too_large") return false;
+  return !status || status === "error" || status === "empty" || status === "missing";
 }
 
 async function processIncomingZip(pending) {
@@ -1649,25 +1846,29 @@ async function processIncomingZip(pending) {
     setProcessing("audio", 1, "Localizando somente os áudios .opus da conversa.");
     setProcessingTelemetry("Localizando áudios", `${parsedTimeline.length} itens encontrados na conversa`);
     const originalLeadName = inferLeadName(pending.name || txtEntry.filename);
-    const conversationKey = makeConversationKey(originalLeadName);
-    const existing = await getAtendimento(conversationKey);
+    const identity = await resolveConversationIdentity(originalLeadName, parsedTimeline);
+    const conversationKey = identity.conversationKey;
+    const existing = identity.existing;
     throwIfImportCancelled();
     const existingByFingerprint = new Map((existing?.timeline || []).map(item => [item.fingerprint, item]));
     const audioMap = buildAudioMap(entries);
     const audioItems = parsedTimeline.filter(item => item.type === "audio");
-    const newAudioItems = audioItems.filter(item => !existingByFingerprint.has(item.fingerprint));
+    const audioItemsToProcess = audioItems.filter(item => {
+      const previous = existingByFingerprint.get(item.fingerprint);
+      return !previous || shouldRetryAudio(previous);
+    });
     const referenceTimestamp = getLatestTimelineTimestamp(parsedTimeline);
 
     let selectedPeriod = "90";
-    if (newAudioItems.length) {
-      selectedPeriod = await waitForAudioPeriodSelection(newAudioItems, referenceTimestamp);
+    if (audioItemsToProcess.length) {
+      selectedPeriod = await waitForAudioPeriodSelection(audioItemsToProcess, referenceTimestamp);
       if (!selectedPeriod || state.importCancelled) throw createImportCancelledError();
     }
     if (audioPeriodPanel) audioPeriodPanel.hidden = true;
     if (processingLive) processingLive.hidden = false;
 
     const selectedAudioItems = [];
-    for (const item of newAudioItems) {
+    for (const item of audioItemsToProcess) {
       if (isAudioWithinSelectedPeriod(item, selectedPeriod, referenceTimestamp)) {
         selectedAudioItems.push(item);
       } else {
@@ -1753,13 +1954,13 @@ async function processIncomingZip(pending) {
       setProcessing(
         "transcribe",
         92,
-        newAudioItems.length
-          ? "Nenhum áudio novo está dentro do período selecionado."
-          : "Nenhum áudio novo precisa ser transcrito."
+        audioItemsToProcess.length
+          ? "Nenhum áudio novo ou com falha está dentro do período selecionado."
+          : "Nenhum áudio novo ou com falha precisa ser transcrito."
       );
       setProcessingTelemetry(
-        newAudioItems.length ? "Áudios antigos mantidos fora do período" : "Mensagens prontas",
-        `${newAudioItems.length} áudio${newAudioItems.length === 1 ? "" : "s"} novo${newAudioItems.length === 1 ? "" : "s"}`
+        audioItemsToProcess.length ? "Áudios mantidos fora do período" : "Mensagens prontas",
+        `${audioItemsToProcess.length} áudio${audioItemsToProcess.length === 1 ? "" : "s"} novo${audioItemsToProcess.length === 1 ? " ou com falha" : "s ou com falha"}`
       );
     }
 
@@ -1775,6 +1976,8 @@ async function processIncomingZip(pending) {
     const nextMetadata = {
       ...(existing?.metadata || {}),
       originalLeadName,
+      conversationDna: identity.dna,
+      usuarioApp: APP_USER_NAME,
       txtFile: txtEntry.filename,
       totalItens: merged.timeline.length,
       totalAudios: merged.timeline.filter(item => item.type === "audio").length,
@@ -1794,7 +1997,7 @@ async function processIncomingZip(pending) {
       const movementAt = Number.isFinite(movementTimestamp) ? new Date(movementTimestamp).toISOString() : now;
       nextMetadata.ultimaMovimentacaoAt = movementAt;
 
-      if (isClientTimelineItem(latestAddedItem, originalLeadName)) {
+      if (isClientTimelineItem(latestAddedItem)) {
         nextMetadata.statusAtendimento = "nova_resposta_cliente";
         nextMetadata.novaRespostaClienteAt = movementAt;
         nextMetadata.origemUltimaMovimentacao = "mensagem_cliente";
