@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=066";
+} from "./db.js?v=067";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=066";
+} from "./whatsapp.js?v=067";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v066", package: "0.66.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v067", package: "0.67.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1343,10 +1343,14 @@ function renderAnalysisSection(record) {
   const analysisperiod = analysis.period || selectedPeriodLabel();
   const currentPeriod = selectedPeriodLabel();
   const periodMismatch = !analyzing && analysisperiod !== currentPeriod;
+  const generatedAt = analysis.generatedAt ? new Date(analysis.generatedAt) : null;
+  const generatedShort = generatedAt && !Number.isNaN(generatedAt.getTime())
+    ? `${dateOnlyFormatter.format(generatedAt).slice(0, 5)} ${timeFormatter.format(generatedAt)}`
+    : (generatedLabel || 'recente');
   const miniFacts = [
-    { icon: 'periodo', value: analysisperiod, label: 'Período analisado' },
-    { icon: 'mensagens', value: `${Number(analysis.messageCount || 0)} mensagens`, label: 'Troca de mensagens' },
-    { icon: 'horario', value: generatedLabel || 'Análise recente', label: 'Análise realizada' }
+    { icon: 'periodo', value: analysisperiod, label: 'Período' },
+    { icon: 'mensagens', value: `${Number(analysis.messageCount || 0)}`, label: 'Mensagens' },
+    { icon: 'horario', value: generatedShort, label: 'Análise' }
   ];
 
   return `
