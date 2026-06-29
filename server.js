@@ -411,7 +411,27 @@ function buildAnalysisInput(body) {
 }
 
 function extractUnitIdentifiers(value) {
-  return new Set((String(value || "").match(/\b\d{3,4}\b/g) || []).filter(number => !/^20\d{2}$/.test(number)));
+  // Captura apenas números de 3-4 dígitos que parecem unidades (não anos 20xx,
+  // não valores soltos como 500 que seriam preços ou metragens sem contexto).
+  // Exige que o número apareça depois de palavras-chave de unidade, ou que seja
+  // o token final de um nome de imóvel (ex: "Renaissance 1301", "ap 204").
+  const text = String(value || "");
+  const unitPattern = /(?:ap(?:to)?|apto|sala|unidade|torre|bloco|lote|casa|andar)\.?\s*(\d{3,4})\b|(?<!\d)(\d{3,4})(?=\s*$)/gi;
+  const matches = new Set();
+  let match;
+  while ((match = unitPattern.exec(text)) !== null) {
+    const num = match[1] || match[2];
+    if (num && !/^20\d{2}$/.test(num)) matches.add(num);
+  }
+  // Fallback: se o nome for curto e contiver apenas 1 número de 3-4 dígitos, usa-o.
+  if (!matches.size) {
+    const tokens = text.trim().split(/\s+/);
+    if (tokens.length <= 4) {
+      const nums = tokens.filter(t => /^\d{3,4}$/.test(t) && !/^20\d{2}$/.test(t));
+      if (nums.length === 1) matches.add(nums[0]);
+    }
+  }
+  return matches;
 }
 
 function sameUnitAppearsAsParallel(analysis) {

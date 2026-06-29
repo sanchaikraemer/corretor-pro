@@ -62,7 +62,6 @@ const AUDIO_IMPORT_PERIODS = [
   { value: "90", label: "90 dias" },
   { value: "all", label: "Todo o período" }
 ];
-const FINAL_AUDIO_STATUSES = new Set(["done", "outside_period", "missing", "too_large", "empty", "error"]);
 const state = {
   records: [],
   remoteSummaries: new Map(),
@@ -124,16 +123,11 @@ function isOwnTimelineItem(item) {
   return Boolean(author && APP_USER_ALIASES.has(author));
 }
 
-function isClientTimelineItem(item, originalLeadName) {
+function isClientTimelineItem(item) {
   const author = normalizeComparable(item?.author);
-  if (!author) return false;
-  if (isOwnTimelineItem(item)) return false;
-
-  // Conversas exportadas do WhatsApp podem usar um nome curto dentro do TXT
-  // e um nome completo no arquivo. Em uma conversa individual, todo autor que
-  // não seja o usuário do app é o contato atendido.
-  const lead = normalizeComparable(originalLeadName);
-  return Boolean(author || lead);
+  // Em conversa individual do WhatsApp, todo autor que não seja o usuário do
+  // app é o contato atendido — não há terceiros na exportação.
+  return Boolean(author) && !isOwnTimelineItem(item);
 }
 
 function stableHash(value) {
@@ -192,15 +186,12 @@ async function resolveConversationIdentity(originalLeadName, parsedTimeline) {
   let matched = sameName.find(record => record?.metadata?.conversationDna === dna) || null;
 
   if (!matched) {
-    const detailedCandidates = [];
-    for (const candidate of sameName) {
-      if (Array.isArray(candidate.timeline)) {
-        detailedCandidates.push(candidate);
-      } else if (candidate?._summaryOnly) {
-        const full = await fetchRemoteRecord(candidate.conversationKey);
-        if (full) detailedCandidates.push(full);
-      }
-    }
+    const withTimeline = sameName.filter(candidate => Array.isArray(candidate.timeline));
+    const summaryOnly = sameName.filter(candidate => candidate?._summaryOnly);
+    const fetched = await Promise.all(
+      summaryOnly.map(candidate => fetchRemoteRecord(candidate.conversationKey))
+    );
+    const detailedCandidates = [...withTimeline, ...fetched.filter(Boolean)];
     const scored = detailedCandidates
       .map(record => ({ record, overlap: timelineOverlap(record.timeline, parsedTimeline) }))
       .sort((a, b) => b.overlap - a.overlap);
@@ -246,7 +237,7 @@ function getContactRoleText(record, form = "response") {
 function latestContactMessageDate(record) {
   const originalLeadName = record?.metadata?.originalLeadName || record?.nomeLead;
   const timestamps = (record?.timeline || [])
-    .filter(item => isClientTimelineItem(item, originalLeadName))
+    .filter(item => isClientTimelineItem(item))
     .map(timelineItemTimestamp)
     .filter(Number.isFinite);
   if (!timestamps.length) return null;
@@ -1370,13 +1361,18 @@ function renderManualLeadSection(record) {
 }
 
 async function createManualLead(name, phone, empreendimento, notes) {
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName) {
+    showToast("Informe o nome do lead para continuar.", "error");
+    return;
+  }
   const now = new Date().toISOString();
-  const conversationKey = makeConversationKey(name) + "-" + Date.now();
+  const conversationKey = makeConversationKey(trimmedName) + "-" + Date.now();
   const record = {
     id: globalThis.crypto?.randomUUID?.() || `manual-${Date.now()}`,
     deviceId: CLOUD_WORKSPACE,
     conversationKey,
-    nomeLead: name.trim(),
+    nomeLead: trimmedName,
     arquivoOrigem: null,
     ultimaMensagemAt: now,
     ultimaMensagemResumo: empreendimento || "Atendimento manual",
@@ -1577,7 +1573,7 @@ async function pullRemoteRecords() {
     if (previous.size !== next.size) changed = true;
     state.remoteSummaries = next;
   } catch {
-    // Sem conexão, a cópia local continua disponível e a próxima atualização tenta de novo.
+    state.cloudAvailable = false;
   } finally {
     state.syncing = false;
   }
@@ -1761,10 +1757,16 @@ function mergeTimeline(existingTimeline, incomingTimeline) {
     const previous = merged.get(incoming.fingerprint);
     if (previous) {
       if (incoming.type === "audio") {
+        const previousDone = previous.transcriptionStatus === "done" && previous.text;
         const incomingDone = incoming.transcriptionStatus === "done" && incoming.text;
-        merged.set(incoming.fingerprint, incomingDone
-          ? { ...previous, ...incoming }
-          : { ...incoming, ...previous });
+        if (previousDone && !incomingDone) {
+          // Mantém transcrição bem-sucedida anterior; novo texto de erro é descartado.
+          merged.set(incoming.fingerprint, { ...incoming, ...previous });
+        } else {
+          // Transcrição nova bem-sucedida ou ambas com falha: incoming prevalece,
+          // inclusive o texto de erro mais recente.
+          merged.set(incoming.fingerprint, { ...previous, ...incoming });
+        }
       } else {
         merged.set(incoming.fingerprint, { ...previous, ...incoming });
       }
@@ -1995,7 +1997,7 @@ async function processIncomingZip(pending) {
       const movementAt = Number.isFinite(movementTimestamp) ? new Date(movementTimestamp).toISOString() : now;
       nextMetadata.ultimaMovimentacaoAt = movementAt;
 
-      if (isClientTimelineItem(latestAddedItem, originalLeadName)) {
+      if (isClientTimelineItem(latestAddedItem)) {
         nextMetadata.statusAtendimento = "nova_resposta_cliente";
         nextMetadata.novaRespostaClienteAt = movementAt;
         nextMetadata.origemUltimaMovimentacao = "mensagem_cliente";

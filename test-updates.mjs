@@ -491,7 +491,7 @@ test("v040 usa o seletor como período da análise, cópia e histórico", () => 
 test("reimportação diferencia mensagem do corretor e resposta do contato usando o horário real", () => {
   assert.match(appSource, /const addedWithTime = merged\.addedItems/);
   assert.match(appSource, /timelineItemTimestamp\(latestAddedItem\)/);
-  assert.match(appSource, /isClientTimelineItem\(latestAddedItem, originalLeadName\)/);
+  assert.match(appSource, /isClientTimelineItem\(latestAddedItem\)/);
   assert.match(appSource, /statusAtendimento = "nova_resposta_cliente"/);
   assert.match(appSource, /novaRespostaClienteAt = movementAt/);
   assert.match(appSource, /statusAtendimento = "aguardando_resposta"/);
@@ -655,7 +655,7 @@ test("v040 identifica Sanchai como usuário do app e os demais autores como cont
   assert.match(appSource, /const APP_USER_NAME = "Sanchai"/);
   assert.match(appSource, /APP_USER_ALIASES = new Set\(\["sanchai", "voce"\]\)/);
   assert.match(appSource, /function isOwnTimelineItem/);
-  assert.match(appSource, /if \(isOwnTimelineItem\(item\)\) return false/);
+  assert.match(appSource, /!\s*isOwnTimelineItem\(item\)/);
   assert.match(appSource, /usuarioApp: APP_USER_NAME/);
   assert.match(serverSource, /CORRETOR\/USUÁRIO DO APP:/);
 });
