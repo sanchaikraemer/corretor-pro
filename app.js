@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=041";
+} from "./db.js?v=060";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=041";
+} from "./whatsapp.js?v=060";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
