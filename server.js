@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v062", package: "0.62.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v063", package: "0.63.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -99,6 +99,7 @@ REGRAS OBRIGATÓRIAS SOBRE PROPOSTA ANEXADA:
 - O campo proximoPasso deve indicar uma ação posterior à proposta, como confirmar entendimento, identificar ajuste ou montar alternativas novas a partir da composição existente.
 
 REGRAS DE PRODUTO E OBJEÇÃO:
+- O campo produtoPrincipal deve ser uma identificação CURTA e objetiva do imóvel atual: tipologia, metragem e localização resumida (ex.: "Apto 132m², 3 suítes — centro, Ernesto Alves x Alexandre da Mota"). Não despeje a descrição publicitária completa nem repita todos os itens de lazer e acabamento.
 - Diferencie o produto atual de produtos apenas mencionados no passado.
 - O mesmo imóvel não pode aparecer ao mesmo tempo como produto principal e produto paralelo, mesmo quando for citado por nomes diferentes, endereço, lançamento ou número da unidade.
 - Não reabra comparação com outros imóveis se o cliente já indicou uma unidade preferida e a conversa está na etapa financeira, salvo se ele tiver pedido essa comparação depois da proposta.
@@ -119,7 +120,9 @@ REGRAS GERAIS:
 - Não pressione e não ofereça uma saída fácil para encerrar a conversa.
 - Abra alternativas sem abandonar o produto principal.
 - Cada sugestão deve soar como um corretor experiente, natural e objetivo, ter preferencialmente até 400 caracteres e terminar com uma única pergunta principal.
-- Gere exatamente três sugestões com abordagens diferentes, porém todas coerentes com a MESMA etapa da negociação. Quando houver proposta anexada, priorize: (1) ajuste direto da composição; (2) facilitação da decisão conjunta; (3) comparação entre novas composições financeiras do mesmo produto. Não use comparação de imóveis como terceira opção sem solicitação recente do cliente.
+- Gere exatamente três sugestões com abordagens GENUINAMENTE diferentes, coerentes com a etapa da negociação. Não devolva três variações da mesma pergunta: cada uma deve abrir um caminho distinto de avanço.
+- Quando houver proposta anexada, priorize: (1) ajuste direto da composição; (2) facilitação da decisão conjunta; (3) comparação entre novas composições financeiras do mesmo produto. Não use comparação de imóveis como terceira opção sem solicitação recente do cliente.
+- Quando NÃO houver proposta anexada e o interesse for médio ou alto (especialmente em imóvel pronto para morar ou com o cliente reengajando após um anúncio), uma das três sugestões deve propor um avanço CONCRETO — agendar uma visita ao imóvel/decorado ou uma ligação rápida — em vez de apenas perguntar sobre composição financeira. Um corretor experiente puxa o próximo passo físico quando o interesse está quente.
 
 Antes de responder, faça uma verificação silenciosa: se existe proposta anexada, confirme que nenhum campo nem sugestão trata a proposta como ainda não enviada.`;
 

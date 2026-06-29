@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=062";
+} from "./db.js?v=063";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=062";
+} from "./whatsapp.js?v=063";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v062", package: "0.62.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v063", package: "0.63.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -134,6 +134,41 @@ function isClientTimelineItem(item) {
   // Em conversa individual do WhatsApp, todo autor que não seja o usuário do
   // app é o contato atendido — não há terceiros na exportação.
   return Boolean(author) && !isOwnTimelineItem(item);
+}
+
+// Descobre como o corretor e o cliente já aparecem nomeados na conversa (ex.: o
+// corretor pode estar como "Construtora Senger" no export). Serve para que itens
+// vindos do print reusem exatamente os mesmos nomes, sem criar identidade dupla.
+function resolveConversationAuthors(timeline, leadName) {
+  const counts = new Map();
+  for (const item of timeline || []) {
+    const author = String(item?.author || "").trim();
+    if (author) counts.set(author, (counts.get(author) || 0) + 1);
+  }
+  const leadNorm = normalizeComparable(leadName);
+  let clientAuthor = null;
+  let brokerAuthor = null;
+  for (const author of counts.keys()) {
+    if (isOwnTimelineItem({ author })) { brokerAuthor = author; break; }
+  }
+  for (const author of counts.keys()) {
+    if (normalizeComparable(author) === leadNorm) { clientAuthor = author; break; }
+  }
+  // O corretor é o autor que não é o cliente (conversa 1:1 tem só dois lados).
+  if (!brokerAuthor) {
+    for (const author of counts.keys()) {
+      if (author !== clientAuthor) { brokerAuthor = author; break; }
+    }
+  }
+  if (!clientAuthor) {
+    for (const author of counts.keys()) {
+      if (author !== brokerAuthor) { clientAuthor = author; break; }
+    }
+  }
+  return {
+    clientAuthor: clientAuthor || leadName || "Cliente",
+    brokerAuthor: brokerAuthor || "Você"
+  };
 }
 
 function stableHash(value) {
@@ -791,9 +826,16 @@ function buildAnalysisRequest(record, timeline) {
   const notas = Array.isArray(record.metadata?.notasAtendimento)
     ? record.metadata.notasAtendimento
     : [];
+  // O corretor pode aparecer na conversa com um nome de perfil (ex.: "Construtora
+  // Senger"). Passa esse nome real para a IA não tratar o próprio corretor como
+  // um terceiro em "última pessoa a falar".
+  const { brokerAuthor } = resolveConversationAuthors(timeline, record.nomeLead);
+  const appUserName = brokerAuthor && !APP_USER_ALIASES.has(normalizeComparable(brokerAuthor))
+    ? brokerAuthor
+    : (record.metadata?.usuarioApp || APP_USER_NAME);
   return {
     leadName: record.nomeLead,
-    appUserName: record.metadata?.usuarioApp || APP_USER_NAME,
+    appUserName,
     contactType: getContactType(record),
     period: selectedPeriodLabel(),
     messages: formatTimelineForCopy(timeline),
@@ -893,7 +935,7 @@ async function copySelectedMessages() {
     showToast("Não foi possível copiar as mensagens.", "error");
     return;
   }
-  showToast(`${timeline.length} mensagem${timeline.length === 1 ? " copiada" : "s copiadas"}.`);
+  showToast(`${timeline.length} ${timeline.length === 1 ? "mensagem copiada" : "mensagens copiadas"}.`);
 }
 
 function renderInstallCard() {
@@ -1344,19 +1386,11 @@ function renderAnalysisSection(record) {
           <div class="analysis-feature-icon">${renderInlineIcon('pendencia')}</div>
           <h3>O que falta definir</h3>
           ${renderPointList(pendingPoints, analysis.pendenciaReal || analysis.pendenciaFinanceira)}
-          <details class="mini-details">
-            <summary>Ver detalhes</summary>
-            <p>${escapeHtml(analysis.pendenciaReal || analysis.pendenciaFinanceira || 'Não identificado')}</p>
-          </details>
         </article>
         <article class="analysis-feature-card">
           <div class="analysis-feature-icon">${renderInlineIcon('proximo')}</div>
           <h3>Próximo passo</h3>
           ${renderPointList(nextStepPoints, analysis.proximoPasso)}
-          <details class="mini-details">
-            <summary>Ver detalhes</summary>
-            <p>${escapeHtml(analysis.proximoPasso || 'Não identificado')}</p>
-          </details>
         </article>
       </div>
       ${renderFullAnalysisDetails(analysis, record)}
@@ -1746,7 +1780,8 @@ const PRINT_TS_RE = /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})\]\s*([\s\S]*
 
 // Converte a transcrição do print (linhas "[AAAA-MM-DD HH:MM] Você/Cliente: texto")
 // em itens de linha do tempo, prontos para mesclar no histórico da conversa.
-function parsePrintTranscript(texto, leadName) {
+function parsePrintTranscript(texto, leadName, timelineExistente) {
+  const { clientAuthor, brokerAuthor } = resolveConversationAuthors(timelineExistente, leadName);
   const linhas = String(texto || "").replace(/\r/g, "").split("\n");
   const blocos = [];
   let atual = null;
@@ -1777,11 +1812,11 @@ function parsePrintTranscript(texto, leadName) {
     const fala = resto.match(/^\(?\s*(você|voce|cliente)\s*\)?\s*:\s*([\s\S]*)$/i);
     if (fala) {
       const lado = fala[1].toLowerCase();
-      author = lado.startsWith("voc") ? "Você" : (leadName || "Cliente");
+      author = lado.startsWith("voc") ? brokerAuthor : clientAuthor;
       text = fala[2].trim();
     } else {
       // Linhas de sinalização (ex.: "*** CLIENTE ENTROU... ***") ficam com o cliente.
-      author = leadName || "Cliente";
+      author = clientAuthor;
       text = resto;
     }
     if (!text) continue;
@@ -1824,7 +1859,7 @@ async function processarPrintsENota(record, texto, prints) {
     if (!textoIA) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
 
     const fresh = await getAtendimento(record.conversationKey) || record;
-    const printItems = parsePrintTranscript(textoIA, fresh.nomeLead);
+    const printItems = parsePrintTranscript(textoIA, fresh.nomeLead, fresh.timeline);
     if (!printItems.length) {
       showToast("Não consegui identificar mensagens com data e hora no print.", "error", 7000);
       return;
@@ -1882,7 +1917,7 @@ async function processarPrintsENota(record, texto, prints) {
 
     showToast(
       merged.added
-        ? `${merged.added} mensagem${merged.added === 1 ? "" : "s"} do print adicionada${merged.added === 1 ? "" : "s"} ao histórico.`
+        ? `${merged.added === 1 ? "1 mensagem do print adicionada" : merged.added + " mensagens do print adicionadas"} ao histórico.`
         : "Nenhuma mensagem nova foi encontrada no print."
     );
   } catch (err) {
@@ -2006,7 +2041,7 @@ function renderDetail(record) {
           <div class="period-options" role="group" aria-label="Selecionar período">
             ${periodOptions}
           </div>
-          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? " será considerada" : "s serão consideradas"} na análise${hiddenCount > 0 ? ` · <button class="period-hidden-hint" type="button" data-detail-period="all">+${hiddenCount} oculta${hiddenCount === 1 ? "" : "s"} — ver tudo</button>` : ""}</span>
+          <span class="period-result">${filteredTimeline.length} ${filteredTimeline.length === 1 ? "mensagem será considerada" : "mensagens serão consideradas"} na análise${hiddenCount > 0 ? ` · <button class="period-hidden-hint" type="button" data-detail-period="all">+${hiddenCount} oculta${hiddenCount === 1 ? "" : "s"} — ver tudo</button>` : ""}</span>
         </div>
         <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
@@ -2021,7 +2056,7 @@ function renderDetail(record) {
             <span class="section-eyebrow">Histórico da conversa</span>
             <strong>Abrir mensagens do período selecionado</strong>
           </div>
-          <span class="history-panel-count">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? '' : 's'}</span>
+          <span class="history-panel-count">${filteredTimeline.length} ${filteredTimeline.length === 1 ? 'mensagem' : 'mensagens'}</span>
         </summary>
         <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodSentenceLabel())}.</p>`}</section>
       </details>

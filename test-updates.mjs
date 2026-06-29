@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v062"/);
+  assert.match(versionSource, /app: "v063"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=062/);
-  assert.match(htmlSource, /styles\.css\?v=062/);
-  assert.match(appSource, /db\.js\?v=062/);
-  assert.match(appSource, /whatsapp\.js\?v=062/);
+  assert.match(htmlSource, /app\.js\?v=063/);
+  assert.match(htmlSource, /styles\.css\?v=063/);
+  assert.match(appSource, /db\.js\?v=063/);
+  assert.match(appSource, /whatsapp\.js\?v=063/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v062<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v063<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -682,15 +682,15 @@ test("v041 usa uma fonte central de versão em app, servidor, build e cache", ()
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v062"/);
-  assert.match(versionSource, /package: "0\.62\.0"/);
+  assert.match(versionSource, /app: "v063"/);
+  assert.match(versionSource, /package: "0\.63\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.62.0");
+  assert.equal(pkg.version, "0.63.0");
 });
 
-test("v062 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
+test("v063 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
   // O texto lido do print é convertido em itens de timeline e mesclado no histórico.
   assert.match(appSource, /function parsePrintTranscript/);
   assert.match(appSource, /origem: "print"/);
@@ -699,12 +699,28 @@ test("v062 lê o print da conversa e mescla as mensagens na linha do tempo", () 
   const start = appSource.indexOf("async function processarPrintsENota");
   const end = appSource.indexOf("\n}", start);
   const fn = appSource.slice(start, end);
-  assert.match(fn, /parsePrintTranscript\(textoIA, fresh\.nomeLead\)/);
+  assert.match(fn, /parsePrintTranscript\(textoIA, fresh\.nomeLead, fresh\.timeline\)/);
   assert.match(fn, /mergeTimeline\(fresh\.timeline \|\| \[\], printItems\)/);
   assert.doesNotMatch(fn, /saveNota\(fresh, conteudoFinal, "print"\)/);
   // Indicador fixo de prints anexados (sobrevive ao re-render automático).
   assert.match(appSource, /class="notas-pending"/);
   assert.match(appSource, /data-clear-prints/);
+});
+
+test("v063 unifica identidade do corretor e corrige plural de mensagens", () => {
+  // Print e análise reaproveitam o nome real do corretor na conversa.
+  assert.match(appSource, /function resolveConversationAuthors/);
+  assert.match(appSource, /author = lado\.startsWith\("voc"\) \? brokerAuthor : clientAuthor/);
+  assert.match(appSource, /const \{ brokerAuthor \} = resolveConversationAuthors\(timeline, record\.nomeLead\)/);
+  // Não pode mais existir o plural errado "mensagems".
+  assert.doesNotMatch(appSource, /mensagem\$\{[^}]*\? '' : 's'\}/);
+  assert.doesNotMatch(appSource, /mensagem\$\{[^}]*\? " será considerada"/);
+  // Cards de pendência e próximo passo não repetem o texto em "Ver detalhes".
+  const secStart = appSource.indexOf("O que falta definir");
+  const secEnd = appSource.indexOf("renderFullAnalysisDetails", secStart);
+  const sec = appSource.slice(secStart, secEnd);
+  assert.doesNotMatch(sec, /analysis\.pendenciaReal \|\| analysis\.pendenciaFinanceira \|\| 'Não identificado'/);
+  assert.doesNotMatch(sec, /analysis\.proximoPasso \|\| 'Não identificado'/);
 });
 
 test("v040 trata corretamente Todo o período nas mensagens de interface", () => {
