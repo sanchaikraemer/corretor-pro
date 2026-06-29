@@ -437,6 +437,34 @@ button { -webkit-tap-highlight-color: transparent; }
 .attendance-card.client-response .attendance-status { color: #047857; }
 .attendance-card.client-response .attendance-status i { background: #059669; }
 
+.list-section-header {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--gray);
+}
+
+.list-section-header:first-child { margin-top: 0; }
+
+.attendance-urgency {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--gray-light);
+  color: var(--charcoal);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.attendance-card--waiting {
+  opacity: .55;
+}
+
 .attendance-time {
   align-self: start;
   color: var(--emerald-dark);

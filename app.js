@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=040";
+} from "./db.js?v=041";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=040";
+} from "./whatsapp.js?v=041";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v040", package: "0.40.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v041", package: "0.41.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -55,6 +55,7 @@ const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
 const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const MAX_PROPOSAL_DIMENSION = 2000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const AUDIO_IMPORT_PERIODS = [
   { value: "30", label: "30 dias" },
@@ -495,6 +496,13 @@ function getLeadWorkflowState(record) {
   }
 
   return { mode: "idle", activityDate };
+}
+
+function classifyLead(record) {
+  const status = record?.metadata?.statusAtendimento;
+  if (status !== "aguardando_resposta") return "responder";
+  const refDate = getValidDate(record?.metadata?.atendidoAgoraAt) || getLatestActivityDate(record);
+  return Date.now() - refDate.getTime() >= SEVEN_DAYS_MS ? "esfriando" : "aguardar";
 }
 
 function formatAttendedNowLabel(record, compact = false) {
@@ -958,28 +966,49 @@ function renderList() {
   state.currentKey = null;
   setListHeader();
 
-  const cards = state.records.map(record => {
+  const responder = [];
+  const esfriando = [];
+  const aguardar = [];
+  for (const record of state.records) {
+    const tag = classifyLead(record);
+    if (tag === "responder") responder.push(record);
+    else if (tag === "esfriando") esfriando.push(record);
+    else aguardar.push(record);
+  }
+
+  responder.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
+  esfriando.sort((a, b) => {
+    const da = getValidDate(a?.metadata?.atendidoAgoraAt) || getLatestActivityDate(a);
+    const db = getValidDate(b?.metadata?.atendidoAgoraAt) || getLatestActivityDate(b);
+    return da.getTime() - db.getTime();
+  });
+  aguardar.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
+
+  function buildCard(record, urgencyLabel) {
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
-    const statusText = workflow.mode === "client_response"
-      ? (getContactType(record) === "corretor" ? "" : getContactRoleText(record, "new"))
-      : "";
-    const statusClass = workflow.mode === "waiting"
-      ? " waiting-client"
-      : workflow.mode === "client_response"
-        ? " client-response"
-        : "";
+    const mutedClass = urgencyLabel ? "" : " attendance-card--waiting";
     return `
-      <button class="attendance-card${statusClass}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+      <button class="attendance-card${mutedClass}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
         <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          ${statusText ? `<span class="attendance-status"><i aria-hidden="true"></i>${escapeHtml(statusText)}</span>` : ""}
+          ${urgencyLabel ? `<span class="attendance-urgency">${escapeHtml(urgencyLabel)}</span>` : ""}
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
-  }).join("");
+  }
+
+  const callNowCards = [
+    ...responder.map(r => buildCard(r, "responder")),
+    ...esfriando.map(r => buildCard(r, "esfriando"))
+  ].join("");
+  const aguardarCards = aguardar.map(r => buildCard(r, "")).join("");
+
+  let groupsHtml = "";
+  if (callNowCards) groupsHtml += `<h2 class="list-section-header">Chamar agora</h2><section class="attendance-list">${callNowCards}</section>`;
+  if (aguardarCards) groupsHtml += `<h2 class="list-section-header">Aguardar</h2><section class="attendance-list">${aguardarCards}</section>`;
 
   app.innerHTML = `
     <section class="list-page">
@@ -995,7 +1024,7 @@ function renderList() {
       </div>
       <div class="list-surface">
         ${renderInstallCard()}
-        ${state.records.length ? `<section class="attendance-list">${cards}</section>` : renderEmptyState()}
+        ${groupsHtml || renderEmptyState()}
         <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
           <span>${state.cloudAvailable === false
