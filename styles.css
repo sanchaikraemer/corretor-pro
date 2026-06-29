@@ -2393,3 +2393,208 @@ button.storage-note strong { font-weight: 600; }
   line-height: 1.75;
   white-space: pre-wrap;
 }
+
+/* ── Notas de atendimento ── */
+.notas-section {
+  width: min(100%, 1060px);
+  margin: 16px auto 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.notas-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notas-header strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--charcoal);
+  font-size: 16px;
+}
+
+.notas-input-area {
+  padding: 14px 18px 16px;
+}
+
+.nota-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--charcoal);
+  background: var(--gray-light);
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.nota-textarea:focus {
+  border-color: var(--emerald);
+  background: var(--white);
+}
+
+.notas-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.nota-record-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--emerald);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--emerald-dark);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.nota-record-button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.nota-record-button:hover {
+  background: var(--soft-green);
+}
+
+.nota-record-button.recording {
+  background: #FEF2F2;
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.nota-save-button {
+  min-height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--emerald);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.nota-save-button:hover { opacity: 0.88; }
+
+.notas-list {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.nota-item {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.nota-item:last-child { border-bottom: none; }
+
+.nota-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nota-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.nota-tipo-icon {
+  width: 14px;
+  height: 14px;
+  stroke: var(--emerald);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nota-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gray);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.nota-delete-button svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.nota-delete-button:hover {
+  background: #FEF2F2;
+  color: var(--danger);
+}
+
+.nota-item-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--charcoal);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .notas-section {
+    width: 100%;
+  }
+  .notas-actions {
+    flex-wrap: wrap;
+  }
+  .nota-save-button { flex: 1; }
+}

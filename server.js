@@ -409,6 +409,17 @@ function buildAnalysisInput(body) {
     : "CLIENTE DIRETO — potencial comprador desta conversa";
   const proposalRecipient = body.contactType === "corretor" ? "corretor parceiro" : "cliente direto";
   const hasMessagesAfterProposal = hasProposal && hasMessageAfterDate(body.messages, body.proposalAttachedAt);
+  const notasLines = [];
+  const notas = Array.isArray(body.notasAtendimento) ? body.notasAtendimento : [];
+  if (notas.length) {
+    notasLines.push("", "NOTAS DO CORRETOR (registros de ligações, visitas e reuniões fora do WhatsApp):");
+    for (const nota of notas) {
+      const dt = nota.criadaEm ? new Date(nota.criadaEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "data não informada";
+      const tipoLabel = nota.tipo === "audio" ? "[áudio transcrito]" : "[texto]";
+      notasLines.push(`- ${dt} ${tipoLabel}: ${String(nota.conteudo || "").trim()}`);
+    }
+  }
+
   return [
     `CONTATO: ${body.leadName.trim()}`,
     `CORRETOR/USUÁRIO DO APP: ${String(body.appUserName || "Sanchai").trim()}`,
@@ -422,6 +433,7 @@ function buildAnalysisInput(body) {
       ? `PROPOSTA: A proposta foi enviada em ${proposalDate}, mas existem mensagens posteriores a ela no histórico; considere essas mensagens como reação à proposta.`
       : `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao ${proposalRecipient} em ${proposalDate}` : "nenhuma proposta anexada"}`,
     `STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: ${hasProposal ? `CUMPRIDO EM RELAÇÃO AO ${proposalRecipient.toUpperCase()} — a proposta anexada comprova esse envio` : "avaliar pela conversa"}`,
+    ...notasLines,
     "",
     hasMessagesAfterProposal ? "CONVERSA (anterior e posterior à proposta):" : "CONVERSA ANTERIOR À PROPOSTA:",
     body.messages.trim()

@@ -84,7 +84,10 @@ const state = {
   audioPeriodSelection: "90",
   audioPeriodResolver: null,
   audioPeriodCandidates: [],
-  audioPeriodReferenceTimestamp: null
+  audioPeriodReferenceTimestamp: null,
+  notaMediaRecorder: null,
+  notaRecordingKey: null,
+  notaRecordingChunks: []
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -777,6 +780,9 @@ async function attachProposalImage(file) {
 
 function buildAnalysisRequest(record, timeline) {
   const proposal = record.metadata?.propostaImagem;
+  const notas = Array.isArray(record.metadata?.notasAtendimento)
+    ? record.metadata.notasAtendimento
+    : [];
   return {
     leadName: record.nomeLead,
     appUserName: record.metadata?.usuarioApp || APP_USER_NAME,
@@ -786,7 +792,8 @@ function buildAnalysisRequest(record, timeline) {
     messageCount: timeline.length,
     incompleteAudioCount: (timeline || []).filter(isAudioFailure).length,
     proposalImage: proposal && isSafeProposalDataUrl(proposal.dataUrl) ? proposal.dataUrl : null,
-    proposalAttachedAt: proposal?.attachedAt || null
+    proposalAttachedAt: proposal?.attachedAt || null,
+    notasAtendimento: notas.length ? notas : undefined
   };
 }
 
@@ -1382,6 +1389,188 @@ function renderContactTypeSelector(record) {
     </section>`;
 }
 
+function renderNotasSection(record) {
+  const notas = record.metadata?.notasAtendimento || [];
+  const sorted = [...notas].sort((a, b) => new Date(b.criadaEm) - new Date(a.criadaEm));
+  const isRecording = state.notaRecordingKey === record.conversationKey;
+
+  const notaItems = sorted.map(nota => {
+    const dt = new Date(nota.criadaEm);
+    const label = Number.isNaN(dt.getTime())
+      ? ""
+      : `${dateOnlyFormatter.format(dt)} às ${timeFormatter.format(dt)}`;
+    const audioIcon = nota.tipo === "audio"
+      ? `<svg class="nota-tipo-icon" viewBox="0 0 24 24" aria-label="Áudio transcrito"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`
+      : "";
+    return `
+      <div class="nota-item" data-nota-id="${escapeHtml(nota.id)}">
+        <div class="nota-item-header">
+          <span class="nota-item-meta">${audioIcon}${escapeHtml(label)}</span>
+          <button class="nota-delete-button" type="button" data-delete-nota="${escapeHtml(nota.id)}" aria-label="Excluir nota">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <p class="nota-item-text">${escapeHtml(nota.conteudo)}</p>
+      </div>`;
+  }).join("");
+
+  return `
+    <section class="notas-section">
+      <div class="notas-header">
+        <span class="section-eyebrow">Notas de atendimento</span>
+        <strong>Observações fora do WhatsApp</strong>
+      </div>
+      <div class="notas-input-area">
+        <textarea
+          class="nota-textarea"
+          id="nota-textarea-${escapeHtml(record.conversationKey)}"
+          placeholder="Anote observações de ligações, visitas ou reuniões presenciais..."
+          rows="3"
+          maxlength="2000"
+        ></textarea>
+        <div class="notas-actions">
+          <button
+            class="nota-record-button${isRecording ? " recording" : ""}"
+            type="button"
+            data-toggle-record-nota
+            aria-label="${isRecording ? "Parar gravação" : "Gravar áudio"}"
+            title="${isRecording ? "Parar gravação" : "Gravar e transcrever áudio"}"
+          >
+            ${isRecording
+              ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Parar`
+              : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Gravar`
+            }
+          </button>
+          <button class="nota-save-button primary-action-button" type="button" data-save-nota>Salvar nota</button>
+        </div>
+      </div>
+      ${notaItems ? `<div class="notas-list">${notaItems}</div>` : ""}
+    </section>`;
+}
+
+async function saveNota(record, conteudo, tipo = "texto") {
+  const texto = String(conteudo || "").trim();
+  if (!texto) return;
+  const now = new Date().toISOString();
+  const nota = {
+    id: globalThis.crypto?.randomUUID?.() || `nota-${Date.now()}`,
+    tipo,
+    conteudo: texto,
+    criadaEm: now
+  };
+  const existing = Array.isArray(record.metadata?.notasAtendimento) ? record.metadata.notasAtendimento : [];
+  const updated = {
+    ...record,
+    updatedAt: now,
+    metadata: {
+      ...(record.metadata || {}),
+      notasAtendimento: [...existing, nota],
+      ultimaMovimentacaoAt: now
+    }
+  };
+  await saveAtendimento(updated);
+  pushRemoteRecord(updated).catch(() => null);
+  await refreshRecords();
+  renderDetail(updated);
+  showToast("Nota salva.");
+}
+
+async function deleteNota(record, notaId) {
+  const existing = Array.isArray(record.metadata?.notasAtendimento) ? record.metadata.notasAtendimento : [];
+  const filtered = existing.filter(n => n.id !== notaId);
+  const now = new Date().toISOString();
+  const updated = {
+    ...record,
+    updatedAt: now,
+    metadata: {
+      ...(record.metadata || {}),
+      notasAtendimento: filtered,
+      ultimaMovimentacaoAt: now
+    }
+  };
+  await saveAtendimento(updated);
+  pushRemoteRecord(updated).catch(() => null);
+  await refreshRecords();
+  renderDetail(updated);
+}
+
+async function toggleNotaRecording(record) {
+  if (state.notaRecordingKey === record.conversationKey) {
+    stopNotaRecording(record);
+    return;
+  }
+  if (state.notaMediaRecorder) {
+    stopNotaRecording(null);
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"]
+      .find(t => MediaRecorder.isTypeSupported(t)) || "";
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    state.notaRecordingChunks = [];
+    state.notaRecordingKey = record.conversationKey;
+    state.notaMediaRecorder = recorder;
+
+    recorder.ondataavailable = e => { if (e.data?.size > 0) state.notaRecordingChunks.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(state.notaRecordingChunks, { type: mimeType || "audio/webm" });
+      state.notaRecordingChunks = [];
+      state.notaMediaRecorder = null;
+      state.notaRecordingKey = null;
+
+      const latest = await getAtendimento(record.conversationKey) || record;
+      renderDetail(latest);
+
+      if (blob.size < 100) {
+        showToast("Gravação muito curta, tente novamente.", "error");
+        return;
+      }
+      if (blob.size > 4 * 1024 * 1024) {
+        showToast("Áudio muito longo (limite de 4 MB). Divida em partes menores.", "error");
+        return;
+      }
+
+      showToast("Transcrevendo áudio...");
+      try {
+        const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+        const fname = `nota-audio-${Date.now()}.${ext}`;
+        const resp = await fetch(`/api/transcrever?filename=${encodeURIComponent(fname)}`, {
+          method: "POST",
+          headers: { "Content-Type": blob.type || "audio/webm", "X-File-Name": encodeURIComponent(fname) },
+          body: blob
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload.error || "Falha na transcrição.");
+        const text = String(payload.text || "").trim();
+        if (!text) {
+          showToast("Áudio gravado mas nenhuma fala detectada.", "error");
+          return;
+        }
+        const fresh = await getAtendimento(record.conversationKey) || record;
+        await saveNota(fresh, text, "audio");
+      } catch (err) {
+        showToast(err?.message || "Não foi possível transcrever o áudio.", "error", 7000);
+      }
+    };
+
+    recorder.start();
+    renderDetail(record);
+    showToast("Gravando... toque em Parar quando terminar.");
+  } catch (err) {
+    state.notaRecordingKey = null;
+    state.notaMediaRecorder = null;
+    showToast("Não foi possível acessar o microfone. Verifique as permissões.", "error", 7000);
+  }
+}
+
+function stopNotaRecording(record) {
+  if (state.notaMediaRecorder && state.notaMediaRecorder.state !== "inactive") {
+    state.notaMediaRecorder.stop();
+  }
+  if (record) renderDetail(record);
+}
+
 function renderManualLeadSection(record) {
   const { telefone, empreendimento, observacoes } = record.metadata || {};
   if (!telefone && !empreendimento && !observacoes) return "";
@@ -1484,6 +1673,7 @@ function renderDetail(record) {
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
       ${renderManualLeadSection(record)}
+      ${renderNotasSection(record)}
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
@@ -2324,6 +2514,31 @@ function bindEvents() {
     const deleteTrigger = event.target.closest("[data-delete-lead]");
     if (deleteTrigger) {
       await deleteCurrentLead();
+      return;
+    }
+
+    const saveNotaTrigger = event.target.closest("[data-save-nota]");
+    if (saveNotaTrigger) {
+      const record = await getCurrentRecord();
+      if (!record) return;
+      const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+      const texto = textarea?.value || "";
+      if (!texto.trim()) { showToast("Escreva algo antes de salvar.", "error"); return; }
+      await saveNota(record, texto);
+      return;
+    }
+
+    const recordNotaTrigger = event.target.closest("[data-toggle-record-nota]");
+    if (recordNotaTrigger) {
+      const record = await getCurrentRecord();
+      if (record) await toggleNotaRecording(record);
+      return;
+    }
+
+    const deleteNotaTrigger = event.target.closest("[data-delete-nota]");
+    if (deleteNotaTrigger) {
+      const record = await getCurrentRecord();
+      if (record) await deleteNota(record, deleteNotaTrigger.dataset.deleteNota);
       return;
     }
     const addLeadTrigger = event.target.closest("[data-add-lead]");
