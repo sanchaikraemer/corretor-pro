@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v043", package: "0.43.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v044", package: "0.44.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -2719,6 +2719,18 @@ function bindEvents() {
         if (record) await handlePrintsAnexo(record, files);
       }
     }
+  });
+
+  app?.addEventListener("paste", async event => {
+    if (!event.target.closest(".nota-textarea")) return;
+    const images = [...(event.clipboardData?.items || [])]
+      .filter(item => item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter(Boolean);
+    if (!images.length) return;
+    event.preventDefault();
+    const record = await getCurrentRecord();
+    if (record) await handlePrintsAnexo(record, images);
   });
 
   renameForm?.addEventListener("submit", async event => {
