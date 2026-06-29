@@ -1002,7 +1002,11 @@ function renderList() {
 
   const callNowCards = [
     ...responder.map(r => buildCard(r, "responder")),
-    ...esfriando.map(r => buildCard(r, "esfriando"))
+    ...esfriando.map(r => {
+      const refDate = getValidDate(r?.metadata?.atendidoAgoraAt) || getLatestActivityDate(r);
+      const days = Math.floor((Date.now() - refDate.getTime()) / (24 * 60 * 60 * 1000));
+      return buildCard(r, `esfriando · ${days}d`);
+    })
   ].join("");
   const aguardarCards = aguardar.map(r => buildCard(r, "")).join("");
 

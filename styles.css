@@ -397,46 +397,6 @@ button { -webkit-tap-highlight-color: transparent; }
   -webkit-box-orient: vertical;
 }
 
-.attendance-status {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 7px;
-  color: var(--emerald-dark);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.attendance-status i {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--emerald);
-}
-
-.attendance-card.waiting-client {
-  border-color: #B7E5D3;
-  background: linear-gradient(90deg, #FFFFFF, #F8FFFC);
-}
-
-.attendance-card.followup-due {
-  border-color: #F2D28B;
-  background: linear-gradient(90deg, #FFFFFF, #FFFBEB);
-}
-
-.attendance-card.followup-due .attendance-status { color: #9A6700; }
-.attendance-card.followup-due .attendance-status i { background: #D99A00; }
-
-.attendance-card.client-response {
-  border-color: #9FD8C2;
-  background: linear-gradient(90deg, #FFFFFF, #F0FDF8);
-}
-
-.attendance-card.client-response .attendance-status { color: #047857; }
-.attendance-card.client-response .attendance-status i { background: #059669; }
-
 .list-section-header {
   margin: 18px 0 8px;
   font-size: 11px;
