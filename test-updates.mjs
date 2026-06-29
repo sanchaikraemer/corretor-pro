@@ -583,14 +583,14 @@ test("v040 aumenta a fonte das sugestões de resposta", () => {
   assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.65;/);
 });
 
-test("v060 permite escolher o período dos áudios com todo o período pré-selecionado", () => {
+test("v040 permite escolher o período dos áudios com 30 dias pré-selecionado", () => {
   assert.match(appSource, /const AUDIO_IMPORT_PERIODS = \[/);
   assert.match(appSource, /\{ value: "30", label: "30 dias" \}/);
   assert.match(appSource, /\{ value: "60", label: "60 dias" \}/);
   assert.match(appSource, /\{ value: "90", label: "90 dias" \}/);
   assert.match(appSource, /\{ value: "all", label: "Todo o período" \}/);
-  assert.match(appSource, /audioPeriodSelection: "all"/);
-  assert.match(htmlSource, /data-audio-import-period="all"[^>]*aria-pressed="true"/);
+  assert.match(appSource, /audioPeriodSelection: "30"/);
+  assert.match(htmlSource, /data-audio-import-period="30"[^>]*aria-pressed="true"/);
   assert.match(htmlSource, /Todas as mensagens escritas serão importadas/);
   assert.match(appSource, /waitForAudioPeriodSelection/);
 });

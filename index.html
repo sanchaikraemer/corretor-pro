@@ -68,10 +68,10 @@
           <strong>Quais áudios devem ser transcritos?</strong>
           <p>Todas as mensagens escritas serão importadas. Escolha apenas o período dos áudios.</p>
           <div class="audio-period-options" role="group" aria-label="Período dos áudios">
-            <button type="button" data-audio-import-period="30" aria-pressed="false">30 dias</button>
+            <button class="active" type="button" data-audio-import-period="30" aria-pressed="true">30 dias</button>
             <button type="button" data-audio-import-period="60" aria-pressed="false">60 dias</button>
             <button type="button" data-audio-import-period="90" aria-pressed="false">90 dias</button>
-            <button class="active" type="button" data-audio-import-period="all" aria-pressed="true">Todo o período</button>
+            <button type="button" data-audio-import-period="all" aria-pressed="false">Todo o período</button>
           </div>
           <span id="audio-period-summary" class="audio-period-summary"></span>
           <button id="audio-period-continue" class="audio-period-continue" type="button">Continuar importação</button>

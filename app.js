@@ -81,7 +81,7 @@ const state = {
   processingElapsedTimer: null,
   importAbortController: null,
   importCancelled: false,
-  audioPeriodSelection: "all",
+  audioPeriodSelection: "30",
   audioPeriodResolver: null,
   audioPeriodCandidates: [],
   audioPeriodReferenceTimestamp: null,
@@ -373,7 +373,7 @@ function updateAudioPeriodSummary() {
 function waitForAudioPeriodSelection(candidates, referenceTimestamp) {
   state.audioPeriodCandidates = candidates;
   state.audioPeriodReferenceTimestamp = referenceTimestamp;
-  setAudioPeriodSelection("all");
+  setAudioPeriodSelection("30");
   if (audioPeriodPanel) audioPeriodPanel.hidden = false;
   if (processingLive) processingLive.hidden = true;
   setProcessing("audio", 1, "Escolha o período dos áudios. Todas as mensagens escritas serão importadas.", "Selecionar período dos áudios");
