@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=064";
+} from "./db.js?v=065";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=064";
+} from "./whatsapp.js?v=065";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v064", package: "0.64.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v065", package: "0.65.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -2029,7 +2029,6 @@ function renderDetail(record) {
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
       ${renderManualLeadSection(record)}
-      ${renderNotasSection(record)}
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
@@ -2049,6 +2048,7 @@ function renderDetail(record) {
         </button>
       </section>
       ${renderAnalysisSection(record)}
+      ${renderNotasSection(record)}
       ${renderProposalSection(record)}
       <details class="history-panel">
         <summary>
