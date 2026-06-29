@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=068";
+} from "./db.js?v=070";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=068";
+} from "./whatsapp.js?v=070";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,11 +44,11 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v068", package: "0.68.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v070", package: "0.70.0" };
 const APP_VERSION = VERSION_INFO.app;
-const APP_USER_NAME = "Sanchai";
-const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
-const CLOUD_WORKSPACE = "corretor-pro-site";
+const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
+const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
+const CLOUD_WORKSPACE = (localStorage.getItem("corretorProWorkspace") || "corretor-pro-site").trim();
 const AUTO_SYNC_INTERVAL_MS = 15000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
 const TRANSCRIPTION_RETRY_DELAY_MS = 1200;
@@ -544,6 +544,80 @@ function classifyLead(record) {
   const refDate = getValidDate(record?.metadata?.atendidoAgoraAt) || getLatestActivityDate(record);
   return Date.now() - refDate.getTime() >= SEVEN_DAYS_MS ? "esfriando" : "aguardar";
 }
+function daysSince(date) {
+  const valid = date instanceof Date ? date : getValidDate(date);
+  if (!valid) return 0;
+  return Math.max(0, Math.floor((Date.now() - valid.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function getCommercialTemperature(record) {
+  const analysis = record?.metadata?.analiseComercial || {};
+  const workflow = getLeadWorkflowState(record);
+  let score = 45;
+  const interest = normalizeComparable(analysis.nivelInteresse || analysis.interesse || "");
+  const stage = normalizeComparable(analysis.etapa || "");
+  const summary = normalizeComparable([
+    analysis.resumo,
+    analysis.pendenciaReal,
+    analysis.pendenciaFinanceira,
+    analysis.proximoPasso,
+    ...(Array.isArray(analysis.sinaisInteresse) ? analysis.sinaisInteresse : [])
+  ].filter(Boolean).join(" "));
+
+  if (workflow.mode === "client_response") score += 22;
+  if (workflow.mode === "waiting") score -= Math.min(20, daysSince(workflow.activityDate) * 2);
+  if (interest.includes("alto") || interest.includes("muito alto")) score += 22;
+  if (interest.includes("medio")) score += 10;
+  if (interest.includes("baixo")) score -= 15;
+  if (/negociacao|proposta|analise financeira|decisao|fechamento/.test(stage)) score += 16;
+  if (/entrada|financiamento|fgts|parcela|valor|proposta|contrato|visita|cafe|reuniao/.test(summary)) score += 10;
+  if (record?.metadata?.propostaImagem) score += 8;
+  if (!analysis.generatedAt) score -= 8;
+  return Math.max(0, Math.min(99, Math.round(score)));
+}
+
+function getCommercialPriority(record) {
+  const workflow = getLeadWorkflowState(record);
+  const score = getCommercialTemperature(record);
+  if (workflow.mode === "client_response") return { label: "Responder agora", className: "hot" };
+  if (classifyLead(record) === "esfriando") return { label: "Retomar hoje", className: "warm" };
+  if (score >= 75) return { label: "Oportunidade forte", className: "hot" };
+  if (score >= 58) return { label: "Acompanhar", className: "warm" };
+  return { label: "Organizado", className: "cool" };
+}
+
+function renderDashboard(records) {
+  const total = records.length;
+  const responder = records.filter(r => getLeadWorkflowState(r).mode === "client_response").length;
+  const esfriando = records.filter(r => classifyLead(r) === "esfriando").length;
+  const quentes = records.filter(r => getCommercialTemperature(r) >= 75).length;
+  const semAnalise = records.filter(r => !r?.metadata?.analiseComercial).length;
+  const top = [...records]
+    .sort((a, b) => getCommercialTemperature(b) - getCommercialTemperature(a))
+    .slice(0, 3);
+  return `
+    <section class="command-dashboard" aria-label="Resumo comercial">
+      <div class="command-dashboard-heading">
+        <span class="section-eyebrow">Sua atenção agora</span>
+        <h2>O que pode virar venda</h2>
+        <p>Prioridade automática por resposta do cliente, tempo parado, proposta, etapa e sinais de interesse.</p>
+      </div>
+      <div class="command-metrics">
+        <article><strong>${responder}</strong><span>para responder</span></article>
+        <article><strong>${esfriando}</strong><span>esfriando</span></article>
+        <article><strong>${quentes}</strong><span>quentes</span></article>
+        <article><strong>${semAnalise}</strong><span>sem análise</span></article>
+      </div>
+      ${top.length ? `<div class="command-top-list">${top.map(record => {
+        const priority = getCommercialPriority(record);
+        return `<button class="command-top-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+          <span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(priority.label)}</small></span>
+          <b>${getCommercialTemperature(record)}%</b>
+        </button>`;
+      }).join("")}</div>` : ""}
+    </section>`;
+}
+
 
 function formatAttendedNowLabel(record, compact = false) {
   const date = getAttendedNowDate(record);
@@ -1052,7 +1126,7 @@ function renderList() {
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          ${urgencyLabel ? `<span class="attendance-urgency">${escapeHtml(urgencyLabel)}</span>` : ""}
+          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)} · ${getCommercialTemperature(record)}%</span>
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
@@ -1082,10 +1156,11 @@ function renderList() {
             Adicionar
           </button>
         </div>
-        <p>Conversas recebidas e organizadas em texto, na ordem em que aconteceram.</p>
+        <p>Conversas priorizadas para você enxergar rápido quem merece ação comercial.</p>
       </div>
       <div class="list-surface">
         ${renderInstallCard()}
+        ${state.records.length ? renderDashboard(state.records) : ""}
         ${groupsHtml || renderEmptyState()}
         <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
@@ -1418,6 +1493,28 @@ function renderAnalysisSection(record) {
             </div>
             <button type="button" data-copy-suggestion="${index}">Copiar</button>
           </article>`).join("") || `<p class="analysis-empty-value">Nenhuma sugestão foi gerada.</p>`}
+      </div>
+    </section>`;
+}
+
+
+function renderCommercialSnapshot(record) {
+  const analysis = record?.metadata?.analiseComercial || {};
+  const priority = getCommercialPriority(record);
+  const score = getCommercialTemperature(record);
+  const next = analysis.proximoPasso || (getLeadWorkflowState(record).mode === "client_response" ? "Responder a nova mensagem do cliente." : "Analisar atendimento e definir próxima ação.");
+  const pending = analysis.pendenciaReal || analysis.pendenciaFinanceira || "Nenhuma pendência clara identificada.";
+  return `
+    <section class="commercial-snapshot ${escapeHtml(priority.className)}">
+      <div class="commercial-score">
+        <span>Temperatura</span>
+        <strong>${score}%</strong>
+      </div>
+      <div class="commercial-snapshot-copy">
+        <span class="section-eyebrow">Prioridade comercial</span>
+        <h2>${escapeHtml(priority.label)}</h2>
+        <p><strong>Próxima ação:</strong> ${escapeHtml(next)}</p>
+        <p><strong>Pendência:</strong> ${escapeHtml(pending)}</p>
       </div>
     </section>`;
 }
@@ -2038,6 +2135,7 @@ function renderDetail(record) {
         </div>
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
+      ${renderCommercialSnapshot(record)}
       ${renderManualLeadSection(record)}
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">

@@ -55,18 +55,18 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v068"/);
+  assert.match(versionSource, /app: "v070"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
-  assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
+  assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
   assert.match(appSource, /startAutomaticSync\(\)/);
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=068/);
-  assert.match(htmlSource, /styles\.css\?v=068/);
-  assert.match(appSource, /db\.js\?v=068/);
-  assert.match(appSource, /whatsapp\.js\?v=068/);
+  assert.match(htmlSource, /app\.js\?v=070/);
+  assert.match(htmlSource, /styles\.css\?v=070/);
+  assert.match(appSource, /db\.js\?v=070/);
+  assert.match(appSource, /whatsapp\.js\?v=070/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v068<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v070<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -442,7 +442,7 @@ test("v040 registra Atendido agora sem timer ou bloqueio por tempo", () => {
   assert.doesNotMatch(appSource, /Nova retomada em/);
   assert.doesNotMatch(appSource, /48 horas sem resposta/);
   assert.match(appSource, /Aguardando resposta do cliente/);
-  assert.match(appSource, /class="attendance-urgency"/);
+  assert.match(appSource, /class="attendance-urgency \$\{getCommercialPriority\(record\)\.className\}"/);
 
   const start = appSource.indexOf("async function registerLeadAttended(");
   const end = appSource.indexOf("async function markAttendedNow()", start);
@@ -659,8 +659,8 @@ test("v040 usa DNA da conversa e sobreposição de mensagens para separar homôn
 });
 
 test("v040 identifica Sanchai como usuário do app e os demais autores como contato", () => {
-  assert.match(appSource, /const APP_USER_NAME = "Sanchai"/);
-  assert.match(appSource, /APP_USER_ALIASES = new Set\(\["sanchai", "voce"\]\)/);
+  assert.match(appSource, /const APP_USER_NAME = \(localStorage\.getItem\("corretorProUserName"\) \|\| "Sanchai"\)\.trim\(\)/);
+  assert.match(appSource, /APP_USER_ALIASES = new Set\(\[normalizeComparable\(APP_USER_NAME\), "sanchai", "voce", "você"\]\)/);
   assert.match(appSource, /function isOwnTimelineItem/);
   assert.match(appSource, /!\s*isOwnTimelineItem\(item\)/);
   assert.match(appSource, /usuarioApp: APP_USER_NAME/);
@@ -682,15 +682,15 @@ test("v041 usa uma fonte central de versão em app, servidor, build e cache", ()
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v068"/);
-  assert.match(versionSource, /package: "0\.68\.0"/);
+  assert.match(versionSource, /app: "v070"/);
+  assert.match(versionSource, /package: "0\.70\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.68.0");
+  assert.equal(pkg.version, "0.70.0");
 });
 
-test("v068 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
+test("v070 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
   // O texto lido do print é convertido em itens de timeline e mesclado no histórico.
   assert.match(appSource, /function parsePrintTranscript/);
   assert.match(appSource, /origem: "print"/);
@@ -707,7 +707,7 @@ test("v068 lê o print da conversa e mescla as mensagens na linha do tempo", () 
   assert.match(appSource, /data-clear-prints/);
 });
 
-test("v068 unifica identidade do corretor e corrige plural de mensagens", () => {
+test("v070 unifica identidade do corretor e corrige plural de mensagens", () => {
   // Print e análise reaproveitam o nome real do corretor na conversa.
   assert.match(appSource, /function resolveConversationAuthors/);
   assert.match(appSource, /author = lado\.startsWith\("voc"\) \? brokerAuthor : clientAuthor/);
