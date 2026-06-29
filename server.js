@@ -321,7 +321,7 @@ async function handleTranscrever(req, res, url) {
     const filename = safeFilename(query.filename || getHeader(req, "x-file-name"));
     const form = new FormData();
     form.append("file", new Blob([buffer], { type: "audio/ogg" }), filename);
-    form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1");
+    form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe");
     form.append("language", "pt");
     form.append("response_format", "json");
 
@@ -341,7 +341,7 @@ async function handleTranscrever(req, res, url) {
 
     return send(res, 200, {
       text: String(payload.text || "").trim(),
-      model: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1"
+      model: process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe"
     });
   } catch {
     return send(res, 500, {
