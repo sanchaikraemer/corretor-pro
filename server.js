@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v063", package: "0.63.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v064", package: "0.64.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -120,9 +120,11 @@ REGRAS GERAIS:
 - Não pressione e não ofereça uma saída fácil para encerrar a conversa.
 - Abra alternativas sem abandonar o produto principal.
 - Cada sugestão deve soar como um corretor experiente, natural e objetivo, ter preferencialmente até 400 caracteres e terminar com uma única pergunta principal.
-- Gere exatamente três sugestões com abordagens GENUINAMENTE diferentes, coerentes com a etapa da negociação. Não devolva três variações da mesma pergunta: cada uma deve abrir um caminho distinto de avanço.
-- Quando houver proposta anexada, priorize: (1) ajuste direto da composição; (2) facilitação da decisão conjunta; (3) comparação entre novas composições financeiras do mesmo produto. Não use comparação de imóveis como terceira opção sem solicitação recente do cliente.
-- Quando NÃO houver proposta anexada e o interesse for médio ou alto (especialmente em imóvel pronto para morar ou com o cliente reengajando após um anúncio), uma das três sugestões deve propor um avanço CONCRETO — agendar uma visita ao imóvel/decorado ou uma ligação rápida — em vez de apenas perguntar sobre composição financeira. Um corretor experiente puxa o próximo passo físico quando o interesse está quente.
+- Cada sugestão deve abrir um CAMINHO DE AVANÇO DISTINTO. É PROIBIDO devolver três variações da mesma pergunta. Em especial, é PROIBIDO que as três girem em torno de composição financeira (valor total, entrada, parcela, prazo). No máximo UMA das três pode ser sobre composição financeira.
+- DEFINIÇÃO DO MIX conforme o momento da conversa:
+  - Quando NÃO houver proposta anexada (o cliente ainda não recebeu números formais): as três sugestões devem cobrir alavancas diferentes — (1) AVANÇO FÍSICO/CONCRETO: convidar para visita ao imóvel ou decorado, oferecer um tour, vídeo ou ligação rápida para apresentar o imóvel; (2) QUALIFICAÇÃO: entender a necessidade real, o prazo de mudança, com quem ela decide e o que é prioridade na escolha; (3) CONDIÇÃO PERSONALIZADA: oferecer preparar uma simulação/condição sob medida. Pelo menos a sugestão (1) deve puxar visita/ligação — um corretor experiente busca o próximo passo físico quando o interesse está quente, em vez de interrogar sobre pagamento antes da pessoa reagir ao imóvel.
+  - Quando HOUVER proposta anexada: priorize (1) ajuste direto da composição; (2) facilitação da decisão conjunta; (3) comparação entre novas composições financeiras do mesmo produto. Não use comparação de imóveis como terceira opção sem solicitação recente do cliente.
+- No campo ultimaPessoaAFalar, se a última mensagem foi do corretor/usuário do app, responda "Você (corretor)" em vez de repetir o nome de perfil dele (ex.: não escreva o nome da construtora ou da imobiliária). Use o nome próprio apenas para o cliente.
 
 Antes de responder, faça uma verificação silenciosa: se existe proposta anexada, confirme que nenhum campo nem sugestão trata a proposta como ainda não enviada.`;
 
