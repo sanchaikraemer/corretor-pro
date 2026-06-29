@@ -2771,7 +2771,9 @@ button.storage-note strong { font-weight: 600; }
 .command-top-card strong,
 .command-top-card small { display: block; }
 .command-top-card small { color: #c4cec9; margin-top: 3px; }
-.command-top-card b { color: #d8ff63; font-size: 1.15rem; }
+.command-top-card b { color: #d8ff63; font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
+.command-top-card b.warm { color: #ffd36a; }
+.command-top-card b.cool { color: #8fdcff; }
 .attendance-urgency.hot { color: #d8ff63; }
 .attendance-urgency.warm { color: #ffd36a; }
 .attendance-urgency.cool { color: #8fdcff; }
@@ -2804,7 +2806,9 @@ button.storage-note strong { font-weight: 600; }
   text-transform: uppercase;
   letter-spacing: .08em;
 }
-.commercial-score strong { color: #d8ff63; font-size: 1.6rem; line-height: 1.1; }
+.commercial-score strong { color: #d8ff63; font-size: 1.25rem; line-height: 1.1; }
+.commercial-score strong.warm { color: #ffd36a; }
+.commercial-score strong.cool { color: #8fdcff; }
 .commercial-snapshot-copy h2 { margin: 4px 0 8px; }
 .commercial-snapshot-copy p { margin: 5px 0; color: var(--muted, #a9b0ae); line-height: 1.4; }
 .commercial-snapshot-copy p strong { color: var(--text, #fff); }
