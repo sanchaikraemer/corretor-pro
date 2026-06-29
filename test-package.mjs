@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const required = [
-  "index.html", "styles.css", "app.js", "db.js", "whatsapp.js",
+  "index.html", "version.js", "styles.css", "app.js", "db.js", "whatsapp.js",
   "service-worker.js", "share-target.html", "manifest.webmanifest",
   "zip.min.js", "logo-mark.png", "icon-192.png", "icon-512.png",
   "apple-touch-icon.png", "server.js", "api/[...path].js", "build.js", "package.json", "vercel.json"

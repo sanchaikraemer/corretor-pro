@@ -1,31 +1,32 @@
-# Corretor Pro — pacote único completo 0.1.4
+# Corretor Pro — v040
 
-Todos os arquivos que você precisa enviar estão na raiz. Não há pastas para selecionar no computador.
+Aplicativo web/PWA para importar conversas exportadas do WhatsApp, organizar mensagens e transcrições, analisar o atendimento com inteligência comercial e gerar sugestões de resposta.
 
-Durante a publicação, o próprio `build.js` cria a pasta `public` dentro da Vercel. O `server.js` concentra as rotas de funcionamento: health check, transcrição, atendimentos e exclusão de leads.
+## Principais funções
 
-## Para atualizar o GitHub
+- importação incremental, sem duplicar mensagens;
+- transcrição de áudios `.opus` com novas tentativas automáticas;
+- nova tentativa, em reimportações, para áudios que permaneceram com falha;
+- período de 30, 60, 90 dias ou todo o histórico;
+- análise comercial com imagem da última proposta;
+- diferenciação entre cliente direto e corretor parceiro;
+- identificação do usuário do app como **Sanchai**;
+- reconhecimento de conversas pelo nome e pelo DNA das mensagens, reduzindo risco de misturar homônimos;
+- sincronização leve: a lista consulta apenas resumos e o histórico completo é carregado ao abrir o lead;
+- PWA com cache versionado pela fonte central `version.js`.
 
-1. Extraia o ZIP.
-2. No repositório `corretor-pro`, clique em **Add file → Upload files**.
-3. Selecione todos os arquivos extraídos.
-4. Clique em **Commit changes**.
+## Versão
 
-Os arquivos com o mesmo nome substituirão a versão anterior. Não é necessário criar pastas manualmente.
+- versão visual e operacional: `v040`;
+- versão do pacote: `0.40.0`;
+- fonte central: `version.js`.
 
-## Variável obrigatória para transcrição
+## Publicação
 
-Na Vercel, configure `OPENAI_API_KEY`.
+```bash
+npm test
+npm run check
+npm run build
+```
 
-## O que esta versão faz
-
-- instala como PWA;
-- recebe ZIP compartilhado pelo WhatsApp no Android;
-- lê textos e transcreve `.opus`;
-- monta uma linha do tempo única;
-- ignora imagens, vídeos e PDFs;
-- salva localmente e mantém a mesma base atualizada automaticamente pelo link;
-- tenta transcrever novamente quando um áudio falha;
-- avisa quando a conversa ficou com áudio não transcrito;
-- permite excluir um lead;
-- usa o Supabase para manter os dados iguais em todos os acessos ao site.
+A Vercel usa `build.js` para gerar a pasta `public` e `server.js` para as rotas da API.

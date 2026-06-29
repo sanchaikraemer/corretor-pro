@@ -1,3 +1,5 @@
+import "./version.js";
+
 // Corretor Pro — handler HTTP sem dependências externas.
 // Funciona como função serverless da Vercel (export default (req, res)).
 
@@ -7,6 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v040", package: "0.40.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -179,6 +182,35 @@ function fromDatabaseRow(row) {
   };
 }
 
+function toSummaryRecord(row) {
+  const metadata = row?.metadata || {};
+  const summaryMetadata = {
+    originalLeadName: metadata.originalLeadName || row?.nome_lead || "",
+    tipoContato: metadata.tipoContato || null,
+    statusAtendimento: metadata.statusAtendimento || null,
+    ultimaMovimentacaoAt: metadata.ultimaMovimentacaoAt || null,
+    atendidoAgoraAt: metadata.atendidoAgoraAt || null,
+    novaRespostaClienteAt: metadata.novaRespostaClienteAt || null,
+    origemUltimaMovimentacao: metadata.origemUltimaMovimentacao || null,
+    conversationDna: metadata.conversationDna || null,
+    usuarioApp: metadata.usuarioApp || null,
+    deletedAt: metadata.deletedAt || null
+  };
+  return {
+    id: row.id,
+    deviceId: row.device_id,
+    conversationKey: row.conversation_key,
+    nomeLead: row.nome_lead,
+    arquivoOrigem: row.arquivo_origem,
+    ultimaMensagemAt: row.ultima_mensagem_at,
+    ultimaMensagemResumo: row.ultima_mensagem_resumo,
+    metadata: summaryMetadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    _summaryOnly: true
+  };
+}
+
 function isValidRecord(record) {
   return Boolean(
     record &&
@@ -259,7 +291,7 @@ async function handleHealth(_req, res) {
   return send(res, 200, {
     ok: true,
     app: "Corretor Pro",
-    version: "v024",
+    version: VERSION_INFO.app,
     openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
     supabaseConfigured: configuredSupabase(),
     timestamp: new Date().toISOString()
@@ -329,6 +361,7 @@ function isSafeProposalImage(value) {
 function isValidAnalysisRequest(body) {
   if (!body || typeof body !== "object") return false;
   if (typeof body.leadName !== "string" || !body.leadName.trim() || body.leadName.length > 200) return false;
+  if (body.appUserName != null && (typeof body.appUserName !== "string" || body.appUserName.length > 120)) return false;
   if (body.contactType !== "cliente" && body.contactType !== "corretor") return false;
   if (typeof body.period !== "string" || body.period.length > 40) return false;
   if (typeof body.messages !== "string" || !body.messages.trim() || body.messages.length > MAX_ANALYSIS_MESSAGES_CHARS) return false;
@@ -362,6 +395,8 @@ function buildAnalysisInput(body) {
   const proposalRecipient = body.contactType === "corretor" ? "corretor parceiro" : "cliente direto";
   return [
     `CONTATO: ${body.leadName.trim()}`,
+    `CORRETOR/USUÁRIO DO APP: ${String(body.appUserName || "Sanchai").trim()}`,
+    `REGRA DE AUTORES: mensagens com esse autor foram enviadas pelo corretor; os demais autores representam o contato da conversa.`,
     `TIPO DE CONTATO: ${contactTypeLabel}`,
     `PERÍODO ANALISADO: ${body.period || "não informado"}`,
     `QUANTIDADE DE MENSAGENS: ${Number(body.messageCount || 0)}`,
@@ -557,13 +592,32 @@ async function fetchExistingRow(deviceId, conversationKey) {
 async function handleListAtendimentos(req, res, url) {
   const query = getQuery(req, url);
   const deviceId = String(query.device_id || "").trim();
+  const conversationKey = String(query.conversation_key || "").trim();
+  const summaryOnly = String(query.summary || "") === "1";
   if (!deviceId) return send(res, 400, { error: "device_id é obrigatório." });
-  if (!configuredSupabase()) return send(res, 200, { storage: "local", records: [] });
+  if (!configuredSupabase()) {
+    return send(res, 200, conversationKey
+      ? { storage: "local", record: null }
+      : { storage: "local", records: [] });
+  }
 
   try {
+    if (conversationKey) {
+      const row = await fetchExistingRow(deviceId, conversationKey);
+      return send(res, 200, {
+        storage: "supabase",
+        record: row ? fromDatabaseRow(row) : null
+      });
+    }
+
     const target = new URL(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}`);
     target.searchParams.set("device_id", `eq.${deviceId}`);
-    target.searchParams.set("select", "*");
+    target.searchParams.set(
+      "select",
+      summaryOnly
+        ? "id,device_id,conversation_key,nome_lead,arquivo_origem,ultima_mensagem_at,ultima_mensagem_resumo,metadata,created_at,updated_at"
+        : "*"
+    );
     target.searchParams.set("order", "ultima_mensagem_at.desc.nullslast");
 
     const supabaseResponse = await fetch(target, { headers: supabaseHeaders() });
@@ -571,7 +625,11 @@ async function handleListAtendimentos(req, res, url) {
     if (!supabaseResponse.ok) {
       return send(res, 502, { error: "Não foi possível consultar os atendimentos no Supabase." });
     }
-    return send(res, 200, { storage: "supabase", records: payload.map(fromDatabaseRow) });
+    const rows = Array.isArray(payload) ? payload : [];
+    return send(res, 200, {
+      storage: "supabase",
+      records: summaryOnly ? rows.map(toSummaryRecord) : rows.map(fromDatabaseRow)
+    });
   } catch {
     return send(res, 502, { error: "Falha de comunicação com o Supabase." });
   }

@@ -1,28 +1,21 @@
-# Validação da primeira função
+# Validação — Corretor Pro v040
 
-Executado antes da entrega:
+## Alterações validadas
 
-- verificação de sintaxe de todos os módulos JavaScript;
-- testes automatizados do parser do WhatsApp;
-- teste automatizado da identidade visual aprovada;
-- build local concluído;
-- teste com o ZIP real `Conversa do WhatsApp com Jamil Contalex(3).zip`;
-- nome identificado: `Jamil Contalex`;
-- 115 itens textuais organizados na linha do tempo;
-- 2 referências de áudio `.opus` encontradas na posição correta;
-- imagens, vídeos e PDFs não entraram na linha do tempo;
-- paleta oficial e tipografia Poppins confirmadas no código;
-- logotipo aprovado aplicado no cabeçalho, processamento e ícone do aplicativo.
+- áudios com status `error`, `empty` ou `missing` entram novamente na fila em uma reimportação;
+- áudios já concluídos, fora do período ou acima do limite não são processados inutilmente;
+- conversas com nomes iguais são diferenciadas pelo DNA das primeiras mensagens e pela sobreposição de fingerprints;
+- registros antigos sem DNA são reconhecidos por mensagens coincidentes e preservam a chave original;
+- `Sanchai` é tratado como o usuário/corretor do aplicativo; outros autores são interpretados como o contato;
+- a sincronização periódica recebe apenas resumos dos cards;
+- o histórico, a proposta e a análise completos são baixados somente quando o lead é aberto e há versão remota mais recente;
+- versão unificada em `version.js`, cabeçalho, cache, API de saúde, build e documentação;
+- textos de “Todo o período” não formam frases incorretas.
 
-A transcrição real depende de `OPENAI_API_KEY` configurada na Vercel.
+## Comandos obrigatórios
 
-
-## Validação da versão 0.1.4 / v020
-
-- atualização automática pelo mesmo link, sem código manual de sincronia;
-- nova tentativa automática de transcrição de áudio;
-- aviso persistente quando falta informação de áudio;
-- exclusão de lead local e na nuvem;
-- proteção para uma versão antiga não restaurar um lead já excluído;
-- 15 testes automatizados aprovados;
-- verificação de sintaxe e build concluídos.
+```bash
+npm test
+npm run check
+npm run build
+```

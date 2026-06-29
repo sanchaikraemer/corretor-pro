@@ -1,8 +1,12 @@
+import "./version.js";
 import fs from "node:fs";
 import path from "node:path";
 
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v040", package: "0.40.0" };
+
 const staticFiles = [
   "index.html",
+  "version.js",
   "styles.css",
   "app.js",
   "db.js",
@@ -33,7 +37,7 @@ for (const file of staticFiles) {
 
 fs.writeFileSync(
   path.join(output, "version.json"),
-  JSON.stringify({ version: "0.1.4", builtAt: new Date().toISOString() }, null, 2)
+  JSON.stringify({ version: VERSION_INFO.app, packageVersion: VERSION_INFO.package, builtAt: new Date().toISOString() }, null, 2)
 );
 
-console.log("Corretor Pro 0.1.4: pasta public criada com todos os arquivos do app.");
+console.log(`Corretor Pro ${VERSION_INFO.app}: pasta public criada com todos os arquivos do app.`);
