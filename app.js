@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=072";
+} from "./db.js?v=073";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=072";
+} from "./whatsapp.js?v=073";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v072", package: "0.72.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v073", package: "0.73.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -586,14 +586,6 @@ function getCommercialPriority(record) {
   return { label: "Organizado", className: "cool" };
 }
 
-// Faixa de temperatura em palavras, sem fingir precisão de porcentagem.
-function getCommercialBand(record) {
-  const score = getCommercialTemperature(record);
-  if (score >= 75) return { label: "Quente", className: "hot" };
-  if (score >= 58) return { label: "Morno", className: "warm" };
-  return { label: "Frio", className: "cool" };
-}
-
 function renderDashboard(records) {
   const total = records.length;
   const responder = records.filter(r => getLeadWorkflowState(r).mode === "client_response").length;
@@ -620,7 +612,6 @@ function renderDashboard(records) {
         const priority = getCommercialPriority(record);
         return `<button class="command-top-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
           <span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(priority.label)}</small></span>
-          <b class="command-top-band ${getCommercialBand(record).className}">${getCommercialBand(record).label}</b>
         </button>`;
       }).join("")}</div>` : ""}
     </section>`;
@@ -1134,7 +1125,7 @@ function renderList() {
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)} · ${getCommercialBand(record).label}</span>
+          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)}</span>
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
@@ -1509,15 +1500,10 @@ function renderAnalysisSection(record) {
 function renderCommercialSnapshot(record) {
   const analysis = record?.metadata?.analiseComercial || {};
   const priority = getCommercialPriority(record);
-  const band = getCommercialBand(record);
   const next = analysis.proximoPasso || (getLeadWorkflowState(record).mode === "client_response" ? "Responder a nova mensagem do cliente." : "Analisar atendimento e definir próxima ação.");
   const pending = analysis.pendenciaReal || analysis.pendenciaFinanceira || "Nenhuma pendência clara identificada.";
   return `
     <section class="commercial-snapshot ${escapeHtml(priority.className)}">
-      <div class="commercial-score">
-        <span>Temperatura</span>
-        <strong class="${band.className}">${band.label}</strong>
-      </div>
       <div class="commercial-snapshot-copy">
         <span class="section-eyebrow">Prioridade comercial</span>
         <h2>${escapeHtml(priority.label)}</h2>
