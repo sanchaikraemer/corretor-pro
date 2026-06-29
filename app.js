@@ -1588,10 +1588,9 @@ async function pushRemoteRecord(record) {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ ...record, deviceId: CLOUD_WORKSPACE })
     });
-    if (!response.ok) return null;
+    if (!response.ok) return false;
     return await response.json().catch(() => ({}));
   } catch {
-    // O registro continua disponível localmente; uma nova alteração poderá tentar o envio outra vez.
     return null;
   }
 }
@@ -2034,7 +2033,7 @@ async function processIncomingZip(pending) {
     setProcessing("save", 97, "Salvando o atendimento neste aparelho.");
     setProcessingTelemetry("Salvando atendimento", `${merged.added} novo${merged.added === 1 ? " item" : "s itens"}`);
     await saveAtendimento(record);
-    await pushRemoteRecord(record);
+    const cloudResult = await pushRemoteRecord(record);
     await removePendingShare();
 
     setProcessing("save", 100, "Atendimento pronto.", "Conversa processada");
@@ -2051,6 +2050,8 @@ async function processIncomingZip(pending) {
         "error",
         9000
       );
+    } else if (!cloudResult) {
+      showToast("Salvo neste aparelho, mas ainda não sincronizado.", "error", 7000);
     } else if (outsidePeriodAudioCount) {
       showToast(`${outsidePeriodAudioCount} áudio${outsidePeriodAudioCount === 1 ? " antigo ficou" : "s antigos ficaram"} fora do período selecionado.`);
     } else if (existing) {
