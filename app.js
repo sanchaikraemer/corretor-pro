@@ -2445,9 +2445,6 @@ async function processIncomingZip(pending) {
     await new Promise(resolve => setTimeout(resolve, 350));
     hideProcessing();
     cleanShareQuery();
-    // Pré-seta currentKey para que renderDetail não redefina o período para "30"
-    state.currentKey = conversationKey;
-    state.detailPeriod = "all";
     await refreshRecords();
     navigateToAttendance(conversationKey);
 
