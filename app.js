@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v055", package: "0.55.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v056", package: "0.56.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -73,7 +73,7 @@ const state = {
   syncing: false,
   syncTimer: null,
   cloudAvailable: null,
-  detailPeriod: "30",
+  detailPeriod: "all",
   deletingKeys: new Set(),
   analyzingKey: null,
   proposalBusy: false,
@@ -1794,7 +1794,7 @@ async function createManualLead(name, phone, empreendimento, notes) {
 }
 
 function renderDetail(record) {
-  if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
+  if (state.currentKey !== record.conversationKey) state.detailPeriod = "all";
   state.currentKey = record.conversationKey;
   setDetailHeader(record);
 
@@ -2585,7 +2585,7 @@ async function deleteCurrentLead() {
   state.deletingKeys.add(record.conversationKey);
   state.records = state.records.filter(item => item.conversationKey !== record.conversationKey);
   state.currentKey = null;
-  state.detailPeriod = "30";
+  state.detailPeriod = "all";
   history.replaceState({}, "", `${location.pathname}${location.search}#/`);
   renderList();
 
