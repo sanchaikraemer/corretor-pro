@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v059", package: "0.59.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v060", package: "0.60.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -81,7 +81,7 @@ const state = {
   processingElapsedTimer: null,
   importAbortController: null,
   importCancelled: false,
-  audioPeriodSelection: "90",
+  audioPeriodSelection: "all",
   audioPeriodResolver: null,
   audioPeriodCandidates: [],
   audioPeriodReferenceTimestamp: null,
@@ -373,7 +373,7 @@ function updateAudioPeriodSummary() {
 function waitForAudioPeriodSelection(candidates, referenceTimestamp) {
   state.audioPeriodCandidates = candidates;
   state.audioPeriodReferenceTimestamp = referenceTimestamp;
-  setAudioPeriodSelection("90");
+  setAudioPeriodSelection("all");
   if (audioPeriodPanel) audioPeriodPanel.hidden = false;
   if (processingLive) processingLive.hidden = true;
   setProcessing("audio", 1, "Escolha o período dos áudios. Todas as mensagens escritas serão importadas.", "Selecionar período dos áudios");
@@ -2262,7 +2262,7 @@ async function processIncomingZip(pending) {
     });
     const referenceTimestamp = getLatestTimelineTimestamp(parsedTimeline);
 
-    let selectedPeriod = "90";
+    let selectedPeriod = "all";
     if (audioItemsToProcess.length) {
       selectedPeriod = await waitForAudioPeriodSelection(audioItemsToProcess, referenceTimestamp);
       if (!selectedPeriod || state.importCancelled) throw createImportCancelledError();
