@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v052", package: "0.52.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v053", package: "0.53.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1490,14 +1490,6 @@ async function saveNota(record, conteudo, tipo = "texto") {
   await refreshRecords();
   renderDetail(updated);
   showToast("Nota salva.", "success", 4000);
-  requestAnimationFrame(() => {
-    const el = document.getElementById(`nota-${nota.id}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    else {
-      const section = document.querySelector(".notas-section");
-      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
 }
 
 async function deleteNota(record, notaId) {
