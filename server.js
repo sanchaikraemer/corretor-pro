@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v047", package: "0.47.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v048", package: "0.48.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -820,7 +820,7 @@ COMO LER UM PRINT DE WHATSAPP:
 FORMATO (siga à risca):
 - Uma linha por mensagem: "[DATA HORÁRIO] Você: texto" ou "[DATA HORÁRIO] Cliente: texto".
 - Transcreva o TEXTO LITERAL, inclusive valores e números.
-- Anúncios/posts/cards compartilhados: leia TODOS os textos visíveis no card (título, subtítulo, tipo de imóvel, metragem, número de quartos/suítes, empreendimento, construtora, slogan, localização, preço — tudo que estiver escrito). Transcreva como "[DATA HORÁRIO] Você: (card compartilhado — NOME DO EMPREENDIMENTO: detalhes extraídos do card, ex: apartamento 132m², 3 suítes, Construtora X)". Se o cliente responder a seguir mostrando interesse, isso significa interesse nesse produto específico.
+- Anúncios/posts/cards compartilhados (posts do Instagram, Facebook, etc. que aparecem como card com imagem/vídeo e link): leia TODOS os textos visíveis no card (nome do empreendimento, construtora, slogan, tipo de imóvel, metragem, quartos/suítes, localização, preço — tudo que estiver escrito). Transcreva como "[DATA HORÁRIO] (LADO): (card de anúncio compartilhado — NOME: detalhes do card)". ATENÇÃO CRÍTICA: se o cliente enviar uma mensagem perguntando sobre o card (ex: "posso saber mais?", "quero informações", "tem disponível?"), adicione OBRIGATORIAMENTE uma linha extra: "[DATA HORÁRIO] *** CLIENTE ENTROU EM CONTATO ATRAVÉS DE UM NOVO ANÚNCIO — (nome do empreendimento/construtora se visível, senão: 'empreendimento não identificado') ***". Isso é um sinal de interesse em produto novo que DEVE aparecer na transcrição.
 - NÃO invente nada. Texto cortado/ilegível: pule.
 DATA DA ÚLTIMA MENSAGEM: identifique a data mais recente visível (formato AAAA-MM-DD). Se impossível determinar, devolva string vazia.
 Responda APENAS JSON: { "texto": "transcrição completa", "dataUltimaISO": "AAAA-MM-DD ou vazio" }.`;
