@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v053", package: "0.53.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v054", package: "0.54.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1468,6 +1468,9 @@ function renderNotasSection(record) {
 async function saveNota(record, conteudo, tipo = "texto") {
   const texto = String(conteudo || "").trim();
   if (!texto) return;
+  // Sempre usa a versão mais completa do IndexedDB para não perder timeline ou notas anteriores
+  const stored = await getAtendimento(record.conversationKey);
+  const base = (stored && Array.isArray(stored.timeline)) ? stored : record;
   const now = new Date().toISOString();
   const nota = {
     id: globalThis.crypto?.randomUUID?.() || `nota-${Date.now()}`,
@@ -1475,12 +1478,12 @@ async function saveNota(record, conteudo, tipo = "texto") {
     conteudo: texto,
     criadaEm: now
   };
-  const existing = Array.isArray(record.metadata?.notasAtendimento) ? record.metadata.notasAtendimento : [];
+  const existing = Array.isArray(base.metadata?.notasAtendimento) ? base.metadata.notasAtendimento : [];
   const updated = {
-    ...record,
+    ...base,
     updatedAt: now,
     metadata: {
-      ...(record.metadata || {}),
+      ...(base.metadata || {}),
       notasAtendimento: [...existing, nota],
       ultimaMovimentacaoAt: now
     }
