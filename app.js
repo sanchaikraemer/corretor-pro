@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v056", package: "0.56.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v057", package: "0.57.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -73,7 +73,7 @@ const state = {
   syncing: false,
   syncTimer: null,
   cloudAvailable: null,
-  detailPeriod: "all",
+  detailPeriod: "30",
   deletingKeys: new Set(),
   analyzingKey: null,
   proposalBusy: false,
@@ -1794,7 +1794,7 @@ async function createManualLead(name, phone, empreendimento, notes) {
 }
 
 function renderDetail(record) {
-  if (state.currentKey !== record.conversationKey) state.detailPeriod = "all";
+  if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
   setDetailHeader(record);
 
@@ -2585,7 +2585,7 @@ async function deleteCurrentLead() {
   state.deletingKeys.add(record.conversationKey);
   state.records = state.records.filter(item => item.conversationKey !== record.conversationKey);
   state.currentKey = null;
-  state.detailPeriod = "all";
+  state.detailPeriod = "30";
   history.replaceState({}, "", `${location.pathname}${location.search}#/`);
   renderList();
 
@@ -2652,8 +2652,7 @@ function bindEvents() {
       const nextPeriod = periodTrigger.dataset.detailPeriod;
       if (DETAIL_PERIODS.some(option => option.value === nextPeriod)) {
         state.detailPeriod = nextPeriod;
-        const record = state.records.find(item => item.conversationKey === state.currentKey)
-          || await getAtendimento(state.currentKey);
+        const record = await getCurrentRecord();
         if (record) renderDetail(record);
       }
       return;
