@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v054", package: "0.54.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v055", package: "0.55.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -813,8 +813,9 @@ async function analyzeCurrentAttendance() {
     return;
   }
   const timeline = filterTimelineByPeriod(record.timeline);
-  if (!timeline.length) {
-    showToast(`Não há mensagens em ${selectedPeriodSentenceLabel()} para analisar.`, "error");
+  const notas = Array.isArray(record.metadata?.notasAtendimento) ? record.metadata.notasAtendimento : [];
+  if (!timeline.length && !notas.length) {
+    showToast(`Não há mensagens nem notas para analisar.`, "error");
     return;
   }
 
@@ -1282,7 +1283,7 @@ function renderAnalysisSection(record) {
             <h2>Análise do atendimento</h2>
           </div>
         </div>
-        <p class="section-description">A análise usa as mensagens do período selecionado, as transcrições dos áudios e o print da proposta, quando anexado.</p>
+        <p class="section-description">A análise usa as mensagens do período selecionado, as notas de atendimento (áudios, prints e observações) e o print da proposta, quando anexado.</p>
         <button class="analysis-button" type="button" data-analyze-attendance${analyzing ? " disabled" : ""}>${escapeHtml(analyzing ? actionLabel : "Analisar atendimento")}</button>
       </section>`;
   }
