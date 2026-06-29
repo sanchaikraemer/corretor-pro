@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v042", package: "0.42.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v043", package: "0.43.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -788,6 +788,93 @@ async function handleDeleteAtendimento(req, res, url) {
   }
 }
 
+async function handleLerPrintNota(req, res) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return send(res, 503, { code: "OPENAI_NOT_CONFIGURED", error: "A chave da OpenAI não está configurada." });
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req, MAX_JSON_BYTES);
+  } catch {
+    return send(res, 400, { error: "Dados inválidos." });
+  }
+
+  let imgs = Array.isArray(body?.images) ? body.images : [];
+  imgs = imgs.filter(u => typeof u === "string" && /^data:image\//.test(u)).slice(0, 6);
+  if (!imgs.length) return send(res, 400, { error: "Nenhuma imagem recebida." });
+
+  const now = new Date();
+  const hojeISO = now.toISOString().slice(0, 10);
+  const ontem = new Date(now); ontem.setDate(ontem.getDate() - 1);
+  const ontemISO = ontem.toISOString().slice(0, 10);
+
+  const instrucao = `HOJE é ${hojeISO}. "Hoje" no print = ${hojeISO}; "Ontem" = ${ontemISO}; datas sem ano = ano ${now.getFullYear()}.
+Você recebe ${imgs.length} print(s) de conversa de WhatsApp. Leia cada imagem com MUITA ATENÇÃO e TRANSCREVA a conversa NA ÍNTEGRA, mensagem por mensagem, do jeito que está escrita. NÃO resuma, NÃO encurte, NÃO omita falas.
+COMO LER UM PRINT DE WHATSAPP:
+- Balões à DIREITA (geralmente verdes/claros) são do CORRETOR. Marque como "Você:".
+- Balões à ESQUERDA são do CLIENTE. Marque como "Cliente:".
+- Capture separadores de data ("Hoje", "Ontem", "12 de maio") e horários de cada balão.
+- Se houver vários prints, junte-os em ordem cronológica. Quando dois prints sobrepõem a mesma mensagem, transcreva UMA vez só.
+FORMATO (siga à risca):
+- Uma linha por mensagem: "[DATA HORÁRIO] Você: texto" ou "[DATA HORÁRIO] Cliente: texto".
+- Transcreva o TEXTO LITERAL, inclusive valores e números.
+- Anúncios/posts compartilhados: "[HORÁRIO] Você: (anúncio compartilhado: resumo breve)" — não transcreva o panfleto todo.
+- NÃO invente nada. Texto cortado/ilegível: pule.
+DATA DA ÚLTIMA MENSAGEM: identifique a data mais recente visível (formato AAAA-MM-DD). Se impossível determinar, devolva string vazia.
+Responda APENAS JSON: { "texto": "transcrição completa", "dataUltimaISO": "AAAA-MM-DD ou vazio" }.`;
+
+  const content = [
+    { type: "text", text: instrucao },
+    ...imgs.map(u => ({ type: "image_url", image_url: { url: u, detail: "high" } }))
+  ];
+
+  const modelos = ["gpt-4o", "gpt-4o-mini"];
+  let ultimoErro = "";
+
+  for (let i = 0; i < modelos.length; i++) {
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelos[i],
+          messages: [{ role: "user", content }],
+          temperature: 0.1,
+          max_tokens: 4096,
+          response_format: { type: "json_object" }
+        }),
+        signal: AbortSignal.timeout(i === 0 ? 45000 : 30000)
+      });
+      const raw = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        ultimoErro = raw?.error?.message || `Erro ${response.status}`;
+        continue;
+      }
+      let p = {}; try { p = JSON.parse(raw?.choices?.[0]?.message?.content || "{}"); } catch (_) {}
+      const texto = String(p.texto || "").trim().slice(0, 12000);
+      if (!texto) { ultimoErro = "A IA não identificou texto no print."; continue; }
+
+      // Valida data devolvida pela IA (não-futura e não muito antiga sem âncora)
+      let dataUltimaISO = "";
+      const mIso = String(p.dataUltimaISO || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (mIso) {
+        const d = new Date(`${mIso[1]}-${mIso[2]}-${mIso[3]}T12:00:00`);
+        if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) dataUltimaISO = d.toISOString();
+      }
+      const ultimoTrecho = texto.slice(-400).toLowerCase();
+      if (/\bhoje\b/.test(ultimoTrecho)) dataUltimaISO = now.toISOString();
+      else if (/\bontem\b/.test(ultimoTrecho)) dataUltimaISO = ontem.toISOString();
+
+      return send(res, 200, { texto, dataUltimaISO });
+    } catch (e) {
+      ultimoErro = e?.message || "Falha ao ler os prints.";
+    }
+  }
+  return send(res, 502, { error: ultimoErro || "Não foi possível ler os prints." });
+}
+
 export default async function handler(req, res) {
   const host = getHeader(req, "host") || "localhost";
   const url = new URL(req.url || "/", `http://${host}`);
@@ -798,6 +885,7 @@ export default async function handler(req, res) {
     if (route === "/health" && method === "GET") return handleHealth(req, res);
     if (route === "/transcrever" && method === "POST") return handleTranscrever(req, res, url);
     if (route === "/analisar" && method === "POST") return handleAnalisar(req, res);
+    if (route === "/ler-print-nota" && method === "POST") return handleLerPrintNota(req, res);
     if (route === "/atendimentos" && method === "GET") return handleListAtendimentos(req, res, url);
     if (route === "/atendimentos" && method === "POST") return handleSaveAtendimento(req, res);
     if (route === "/atendimentos" && method === "DELETE") return handleDeleteAtendimento(req, res, url);

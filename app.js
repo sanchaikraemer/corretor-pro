@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v042", package: "0.42.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v043", package: "0.43.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1400,9 +1400,12 @@ function renderNotasSection(record) {
     const label = Number.isNaN(dt.getTime())
       ? ""
       : `${dateOnlyFormatter.format(dt)} às ${timeFormatter.format(dt)}`;
-    const audioIcon = nota.tipo === "audio"
+    const tipoIcon = nota.tipo === "audio"
       ? `<svg class="nota-tipo-icon" viewBox="0 0 24 24" aria-label="Áudio transcrito"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`
+      : nota.tipo === "print"
+      ? `<svg class="nota-tipo-icon" viewBox="0 0 24 24" aria-label="Print lido pela IA"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`
       : "";
+    const audioIcon = tipoIcon;
     return `
       <div class="nota-item" data-nota-id="${escapeHtml(nota.id)}">
         <div class="nota-item-header">
@@ -1442,6 +1445,11 @@ function renderNotasSection(record) {
               : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Gravar`
             }
           </button>
+          <label class="nota-print-button" title="Anexar print(s) da conversa — a IA lê e salva o texto automaticamente">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            Print
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple data-print-nota-input hidden>
+          </label>
           <button class="nota-save-button primary-action-button" type="button" data-save-nota>Salvar nota</button>
         </div>
       </div>
@@ -1663,6 +1671,54 @@ function stopNotaRecording(record) {
     state.notaMediaRecorder = null;
   }
   if (record) getAtendimento(record.conversationKey).then(r => { if (r) renderDetail(r); });
+}
+
+const MAX_PRINT_DATA_URL = 1_400_000;
+const MAX_PRINT_SOURCE_BYTES = 12 * 1024 * 1024;
+
+async function preparePrintImage(file) {
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || "")) throw new Error("Use imagens JPG, PNG ou WebP.");
+  if (file.size > MAX_PRINT_SOURCE_BYTES) throw new Error("Imagem ultrapassa 12 MB.");
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImageElement(source);
+  const dimensions = [2000, 1700, 1400, 1150];
+  const qualities = [0.90, 0.82, 0.74, 0.66];
+  let prepared = null;
+  for (const dimension of dimensions) {
+    for (const quality of qualities) {
+      prepared = proposalCanvasDataUrl(image, dimension, quality);
+      if (prepared.dataUrl.length <= MAX_PRINT_DATA_URL) break;
+    }
+    if (prepared?.dataUrl.length <= MAX_PRINT_DATA_URL) break;
+  }
+  if (!prepared || prepared.dataUrl.length > MAX_PRINT_DATA_URL) {
+    throw new Error("Imagem grande demais mesmo comprimida. Recorte apenas a conversa.");
+  }
+  return prepared.dataUrl;
+}
+
+async function handlePrintsAnexo(record, files) {
+  if (!files?.length) return;
+  const arr = [...files];
+  if (arr.length > 6) { showToast("Máximo de 6 prints por vez.", "error"); return; }
+
+  showToast(`Lendo ${arr.length > 1 ? arr.length + " prints" : "o print"} com a IA...`);
+  try {
+    const dataUrls = await Promise.all(arr.map(f => preparePrintImage(f)));
+    const resp = await fetch("/api/ler-print-nota", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ images: dataUrls, leadName: record.nomeLead })
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.error || "A IA não conseguiu ler o print.");
+    const texto = String(payload.texto || "").trim();
+    if (!texto) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
+    const fresh = await getAtendimento(record.conversationKey) || record;
+    await saveNota(fresh, texto, "print");
+  } catch (err) {
+    showToast(err?.message || "Não foi possível processar o print.", "error", 7000);
+  }
 }
 
 function renderManualLeadSection(record) {
@@ -2647,11 +2703,22 @@ function bindEvents() {
   });
 
   app?.addEventListener("change", async event => {
-    const input = event.target.closest("[data-proposal-input]");
-    if (!input) return;
-    const file = input.files?.[0];
-    input.value = "";
-    if (file) await attachProposalImage(file);
+    const proposalInput = event.target.closest("[data-proposal-input]");
+    if (proposalInput) {
+      const file = proposalInput.files?.[0];
+      proposalInput.value = "";
+      if (file) await attachProposalImage(file);
+      return;
+    }
+    const printInput = event.target.closest("[data-print-nota-input]");
+    if (printInput) {
+      const files = [...(printInput.files || [])];
+      printInput.value = "";
+      if (files.length) {
+        const record = await getCurrentRecord();
+        if (record) await handlePrintsAnexo(record, files);
+      }
+    }
   });
 
   renameForm?.addEventListener("submit", async event => {

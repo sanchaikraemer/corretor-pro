@@ -2492,6 +2492,40 @@ button.storage-note strong { font-weight: 600; }
   50% { opacity: 0.65; }
 }
 
+.nota-print-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--charcoal);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.nota-print-button svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.nota-print-button:hover {
+  background: var(--gray-light);
+  border-color: var(--charcoal);
+}
+
 .nota-save-button {
   min-height: 44px;
   padding: 0 20px;

@@ -1,6 +1,6 @@
 importScripts("/version.js?v=041");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v042" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v043" };
 const BUILD_ID = `corretor-pro-${VERSION_INFO.app}`;
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
