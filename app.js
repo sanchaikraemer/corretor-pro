@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v044", package: "0.44.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v045", package: "0.45.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -88,7 +88,8 @@ const state = {
   notaMediaRecorder: null,
   notaRecordingKey: null,
   notaRecordingChunks: [],
-  _notaRecog: null
+  _notaRecog: null,
+  notaPrintsPendentes: []
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -972,6 +973,7 @@ function setDetailHeader(record) {
 
 function renderList() {
   state.currentKey = null;
+  state.notaPrintsPendentes = [];
   setListHeader();
 
   const responder = [];
@@ -1700,24 +1702,40 @@ async function preparePrintImage(file) {
 async function handlePrintsAnexo(record, files) {
   if (!files?.length) return;
   const arr = [...files];
-  if (arr.length > 6) { showToast("Máximo de 6 prints por vez.", "error"); return; }
+  const total = state.notaPrintsPendentes.length + arr.length;
+  if (total > 6) { showToast("Máximo de 6 prints por vez.", "error"); return; }
 
-  showToast(`Lendo ${arr.length > 1 ? arr.length + " prints" : "o print"} com a IA...`);
-  try {
-    const dataUrls = await Promise.all(arr.map(f => preparePrintImage(f)));
-    const resp = await fetch("/api/ler-print-nota", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ images: dataUrls, leadName: record.nomeLead })
-    });
-    const payload = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(payload.error || "A IA não conseguiu ler o print.");
-    const texto = String(payload.texto || "").trim();
-    if (!texto) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
-    const fresh = await getAtendimento(record.conversationKey) || record;
-    await saveNota(fresh, texto, "print");
-  } catch (err) {
-    showToast(err?.message || "Não foi possível processar o print.", "error", 7000);
+  state.notaPrintsPendentes = [...state.notaPrintsPendentes, ...arr];
+  const count = state.notaPrintsPendentes.length;
+  const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+  if (textarea && !textarea.value.trim()) {
+    textarea.placeholder = `${count} arquivo${count > 1 ? "s" : ""} anexado${count > 1 ? "s" : ""} — toque em Salvar nota para a IA ler`;
+  }
+  showToast(`${count} print${count > 1 ? "s" : ""} pronto${count > 1 ? "s" : ""} — toque em Salvar nota.`);
+}
+
+async function processarPrintsENota(record, texto, prints) {
+  if (prints.length) {
+    showToast(`Lendo ${prints.length > 1 ? prints.length + " prints" : "o print"} com a IA...`);
+    try {
+      const dataUrls = await Promise.all(prints.map(f => preparePrintImage(f)));
+      const resp = await fetch("/api/ler-print-nota", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ images: dataUrls, leadName: record.nomeLead })
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(payload.error || "A IA não conseguiu ler o print.");
+      const textoIA = String(payload.texto || "").trim();
+      if (!textoIA) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
+      const conteudoFinal = texto ? `${texto}\n\n${textoIA}` : textoIA;
+      const fresh = await getAtendimento(record.conversationKey) || record;
+      await saveNota(fresh, conteudoFinal, "print");
+    } catch (err) {
+      showToast(err?.message || "Não foi possível processar o print.", "error", 7000);
+    }
+  } else {
+    await saveNota(record, texto);
   }
 }
 
@@ -2672,9 +2690,11 @@ function bindEvents() {
       const record = await getCurrentRecord();
       if (!record) return;
       const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
-      const texto = textarea?.value || "";
-      if (!texto.trim()) { showToast("Escreva algo antes de salvar.", "error"); return; }
-      await saveNota(record, texto);
+      const texto = (textarea?.value || "").trim();
+      const prints = [...state.notaPrintsPendentes];
+      if (!texto && !prints.length) { showToast("Escreva algo ou anexe um print antes de salvar.", "error"); return; }
+      state.notaPrintsPendentes = [];
+      await processarPrintsENota(record, texto, prints);
       return;
     }
 
@@ -2731,6 +2751,7 @@ function bindEvents() {
     event.preventDefault();
     const record = await getCurrentRecord();
     if (record) await handlePrintsAnexo(record, images);
+    // Não processa automaticamente — acumula e aguarda o Salvar nota
   });
 
   renameForm?.addEventListener("submit", async event => {
