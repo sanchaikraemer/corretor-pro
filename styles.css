@@ -2771,6 +2771,9 @@ button.storage-note strong { font-weight: 600; }
 .command-top-card strong,
 .command-top-card small { display: block; }
 .command-top-card small { color: #c4cec9; margin-top: 3px; }
+.command-top-band { font-size: 1rem; font-weight: 700; white-space: nowrap; color: #d8ff63; }
+.command-top-band.warm { color: #ffd36a; }
+.command-top-band.cool { color: #8fdcff; }
 .attendance-urgency.hot { color: #d8ff63; }
 .attendance-urgency.warm { color: #ffd36a; }
 .attendance-urgency.cool { color: #8fdcff; }

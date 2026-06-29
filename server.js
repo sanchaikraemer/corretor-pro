@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v073", package: "0.73.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v074", package: "0.74.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -20,6 +20,7 @@ const ANALYSIS_SCHEMA = {
     produtosParalelos: { type: "array", items: { type: "string" }, maxItems: 6 },
     etapa: { type: "string" },
     nivelInteresse: { type: "string", enum: ["baixo", "médio", "alto"] },
+    temperatura: { type: "string", enum: ["quente", "morno", "frio"] },
     sinaisInteresse: { type: "array", items: { type: "string" }, maxItems: 6 },
     objecaoPrincipal: { type: "string" },
     ultimaPessoaAFalar: { type: "string" },
@@ -54,6 +55,7 @@ const ANALYSIS_SCHEMA = {
     "produtosParalelos",
     "etapa",
     "nivelInteresse",
+    "temperatura",
     "sinaisInteresse",
     "objecaoPrincipal",
     "ultimaPessoaAFalar",
@@ -105,6 +107,7 @@ REGRAS DE PRODUTO E OBJEÇÃO:
 - Não reabra comparação com outros imóveis se o cliente já indicou uma unidade preferida e a conversa está na etapa financeira, salvo se ele tiver pedido essa comparação depois da proposta.
 - Não transforme confusão de preço sobre outro imóvel em objeção de preço do produto atual.
 - Classifique o interesse apenas por evidências da conversa, não por otimismo.
+- Classifique a TEMPERATURA do lead lendo o contexto inteiro — não use fórmula ou pontuação numérica. Considere engajamento e quem falou por último, recência da última interação, sinais de compra (pedido de valores/visita/condições, unidade específica, urgência), etapa da negociação e objeções. Use exatamente: "quente" (cliente engajado, sinais claros de avanço ou aguardando você agora), "morno" (interesse real mas sem definição, parado ou ainda explorando) ou "frio" (pouco engajamento, sem sinais ou esfriou). A decisão é sua, com base na conversa.
 
 REGRAS GERAIS:
 - Leia os valores e condições visíveis na imagem, mas não invente números ou informações ilegíveis. Quando algo não estiver claro, diga que não foi identificado.

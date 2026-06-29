@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v073"/);
+  assert.match(versionSource, /app: "v074"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=073/);
-  assert.match(htmlSource, /styles\.css\?v=073/);
-  assert.match(appSource, /db\.js\?v=073/);
-  assert.match(appSource, /whatsapp\.js\?v=073/);
+  assert.match(htmlSource, /app\.js\?v=074/);
+  assert.match(htmlSource, /styles\.css\?v=074/);
+  assert.match(appSource, /db\.js\?v=074/);
+  assert.match(appSource, /whatsapp\.js\?v=074/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v073<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v074<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -682,15 +682,15 @@ test("v041 usa uma fonte central de versão em app, servidor, build e cache", ()
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v073"/);
-  assert.match(versionSource, /package: "0\.73\.0"/);
+  assert.match(versionSource, /app: "v074"/);
+  assert.match(versionSource, /package: "0\.74\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.73.0");
+  assert.equal(pkg.version, "0.74.0");
 });
 
-test("v073 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
+test("v074 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
   // O texto lido do print é convertido em itens de timeline e mesclado no histórico.
   assert.match(appSource, /function parsePrintTranscript/);
   assert.match(appSource, /origem: "print"/);
@@ -707,7 +707,21 @@ test("v073 lê o print da conversa e mescla as mensagens na linha do tempo", () 
   assert.match(appSource, /data-clear-prints/);
 });
 
-test("v073 unifica identidade do corretor e corrige plural de mensagens", () => {
+test("v074 a IA classifica a temperatura do lead pelo contexto, sem score numérico", () => {
+  // Servidor: campo de temperatura no schema + regra de classificação pela leitura.
+  assert.match(serverSource, /temperatura: \{ type: "string", enum: \["quente", "morno", "frio"\] \}/);
+  assert.match(serverSource, /Classifique a TEMPERATURA do lead lendo o contexto/);
+  assert.match(serverSource, /não use fórmula ou pontuação numérica/);
+  // App: temperatura vem do campo da IA; o score heurístico 0-100 não existe mais.
+  assert.match(appSource, /function getLeadTemperature\(record\)/);
+  assert.match(appSource, /analiseComercial\?\.temperatura/);
+  assert.doesNotMatch(appSource, /function getCommercialTemperature/);
+  assert.doesNotMatch(appSource, /Math\.min\(99, Math\.round\(score\)\)/);
+  // Painel conta e ordena pela temperatura da IA.
+  assert.match(appSource, /getLeadTemperature\(r\)\?\.key === "quente"/);
+});
+
+test("v074 unifica identidade do corretor e corrige plural de mensagens", () => {
   // Print e análise reaproveitam o nome real do corretor na conversa.
   assert.match(appSource, /function resolveConversationAuthors/);
   assert.match(appSource, /author = lado\.startsWith\("voc"\) \? brokerAuthor : clientAuthor/);
