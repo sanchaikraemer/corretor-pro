@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v050", package: "0.50.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v051", package: "0.51.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1535,7 +1535,7 @@ async function toggleNotaRecording(record) {
 
   if (SR) {
     // Tempo real via Web Speech API (Chrome/Edge/Android) — texto aparece enquanto fala
-    const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+    const textarea = document.getElementById(`nota-textarea-${record.conversationKey}`);
     const textoOriginal = textarea?.value ? textarea.value.trim() + " " : "";
     let ditadoBase = "", sessaoFinais = "", ditando = true;
     state.notaRecordingKey = record.conversationKey;
@@ -1577,7 +1577,7 @@ async function toggleNotaRecording(record) {
         const ditado = colapsarRepeticaoCrescente(
           (ditadoBase + sessaoFinais + interim).replace(/\s+/g, " ").trim()
         );
-        const ta2 = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+        const ta2 = document.getElementById(`nota-textarea-${record.conversationKey}`);
         if (ta2) ta2.value = (textoOriginal + ditado).replace(/\s+/g, " ").trim();
       };
       r.onerror = (ev) => {
@@ -1707,7 +1707,7 @@ async function handlePrintsAnexo(record, files) {
 
   state.notaPrintsPendentes = [...state.notaPrintsPendentes, ...arr];
   const count = state.notaPrintsPendentes.length;
-  const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+  const textarea = document.getElementById(`nota-textarea-${record.conversationKey}`);
   if (textarea && !textarea.value.trim()) {
     textarea.placeholder = `${count} arquivo${count > 1 ? "s" : ""} anexado${count > 1 ? "s" : ""} — toque em Salvar nota para a IA ler`;
   }
@@ -2689,7 +2689,7 @@ function bindEvents() {
     if (saveNotaTrigger) {
       const record = await getCurrentRecord();
       if (!record) return;
-      const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+      const textarea = document.getElementById(`nota-textarea-${record.conversationKey}`);
       const texto = (textarea?.value || "").trim();
       const prints = [...state.notaPrintsPendentes];
       if (!texto && !prints.length) return;
