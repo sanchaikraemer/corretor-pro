@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v057", package: "0.57.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v059", package: "0.59.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -879,8 +879,7 @@ async function copySuggestedMessage(index) {
 
 async function copySelectedMessages() {
   if (!state.currentKey) return;
-  const record = state.records.find(item => item.conversationKey === state.currentKey)
-    || await getAtendimento(state.currentKey);
+  const record = await getCurrentRecord();
   if (!record) return;
 
   const timeline = filterTimelineByPeriod(record.timeline);
@@ -1497,14 +1496,16 @@ async function saveNota(record, conteudo, tipo = "texto") {
 }
 
 async function deleteNota(record, notaId) {
-  const existing = Array.isArray(record.metadata?.notasAtendimento) ? record.metadata.notasAtendimento : [];
+  const stored = await getAtendimento(record.conversationKey);
+  const base = (stored && Array.isArray(stored.timeline)) ? stored : record;
+  const existing = Array.isArray(base.metadata?.notasAtendimento) ? base.metadata.notasAtendimento : [];
   const filtered = existing.filter(n => n.id !== notaId);
   const now = new Date().toISOString();
   const updated = {
-    ...record,
+    ...base,
     updatedAt: now,
     metadata: {
-      ...(record.metadata || {}),
+      ...(base.metadata || {}),
       notasAtendimento: filtered,
       ultimaMovimentacaoAt: now
     }
@@ -1811,7 +1812,7 @@ function renderDetail(record) {
       ? getContactRoleText(record, "new")
       : "Atendimento salvo";
   const workflowSubtitle = waitingForClient
-    ? attendedNowLabel
+    ? (attendedNowLabel || updatedLabel)
     : workflow.mode === "client_response"
       ? `Recebida ${formatCardDate(workflow.activityDate.toISOString()).date.toLowerCase()} às ${formatCardDate(workflow.activityDate.toISOString()).time}`
       : updatedLabel;
@@ -2444,6 +2445,8 @@ async function processIncomingZip(pending) {
     await new Promise(resolve => setTimeout(resolve, 350));
     hideProcessing();
     cleanShareQuery();
+    // Pré-seta currentKey para que renderDetail não redefina o período para "30"
+    state.currentKey = conversationKey;
     state.detailPeriod = "all";
     await refreshRecords();
     navigateToAttendance(conversationKey);
