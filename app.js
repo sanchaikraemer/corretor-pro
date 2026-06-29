@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=061";
+} from "./db.js?v=062";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=061";
+} from "./whatsapp.js?v=062";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v061", package: "0.61.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v062", package: "0.62.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1403,6 +1403,15 @@ function renderNotasSection(record) {
   const sorted = [...notas].sort((a, b) => new Date(b.criadaEm) - new Date(a.criadaEm));
   const isRecording = state.notaRecordingKey === record.conversationKey;
 
+  const pendingCount = state.currentKey === record.conversationKey ? state.notaPrintsPendentes.length : 0;
+  const pendingPrints = pendingCount
+    ? `<div class="notas-pending" role="status">
+         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+         <span>${pendingCount} print${pendingCount > 1 ? "s" : ""} anexado${pendingCount > 1 ? "s" : ""} — toque em <strong>Salvar nota</strong> para a IA ler e adicionar ao histórico.</span>
+         <button type="button" class="notas-pending-clear" data-clear-prints aria-label="Remover prints anexados">Remover</button>
+       </div>`
+    : "";
+
   const notaItems = sorted.map(nota => {
     const dt = new Date(nota.criadaEm);
     const label = Number.isNaN(dt.getTime())
@@ -1453,13 +1462,14 @@ function renderNotasSection(record) {
               : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Gravar`
             }
           </button>
-          <label class="nota-print-button" title="Anexar print(s) da conversa — a IA lê e salva o texto automaticamente">
+          <label class="nota-print-button" title="Anexar print(s) da conversa — a IA lê e adiciona as mensagens ao histórico">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
             Print
             <input type="file" accept="image/jpeg,image/png,image/webp" multiple data-print-nota-input hidden>
           </label>
           <button class="nota-save-button primary-action-button" type="button" data-save-nota>Salvar nota</button>
         </div>
+        ${pendingPrints}
       </div>
       ${notaItems ? `<div class="notas-list">${notaItems}</div>` : ""}
     </section>`;
@@ -1716,37 +1726,167 @@ async function handlePrintsAnexo(record, files) {
   const total = state.notaPrintsPendentes.length + arr.length;
   if (total > 6) { showToast("Máximo de 6 prints por vez.", "error"); return; }
 
+  // Preserva o texto que o usuário já digitou antes do re-render.
+  const textarea = document.getElementById(`nota-textarea-${record.conversationKey}`);
+  const draft = textarea ? textarea.value : "";
+
   state.notaPrintsPendentes = [...state.notaPrintsPendentes, ...arr];
   const count = state.notaPrintsPendentes.length;
-  const textarea = document.getElementById(`nota-textarea-${record.conversationKey}`);
-  if (textarea && !textarea.value.trim()) {
-    textarea.placeholder = `${count} arquivo${count > 1 ? "s" : ""} anexado${count > 1 ? "s" : ""} — toque em Salvar nota para a IA ler`;
+
+  // Re-renderiza para mostrar o indicador fixo de prints anexados (sobrevive ao
+  // re-render automático da sincronização, ao contrário de um aviso temporário).
+  renderDetail(record);
+  const restored = document.getElementById(`nota-textarea-${record.conversationKey}`);
+  if (restored && draft) restored.value = draft;
+
+  showToast(`${count} print${count > 1 ? "s" : ""} anexado${count > 1 ? "s" : ""} — toque em Salvar nota.`);
+}
+
+const PRINT_TS_RE = /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})\]\s*([\s\S]*)$/;
+
+// Converte a transcrição do print (linhas "[AAAA-MM-DD HH:MM] Você/Cliente: texto")
+// em itens de linha do tempo, prontos para mesclar no histórico da conversa.
+function parsePrintTranscript(texto, leadName) {
+  const linhas = String(texto || "").replace(/\r/g, "").split("\n");
+  const blocos = [];
+  let atual = null;
+  for (const linha of linhas) {
+    const m = linha.match(PRINT_TS_RE);
+    if (m) {
+      if (atual) blocos.push(atual);
+      atual = { ano: m[1], mes: m[2], dia: m[3], hora: String(m[4]).padStart(2, "0"), min: m[5], resto: m[6] };
+    } else if (atual) {
+      atual.resto += `\n${linha}`;
+    }
   }
-  showToast(`${count} print${count > 1 ? "s" : ""} pronto${count > 1 ? "s" : ""} — toque em Salvar nota.`);
+  if (atual) blocos.push(atual);
+
+  const ocorrencias = new Map();
+  const itens = [];
+  let ordem = 0;
+  for (const b of blocos) {
+    const ts = new Date(Number(b.ano), Number(b.mes) - 1, Number(b.dia), Number(b.hora), Number(b.min), 0, 0);
+    if (Number.isNaN(ts.getTime())) continue;
+    const date = `${b.dia}/${b.mes}/${b.ano}`;
+    const time = `${b.hora}:${b.min}`;
+    const resto = b.resto.trim();
+    if (!resto) continue;
+
+    let author;
+    let text;
+    const fala = resto.match(/^\(?\s*(você|voce|cliente)\s*\)?\s*:\s*([\s\S]*)$/i);
+    if (fala) {
+      const lado = fala[1].toLowerCase();
+      author = lado.startsWith("voc") ? "Você" : (leadName || "Cliente");
+      text = fala[2].trim();
+    } else {
+      // Linhas de sinalização (ex.: "*** CLIENTE ENTROU... ***") ficam com o cliente.
+      author = leadName || "Cliente";
+      text = resto;
+    }
+    if (!text) continue;
+
+    const base = [date, time, author, "text", text].join("|");
+    const occ = (ocorrencias.get(base) || 0) + 1;
+    ocorrencias.set(base, occ);
+    itens.push({
+      date,
+      time,
+      timestamp: ts.toISOString(),
+      author,
+      type: "text",
+      text,
+      origem: "print",
+      sourceOrder: ordem += 1,
+      fingerprint: `print-${stableHash(base)}-${occ}`
+    });
+  }
+  return itens;
 }
 
 async function processarPrintsENota(record, texto, prints) {
-  if (prints.length) {
-    showToast(`Lendo ${prints.length > 1 ? prints.length + " prints" : "o print"} com a IA...`);
-    try {
-      const dataUrls = await Promise.all(prints.map(f => preparePrintImage(f)));
-      const resp = await fetch("/api/ler-print-nota", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ images: dataUrls, leadName: record.nomeLead })
-      });
-      const payload = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(payload.error || "A IA não conseguiu ler o print.");
-      const textoIA = String(payload.texto || "").trim();
-      if (!textoIA) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
-      const conteudoFinal = texto ? `${texto}\n\n${textoIA}` : textoIA;
-      const fresh = await getAtendimento(record.conversationKey) || record;
-      await saveNota(fresh, conteudoFinal, "print");
-    } catch (err) {
-      showToast(err?.message || "Não foi possível processar o print.", "error", 7000);
-    }
-  } else {
+  if (!prints.length) {
     await saveNota(record, texto);
+    return;
+  }
+
+  showToast(`Lendo ${prints.length > 1 ? prints.length + " prints" : "o print"} com a IA...`);
+  try {
+    const dataUrls = await Promise.all(prints.map(f => preparePrintImage(f)));
+    const resp = await fetch("/api/ler-print-nota", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ images: dataUrls, leadName: record.nomeLead })
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.error || "A IA não conseguiu ler o print.");
+    const textoIA = String(payload.texto || "").trim();
+    if (!textoIA) { showToast("Nenhum texto identificado no(s) print(s).", "error"); return; }
+
+    const fresh = await getAtendimento(record.conversationKey) || record;
+    const printItems = parsePrintTranscript(textoIA, fresh.nomeLead);
+    if (!printItems.length) {
+      showToast("Não consegui identificar mensagens com data e hora no print.", "error", 7000);
+      return;
+    }
+
+    const merged = mergeTimeline(fresh.timeline || [], printItems);
+    const lastItem = merged.timeline[merged.timeline.length - 1];
+    const now = new Date().toISOString();
+    const nextMetadata = { ...(fresh.metadata || {}) };
+
+    if (merged.added > 0) {
+      const latestAdded = merged.addedItems
+        .map(item => ({ item, ts: timelineItemTimestamp(item) }))
+        .filter(entry => Number.isFinite(entry.ts))
+        .sort((a, b) => a.ts - b.ts)
+        .at(-1)?.item || merged.addedItems[merged.addedItems.length - 1];
+      const movTs = timelineItemTimestamp(latestAdded);
+      const movAt = Number.isFinite(movTs) ? new Date(movTs).toISOString() : now;
+      nextMetadata.ultimaMovimentacaoAt = movAt;
+      if (isClientTimelineItem(latestAdded)) {
+        nextMetadata.statusAtendimento = "nova_resposta_cliente";
+        nextMetadata.novaRespostaClienteAt = movAt;
+        nextMetadata.origemUltimaMovimentacao = "mensagem_cliente";
+        delete nextMetadata.atendidoAgoraAt;
+        delete nextMetadata.reanaliseDisponivelEm;
+      } else {
+        nextMetadata.statusAtendimento = "aguardando_resposta";
+        nextMetadata.atendidoAgoraAt = movAt;
+        nextMetadata.origemUltimaMovimentacao = "mensagem_corretor";
+        delete nextMetadata.novaRespostaClienteAt;
+        delete nextMetadata.reanaliseDisponivelEm;
+      }
+    }
+
+    const updated = {
+      ...fresh,
+      timeline: merged.timeline,
+      ultimaMensagemAt: lastItem?.timestamp || fresh.ultimaMensagemAt || now,
+      ultimaMensagemResumo: lastItem?.text || fresh.ultimaMensagemResumo || "",
+      updatedAt: now,
+      metadata: nextMetadata
+    };
+
+    await saveAtendimento(updated);
+    pushRemoteRecord(updated).catch(() => null);
+
+    // Texto digitado junto com o print continua virando nota de observação.
+    // saveNota relê do IndexedDB (já salvo acima) e re-renderiza o detalhe.
+    if (texto) {
+      await saveNota(updated, texto);
+    } else {
+      await refreshRecords();
+      renderDetail(updated);
+    }
+
+    showToast(
+      merged.added
+        ? `${merged.added} mensagem${merged.added === 1 ? "" : "s"} do print adicionada${merged.added === 1 ? "" : "s"} ao histórico.`
+        : "Nenhuma mensagem nova foi encontrada no print."
+    );
+  } catch (err) {
+    showToast(err?.message || "Não foi possível processar o print.", "error", 7000);
   }
 }
 
@@ -2707,6 +2847,14 @@ function bindEvents() {
       if (!texto && !prints.length) return;
       state.notaPrintsPendentes = [];
       await processarPrintsENota(record, texto, prints);
+      return;
+    }
+
+    const clearPrintsTrigger = event.target.closest("[data-clear-prints]");
+    if (clearPrintsTrigger) {
+      state.notaPrintsPendentes = [];
+      const record = await getCurrentRecord();
+      if (record) renderDetail(record);
       return;
     }
 
