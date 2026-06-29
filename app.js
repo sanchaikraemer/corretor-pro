@@ -1823,6 +1823,8 @@ function renderDetail(record) {
 
   const failedAudios = (record.timeline || []).filter(isAudioFailure);
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
+  const totalTimeline = Array.isArray(record.timeline) ? record.timeline.length : 0;
+  const hiddenCount = totalTimeline - filteredTimeline.length;
   const groups = groupTimelineByDate(filteredTimeline);
   const timelineHtml = groups.map(group => `
     <div class="timeline-day"><span>${escapeHtml(group.label)}</span></div>
@@ -1863,7 +1865,7 @@ function renderDetail(record) {
           <div class="period-options" role="group" aria-label="Selecionar período">
             ${periodOptions}
           </div>
-          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? " será considerada" : "s serão consideradas"} na análise</span>
+          <span class="period-result">${filteredTimeline.length} mensagem${filteredTimeline.length === 1 ? " será considerada" : "s serão consideradas"} na análise${hiddenCount > 0 ? ` · <button class="period-hidden-hint" type="button" data-detail-period="all">+${hiddenCount} oculta${hiddenCount === 1 ? "" : "s"} — ver tudo</button>` : ""}</span>
         </div>
         <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
@@ -2442,6 +2444,7 @@ async function processIncomingZip(pending) {
     await new Promise(resolve => setTimeout(resolve, 350));
     hideProcessing();
     cleanShareQuery();
+    state.detailPeriod = "all";
     await refreshRecords();
     navigateToAttendance(conversationKey);
 

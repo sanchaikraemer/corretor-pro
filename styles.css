@@ -638,6 +638,19 @@ button { -webkit-tap-highlight-color: transparent; }
   font-weight: 600;
 }
 
+.period-hidden-hint {
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--blue, #3b82f6);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .period-options {
   display: flex;
   flex-wrap: wrap;
