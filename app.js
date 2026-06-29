@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=065";
+} from "./db.js?v=066";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=065";
+} from "./whatsapp.js?v=066";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v065", package: "0.65.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v066", package: "0.66.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -1970,9 +1970,15 @@ async function createManualLead(name, phone, empreendimento, notes) {
 }
 
 function renderDetail(record) {
-  if (state.currentKey !== record.conversationKey) state.detailPeriod = "30";
+  // Ao abrir um lead diferente, começa do topo (status). Em re-renders do mesmo
+  // lead — ex.: sincronização automática — preserva onde o usuário está lendo.
+  const isNewLead = state.currentKey !== record.conversationKey;
+  if (isNewLead) state.detailPeriod = "30";
   state.currentKey = record.conversationKey;
   setDetailHeader(record);
+  if (isNewLead) {
+    requestAnimationFrame(() => window.scrollTo(0, 0));
+  }
 
   const updated = new Date(record.updatedAt || record.ultimaMensagemAt || Date.now());
   const updatedLabel = Number.isNaN(updated.getTime())
