@@ -2126,23 +2126,31 @@ button.storage-note strong { font-weight: 600; }
 .analysis-meta-card {
   flex: 1 1 0;
   min-width: 0;
-  padding: 8px 6px;
+  padding: 10px 6px;
   border: 1px solid var(--line);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   text-align: center;
-  gap: 3px;
+  gap: 4px;
   background: var(--white);
   box-shadow: var(--shadow-sm);
 }
 
+/* O valor reserva a altura de 2 linhas para que ícones (topo) e rótulos
+   (base) alinhem entre as três colunas, mesmo quando um valor quebra em
+   duas linhas e os outros ocupam só uma. */
 .analysis-meta-card strong {
   color: var(--charcoal);
   font-size: 12px;
   line-height: 1.15;
   word-break: break-word;
+  min-height: calc(2 * 1.15em);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .analysis-meta-card small {
