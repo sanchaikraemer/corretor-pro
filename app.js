@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v051", package: "0.51.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v052", package: "0.52.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -731,9 +731,15 @@ async function ensureFullRecord(conversationKey) {
   if (summary && !summary.metadata?.deletedAt) {
     const remote = await fetchRemoteRecord(conversationKey);
     if (remote && Array.isArray(remote.timeline)) {
-      await saveAtendimento(remote);
-      updateRecordInState(remote);
-      return remote;
+      // Preserva notas locais caso o registro remoto não as tenha (proteção contra overwrite)
+      const localNotas = local?.metadata?.notasAtendimento;
+      const remoteNotas = remote?.metadata?.notasAtendimento;
+      const merged = (!Array.isArray(remoteNotas) || remoteNotas.length === 0) && Array.isArray(localNotas) && localNotas.length > 0
+        ? { ...remote, metadata: { ...(remote.metadata || {}), notasAtendimento: localNotas } }
+        : remote;
+      await saveAtendimento(merged);
+      updateRecordInState(merged);
+      return merged;
     }
   }
 
@@ -1409,7 +1415,7 @@ function renderNotasSection(record) {
       : "";
     const audioIcon = tipoIcon;
     return `
-      <div class="nota-item" data-nota-id="${escapeHtml(nota.id)}">
+      <div class="nota-item" id="nota-${escapeHtml(nota.id)}" data-nota-id="${escapeHtml(nota.id)}">
         <div class="nota-item-header">
           <span class="nota-item-meta">${audioIcon}${escapeHtml(label)}</span>
           <button class="nota-delete-button" type="button" data-delete-nota="${escapeHtml(nota.id)}" aria-label="Excluir nota">
@@ -1483,7 +1489,15 @@ async function saveNota(record, conteudo, tipo = "texto") {
   pushRemoteRecord(updated).catch(() => null);
   await refreshRecords();
   renderDetail(updated);
-  showToast("Nota salva.");
+  showToast("Nota salva.", "success", 4000);
+  requestAnimationFrame(() => {
+    const el = document.getElementById(`nota-${nota.id}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    else {
+      const section = document.querySelector(".notas-section");
+      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
 }
 
 async function deleteNota(record, notaId) {
