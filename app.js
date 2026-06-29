@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v045", package: "0.45.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v046", package: "0.46.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -235,7 +235,7 @@ function getContactType(record) {
 function getContactRoleText(record, form = "response") {
   const broker = getContactType(record) === "corretor";
   if (form === "waiting") return broker ? "Aguardando resposta do corretor parceiro" : "Aguardando resposta do cliente";
-  if (form === "new") return broker ? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente";
+  if (form === "new") return broker ? "Última interação do corretor parceiro" : "Última interação do lead";
   if (form === "target") return broker ? "ao corretor parceiro" : "ao cliente";
   return broker ? "corretor parceiro" : "cliente";
 }
