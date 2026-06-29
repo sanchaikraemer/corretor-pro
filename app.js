@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v048", package: "0.48.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v049", package: "0.49.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = "Sanchai";
 const APP_USER_ALIASES = new Set(["sanchai", "voce"]);
@@ -2692,7 +2692,11 @@ function bindEvents() {
       const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
       const texto = (textarea?.value || "").trim();
       const prints = [...state.notaPrintsPendentes];
-      if (!texto && !prints.length) { showToast("Escreva algo ou anexe um print antes de salvar.", "error"); return; }
+      if (!texto && !prints.length) {
+        const fileInput = app.querySelector("[data-print-nota-input]");
+        if (fileInput) fileInput.click();
+        return;
+      }
       state.notaPrintsPendentes = [];
       await processarPrintsENota(record, texto, prints);
       return;
