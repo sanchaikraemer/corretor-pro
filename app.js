@@ -87,7 +87,8 @@ const state = {
   audioPeriodReferenceTimestamp: null,
   notaMediaRecorder: null,
   notaRecordingKey: null,
-  notaRecordingChunks: []
+  notaRecordingChunks: [],
+  _notaRecog: null
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -1424,7 +1425,7 @@ function renderNotasSection(record) {
         <textarea
           class="nota-textarea"
           id="nota-textarea-${escapeHtml(record.conversationKey)}"
-          placeholder="Anote observações de ligações, visitas ou reuniões presenciais..."
+          placeholder="Toque em Gravar e fale — o texto aparece aqui em tempo real. Ou digite direto."
           rows="3"
           maxlength="2000"
         ></textarea>
@@ -1494,81 +1495,174 @@ async function deleteNota(record, notaId) {
   renderDetail(updated);
 }
 
+// Colapa repetições crescentes que o Android Chrome gera no SpeechRecognition
+// ("a", "a b", "a b c" → retorna só "a b c"). Em fala normal não altera nada.
+function colapsarRepeticaoCrescente(txt) {
+  const t = String(txt || "").trim().split(/\s+/).filter(Boolean);
+  if (t.length < 4) return String(txt || "").trim();
+  const low = t.map(w => w.toLowerCase());
+  const first = low[0];
+  const starts = [];
+  for (let i = 0; i < t.length; i++) if (low[i] === first) starts.push(i);
+  if (starts.length < 2) return t.join(" ");
+  starts.push(t.length);
+  const segs = [];
+  for (let s = 0; s < starts.length - 1; s++) segs.push(t.slice(starts[s], starts[s + 1]).join(" "));
+  for (let s = 0; s < segs.length - 1; s++) {
+    if (!segs[s + 1].toLowerCase().startsWith(segs[s].toLowerCase())) return t.join(" ");
+  }
+  return segs[segs.length - 1];
+}
+
 async function toggleNotaRecording(record) {
   if (state.notaRecordingKey === record.conversationKey) {
     stopNotaRecording(record);
     return;
   }
-  if (state.notaMediaRecorder) {
-    stopNotaRecording(null);
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"]
-      .find(t => MediaRecorder.isTypeSupported(t)) || "";
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-    state.notaRecordingChunks = [];
+  if (state.notaRecordingKey) stopNotaRecording(null);
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (SR) {
+    // Tempo real via Web Speech API (Chrome/Edge/Android) — texto aparece enquanto fala
+    const textarea = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+    const textoOriginal = textarea?.value ? textarea.value.trim() + " " : "";
+    let ditadoBase = "", sessaoFinais = "", ditando = true;
     state.notaRecordingKey = record.conversationKey;
-    state.notaMediaRecorder = recorder;
-
-    recorder.ondataavailable = e => { if (e.data?.size > 0) state.notaRecordingChunks.push(e.data); };
-    recorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(state.notaRecordingChunks, { type: mimeType || "audio/webm" });
-      state.notaRecordingChunks = [];
-      state.notaMediaRecorder = null;
-      state.notaRecordingKey = null;
-
-      const latest = await getAtendimento(record.conversationKey) || record;
-      renderDetail(latest);
-
-      if (blob.size < 100) {
-        showToast("Gravação muito curta, tente novamente.", "error");
-        return;
-      }
-      if (blob.size > 4 * 1024 * 1024) {
-        showToast("Áudio muito longo (limite de 4 MB). Divida em partes menores.", "error");
-        return;
-      }
-
-      showToast("Transcrevendo áudio...");
-      try {
-        const ext = mimeType.includes("ogg") ? "ogg" : "webm";
-        const fname = `nota-audio-${Date.now()}.${ext}`;
-        const resp = await fetch(`/api/transcrever?filename=${encodeURIComponent(fname)}`, {
-          method: "POST",
-          headers: { "Content-Type": blob.type || "audio/webm", "X-File-Name": encodeURIComponent(fname) },
-          body: blob
-        });
-        const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(payload.error || "Falha na transcrição.");
-        const text = String(payload.text || "").trim();
-        if (!text) {
-          showToast("Áudio gravado mas nenhuma fala detectada.", "error");
-          return;
-        }
-        const fresh = await getAtendimento(record.conversationKey) || record;
-        await saveNota(fresh, text, "audio");
-      } catch (err) {
-        showToast(err?.message || "Não foi possível transcrever o áudio.", "error", 7000);
-      }
-    };
-
-    recorder.start();
     renderDetail(record);
-    showToast("Gravando... toque em Parar quando terminar.");
-  } catch (err) {
-    state.notaRecordingKey = null;
-    state.notaMediaRecorder = null;
-    showToast("Não foi possível acessar o microfone. Verifique as permissões.", "error", 7000);
+
+    function pararDitado() {
+      ditando = false;
+      state.notaRecordingKey = null;
+      state.notaMediaRecorder = null;
+      try { state._notaRecog?.stop(); } catch (_) {}
+      state._notaRecog = null;
+      getAtendimento(record.conversationKey).then(r => renderDetail(r || record));
+      showToast("Pronto. Revise o texto e toque em Salvar nota.");
+    }
+
+    function montarRecog() {
+      const r = new SR();
+      r.lang = "pt-BR";
+      r.continuous = true;
+      r.interimResults = true;
+      r.onresult = (e) => {
+        const partes = []; let interim = "";
+        for (let i = 0; i < e.results.length; i++) {
+          const txt = String(e.results[i][0].transcript || "").trim();
+          if (!txt) continue;
+          if (e.results[i].isFinal) {
+            const ult = partes.length ? partes[partes.length - 1] : "";
+            if (ult && (txt.startsWith(ult) || ult.startsWith(txt))) {
+              partes[partes.length - 1] = txt.length >= ult.length ? txt : ult;
+            } else {
+              partes.push(txt);
+            }
+          } else {
+            interim = txt;
+          }
+        }
+        const finais = partes.join(" ");
+        sessaoFinais = finais ? finais + " " : "";
+        const ditado = colapsarRepeticaoCrescente(
+          (ditadoBase + sessaoFinais + interim).replace(/\s+/g, " ").trim()
+        );
+        const ta2 = app.querySelector(`#nota-textarea-${record.conversationKey}`);
+        if (ta2) ta2.value = (textoOriginal + ditado).replace(/\s+/g, " ").trim();
+      };
+      r.onerror = (ev) => {
+        if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+          showToast("Microfone bloqueado. Permita o microfone no navegador.", "error", 7000);
+          pararDitado();
+        }
+      };
+      r.onend = () => {
+        if (!ditando) return;
+        ditadoBase += sessaoFinais; sessaoFinais = "";
+        try { r.onresult = null; r.onend = null; r.onerror = null; } catch (_) {}
+        state._notaRecog = montarRecog();
+        try { state._notaRecog.start(); } catch (_) {}
+      };
+      return r;
+    }
+
+    try {
+      state._notaRecog = montarRecog();
+      state._notaRecog.start();
+      showToast("Ouvindo... fale e o texto vai aparecendo. Toque em Parar quando terminar.");
+    } catch (_) {
+      showToast("Não consegui ligar o microfone.", "error", 7000);
+      pararDitado();
+    }
+
+    state.notaMediaRecorder = { _pararDitado: pararDitado };
+  } else {
+    // Fallback: MediaRecorder → OpenAI Whisper (Safari e browsers sem SpeechRecognition)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"]
+        .find(t => MediaRecorder.isTypeSupported(t)) || "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      state.notaRecordingChunks = [];
+      state.notaRecordingKey = record.conversationKey;
+      state.notaMediaRecorder = recorder;
+
+      recorder.ondataavailable = e => { if (e.data?.size > 0) state.notaRecordingChunks.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(state.notaRecordingChunks, { type: mimeType || "audio/webm" });
+        state.notaRecordingChunks = [];
+        state.notaMediaRecorder = null;
+        state.notaRecordingKey = null;
+
+        const latest = await getAtendimento(record.conversationKey) || record;
+        renderDetail(latest);
+
+        if (blob.size < 100) { showToast("Gravação muito curta, tente novamente.", "error"); return; }
+        if (blob.size > 4 * 1024 * 1024) { showToast("Áudio longo demais (limite 4 MB). Grave em partes menores.", "error"); return; }
+
+        showToast("Transcrevendo áudio...");
+        try {
+          const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+          const fname = `nota-audio-${Date.now()}.${ext}`;
+          const resp = await fetch(`/api/transcrever?filename=${encodeURIComponent(fname)}`, {
+            method: "POST",
+            headers: { "Content-Type": blob.type || "audio/webm", "X-File-Name": encodeURIComponent(fname) },
+            body: blob
+          });
+          const payload = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(payload.error || "Falha na transcrição.");
+          const text = String(payload.text || "").trim();
+          if (!text) { showToast("Nenhuma fala detectada no áudio.", "error"); return; }
+          const fresh = await getAtendimento(record.conversationKey) || record;
+          await saveNota(fresh, text, "audio");
+        } catch (err) {
+          showToast(err?.message || "Não foi possível transcrever o áudio.", "error", 7000);
+        }
+      };
+
+      recorder.start();
+      renderDetail(record);
+      showToast("Gravando... toque em Parar quando terminar.");
+    } catch (err) {
+      state.notaRecordingKey = null;
+      state.notaMediaRecorder = null;
+      showToast("Não foi possível acessar o microfone. Verifique as permissões.", "error", 7000);
+    }
   }
 }
 
 function stopNotaRecording(record) {
-  if (state.notaMediaRecorder && state.notaMediaRecorder.state !== "inactive") {
+  if (state.notaMediaRecorder?._pararDitado) {
+    state.notaMediaRecorder._pararDitado();
+  } else if (state.notaMediaRecorder && state.notaMediaRecorder.state !== "inactive") {
     state.notaMediaRecorder.stop();
   }
-  if (record) renderDetail(record);
+  if (!state.notaMediaRecorder?._pararDitado) {
+    state.notaRecordingKey = null;
+    state.notaMediaRecorder = null;
+  }
+  if (record) getAtendimento(record.conversationKey).then(r => { if (r) renderDetail(r); });
 }
 
 function renderManualLeadSection(record) {
