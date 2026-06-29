@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v040", package: "0.40.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v041", package: "0.41.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -383,6 +383,21 @@ function extractOpenAIText(payload) {
   return "";
 }
 
+function hasMessageAfterDate(messagesText, isoDate) {
+  if (!isoDate) return false;
+  const proposalTime = Date.parse(isoDate);
+  if (!Number.isFinite(proposalTime)) return false;
+  // Mensagens são formatadas no horário de Brasília (UTC-3); soma 3h para comparar com UTC.
+  const pattern = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})\s*-/gm;
+  let match;
+  while ((match = pattern.exec(messagesText)) !== null) {
+    const [, day, month, year, hour, minute] = match;
+    const ts = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour) + 3, Number(minute));
+    if (ts > proposalTime) return true;
+  }
+  return false;
+}
+
 function buildAnalysisInput(body) {
   const hasProposal = Boolean(body.proposalImage);
   const incompleteAudioCount = Math.max(0, Number(body.incompleteAudioCount || 0));
@@ -393,6 +408,7 @@ function buildAnalysisInput(body) {
     ? "CORRETOR PARCEIRO — intermediário; existe um cliente final de terceiro"
     : "CLIENTE DIRETO — potencial comprador desta conversa";
   const proposalRecipient = body.contactType === "corretor" ? "corretor parceiro" : "cliente direto";
+  const hasMessagesAfterProposal = hasProposal && hasMessageAfterDate(body.messages, body.proposalAttachedAt);
   return [
     `CONTATO: ${body.leadName.trim()}`,
     `CORRETOR/USUÁRIO DO APP: ${String(body.appUserName || "Sanchai").trim()}`,
@@ -402,10 +418,12 @@ function buildAnalysisInput(body) {
     `QUANTIDADE DE MENSAGENS: ${Number(body.messageCount || 0)}`,
     `ÁUDIOS SEM TRANSCRIÇÃO: ${incompleteAudioCount}`,
     `PROPOSTA EM IMAGEM: ${hasProposal ? "sim" : "não anexada"}`,
-    `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao ${proposalRecipient} em ${proposalDate}` : "nenhuma proposta anexada"}`,
+    hasMessagesAfterProposal
+      ? `PROPOSTA: A proposta foi enviada em ${proposalDate}, mas existem mensagens posteriores a ela no histórico; considere essas mensagens como reação à proposta.`
+      : `ÚLTIMA AÇÃO COMERCIAL APÓS A CONVERSA: ${hasProposal ? `proposta efetivamente enviada ao ${proposalRecipient} em ${proposalDate}` : "nenhuma proposta anexada"}`,
     `STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES: ${hasProposal ? `CUMPRIDO EM RELAÇÃO AO ${proposalRecipient.toUpperCase()} — a proposta anexada comprova esse envio` : "avaliar pela conversa"}`,
     "",
-    "CONVERSA ANTERIOR À PROPOSTA:",
+    hasMessagesAfterProposal ? "CONVERSA (anterior e posterior à proposta):" : "CONVERSA ANTERIOR À PROPOSTA:",
     body.messages.trim()
   ].join("\n");
 }

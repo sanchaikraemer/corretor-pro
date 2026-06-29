@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v040"/);
+  assert.match(versionSource, /app: "v041"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = "corretor-pro-site"/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=040/);
-  assert.match(htmlSource, /styles\.css\?v=040/);
-  assert.match(appSource, /db\.js\?v=040/);
-  assert.match(appSource, /whatsapp\.js\?v=040/);
+  assert.match(htmlSource, /app\.js\?v=041/);
+  assert.match(htmlSource, /styles\.css\?v=041/);
+  assert.match(appSource, /db\.js\?v=041/);
+  assert.match(appSource, /whatsapp\.js\?v=041/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v040<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v041<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -442,7 +442,7 @@ test("v040 registra Atendido agora sem timer ou bloqueio por tempo", () => {
   assert.doesNotMatch(appSource, /Nova retomada em/);
   assert.doesNotMatch(appSource, /48 horas sem resposta/);
   assert.match(appSource, /Aguardando resposta do cliente/);
-  assert.match(appSource, /class="attendance-status"/);
+  assert.match(appSource, /class="attendance-urgency"/);
 
   const start = appSource.indexOf("async function registerLeadAttended(");
   const end = appSource.indexOf("async function markAttendedNow()", start);
@@ -537,28 +537,35 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v040 mostra o horário da movimentação uma única vez no card", () => {
+test("v041 organiza lista por urgência com grupos Chamar agora e Aguardar", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
-  const statusStart = renderListSource.indexOf("const statusText");
-  const statusEnd = renderListSource.indexOf("const statusClass", statusStart);
-  const statusSource = renderListSource.slice(statusStart, statusEnd);
-  assert.doesNotMatch(statusSource, /\? getContactRoleText\(record, "waiting"\)/);
-  assert.match(statusSource, /getContactType\(record\) === "corretor" \? "" : getContactRoleText\(record, "new"\)/);
+  // Horário da última atividade presente no card
   assert.match(renderListSource, /<span class="attendance-time">/);
-  assert.doesNotMatch(statusSource, /moment\.date|moment\.time|formatAttendedNowLabel/);
-  assert.doesNotMatch(statusSource, /Retomada disponível · 48h sem resposta/);
+  // Grupos de urgência com títulos de seção
+  assert.match(renderListSource, /Chamar agora/);
+  assert.match(renderListSource, /Aguardar/);
+  // Rótulo de urgência em texto nos cards do grupo "Chamar agora"
+  assert.match(renderListSource, /attendance-urgency/);
+  // Sem duplicação de horário via formatAttendedNowLabel
+  assert.doesNotMatch(renderListSource, /formatAttendedNowLabel/);
+  assert.doesNotMatch(renderListSource, /Retomada disponível · 48h sem resposta/);
 });
 
 
 
-test("v040 remove apenas o status de nova mensagem do corretor parceiro no card", () => {
+test("v041 classifica urgência por status e tempo, não por tipo de contato", () => {
+  // classifyLead unifica a urgência em rótulos de texto
+  assert.match(appSource, /function classifyLead\(record\)/);
+  assert.match(appSource, /status !== "aguardando_resposta"/);
+  // getContactRoleText ainda existe para o painel de detalhe
+  assert.match(appSource, /if \(form === "new"\) return broker \? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente"/);
+  // Cards da lista não diferenciam tipo de contato para urgência
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
-  assert.match(renderListSource, /getContactType\(record\) === "corretor" \? "" : getContactRoleText\(record, "new"\)/);
-  assert.match(appSource, /if \(form === "new"\) return broker \? "Nova mensagem do corretor parceiro" : "Nova resposta do cliente"/);
+  assert.doesNotMatch(renderListSource, /getContactType\(record\) === "corretor"/);
 });
 
 test("v040 mostra inteligência comercial antes do contexto financeiro", () => {
@@ -671,16 +678,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v040 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v041 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v040"/);
-  assert.match(versionSource, /package: "0\.40\.0"/);
+  assert.match(versionSource, /app: "v041"/);
+  assert.match(versionSource, /package: "0\.41\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.40.0");
+  assert.equal(pkg.version, "0.41.0");
 });
 
 test("v040 trata corretamente Todo o período nas mensagens de interface", () => {

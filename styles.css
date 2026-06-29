@@ -397,45 +397,33 @@ button { -webkit-tap-highlight-color: transparent; }
   -webkit-box-orient: vertical;
 }
 
-.attendance-status {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 7px;
-  color: var(--emerald-dark);
+.list-section-header {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--gray);
+}
+
+.list-section-header:first-child { margin-top: 0; }
+
+.attendance-urgency {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--gray-light);
+  color: var(--charcoal);
   font-size: 9px;
   font-weight: 700;
-  line-height: 1.35;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 
-.attendance-status i {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--emerald);
+.attendance-card--waiting {
+  opacity: .55;
 }
-
-.attendance-card.waiting-client {
-  border-color: #B7E5D3;
-  background: linear-gradient(90deg, #FFFFFF, #F8FFFC);
-}
-
-.attendance-card.followup-due {
-  border-color: #F2D28B;
-  background: linear-gradient(90deg, #FFFFFF, #FFFBEB);
-}
-
-.attendance-card.followup-due .attendance-status { color: #9A6700; }
-.attendance-card.followup-due .attendance-status i { background: #D99A00; }
-
-.attendance-card.client-response {
-  border-color: #9FD8C2;
-  background: linear-gradient(90deg, #FFFFFF, #F0FDF8);
-}
-
-.attendance-card.client-response .attendance-status { color: #047857; }
-.attendance-card.client-response .attendance-status i { background: #059669; }
 
 .attendance-time {
   align-self: start;
