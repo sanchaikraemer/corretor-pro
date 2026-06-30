@@ -4196,7 +4196,7 @@ body{background:radial-gradient(circle at 50% -10%,rgba(199,255,61,.07),transpar
 @media(max-width:520px){.app-main{padding:12px!important}.v2-home-command,.v2-decision-card{border-radius:24px;padding:18px}.v2-action-row{grid-template-columns:auto 1fr;padding:13px}.v2-action-meta{display:none}.v2-lead-row{grid-template-columns:1fr}.v2-lead-side{text-align:left;display:flex;justify-content:space-between;gap:10px}.v2-lead-identity{flex-direction:column}.v2-lead-identity .v2-small-button{width:100%}.v2-copy-box button{min-height:62px}.app-header{padding-left:10px!important;padding-right:10px!important}.brand-name{font-size:12px!important}}
 
 /* =========================================================
-   Corretor Pro v083 — V2 reconstruída
+   Corretor Pro v084 — V2 reconstruída
    Regra: decisão primeiro, dados recolhidos.
    ========================================================= */
 :root {
@@ -4693,4 +4693,293 @@ label,
   .cp-suggestion { grid-template-columns: 1fr; display: grid; }
   .cp-suggestion button { width: 100%; }
   .cp-fold > :not(summary), .cp-utility > :not(summary), .cp-danger-zone > :not(summary) { margin: 12px; }
+}
+
+/* =========================================================
+   Corretor Pro v084 — refinamento mobile real
+   Objetivo: versão visível, escala menor, menos scroll, CTA claro.
+   ========================================================= */
+:root {
+  --cp-lime: #c8ff24;
+  --cp-lime-soft: rgba(200,255,36,.10);
+  --cp-radius: 20px;
+  --cp-grid: 12px;
+}
+
+.app-header {
+  min-height: calc(60px + var(--safe-top)) !important;
+  padding: calc(7px + var(--safe-top)) 12px 7px !important;
+  gap: 8px !important;
+}
+.brand img { width: 42px !important; height: 42px !important; }
+.brand-name { display: grid !important; }
+.brand-name span { font-size: 12px !important; }
+.brand-name strong { font-size: 16px !important; }
+.header-version,
+.lead-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+  min-width: 42px !important;
+  min-height: 26px !important;
+  padding: 0 9px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--cp-border-strong) !important;
+  background: var(--cp-surface-2) !important;
+  color: var(--cp-text) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+  opacity: 1 !important;
+}
+.lead-count[hidden], .header-version[hidden] { display: none !important; }
+.detail-header strong { font-size: 14px !important; }
+.detail-header span { font-size: 9px !important; }
+.icon-button { width: 40px !important; height: 40px !important; border-radius: 13px !important; }
+
+.app-main {
+  max-width: 560px !important;
+  padding: 12px 12px calc(28px + var(--safe-bottom)) !important;
+}
+.cp-page,
+.v2-home-page,
+.v2-detail-page { gap: 12px !important; }
+
+.v2-topbar-actions { margin-bottom: 0 !important; }
+.v2-secondary-button,
+.cp-secondary-action,
+.cp-link-button,
+.copy-messages-button {
+  min-height: 40px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  border-radius: 14px !important;
+}
+.cp-primary-action,
+.v2-primary-button,
+.cp-message-box button,
+.cp-copy-mini,
+.nota-save-button {
+  min-height: 46px !important;
+  padding: 0 16px !important;
+  font-size: 14px !important;
+  border-radius: 16px !important;
+}
+
+.cp-kicker,
+.cp-status-line,
+.cp-message-box span,
+.section-eyebrow,
+.cp-insight-list span,
+.v2-diagnosis-list span,
+.analysis-block h3,
+.analysis-meta span {
+  font-size: 9.5px !important;
+  letter-spacing: .13em !important;
+}
+
+.cp-home-hero,
+.v2-home-command {
+  padding: 18px 16px 16px !important;
+  border-radius: 22px !important;
+}
+.cp-home-hero h1,
+.v2-home-copy h1 {
+  max-width: 13ch !important;
+  font-size: clamp(26px, 7.3vw, 34px) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -.055em !important;
+}
+.cp-hero-subtitle,
+.v2-home-copy p {
+  margin-top: 9px !important;
+  font-size: 13px !important;
+  line-height: 1.42 !important;
+}
+.cp-opportunity-list,
+.v2-action-queue { margin-top: 14px !important; gap: 8px !important; }
+.cp-opportunity {
+  grid-template-columns: minmax(0,1fr) !important;
+  border-radius: 18px !important;
+}
+.cp-opportunity-open { padding: 13px 14px 0 !important; gap: 4px !important; }
+.cp-opportunity-open strong { font-size: 17px !important; line-height: 1.15 !important; }
+.cp-opportunity-open small { font-size: 12px !important; line-height: 1.32 !important; }
+.cp-copy-mini { width: calc(100% - 28px) !important; margin: 10px 14px 14px !important; }
+.v2-show-all { min-height: 42px !important; margin-top: 10px !important; }
+
+.cp-section-title h2 { font-size: 15px !important; }
+.cp-lead-line,
+.v2-lead-row {
+  grid-template-columns: minmax(0,1fr) !important;
+  gap: 8px !important;
+  padding: 13px !important;
+  border-radius: 17px !important;
+}
+.cp-lead-line-main strong { font-size: 15px !important; line-height: 1.2 !important; }
+.cp-lead-line-main span { font-size: 12.5px !important; line-height: 1.32 !important; }
+.cp-lead-line-main small,
+.cp-lead-line-meta small { font-size: 10.5px !important; }
+.cp-lead-line-meta { min-width: 0 !important; justify-items: start !important; }
+
+.cp-lead-header,
+.v2-lead-identity {
+  padding: 10px 0 2px !important;
+  gap: 10px !important;
+}
+.cp-lead-header h1,
+.v2-lead-identity h1 {
+  font-size: clamp(24px, 7.4vw, 34px) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -.058em !important;
+}
+.cp-lead-header span { font-size: 12px !important; }
+.cp-small { min-height: 36px !important; font-size: 12px !important; }
+
+.cp-decision,
+.v2-decision-card {
+  padding: 18px !important;
+  border-radius: 22px !important;
+}
+.cp-decision h2,
+.v2-decision-card h2 {
+  font-size: clamp(22px, 6.2vw, 30px) !important;
+  line-height: 1.06 !important;
+  letter-spacing: -.052em !important;
+  max-width: 100% !important;
+}
+.cp-decision-verdict,
+.v2-decision-card > p {
+  margin-top: 10px !important;
+  font-size: 13.5px !important;
+  line-height: 1.45 !important;
+}
+.cp-message-box,
+.v2-copy-box {
+  margin-top: 14px !important;
+  padding: 14px !important;
+  border-radius: 18px !important;
+  gap: 10px !important;
+}
+.cp-message-box p,
+.v2-copy-box p {
+  font-size: 14px !important;
+  line-height: 1.48 !important;
+}
+.cp-message-box button { min-height: 48px !important; font-size: 14px !important; }
+.cp-why,
+.v2-reason-box { margin-top: 10px !important; padding-top: 10px !important; font-size: 13px !important; }
+.cp-why p { font-size: 12.5px !important; line-height: 1.4 !important; }
+
+.cp-fold,
+.v2-fold-section,
+.cp-panel,
+.analysis-card,
+.suggestions-panel,
+.cp-utility,
+.history-panel,
+.cp-danger-zone,
+.v2-danger-zone {
+  border-radius: 18px !important;
+}
+.cp-fold > summary,
+.cp-utility > summary,
+.cp-danger-zone > summary,
+.v2-fold-section > summary,
+.history-panel > summary {
+  padding: 15px !important;
+  font-size: 14px !important;
+}
+.cp-fold > :not(summary),
+.cp-utility > :not(summary),
+.cp-danger-zone > :not(summary) { margin: 12px !important; }
+.cp-panel { padding: 15px !important; }
+.cp-panel-head h2,
+.v2-section-head h2 { font-size: 19px !important; }
+
+.cp-insight-list article,
+.v2-diagnosis-list article,
+.analysis-block,
+.analysis-grid > div,
+.analysis-meta > div {
+  padding: 12px !important;
+  border-radius: 15px !important;
+}
+.cp-insight-list ul { margin-top: 8px !important; }
+.cp-insight-list li { font-size: 13px !important; line-height: 1.38 !important; }
+
+.cp-suggestion,
+.v2-suggestion-row {
+  grid-template-columns: 1fr !important;
+  padding: 12px !important;
+  border-radius: 15px !important;
+}
+.cp-suggestion p { font-size: 13px !important; line-height: 1.42 !important; }
+.cp-suggestion button { width: 100% !important; }
+
+.notas-header {
+  display: grid !important;
+  gap: 4px !important;
+}
+.notas-header strong {
+  font-size: 22px !important;
+  line-height: 1.08 !important;
+  letter-spacing: -.045em !important;
+}
+.nota-textarea {
+  min-height: 112px !important;
+  font-size: 15px !important;
+  line-height: 1.45 !important;
+}
+.notas-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+}
+.nota-save-button { grid-column: 1 / -1 !important; }
+.nota-record-button,
+.nota-print-button {
+  min-height: 42px !important;
+  font-size: 14px !important;
+  border-radius: 15px !important;
+}
+
+.proposal-card,
+.manual-lead-card,
+.contact-type-card,
+.empty-state,
+.install-card,
+.audio-warning {
+  padding: 16px !important;
+  border-radius: 20px !important;
+}
+.proposal-card h2,
+.history-panel strong { font-size: 20px !important; line-height: 1.12 !important; }
+.proposal-card p { font-size: 13px !important; line-height: 1.45 !important; }
+.proposal-preview-card {
+  padding: 12px !important;
+  border-radius: 16px !important;
+  grid-template-columns: 72px minmax(0,1fr) !important;
+  gap: 12px !important;
+}
+.proposal-preview-card img { width: 72px !important; height: 72px !important; border-radius: 12px !important; }
+.proposal-preview-card strong,
+.proposal-preview-card span { font-size: 13px !important; overflow-wrap: anywhere !important; }
+.history-panel-count { width: 42px !important; height: 42px !important; font-size: 17px !important; }
+.delete-lead-button { min-height: 46px !important; font-size: 14px !important; }
+
+.toast {
+  max-width: calc(100% - 28px) !important;
+  font-size: 12px !important;
+  border-radius: 16px !important;
+}
+
+@media (max-width: 390px) {
+  .brand-name { display: none !important; }
+  .header-version { min-width: 39px !important; padding-inline: 7px !important; }
+  .lead-count { font-size: 10px !important; padding-inline: 7px !important; }
+  .app-main { padding-inline: 10px !important; }
+  .cp-home-hero h1, .v2-home-copy h1 { font-size: clamp(24px, 7vw, 30px) !important; }
+  .cp-decision h2, .v2-decision-card h2 { font-size: clamp(21px, 6vw, 27px) !important; }
 }

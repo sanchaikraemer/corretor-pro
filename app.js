@@ -7,14 +7,14 @@ import {
   removePendingShare,
   saveAtendimento,
   saveCachedTranscription
-} from "./db.js?v=083";
+} from "./db.js?v=084";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=083";
+} from "./whatsapp.js?v=084";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -46,7 +46,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v083", package: "0.83.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v084", package: "0.84.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
