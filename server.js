@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v088", package: "0.88.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v089", package: "0.89.0" };
 
 
 const ANALYSIS_SCHEMA = {

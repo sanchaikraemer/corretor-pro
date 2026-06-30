@@ -1,5 +1,5 @@
 // Fonte única de versão do Corretor Pro.
 globalThis.CORRETOR_PRO_VERSION = Object.freeze({
-  app: "v088",
-  package: "0.88.0"
+  app: "v089",
+  package: "0.89.0"
 });

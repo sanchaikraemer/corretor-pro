@@ -3503,3 +3503,21 @@ body {
 .bd-card--clickable:active { transform: scale(0.995); }
 .bd-card--clickable:hover { border-color: rgba(255, 107, 92, 0.4); }
 .bd-section { scroll-margin-top: 80px; }
+
+/* v089 — botões "Instalar" na marca (coral, não verde) + layout responsivo desktop/mobile */
+.install-button { background: var(--bd-coral) !important; color: #fff !important; }
+.home-bd .install-card-icon { background: rgba(255, 107, 92, 0.16) !important; color: var(--bd-coral) !important; }
+.home-bd .install-card button { background: var(--bd-coral) !important; color: #fff !important; }
+.home-bd .install-card-copy span { color: var(--bd-apoio) !important; }
+.brand-name strong { color: var(--bd-coral) !important; }
+
+/* centraliza a coluna — corrige o alinhamento à esquerda no desktop */
+.app-main { margin-left: auto !important; margin-right: auto !important; }
+
+@media (min-width: 1000px) {
+  .app-main { max-width: 1080px !important; }
+  .detail-page-v3 { max-width: 760px; margin-left: auto; margin-right: auto; }
+  .bd-hero h1 { font-size: 34px; }
+  .bd-list { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .bd-waitlist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+}
