@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v086"/);
+  assert.match(versionSource, /app: "v087"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=086/);
-  assert.match(htmlSource, /styles\.css\?v=086/);
-  assert.match(appSource, /db\.js\?v=086/);
-  assert.match(appSource, /whatsapp\.js\?v=086/);
+  assert.match(htmlSource, /app\.js\?v=087/);
+  assert.match(htmlSource, /styles\.css\?v=087/);
+  assert.match(appSource, /db\.js\?v=087/);
+  assert.match(appSource, /whatsapp\.js\?v=087/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v086<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v087<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -262,7 +262,7 @@ test("análise comercial usa período selecionado, áudio e proposta já enviada
   assert.match(appSource, /fetch\("\/api\/analisar"/);
   assert.match(appSource, /incompleteAudioCount/);
   assert.match(appSource, /proposalImage/);
-  assert.match(serverSource, /efetivamente ENVIADA ao contato desta conversa/);
+  assert.match(serverSource, /já foi enviada ao contato desta conversa/);
   assert.match(serverSource, /detail: "high"/);
   assert.match(serverSource, /gpt-5\.4-mini/);
   assert.match(serverSource, /type: "json_schema"/);
@@ -271,15 +271,15 @@ test("análise comercial usa período selecionado, áudio e proposta já enviada
 });
 
 test("inteligência comercial parte da proposta já enviada e não reinicia a negociação", () => {
-  assert.match(serverSource, /AÇÃO COMERCIAL MAIS RECENTE/);
+  assert.match(serverSource, /ação comercial mais recente/i);
   assert.match(serverSource, /STATUS DO COMPROMISSO DE ENVIAR CONDIÇÕES/);
   assert.match(serverSource, /CUMPRIDO EM RELAÇÃO AO/);
   assert.match(serverSource, /Nunca use como próximo passo/);
-  assert.match(serverSource, /Na primeira simulação que te enviei/);
+  assert.match(serverSource, /reconhecendo a primeira já enviada/);
   assert.match(serverSource, /O mesmo imóvel não pode aparecer ao mesmo tempo como produto principal e produto paralelo/);
-  assert.match(serverSource, /Não reabra comparação com outros imóveis/);
-  assert.match(serverSource, /Não transforme confusão de preço sobre outro imóvel/);
-  assert.match(serverSource, /nenhum campo nem sugestão trata a proposta como ainda não enviada/);
+  assert.match(serverSource, /não prova que o cliente final já a recebeu/);
+  assert.match(serverSource, /Pode oferecer NOVAS composições/);
+  assert.match(serverSource, /nenhum campo ou sugestão pode tratá-la como ainda não enviada/);
 });
 
 test("revisão automática corrige análise que ignora a proposta já enviada", async () => {
@@ -415,8 +415,8 @@ test("v040 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(appSource, /Proposta analisada com sucesso/);
   assert.match(appSource, /analysis-status-success/);
   assert.match(appSource, /actionableAlert \? `<div class="analysis-alert"/);
-  assert.match(serverSource, /retorne uma string vazia quando não houver falta de informação/);
-  assert.match(serverSource, /Não use esse campo para confirmar que a proposta foi lida/);
+  assert.match(serverSource, /alertaInformacaoIncompleta: string vazia/);
+  assert.match(serverSource, /salvo quando houver áudio sem transcrição/);
   assert.match(stylesSource, /\.analysis-status-success/);
 });
 
@@ -517,8 +517,8 @@ test("análise diferencia cliente direto de corretor parceiro", () => {
   assert.match(appSource, /Selecione primeiro se este contato é cliente ou corretor/);
   assert.match(serverSource, /TIPO DE CONTATO:/);
   assert.match(serverSource, /CORRETOR PARCEIRO — intermediário/);
-  assert.match(serverSource, /Não trate o corretor parceiro como comprador/);
-  assert.match(serverSource, /As mensagens sugeridas devem ser dirigidas ao corretor parceiro/);
+  assert.match(serverSource, /Não é comprador; trate como parceria/);
+  assert.match(serverSource, /ajude-o a conduzir o cliente final dele/);
   assert.match(serverSource, /body\.contactType !== "cliente"/);
 });
 
@@ -678,16 +678,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v086 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v087 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v086"/);
-  assert.match(versionSource, /package: "0\.86\.0"/);
+  assert.match(versionSource, /app: "v087"/);
+  assert.match(versionSource, /package: "0\.87\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.86.0");
+  assert.equal(pkg.version, "0.87.0");
 });
 
 test("v075 lê o print da conversa e mescla as mensagens na linha do tempo", () => {

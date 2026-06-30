@@ -1,6 +1,6 @@
-importScripts("/version.js?v=076");
+importScripts("/version.js?v=087");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v086" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v087" };
 const BUILD_ID = `corretor-pro-${VERSION_INFO.app}`;
 const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
 const SHARE_DB_NAME = "corretor-pro-share";
@@ -10,12 +10,12 @@ const SHARE_RECORD_ID = "latest";
 
 const CORE_ASSETS = [
   "/",
-  "/version.js?v=076",
+  "/version.js?v=087",
   "/index.html",
-  "/styles.css?v=076",
-  "/app.js?v=076",
-  "/db.js?v=076",
-  "/whatsapp.js?v=076",
+  "/styles.css?v=087",
+  "/app.js?v=087",
+  "/db.js?v=087",
+  "/whatsapp.js?v=087",
   "/manifest.webmanifest",
   "/share-target.html",
   "/zip.min.js",
