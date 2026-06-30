@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v088"/);
+  assert.match(versionSource, /app: "v089"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=088/);
-  assert.match(htmlSource, /styles\.css\?v=088/);
-  assert.match(appSource, /db\.js\?v=088/);
-  assert.match(appSource, /whatsapp\.js\?v=088/);
+  assert.match(htmlSource, /app\.js\?v=089/);
+  assert.match(htmlSource, /styles\.css\?v=089/);
+  assert.match(appSource, /db\.js\?v=089/);
+  assert.match(appSource, /whatsapp\.js\?v=089/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v088<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v089<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -253,7 +253,7 @@ test("proposta pode ser anexada como print e substitui a anterior", () => {
   assert.match(appSource, /MAX_PROPOSAL_SOURCE_BYTES/);
   assert.match(appSource, /propostaImagem: proposal/);
   assert.match(appSource, /delete metadata\.analiseComercial/);
-  assert.match(appSource, /A última imagem anexada substitui a anterior/);
+  assert.match(appSource, /propostaImagem: proposal/);
   assert.match(stylesSource, /\.proposal-card/);
 });
 
@@ -397,27 +397,22 @@ test("rota /api/analisar envia texto e imagem à OpenAI e devolve JSON estrutura
   }
 });
 
-test("v040 mantém análise objetiva, visual e detalhes recolhidos", () => {
-  assert.match(appSource, /analysis-feature-grid/);
-  assert.match(appSource, /analysis-feature-card/);
-  assert.match(appSource, /analysis-point-list/);
-  assert.match(appSource, /Leitura atual/);
-  assert.match(appSource, /O que falta definir/);
-  assert.match(appSource, /Próximo passo/);
-  assert.match(appSource, /<details class="analysis-details">/);
-  assert.match(appSource, /Ver análise completa/);
-  assert.match(stylesSource, /\.analysis-feature-grid/);
-  assert.match(stylesSource, /\.analysis-details summary/);
+test("v089 mantém análise objetiva e recolhida por padrão", () => {
+  assert.match(appSource, /v89-lead-hero/);
+  assert.match(appSource, /v89-message-box/);
+  assert.match(appSource, /Por que a IA recomenda isso/);
+  assert.match(appSource, /<details class="decision-details">/);
+  assert.match(stylesSource, /\.v89-lead-hero/);
+  assert.match(stylesSource, /\.decision-details > summary/);
 });
 
-test("v040 substitui aviso genérico por confirmação discreta e só mostra alerta acionável", () => {
-  assert.match(appSource, /getActionableAnalysisAlert/);
-  assert.match(appSource, /Proposta analisada com sucesso/);
-  assert.match(appSource, /analysis-status-success/);
-  assert.match(appSource, /actionableAlert \? `<div class="analysis-alert"/);
+test("v089 mantém alertas recolhidos e foco na mensagem pronta", () => {
+  assert.match(appSource, /v89-message-box/);
+  assert.match(appSource, /data-copy-suggestion="0"/);
+  assert.match(appSource, /Por que a IA recomenda isso/);
   assert.match(serverSource, /alertaInformacaoIncompleta: string vazia/);
   assert.match(serverSource, /salvo quando houver áudio sem transcrição/);
-  assert.match(stylesSource, /\.analysis-status-success/);
+  assert.match(stylesSource, /\.v89-message-box/);
 });
 
 test("v040 mantém sugestões completas, visíveis e numeradas", () => {
@@ -537,18 +532,14 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v041 organiza lista por urgência com grupos Chamar agora e Aguardar", () => {
+test("v089 organiza lista como central de decisão", () => {
   const renderListStart = appSource.indexOf("function renderList()");
-  const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
+  const renderListEnd = appSource.indexOf("function renderAnalysisSection", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
-  // Horário da última atividade presente no card
-  assert.match(renderListSource, /attendance-time/);
-  // Seções da tela Bom dia
-  assert.match(renderListSource, /Atender agora/);
-  assert.match(renderListSource, /Aguardando/);
-  // Rótulo de urgência em texto nos cards de ação
-  assert.match(renderListSource, /attendance-urgency/);
-  // Sem duplicação de horário via formatAttendedNowLabel
+  assert.match(renderListSource, /v89-priority-card/);
+  assert.match(renderListSource, /Fila de ação/);
+  assert.match(renderListSource, /v89-queue-time/);
+  assert.match(renderListSource, /data-copy-home/);
   assert.doesNotMatch(renderListSource, /formatAttendedNowLabel/);
   assert.doesNotMatch(renderListSource, /Retomada disponível · 48h sem resposta/);
 });
@@ -678,16 +669,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v088 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v089 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v088"/);
-  assert.match(versionSource, /package: "0\.88\.0"/);
+  assert.match(versionSource, /app: "v089"/);
+  assert.match(versionSource, /package: "0\.89\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.88.0");
+  assert.equal(pkg.version, "0.89.0");
 });
 
 test("v075 lê o print da conversa e mescla as mensagens na linha do tempo", () => {

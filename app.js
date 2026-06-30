@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=088";
+} from "./db.js?v=089";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=088";
+} from "./whatsapp.js?v=089";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v088", package: "0.88.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v089", package: "0.89.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -1193,7 +1193,7 @@ function setDetailHeader(record) {
 }
 
 function renderList() {
-  // Tela "Bom dia": briefing priorizado com mensagem pronta por lead (marca Direciona).
+  // V089 — central de ação: menos painel, mais decisão. Sem avatar, sem percentual e sem ruído.
   state.currentKey = null;
   state.notaPrintsPendentes = [];
   setListHeader();
@@ -1213,309 +1213,88 @@ function renderList() {
   aguardar.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
 
   const acionar = [...responder, ...esfriando];
+  const topTwo = acionar.slice(0, 2);
+  const remainingAction = acionar.slice(2);
 
-  function leadInitials(nome) {
-    const parts = String(nome || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-    const ini = parts.map(p => p[0]).join("");
-    return (ini || "?").toUpperCase();
+  function labelFor(record) {
+    const workflow = getLeadWorkflowState(record);
+    if (workflow.mode === "client_response") return "Responder agora";
+    if (classifyLead(record) === "esfriando") return "Retomar";
+    return record?.metadata?.analiseComercial ? "Acompanhar" : "Analisar primeiro";
   }
 
-  function urgencyLabelFor(record) {
-    const workflow = getLeadWorkflowState(record);
-    if (workflow.mode === "client_response") return "Responder";
-    if (classifyLead(record) === "esfriando") {
-      const refDate = getValidDate(record?.metadata?.atendidoAgoraAt) || getLatestActivityDate(record);
-      const days = Math.floor((Date.now() - refDate.getTime()) / (24 * 60 * 60 * 1000));
-      return `Retomar · ${days}d`;
-    }
-    return "Acompanhar";
+  function compactText(text, fallback = "Abrir atendimento") {
+    const clean = String(text || fallback).replace(/\s+/g, " ").trim();
+    return clean.length > 124 ? `${clean.slice(0, 121).trim()}...` : clean;
   }
 
-  function buildActionCard(record) {
-    const priority = getCommercialPriority(record);
-    const workflow = getLeadWorkflowState(record);
-    const moment = formatCardDate(workflow.activityDate.toISOString());
-    const reason = getLeadActionText(record);
-    const suggestion = getPrimarySuggestion(record?.metadata?.analiseComercial || {});
+  function buildPriorityRow(record, index = 0) {
+    const analysis = record?.metadata?.analiseComercial || {};
+    const suggestion = getPrimarySuggestion(analysis);
+    const action = compactText(analysis.proximoPasso || getLeadActionText(record), "Gerar análise comercial");
     const hasMsg = Boolean(suggestion && suggestion.mensagem);
-    const actions = hasMsg
-      ? `<div class="bd-msg"><span class="bd-msg-label">Mensagem pronta</span><p>${escapeHtml(suggestion.mensagem)}</p></div>
-        <div class="bd-actions">
-          <button class="bd-btn bd-btn--primary" type="button" data-copy-home="${escapeHtml(record.conversationKey)}">Copiar mensagem</button>
-          <button class="bd-btn bd-btn--ghost" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Abrir lead</button>
-        </div>`
-      : `<div class="bd-actions">
-          <button class="bd-btn bd-btn--primary" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Gerar análise</button>
-        </div>`;
     return `
-      <article class="bd-card bd-card--${escapeHtml(priority.className)} bd-card--clickable" data-attendance="${escapeHtml(record.conversationKey)}">
-        <div class="bd-card-head">
-          <span class="bd-avatar" aria-hidden="true">${escapeHtml(leadInitials(record.nomeLead))}</span>
-          <span class="bd-who">
-            <span class="bd-name">${escapeHtml(record.nomeLead)}</span>
-            <span class="bd-meta attendance-time">${escapeHtml(moment.date)} · ${escapeHtml(moment.time)}</span>
-          </span>
-          <span class="bd-tag attendance-urgency ${escapeHtml(priority.className)}">${escapeHtml(urgencyLabelFor(record))}</span>
+      <article class="v89-priority-card" data-attendance="${escapeHtml(record.conversationKey)}">
+        <div class="v89-card-top">
+          <span class="v89-rank">${index + 1}</span>
+          <span class="v89-status">${escapeHtml(labelFor(record))}</span>
         </div>
-        <p class="bd-why">${escapeHtml(reason)}</p>
-        ${actions}
+        <strong>${escapeHtml(record.nomeLead)}</strong>
+        <p>${escapeHtml(action)}</p>
+        ${hasMsg
+          ? `<button class="v89-copy" type="button" data-copy-home="${escapeHtml(record.conversationKey)}">Copiar mensagem</button>`
+          : `<button class="v89-copy" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Analisar atendimento</button>`}
       </article>`;
   }
 
-  function buildWaitCard(record) {
-    const moment = formatCardDate(getLatestActivityDate(record).toISOString());
+  function buildQueueCard(record) {
+    const moment = formatCardDate((getLeadWorkflowState(record).activityDate || getLatestActivityDate(record)).toISOString());
+    const analysis = record?.metadata?.analiseComercial || {};
+    const action = compactText(analysis.proximoPasso || getLeadActionText(record), "Gerar análise comercial");
     return `
-      <button class="bd-wait" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-        <span class="bd-wait-copy">
-          <span class="bd-wait-name">${escapeHtml(record.nomeLead)}</span>
-          <span class="bd-wait-preview">${escapeHtml(record.ultimaMensagemResumo || "Aguardando resposta do cliente")}</span>
+      <button class="v89-queue-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+        <span class="v89-queue-main">
+          <strong>${escapeHtml(record.nomeLead)}</strong>
+          <em>${escapeHtml(labelFor(record))}</em>
+          <span>${escapeHtml(action)}</span>
         </span>
-        <span class="bd-wait-meta attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
+        <span class="v89-queue-time">${escapeHtml(moment.date)}<small>${escapeHtml(moment.time)}</small></span>
       </button>`;
   }
 
-  const total = acionar.length;
-  const hero = `
-    <section class="bd-hero">
-      <span class="bd-greet">${escapeHtml(getGreeting())}, ${escapeHtml(APP_USER_NAME)}</span>
-      <h1>${total ? `Você tem <span>${total} lead${total === 1 ? "" : "s"}</span> esperando você hoje` : "Nenhuma urgência agora. Bom trabalho."}</h1>
-      <p>${total ? "Comece de cima. A mensagem já está pronta — é copiar, mandar e seguir pro próximo." : "Quando um cliente responder, ele aparece aqui em primeiro lugar."}</p>
-    </section>
-    <div class="bd-kpis" aria-label="Resumo do dia">
-      <button class="bd-kpi" type="button" data-kpi-scroll="bd-atender"><strong class="coral">${total}</strong><span>pra agir</span></button>
-      <button class="bd-kpi" type="button" data-kpi-scroll="bd-atender"><strong>${esfriando.length}</strong><span>retomar</span></button>
-      <button class="bd-kpi" type="button" data-kpi-scroll="bd-aguardando"><strong>${aguardar.length}</strong><span>aguardando</span></button>
-    </div>`;
+  const hero = state.records.length ? `
+    <section class="v89-hero" aria-labelledby="v89-title">
+      <span class="v89-kicker">Central de decisão</span>
+      <h1 id="v89-title">${acionar.length ? `${acionar.length} atendimento${acionar.length === 1 ? "" : "s"} pedem ação.` : "Tudo sob controle."}</h1>
+      <p>${acionar.length ? "Copie a próxima mensagem ou abra o lead. O resto fica recolhido." : "Quando alguém responder ou esfriar, aparece aqui primeiro."}</p>
+      <div class="v89-mini-stats" aria-label="Resumo dos atendimentos">
+        <span><b>${responder.length}</b> responder</span>
+        <span><b>${esfriando.length}</b> retomar</span>
+        <span><b>${aguardar.length}</b> aguardando</span>
+      </div>
+    </section>` : "";
 
-  const acionarHtml = acionar.length
-    ? `<h2 class="bd-section" id="bd-atender">Atender agora</h2><div class="bd-list">${acionar.map(buildActionCard).join("")}</div>`
+  const priorityHtml = topTwo.length
+    ? `<section class="v89-priority-list" aria-label="Atendimentos principais">${topTwo.map(buildPriorityRow).join("")}</section>`
     : "";
-  const aguardarHtml = aguardar.length
-    ? `<h2 class="bd-section bd-section--muted" id="bd-aguardando">Aguardando resposta</h2><div class="bd-waitlist">${aguardar.map(buildWaitCard).join("")}</div>`
+  const queue = [...remainingAction, ...aguardar];
+  const queueHtml = queue.length
+    ? `<div class="v89-section-title"><span>Fila de ação</span><b>${queue.length}</b></div><section class="v89-queue">${queue.map(buildQueueCard).join("")}</section>`
     : "";
 
   app.innerHTML = `
-    <section class="home-bd">
+    <section class="v89-home">
+      <div class="v89-home-top">
+        <button class="v89-add" type="button" data-add-lead>+ Novo atendimento</button>
+      </div>
       ${renderInstallCard()}
-      ${state.records.length ? hero : ""}
-      ${state.records.length ? (acionarHtml + aguardarHtml) : renderEmptyState()}
-      <button class="floating-add-button" type="button" data-add-lead aria-label="Adicionar atendimento">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
+      ${state.records.length ? hero + priorityHtml + queueHtml : renderEmptyState()}
       <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
-        <span>${state.cloudAvailable === false
-          ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
-          : "Atendimentos atualizados automaticamente neste link."}</span>
+        ${state.cloudAvailable === false ? "Sem conexão com a nuvem. Dados salvos neste aparelho." : "Atendimentos sincronizados automaticamente."}
       </div>
     </section>`;
 }
 
-function groupTimelineByDate(timeline) {
-  const groups = [];
-  let lastKey = null;
-  for (const item of timeline || []) {
-    const date = item.timestamp ? new Date(item.timestamp) : null;
-    const key = date && !Number.isNaN(date.getTime()) ? date.toDateString() : item.date || "Sem data";
-    if (key !== lastKey) {
-      groups.push({
-        key,
-        label: date && !Number.isNaN(date.getTime()) ? dateOnlyFormatter.format(date) : item.date || "Sem data",
-        items: []
-      });
-      lastKey = key;
-    }
-    groups[groups.length - 1].items.push(item);
-  }
-  return groups;
-}
-
-function renderTimelineItem(item, record) {
-  const originalLead = record.metadata?.originalLeadName || record.nomeLead;
-  const leadClass = normalizeComparable(item.author) === normalizeComparable(originalLead) ? " lead" : "";
-  const fallbackText = item.type === "audio"
-    ? "Não foi possível transcrever este áudio."
-    : "";
-
-  if (item.type === "audio") {
-    const outsidePeriod = isAudioOutsidePeriod(item);
-    const failed = isAudioFailure(item);
-    const label = outsidePeriod ? "Áudio fora do período" : failed ? "Áudio não transcrito" : "Áudio transcrito";
-    return `
-      <article class="timeline-item${leadClass}">
-        <div class="timeline-meta">
-          <span class="timeline-author">${escapeHtml(item.author)}</span>
-          <time class="timeline-time">${escapeHtml(item.time || "")}</time>
-        </div>
-        <div class="transcription-block${failed ? " error" : outsidePeriod ? " skipped" : ""}">
-          <span class="transcription-label">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M8 6v12M4 9v6M16 5v14M20 8v8"/></svg>
-            ${label}
-          </span>
-          <p class="timeline-text">${escapeHtml(item.text || fallbackText)}</p>
-        </div>
-      </article>`;
-  }
-
-  return `
-    <article class="timeline-item${leadClass}">
-      <div class="timeline-meta">
-        <span class="timeline-author">${escapeHtml(item.author)}</span>
-        <time class="timeline-time">${escapeHtml(item.time || "")}</time>
-      </div>
-      <p class="timeline-text">${escapeHtml(item.text || "")}</p>
-    </article>`;
-}
-
-
-function formatSavedDate(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) return "";
-  return `${dateOnlyFormatter.format(date)} às ${timeFormatter.format(date)}`;
-}
-
-function renderProposalSection(record) {
-  const proposal = record.metadata?.propostaImagem;
-  const hasSafeImage = proposal && isSafeProposalDataUrl(proposal.dataUrl);
-  const busy = state.proposalBusy;
-  const attachedLabel = formatSavedDate(proposal?.attachedAt);
-  const proposalTarget = getContactRoleText(record, "target");
-
-  return `
-    <section class="proposal-card">
-      <div class="section-heading-row">
-        <div>
-          <span class="section-eyebrow">Contexto financeiro</span>
-          <h2>Última proposta</h2>
-        </div>
-        ${hasSafeImage ? `<span class="proposal-status">Já enviada</span>` : ""}
-      </div>
-      <p class="section-description">Anexe um print da proposta enviada ${escapeHtml(proposalTarget)}. A análise considerará automaticamente que ela já foi enviada.</p>
-      <input id="proposal-image-input" type="file" accept="image/jpeg,image/png,image/webp" data-proposal-input hidden>
-      ${hasSafeImage ? `
-        <div class="proposal-preview">
-          <img src="${escapeHtml(proposal.dataUrl)}" alt="Print da última proposta enviada">
-          <div class="proposal-preview-copy">
-            <strong>${escapeHtml(proposal.name || "Proposta anexada")}</strong>
-            <span>${attachedLabel ? `Anexada em ${escapeHtml(attachedLabel)}` : "Proposta atual"}</span>
-            <small>A última imagem anexada substitui a anterior.</small>
-          </div>
-        </div>
-        <button class="secondary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
-          ${busy ? "Preparando imagem..." : "Trocar print da proposta"}
-        </button>` : `
-        <button class="primary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
-          ${busy ? "Preparando imagem..." : "Anexar print da proposta"}
-        </button>`}
-    </section>`;
-}
-
-function renderTextList(items) {
-  const list = Array.isArray(items) ? items.filter(Boolean) : [];
-  if (!list.length) return `<span class="analysis-empty-value">Não identificado</span>`;
-  return `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
-}
-
-function splitTextIntoPoints(text, limit = 3) {
-  const value = String(text || "").trim();
-  if (!value) return [];
-  const normalized = value
-    .replace(/\s+/g, ' ')
-    .replace(/\s*[-•]\s*/g, '. ')
-    .trim();
-  const parts = normalized
-    .split(/(?<=[.!?;])\s+|\s{2,}/)
-    .map(part => part.trim().replace(/^[•\-]\s*/, '').trim())
-    .filter(Boolean);
-  if (!parts.length) return [normalized];
-  return parts.slice(0, limit);
-}
-
-function renderPointList(items, fallback) {
-  const list = (Array.isArray(items) ? items : []).filter(Boolean).slice(0, 4);
-  const source = list.length ? list : splitTextIntoPoints(fallback, 4);
-  if (!source.length) return `<p class="analysis-empty-value">Não identificado</p>`;
-  return `<ul class="analysis-point-list">${source.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
-}
-
-function renderInlineIcon(kind) {
-  const icons = {
-    leitura: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>',
-    pendencia: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m15.5 8.5-7 7"/><path d="m8.5 8.5 7 7"/></svg>',
-    proximo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="m15 5 5 7-5 7"/></svg>',
-    periodo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
-    mensagens: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-    horario: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-    sucesso: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>'
-  };
-  return icons[kind] || icons.leitura;
-}
-
-function summarizeSuggestionMessage(text) {
-  const value = String(text || '').trim();
-  if (!value) return '';
-  const sentence = splitTextIntoPoints(value, 1)[0] || value;
-  return sentence.length > 120 ? `${sentence.slice(0, 117).trim()}...` : sentence;
-}
-
-function getActionableAnalysisAlert(record, analysis) {
-  const alert = String(analysis?.alertaInformacaoIncompleta || "").trim();
-  const incompleteAudioCount = (record.timeline || []).filter(isAudioFailure).length;
-
-  if (incompleteAudioCount > 0) {
-    return alert || `${incompleteAudioCount} áudio${incompleteAudioCount === 1 ? " não foi transcrito" : "s não foram transcritos"}. A análise pode estar incompleta.`;
-  }
-  if (!alert) return "";
-
-  const normalized = normalizeComparable(alert);
-  const criticalPatterns = [
-    /imagem ilegivel/,
-    /proposta ilegivel/,
-    /nao foi possivel (?:ler|analisar|identificar)/,
-    /informac(?:ao|oes) essencia(?:l|is)/,
-    /dados insuficientes/,
-    /valor(?:es)? principa(?:l|is) nao (?:foi|foram) identificado/,
-    /proposta nao (?:foi )?identificada/
-  ];
-  return criticalPatterns.some(pattern => pattern.test(normalized)) ? alert : "";
-}
-
-function renderFullAnalysisDetails(analysis, record) {
-  const clientLabel = getContactType(record) === "corretor" ? "cliente final" : "cliente";
-  return `
-    <details class="analysis-details">
-      <summary>
-        <span>Ver análise completa</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
-      </summary>
-      <div class="analysis-details-content">
-        <div class="analysis-facts">
-          <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
-          <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
-          <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
-        </div>
-        <div class="analysis-grid">
-          <div class="analysis-block">
-            <h3>Sinais de interesse</h3>
-            ${renderTextList(analysis.sinaisInteresse)}
-          </div>
-          <div class="analysis-block">
-            <h3>Produtos paralelos</h3>
-            ${renderTextList(analysis.produtosParalelos)}
-          </div>
-          <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Última solicitação do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Último compromisso do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
-          <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
-          <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
-          <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
-          <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
-          <div class="analysis-block"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
-        </div>
-      </div>
-    </details>`;
-}
 
 function renderAnalysisSection(record) {
   /* Leitura atual; O que falta definir; Próximo passo; <details class="analysis-details">; Ver análise completa; actionableAlert ? `<div class="analysis-alert"; V086 substitui analysis-feature-grid, analysis-feature-card, analysis-status-success, suggestions-panel-grid e class="suggestion-number" por decisão recolhida. */
@@ -1564,7 +1343,7 @@ function renderAnalysisSection(record) {
         </div>
       </details>` : ""}
 
-      <details class="decision-details" open>
+      <details class="decision-details">
         <summary>Por que a IA recomenda isso</summary>
         <div class="why-grid">
           <article><strong>O que a IA percebeu</strong>${renderPointList(readingPoints, analysis.resumo)}</article>
@@ -1586,27 +1365,34 @@ function getPrimarySuggestion(analysis) {
 }
 
 function renderCommercialSnapshot(record) {
+  // V089 — lead como decisão, não relatório. A primeira dobra deve responder: o que fazer e o que copiar.
   const analysis = record?.metadata?.analiseComercial || {};
   const workflow = getLeadWorkflowState(record);
   const primary = getPrimarySuggestion(analysis);
-  const verdict = analysis.porQueNaoComprou || analysis.resumo || (record?.metadata?.analiseComercial
+  const hasAnalysis = Boolean(record?.metadata?.analiseComercial);
+  const action = String(analysis.proximoPasso || getLeadActionText(record) || "Gerar análise comercial").replace(/\s+/g, " ").trim();
+  const why = String(analysis.porQueNaoComprou || analysis.pendenciaReal || analysis.resumo || (hasAnalysis
     ? "A IA encontrou um caminho de avanço neste atendimento."
-    : "Gere uma análise para transformar a conversa em próxima ação.");
-  const action = analysis.proximoPasso || getLeadActionText(record);
-  const tone = workflow.mode === "client_response" ? "Responder agora" : classifyLead(record) === "esfriando" ? "Retomar com contexto" : "Acompanhar";
+    : "Gere uma análise para transformar a conversa em próxima ação."))
+    .replace(/\s+/g, " ").trim();
+  const tone = workflow.mode === "client_response"
+    ? "Responder agora"
+    : classifyLead(record) === "esfriando"
+      ? "Retomar com contexto"
+      : hasAnalysis ? "Acompanhar" : "Analisar primeiro";
+  const cleanAction = action.length > 150 ? `${action.slice(0, 147).trim()}...` : action;
+  const cleanWhy = why.length > 160 ? `${why.slice(0, 157).trim()}...` : why;
   return `
-    <section class="lead-decision-panel">
-      <div class="lead-decision-topline">
-        <span>${escapeHtml(tone)}</span>
-        <small>${record?.metadata?.analiseComercial ? "Decisão da IA" : "Sem análise"}</small>
-      </div>
-      <h1>${escapeHtml(action)}</h1>
-      <p>${escapeHtml(verdict)}</p>
-      ${primary ? `<div class="primary-message-box">
-        <span>Mensagem pronta</span>
+    <section class="v89-lead-hero">
+      <span class="v89-kicker">A IA recomenda</span>
+      <strong class="v89-lead-state">${escapeHtml(tone)}</strong>
+      <h1>${escapeHtml(cleanAction)}</h1>
+      <p>${escapeHtml(cleanWhy)}</p>
+      ${primary ? `<div class="v89-message-box">
+        <span>Mensagem pronta para WhatsApp</span>
         <p>${escapeHtml(primary.mensagem)}</p>
         <button type="button" data-copy-suggestion="0">Copiar mensagem</button>
-      </div>` : `<button class="analysis-button primary-analysis" type="button" data-analyze-attendance>Gerar análise</button>`}
+      </div>` : `<button class="v89-copy v89-copy-full" type="button" data-analyze-attendance>Gerar análise</button>`}
     </section>`;
 }
 
