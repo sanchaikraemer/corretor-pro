@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=090";
+} from "./db.js?v=091";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=090";
+} from "./whatsapp.js?v=091";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -45,7 +45,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v090", package: "0.90.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v091", package: "0.91.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -77,6 +77,7 @@ const state = {
   syncTimer: null,
   cloudAvailable: null,
   detailPeriod: "30",
+  homeFilter: "all",
   deletingKeys: new Set(),
   analyzingKey: null,
   proposalBusy: false,
@@ -1244,6 +1245,23 @@ function renderList() {
   const retomar = records.filter(record => classifyLead(record) === "esfriando");
   const aguardando = records.filter(record => getLeadWorkflowState(record).mode === "waiting");
   const semAnalise = records.filter(record => !record?.metadata?.analiseComercial);
+  const filterGroups = {
+    all: records,
+    responder,
+    retomar,
+    aguardando,
+    semAnalise
+  };
+  const filterLabels = {
+    all: "Todos os atendimentos",
+    responder: "Responder agora",
+    retomar: "Retomar",
+    aguardando: "Aguardando",
+    semAnalise: "Sem análise"
+  };
+  const activeHomeFilter = Object.prototype.hasOwnProperty.call(filterGroups, state.homeFilter) ? state.homeFilter : "all";
+  state.homeFilter = activeHomeFilter;
+  const filteredRecords = [...filterGroups[activeHomeFilter]].sort((a, b) => getLatestActivityDate(b) - getLatestActivityDate(a));
   const actionable = [...records]
     .filter(record => getLeadWorkflowState(record).mode === "client_response" || classifyLead(record) === "esfriando" || !record?.metadata?.analiseComercial)
     .sort((a, b) => getActionRank(b) - getActionRank(a));
@@ -1291,7 +1309,7 @@ function renderList() {
       </button>`;
   }).join("");
 
-  const tableRows = recent.slice(0, 10).map(record => {
+  const tableRows = filteredRecords.map(record => {
     const moment = formatCardDate(getLatestActivityDate(record).toISOString());
     const priority = getCommercialPriority(record);
     return `
@@ -1330,12 +1348,12 @@ function renderList() {
 
       ${renderInstallCard()}
 
-      <div class="cp-kpi-grid" aria-label="Resumo dos atendimentos">
-        <article><span>Total de leads</span><strong>${records.length}</strong><small>base ativa</small></article>
-        <article><span>Responder agora</span><strong>${responder.length}</strong><small>cliente falou por último</small></article>
-        <article><span>Retomar</span><strong>${retomar.length}</strong><small>atendimentos esfriando</small></article>
-        <article><span>Aguardando</span><strong>${aguardando.length}</strong><small>resposta do cliente</small></article>
-        <article><span>Sem análise</span><strong>${semAnalise.length}</strong><small>precisam da IA</small></article>
+      <div class="cp-kpi-grid" aria-label="Filtrar atendimentos por situação">
+        <button class="cp-kpi-card${activeHomeFilter === "all" ? " active" : ""}" type="button" data-home-filter="all" aria-pressed="${activeHomeFilter === "all"}"><span>Total de leads</span><strong>${records.length}</strong><small>ver base ativa</small></button>
+        <button class="cp-kpi-card${activeHomeFilter === "responder" ? " active" : ""}" type="button" data-home-filter="responder" aria-pressed="${activeHomeFilter === "responder"}"><span>Responder agora</span><strong>${responder.length}</strong><small>ver quem falou por último</small></button>
+        <button class="cp-kpi-card${activeHomeFilter === "retomar" ? " active" : ""}" type="button" data-home-filter="retomar" aria-pressed="${activeHomeFilter === "retomar"}"><span>Retomar</span><strong>${retomar.length}</strong><small>ver atendimentos esfriando</small></button>
+        <button class="cp-kpi-card${activeHomeFilter === "aguardando" ? " active" : ""}" type="button" data-home-filter="aguardando" aria-pressed="${activeHomeFilter === "aguardando"}"><span>Aguardando</span><strong>${aguardando.length}</strong><small>ver respostas pendentes</small></button>
+        <button class="cp-kpi-card${activeHomeFilter === "semAnalise" ? " active" : ""}" type="button" data-home-filter="semAnalise" aria-pressed="${activeHomeFilter === "semAnalise"}"><span>Sem análise</span><strong>${semAnalise.length}</strong><small>ver quem precisa da IA</small></button>
       </div>
 
       <div class="cp-dashboard-grid">
@@ -1358,10 +1376,13 @@ function renderList() {
           <button class="cp-link-button" type="button" data-shell-route="#/diagnostico">Ver diagnóstico geral →</button>
         </article>
 
-        <article class="cp-panel cp-leads-panel">
-          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Base comercial</span><h2>Atendimentos em andamento</h2></div><span>${records.length} leads</span></div>
+        <article class="cp-panel cp-leads-panel" id="cp-filtered-leads">
+          <div class="cp-panel-heading">
+            <div><span class="cp-eyebrow">${activeHomeFilter === "all" ? "Base comercial" : "Filtro ativo"}</span><h2>${escapeHtml(filterLabels[activeHomeFilter])}</h2></div>
+            <div class="cp-filter-heading-actions"><span>${filteredRecords.length} lead${filteredRecords.length === 1 ? "" : "s"}</span>${activeHomeFilter === "all" ? "" : `<button type="button" data-home-filter="all">Limpar filtro</button>`}</div>
+          </div>
           <div class="cp-table-head"><span>Lead</span><span>Status</span><span>Última interação</span><span>Próxima ação</span><span>Prioridade</span></div>
-          <div class="cp-table-body">${tableRows}</div>
+          <div class="cp-table-body">${tableRows || `<div class="cp-empty-filter"><strong>Nenhum atendimento neste filtro.</strong><span>Escolha outro indicador para ver os leads correspondentes.</span></div>`}</div>
         </article>
 
         <article class="cp-panel cp-day-panel">
@@ -1664,8 +1685,8 @@ function renderCommercialSnapshot(record) {
   return `
     <section class="lead-decision-panel">
       <div class="lead-decision-topline">
-        <span>${escapeHtml(tone)}</span>
-        <small>${record?.metadata?.analiseComercial ? "Decisão da IA" : "Sem análise"}</small>
+        <span class="lead-decision-label">${escapeHtml(tone)}</span>
+        <small class="lead-decision-context">${record?.metadata?.analiseComercial ? "Decisão da IA" : "Sem análise"}</small>
       </div>
       <h1>${escapeHtml(action)}</h1>
       <p>${escapeHtml(verdict)}</p>
@@ -3285,6 +3306,16 @@ function bindEvents() {
     const copyHomeTrigger = event.target.closest("[data-copy-home]");
     if (copyHomeTrigger) {
       await copyHomeSuggestion(copyHomeTrigger.dataset.copyHome);
+      return;
+    }
+
+    const homeFilterTrigger = event.target.closest("[data-home-filter]");
+    if (homeFilterTrigger) {
+      state.homeFilter = homeFilterTrigger.dataset.homeFilter || "all";
+      renderList();
+      requestAnimationFrame(() => {
+        document.getElementById("cp-filtered-leads")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       return;
     }
 
