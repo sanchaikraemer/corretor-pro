@@ -3491,3 +3491,15 @@ body {
 .home-bd .floating-add-button { background: var(--bd-coral); color: #fff; box-shadow: 0 12px 26px rgba(255, 107, 92, 0.34); }
 .home-bd .storage-note { color: var(--bd-apoio); }
 .home-bd .install-card { background: var(--bd-petroleo-claro); border-color: var(--bd-linha); color: var(--bd-gelo); }
+
+/* v088 — cliques na tela Bom dia: KPIs rolam para a seção, cards abrem o lead */
+.bd-kpi {
+  font: inherit; text-align: left; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color 0.15s ease, transform 0.05s ease;
+}
+.bd-kpi:active { transform: scale(0.97); border-color: var(--bd-coral); }
+.bd-card--clickable { cursor: pointer; transition: border-color 0.15s ease, transform 0.05s ease; }
+.bd-card--clickable:active { transform: scale(0.995); }
+.bd-card--clickable:hover { border-color: rgba(255, 107, 92, 0.4); }
+.bd-section { scroll-margin-top: 80px; }

@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=087";
+} from "./db.js?v=088";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=087";
+} from "./whatsapp.js?v=088";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v087", package: "0.87.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v088", package: "0.88.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -1248,7 +1248,7 @@ function renderList() {
           <button class="bd-btn bd-btn--primary" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Gerar análise</button>
         </div>`;
     return `
-      <article class="bd-card bd-card--${escapeHtml(priority.className)}">
+      <article class="bd-card bd-card--${escapeHtml(priority.className)} bd-card--clickable" data-attendance="${escapeHtml(record.conversationKey)}">
         <div class="bd-card-head">
           <span class="bd-avatar" aria-hidden="true">${escapeHtml(leadInitials(record.nomeLead))}</span>
           <span class="bd-who">
@@ -1282,16 +1282,16 @@ function renderList() {
       <p>${total ? "Comece de cima. A mensagem já está pronta — é copiar, mandar e seguir pro próximo." : "Quando um cliente responder, ele aparece aqui em primeiro lugar."}</p>
     </section>
     <div class="bd-kpis" aria-label="Resumo do dia">
-      <span class="bd-kpi"><strong class="coral">${total}</strong><span>pra agir</span></span>
-      <span class="bd-kpi"><strong>${esfriando.length}</strong><span>retomar</span></span>
-      <span class="bd-kpi"><strong>${aguardar.length}</strong><span>aguardando</span></span>
+      <button class="bd-kpi" type="button" data-kpi-scroll="bd-atender"><strong class="coral">${total}</strong><span>pra agir</span></button>
+      <button class="bd-kpi" type="button" data-kpi-scroll="bd-atender"><strong>${esfriando.length}</strong><span>retomar</span></button>
+      <button class="bd-kpi" type="button" data-kpi-scroll="bd-aguardando"><strong>${aguardar.length}</strong><span>aguardando</span></button>
     </div>`;
 
   const acionarHtml = acionar.length
-    ? `<h2 class="bd-section">Atender agora</h2><div class="bd-list">${acionar.map(buildActionCard).join("")}</div>`
+    ? `<h2 class="bd-section" id="bd-atender">Atender agora</h2><div class="bd-list">${acionar.map(buildActionCard).join("")}</div>`
     : "";
   const aguardarHtml = aguardar.length
-    ? `<h2 class="bd-section bd-section--muted">Aguardando resposta</h2><div class="bd-waitlist">${aguardar.map(buildWaitCard).join("")}</div>`
+    ? `<h2 class="bd-section bd-section--muted" id="bd-aguardando">Aguardando resposta</h2><div class="bd-waitlist">${aguardar.map(buildWaitCard).join("")}</div>`
     : "";
 
   app.innerHTML = `
@@ -3049,6 +3049,13 @@ function bindEvents() {
     const copyHomeTrigger = event.target.closest("[data-copy-home]");
     if (copyHomeTrigger) {
       await copyHomeSuggestion(copyHomeTrigger.dataset.copyHome);
+      return;
+    }
+
+    const kpiScrollTrigger = event.target.closest("[data-kpi-scroll]");
+    if (kpiScrollTrigger) {
+      const target = document.getElementById(kpiScrollTrigger.dataset.kpiScroll);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
 

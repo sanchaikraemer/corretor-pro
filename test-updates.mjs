@@ -55,7 +55,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v087"/);
+  assert.match(versionSource, /app: "v088"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +63,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=087/);
-  assert.match(htmlSource, /styles\.css\?v=087/);
-  assert.match(appSource, /db\.js\?v=087/);
-  assert.match(appSource, /whatsapp\.js\?v=087/);
+  assert.match(htmlSource, /app\.js\?v=088/);
+  assert.match(htmlSource, /styles\.css\?v=088/);
+  assert.match(appSource, /db\.js\?v=088/);
+  assert.match(appSource, /whatsapp\.js\?v=088/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +211,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v087<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v088<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -678,16 +678,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v087 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v088 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v087"/);
-  assert.match(versionSource, /package: "0\.87\.0"/);
+  assert.match(versionSource, /app: "v088"/);
+  assert.match(versionSource, /package: "0\.88\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.87.0");
+  assert.equal(pkg.version, "0.88.0");
 });
 
 test("v075 lê o print da conversa e mescla as mensagens na linha do tempo", () => {
