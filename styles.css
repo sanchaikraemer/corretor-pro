@@ -2699,32 +2699,24 @@ button.storage-note strong { font-weight: 600; }
   .nota-save-button { flex: 1; }
 }
 
-/* v069 — camada de eficiência comercial */
+/* v075 — camada de eficiência comercial */
 .command-dashboard {
-  border: 1px solid rgba(190, 255, 72, 0.28);
+  border: 1px solid rgba(190, 255, 72, 0.22);
   border-radius: 28px;
   padding: 22px;
   margin-bottom: 18px;
-  /* Painel escuro proposital ("centro de comando"): os destaques em verde-limão
-     e os rótulos claros foram pensados para fundo escuro. Em fundo claro o texto
-     ficava lavado. */
-  color: #eaf3ee;
   background:
-    radial-gradient(circle at top left, rgba(190, 255, 72, 0.20), transparent 42%),
-    linear-gradient(135deg, #0b3b2e, #062a20);
+    radial-gradient(circle at top left, rgba(190, 255, 72, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
   box-shadow: 0 22px 70px rgba(0,0,0,0.32);
-}
-.command-dashboard .section-eyebrow {
-  color: #d8ff63;
 }
 .command-dashboard-heading h2 {
   margin: 4px 0 6px;
   font-size: clamp(1.35rem, 4vw, 2rem);
-  color: #ffffff;
 }
 .command-dashboard-heading p {
   margin: 0;
-  color: #c4cec9;
+  color: var(--muted, #a9b0ae);
   line-height: 1.45;
 }
 .command-metrics {
@@ -2749,7 +2741,7 @@ button.storage-note strong { font-weight: 600; }
   display: block;
   margin-top: 6px;
   font-size: .78rem;
-  color: #c4cec9;
+  color: var(--muted, #a9b0ae);
 }
 .command-top-list {
   display: grid;
@@ -2770,15 +2762,16 @@ button.storage-note strong { font-weight: 600; }
 }
 .command-top-card strong,
 .command-top-card small { display: block; }
-.command-top-card small { color: #c4cec9; margin-top: 3px; }
-.command-top-band { font-size: 1rem; font-weight: 700; white-space: nowrap; color: #d8ff63; }
-.command-top-band.warm { color: #ffd36a; }
-.command-top-band.cool { color: #8fdcff; }
+.command-top-card small { color: var(--muted, #a9b0ae); margin-top: 3px; }
+.command-top-card b { color: #d8ff63; font-size: 1.15rem; }
 .attendance-urgency.hot { color: #d8ff63; }
 .attendance-urgency.warm { color: #ffd36a; }
 .attendance-urgency.cool { color: #8fdcff; }
 .commercial-snapshot {
-  display: block;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 24px;
   padding: 18px;
@@ -2787,9 +2780,53 @@ button.storage-note strong { font-weight: 600; }
 }
 .commercial-snapshot.warm { background: linear-gradient(135deg, rgba(255,211,106,0.12), rgba(255,255,255,0.035)); }
 .commercial-snapshot.cool { background: linear-gradient(135deg, rgba(143,220,255,0.10), rgba(255,255,255,0.03)); }
+.commercial-score {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: rgba(0,0,0,0.36);
+  border: 1px solid rgba(216,255,99,0.28);
+}
+.commercial-score span {
+  color: var(--muted, #a9b0ae);
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.commercial-score strong { color: #d8ff63; font-size: 1.6rem; line-height: 1.1; }
 .commercial-snapshot-copy h2 { margin: 4px 0 8px; }
 .commercial-snapshot-copy p { margin: 5px 0; color: var(--muted, #a9b0ae); line-height: 1.4; }
 .commercial-snapshot-copy p strong { color: var(--text, #fff); }
 @media (max-width: 680px) {
   .command-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .commercial-snapshot { grid-template-columns: 1fr; }
+  .commercial-score { width: 84px; height: 84px; }
+}
+
+.command-playbook {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(216, 255, 99, 0.22);
+  border-radius: 18px;
+  background: rgba(216, 255, 99, 0.08);
+}
+.command-playbook strong { color: #d8ff63; }
+.command-playbook span { color: var(--muted, #a9b0ae); line-height: 1.45; }
+.command-top-card--hot { border-color: rgba(216, 255, 99, 0.38); }
+.command-top-card--warm { border-color: rgba(255, 211, 106, 0.32); }
+.command-top-card--cool { border-color: rgba(143, 220, 255, 0.28); }
+.command-top-card small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 560px) {
+  .command-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .command-dashboard { padding: 18px; }
 }

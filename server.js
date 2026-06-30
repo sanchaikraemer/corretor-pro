@@ -3,13 +3,13 @@ import "./version.js";
 // Corretor Pro — handler HTTP sem dependências externas.
 // Funciona como função serverless da Vercel (export default (req, res)).
 
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
+const MAX_AUDIO_BYTES = Number(process.env.MAX_AUDIO_BYTES || 12 * 1024 * 1024);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v074", package: "0.74.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v075", package: "0.75.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -20,7 +20,6 @@ const ANALYSIS_SCHEMA = {
     produtosParalelos: { type: "array", items: { type: "string" }, maxItems: 6 },
     etapa: { type: "string" },
     nivelInteresse: { type: "string", enum: ["baixo", "médio", "alto"] },
-    temperatura: { type: "string", enum: ["quente", "morno", "frio"] },
     sinaisInteresse: { type: "array", items: { type: "string" }, maxItems: 6 },
     objecaoPrincipal: { type: "string" },
     ultimaPessoaAFalar: { type: "string" },
@@ -55,7 +54,6 @@ const ANALYSIS_SCHEMA = {
     "produtosParalelos",
     "etapa",
     "nivelInteresse",
-    "temperatura",
     "sinaisInteresse",
     "objecaoPrincipal",
     "ultimaPessoaAFalar",
@@ -107,7 +105,6 @@ REGRAS DE PRODUTO E OBJEÇÃO:
 - Não reabra comparação com outros imóveis se o cliente já indicou uma unidade preferida e a conversa está na etapa financeira, salvo se ele tiver pedido essa comparação depois da proposta.
 - Não transforme confusão de preço sobre outro imóvel em objeção de preço do produto atual.
 - Classifique o interesse apenas por evidências da conversa, não por otimismo.
-- Classifique a TEMPERATURA do lead lendo o contexto inteiro — não use fórmula ou pontuação numérica. Considere engajamento e quem falou por último, recência da última interação, sinais de compra (pedido de valores/visita/condições, unidade específica, urgência), etapa da negociação e objeções. Use exatamente: "quente" (cliente engajado, sinais claros de avanço ou aguardando você agora), "morno" (interesse real mas sem definição, parado ou ainda explorando) ou "frio" (pouco engajamento, sem sinais ou esfriou). A decisão é sua, com base na conversa.
 
 REGRAS GERAIS:
 - Leia os valores e condições visíveis na imagem, mas não invente números ou informações ilegíveis. Quando algo não estiver claro, diga que não foi identificado.
@@ -319,7 +316,7 @@ async function handleTranscrever(req, res, url) {
   if (tooLarge || buffer.length > MAX_AUDIO_BYTES) {
     return send(res, 413, {
       code: "AUDIO_TOO_LARGE",
-      error: "Este áudio ultrapassa o limite de 4 MB desta primeira versão."
+      error: "Este áudio ultrapassa o limite de 12 MB desta versão."
     });
   }
   if (!buffer.length) return send(res, 400, { error: "O áudio recebido está vazio." });
@@ -560,6 +557,30 @@ async function requestStructuredAnalysis({ apiKey, model, content, instructions 
   }
 }
 
+
+function analysisModelCandidates() {
+  const configured = String(process.env.OPENAI_ANALYSIS_MODEL || "").trim();
+  const fallbacks = ["gpt-5.4-mini", "gpt-5.1-mini", "gpt-4.1-mini"];
+  return [...new Set([configured, ...fallbacks].filter(Boolean))];
+}
+
+async function requestAnalysisWithFallback({ apiKey, content, instructions }) {
+  let lastError = null;
+  for (const model of analysisModelCandidates()) {
+    try {
+      const analysis = await requestStructuredAnalysis({ apiKey, model, content, instructions });
+      return { analysis, model };
+    } catch (error) {
+      lastError = error;
+      const status = Number(error?.status || 0);
+      const message = String(error?.message || "").toLowerCase();
+      const modelProblem = status === 404 || status === 400 || message.includes("model") || message.includes("not found") || message.includes("does not exist");
+      if (!modelProblem) throw error;
+    }
+  }
+  throw lastError || new Error("Nenhum modelo de análise disponível.");
+}
+
 async function handleAnalisar(req, res) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -588,14 +609,15 @@ async function handleAnalisar(req, res) {
     });
   }
 
-  const model = process.env.OPENAI_ANALYSIS_MODEL || "gpt-5.4-mini";
   try {
-    let analysis = await requestStructuredAnalysis({
+    let usedModel = "";
+    let firstPass = await requestAnalysisWithFallback({
       apiKey,
-      model,
       content: buildAnalysisContent(body),
       instructions: ANALYSIS_INSTRUCTIONS
     });
+    let analysis = firstPass.analysis;
+    usedModel = firstPass.model;
 
     let qualityReviewApplied = false;
     if (body.proposalImage && proposalAnalysisNeedsRepair(analysis)) {
@@ -610,15 +632,16 @@ async function handleAnalisar(req, res) {
         JSON.stringify(analysis)
       ].join("\n");
 
-      analysis = await requestStructuredAnalysis({
+      const correctionPass = await requestAnalysisWithFallback({
         apiKey,
-        model,
         content: buildAnalysisContent(body, correctionContext),
         instructions: `${ANALYSIS_INSTRUCTIONS}\n\nEsta é uma etapa de correção. A resposta final deve eliminar integralmente a contradição identificada.`
       });
+      analysis = correctionPass.analysis;
+      usedModel = correctionPass.model;
     }
 
-    return send(res, 200, { analysis, model, qualityReviewApplied });
+    return send(res, 200, { analysis, model: usedModel, qualityReviewApplied });
   } catch (error) {
     if (error?.code === "ANALYSIS_EMPTY") {
       return send(res, 502, { code: "ANALYSIS_EMPTY", error: error.message });

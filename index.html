@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=074">
+  <link rel="stylesheet" href="/styles.css?v=075">
 </head>
 <body>
   <header id="app-header" class="app-header">
@@ -33,7 +33,7 @@
       <span id="detail-header-subtitle"></span>
     </div>
 
-    <span id="header-version" class="header-version" aria-label="Versão do sistema">v074</span>
+    <span id="header-version" class="header-version" aria-label="Versão do sistema">v075</span>
     <span id="lead-count" class="lead-count" aria-label="Total de leads" hidden></span>
     <button id="install-button" class="install-button" type="button" hidden>Instalar</button>
     <button id="edit-name-button" class="icon-button" type="button" aria-label="Editar nome" hidden>
@@ -68,9 +68,9 @@
           <strong>Quais áudios devem ser transcritos?</strong>
           <p>Todas as mensagens escritas serão importadas. Escolha apenas o período dos áudios.</p>
           <div class="audio-period-options" role="group" aria-label="Período dos áudios">
-            <button class="active" type="button" data-audio-import-period="30" aria-pressed="true">30 dias</button>
+            <button type="button" data-audio-import-period="30" aria-pressed="false">30 dias</button>
             <button type="button" data-audio-import-period="60" aria-pressed="false">60 dias</button>
-            <button type="button" data-audio-import-period="90" aria-pressed="false">90 dias</button>
+            <button class="active" type="button" data-audio-import-period="90" aria-pressed="true">90 dias</button>
             <button type="button" data-audio-import-period="all" aria-pressed="false">Todo o período</button>
           </div>
           <span id="audio-period-summary" class="audio-period-summary"></span>
@@ -144,8 +144,8 @@
 
 
 
-  <script src="/version.js?v=074"></script>
-  <script src="/zip.min.js?v=074"></script>
-  <script type="module" src="/app.js?v=074"></script>
+  <script src="/version.js?v=075"></script>
+  <script src="/zip.min.js?v=075"></script>
+  <script type="module" src="/app.js?v=075"></script>
 </body>
 </html>

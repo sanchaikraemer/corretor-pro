@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=074";
+} from "./db.js?v=075";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=074";
+} from "./whatsapp.js?v=075";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v074", package: "0.74.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v075", package: "0.75.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -56,6 +56,8 @@ const MAX_PROPOSAL_SOURCE_BYTES = 12 * 1024 * 1024;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const MAX_PROPOSAL_DIMENSION = 2000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const AUDIO_MAX_BYTES = 12 * 1024 * 1024;
 const PROCESSING_STEPS = ["read", "audio", "transcribe", "timeline", "save"];
 const AUDIO_IMPORT_PERIODS = [
   { value: "30", label: "30 dias" },
@@ -81,7 +83,7 @@ const state = {
   processingElapsedTimer: null,
   importAbortController: null,
   importCancelled: false,
-  audioPeriodSelection: "30",
+  audioPeriodSelection: "90",
   audioPeriodResolver: null,
   audioPeriodCandidates: [],
   audioPeriodReferenceTimestamp: null,
@@ -408,7 +410,7 @@ function updateAudioPeriodSummary() {
 function waitForAudioPeriodSelection(candidates, referenceTimestamp) {
   state.audioPeriodCandidates = candidates;
   state.audioPeriodReferenceTimestamp = referenceTimestamp;
-  setAudioPeriodSelection("30");
+  setAudioPeriodSelection("90");
   if (audioPeriodPanel) audioPeriodPanel.hidden = false;
   if (processingLive) processingLive.hidden = true;
   setProcessing("audio", 1, "Escolha o período dos áudios. Todas as mensagens escritas serão importadas.", "Selecionar período dos áudios");
@@ -550,82 +552,112 @@ function daysSince(date) {
   return Math.max(0, Math.floor((Date.now() - valid.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
-const TEMPERATURE_INFO = {
-  quente: { key: "quente", label: "Quente", className: "hot", rank: 3 },
-  morno: { key: "morno", label: "Morno", className: "warm", rank: 2 },
-  frio: { key: "frio", label: "Frio", className: "cool", rank: 1 }
-};
+function getCommercialTemperature(record) {
+  const analysis = record?.metadata?.analiseComercial || {};
+  const workflow = getLeadWorkflowState(record);
+  let score = 44;
+  const interest = normalizeComparable(analysis.nivelInteresse || analysis.interesse || "");
+  const stage = normalizeComparable(analysis.etapa || "");
+  const summary = normalizeComparable([
+    analysis.resumo,
+    analysis.pendenciaReal,
+    analysis.pendenciaFinanceira,
+    analysis.proximoPasso,
+    analysis.ultimaSolicitacaoCliente,
+    analysis.ultimoCompromissoCliente,
+    analysis.ultimoCompromissoCorretor,
+    ...(Array.isArray(analysis.sinaisInteresse) ? analysis.sinaisInteresse : [])
+  ].filter(Boolean).join(" "));
+  const age = daysSince(workflow.activityDate);
 
-// A temperatura do lead é definida pela IA ao ler o contexto da conversa
-// (campo analiseComercial.temperatura), não por pontuação numérica.
-// Sem análise ainda → null (não classificado).
-function getLeadTemperature(record) {
-  const raw = normalizeComparable(record?.metadata?.analiseComercial?.temperatura || "");
-  if (raw.includes("quente")) return TEMPERATURE_INFO.quente;
-  if (raw.includes("morno")) return TEMPERATURE_INFO.morno;
-  if (raw.includes("frio")) return TEMPERATURE_INFO.frio;
-  return null;
-}
-
-function temperatureRank(record) {
-  return getLeadTemperature(record)?.rank || 0;
-}
-
-function leadRecency(record) {
-  const meta = record?.metadata || {};
-  return Date.parse(meta.ultimaMovimentacaoAt || record?.ultimaMensagemAt || record?.updatedAt || "") || 0;
+  if (workflow.mode === "client_response") score += 26;
+  if (workflow.mode === "waiting") score -= Math.min(22, age * 2);
+  if (classifyLead(record) === "esfriando") score += 8;
+  if (interest.includes("alto") || interest.includes("muito alto")) score += 23;
+  if (interest.includes("medio")) score += 12;
+  if (interest.includes("baixo")) score -= 18;
+  if (/negociacao|proposta|analise financeira|decisao|fechamento|visita/.test(stage)) score += 15;
+  if (/entrada|financiamento|fgts|parcela|valor|proposta|contrato|visita|cafe|reuniao|simulacao|chaves/.test(summary)) score += 11;
+  if (/comprar|fechar|gostei|queremos|reserva|documento|aprovacao/.test(summary)) score += 8;
+  if (record?.metadata?.propostaImagem) score += 7;
+  if (!analysis.generatedAt) score -= 12;
+  return Math.max(0, Math.min(99, Math.round(score)));
 }
 
 function getCommercialPriority(record) {
   const workflow = getLeadWorkflowState(record);
-  const temp = getLeadTemperature(record);
+  const score = getCommercialTemperature(record);
   if (workflow.mode === "client_response") return { label: "Responder agora", className: "hot" };
+  if (!record?.metadata?.analiseComercial) return { label: "Analisar primeiro", className: "warm" };
   if (classifyLead(record) === "esfriando") return { label: "Retomar hoje", className: "warm" };
-  if (!temp) return { label: "Sem análise", className: "cool" };
-  if (temp.key === "quente") return { label: "Oportunidade forte", className: "hot" };
-  if (temp.key === "morno") return { label: "Acompanhar", className: "warm" };
+  if (score >= 75) return { label: "Oportunidade forte", className: "hot" };
+  if (score >= 58) return { label: "Acompanhar", className: "warm" };
   return { label: "Organizado", className: "cool" };
+}
+
+function getActionRank(record) {
+  const workflow = getLeadWorkflowState(record);
+  if (workflow.mode === "client_response") return 4000 + getCommercialTemperature(record);
+  if (!record?.metadata?.analiseComercial) return 3000 + daysSince(getLatestActivityDate(record));
+  if (classifyLead(record) === "esfriando") return 2000 + getCommercialTemperature(record);
+  return getCommercialTemperature(record);
+}
+
+function getCommercialReason(record) {
+  const analysis = record?.metadata?.analiseComercial;
+  const workflow = getLeadWorkflowState(record);
+  if (!analysis) return "Sem análise: abra o atendimento e gere a leitura comercial.";
+  if (workflow.mode === "client_response") return "O cliente respondeu depois da última movimentação. A prioridade é continuar exatamente do ponto em que ele parou.";
+  if (classifyLead(record) === "esfriando") return "Você já movimentou esse atendimento, mas ele está parado há dias. Retomar com gancho específico evita perder timing.";
+  if (record?.metadata?.propostaImagem) return "Existe proposta anexada. A retomada deve medir reação e ajustar a composição, não reenviar os mesmos números.";
+  const pending = String(analysis.pendenciaReal || analysis.pendenciaFinanceira || analysis.proximoPasso || "").trim();
+  if (pending) return pending;
+  return String(analysis.resumo || "Atendimento organizado para acompanhamento.").trim();
+}
+
+function getNextActionLabel(record) {
+  const analysis = record?.metadata?.analiseComercial;
+  const workflow = getLeadWorkflowState(record);
+  if (!analysis) return "Gerar análise";
+  if (workflow.mode === "client_response") return "Responder";
+  if (classifyLead(record) === "esfriando") return "Retomar";
+  if (getCommercialTemperature(record) >= 75) return "Conduzir";
+  return "Abrir";
 }
 
 function renderDashboard(records) {
   const total = records.length;
   const responder = records.filter(r => getLeadWorkflowState(r).mode === "client_response").length;
   const esfriando = records.filter(r => classifyLead(r) === "esfriando").length;
-  const quentes = records.filter(r => getLeadTemperature(r)?.key === "quente").length;
+  const quentes = records.filter(r => getCommercialTemperature(r) >= 75).length;
   const semAnalise = records.filter(r => !r?.metadata?.analiseComercial).length;
   const top = [...records]
-    .sort((a, b) => {
-      // Ordena pela temperatura que a IA atribuiu; desempata por quem
-      // respondeu (precisa de você agora) e pela interação mais recente.
-      const byTemp = temperatureRank(b) - temperatureRank(a);
-      if (byTemp !== 0) return byTemp;
-      const aResp = getLeadWorkflowState(a).mode === "client_response" ? 1 : 0;
-      const bResp = getLeadWorkflowState(b).mode === "client_response" ? 1 : 0;
-      if (aResp !== bResp) return bResp - aResp;
-      return leadRecency(b) - leadRecency(a);
-    })
-    .slice(0, 3);
+    .sort((a, b) => getActionRank(b) - getActionRank(a))
+    .slice(0, 5);
   return `
     <section class="command-dashboard" aria-label="Resumo comercial">
       <div class="command-dashboard-heading">
-        <span class="section-eyebrow">Sua atenção agora</span>
-        <h2>O que pode virar venda</h2>
-        <p>A IA lê cada conversa e classifica a temperatura do lead — resposta do cliente, sinais de interesse e etapa.</p>
+        <span class="section-eyebrow">Mesa do corretor</span>
+        <h2>O que merece ação agora</h2>
+        <p>A ordem favorece primeiro quem respondeu, depois quem precisa de análise, retomadas frias e oportunidades com sinais reais de compra.</p>
       </div>
       <div class="command-metrics">
-        <article><strong>${responder}</strong><span>para responder</span></article>
-        <article><strong>${esfriando}</strong><span>esfriando</span></article>
+        <article><strong>${responder}</strong><span>responder</span></article>
+        <article><strong>${esfriando}</strong><span>retomar</span></article>
         <article><strong>${quentes}</strong><span>quentes</span></article>
         <article><strong>${semAnalise}</strong><span>sem análise</span></article>
       </div>
       ${top.length ? `<div class="command-top-list">${top.map(record => {
         const priority = getCommercialPriority(record);
-        const temp = getLeadTemperature(record);
-        return `<button class="command-top-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-          <span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(priority.label)}</small></span>
-          ${temp ? `<b class="command-top-band ${temp.className}">${temp.label}</b>` : ""}
+        return `<button class="command-top-card command-top-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+          <span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(priority.label)} · ${escapeHtml(getCommercialReason(record))}</small></span>
+          <b>${getCommercialTemperature(record)}%</b>
         </button>`;
       }).join("")}</div>` : ""}
+      <div class="command-playbook">
+        <strong>Fluxo recomendado</strong>
+        <span>Rotina de uso: importar, analisar, copiar a melhor resposta, marcar como atendido e reimportar quando houver nova resposta do contato.</span>
+      </div>
     </section>`;
 }
 
@@ -1137,7 +1169,7 @@ function renderList() {
         <span class="attendance-copy">
           <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)}${getLeadTemperature(record) ? ` · ${getLeadTemperature(record).label}` : ""}</span>
+          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)} · ${getCommercialTemperature(record)}% · ${escapeHtml(getNextActionLabel(record))}</span>
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
@@ -1512,13 +1544,17 @@ function renderAnalysisSection(record) {
 function renderCommercialSnapshot(record) {
   const analysis = record?.metadata?.analiseComercial || {};
   const priority = getCommercialPriority(record);
-  const temp = getLeadTemperature(record);
+  const score = getCommercialTemperature(record);
   const next = analysis.proximoPasso || (getLeadWorkflowState(record).mode === "client_response" ? "Responder a nova mensagem do cliente." : "Analisar atendimento e definir próxima ação.");
   const pending = analysis.pendenciaReal || analysis.pendenciaFinanceira || "Nenhuma pendência clara identificada.";
   return `
     <section class="commercial-snapshot ${escapeHtml(priority.className)}">
+      <div class="commercial-score">
+        <span>Temperatura</span>
+        <strong>${score}%</strong>
+      </div>
       <div class="commercial-snapshot-copy">
-        <span class="section-eyebrow">Prioridade comercial${temp ? ` · ${escapeHtml(temp.label)}` : ""}</span>
+        <span class="section-eyebrow">Prioridade comercial</span>
         <h2>${escapeHtml(priority.label)}</h2>
         <p><strong>Próxima ação:</strong> ${escapeHtml(next)}</p>
         <p><strong>Pendência:</strong> ${escapeHtml(pending)}</p>
@@ -1792,7 +1828,7 @@ async function toggleNotaRecording(record) {
         renderDetail(latest);
 
         if (blob.size < 100) { showToast("Gravação muito curta, tente novamente.", "error"); return; }
-        if (blob.size > 4 * 1024 * 1024) { showToast("Áudio longo demais (limite 4 MB). Grave em partes menores.", "error"); return; }
+        if (blob.size > AUDIO_MAX_BYTES) { showToast("Áudio longo demais (limite 12 MB). Grave em partes menores.", "error"); return; }
 
         showToast("Transcrevendo áudio...");
         try {
