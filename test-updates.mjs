@@ -65,7 +65,7 @@ const sampleAnalysis = {
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v081"/);
+  assert.match(versionSource, /app: "v083"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -73,10 +73,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=081/);
-  assert.match(htmlSource, /styles\.css\?v=081/);
-  assert.match(appSource, /db\.js\?v=081/);
-  assert.match(appSource, /whatsapp\.js\?v=081/);
+  assert.match(htmlSource, /app\.js\?v=083/);
+  assert.match(htmlSource, /styles\.css\?v=083/);
+  assert.match(appSource, /db\.js\?v=083/);
+  assert.match(appSource, /whatsapp\.js\?v=083/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -221,7 +221,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v081<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v083<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -411,10 +411,10 @@ test("v040 mantém análise objetiva, visual e detalhes recolhidos", () => {
   assert.match(appSource, /v2-diagnosis-list/);
   assert.match(appSource, /v2-diagnosis-list/);
   assert.match(appSource, /analysis-point-list/);
-  assert.match(appSource, /Leitura atual/);
-  assert.match(appSource, /O que falta definir/);
-  assert.match(appSource, /Próximo passo/);
-  assert.match(appSource, /class="v2-drawer"/);
+  assert.match(appSource, /O que está acontecendo/);
+  assert.match(appSource, /Antes de fechar/);
+  assert.match(appSource, /Próximo movimento/);
+  assert.match(appSource, /class="cp-drawer v2-drawer"/);
   assert.match(appSource, /Ver análise completa/);
   assert.match(stylesSource, /\.v2-diagnosis-list/);
   assert.match(stylesSource, /\.v2-drawer summary/);
@@ -424,7 +424,7 @@ test("v040 substitui aviso genérico por confirmação discreta e só mostra ale
   assert.match(appSource, /getActionableAnalysisAlert/);
   assert.match(appSource, /Proposta considerada na análise/);
   assert.match(appSource, /v2-inline-status/);
-  assert.match(appSource, /actionableAlert \? `<div class="analysis-alert"/);
+  assert.match(appSource, /actionableAlert \? `<div class="cp-alert analysis-alert"/);
   assert.match(serverSource, /retorne uma string vazia quando não houver falta de informação/);
   assert.match(serverSource, /Não use esse campo para confirmar que a proposta foi lida/);
   assert.match(stylesSource, /\.v2-inline-status/);
@@ -433,7 +433,7 @@ test("v040 substitui aviso genérico por confirmação discreta e só mostra ale
 test("v040 mantém sugestões completas, visíveis e numeradas", () => {
   assert.match(appSource, /v2-suggestions-stack/);
   assert.match(appSource, /v2-suggestion-row/);
-  assert.match(appSource, /Mensagem pronta para WhatsApp/);
+  assert.match(appSource, /Mensagem pronta/);
   assert.match(appSource, /data-copy-suggestion/);
   assert.doesNotMatch(appSource, /Ver sugestão/);
   assert.match(stylesSource, /\.v2-suggestions-stack/);
@@ -452,7 +452,7 @@ test("v040 registra Atendido agora sem timer ou bloqueio por tempo", () => {
   assert.doesNotMatch(appSource, /Nova retomada em/);
   assert.doesNotMatch(appSource, /48 horas sem resposta/);
   assert.match(appSource, /Aguardando resposta do cliente/);
-  assert.match(appSource, /attendance-urgency/);
+  assert.match(appSource, /v2-lead-side/);
 
   const start = appSource.indexOf("async function registerLeadAttended(");
   const end = appSource.indexOf("async function markAttendedNow()", start);
@@ -547,18 +547,16 @@ test("lista usa a última movimentação, não apenas a última mensagem", () =>
   assert.match(dbSource, /metadata\?\.atendidoAgoraAt/);
 });
 
-test("v041 organiza lista por urgência com grupos Chamar agora e Aguardar", () => {
+test("v083 organiza a home como central de ação, não como dashboard", () => {
   const renderListStart = appSource.indexOf("function renderList()");
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
-  // Horário da última atividade presente no card
-  assert.match(renderListSource, /<span class="attendance-time">/);
-  // Grupos de urgência com títulos de seção
-  assert.match(renderListSource, /Chamar agora/);
-  assert.match(renderListSource, /Aguardar/);
-  // Rótulo de urgência em texto nos cards do grupo "Chamar agora"
-  assert.match(renderListSource, /attendance-urgency/);
-  // Sem duplicação de horário via formatAttendedNowLabel
+  assert.match(renderListSource, /v2-home-page/);
+  assert.match(renderListSource, /Fila de ação/);
+  assert.match(renderListSource, /Todos os atendimentos/);
+  assert.match(renderListSource, /v2-lead-row/);
+  assert.doesNotMatch(renderListSource, /attendance-time/);
+  assert.doesNotMatch(renderListSource, /attendance-urgency/);
   assert.doesNotMatch(renderListSource, /formatAttendedNowLabel/);
   assert.doesNotMatch(renderListSource, /Retomada disponível · 48h sem resposta/);
 });
@@ -590,7 +588,7 @@ test("v040 mostra inteligência comercial antes do contexto financeiro", () => {
 
 test("v040 aumenta a fonte das sugestões de resposta", () => {
   assert.match(stylesSource, /\.suggestion-body strong \{[\s\S]*font-size: 13px;/);
-  assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;[\s\S]*line-height: 1\.65;/);
+  assert.match(stylesSource, /\.v2-suggestion-row[\s\S]*font-size: 14px;/);
 });
 
 test("v040 permite escolher o período dos áudios com 90 dias pré-selecionado", () => {
@@ -646,7 +644,7 @@ test("v040 aumenta os textos da análise sem alterar as sugestões já aprovadas
   assert.match(stylesSource, /\.analysis-compact-item p \{[\s\S]*font-size: 12px;/);
   assert.match(stylesSource, /\.analysis-block p,[\s\S]*font-size: 11px;/);
   assert.match(stylesSource, /\.analysis-status strong \{[\s\S]*font-size: 12px;/);
-  assert.match(stylesSource, /\.suggestions-panel \.suggestion-card p \{[\s\S]*font-size: 14px;/);
+  assert.match(stylesSource, /\.v2-suggestion-row/);
 });
 
 test("v040 não repete aguardando resposta dentro da inteligência comercial", () => {
@@ -688,16 +686,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v081 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v083 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v081"/);
-  assert.match(versionSource, /package: "0\.81\.0"/);
+  assert.match(versionSource, /app: "v083"/);
+  assert.match(versionSource, /package: "0\.83\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.81.0");
+  assert.equal(pkg.version, "0.83.0");
 });
 
 test("v075 lê o print da conversa e mescla as mensagens na linha do tempo", () => {

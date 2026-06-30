@@ -1,8 +1,8 @@
-# Corretor Pro — v081
+# Corretor Pro — v083
 
 Aplicativo web/PWA para importar conversas exportadas do WhatsApp, organizar mensagens e transcrições, analisar o atendimento com inteligência comercial e sugerir próximas respostas.
 
-## v081
+## v083
 
 Pacote entregue:
 
