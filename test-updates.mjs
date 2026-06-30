@@ -35,6 +35,16 @@ const sampleAnalysis = {
   nivelInteresse: "alto",
   sinaisInteresse: ["Indicou a unidade específica", "Pediu condição parcelada"],
   objecaoPrincipal: "Composição do pagamento durante a construção",
+  objecoesSecundarias: ["Prazo de decisão com o filho"],
+  pendenciaDocumental: "Não identificada",
+  tipoComprador: "comprador familiar para moradia",
+  riscoPerda: "médio",
+  probabilidadeFechamento: 74,
+  nivelUrgencia: "média",
+  melhorHorarioContato: "Não identificado",
+  confiancaAnalise: 88,
+  porqueNaoComprou: "Ainda precisa validar a composição financeira com o filho antes de avançar.",
+  oQueFaltaParaFechar: "Definir qual ponto da composição financeira deve ser ajustado.",
   ultimaPessoaAFalar: "Sanchai",
   ultimaSolicitacaoCliente: "Receber uma condição parcelada para analisar com o filho",
   ultimoCompromissoCliente: "Analisar a simulação com o filho",
@@ -47,15 +57,15 @@ const sampleAnalysis = {
   proximoPasso: "Perguntar se o cliente prefere ajustar a entrada ou as parcelas",
   alertaInformacaoIncompleta: "",
   mensagensSugeridas: [
-    { titulo: "Direta", mensagem: "Jamil, na primeira simulação, qual ponto você prefere ajustar: a entrada ou as parcelas?" },
-    { titulo: "Comparativa", mensagem: "Jamil, posso montar duas alternativas para comparar com a primeira. Você prefere reduzir a entrada ou o valor das parcelas?" },
-    { titulo: "Planejamento", mensagem: "Jamil, considerando a simulação enviada, qual parte precisa ficar mais confortável para vocês: entrada ou parcelas?" }
+    { titulo: "Direta", estrategia: "continuidade", motivo: "Retoma a simulação enviada sem recomeçar a negociação.", mensagem: "Jamil, na primeira simulação, qual ponto você prefere ajustar: a entrada ou as parcelas?" },
+    { titulo: "Comparativa", estrategia: "reengajamento", motivo: "Abre uma alternativa clara após a primeira simulação.", mensagem: "Jamil, posso montar duas alternativas para comparar com a primeira. Você prefere reduzir a entrada ou o valor das parcelas?" },
+    { titulo: "Planejamento", estrategia: "avanco", motivo: "Conduz para escolher o ajuste que viabiliza avanço.", mensagem: "Jamil, considerando a simulação enviada, qual parte precisa ficar mais confortável para vocês: entrada ou parcelas?" }
   ]
 };
 
 test("v040 mantém atualização automática e evita mistura de arquivos em cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
-  assert.match(versionSource, /app: "v076"/);
+  assert.match(versionSource, /app: "v078"/);
   assert.match(appSource, /const APP_VERSION = VERSION_INFO\.app/);
   assert.match(appSource, /const CLOUD_WORKSPACE = \(localStorage\.getItem\("corretorProWorkspace"\) \|\| "corretor-pro-site"\)\.trim\(\)/);
   assert.match(appSource, /AUTO_SYNC_INTERVAL_MS = 15000/);
@@ -63,10 +73,10 @@ test("v040 mantém atualização automática e evita mistura de arquivos em cach
   assert.doesNotMatch(htmlSource, /sync-dialog/);
   assert.doesNotMatch(appSource, /data-sync-open/);
   assert.match(workerSource, /BUILD_ID = `corretor-pro-\$\{VERSION_INFO\.app\}`/);
-  assert.match(htmlSource, /app\.js\?v=076/);
-  assert.match(htmlSource, /styles\.css\?v=076/);
-  assert.match(appSource, /db\.js\?v=076/);
-  assert.match(appSource, /whatsapp\.js\?v=076/);
+  assert.match(htmlSource, /app\.js\?v=078/);
+  assert.match(htmlSource, /styles\.css\?v=078/);
+  assert.match(appSource, /db\.js\?v=078/);
+  assert.match(appSource, /whatsapp\.js\?v=078/);
   assert.match(workerSource, /networkFirstPaths/);
   assert.match(appSource, /controllerchange/);
 });
@@ -211,7 +221,7 @@ test("DELETE grava marca de exclusão para atualizar os outros aparelhos", async
 });
 
 test("versão v040 aparece no cabeçalho superior", () => {
-  assert.match(htmlSource, /id="header-version"[^>]*>v076<\/span>/);
+  assert.match(htmlSource, /id="header-version"[^>]*>v078<\/span>/);
   assert.match(appSource, /headerVersion\.textContent = APP_VERSION/);
   assert.doesNotMatch(appSource, /class="build-tag">Corretor Pro/);
 });
@@ -293,9 +303,9 @@ test("revisão automática corrige análise que ignora a proposta já enviada", 
     produtosParalelos: ["Personalité", "Lançamento da Venâncio - unidade 1301"],
     proximoPasso: "Enviar as opções de pagamento e mostrar como ficam entrada e parcelas",
     mensagensSugeridas: [
-      { titulo: "Retomar", mensagem: "Jamil, posso te organizar a condição do 1301 e te mostrar os números?" },
-      { titulo: "Com o filho", mensagem: "Posso te mandar uma visão direta da proposta para conversar com seu filho?" },
-      { titulo: "Comparar", mensagem: "Quer que eu compare o 1301 com alternativas próximas?" }
+      { titulo: "Retomar", estrategia: "continuidade", motivo: "Teste", mensagem: "Jamil, posso te organizar a condição do 1301 e te mostrar os números?" },
+      { titulo: "Com o filho", estrategia: "reengajamento", motivo: "Teste", mensagem: "Posso te mandar uma visão direta da proposta para conversar com seu filho?" },
+      { titulo: "Comparar", estrategia: "avanco", motivo: "Teste", mensagem: "Quer que eu compare o 1301 com alternativas próximas?" }
     ]
   };
 
@@ -678,16 +688,16 @@ test("v040 sincroniza resumos e baixa o histórico completo somente ao abrir", (
   assert.match(serverSource, /record: row \? fromDatabaseRow\(row\) : null/);
 });
 
-test("v076 usa uma fonte central de versão em app, servidor, build e cache", () => {
+test("v078 usa uma fonte central de versão em app, servidor, build e cache", () => {
   const versionSource = fs.readFileSync(new URL("./version.js", import.meta.url), "utf8");
   const buildSource = fs.readFileSync(new URL("./build.js", import.meta.url), "utf8");
   const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-  assert.match(versionSource, /app: "v076"/);
-  assert.match(versionSource, /package: "0\.76\.0"/);
+  assert.match(versionSource, /app: "v078"/);
+  assert.match(versionSource, /package: "0\.78\.0"/);
   assert.match(serverSource, /VERSION_INFO\.app/);
   assert.match(workerSource, /CORRETOR_PRO_VERSION/);
   assert.match(buildSource, /VERSION_INFO\.app/);
-  assert.equal(pkg.version, "0.76.0");
+  assert.equal(pkg.version, "0.78.0");
 });
 
 test("v075 lê o print da conversa e mescla as mensagens na linha do tempo", () => {

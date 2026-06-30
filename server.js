@@ -9,7 +9,7 @@ const MAX_ANALYSIS_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_ANALYSIS_MESSAGES_CHARS = 180000;
 const MAX_PROPOSAL_DATA_URL_LENGTH = 1_800_000;
 const TABLE = "corretor_pro_atendimentos";
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v076", package: "0.76.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v078", package: "0.78.0" };
 
 
 const ANALYSIS_SCHEMA = {
@@ -21,7 +21,19 @@ const ANALYSIS_SCHEMA = {
     etapa: { type: "string" },
     nivelInteresse: { type: "string", enum: ["baixo", "médio", "alto"] },
     sinaisInteresse: { type: "array", items: { type: "string" }, maxItems: 6 },
+    gatilhoPrincipal: { type: "string" },
+    momentoEmocional: { type: "string" },
     objecaoPrincipal: { type: "string" },
+    objecoesSecundarias: { type: "array", items: { type: "string" }, maxItems: 5 },
+    pendenciaDocumental: { type: "string" },
+    tipoComprador: { type: "string" },
+    riscoPerda: { type: "string", enum: ["baixo", "médio", "alto"] },
+    probabilidadeFechamento: { type: "number", minimum: 0, maximum: 100 },
+    nivelUrgencia: { type: "string", enum: ["baixa", "média", "alta"] },
+    melhorHorarioContato: { type: "string" },
+    confiancaAnalise: { type: "number", minimum: 0, maximum: 100 },
+    porqueNaoComprou: { type: "string" },
+    oQueFaltaParaFechar: { type: "string" },
     ultimaPessoaAFalar: { type: "string" },
     ultimaSolicitacaoCliente: { type: "string" },
     ultimoCompromissoCliente: { type: "string" },
@@ -41,9 +53,11 @@ const ANALYSIS_SCHEMA = {
         type: "object",
         properties: {
           titulo: { type: "string" },
+          estrategia: { type: "string", enum: ["continuidade", "reengajamento", "avanco"] },
+          motivo: { type: "string" },
           mensagem: { type: "string" }
         },
-        required: ["titulo", "mensagem"],
+        required: ["titulo", "estrategia", "motivo", "mensagem"],
         additionalProperties: false
       }
     }
@@ -55,7 +69,19 @@ const ANALYSIS_SCHEMA = {
     "etapa",
     "nivelInteresse",
     "sinaisInteresse",
+    "gatilhoPrincipal",
+    "momentoEmocional",
     "objecaoPrincipal",
+    "objecoesSecundarias",
+    "pendenciaDocumental",
+    "tipoComprador",
+    "riscoPerda",
+    "probabilidadeFechamento",
+    "nivelUrgencia",
+    "melhorHorarioContato",
+    "confiancaAnalise",
+    "porqueNaoComprou",
+    "oQueFaltaParaFechar",
     "ultimaPessoaAFalar",
     "ultimaSolicitacaoCliente",
     "ultimoCompromissoCliente",
@@ -74,7 +100,7 @@ const ANALYSIS_SCHEMA = {
 
 const ANALYSIS_INSTRUCTIONS = `Você é o motor de inteligência comercial do Corretor Pro, voltado a atendimentos imobiliários reais por WhatsApp.
 
-Analise a conversa cronologicamente e identifique com precisão: última pessoa a falar, último compromisso do cliente, última solicitação do cliente, último compromisso assumido pelo corretor, produto principal atual, opções paralelas, participantes da decisão, etapa da negociação, nível de interesse, sinais objetivos, objeção relevante, pendência financeira, pendência real, quem deve agir agora e próximo passo.
+Analise a conversa cronologicamente e identifique com precisão: última pessoa a falar, último compromisso do cliente, última solicitação do cliente, último compromisso assumido pelo corretor, produto principal atual, opções paralelas, participantes da decisão, etapa da negociação, nível de interesse, sinais objetivos, gatilho principal de decisão, momento emocional, objeção principal, objeções secundárias, pendência financeira, pendência documental, pendência real, tipo de comprador, risco de perda, probabilidade de fechamento, nível de urgência, melhor horário de contato quando inferível, confiança da análise, por que ainda não comprou, o que falta para fechar, quem deve agir agora e próximo passo.
 
 HIERARQUIA DOS FATOS:
 1. As mensagens mostram a evolução da negociação.
@@ -107,6 +133,19 @@ REGRAS DE PRODUTO E OBJEÇÃO:
 - Classifique o interesse apenas por evidências da conversa, não por otimismo.
 
 REGRAS GERAIS:
+- Preencha gatilhoPrincipal com o fator que parece mover a decisão do cliente: localização, preço, entrada, parcela, prazo, urgência de mudança, segurança, status do imóvel, indicação familiar, investimento ou outro gatilho evidente. Se não houver evidência, escreva "Não identificado".
+- Preencha momentoEmocional com uma leitura curta e objetiva do estado do cliente: empolgado, cauteloso, inseguro, comparando opções, esperando terceiro, travado no financeiro, sem reação após proposta ou equivalente. Não invente emoção sem base.
+- Preencha objecaoPrincipal com o principal bloqueio real para avanço. Se não existir objeção clara, escreva "Não identificada"; não invente objeção.
+- Preencha objecoesSecundarias com até 5 bloqueios menores identificados. Use array vazio quando não houver.
+- Preencha pendenciaDocumental apenas quando faltar documento, aprovação, matrícula, contrato, financiamento, FGTS ou informação formal semelhante. Caso contrário, escreva "Não identificada".
+- Preencha tipoComprador com uma leitura comercial útil: moradia, investimento, comprador familiar, investidor comparador, indeciso, corretor parceiro conduzindo cliente final, comprador travado no financeiro ou equivalente.
+- Preencha riscoPerda como baixo, médio ou alto com base em silêncio, objeção, prazo, concorrência, falta de avanço e temperatura da conversa.
+- Preencha probabilidadeFechamento de 0 a 100. Seja realista: use evidências, não otimismo. Cliente sem resposta depois de proposta não deve receber nota alta sem sinais fortes recentes.
+- Preencha nivelUrgencia como baixa, média ou alta. Urgência só é alta se houver prazo real, decisão próxima, visita marcada, proposta ativa ou resposta recente importante.
+- Preencha melhorHorarioContato somente se a conversa indicar horário/padrão claro; caso contrário escreva "Não identificado".
+- Preencha confiancaAnalise de 0 a 100 conforme qualidade do histórico, presença de áudio sem transcrição, clareza da proposta e consistência das mensagens.
+- Preencha porqueNaoComprou como diagnóstico direto do bloqueio comercial atual. Responda a pergunta: por que esse cliente ainda não comprou?
+- Preencha oQueFaltaParaFechar como a menor ação concreta que pode aproximar o fechamento: confirmar ajuste financeiro, envolver decisor, marcar visita, esclarecer prazo, validar localização, formalizar proposta, etc.
 - Leia os valores e condições visíveis na imagem, mas não invente números ou informações ilegíveis. Quando algo não estiver claro, diga que não foi identificado.
 - Dê mais peso às mensagens mais recentes, sem perder compromissos anteriores ainda pendentes.
 - Diferencie claramente o que o cliente pediu, o que o corretor prometeu e o que já foi efetivamente entregue.
@@ -114,12 +153,19 @@ REGRAS GERAIS:
 - Preencha alertaInformacaoIncompleta somente quando houver áudio sem transcrição, imagem ilegível ou ausência de dado essencial que impeça uma conclusão confiável.
 - Se houver áudio não transcrito, avise que a análise pode estar incompleta.
 - As mensagens sugeridas devem continuar exatamente de onde a conversa parou, aproveitar a pendência real e considerar a proposta já enviada.
+- As três mensagens sugeridas devem ter estratégias diferentes e declaradas no campo estrategia:
+  1. continuidade: retoma naturalmente a última pendência sem parecer cobrança.
+  2. reengajamento: reabre a conversa de forma elegante quando houve silêncio ou perda de ritmo.
+  3. avanco: leva o cliente para uma próxima decisão concreta, como visita, ligação, ajuste específico, confirmação de prioridade ou alinhamento com decisor.
+- Preencha motivo explicando em uma frase por que aquela mensagem foi escolhida. O motivo é para o corretor, não para o cliente.
+- Use SPIN Selling de forma natural: situação quando faltar contexto, problema quando houver bloqueio, implicação quando o atraso prejudica a escolha, necessidade/solução quando há caminho claro. Não escreva de forma acadêmica e não cite “SPIN”.
+- Antes de sugerir mensagem, pergunte mentalmente: “essa resposta continuaria a conversa real do WhatsApp ou parece recomeçar do zero?”. Se parecer recomeçar, reescreva.
 - Não use retomadas genéricas como “ainda tem interesse?” ou “seguiram outro caminho?”.
 - Não use as expressões “faz sentido”, “fiquei pensando”, “estive pensando”, “caso não tenha agradado”, “se não gostou” ou “papo”.
 - Não use emojis.
 - Não pressione e não ofereça uma saída fácil para encerrar a conversa.
 - Abra alternativas sem abandonar o produto principal.
-- Cada sugestão deve soar como um corretor experiente, natural e objetivo, ter preferencialmente até 400 caracteres e terminar com uma única pergunta principal.
+- Cada sugestão deve soar como um corretor experiente de alta performance no WhatsApp: natural, direta, sem formalidade excessiva, sem parecer texto de robô, usando perguntas abertas com lógica de SPIN Selling quando couber. Deve ter preferencialmente até 400 caracteres e terminar com uma única pergunta principal.
 - Cada sugestão deve abrir um CAMINHO DE AVANÇO DISTINTO. É PROIBIDO devolver três variações da mesma pergunta. Em especial, é PROIBIDO que as três girem em torno de composição financeira (valor total, entrada, parcela, prazo). No máximo UMA das três pode ser sobre composição financeira.
 - DEFINIÇÃO DO MIX conforme o momento da conversa:
   - Quando NÃO houver proposta anexada (o cliente ainda não recebeu números formais): as três sugestões devem cobrir alavancas diferentes — (1) AVANÇO FÍSICO/CONCRETO: convidar para visita ao imóvel ou decorado, oferecer um tour, vídeo ou ligação rápida para apresentar o imóvel; (2) QUALIFICAÇÃO: entender a necessidade real, o prazo de mudança, com quem ela decide e o que é prioridade na escolha; (3) CONDIÇÃO PERSONALIZADA: oferecer preparar uma simulação/condição sob medida. Pelo menos a sugestão (1) deve puxar visita/ligação — um corretor experiente busca o próximo passo físico quando o interesse está quente, em vez de interrogar sobre pagamento antes da pessoa reagir ao imóvel.

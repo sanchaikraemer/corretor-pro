@@ -1,4 +1,4 @@
-# Validação — Corretor Pro v076
+# Validação — Corretor Pro v078
 
 ## Alterações validadas
 
@@ -21,9 +21,9 @@ npm run build
 ```
 
 
-## Validação adicional da v076
+## Validação adicional da v078
 
 - limite de áudio ampliado para 12 MB;
 - fallback de modelo na análise comercial;
 - home reposicionada como mesa do corretor, com motivo de prioridade e ação sugerida;
-- versão atualizada de forma consistente para `v076` / `0.76.0`.
+- versão atualizada de forma consistente para `v078` / `0.78.0`.

@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=076";
+} from "./db.js?v=078";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=076";
+} from "./whatsapp.js?v=078";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v076", package: "0.76.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v078", package: "0.78.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -610,6 +610,8 @@ function getCommercialReason(record) {
   if (workflow.mode === "client_response") return "O cliente respondeu depois da última movimentação. A prioridade é continuar exatamente do ponto em que ele parou.";
   if (classifyLead(record) === "esfriando") return "Você já movimentou esse atendimento, mas ele está parado há dias. Retomar com gancho específico evita perder timing.";
   if (record?.metadata?.propostaImagem) return "Existe proposta anexada. A retomada deve medir reação e ajustar a composição, não reenviar os mesmos números.";
+  const gatilho = String(analysis.gatilhoPrincipal || "").trim();
+  if (gatilho && !/não identificado/i.test(gatilho)) return `Gatilho de decisão: ${gatilho}.`;
   const pending = String(analysis.pendenciaReal || analysis.pendenciaFinanceira || analysis.proximoPasso || "").trim();
   if (pending) return pending;
   return String(analysis.resumo || "Atendimento organizado para acompanhamento.").trim();
@@ -1369,7 +1371,9 @@ function renderInlineIcon(kind) {
     periodo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
     mensagens: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     horario: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-    sucesso: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>'
+    sucesso: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>',
+    alvo: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
+    risco: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg>'
   };
   return icons[kind] || icons.leitura;
 }
@@ -1416,6 +1420,12 @@ function renderFullAnalysisDetails(analysis, record) {
           <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
           <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
           <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
+          <div><span>Gatilho</span><strong>${escapeHtml(analysis.gatilhoPrincipal || "Não identificado")}</strong></div>
+          <div><span>Momento emocional</span><strong>${escapeHtml(analysis.momentoEmocional || "Não identificado")}</strong></div>
+          <div><span>Tipo de comprador</span><strong>${escapeHtml(analysis.tipoComprador || "Não identificado")}</strong></div>
+          <div><span>Risco de perda</span><strong>${escapeHtml(analysis.riscoPerda || "Não identificado")}</strong></div>
+          <div><span>Fechamento</span><strong>${Number.isFinite(Number(analysis.probabilidadeFechamento)) ? `${Math.round(Number(analysis.probabilidadeFechamento))}%` : "Não identificado"}</strong></div>
+          <div><span>Confiança da IA</span><strong>${Number.isFinite(Number(analysis.confiancaAnalise)) ? `${Math.round(Number(analysis.confiancaAnalise))}%` : "Não identificado"}</strong></div>
         </div>
         <div class="analysis-grid">
           <div class="analysis-block">
@@ -1428,6 +1438,8 @@ function renderFullAnalysisDetails(analysis, record) {
           </div>
           <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
           <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Objeções secundárias</h3>${renderTextList(analysis.objecoesSecundarias)}</div>
+          <div class="analysis-block"><h3>Pendência documental</h3><p>${escapeHtml(analysis.pendenciaDocumental || "Não identificada")}</p></div>
           <div class="analysis-block"><h3>Última solicitação do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
           <div class="analysis-block"><h3>Último compromisso do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
           <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
@@ -1435,6 +1447,9 @@ function renderFullAnalysisDetails(analysis, record) {
           <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
           <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
           <div class="analysis-block"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Por que ainda não comprou?</h3><p>${escapeHtml(analysis.porqueNaoComprou || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>O que falta para fechar?</h3><p>${escapeHtml(analysis.oQueFaltaParaFechar || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Melhor horário para contato</h3><p>${escapeHtml(analysis.melhorHorarioContato || "Não identificado")}</p></div>
         </div>
       </div>
     </details>`;
@@ -1534,6 +1549,21 @@ function renderAnalysisSection(record) {
           ${renderPointList(nextStepPoints, analysis.proximoPasso)}
         </article>
       </div>
+      <div class="analysis-decision-grid">
+        <article class="analysis-decision-card">
+          <span>${renderInlineIcon('alvo')}</span>
+          <div><strong>Por que ainda não comprou?</strong><p>${escapeHtml(analysis.porqueNaoComprou || 'Não identificado')}</p></div>
+        </article>
+        <article class="analysis-decision-card">
+          <span>${renderInlineIcon('proximo')}</span>
+          <div><strong>O que falta para fechar?</strong><p>${escapeHtml(analysis.oQueFaltaParaFechar || analysis.proximoPasso || "Não identificado")}</p></div>
+        </article>
+        <article class="analysis-decision-card">
+          <span>${renderInlineIcon('risco')}</span>
+          <div><strong>Risco e fechamento</strong><p>${escapeHtml(analysis.riscoPerda || 'Não identificado')} · ${Number.isFinite(Number(analysis.probabilidadeFechamento)) ? `${Math.round(Number(analysis.probabilidadeFechamento))}%` : 'sem estimativa'}</p></div>
+        </article>
+      </div>
+      ${(analysis.gatilhoPrincipal || analysis.momentoEmocional) ? `<div class="analysis-commercial-signal"><strong>Gatilho:</strong> ${escapeHtml(analysis.gatilhoPrincipal || "Não identificado")} <span>•</span> <strong>Momento:</strong> ${escapeHtml(analysis.momentoEmocional || "Não identificado")} <span>•</span> <strong>Comprador:</strong> ${escapeHtml(analysis.tipoComprador || "Não identificado")}</div>` : ""}
       ${renderFullAnalysisDetails(analysis, record)}
       ${actionableAlert ? `<div class="analysis-alert" role="alert">${escapeHtml(actionableAlert)}</div>` : ""}
     </section>
@@ -1551,6 +1581,7 @@ function renderAnalysisSection(record) {
             <span class="suggestion-number" aria-hidden="true">${index + 1}</span>
             <div class="suggestion-body">
               <strong>${escapeHtml(suggestion.titulo || `Opção ${index + 1}`)}</strong>
+              ${suggestion.estrategia || suggestion.motivo ? `<small class="suggestion-strategy">${escapeHtml([suggestion.estrategia, suggestion.motivo].filter(Boolean).join(" · "))}</small>` : ""}
               <p class="suggestion-message-full">${escapeHtml(suggestion.mensagem || '')}</p>
             </div>
             <button type="button" data-copy-suggestion="${index}">Copiar</button>
