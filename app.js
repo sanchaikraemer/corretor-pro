@@ -5,14 +5,14 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=075";
+} from "./db.js?v=076";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=075";
+} from "./whatsapp.js?v=076";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +44,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v075", package: "0.75.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v076", package: "0.76.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -625,39 +625,49 @@ function getNextActionLabel(record) {
   return "Abrir";
 }
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Bom dia";
+  if (hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function getLeadActionText(record) {
+  const analysis = record?.metadata?.analiseComercial || {};
+  if (!record?.metadata?.analiseComercial) return "Gerar análise comercial";
+  const action = String(analysis.proximoPasso || analysis.pendenciaReal || analysis.pendenciaFinanceira || "Abrir atendimento").trim();
+  return action.length > 92 ? `${action.slice(0, 89).trim()}...` : action;
+}
+
 function renderDashboard(records) {
-  const total = records.length;
   const responder = records.filter(r => getLeadWorkflowState(r).mode === "client_response").length;
   const esfriando = records.filter(r => classifyLead(r) === "esfriando").length;
   const quentes = records.filter(r => getCommercialTemperature(r) >= 75).length;
   const semAnalise = records.filter(r => !r?.metadata?.analiseComercial).length;
-  const top = [...records]
-    .sort((a, b) => getActionRank(b) - getActionRank(a))
-    .slice(0, 5);
+  const top = [...records].sort((a, b) => getActionRank(b) - getActionRank(a));
+  const best = top[0];
+
   return `
     <section class="command-dashboard" aria-label="Resumo comercial">
-      <div class="command-dashboard-heading">
-        <span class="section-eyebrow">Mesa do corretor</span>
-        <h2>O que merece ação agora</h2>
-        <p>A ordem favorece primeiro quem respondeu, depois quem precisa de análise, retomadas frias e oportunidades com sinais reais de compra.</p>
+      <div class="command-greeting">
+        <span>${escapeHtml(getGreeting())}, Sanchai.</span>
+        <strong>${responder + esfriando} clientes precisam de você hoje.</strong>
       </div>
-      <div class="command-metrics">
-        <article><strong>${responder}</strong><span>responder</span></article>
-        <article><strong>${esfriando}</strong><span>retomar</span></article>
-        <article><strong>${quentes}</strong><span>quentes</span></article>
-        <article><strong>${semAnalise}</strong><span>sem análise</span></article>
+      <div class="command-chips" aria-label="Indicadores rápidos">
+        <span class="chip chip--hot">🔥 Quentes <b>${quentes}</b></span>
+        <span class="chip chip--warm">🟠 Responder <b>${responder}</b></span>
+        <span class="chip chip--cool">🔵 Retomar <b>${esfriando}</b></span>
+        <span class="chip chip--muted">⚪ Sem análise <b>${semAnalise}</b></span>
       </div>
-      ${top.length ? `<div class="command-top-list">${top.map(record => {
-        const priority = getCommercialPriority(record);
-        return `<button class="command-top-card command-top-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-          <span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(priority.label)} · ${escapeHtml(getCommercialReason(record))}</small></span>
-          <b>${getCommercialTemperature(record)}%</b>
-        </button>`;
-      }).join("")}</div>` : ""}
-      <div class="command-playbook">
-        <strong>Fluxo recomendado</strong>
-        <span>Rotina de uso: importar, analisar, copiar a melhor resposta, marcar como atendido e reimportar quando houver nova resposta do contato.</span>
-      </div>
+      ${best ? `<button class="action-now-card" type="button" data-attendance="${escapeHtml(best.conversationKey)}">
+        <span class="action-now-label">Ação principal</span>
+        <span class="action-now-main">
+          <strong>${escapeHtml(best.nomeLead)}</strong>
+          <b>${getCommercialTemperature(best)}%</b>
+        </span>
+        <span class="action-now-step">${escapeHtml(getLeadActionText(best))}</span>
+        <span class="action-now-reason">${escapeHtml(getCommercialReason(best))}</span>
+      </button>` : ""}
     </section>`;
 }
 
@@ -1151,36 +1161,38 @@ function renderList() {
     else aguardar.push(record);
   }
 
-  responder.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
-  esfriando.sort((a, b) => {
-    const da = getValidDate(a?.metadata?.atendidoAgoraAt) || getLatestActivityDate(a);
-    const db = getValidDate(b?.metadata?.atendidoAgoraAt) || getLatestActivityDate(b);
-    return da.getTime() - db.getTime();
-  });
+  responder.sort((a, b) => getActionRank(b) - getActionRank(a));
+  esfriando.sort((a, b) => getActionRank(b) - getActionRank(a));
   aguardar.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
 
   function buildCard(record, urgencyLabel) {
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
+    const priority = getCommercialPriority(record);
     const mutedClass = urgencyLabel ? "" : " attendance-card--waiting";
+    const action = getLeadActionText(record);
     return `
-      <button class="attendance-card${mutedClass}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+      <button class="attendance-card${mutedClass} attendance-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
         <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
         <span class="attendance-copy">
-          <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
+          <span class="attendance-topline">
+            <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
+            <b>${getCommercialTemperature(record)}%</b>
+          </span>
+          <span class="attendance-action">${escapeHtml(action)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
-          <span class="attendance-urgency ${getCommercialPriority(record).className}">${escapeHtml(urgencyLabel || getCommercialPriority(record).label)} · ${getCommercialTemperature(record)}% · ${escapeHtml(getNextActionLabel(record))}</span>
+          <span class="attendance-urgency ${escapeHtml(priority.className)}">${escapeHtml(urgencyLabel || priority.label)}</span>
         </span>
         <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
   }
 
   const callNowCards = [
-    ...responder.map(r => buildCard(r, "responder")),
+    ...responder.map(r => buildCard(r, "responder agora")),
     ...esfriando.map(r => {
       const refDate = getValidDate(r?.metadata?.atendidoAgoraAt) || getLatestActivityDate(r);
       const days = Math.floor((Date.now() - refDate.getTime()) / (24 * 60 * 60 * 1000));
-      return buildCard(r, `esfriando · ${days}d`);
+      return buildCard(r, `retomar · ${days}d`);
     })
   ].join("");
   const aguardarCards = aguardar.map(r => buildCard(r, "")).join("");
@@ -1193,27 +1205,34 @@ function renderList() {
     <section class="list-page">
       <div class="list-hero">
         <div class="list-hero-heading">
-          <h1>Atendimentos</h1>
-          <button class="add-lead-button" type="button" data-add-lead>
+          <div>
+            <span class="page-kicker">Mesa comercial</span>
+            <h1>Atendimentos</h1>
+          </div>
+          <button class="add-lead-button" type="button" data-add-lead aria-label="Adicionar atendimento">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            Adicionar
+            <span>Adicionar</span>
           </button>
         </div>
-        <p>Conversas priorizadas para você enxergar rápido quem merece ação comercial.</p>
+        <p>Abra, copie a próxima mensagem e movimente os leads certos primeiro.</p>
       </div>
       <div class="list-surface">
         ${renderInstallCard()}
         ${state.records.length ? renderDashboard(state.records) : ""}
         ${groupsHtml || renderEmptyState()}
+        <button class="floating-add-button" type="button" data-add-lead aria-label="Adicionar atendimento">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
         <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
           <span>${state.cloudAvailable === false
             ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
-            : "Os atendimentos deste link são <strong>atualizados automaticamente</strong>."}</span>
+            : "Atendimentos atualizados automaticamente neste link."}</span>
         </div>
       </div>
     </section>`;
 }
+
 
 function groupTimelineByDate(timeline) {
   const groups = [];

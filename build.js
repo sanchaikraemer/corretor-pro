@@ -2,7 +2,7 @@ import "./version.js";
 import fs from "node:fs";
 import path from "node:path";
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v075", package: "0.75.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v076", package: "0.76.0" };
 
 const staticFiles = [
   "index.html",
