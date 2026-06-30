@@ -1,5 +1,14 @@
 # Pontos de restauração ativos
 
+## Ponto #655 — 2026-06-30 — Reconstrução real da interface Corretor Pro
+
+- Remove as camadas visuais acumuladas da v653/v654 e volta ao CSS funcional original como base.
+- Aplica uma única interface Corretor Pro baseada na Opção A, com shell, sidebar, topbar, dashboard e navegação mobile reconstruídos.
+- Marca passa a usar símbolo SVG incorporado no HTML, evitando ícone invisível ou dependência do cache do PWA.
+- Mobile ganha proporções compactas, textos completos na navegação, legenda do gráfico mesmo com a base vazia e estados vazios sem painéis gigantes.
+- Mantém as APIs, importação, análises, pipeline, agenda, propostas, histórico completo sob demanda e otimizações de performance da v652.
+- Nenhum histórico é limitado a 40 mensagens.
+
 ## Ponto #654 — 2026-06-30 — Corretor Pro fiel à Opção A
 
 - Base funcional preservada: APIs, persistência, importação de ZIP, histórico integral, análises, agenda, pipeline, propostas, relatórios e configurações.
