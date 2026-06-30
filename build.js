@@ -8,6 +8,7 @@ const staticFiles = [
   "index.html",
   "version.js",
   "styles.css",
+  "ui-v2.css",
   "app.js",
   "db.js",
   "whatsapp.js",

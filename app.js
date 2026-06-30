@@ -5,19 +5,20 @@ import {
   listAtendimentos,
   removePendingShare,
   saveAtendimento
-} from "./db.js?v=089";
+} from "./db.js?v=090";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=089";
+} from "./whatsapp.js?v=090";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
 const brandButton = document.querySelector("#brand-button");
 const installButton = document.querySelector("#install-button");
+const themeToggleButton = document.querySelector("#theme-toggle-button");
 const headerVersion = document.querySelector("#header-version");
 const editNameButton = document.querySelector("#edit-name-button");
 const detailHeader = document.querySelector("#detail-header");
@@ -44,7 +45,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v089", package: "0.89.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v090", package: "0.90.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -91,7 +92,8 @@ const state = {
   notaRecordingKey: null,
   notaRecordingChunks: [],
   _notaRecog: null,
-  notaPrintsPendentes: []
+  notaPrintsPendentes: [],
+  detailTab: "resumo"
 };
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -300,16 +302,55 @@ function getRouteKey() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function getRouteSection() {
+  const hash = location.hash || "#/";
+  if (/^#\/diagnostico/.test(hash)) return "diagnostico";
+  if (/^#\/historico/.test(hash)) return "historico";
+  if (/^#\/configuracoes/.test(hash)) return "configuracoes";
+  if (/^#\/atendimento\//.test(hash)) return "lead";
+  return "home";
+}
+
+function setShellActive(section = getRouteSection()) {
+  document.querySelectorAll("[data-shell-section]").forEach(button => {
+    button.classList.toggle("active", button.dataset.shellSection === section);
+  });
+}
+
+function navigateToSection(hash) {
+  const next = hash || "#/";
+  if (location.hash === next) renderRoute();
+  else location.hash = next;
+}
+
 function navigateToList() {
-  if (location.hash) {
-    location.hash = "#/";
-  } else {
-    renderRoute();
-  }
+  navigateToSection("#/");
 }
 
 function navigateToAttendance(key) {
   location.hash = `#/atendimento/${encodeURIComponent(key)}`;
+}
+
+function getSavedTheme() {
+  const saved = localStorage.getItem("corretorProTheme");
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  const next = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("corretorProTheme", next);
+  if (themeToggleButton) {
+    themeToggleButton.textContent = next === "dark" ? "☀" : "◐";
+    themeToggleButton.setAttribute("aria-label", next === "dark" ? "Usar tema claro" : "Usar tema escuro");
+  }
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = next === "dark" ? "#0C1D24" : "#E6EEF0";
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 }
 
 function cleanShareQuery() {
@@ -1193,108 +1234,355 @@ function setDetailHeader(record) {
 }
 
 function renderList() {
-  // V089 — central de ação: menos painel, mais decisão. Sem avatar, sem percentual e sem ruído.
   state.currentKey = null;
   state.notaPrintsPendentes = [];
   setListHeader();
+  setShellActive("home");
 
-  const responder = [];
-  const esfriando = [];
-  const aguardar = [];
-  for (const record of state.records) {
-    const tag = classifyLead(record);
-    if (tag === "responder") responder.push(record);
-    else if (tag === "esfriando") esfriando.push(record);
-    else aguardar.push(record);
-  }
+  const records = [...state.records];
+  const responder = records.filter(record => getLeadWorkflowState(record).mode === "client_response");
+  const retomar = records.filter(record => classifyLead(record) === "esfriando");
+  const aguardando = records.filter(record => getLeadWorkflowState(record).mode === "waiting");
+  const semAnalise = records.filter(record => !record?.metadata?.analiseComercial);
+  const actionable = [...records]
+    .filter(record => getLeadWorkflowState(record).mode === "client_response" || classifyLead(record) === "esfriando" || !record?.metadata?.analiseComercial)
+    .sort((a, b) => getActionRank(b) - getActionRank(a));
+  const recent = [...records].sort((a, b) => getLatestActivityDate(b) - getLatestActivityDate(a));
 
-  responder.sort((a, b) => getActionRank(b) - getActionRank(a));
-  esfriando.sort((a, b) => getActionRank(b) - getActionRank(a));
-  aguardar.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
+  const statusCounts = {
+    responder: responder.length,
+    retomar: retomar.length,
+    aguardando: aguardando.length,
+    analisar: semAnalise.length
+  };
+  const totalStatus = Math.max(1, Object.values(statusCounts).reduce((sum, value) => sum + value, 0));
+  const cumulative = [];
+  let cursor = 0;
+  const palette = ["#FF6B5C", "#F2A23A", "#8FA9B0", "#27B67A"];
+  Object.values(statusCounts).forEach((value, index) => {
+    const start = cursor;
+    cursor += (value / totalStatus) * 360;
+    cumulative.push(`${palette[index]} ${start}deg ${cursor}deg`);
+  });
+  if (cursor < 360) cumulative.push(`var(--cp-line) ${cursor}deg 360deg`);
 
-  const acionar = [...responder, ...esfriando];
-  const topTwo = acionar.slice(0, 2);
-  const remainingAction = acionar.slice(2);
+  const initialsFor = name => {
+    const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return (parts.map(part => part[0]).join("") || "?").toUpperCase();
+  };
 
-  function labelFor(record) {
-    const workflow = getLeadWorkflowState(record);
-    if (workflow.mode === "client_response") return "Responder agora";
-    if (classifyLead(record) === "esfriando") return "Retomar";
-    return record?.metadata?.analiseComercial ? "Acompanhar" : "Analisar primeiro";
-  }
+  const priorityBadge = record => {
+    const priority = getCommercialPriority(record);
+    const label = priority.label === "Oportunidade forte" ? "Prioridade" : priority.label;
+    return `<span class="cp-status cp-status-${escapeHtml(priority.className)}">${escapeHtml(label)}</span>`;
+  };
 
-  function compactText(text, fallback = "Abrir atendimento") {
-    const clean = String(text || fallback).replace(/\s+/g, " ").trim();
-    return clean.length > 124 ? `${clean.slice(0, 121).trim()}...` : clean;
-  }
-
-  function buildPriorityRow(record, index = 0) {
-    const analysis = record?.metadata?.analiseComercial || {};
-    const suggestion = getPrimarySuggestion(analysis);
-    const action = compactText(analysis.proximoPasso || getLeadActionText(record), "Gerar análise comercial");
-    const hasMsg = Boolean(suggestion && suggestion.mensagem);
+  const focusCards = actionable.slice(0, 4).map(record => {
+    const moment = formatCardDate(getLatestActivityDate(record).toISOString());
     return `
-      <article class="v89-priority-card" data-attendance="${escapeHtml(record.conversationKey)}">
-        <div class="v89-card-top">
-          <span class="v89-rank">${index + 1}</span>
-          <span class="v89-status">${escapeHtml(labelFor(record))}</span>
-        </div>
-        <strong>${escapeHtml(record.nomeLead)}</strong>
-        <p>${escapeHtml(action)}</p>
-        ${hasMsg
-          ? `<button class="v89-copy" type="button" data-copy-home="${escapeHtml(record.conversationKey)}">Copiar mensagem</button>`
-          : `<button class="v89-copy" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Analisar atendimento</button>`}
-      </article>`;
-  }
-
-  function buildQueueCard(record) {
-    const moment = formatCardDate((getLeadWorkflowState(record).activityDate || getLatestActivityDate(record)).toISOString());
-    const analysis = record?.metadata?.analiseComercial || {};
-    const action = compactText(analysis.proximoPasso || getLeadActionText(record), "Gerar análise comercial");
-    return `
-      <button class="v89-queue-card" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-        <span class="v89-queue-main">
+      <button class="cp-appointment-row" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+        <time>${escapeHtml(moment.time)}</time>
+        <span class="cp-mini-avatar">${escapeHtml(initialsFor(record.nomeLead))}</span>
+        <span class="cp-appointment-copy">
           <strong>${escapeHtml(record.nomeLead)}</strong>
-          <em>${escapeHtml(labelFor(record))}</em>
-          <span>${escapeHtml(action)}</span>
+          <small>${escapeHtml(getLeadActionText(record))}</small>
         </span>
-        <span class="v89-queue-time">${escapeHtml(moment.date)}<small>${escapeHtml(moment.time)}</small></span>
+        ${priorityBadge(record)}
       </button>`;
+  }).join("");
+
+  const tableRows = recent.slice(0, 10).map(record => {
+    const moment = formatCardDate(getLatestActivityDate(record).toISOString());
+    const priority = getCommercialPriority(record);
+    return `
+      <button class="cp-table-row" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+        <span class="cp-table-lead"><span class="cp-mini-avatar">${escapeHtml(initialsFor(record.nomeLead))}</span><span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(record.metadata?.empreendimento || record.ultimaMensagemResumo || "Atendimento imobiliário")}</small></span></span>
+        <span>${escapeHtml(priority.label)}</span>
+        <span>${escapeHtml(moment.date)} · ${escapeHtml(moment.time)}</span>
+        <span>${escapeHtml(getLeadActionText(record))}</span>
+        <span>${priorityBadge(record)}<b aria-hidden="true">›</b></span>
+      </button>`;
+  }).join("");
+
+  if (!records.length) {
+    app.innerHTML = `
+      <section class="cp-page cp-dashboard-page">
+        <div class="cp-page-heading">
+          <div><span class="cp-eyebrow">Central comercial</span><h1>Atendimentos</h1><p>Importe uma conversa do WhatsApp para começar.</p></div>
+          <button class="cp-primary-button" type="button" data-add-lead>+ Novo atendimento</button>
+        </div>
+        ${renderInstallCard()}
+        ${renderEmptyState()}
+      </section>`;
+    return;
   }
-
-  const hero = state.records.length ? `
-    <section class="v89-hero" aria-labelledby="v89-title">
-      <span class="v89-kicker">Central de decisão</span>
-      <h1 id="v89-title">${acionar.length ? `${acionar.length} atendimento${acionar.length === 1 ? "" : "s"} pedem ação.` : "Tudo sob controle."}</h1>
-      <p>${acionar.length ? "Copie a próxima mensagem ou abra o lead. O resto fica recolhido." : "Quando alguém responder ou esfriar, aparece aqui primeiro."}</p>
-      <div class="v89-mini-stats" aria-label="Resumo dos atendimentos">
-        <span><b>${responder.length}</b> responder</span>
-        <span><b>${esfriando.length}</b> retomar</span>
-        <span><b>${aguardar.length}</b> aguardando</span>
-      </div>
-    </section>` : "";
-
-  const priorityHtml = topTwo.length
-    ? `<section class="v89-priority-list" aria-label="Atendimentos principais">${topTwo.map(buildPriorityRow).join("")}</section>`
-    : "";
-  const queue = [...remainingAction, ...aguardar];
-  const queueHtml = queue.length
-    ? `<div class="v89-section-title"><span>Fila de ação</span><b>${queue.length}</b></div><section class="v89-queue">${queue.map(buildQueueCard).join("")}</section>`
-    : "";
 
   app.innerHTML = `
-    <section class="v89-home">
-      <div class="v89-home-top">
-        <button class="v89-add" type="button" data-add-lead>+ Novo atendimento</button>
+    <section class="cp-page cp-dashboard-page">
+      <div class="cp-page-heading">
+        <div>
+          <span class="cp-eyebrow">Central de decisão</span>
+          <h1>Panorama do dia</h1>
+          <p>${escapeHtml(getGreeting())}, ${escapeHtml(APP_USER_NAME)}. Veja quem precisa de você primeiro.</p>
+        </div>
+        <button class="cp-primary-button" type="button" data-add-lead>+ Novo atendimento</button>
       </div>
+
       ${renderInstallCard()}
-      ${state.records.length ? hero + priorityHtml + queueHtml : renderEmptyState()}
-      <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
-        ${state.cloudAvailable === false ? "Sem conexão com a nuvem. Dados salvos neste aparelho." : "Atendimentos sincronizados automaticamente."}
+
+      <div class="cp-kpi-grid" aria-label="Resumo dos atendimentos">
+        <article><span>Total de leads</span><strong>${records.length}</strong><small>base ativa</small></article>
+        <article><span>Responder agora</span><strong>${responder.length}</strong><small>cliente falou por último</small></article>
+        <article><span>Retomar</span><strong>${retomar.length}</strong><small>atendimentos esfriando</small></article>
+        <article><span>Aguardando</span><strong>${aguardando.length}</strong><small>resposta do cliente</small></article>
+        <article><span>Sem análise</span><strong>${semAnalise.length}</strong><small>precisam da IA</small></article>
+      </div>
+
+      <div class="cp-dashboard-grid">
+        <article class="cp-panel cp-focus-panel">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Prioridade</span><h2>Próximos atendimentos</h2></div><span>${actionable.length} na fila</span></div>
+          <div class="cp-appointments">${focusCards || `<p class="cp-muted-message">Nenhuma ação urgente agora.</p>`}</div>
+        </article>
+
+        <article class="cp-panel cp-performance-panel">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Distribuição</span><h2>Desempenho dos atendimentos</h2></div></div>
+          <div class="cp-performance-body">
+            <div class="cp-donut" style="--cp-donut:${cumulative.join(",")}"><span><strong>${records.length}</strong><small>leads</small></span></div>
+            <ul>
+              <li><i style="--dot:#FF6B5C"></i><span>Responder</span><strong>${responder.length}</strong></li>
+              <li><i style="--dot:#F2A23A"></i><span>Retomar</span><strong>${retomar.length}</strong></li>
+              <li><i style="--dot:#8FA9B0"></i><span>Aguardando</span><strong>${aguardando.length}</strong></li>
+              <li><i style="--dot:#27B67A"></i><span>Sem análise</span><strong>${semAnalise.length}</strong></li>
+            </ul>
+          </div>
+          <button class="cp-link-button" type="button" data-shell-route="#/diagnostico">Ver diagnóstico geral →</button>
+        </article>
+
+        <article class="cp-panel cp-leads-panel">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Base comercial</span><h2>Atendimentos em andamento</h2></div><span>${records.length} leads</span></div>
+          <div class="cp-table-head"><span>Lead</span><span>Status</span><span>Última interação</span><span>Próxima ação</span><span>Prioridade</span></div>
+          <div class="cp-table-body">${tableRows}</div>
+        </article>
+
+        <article class="cp-panel cp-day-panel">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Hoje</span><h2>Atividades do dia</h2></div></div>
+          <div class="cp-day-ring"><span><strong>${responder.length + retomar.length}</strong><small>ações</small></span></div>
+          <ul>
+            <li><span>Responder clientes</span><strong>${responder.length}</strong></li>
+            <li><span>Retomar conversas</span><strong>${retomar.length}</strong></li>
+            <li><span>Gerar análises</span><strong>${semAnalise.length}</strong></li>
+          </ul>
+        </article>
       </div>
     </section>`;
 }
 
+
+function groupTimelineByDate(timeline) {
+  const groups = [];
+  let lastKey = null;
+  for (const item of timeline || []) {
+    const date = item.timestamp ? new Date(item.timestamp) : null;
+    const key = date && !Number.isNaN(date.getTime()) ? date.toDateString() : item.date || "Sem data";
+    if (key !== lastKey) {
+      groups.push({
+        key,
+        label: date && !Number.isNaN(date.getTime()) ? dateOnlyFormatter.format(date) : item.date || "Sem data",
+        items: []
+      });
+      lastKey = key;
+    }
+    groups[groups.length - 1].items.push(item);
+  }
+  return groups;
+}
+
+function renderTimelineItem(item, record) {
+  const originalLead = record.metadata?.originalLeadName || record.nomeLead;
+  const leadClass = normalizeComparable(item.author) === normalizeComparable(originalLead) ? " lead" : "";
+  const fallbackText = item.type === "audio"
+    ? "Não foi possível transcrever este áudio."
+    : "";
+
+  if (item.type === "audio") {
+    const outsidePeriod = isAudioOutsidePeriod(item);
+    const failed = isAudioFailure(item);
+    const label = outsidePeriod ? "Áudio fora do período" : failed ? "Áudio não transcrito" : "Áudio transcrito";
+    return `
+      <article class="timeline-item${leadClass}">
+        <div class="timeline-meta">
+          <span class="timeline-author">${escapeHtml(item.author)}</span>
+          <time class="timeline-time">${escapeHtml(item.time || "")}</time>
+        </div>
+        <div class="transcription-block${failed ? " error" : outsidePeriod ? " skipped" : ""}">
+          <span class="transcription-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M8 6v12M4 9v6M16 5v14M20 8v8"/></svg>
+            ${label}
+          </span>
+          <p class="timeline-text">${escapeHtml(item.text || fallbackText)}</p>
+        </div>
+      </article>`;
+  }
+
+  return `
+    <article class="timeline-item${leadClass}">
+      <div class="timeline-meta">
+        <span class="timeline-author">${escapeHtml(item.author)}</span>
+        <time class="timeline-time">${escapeHtml(item.time || "")}</time>
+      </div>
+      <p class="timeline-text">${escapeHtml(item.text || "")}</p>
+    </article>`;
+}
+
+
+function formatSavedDate(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return `${dateOnlyFormatter.format(date)} às ${timeFormatter.format(date)}`;
+}
+
+function renderProposalSection(record) {
+  const proposal = record.metadata?.propostaImagem;
+  const hasSafeImage = proposal && isSafeProposalDataUrl(proposal.dataUrl);
+  const busy = state.proposalBusy;
+  const attachedLabel = formatSavedDate(proposal?.attachedAt);
+  const proposalTarget = getContactRoleText(record, "target");
+
+  return `
+    <section class="proposal-card">
+      <div class="section-heading-row">
+        <div>
+          <span class="section-eyebrow">Contexto financeiro</span>
+          <h2>Última proposta</h2>
+        </div>
+        ${hasSafeImage ? `<span class="proposal-status">Já enviada</span>` : ""}
+      </div>
+      <p class="section-description">Anexe um print da proposta enviada ${escapeHtml(proposalTarget)}. A análise considerará automaticamente que ela já foi enviada.</p>
+      <input id="proposal-image-input" type="file" accept="image/jpeg,image/png,image/webp" data-proposal-input hidden>
+      ${hasSafeImage ? `
+        <div class="proposal-preview">
+          <img src="${escapeHtml(proposal.dataUrl)}" alt="Print da última proposta enviada">
+          <div class="proposal-preview-copy">
+            <strong>${escapeHtml(proposal.name || "Proposta anexada")}</strong>
+            <span>${attachedLabel ? `Anexada em ${escapeHtml(attachedLabel)}` : "Proposta atual"}</span>
+            <small>A última imagem anexada substitui a anterior.</small>
+          </div>
+        </div>
+        <button class="secondary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
+          ${busy ? "Preparando imagem..." : "Trocar print da proposta"}
+        </button>` : `
+        <button class="primary-action-button" type="button" data-attach-proposal${busy ? " disabled" : ""}>
+          ${busy ? "Preparando imagem..." : "Anexar print da proposta"}
+        </button>`}
+    </section>`;
+}
+
+function renderTextList(items) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) return `<span class="analysis-empty-value">Não identificado</span>`;
+  return `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function splitTextIntoPoints(text, limit = 3) {
+  const value = String(text || "").trim();
+  if (!value) return [];
+  const normalized = value
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[-•]\s*/g, '. ')
+    .trim();
+  const parts = normalized
+    .split(/(?<=[.!?;])\s+|\s{2,}/)
+    .map(part => part.trim().replace(/^[•\-]\s*/, '').trim())
+    .filter(Boolean);
+  if (!parts.length) return [normalized];
+  return parts.slice(0, limit);
+}
+
+function renderPointList(items, fallback) {
+  const list = (Array.isArray(items) ? items : []).filter(Boolean).slice(0, 4);
+  const source = list.length ? list : splitTextIntoPoints(fallback, 4);
+  if (!source.length) return `<p class="analysis-empty-value">Não identificado</p>`;
+  return `<ul class="analysis-point-list">${source.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderInlineIcon(kind) {
+  const icons = {
+    leitura: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>',
+    pendencia: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m15.5 8.5-7 7"/><path d="m8.5 8.5 7 7"/></svg>',
+    proximo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="m15 5 5 7-5 7"/></svg>',
+    periodo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>',
+    mensagens: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    horario: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+    sucesso: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>'
+  };
+  return icons[kind] || icons.leitura;
+}
+
+function summarizeSuggestionMessage(text) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+  const sentence = splitTextIntoPoints(value, 1)[0] || value;
+  return sentence.length > 120 ? `${sentence.slice(0, 117).trim()}...` : sentence;
+}
+
+function getActionableAnalysisAlert(record, analysis) {
+  const alert = String(analysis?.alertaInformacaoIncompleta || "").trim();
+  const incompleteAudioCount = (record.timeline || []).filter(isAudioFailure).length;
+
+  if (incompleteAudioCount > 0) {
+    return alert || `${incompleteAudioCount} áudio${incompleteAudioCount === 1 ? " não foi transcrito" : "s não foram transcritos"}. A análise pode estar incompleta.`;
+  }
+  if (!alert) return "";
+
+  const normalized = normalizeComparable(alert);
+  const criticalPatterns = [
+    /imagem ilegivel/,
+    /proposta ilegivel/,
+    /nao foi possivel (?:ler|analisar|identificar)/,
+    /informac(?:ao|oes) essencia(?:l|is)/,
+    /dados insuficientes/,
+    /valor(?:es)? principa(?:l|is) nao (?:foi|foram) identificado/,
+    /proposta nao (?:foi )?identificada/
+  ];
+  return criticalPatterns.some(pattern => pattern.test(normalized)) ? alert : "";
+}
+
+function renderFullAnalysisDetails(analysis, record) {
+  const clientLabel = getContactType(record) === "corretor" ? "cliente final" : "cliente";
+  return `
+    <details class="analysis-details">
+      <summary>
+        <span>Ver análise completa</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+      </summary>
+      <div class="analysis-details-content">
+        <div class="analysis-facts">
+          <div><span>Produto principal</span><strong>${escapeHtml(analysis.produtoPrincipal || "Não identificado")}</strong></div>
+          <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
+          <div><span>Interesse</span><strong>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</strong></div>
+        </div>
+        <div class="analysis-grid">
+          <div class="analysis-block">
+            <h3>Sinais de interesse</h3>
+            ${renderTextList(analysis.sinaisInteresse)}
+          </div>
+          <div class="analysis-block">
+            <h3>Produtos paralelos</h3>
+            ${renderTextList(analysis.produtosParalelos)}
+          </div>
+          <div class="analysis-block"><h3>Última pessoa a falar</h3><p>${escapeHtml(analysis.ultimaPessoaAFalar || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Objeção principal</h3><p>${escapeHtml(analysis.objecaoPrincipal || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Última solicitação do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimaSolicitacaoCliente || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Último compromisso do ${escapeHtml(clientLabel)}</h3><p>${escapeHtml(analysis.ultimoCompromissoCliente || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Último compromisso do corretor</h3><p>${escapeHtml(analysis.ultimoCompromissoCorretor || "Não identificado")}</p></div>
+          <div class="analysis-block"><h3>Participantes da decisão</h3><p>${escapeHtml(analysis.participantesDecisao || "Não identificados")}</p></div>
+          <div class="analysis-block"><h3>Proposta identificada</h3><p>${escapeHtml(analysis.propostaResumo || "Nenhuma proposta anexada")}</p></div>
+          <div class="analysis-block"><h3>Pendência financeira</h3><p>${escapeHtml(analysis.pendenciaFinanceira || "Não identificada")}</p></div>
+          <div class="analysis-block"><h3>Quem deve agir agora</h3><p>${escapeHtml(analysis.quemDeveProximoPasso || "Não identificado")}</p></div>
+        </div>
+      </div>
+    </details>`;
+}
 
 function renderAnalysisSection(record) {
   /* Leitura atual; O que falta definir; Próximo passo; <details class="analysis-details">; Ver análise completa; actionableAlert ? `<div class="analysis-alert"; V086 substitui analysis-feature-grid, analysis-feature-card, analysis-status-success, suggestions-panel-grid e class="suggestion-number" por decisão recolhida. */
@@ -1343,7 +1631,7 @@ function renderAnalysisSection(record) {
         </div>
       </details>` : ""}
 
-      <details class="decision-details">
+      <details class="decision-details" open>
         <summary>Por que a IA recomenda isso</summary>
         <div class="why-grid">
           <article><strong>O que a IA percebeu</strong>${renderPointList(readingPoints, analysis.resumo)}</article>
@@ -1365,34 +1653,27 @@ function getPrimarySuggestion(analysis) {
 }
 
 function renderCommercialSnapshot(record) {
-  // V089 — lead como decisão, não relatório. A primeira dobra deve responder: o que fazer e o que copiar.
   const analysis = record?.metadata?.analiseComercial || {};
   const workflow = getLeadWorkflowState(record);
   const primary = getPrimarySuggestion(analysis);
-  const hasAnalysis = Boolean(record?.metadata?.analiseComercial);
-  const action = String(analysis.proximoPasso || getLeadActionText(record) || "Gerar análise comercial").replace(/\s+/g, " ").trim();
-  const why = String(analysis.porQueNaoComprou || analysis.pendenciaReal || analysis.resumo || (hasAnalysis
+  const verdict = analysis.porQueNaoComprou || analysis.resumo || (record?.metadata?.analiseComercial
     ? "A IA encontrou um caminho de avanço neste atendimento."
-    : "Gere uma análise para transformar a conversa em próxima ação."))
-    .replace(/\s+/g, " ").trim();
-  const tone = workflow.mode === "client_response"
-    ? "Responder agora"
-    : classifyLead(record) === "esfriando"
-      ? "Retomar com contexto"
-      : hasAnalysis ? "Acompanhar" : "Analisar primeiro";
-  const cleanAction = action.length > 150 ? `${action.slice(0, 147).trim()}...` : action;
-  const cleanWhy = why.length > 160 ? `${why.slice(0, 157).trim()}...` : why;
+    : "Gere uma análise para transformar a conversa em próxima ação.");
+  const action = analysis.proximoPasso || getLeadActionText(record);
+  const tone = workflow.mode === "client_response" ? "Responder agora" : classifyLead(record) === "esfriando" ? "Retomar com contexto" : "Acompanhar";
   return `
-    <section class="v89-lead-hero">
-      <span class="v89-kicker">A IA recomenda</span>
-      <strong class="v89-lead-state">${escapeHtml(tone)}</strong>
-      <h1>${escapeHtml(cleanAction)}</h1>
-      <p>${escapeHtml(cleanWhy)}</p>
-      ${primary ? `<div class="v89-message-box">
-        <span>Mensagem pronta para WhatsApp</span>
+    <section class="lead-decision-panel">
+      <div class="lead-decision-topline">
+        <span>${escapeHtml(tone)}</span>
+        <small>${record?.metadata?.analiseComercial ? "Decisão da IA" : "Sem análise"}</small>
+      </div>
+      <h1>${escapeHtml(action)}</h1>
+      <p>${escapeHtml(verdict)}</p>
+      ${primary ? `<div class="primary-message-box">
+        <span>Mensagem pronta</span>
         <p>${escapeHtml(primary.mensagem)}</p>
         <button type="button" data-copy-suggestion="0">Copiar mensagem</button>
-      </div>` : `<button class="v89-copy v89-copy-full" type="button" data-analyze-attendance>Gerar análise</button>`}
+      </div>` : `<button class="analysis-button primary-analysis" type="button" data-analyze-attendance>Gerar análise</button>`}
     </section>`;
 }
 
@@ -1949,39 +2230,21 @@ async function createManualLead(name, phone, empreendimento, notes) {
 }
 
 function renderDetail(record) {
-  // Ao abrir um lead diferente, começa do topo (status). Em re-renders do mesmo
-  // lead — ex.: sincronização automática — preserva onde o usuário está lendo.
   const isNewLead = state.currentKey !== record.conversationKey;
-  if (isNewLead) state.detailPeriod = "30";
+  if (isNewLead) {
+    state.detailPeriod = "30";
+    state.detailTab = "resumo";
+  }
   state.currentKey = record.conversationKey;
   setDetailHeader(record);
-  if (isNewLead) {
-    requestAnimationFrame(() => window.scrollTo(0, 0));
-  }
+  setShellActive("home");
+  if (isNewLead) requestAnimationFrame(() => window.scrollTo(0, 0));
 
-  const updated = new Date(record.updatedAt || record.ultimaMensagemAt || Date.now());
-  const updatedLabel = Number.isNaN(updated.getTime())
-    ? "Atualizado recentemente"
-    : `Atualizado em ${dateOnlyFormatter.format(updated)} às ${timeFormatter.format(updated)}`;
+  const analysis = record.metadata?.analiseComercial || {};
   const workflow = getLeadWorkflowState(record);
-  const waitingForClient = workflow.mode === "waiting";
-  const attendedNowLabel = formatAttendedNowLabel(record);
-  const workflowTitle = waitingForClient
-    ? getContactRoleText(record, "waiting")
-    : workflow.mode === "client_response"
-      ? getContactRoleText(record, "new")
-      : "Atendimento salvo";
-  const workflowSubtitle = waitingForClient
-    ? (attendedNowLabel || updatedLabel)
-    : workflow.mode === "client_response"
-      ? `Recebida ${formatCardDate(workflow.activityDate.toISOString()).date.toLowerCase()} às ${formatCardDate(workflow.activityDate.toISOString()).time}`
-      : updatedLabel;
-  const workflowClass = workflow.mode === "waiting"
-    ? " waiting-client"
-    : workflow.mode === "client_response"
-      ? " client-response"
-      : "";
-
+  const priority = getCommercialPriority(record);
+  const lastMoment = formatCardDate(getLatestActivityDate(record).toISOString());
+  const initials = String(record.nomeLead || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
   const failedAudios = (record.timeline || []).filter(isAudioFailure);
   const filteredTimeline = filterTimelineByPeriod(record.timeline);
   const totalTimeline = Array.isArray(record.timeline) ? record.timeline.length : 0;
@@ -1992,69 +2255,225 @@ function renderDetail(record) {
     ${group.items.map(item => renderTimelineItem(item, record)).join("")}
   `).join("");
   const periodOptions = DETAIL_PERIODS.map(option => `
-    <button
-      class="period-option${state.detailPeriod === option.value ? " active" : ""}"
-      type="button"
-      data-detail-period="${option.value}"
-      aria-pressed="${state.detailPeriod === option.value ? "true" : "false"}"
-    >${escapeHtml(option.label)}</button>
+    <button class="period-option${state.detailPeriod === option.value ? " active" : ""}" type="button" data-detail-period="${option.value}" aria-pressed="${state.detailPeriod === option.value ? "true" : "false"}">${escapeHtml(option.label)}</button>
   `).join("");
 
-  app.innerHTML = `
-    <section class="detail-page detail-page-v3">
-      ${renderContactTypeSelector(record)}
-      ${renderCommercialSnapshot(record)}
-      ${renderAnalysisSection(record)}
+  const currentTab = state.detailTab || "resumo";
+  const tabButton = (id, label) => `<button type="button" class="${currentTab === id ? "active" : ""}" data-detail-tab="${id}">${label}</button>`;
 
-      <details class="decision-details operations-details">
-        <summary>Mensagens e período da análise</summary>
-        <section class="message-toolbar" aria-label="Período das mensagens">
-          <div class="period-filter">
-            <span class="period-filter-label">Período da análise:</span>
-            <div class="period-options" role="group" aria-label="Selecionar período">
-              ${periodOptions}
-            </div>
-            <span class="period-result">${filteredTimeline.length} ${filteredTimeline.length === 1 ? "mensagem será considerada" : "mensagens serão consideradas"} na análise${hiddenCount > 0 ? ` · <button class="period-hidden-hint" type="button" data-detail-period="all">+${hiddenCount} oculta${hiddenCount === 1 ? "" : "s"} — ver tudo</button>` : ""}</span>
-          </div>
-          <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>Copiar mensagens</button>
-        </section>
-        ${failedAudios.length ? `
-          <section class="audio-warning" role="alert">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
-            <div><strong>Informação incompleta</strong><span>${failedAudios.length} áudio${failedAudios.length === 1 ? " não foi transcrito" : "s não foram transcritos"}.</span></div>
-          </section>` : ""}
-        <section class="timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada em ${escapeHtml(selectedPeriodSentenceLabel())}.</p>`}</section>
-      </details>
+  const summaryContent = `
+    <div class="cp-lead-summary-grid">
+      <div class="cp-summary-main">
+        ${renderCommercialSnapshot(record)}
+      </div>
+      <article class="cp-panel cp-lead-facts">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Resumo</span><h2>Sobre o atendimento</h2></div></div>
+        <dl>
+          <div><dt>Produto principal</dt><dd>${escapeHtml(analysis.produtoPrincipal || record.metadata?.empreendimento || "Não identificado")}</dd></div>
+          <div><dt>Etapa</dt><dd>${escapeHtml(analysis.etapa || "Em acompanhamento")}</dd></div>
+          <div><dt>Interesse</dt><dd>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</dd></div>
+          <div><dt>Última interação</dt><dd>${escapeHtml(lastMoment.date)} às ${escapeHtml(lastMoment.time)}</dd></div>
+          <div><dt>Contato</dt><dd>${escapeHtml(getContactType(record) === "corretor" ? "Corretor parceiro" : "Cliente")}</dd></div>
+        </dl>
+      </article>
+      <article class="cp-panel cp-next-actions">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Próxima ação</span><h2>O que falta avançar</h2></div></div>
+        <p>${escapeHtml(analysis.pendenciaReal || analysis.pendenciaFinanceira || getCommercialReason(record))}</p>
+        <div class="cp-action-list">
+          <span><i>1</i>${escapeHtml(analysis.proximoPasso || getLeadActionText(record))}</span>
+          <span><i>2</i>${escapeHtml(analysis.quemDeveProximoPasso || (workflow.mode === "client_response" ? "Você deve responder agora" : "Acompanhar a resposta do cliente"))}</span>
+        </div>
+      </article>
+    </div>`;
 
-      <details class="decision-details operations-details">
-        <summary>Notas, proposta e ações do lead</summary>
-        ${renderManualLeadSection(record)}
-        ${renderNotasSection(record)}
-        ${renderProposalSection(record)}
-        <section class="status-card${workflowClass}">
-          <div class="status-copy"><strong>${escapeHtml(workflowTitle)}</strong><span>${escapeHtml(workflowSubtitle)}</span></div>
-          ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
-        </section>
+  const diagnosticContent = `
+    <div class="cp-diagnostic-layout">
+      <article class="cp-panel cp-analysis-overview">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Inteligência comercial</span><h2>Diagnóstico do atendimento</h2></div></div>
+        ${record.metadata?.analiseComercial ? `
+          <div class="cp-analysis-tags">
+            <span>${escapeHtml(analysis.etapa || "Etapa não identificada")}</span>
+            <span>${escapeHtml(analysis.nivelInteresse || "Interesse não identificado")}</span>
+            <span>${escapeHtml(priority.label)}</span>
+          </div>` : ""}
+        ${renderAnalysisSection(record)}
+      </article>
+    </div>`;
+
+  const historyContent = `
+    <article class="cp-panel cp-history-panel">
+      <div class="cp-panel-heading"><div><span class="cp-eyebrow">Histórico</span><h2>Conversa do período</h2></div><span>${filteredTimeline.length} mensagens</span></div>
+      ${failedAudios.length ? `<div class="audio-warning" role="alert"><strong>Informação incompleta</strong><span>${failedAudios.length} áudio${failedAudios.length === 1 ? " não foi transcrito" : "s não foram transcritos"}.</span></div>` : ""}
+      <section class="message-toolbar" aria-label="Período das mensagens">
+        <div class="period-filter">
+          <div class="period-options" role="group" aria-label="Selecionar período">${periodOptions}</div>
+          <span class="period-result">${filteredTimeline.length} mensagens${hiddenCount > 0 ? ` · <button class="period-hidden-hint" type="button" data-detail-period="all">ver mais ${hiddenCount}</button>` : ""}</span>
+        </div>
+        <button class="copy-messages-button" type="button" data-copy-messages${filteredTimeline.length ? "" : " disabled"}>Copiar mensagens</button>
+      </section>
+      <section class="timeline cp-timeline">${timelineHtml || `<p class="timeline-empty">Nenhuma mensagem encontrada neste período.</p>`}</section>
+    </article>`;
+
+  const notesContent = `
+    <div class="cp-operations-grid">
+      ${renderManualLeadSection(record)}
+      ${renderNotasSection(record)}
+      ${renderProposalSection(record)}
+    </div>`;
+
+  const optionsContent = `
+    <div class="cp-options-layout">
+      <article class="cp-panel cp-status-management">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Movimentação</span><h2>Status do atendimento</h2></div></div>
+        <p>${escapeHtml(workflow.mode === "waiting" ? "Você já movimentou este atendimento e agora aguarda o cliente." : workflow.mode === "client_response" ? "O cliente respondeu e o próximo passo é seu." : "Atendimento salvo e pronto para acompanhamento.")}</p>
+        ${workflow.mode === "waiting" ? "" : `<button class="cp-primary-button" type="button" data-attended-now>Atendido agora</button>`}
+      </article>
+      <article class="cp-panel cp-danger-zone">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Atenção</span><h2>Excluir atendimento</h2></div></div>
+        <p>Remove este lead deste site e dos aparelhos sincronizados.</p>
         <button class="delete-lead-button" type="button" data-delete-lead>Excluir lead</button>
-      </details>
+      </article>
+    </div>`;
+
+  const tabContent = currentTab === "diagnostico"
+    ? diagnosticContent
+    : currentTab === "historico"
+      ? historyContent
+      : currentTab === "notas"
+        ? notesContent
+        : currentTab === "opcoes"
+          ? optionsContent
+          : summaryContent;
+
+  app.innerHTML = `
+    <section class="cp-page cp-lead-page">
+      ${renderContactTypeSelector(record)}
+      <article class="cp-lead-header-card">
+        <div class="cp-lead-identity">
+          <span class="cp-lead-avatar">${escapeHtml(initials)}</span>
+          <div><span class="cp-eyebrow">Atendimento</span><h1>${escapeHtml(record.nomeLead)}</h1><p>${escapeHtml(record.ultimaMensagemResumo || "Conversa importada do WhatsApp")}</p></div>
+        </div>
+        <div class="cp-lead-header-actions">
+          <span class="cp-status cp-status-${escapeHtml(priority.className)}">${escapeHtml(priority.label)}</span>
+          <button class="cp-secondary-button" type="button" data-attended-now${workflow.mode === "waiting" ? " disabled" : ""}>${workflow.mode === "waiting" ? "Aguardando cliente" : "Atendido agora"}</button>
+        </div>
+        <div class="cp-lead-meta-grid">
+          <div><span>Status</span><strong>${escapeHtml(workflow.mode === "client_response" ? "Cliente respondeu" : workflow.mode === "waiting" ? "Aguardando resposta" : "Organizado")}</strong></div>
+          <div><span>Etapa</span><strong>${escapeHtml(analysis.etapa || "Não identificada")}</strong></div>
+          <div><span>Produto</span><strong>${escapeHtml(analysis.produtoPrincipal || record.metadata?.empreendimento || "Não identificado")}</strong></div>
+          <div><span>Última interação</span><strong>${escapeHtml(lastMoment.date)} · ${escapeHtml(lastMoment.time)}</strong></div>
+        </div>
+      </article>
+
+      <nav class="cp-detail-tabs" aria-label="Seções do atendimento">
+        ${tabButton("resumo", "Resumo")}
+        ${tabButton("diagnostico", "Diagnóstico")}
+        ${tabButton("historico", "Histórico")}
+        ${tabButton("notas", "Notas e proposta")}
+        ${tabButton("opcoes", "Opções")}
+      </nav>
+
+      <div class="cp-detail-content">${tabContent}</div>
+    </section>`;
+}
+
+function setSecondaryPageHeader(section) {
+  state.currentKey = null;
+  setListHeader();
+  if (leadCount) leadCount.hidden = true;
+  setShellActive(section);
+}
+
+function renderDiagnosticsPage() {
+  setSecondaryPageHeader("diagnostico");
+  const analysed = state.records.filter(record => record?.metadata?.analiseComercial);
+  const without = state.records.filter(record => !record?.metadata?.analiseComercial);
+  const hot = analysed.filter(record => getCommercialPriority(record).className === "hot");
+  const rows = analysed.slice(0, 12).map(record => {
+    const analysis = record.metadata.analiseComercial;
+    return `<button class="cp-insight-row" type="button" data-attendance="${escapeHtml(record.conversationKey)}"><span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(analysis.resumo || "Análise comercial disponível")}</small></span><span>${escapeHtml(analysis.etapa || "Sem etapa")}</span><span>${escapeHtml(analysis.nivelInteresse || "Não identificado")}</span><b>›</b></button>`;
+  }).join("");
+  app.innerHTML = `
+    <section class="cp-page">
+      <div class="cp-page-heading"><div><span class="cp-eyebrow">Inteligência comercial</span><h1>Diagnóstico</h1><p>Leitura consolidada dos atendimentos analisados pela IA.</p></div></div>
+      <div class="cp-kpi-grid cp-kpi-grid-four">
+        <article><span>Analisados</span><strong>${analysed.length}</strong><small>com leitura comercial</small></article>
+        <article><span>Oportunidades fortes</span><strong>${hot.length}</strong><small>merecem prioridade</small></article>
+        <article><span>Sem análise</span><strong>${without.length}</strong><small>aguardando leitura</small></article>
+        <article><span>Total</span><strong>${state.records.length}</strong><small>atendimentos</small></article>
+      </div>
+      <article class="cp-panel cp-diagnostic-list">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Leituras</span><h2>Atendimentos analisados</h2></div></div>
+        ${rows || `<div class="cp-empty-panel"><p>Nenhuma análise comercial foi gerada ainda.</p></div>`}
+      </article>
+    </section>`;
+}
+
+function renderHistoryPage() {
+  setSecondaryPageHeader("historico");
+  const records = [...state.records].sort((a, b) => getLatestActivityDate(b) - getLatestActivityDate(a));
+  const items = records.map(record => {
+    const moment = formatCardDate(getLatestActivityDate(record).toISOString());
+    return `<button class="cp-history-row" type="button" data-attendance="${escapeHtml(record.conversationKey)}"><span class="cp-history-icon">↺</span><span><strong>${escapeHtml(record.nomeLead)}</strong><small>${escapeHtml(record.ultimaMensagemResumo || "Atendimento atualizado")}</small></span><time>${escapeHtml(moment.date)}<small>${escapeHtml(moment.time)}</small></time><b>›</b></button>`;
+  }).join("");
+  app.innerHTML = `
+    <section class="cp-page">
+      <div class="cp-page-heading"><div><span class="cp-eyebrow">Linha do tempo</span><h1>Histórico</h1><p>Últimas movimentações de todos os atendimentos.</p></div></div>
+      <article class="cp-panel cp-global-history">
+        <div class="cp-panel-heading"><div><span class="cp-eyebrow">Recentes</span><h2>Conversas atualizadas</h2></div><span>${records.length} leads</span></div>
+        ${items || `<div class="cp-empty-panel"><p>Nenhum atendimento disponível.</p></div>`}
+      </article>
+    </section>`;
+}
+
+function renderSettingsPage() {
+  setSecondaryPageHeader("configuracoes");
+  const theme = document.documentElement.dataset.theme || "light";
+  app.innerHTML = `
+    <section class="cp-page">
+      <div class="cp-page-heading"><div><span class="cp-eyebrow">Preferências</span><h1>Configurações</h1><p>Personalize a experiência sem alterar os dados dos atendimentos.</p></div></div>
+      <div class="cp-settings-grid">
+        <article class="cp-panel cp-profile-card">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Perfil</span><h2>Usuário do app</h2></div></div>
+          <div class="cp-profile-line"><span class="cp-profile-dot">S</span><span><strong>${escapeHtml(APP_USER_NAME)}</strong><small>Corretor</small></span></div>
+          <dl><div><dt>Versão</dt><dd>${escapeHtml(APP_VERSION)}</dd></div><div><dt>Workspace</dt><dd>${escapeHtml(CLOUD_WORKSPACE)}</dd></div><div><dt>Leads</dt><dd>${state.records.length}</dd></div></dl>
+        </article>
+        <article class="cp-panel cp-preferences-card">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Exibição</span><h2>Tema da interface</h2></div></div>
+          <div class="cp-theme-options" role="group" aria-label="Tema da interface">
+            <button type="button" data-theme-choice="light" class="${theme === "light" ? "active" : ""}"><span class="cp-theme-preview light"></span><strong>Claro</strong><small>Leve e luminoso</small></button>
+            <button type="button" data-theme-choice="dark" class="${theme === "dark" ? "active" : ""}"><span class="cp-theme-preview dark"></span><strong>Escuro</strong><small>Contraste e profundidade</small></button>
+          </div>
+        </article>
+        <article class="cp-panel cp-system-card">
+          <div class="cp-panel-heading"><div><span class="cp-eyebrow">Sistema</span><h2>Funcionamento</h2></div></div>
+          <ul><li><span>Importação do WhatsApp</span><strong>Ativa</strong></li><li><span>Transcrição de áudios</span><strong>Até 12 MB</strong></li><li><span>Período padrão</span><strong>90 dias</strong></li><li><span>Sincronização</span><strong>${state.cloudAvailable === false ? "Local" : "Automática"}</strong></li></ul>
+        </article>
+      </div>
     </section>`;
 }
 
 async function renderRoute() {
+  setShellActive();
   const key = getRouteKey();
-  if (!key) {
-    renderList();
+  if (key) {
+    const record = await ensureFullRecord(key);
+    if (!record) {
+      showToast("Este atendimento não foi encontrado.", "error");
+      navigateToList();
+      return;
+    }
+    renderDetail(record);
     return;
   }
 
-  const record = await ensureFullRecord(key);
-  if (!record) {
-    showToast("Este atendimento não foi encontrado.", "error");
-    navigateToList();
-    return;
-  }
-  renderDetail(record);
+  const section = getRouteSection();
+  if (section === "diagnostico") return renderDiagnosticsPage();
+  if (section === "historico") return renderHistoryPage();
+  if (section === "configuracoes") return renderSettingsPage();
+  renderList();
 }
+
 
 function mergeLocalAndRemoteSummaries(localRecords) {
   const merged = new Map();
@@ -2772,6 +3191,19 @@ function bindEvents() {
   backButton?.addEventListener("click", navigateToList);
   brandButton?.addEventListener("click", navigateToList);
   installButton?.addEventListener("click", installApp);
+  themeToggleButton?.addEventListener("click", toggleTheme);
+  document.addEventListener("click", event => {
+    const routeTrigger = event.target.closest("[data-shell-route]");
+    if (routeTrigger) {
+      navigateToSection(routeTrigger.dataset.shellRoute);
+      return;
+    }
+    const outsideAddTrigger = event.target.closest("[data-add-lead]");
+    if (outsideAddTrigger && !app?.contains(outsideAddTrigger)) {
+      addLeadForm?.reset();
+      addLeadDialog?.showModal();
+    }
+  });
   editNameButton?.addEventListener("click", openRenameDialog);
   cancelImportButton?.addEventListener("click", cancelCurrentImport);
   audioPeriodPanel?.addEventListener("click", event => {
@@ -2794,6 +3226,24 @@ function bindEvents() {
     const contactTypeTrigger = event.target.closest("[data-contact-type]");
     if (contactTypeTrigger) {
       await setContactType(contactTypeTrigger.dataset.contactType);
+      return;
+    }
+
+    const detailTabTrigger = event.target.closest("[data-detail-tab]");
+    if (detailTabTrigger) {
+      const nextTab = detailTabTrigger.dataset.detailTab;
+      if (["resumo", "diagnostico", "historico", "notas", "opcoes"].includes(nextTab)) {
+        state.detailTab = nextTab;
+        const record = await getCurrentRecord();
+        if (record) renderDetail(record);
+      }
+      return;
+    }
+
+    const themeChoiceTrigger = event.target.closest("[data-theme-choice]");
+    if (themeChoiceTrigger) {
+      applyTheme(themeChoiceTrigger.dataset.themeChoice);
+      renderSettingsPage();
       return;
     }
 
@@ -2979,6 +3429,7 @@ async function registerServiceWorker() {
 }
 
 async function init() {
+  applyTheme(getSavedTheme());
   // Lê o ZIP na thread principal (sem web workers): evita arquivos extras e
   // funciona offline. Só lemos texto e áudios pequenos, então é leve.
   globalThis.zip?.configure?.({ useWebWorkers: false });

@@ -15,9 +15,28 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=089">
+  <link rel="stylesheet" href="/styles.css?v=090">
+  <link rel="stylesheet" href="/ui-v2.css?v=090">
 </head>
 <body>
+  <div class="cp-shell">
+    <aside class="cp-sidebar" aria-label="Navegação principal">
+      <button class="cp-side-brand" type="button" data-shell-route="#/" aria-label="Ir para atendimentos">
+        <img src="/logo-mark.png" alt="" width="42" height="42">
+        <span><b>Corretor</b><strong>Pro</strong></span>
+      </button>
+      <nav class="cp-side-nav">
+        <button type="button" data-shell-route="#/" data-shell-section="home" class="active"><span>⌂</span>Atendimentos</button>
+        <button type="button" data-shell-route="#/diagnostico" data-shell-section="diagnostico"><span>◎</span>Diagnóstico</button>
+        <button type="button" data-shell-route="#/historico" data-shell-section="historico"><span>↺</span>Histórico</button>
+        <button type="button" data-shell-route="#/configuracoes" data-shell-section="configuracoes"><span>⚙</span>Configurações</button>
+      </nav>
+      <div class="cp-side-footer">
+        <span class="cp-profile-dot">S</span>
+        <span><b>Sanchai</b><small>Corretor</small></span>
+      </div>
+    </aside>
+    <div class="cp-workspace">
   <header id="app-header" class="app-header">
     <button id="back-button" class="icon-button back-button" type="button" aria-label="Voltar" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -33,8 +52,9 @@
       <span id="detail-header-subtitle"></span>
     </div>
 
-    <span id="header-version" class="header-version" aria-label="Versão do sistema">v089</span>
+    <span id="header-version" class="header-version" aria-label="Versão do sistema">v090</span>
     <span id="lead-count" class="lead-count" aria-label="Total de leads" hidden></span>
+    <button id="theme-toggle-button" class="theme-toggle-button" type="button" aria-label="Alternar tema" title="Alternar tema">◐</button>
     <button id="install-button" class="install-button" type="button" hidden>Instalar</button>
     <button id="edit-name-button" class="icon-button" type="button" aria-label="Editar nome" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -42,6 +62,15 @@
   </header>
 
   <main id="app" class="app-main" aria-live="polite"></main>
+  </div>
+  </div>
+  <nav class="cp-mobile-nav" aria-label="Navegação principal">
+    <button type="button" data-shell-route="#/" data-shell-section="home" class="active"><span>⌂</span>Atendimentos</button>
+    <button type="button" data-shell-route="#/diagnostico" data-shell-section="diagnostico"><span>◎</span>Diagnóstico</button>
+    <button type="button" data-add-lead class="cp-mobile-add" aria-label="Novo atendimento">+</button>
+    <button type="button" data-shell-route="#/historico" data-shell-section="historico"><span>↺</span>Histórico</button>
+    <button type="button" data-shell-route="#/configuracoes" data-shell-section="configuracoes"><span>⚙</span>Ajustes</button>
+  </nav>
 
   <section id="processing-overlay" class="processing-overlay" aria-live="assertive" aria-modal="true" role="dialog" hidden>
     <div class="processing-shell">
@@ -144,8 +173,8 @@
 
 
 
-  <script src="/version.js?v=089"></script>
-  <script src="/zip.min.js?v=089"></script>
-  <script type="module" src="/app.js?v=089"></script>
+  <script src="/version.js?v=090"></script>
+  <script src="/zip.min.js?v=090"></script>
+  <script type="module" src="/app.js?v=090"></script>
 </body>
 </html>
