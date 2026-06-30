@@ -1,6 +1,6 @@
 {
   "name": "corretor-pro",
-  "version": "0.78.0",
+  "version": "0.79.0",
   "private": true,
   "type": "module",
   "description": "PWA do Corretor Pro para receber conversas exportadas do WhatsApp, transcrever áudios e montar atendimentos textuais.",

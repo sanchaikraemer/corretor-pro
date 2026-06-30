@@ -1,18 +1,20 @@
 import {
   deleteAtendimento,
   getAtendimento,
+  getCachedTranscription,
   getPendingShare,
   listAtendimentos,
   removePendingShare,
-  saveAtendimento
-} from "./db.js?v=078";
+  saveAtendimento,
+  saveCachedTranscription
+} from "./db.js?v=079";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=078";
+} from "./whatsapp.js?v=079";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -44,7 +46,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v078", package: "0.78.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v079", package: "0.79.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -555,7 +557,7 @@ function daysSince(date) {
 function getCommercialTemperature(record) {
   const analysis = record?.metadata?.analiseComercial || {};
   const workflow = getLeadWorkflowState(record);
-  let score = 44;
+  let score = 36;
   const interest = normalizeComparable(analysis.nivelInteresse || analysis.interesse || "");
   const stage = normalizeComparable(analysis.etapa || "");
   const summary = normalizeComparable([
@@ -566,22 +568,38 @@ function getCommercialTemperature(record) {
     analysis.ultimaSolicitacaoCliente,
     analysis.ultimoCompromissoCliente,
     analysis.ultimoCompromissoCorretor,
+    analysis.porqueNaoComprou,
+    analysis.oQueFaltaParaFechar,
     ...(Array.isArray(analysis.sinaisInteresse) ? analysis.sinaisInteresse : [])
   ].filter(Boolean).join(" "));
   const age = daysSince(workflow.activityDate);
 
-  if (workflow.mode === "client_response") score += 26;
-  if (workflow.mode === "waiting") score -= Math.min(22, age * 2);
-  if (classifyLead(record) === "esfriando") score += 8;
-  if (interest.includes("alto") || interest.includes("muito alto")) score += 23;
-  if (interest.includes("medio")) score += 12;
-  if (interest.includes("baixo")) score -= 18;
-  if (/negociacao|proposta|analise financeira|decisao|fechamento|visita/.test(stage)) score += 15;
-  if (/entrada|financiamento|fgts|parcela|valor|proposta|contrato|visita|cafe|reuniao|simulacao|chaves/.test(summary)) score += 11;
-  if (/comprar|fechar|gostei|queremos|reserva|documento|aprovacao/.test(summary)) score += 8;
-  if (record?.metadata?.propostaImagem) score += 7;
-  if (!analysis.generatedAt) score -= 12;
-  return Math.max(0, Math.min(99, Math.round(score)));
+  if (workflow.mode === "client_response") score += 18;
+  if (workflow.mode === "waiting") score -= Math.min(24, age * 2.5);
+  if (classifyLead(record) === "esfriando") score += 6;
+  if (interest.includes("muito alto")) score += 18;
+  else if (interest.includes("alto")) score += 14;
+  if (interest.includes("medio")) score += 8;
+  if (interest.includes("baixo")) score -= 16;
+  if (/negociacao|proposta|analise financeira|decisao|fechamento|visita/.test(stage)) score += 10;
+  if (/entrada|financiamento|fgts|parcela|valor|proposta|contrato|visita|cafe|reuniao|simulacao|chaves/.test(summary)) score += 8;
+  if (/comprar|fechar|gostei|queremos|reserva|documento|aprovacao/.test(summary)) score += 6;
+  if (record?.metadata?.propostaImagem) score += 5;
+  if (!analysis.generatedAt) score -= 18;
+
+  const hasHardClosingSignal = /reserva|contrato|documento|aprovacao|fechar|comprar|visita marcada|cafe marcado/.test(summary);
+  const cap = hasHardClosingSignal ? 92 : workflow.mode === "client_response" ? 86 : 82;
+  return Math.max(0, Math.min(cap, Math.round(score)));
+}
+
+function getTemperatureLabel(record) {
+  const workflow = getLeadWorkflowState(record);
+  if (!record?.metadata?.analiseComercial) return "Sem análise";
+  if (workflow.mode === "client_response") return "Responder";
+  const score = getCommercialTemperature(record);
+  if (score >= 78) return "Alta";
+  if (score >= 58) return "Média";
+  return "Baixa";
 }
 
 function getCommercialPriority(record) {
@@ -590,7 +608,7 @@ function getCommercialPriority(record) {
   if (workflow.mode === "client_response") return { label: "Responder agora", className: "hot" };
   if (!record?.metadata?.analiseComercial) return { label: "Analisar primeiro", className: "warm" };
   if (classifyLead(record) === "esfriando") return { label: "Retomar hoje", className: "warm" };
-  if (score >= 75) return { label: "Oportunidade forte", className: "hot" };
+  if (score >= 78) return { label: "Oportunidade forte", className: "hot" };
   if (score >= 58) return { label: "Acompanhar", className: "warm" };
   return { label: "Organizado", className: "cool" };
 }
@@ -665,7 +683,7 @@ function renderDashboard(records) {
         <span class="action-now-label">Ação principal</span>
         <span class="action-now-main">
           <strong>${escapeHtml(best.nomeLead)}</strong>
-          <b>${getCommercialTemperature(best)}%</b>
+          <b>${escapeHtml(getTemperatureLabel(best))}</b>
         </span>
         <span class="action-now-step">${escapeHtml(getLeadActionText(best))}</span>
         <span class="action-now-reason">${escapeHtml(getCommercialReason(best))}</span>
@@ -1175,11 +1193,10 @@ function renderList() {
     const action = getLeadActionText(record);
     return `
       <button class="attendance-card${mutedClass} attendance-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-        <span class="avatar">${escapeHtml(initials(record.nomeLead))}</span>
+        <span class="attendance-priority-pill ${escapeHtml(priority.className)}">${escapeHtml(getTemperatureLabel(record))}</span>
         <span class="attendance-copy">
           <span class="attendance-topline">
             <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
-            <b>${getCommercialTemperature(record)}%</b>
           </span>
           <span class="attendance-action">${escapeHtml(action)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
@@ -1601,7 +1618,7 @@ function renderCommercialSnapshot(record) {
     <section class="commercial-snapshot ${escapeHtml(priority.className)}">
       <div class="commercial-score">
         <span>Temperatura</span>
-        <strong>${score}%</strong>
+        <strong>${escapeHtml(getTemperatureLabel(record))}</strong>
       </div>
       <div class="commercial-snapshot-copy">
         <span class="section-eyebrow">Prioridade comercial</span>
@@ -2432,6 +2449,24 @@ function buildAudioMap(entries) {
   return map;
 }
 
+function audioCacheKey(entry, item) {
+  const filename = normalizeFileName(entry?.filename || item?.audioFile || "");
+  const size = Number(entry?.uncompressedSize || entry?.compressedSize || 0);
+  const modified = entry?.lastModDate instanceof Date ? entry.lastModDate.getTime() : "";
+  const timestamp = item?.timestamp || "";
+  return simpleHash([filename, size, modified, timestamp].join("|"));
+}
+
+function applyCachedTranscription(item, cached) {
+  if (!item || !cached) return false;
+  item.text = cached.text || "";
+  item.transcriptionStatus = cached.status || "done";
+  item.transcriptionAttempts = 0;
+  item.transcriptionCached = true;
+  item.transcriptionCachedAt = cached.createdAt || new Date().toISOString();
+  return Boolean(item.text || item.transcriptionStatus === "done");
+}
+
 async function transcribeAudio(entry, fullName, signal) {
   if (!entry) {
     return { text: "", status: "missing" };
@@ -2445,7 +2480,7 @@ async function transcribeAudio(entry, fullName, signal) {
   } catch {
     return { text: "", status: "missing" };
   }
-  if (blob.size > 4 * 1024 * 1024) {
+  if (blob.size > MAX_AUDIO_TRANSCRIPTION_BYTES) {
     return { text: "", status: "too_large" };
   }
 
@@ -2682,38 +2717,48 @@ async function processIncomingZip(pending) {
           item.transcriptionAttempts = 0;
           item.text = "Não foi possível localizar este áudio dentro do ZIP.";
         } else {
-          try {
-            const result = await transcribeAudioWithRetry(
-              audioEntry,
-              audioEntry.filename,
-              nextAttempt => {
-                setProcessing(
-                  "transcribe",
-                  beforePercent,
-                  `O áudio ${index + 1} falhou. Tentando novamente (${nextAttempt}/${MAX_TRANSCRIPTION_ATTEMPTS}).`
-                );
-                setProcessingTelemetry(
-                  audioEntry.filename,
-                  `${completedAudios} concluído${completedAudios === 1 ? "" : "s"} · nova tentativa em andamento`
-                );
-              },
-              signal
-            );
-            item.text = result.text || (
-              result.status === "too_large"
-                ? "Este áudio ultrapassa o limite permitido para transcrição."
-                : "O áudio não retornou texto após novas tentativas."
-            );
-            item.transcriptionStatus = result.status;
-            item.transcriptionAttempts = result.attempts;
+          const cacheKey = audioCacheKey(audioEntry, item);
+          const cached = await getCachedTranscription(cacheKey).catch(() => null);
+          if (applyCachedTranscription(item, cached)) {
             item.transcriptionPeriod = selectedPeriod;
-          } catch (error) {
-            if (error?.code === "IMPORT_CANCELLED" || error?.name === "AbortError") throw createImportCancelledError();
-            if (error.fatal) throw error;
-            item.text = "Não foi possível transcrever este áudio após 3 tentativas.";
-            item.transcriptionStatus = "error";
-            item.transcriptionAttempts = MAX_TRANSCRIPTION_ATTEMPTS;
-            item.transcriptionPeriod = selectedPeriod;
+            setProcessingTelemetry(audioEntry.filename, "Transcrição reaproveitada do cache local");
+          } else {
+            try {
+              const result = await transcribeAudioWithRetry(
+                audioEntry,
+                audioEntry.filename,
+                nextAttempt => {
+                  setProcessing(
+                    "transcribe",
+                    beforePercent,
+                    `O áudio ${index + 1} falhou. Tentando novamente (${nextAttempt}/${MAX_TRANSCRIPTION_ATTEMPTS}).`
+                  );
+                  setProcessingTelemetry(
+                    audioEntry.filename,
+                    `${completedAudios} concluído${completedAudios === 1 ? "" : "s"} · nova tentativa em andamento`
+                  );
+                },
+                signal
+              );
+              item.text = result.text || (
+                result.status === "too_large"
+                  ? "Este áudio ultrapassa o limite permitido para transcrição."
+                  : "O áudio não retornou texto após novas tentativas."
+              );
+              item.transcriptionStatus = result.status;
+              item.transcriptionAttempts = result.attempts;
+              item.transcriptionPeriod = selectedPeriod;
+              if (result.status === "done" && result.text) {
+                await saveCachedTranscription({ cacheKey, text: result.text, status: result.status, filename: audioEntry.filename, size: audioEntry.uncompressedSize || audioEntry.compressedSize || 0 }).catch(() => null);
+              }
+            } catch (error) {
+              if (error?.code === "IMPORT_CANCELLED" || error?.name === "AbortError") throw createImportCancelledError();
+              if (error.fatal) throw error;
+              item.text = "Não foi possível transcrever este áudio após 3 tentativas.";
+              item.transcriptionStatus = "error";
+              item.transcriptionAttempts = MAX_TRANSCRIPTION_ATTEMPTS;
+              item.transcriptionPeriod = selectedPeriod;
+            }
           }
         }
 

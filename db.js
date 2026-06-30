@@ -1,6 +1,7 @@
 const APP_DB_NAME = "corretor-pro-data";
-const APP_DB_VERSION = 1;
+const APP_DB_VERSION = 2;
 const ATTENDANCE_STORE = "atendimentos";
+const TRANSCRIPTION_CACHE_STORE = "transcriptionCache";
 
 export const SHARE_DB_NAME = "corretor-pro-share";
 export const SHARE_DB_VERSION = 1;
@@ -42,6 +43,10 @@ async function openAppDatabase() {
     if (!db.objectStoreNames.contains(ATTENDANCE_STORE)) {
       const store = db.createObjectStore(ATTENDANCE_STORE, { keyPath: "conversationKey" });
       store.createIndex("updatedAt", "updatedAt", { unique: false });
+    }
+    if (!db.objectStoreNames.contains(TRANSCRIPTION_CACHE_STORE)) {
+      const cache = db.createObjectStore(TRANSCRIPTION_CACHE_STORE, { keyPath: "cacheKey" });
+      cache.createIndex("createdAt", "createdAt", { unique: false });
     }
   });
 }
@@ -111,6 +116,34 @@ export async function saveAtendimento(record) {
   }
 }
 
+export async function getCachedTranscription(cacheKey) {
+  if (!cacheKey) return null;
+  const db = await openAppDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(TRANSCRIPTION_CACHE_STORE, "readonly");
+      const request = transaction.objectStore(TRANSCRIPTION_CACHE_STORE).get(cacheKey);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error("Falha ao consultar cache de áudio."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function saveCachedTranscription(entry) {
+  if (!entry?.cacheKey) return null;
+  const db = await openAppDatabase();
+  try {
+    const record = { ...entry, createdAt: entry.createdAt || new Date().toISOString() };
+    await runTransaction(db, TRANSCRIPTION_CACHE_STORE, "readwrite", store => {
+      store.put(record);
+    });
+    return record;
+  } finally {
+    db.close();
+  }
+}
 
 export async function deleteAtendimento(conversationKey) {
   if (!conversationKey) return;

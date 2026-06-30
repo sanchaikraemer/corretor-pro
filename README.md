@@ -1,38 +1,26 @@
-# Corretor Pro — v078
+# Corretor Pro — v079
 
-Aplicativo web/PWA para importar conversas exportadas do WhatsApp, organizar mensagens e transcrições, analisar o atendimento com inteligência comercial e gerar sugestões de resposta.
+Aplicativo web/PWA para importar conversas exportadas do WhatsApp, organizar mensagens e transcrições, analisar o atendimento com inteligência comercial e sugerir próximas respostas.
 
-## Principais funções
+## v079
 
-- importação incremental, sem duplicar mensagens;
-- transcrição de áudios `.opus` com novas tentativas automáticas e limite ampliado para 12 MB;
-- nova tentativa, em reimportações, para áudios que permaneceram com falha;
-- período de 30, 60, 90 dias ou todo o histórico;
-- análise comercial com imagem da última proposta;
-- diferenciação entre cliente direto e corretor parceiro;
-- identificação do usuário do app como **Sanchai**;
-- reconhecimento de conversas pelo nome e pelo DNA das mensagens, reduzindo risco de misturar homônimos;
-- sincronização leve: a lista consulta apenas resumos e o histórico completo é carregado ao abrir o lead;
-- PWA com cache versionado pela fonte central `version.js`;
-- painel comercial com prioridade, motivo da ação e roteiro de uso para corretor.
+Pacote entregue:
 
-## Versão
+- visual mobile revisado em grafite/preto/cinza com verde-limão somente como destaque;
+- remoção dos avatares dos cards de atendimento;
+- remoção dos percentuais da lista, trocando por leitura comercial: `Responder`, `Alta`, `Média`, `Baixa` ou `Sem análise`;
+- correção de proporções e estouro de layout no mobile;
+- tela interna do lead alinhada visualmente com a tela inicial;
+- limite de áudio mantido em 12 MB;
+- cache local de transcrição por áudio no IndexedDB para evitar retranscrever o mesmo áudio em reimportações;
+- reaproveitamento de transcrição anterior quando disponível;
+- fluxo de importação com feedback mais claro durante transcrição.
 
-- versão visual e operacional: `v078`;
-- versão do pacote: `0.78.0`;
-- fonte central: `version.js`.
+## Arquivos principais
 
-## Publicação
-
-```bash
-npm test
-npm run check
-npm run build
-```
-
-A Vercel usa `build.js` para gerar a pasta `public` e `server.js` para as rotas da API.
-
-
-## Foco da v078
-
-Esta versão não implementa login nem cadastro de imóveis. O objetivo é validar a funcionalidade principal: importar conversas do WhatsApp, organizar texto e áudio, gerar diagnóstico comercial e indicar quem merece ação agora.
+- `index.html` — estrutura da PWA;
+- `styles.css` — interface visual;
+- `app.js` — lógica principal do cliente;
+- `db.js` — IndexedDB local;
+- `server.js` — backend/API;
+- `whatsapp.js` — parser de conversas do WhatsApp.

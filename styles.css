@@ -3239,3 +3239,236 @@ body { background: radial-gradient(circle at 70% -10%, rgba(217,255,63,.09), tra
     grid-template-columns: 1fr;
   }
 }
+
+/* v079 — mobile premium + Pacote 4: continuidade visual, sem percentuais irreais e sem avatares */
+:root {
+  --bg-main: #080a0c;
+  --bg-panel: #101316;
+  --bg-card: #161a1e;
+  --bg-card-2: #1d2227;
+  --text-main: #f6f8f3;
+  --text-muted: #9ea7a2;
+  --line-soft: rgba(255,255,255,.085);
+  --lime: #d9ff3f;
+  --lime-2: #bfff1f;
+  --amber: #c8a24b;
+  --hot: #d9ff3f;
+  --cool: #7c8580;
+}
+
+/* A lista agora usa uma linguagem única: limão = agir; cinza = acompanhar. */
+.attendance-card {
+  grid-template-columns: minmax(0,1fr) auto !important;
+  align-items: start !important;
+  min-height: 74px !important;
+  padding: 12px 12px 12px 13px !important;
+  border-left: 0 !important;
+  position: relative;
+  overflow: hidden;
+}
+.attendance-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.18);
+}
+.attendance-card--hot::before { background: var(--lime) !important; }
+.attendance-card--warm::before { background: rgba(217,255,63,.48) !important; }
+.attendance-card--cool::before { background: rgba(255,255,255,.18) !important; }
+.avatar { display: none !important; }
+.attendance-priority-pill {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 76px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.055);
+  color: #dfe6dd;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+.attendance-priority-pill.hot { color: #0b0d0f; background: var(--lime); border-color: var(--lime); }
+.attendance-priority-pill.warm { color: var(--lime); background: rgba(217,255,63,.10); border-color: rgba(217,255,63,.22); }
+.attendance-priority-pill.cool { color: #aeb7b1; background: rgba(255,255,255,.04); }
+.attendance-copy { min-width: 0; padding-right: 8px; }
+.attendance-topline { padding-right: 0 !important; }
+.attendance-name {
+  max-width: 100%;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attendance-action, .attendance-preview { max-width: 100%; }
+.attendance-time {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: end;
+  justify-self: end;
+  margin-top: 24px;
+  min-width: 42px;
+  text-align: right;
+}
+.attendance-urgency.hot,
+.attendance-urgency.warm,
+.attendance-urgency.cool {
+  color: var(--lime) !important;
+  background: rgba(217,255,63,.09) !important;
+}
+.command-chips {
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+}
+.chip {
+  flex: 1 1 calc(50% - 8px) !important;
+  justify-content: center;
+  min-width: 132px;
+}
+.action-now-card { overflow: hidden; }
+.action-now-main { align-items: center !important; }
+.action-now-main strong { min-width: 0; }
+.action-now-main b {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #0b0d0f !important;
+  background: var(--lime);
+  font-size: 10px !important;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Tela do lead segue a mesma identidade da home */
+.detail-page {
+  background: #0b0d0f !important;
+  color: var(--text-main) !important;
+  padding: 14px 12px calc(34px + var(--safe-bottom)) !important;
+}
+.detail-header {
+  background: #0b0d0f !important;
+  border-bottom: 1px solid rgba(217,255,63,.08) !important;
+  color: var(--text-main) !important;
+}
+.detail-title, #detail-header-title { color: #fff !important; }
+#detail-header-subtitle, .detail-header span { color: #9ea7a2 !important; }
+.status-card,
+.message-toolbar,
+.commercial-snapshot,
+.analysis-card,
+.analysis-card-rich,
+.analysis-feature-card,
+.analysis-decision-card,
+.suggestions-panel,
+.suggestion-card,
+.history-panel,
+.contact-type-card,
+.notas-card,
+.print-note-card,
+.manual-lead-card {
+  background: #161a1e !important;
+  border: 1px solid rgba(255,255,255,.075) !important;
+  color: var(--text-main) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.22) !important;
+}
+.status-card {
+  max-width: 860px;
+  border-color: rgba(217,255,63,.16) !important;
+  background: linear-gradient(135deg, rgba(217,255,63,.09), #161a1e) !important;
+}
+.status-copy strong,
+.analysis-summary strong,
+.analysis-block h3,
+.analysis-feature-card h3,
+.analysis-decision-card strong,
+.suggestion-card strong,
+.history-panel summary,
+.message-toolbar strong,
+.commercial-snapshot-copy h2 {
+  color: #fff !important;
+}
+.status-copy span,
+.analysis-summary p,
+.analysis-block p,
+.analysis-block li,
+.analysis-empty-value,
+.analysis-decision-card p,
+.suggestion-message-full,
+.suggestion-strategy,
+.commercial-snapshot-copy p,
+.history-panel p,
+.message-toolbar span {
+  color: #aab3ad !important;
+}
+.commercial-snapshot {
+  background: radial-gradient(circle at 100% 0%, rgba(217,255,63,.10), transparent 34%), linear-gradient(145deg, #171b1f, #101316) !important;
+}
+.commercial-score {
+  background: rgba(217,255,63,.10) !important;
+  border-color: rgba(217,255,63,.20) !important;
+}
+.commercial-score strong {
+  color: var(--lime) !important;
+  font-size: 20px !important;
+}
+.analysis-meta-card,
+.analysis-compact-item,
+.analysis-facts div,
+.analysis-block,
+.timeline-item,
+.transcription-block {
+  background: #101316 !important;
+  border-color: rgba(255,255,255,.075) !important;
+  color: var(--text-main) !important;
+}
+.analysis-button,
+.analysis-refresh-button,
+.attended-now-button,
+.suggestion-card button,
+[data-copy-suggestion] {
+  background: var(--lime) !important;
+  color: #0b0d0f !important;
+  border: 0 !important;
+  box-shadow: 0 12px 24px rgba(217,255,63,.12) !important;
+}
+.secondary-button,
+.message-toolbar button:not(.analysis-button) {
+  background: #20252b !important;
+  color: #f0f3ef !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+}
+input, textarea, select {
+  background: #101316 !important;
+  border-color: rgba(255,255,255,.10) !important;
+  color: #fff !important;
+}
+.timeline-author, .section-eyebrow, .analysis-commercial-signal strong { color: var(--lime) !important; }
+.analysis-commercial-signal {
+  background: rgba(217,255,63,.07) !important;
+  border-color: rgba(217,255,63,.16) !important;
+}
+
+@media (max-width: 430px) {
+  .list-hero { padding-inline: 14px !important; }
+  .list-surface { padding-inline: 9px !important; }
+  .command-dashboard { padding: 14px !important; }
+  .command-greeting strong { font-size: 23px !important; }
+  .chip { min-width: calc(50% - 5px); padding-inline: 8px !important; font-size: 11px !important; }
+  .attendance-card { grid-template-columns: minmax(0,1fr) 86px !important; }
+  .attendance-priority-pill { min-width: 68px; font-size: 8.5px; }
+  .attendance-time { font-size: 9px !important; }
+  .detail-page { padding-inline: 10px !important; }
+  .analysis-decision-grid, .analysis-feature-grid, .suggestions-grid { grid-template-columns: 1fr !important; }
+}
