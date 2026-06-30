@@ -7,14 +7,14 @@ import {
   removePendingShare,
   saveAtendimento,
   saveCachedTranscription
-} from "./db.js?v=079";
+} from "./db.js?v=080";
 import {
   inferLeadName,
   initials,
   makeConversationKey,
   normalizeFileName,
   parseWhatsappTxt
-} from "./whatsapp.js?v=079";
+} from "./whatsapp.js?v=080";
 
 const app = document.querySelector("#app");
 const backButton = document.querySelector("#back-button");
@@ -46,7 +46,7 @@ const addLeadDialog = document.querySelector("#add-lead-dialog");
 const addLeadForm = document.querySelector("#add-lead-form");
 const leadCount = document.querySelector("#lead-count");
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v079", package: "0.79.0" };
+const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v080", package: "0.80.0" };
 const APP_VERSION = VERSION_INFO.app;
 const APP_USER_NAME = (localStorage.getItem("corretorProUserName") || "Sanchai").trim();
 const APP_USER_ALIASES = new Set([normalizeComparable(APP_USER_NAME), "sanchai", "voce", "você"]);
@@ -666,31 +666,30 @@ function renderDashboard(records) {
   const semAnalise = records.filter(r => !r?.metadata?.analiseComercial).length;
   const top = [...records].sort((a, b) => getActionRank(b) - getActionRank(a));
   const best = top[0];
+  const bestPriority = best ? getCommercialPriority(best) : null;
 
   return `
     <section class="command-dashboard" aria-label="Resumo comercial">
       <div class="command-greeting">
-        <span>${escapeHtml(getGreeting())}, Sanchai.</span>
-        <strong>${responder + esfriando} clientes precisam de você hoje.</strong>
+        <span>${escapeHtml(getGreeting())}, Sanchai</span>
+        <strong>${responder + esfriando} clientes pedem ação.</strong>
+        <p>Abra, copie a mensagem certa e siga sem perder o ponto da conversa.</p>
       </div>
       <div class="command-chips" aria-label="Indicadores rápidos">
-        <span class="chip chip--hot">🔥 Quentes <b>${quentes}</b></span>
-        <span class="chip chip--warm">🟠 Responder <b>${responder}</b></span>
-        <span class="chip chip--cool">🔵 Retomar <b>${esfriando}</b></span>
-        <span class="chip chip--muted">⚪ Sem análise <b>${semAnalise}</b></span>
+        <span class="chip chip--hot"><b>${quentes}</b> Quentes</span>
+        <span class="chip chip--warm"><b>${responder}</b> Responder</span>
+        <span class="chip chip--cool"><b>${esfriando}</b> Retomar</span>
+        <span class="chip chip--muted"><b>${semAnalise}</b> Sem análise</span>
       </div>
-      ${best ? `<button class="action-now-card" type="button" data-attendance="${escapeHtml(best.conversationKey)}">
-        <span class="action-now-label">Ação principal</span>
-        <span class="action-now-main">
-          <strong>${escapeHtml(best.nomeLead)}</strong>
-          <b>${escapeHtml(getTemperatureLabel(best))}</b>
-        </span>
+      ${best ? `<button class="action-now-card priority-${escapeHtml(bestPriority.className)}" type="button" data-attendance="${escapeHtml(best.conversationKey)}">
+        <span class="action-now-label">Melhor próxima ação</span>
+        <strong>${escapeHtml(best.nomeLead)}</strong>
+        <span class="action-now-status">${escapeHtml(bestPriority.label)}</span>
         <span class="action-now-step">${escapeHtml(getLeadActionText(best))}</span>
         <span class="action-now-reason">${escapeHtml(getCommercialReason(best))}</span>
       </button>` : ""}
     </section>`;
 }
-
 
 function formatAttendedNowLabel(record, compact = false) {
   const date = getAttendedNowDate(record);
@@ -1193,19 +1192,17 @@ function renderList() {
     const action = getLeadActionText(record);
     return `
       <button class="attendance-card${mutedClass} attendance-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-        <span class="attendance-priority-pill ${escapeHtml(priority.className)}">${escapeHtml(getTemperatureLabel(record))}</span>
         <span class="attendance-copy">
           <span class="attendance-topline">
             <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
+            <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span><span class="attendance-time-inline">${escapeHtml(moment.date)} · ${escapeHtml(moment.time)}</span>
           </span>
           <span class="attendance-action">${escapeHtml(action)}</span>
           <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
           <span class="attendance-urgency ${escapeHtml(priority.className)}">${escapeHtml(urgencyLabel || priority.label)}</span>
         </span>
-        <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
   }
-
   const callNowCards = [
     ...responder.map(r => buildCard(r, "responder agora")),
     ...esfriando.map(r => {
@@ -1611,24 +1608,29 @@ function renderAnalysisSection(record) {
 function renderCommercialSnapshot(record) {
   const analysis = record?.metadata?.analiseComercial || {};
   const priority = getCommercialPriority(record);
-  const score = getCommercialTemperature(record);
   const next = analysis.proximoPasso || (getLeadWorkflowState(record).mode === "client_response" ? "Responder a nova mensagem do cliente." : "Analisar atendimento e definir próxima ação.");
   const pending = analysis.pendenciaReal || analysis.pendenciaFinanceira || "Nenhuma pendência clara identificada.";
+  const reason = analysis.oQueFaltaParaFechar || analysis.porqueNaoComprou || analysis.objeçãoPrincipal || analysis.objecaoPrincipal || getCommercialReason(record);
+  const suggestions = Array.isArray(analysis.mensagensSugeridas) ? analysis.mensagensSugeridas : [];
+  const firstSuggestion = suggestions[0]?.mensagem || "";
   return `
-    <section class="commercial-snapshot ${escapeHtml(priority.className)}">
-      <div class="commercial-score">
-        <span>Temperatura</span>
-        <strong>${escapeHtml(getTemperatureLabel(record))}</strong>
+    <section class="commercial-snapshot priority-${escapeHtml(priority.className)}">
+      <div class="commercial-snapshot-head">
+        <span class="section-eyebrow">Decisão comercial</span>
+        <strong>${escapeHtml(priority.label)}</strong>
       </div>
       <div class="commercial-snapshot-copy">
-        <span class="section-eyebrow">Prioridade comercial</span>
-        <h2>${escapeHtml(priority.label)}</h2>
-        <p><strong>Próxima ação:</strong> ${escapeHtml(next)}</p>
-        <p><strong>Pendência:</strong> ${escapeHtml(pending)}</p>
+        <p><b>Próxima ação</b>${escapeHtml(next)}</p>
+        <p><b>Pendência</b>${escapeHtml(pending)}</p>
+        <p><b>Por que ainda não fechou</b>${escapeHtml(reason || "Ainda não identificado pela conversa.")}</p>
       </div>
+      ${firstSuggestion ? `<div class="primary-message-box">
+        <span>Mensagem pronta</span>
+        <p>${escapeHtml(firstSuggestion)}</p>
+        <button type="button" data-copy-suggestion="0">Copiar mensagem</button>
+      </div>` : ""}
     </section>`;
 }
-
 function renderContactTypeSelector(record) {
   if (getContactType(record)) return "";
   return `
@@ -2246,7 +2248,7 @@ function renderDetail(record) {
         ${waitingForClient ? "" : `<button class="attended-now-button" type="button" data-attended-now>Atendido agora</button>`}
       </section>
       ${renderCommercialSnapshot(record)}
-      ${renderManualLeadSection(record)}
+      ${renderAnalysisSection(record)}
       ${failedAudios.length ? `
         <section class="audio-warning" role="alert">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>
@@ -2265,7 +2267,6 @@ function renderDetail(record) {
           Copiar
         </button>
       </section>
-      ${renderAnalysisSection(record)}
       ${renderNotasSection(record)}
       ${renderProposalSection(record)}
       <details class="history-panel">
