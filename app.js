@@ -1052,6 +1052,46 @@ async function copySuggestedMessage(index) {
   await registerLeadAttended(record, "sugestao_copiada", `Mensagem copiada e atendimento registrado. ${getContactRoleText(record, "waiting")}.`);
 }
 
+async function markAttendedFromHome(record, source) {
+  // Variante de registerLeadAttended para a tela Bom dia: salva e sincroniza
+  // sem chamar renderDetail (continuamos na lista, não no detalhe).
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(record.metadata || {}),
+    statusAtendimento: "aguardando_resposta",
+    atendidoAgoraAt: now,
+    ultimaMovimentacaoAt: now,
+    origemUltimaMovimentacao: source
+  };
+  delete metadata.reanaliseDisponivelEm;
+  const updated = { ...record, metadata, updatedAt: now };
+  await saveAtendimento(updated);
+  updateRecordInState(updated);
+  pushRemoteRecord(updated).then(result => {
+    if (!result) showToast("Atendimento registrado neste aparelho, mas a nuvem não confirmou a atualização.", "error", 7000);
+  });
+  return updated;
+}
+
+async function copyHomeSuggestion(conversationKey) {
+  const record = await ensureFullRecord(conversationKey);
+  if (!record) return;
+  const suggestion = getPrimarySuggestion(record?.metadata?.analiseComercial || {});
+  const text = String(suggestion?.mensagem || "").trim();
+  if (!text) {
+    showToast("Abra o lead e gere a análise para ter a mensagem pronta.", "error");
+    return;
+  }
+  const copied = await writeToClipboard(text);
+  if (!copied) {
+    showToast("Não foi possível copiar a mensagem.", "error");
+    return;
+  }
+  const updated = await markAttendedFromHome(record, "sugestao_copiada_home");
+  showToast(`Mensagem copiada e atendimento registrado. ${getContactRoleText(updated, "waiting")}.`);
+  renderList();
+}
+
 async function copySelectedMessages() {
   if (!state.currentKey) return;
   const record = await getCurrentRecord();
@@ -1153,7 +1193,7 @@ function setDetailHeader(record) {
 }
 
 function renderList() {
-  /* V086 preserva grupos Chamar agora/Aguardar sem attendance-urgency visual. */
+  // Tela "Bom dia": briefing priorizado com mensagem pronta por lead (marca Direciona).
   state.currentKey = null;
   state.notaPrintsPendentes = [];
   setListHeader();
@@ -1172,72 +1212,104 @@ function renderList() {
   esfriando.sort((a, b) => getActionRank(b) - getActionRank(a));
   aguardar.sort((a, b) => getLatestActivityDate(b).getTime() - getLatestActivityDate(a).getTime());
 
-  function buildCard(record, urgencyLabel) {
+  const acionar = [...responder, ...esfriando];
+
+  function leadInitials(nome) {
+    const parts = String(nome || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    const ini = parts.map(p => p[0]).join("");
+    return (ini || "?").toUpperCase();
+  }
+
+  function urgencyLabelFor(record) {
+    const workflow = getLeadWorkflowState(record);
+    if (workflow.mode === "client_response") return "Responder";
+    if (classifyLead(record) === "esfriando") {
+      const refDate = getValidDate(record?.metadata?.atendidoAgoraAt) || getLatestActivityDate(record);
+      const days = Math.floor((Date.now() - refDate.getTime()) / (24 * 60 * 60 * 1000));
+      return `Retomar · ${days}d`;
+    }
+    return "Acompanhar";
+  }
+
+  function buildActionCard(record) {
+    const priority = getCommercialPriority(record);
     const workflow = getLeadWorkflowState(record);
     const moment = formatCardDate(workflow.activityDate.toISOString());
-    const priority = getCommercialPriority(record);
-    const mutedClass = urgencyLabel ? "" : " attendance-card--waiting";
-    const action = getLeadActionText(record);
+    const reason = getLeadActionText(record);
+    const suggestion = getPrimarySuggestion(record?.metadata?.analiseComercial || {});
+    const hasMsg = Boolean(suggestion && suggestion.mensagem);
+    const actions = hasMsg
+      ? `<div class="bd-msg"><span class="bd-msg-label">Mensagem pronta</span><p>${escapeHtml(suggestion.mensagem)}</p></div>
+        <div class="bd-actions">
+          <button class="bd-btn bd-btn--primary" type="button" data-copy-home="${escapeHtml(record.conversationKey)}">Copiar mensagem</button>
+          <button class="bd-btn bd-btn--ghost" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Abrir lead</button>
+        </div>`
+      : `<div class="bd-actions">
+          <button class="bd-btn bd-btn--primary" type="button" data-attendance="${escapeHtml(record.conversationKey)}">Gerar análise</button>
+        </div>`;
     return `
-      <button class="attendance-card${mutedClass} attendance-card--${escapeHtml(priority.className)}" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
-        <span class="attendance-copy">
-          <span class="attendance-topline">
-            <span class="attendance-name">${escapeHtml(record.nomeLead)}</span>
-            <em class="attendance-tag ${escapeHtml(priority.className)}">${escapeHtml(urgencyLabel || priority.label)}</em>
+      <article class="bd-card bd-card--${escapeHtml(priority.className)}">
+        <div class="bd-card-head">
+          <span class="bd-avatar" aria-hidden="true">${escapeHtml(leadInitials(record.nomeLead))}</span>
+          <span class="bd-who">
+            <span class="bd-name">${escapeHtml(record.nomeLead)}</span>
+            <span class="bd-meta attendance-time">${escapeHtml(moment.date)} · ${escapeHtml(moment.time)}</span>
           </span>
-          <span class="attendance-action">${escapeHtml(action)}</span>
-          <span class="attendance-preview">${escapeHtml(record.ultimaMensagemResumo || "Atendimento recebido")}</span>
+          <span class="bd-tag attendance-urgency ${escapeHtml(priority.className)}">${escapeHtml(urgencyLabelFor(record))}</span>
+        </div>
+        <p class="bd-why">${escapeHtml(reason)}</p>
+        ${actions}
+      </article>`;
+  }
+
+  function buildWaitCard(record) {
+    const moment = formatCardDate(getLatestActivityDate(record).toISOString());
+    return `
+      <button class="bd-wait" type="button" data-attendance="${escapeHtml(record.conversationKey)}">
+        <span class="bd-wait-copy">
+          <span class="bd-wait-name">${escapeHtml(record.nomeLead)}</span>
+          <span class="bd-wait-preview">${escapeHtml(record.ultimaMensagemResumo || "Aguardando resposta do cliente")}</span>
         </span>
-        <span class="attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
+        <span class="bd-wait-meta attendance-time">${escapeHtml(moment.date)}<span>${escapeHtml(moment.time)}</span></span>
       </button>`;
   }
 
-  const callNowCards = [
-    ...responder.map(r => buildCard(r, "responder agora")),
-    ...esfriando.map(r => {
-      const refDate = getValidDate(r?.metadata?.atendidoAgoraAt) || getLatestActivityDate(r);
-      const days = Math.floor((Date.now() - refDate.getTime()) / (24 * 60 * 60 * 1000));
-      return buildCard(r, `retomar · ${days}d`);
-    })
-  ].join("");
-  const aguardarCards = aguardar.map(r => buildCard(r, "")).join("");
+  const total = acionar.length;
+  const hero = `
+    <section class="bd-hero">
+      <span class="bd-greet">${escapeHtml(getGreeting())}, ${escapeHtml(APP_USER_NAME)}</span>
+      <h1>${total ? `Você tem <span>${total} lead${total === 1 ? "" : "s"}</span> esperando você hoje` : "Nenhuma urgência agora. Bom trabalho."}</h1>
+      <p>${total ? "Comece de cima. A mensagem já está pronta — é copiar, mandar e seguir pro próximo." : "Quando um cliente responder, ele aparece aqui em primeiro lugar."}</p>
+    </section>
+    <div class="bd-kpis" aria-label="Resumo do dia">
+      <span class="bd-kpi"><strong class="coral">${total}</strong><span>pra agir</span></span>
+      <span class="bd-kpi"><strong>${esfriando.length}</strong><span>retomar</span></span>
+      <span class="bd-kpi"><strong>${aguardar.length}</strong><span>aguardando</span></span>
+    </div>`;
 
-  let groupsHtml = "";
-  if (callNowCards) groupsHtml += `<h2 class="list-section-header">Chamar agora</h2><section class="attendance-list">${callNowCards}</section>`;
-  if (aguardarCards) groupsHtml += `<h2 class="list-section-header">Aguardar</h2><section class="attendance-list">${aguardarCards}</section>`;
+  const acionarHtml = acionar.length
+    ? `<h2 class="bd-section">Atender agora</h2><div class="bd-list">${acionar.map(buildActionCard).join("")}</div>`
+    : "";
+  const aguardarHtml = aguardar.length
+    ? `<h2 class="bd-section bd-section--muted">Aguardando resposta</h2><div class="bd-waitlist">${aguardar.map(buildWaitCard).join("")}</div>`
+    : "";
 
   app.innerHTML = `
-    <section class="list-page">
-      <div class="list-hero">
-        <div class="list-hero-heading">
-          <div>
-            <span class="page-kicker">Mesa comercial</span>
-            <h1>Atendimentos</h1>
-          </div>
-          <button class="add-lead-button" type="button" data-add-lead aria-label="Adicionar atendimento">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            <span>Adicionar</span>
-          </button>
-        </div>
-        <p>Abra, copie a próxima mensagem e movimente os leads certos primeiro.</p>
-      </div>
-      <div class="list-surface">
-        ${renderInstallCard()}
-        ${state.records.length ? renderDashboard(state.records) : ""}
-        ${groupsHtml || renderEmptyState()}
-        <button class="floating-add-button" type="button" data-add-lead aria-label="Adicionar atendimento">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-        <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
-          <span>${state.cloudAvailable === false
-            ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
-            : "Atendimentos atualizados automaticamente neste link."}</span>
-        </div>
+    <section class="home-bd">
+      ${renderInstallCard()}
+      ${state.records.length ? hero : ""}
+      ${state.records.length ? (acionarHtml + aguardarHtml) : renderEmptyState()}
+      <button class="floating-add-button" type="button" data-add-lead aria-label="Adicionar atendimento">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <div class="storage-note${state.cloudAvailable === false ? " error" : ""}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-7V2"/><path d="m20 2-8 8"/><path d="M4 17h7v5"/><path d="m4 22 8-8"/></svg>
+        <span>${state.cloudAvailable === false
+          ? "A atualização automática está indisponível porque o banco na nuvem não está configurado."
+          : "Atendimentos atualizados automaticamente neste link."}</span>
       </div>
     </section>`;
 }
-
 
 function groupTimelineByDate(timeline) {
   const groups = [];
@@ -2971,6 +3043,12 @@ function bindEvents() {
     const copySuggestionTrigger = event.target.closest("[data-copy-suggestion]");
     if (copySuggestionTrigger) {
       await copySuggestedMessage(Number(copySuggestionTrigger.dataset.copySuggestion));
+      return;
+    }
+
+    const copyHomeTrigger = event.target.closest("[data-copy-home]");
+    if (copyHomeTrigger) {
+      await copyHomeSuggestion(copyHomeTrigger.dataset.copyHome);
       return;
     }
 

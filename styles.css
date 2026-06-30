@@ -3361,3 +3361,133 @@ body {
   .primary-message-box p { font-size: 14px !important; }
   .attendance-card { padding: 12px !important; }
 }
+
+/* ============================================================
+   v087 — Tela "Bom dia" (marca Direciona: Petróleo & Coral)
+   Escopo próprio (.home-bd); não altera o tema das demais telas.
+   ============================================================ */
+:root {
+  --bd-petroleo: #0C1D24;
+  --bd-petroleo-claro: #132A33;
+  --bd-coral: #FF6B5C;
+  --bd-coral-soft: rgba(255, 107, 92, 0.12);
+  --bd-gelo: #E6EEF0;
+  --bd-apoio: #8FA9B0;
+  --bd-linha: #21424E;
+}
+
+.app-header {
+  background:
+    radial-gradient(circle at 92% -35%, rgba(255, 107, 92, 0.30), transparent 46%),
+    linear-gradient(135deg, #0C1D24, #0A1A20);
+}
+.brand-name strong { color: var(--bd-coral); }
+
+.home-bd {
+  background: var(--bd-petroleo);
+  min-height: calc(100dvh - 76px);
+  padding: 20px 16px calc(40px + var(--safe-bottom));
+  color: var(--bd-gelo);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  position: relative;
+}
+
+.bd-hero { padding: 6px 6px 2px; }
+.bd-greet { font-size: 14px; color: var(--bd-apoio); font-weight: 500; }
+.bd-hero h1 {
+  margin: 6px 0 0;
+  font-family: "Sora", "Poppins", system-ui, sans-serif;
+  font-weight: 800; font-size: 27px; line-height: 1.14;
+  letter-spacing: -0.5px; color: var(--bd-gelo);
+}
+.bd-hero h1 span { color: var(--bd-coral); }
+.bd-hero p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--bd-apoio); }
+
+.bd-kpis { display: flex; gap: 9px; margin: 16px 0 6px; }
+.bd-kpi {
+  flex: 1; background: var(--bd-petroleo-claro); border: 1px solid var(--bd-linha);
+  border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 2px;
+}
+.bd-kpi strong { font-family: "Sora", sans-serif; font-weight: 700; font-size: 22px; color: var(--bd-gelo); }
+.bd-kpi strong.coral { color: var(--bd-coral); }
+.bd-kpi span { font-size: 11px; color: var(--bd-apoio); font-weight: 500; }
+
+.bd-section {
+  margin: 22px 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--bd-apoio); font-family: "Inter", sans-serif;
+}
+.bd-section--muted { opacity: 0.7; }
+
+.bd-list { display: flex; flex-direction: column; gap: 12px; }
+
+.bd-card {
+  background: var(--bd-petroleo-claro); border: 1px solid var(--bd-linha);
+  border-radius: 20px; padding: 16px;
+}
+.bd-card--hot {
+  border-color: rgba(255, 107, 92, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 107, 92, 0.14), 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+.bd-card-head { display: flex; align-items: center; gap: 11px; margin-bottom: 11px; }
+.bd-avatar {
+  width: 42px; height: 42px; border-radius: 13px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  font-family: "Sora", sans-serif; font-weight: 700; font-size: 14px; color: var(--bd-petroleo);
+  background: linear-gradient(135deg, #cdd9dd, #9fb4ba);
+}
+.bd-card--hot .bd-avatar { background: linear-gradient(135deg, #ff8a7d, #ff6b5c); color: #fff; }
+.bd-who { min-width: 0; flex: 1; display: grid; }
+.bd-name {
+  font-family: "Sora", sans-serif; font-weight: 700; font-size: 16px; color: var(--bd-gelo); line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bd-meta { font-size: 12px; color: var(--bd-apoio); margin-top: 3px; }
+.bd-tag {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 999px; white-space: nowrap; align-self: flex-start;
+}
+.bd-tag.hot { background: var(--bd-coral); color: #fff; }
+.bd-tag.warm { background: var(--bd-coral-soft); color: var(--bd-coral); }
+.bd-tag.cool { background: rgba(143, 169, 176, 0.16); color: #bcd0d6; }
+
+.bd-why { font-size: 13px; line-height: 1.5; color: #c4d4d9; margin: 0 0 12px; }
+
+.bd-msg {
+  background: rgba(12, 29, 36, 0.55); border: 1px solid var(--bd-linha);
+  border-radius: 14px; padding: 11px 13px; margin-bottom: 11px;
+}
+.bd-msg-label {
+  display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--bd-coral); margin-bottom: 6px;
+}
+.bd-msg-label::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--bd-coral); }
+.bd-msg p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--bd-gelo); }
+
+.bd-actions { display: flex; gap: 9px; }
+.bd-btn {
+  flex: 1; border: 0; border-radius: 12px; padding: 12px; font-family: "Inter", sans-serif;
+  font-weight: 600; font-size: 13.5px; cursor: pointer;
+}
+.bd-btn--primary { background: var(--bd-coral); color: #fff; }
+.bd-btn--ghost { background: transparent; color: var(--bd-gelo); border: 1px solid var(--bd-linha); }
+
+.bd-waitlist { display: flex; flex-direction: column; gap: 8px; }
+.bd-wait {
+  width: 100%; text-align: left; background: var(--bd-petroleo-claro); border: 1px solid var(--bd-linha);
+  border-radius: 14px; padding: 13px 14px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; color: inherit;
+}
+.bd-wait-copy { min-width: 0; flex: 1; display: grid; }
+.bd-wait-name {
+  font-family: "Sora", sans-serif; font-weight: 600; font-size: 14.5px; color: var(--bd-gelo);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bd-wait-preview {
+  font-size: 12px; color: var(--bd-apoio); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bd-wait-meta { font-size: 11px; color: var(--bd-apoio); text-align: right; display: grid; flex: 0 0 auto; }
+
+.home-bd .floating-add-button { background: var(--bd-coral); color: #fff; box-shadow: 0 12px 26px rgba(255, 107, 92, 0.34); }
+.home-bd .storage-note { color: var(--bd-apoio); }
+.home-bd .install-card { background: var(--bd-petroleo-claro); border-color: var(--bd-linha); color: var(--bd-gelo); }

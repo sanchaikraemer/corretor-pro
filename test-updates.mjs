@@ -542,11 +542,11 @@ test("v041 organiza lista por urgência com grupos Chamar agora e Aguardar", () 
   const renderListEnd = appSource.indexOf("function groupTimelineByDate", renderListStart);
   const renderListSource = appSource.slice(renderListStart, renderListEnd);
   // Horário da última atividade presente no card
-  assert.match(renderListSource, /<span class="attendance-time">/);
-  // Grupos de urgência com títulos de seção
-  assert.match(renderListSource, /Chamar agora/);
-  assert.match(renderListSource, /Aguardar/);
-  // Rótulo de urgência em texto nos cards do grupo "Chamar agora"
+  assert.match(renderListSource, /attendance-time/);
+  // Seções da tela Bom dia
+  assert.match(renderListSource, /Atender agora/);
+  assert.match(renderListSource, /Aguardando/);
+  // Rótulo de urgência em texto nos cards de ação
   assert.match(renderListSource, /attendance-urgency/);
   // Sem duplicação de horário via formatAttendedNowLabel
   assert.doesNotMatch(renderListSource, /formatAttendedNowLabel/);
