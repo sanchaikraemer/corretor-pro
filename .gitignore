@@ -1,5 +1,11 @@
-dist/
-public/
+node_modules
 node_modules/
+public/
+_render*.mjs
+_opcoes*.html
+preview-*.png
+_render_id.mjs
 .env
-.vercel
+.env.local
+.env.*.local
+_backup_620/

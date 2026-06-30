@@ -1,201 +1,282 @@
-importScripts("/version.js?v=091");
+const BUILD_ID = '__BUILD_ID__';
+const STATIC_CACHE = 'direciona-static-v6-' + BUILD_ID;
+// Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
+const SHARE_CACHE = 'direciona-sharetarget-stable';
+const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
+const DEBUG_KEY = '/__direciona_share_debug__';
 
-const VERSION_INFO = globalThis.CORRETOR_PRO_VERSION || { app: "v091" };
-const BUILD_ID = `corretor-pro-${VERSION_INFO.app}`;
-const STATIC_CACHE = `corretor-pro-static-${BUILD_ID}`;
-const SHARE_DB_NAME = "corretor-pro-share";
-const SHARE_DB_VERSION = 1;
-const SHARE_STORE = "incoming";
-const SHARE_RECORD_ID = "latest";
+// IndexedDB pra storage redundante do ZIP. Cache API tem comportamento erratico
+// no Chrome Android (put returna sucesso mas dados nao persistem). IndexedDB e
+// mais previsivel: writes sao transacionais e duraveis.
+const IDB_NAME = 'direciona-share';
+const IDB_VERSION = 1;
+const IDB_STORE = 'zips';
 
-const CORE_ASSETS = [
-  "/",
-  "/version.js?v=091",
-  "/index.html",
-  "/styles.css?v=091",
-  "/ui-v2.css?v=091",
-  "/app.js?v=091",
-  "/db.js?v=091",
-  "/whatsapp.js?v=091",
-  "/manifest.webmanifest",
-  "/share-target.html",
-  "/zip.min.js",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
-  "/logo-mark.png"
-];
-
-function openShareDatabase() {
+function idbOpen() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(SHARE_DB_NAME, SHARE_DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(SHARE_STORE)) {
-        db.createObjectStore(SHARE_STORE, { keyPath: "id" });
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Falha ao abrir armazenamento de compartilhamento."));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-function ensureZipName(name) {
-  const base = String(name || "").trim() || "conversa-whatsapp";
-  return /\.zip$/i.test(base) ? base : `${base}.zip`;
-}
-
-async function saveIncomingFile(file) {
-  // Guarda o próprio arquivo (File é um Blob). O IndexedDB persiste os bytes
-  // reais sem carregar tudo na memória — seguro mesmo para ZIPs grandes, e
-  // resolve o caso do Android reportar tamanho 0 antes da leitura.
-  const type = file.type || "application/zip";
-  const db = await openShareDatabase();
+async function idbPut(record) {
+  const db = await idbOpen();
   try {
-    await new Promise((resolve, reject) => {
-      const transaction = db.transaction(SHARE_STORE, "readwrite");
-      transaction.objectStore(SHARE_STORE).put({
-        id: SHARE_RECORD_ID,
-        name: ensureZipName(file.name),
-        type,
-        size: file.size,
-        blob: file,
-        receivedAt: new Date().toISOString()
-      });
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error || new Error("Falha ao salvar arquivo recebido."));
-      transaction.onabort = () => reject(transaction.error || new Error("Salvamento cancelado."));
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(record);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('idb tx aborted'));
     });
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
-async function handleShareTarget(request) {
-  const home = new URL("/", request.url);
-
-  // 1) Lê o multipart do compartilhamento.
-  let file;
+async function idbGet(id) {
+  const db = await idbOpen();
   try {
-    const formData = await request.formData();
-    file = formData.get("conversation");
-    if (!(file instanceof File)) {
-      for (const value of formData.values()) {
-        if (value instanceof File) {
-          file = value;
-          break;
-        }
-      }
-    }
-  } catch (error) {
-    home.searchParams.set("share_error", "leitura");
-    return Response.redirect(home.href, 303);
-  }
-
-  // 2) Confere que veio um arquivo (sem exigir extensão .zip nem tamanho > 0:
-  //    o app valida o conteúdo depois, e o tamanho pode vir 0 no Android).
-  if (!(file instanceof File)) {
-    home.searchParams.set("share_error", "sem_arquivo");
-    return Response.redirect(home.href, 303);
-  }
-  if (file.size > 2 * 1024 * 1024 * 1024) {
-    home.searchParams.set("share_error", "muito_grande");
-    return Response.redirect(home.href, 303);
-  }
-
-  // 3) Salva o arquivo recebido para o app processar.
-  try {
-    await saveIncomingFile(file);
-  } catch (error) {
-    home.searchParams.set("share_error", "armazenamento");
-    return Response.redirect(home.href, 303);
-  }
-
-  home.searchParams.set("recebido", "1");
-  return Response.redirect(home.href, 303);
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(id);
+      let result = null;
+      req.onsuccess = () => { result = req.result || null; };
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('idb get aborted'));
+    });
+  } finally { db.close(); }
 }
 
-self.addEventListener("install", event => {
+async function idbDel(id) {
+  const db = await idbOpen();
+  try {
+    return await new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } finally { db.close(); }
+}
+
+const CORE_ASSETS = [
+  '/',
+  '/index.html',
+  '/styles.css?v=__VERSION__',
+  '/app.js?v=__VERSION__',
+  '/vendor/jszip.min.js?v=__VERSION__',
+  '/share.html',
+  '/manifest.json',
+  '/service-worker.js',
+  '/icon-192.png?v=__VERSION__',
+  '/icon-512.png?v=__VERSION__',
+  '/favicon.png?v=__VERSION__',
+  '/logo-direciona-light.svg?v=__VERSION__',
+  '/logo-direciona-dark.svg?v=__VERSION__'
+];
+
+self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(CORE_ASSETS))
+      .then(cache => cache.addAll(CORE_ASSETS).catch(() => null))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("activate", event => {
+self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const names = await caches.keys();
+
+    // Resgata qualquer ZIP/debug que o SW anterior tenha deixado em cache
+    // antes de apagarmos o cache antigo. Mantém o histórico de share intacto.
+    const legacyCaches = names.filter(n =>
+      n !== STATIC_CACHE &&
+      n !== SHARE_CACHE &&
+      (n.startsWith('direciona-sharetarget-') || n.startsWith('direciona-static-'))
+    );
+
+    if (legacyCaches.length) {
+      try {
+        const target = await caches.open(SHARE_CACHE);
+        for (const oldName of legacyCaches) {
+          try {
+            const old = await caches.open(oldName);
+            for (const key of ZIP_KEYS) {
+              const match = await old.match(key);
+              if (match) await target.put(key, match).catch(() => null);
+            }
+            const debug = await old.match(DEBUG_KEY);
+            if (debug) await target.put(DEBUG_KEY, debug).catch(() => null);
+          } catch (_) { /* ignore */ }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    // Apaga só caches obsoletos. SHARE_CACHE e STATIC_CACHE atual ficam.
     await Promise.all(
       names
-        .filter(name => name.startsWith("corretor-pro-static-") && name !== STATIC_CACHE)
-        .map(name => caches.delete(name))
+        .filter(n => n !== STATIC_CACHE && n !== SHARE_CACHE)
+        .map(n => caches.delete(n).catch(() => false))
     );
+
     await self.clients.claim();
   })());
 });
 
-self.addEventListener("fetch", event => {
-  const request = event.request;
-  const url = new URL(request.url);
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
 
-  if (request.method === "POST" && url.origin === self.location.origin && url.pathname === "/share-target") {
-    event.respondWith(handleShareTarget(request));
+  if (event.request.method === 'POST' && (
+    url.pathname.endsWith('/share.html') ||
+    url.pathname.endsWith('/share-target')
+  )) {
+    event.respondWith(handleShare(event.request));
     return;
   }
 
-  if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
-    return;
-  }
+  if (url.pathname.includes('/api/')) return;
+  if (event.request.method !== 'GET') return;
 
-  if (request.mode === "navigate") {
+  const isHtml = url.pathname === '/' ||
+                 url.pathname.endsWith('.html') ||
+                 url.pathname.endsWith('/manifest.json') ||
+                 url.pathname.endsWith('/service-worker.js');
+
+  if (isHtml) {
     event.respondWith(
-      fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(STATIC_CACHE).then(cache => cache.put(request, copy)).catch(() => null);
-          return response;
-        })
-        .catch(() => caches.match("/index.html"))
+      fetch(event.request).then(response => {
+        const copy = response.clone();
+        caches.open(STATIC_CACHE).then(cache => cache.put(event.request, copy)).catch(() => null);
+        return response;
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('/index.html')))
     );
     return;
   }
 
-  const networkFirstPaths = new Set([
-    "/index.html",
-    "/styles.css",
-    "/ui-v2.css",
-    "/app.js",
-    "/db.js",
-    "/whatsapp.js"
-  ]);
-
-  if (networkFirstPaths.has(url.pathname)) {
-    event.respondWith((async () => {
-      try {
-        const response = await fetch(request, { cache: "no-store" });
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(STATIC_CACHE).then(cache => cache.put(request, copy)).catch(() => null);
-        }
-        return response;
-      } catch {
-        return (await caches.match(request)) || (await caches.match(url.pathname)) || Response.error();
-      }
-    })());
-    return;
-  }
-
   event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(STATIC_CACHE).then(cache => cache.put(request, copy)).catch(() => null);
-        }
+    caches.match(event.request).then(cached => {
+      return cached || fetch(event.request).then(response => {
+        const copy = response.clone();
+        caches.open(STATIC_CACHE).then(cache => cache.put(event.request, copy)).catch(() => null);
         return response;
-      });
+      }).catch(() => caches.match('/index.html'));
     })
   );
 });
+
+async function saveShareDebug(info) {
+  try {
+    const cache = await caches.open(SHARE_CACHE);
+    await cache.put(DEBUG_KEY, new Response(JSON.stringify(info), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  } catch (_) { /* ignore */ }
+}
+
+async function handleShare(request) {
+  const debug = { ts: new Date().toISOString(), buildId: BUILD_ID, step: 'start', formKeys: [], files: [], note: null };
+
+  try {
+    const formData = await request.formData();
+
+    for (const [key, value] of formData.entries()) {
+      debug.formKeys.push(key);
+      if (value && typeof value === 'object' && 'name' in value) {
+        debug.files.push({
+          key,
+          name: value.name || '(sem nome)',
+          type: value.type || '(sem tipo)',
+          size: typeof value.size === 'number' ? value.size : null
+        });
+      }
+    }
+
+    // Preferência: campo "zip" do manifest. Depois qualquer File com nome.
+    let file =
+      formData.get('zip') ||
+      formData.get('file') ||
+      formData.get('files') ||
+      formData.get('arquivo');
+
+    if (!file || !file.name) {
+      for (const value of formData.values()) {
+        if (value && value.name) { file = value; break; }
+      }
+    }
+
+    if (!file || !file.name) {
+      debug.step = 'no_file_in_form';
+      await saveShareDebug(debug);
+      return Response.redirect('/index.html?shared=0&source=share-target&erro=sem_arquivo', 303);
+    }
+
+    debug.chosenFile = { name: file.name, type: file.type, size: file.size };
+    const maxSharedBytes = 750 * 1024 * 1024;
+    if (!/\.zip$/i.test(String(file.name || '')) || file.size <= 0 || file.size > maxSharedBytes) {
+      debug.step = 'invalid_file';
+      debug.note = file.size > maxSharedBytes ? 'arquivo acima de 750 MB' : 'arquivo não é ZIP';
+      await saveShareDebug(debug);
+      return Response.redirect('/index.html?shared=0&source=share-target&erro=arquivo_invalido', 303);
+    }
+    debug.step = 'saving';
+
+    // Dupla persistencia: IndexedDB (primario, mais confiavel no Android)
+    // + Cache API (fallback, compat com codigo legado).
+    let idbError = null;
+    let cacheError = null;
+    let verifiedSize = null;
+
+    try {
+      const blob = file.slice(0, file.size, file.type || 'application/zip');
+      await idbPut({
+        id: 'latest',
+        name: file.name,
+        type: file.type || 'application/zip',
+        blob,
+        receivedAt: new Date().toISOString()
+      });
+      const back = await idbGet('latest');
+      verifiedSize = back?.blob?.size ?? null;
+      if (!verifiedSize) idbError = 'idb roundtrip retornou blob sem tamanho';
+    } catch (e) {
+      idbError = e?.message || String(e);
+    }
+
+    try {
+      const cache = await caches.open(SHARE_CACHE);
+      const headers = {
+        'Content-Type': file.type || 'application/zip',
+        'X-File-Name': encodeURIComponent(file.name),
+        'X-Received-At': new Date().toISOString()
+      };
+      await cache.put(ZIP_KEYS[0], new Response(file, { headers }));
+    } catch (e) {
+      cacheError = e?.message || String(e);
+    }
+
+    debug.idbError = idbError;
+    debug.cacheError = cacheError;
+    debug.idbVerifiedSize = verifiedSize;
+    debug.step = (!idbError || !cacheError) ? 'saved' : 'save_failed';
+    await saveShareDebug(debug);
+
+    if (idbError && cacheError) {
+      return Response.redirect('/index.html?shared=0&source=share-target&erro=storage_falhou', 303);
+    }
+    return Response.redirect('/index.html?shared=1&source=share-target', 303);
+  } catch (error) {
+    debug.step = 'exception';
+    debug.error = error?.message || String(error);
+    await saveShareDebug(debug);
+    return Response.redirect('/index.html?shared=0&source=share-target&erro=excecao', 303);
+  }
+}

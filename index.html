@@ -1,180 +1,761 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0C1D24">
-  <meta name="description" content="Corretor Pro transforma conversas exportadas do WhatsApp em atendimentos textuais organizados.">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Corretor Pro">
-  <title>Corretor Pro</title>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icon-192.png" sizes="192x192">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=091">
-  <link rel="stylesheet" href="/ui-v2.css?v=091">
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" id="themeColorMeta" content="#031E2C">
+<title>Corretor Pro</title>
+<link rel="manifest" href="/manifest.json">
+<script>
+  // Aplica somente o tema escolhido pelo usuário antes da pintura da tela.
+  // As opções disponíveis são claro e escuro.
+  (function(){
+    var tema = "dark";
+    try{
+      var salvo = localStorage.getItem("direciona_tema");
+      if(salvo === "light" || salvo === "dark") tema = salvo;
+    }catch(_){ }
+    document.documentElement.dataset.theme = tema;
+    document.documentElement.style.colorScheme = tema;
+  })();
+</script>
+<script>
+  // Captura o convite de instalação (beforeinstallprompt) o MAIS CEDO possível.
+  // O app.js é grande e carrega no fim do body — se o Chrome disparar o evento antes
+  // dele, o convite se perde e o botão "Baixar app" não instala. Aqui guardamos o
+  // evento num global pro app.js usar depois.
+  window.__deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+    window.dispatchEvent(new Event("direciona-install-ready"));
+  });
+  window.addEventListener("appinstalled", function(){
+    window.__deferredInstallPrompt = null;
+  });
+</script>
+<link rel="icon" type="image/png" href="/favicon.png?v=__VERSION__">
+<link rel="apple-touch-icon" href="/icon-192.png?v=__VERSION__">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css?v=__VERSION__">
 </head>
 <body>
-  <div class="cp-shell">
-    <aside class="cp-sidebar" aria-label="Navegação principal">
-      <button class="cp-side-brand" type="button" data-shell-route="#/" aria-label="Ir para atendimentos">
-        <img src="/logo-mark.png" alt="" width="42" height="42">
-        <span><b>Corretor</b><strong>Pro</strong></span>
-      </button>
-      <nav class="cp-side-nav">
-        <button type="button" data-shell-route="#/" data-shell-section="home" class="active"><span>⌂</span>Atendimentos</button>
-        <button type="button" data-shell-route="#/diagnostico" data-shell-section="diagnostico"><span>◎</span>Diagnóstico</button>
-        <button type="button" data-shell-route="#/historico" data-shell-section="historico"><span>↺</span>Histórico</button>
-        <button type="button" data-shell-route="#/configuracoes" data-shell-section="configuracoes"><span>⚙</span>Configurações</button>
-      </nav>
-      <div class="cp-side-footer">
-        <span class="cp-profile-dot">S</span>
-        <span><b>Sanchai</b><small>Corretor</small></span>
+<main class="app">
+  <aside class="sidebar">
+    <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Atendimentos">
+      <div class="sb-logo" aria-hidden="true"></div>
+      <div class="sb-brand-copy">
+        <div class="sb-wordmark"><h1>Corretor <em>Pro</em></h1><span>Plataforma de vendas imobiliárias</span></div>
+        <div class="sb-ver-top">Atualização #__VERSION__</div>
       </div>
-    </aside>
-    <div class="cp-workspace">
-  <header id="app-header" class="app-header">
-    <button id="back-button" class="icon-button back-button" type="button" aria-label="Voltar" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-    </button>
-
-    <button id="brand-button" class="brand" type="button" aria-label="Ir para atendimentos">
-      <img src="/logo-mark.png" alt="" width="52" height="52">
-      <span class="brand-name"><span>Corretor&nbsp;</span><strong>Pro</strong></span>
-    </button>
-
-    <div id="detail-header" class="detail-header" hidden>
-      <strong id="detail-header-title"></strong>
-      <span id="detail-header-subtitle"></span>
     </div>
-
-    <span id="header-version" class="header-version" aria-label="Versão do sistema">v091</span>
-    <span id="lead-count" class="lead-count" aria-label="Total de leads" hidden></span>
-    <button id="theme-toggle-button" class="theme-toggle-button" type="button" aria-label="Alternar tema" title="Alternar tema">◐</button>
-    <button id="install-button" class="install-button" type="button" hidden>Instalar</button>
-    <button id="edit-name-button" class="icon-button" type="button" aria-label="Editar nome" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-    </button>
-  </header>
-
-  <main id="app" class="app-main" aria-live="polite"></main>
+    <nav class="sb-nav">
+      <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Atendimentos</button>
+      <button type="button" class="sb-item go" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M8 20v-6h8v6"/></svg></span>Imóveis</button>
+      <button type="button" class="sb-item go" data-target="carteira" data-nav-key="carteira"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span>Leads</button>
+      <button type="button" class="sb-item go" data-target="agenda" data-nav-key="atividades"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 2v4M16 2v4M7 10h10M8 14h3M8 17h5"/></svg></span>Atividades</button>
+      <button type="button" class="sb-item go" data-target="pipeline" data-nav-key="pipeline"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v4H4zM4 11h11v4H4zM4 17h7v3H4z"/></svg></span>Negócios</button>
+      <button type="button" class="sb-item go" data-target="agenda" data-nav-key="tarefas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Tarefas</button>
+      <button type="button" class="sb-item go" data-target="relatorio" data-nav-key="relatorio"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-7"/></svg></span>Relatórios</button>
+      <button type="button" class="sb-item go" data-target="agenda" data-nav-key="agenda"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>Agenda</button>
+      <button type="button" class="sb-item go" data-target="menu" data-nav-key="menu"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 7 2.6a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>Configurações</button>
+    </nav>
+    <div class="sb-profile">
+      <div class="sb-profile-avatar">SK</div>
+      <div><strong>Seu perfil</strong><span>Corretor</span></div>
+      <button type="button" class="go" data-target="menu" aria-label="Abrir configurações">⌄</button>
+    </div>
+  </aside>
+  <div class="main-col">
+  <div class="top cp-topbar">
+    <div class="brand go" data-target="home" style="cursor:pointer" title="Voltar para Atendimentos">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="mobile-wordmark"><h1>Corretor <em>Pro</em></h1><span>Plataforma de vendas imobiliárias</span><div class="sb-ver-top">v__VERSION__</div></div>
+    </div>
+    <div class="busca-global" style="position:relative">
+      <span class="cp-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></span>
+      <input type="search" id="buscaGlobal" placeholder="Buscar leads, imóveis, atendimentos...">
+      <div id="buscaGlobalResults"></div>
+    </div>
+    <div class="cp-top-actions">
+      <button type="button" class="cp-icon-btn desktop-only" onclick="show('carteira')" title="Leads" aria-label="Abrir leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></button>
+      <button type="button" class="cp-icon-btn desktop-only" onclick="show('agenda')" title="Agenda" aria-label="Abrir agenda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg></button>
+      <button type="button" class="cp-icon-btn top-bell" id="topBell" title="Agenda do dia" onclick="show('agenda')" aria-label="Agenda do dia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="bell-badge" id="bellBadge" hidden></span></button>
+      <button type="button" class="cp-icon-btn mobile-only" onclick="show('menu')" title="Menu" aria-label="Abrir menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <button type="button" class="cp-user-btn go desktop-only" data-target="menu" title="Configurações"><span>SK</span></button>
+    </div>
+    <span id="pillTotalLeadsDesktop" style="display:none"></span>
+    <span id="btnAgendaTopoCount" style="display:none">0</span>
   </div>
-  </div>
-  <nav class="cp-mobile-nav" aria-label="Navegação principal">
-    <button type="button" data-shell-route="#/" data-shell-section="home" class="active"><span>⌂</span>Atendimentos</button>
-    <button type="button" data-shell-route="#/diagnostico" data-shell-section="diagnostico"><span>◎</span>Diagnóstico</button>
-    <button type="button" data-add-lead class="cp-mobile-add" aria-label="Novo atendimento">+</button>
-    <button type="button" data-shell-route="#/historico" data-shell-section="historico"><span>↺</span>Histórico</button>
-    <button type="button" data-shell-route="#/configuracoes" data-shell-section="configuracoes"><span>⚙</span>Ajustes</button>
-  </nav>
 
-  <section id="processing-overlay" class="processing-overlay" aria-live="assertive" aria-modal="true" role="dialog" hidden>
-    <div class="processing-shell">
-      <div class="processing-brand" aria-hidden="true">
-        <img src="/logo-mark.png" alt="" width="62" height="62">
-        <span><b>CORRETOR</b><strong>PRO</strong></span>
-      </div>
+  <div class="desktop-layout">
+    <section id="home" class="screen active">
+      <div id="bannerOnboarding" style="display:none"></div>
+      <div id="bannerInstalar" style="display:none"></div>
 
-      <div class="processing-card">
-        <p class="eyebrow">Recebido do WhatsApp</p>
-        <h1 id="processing-title">Processando conversa</h1>
-        <p id="processing-description" class="processing-description">Abrindo o arquivo enviado pelo WhatsApp.</p>
-
-        <div id="processing-live" class="processing-live">
-          <span class="processing-spinner" aria-hidden="true"></span>
+      <div id="cpDashboard" class="cp-dashboard">
+        <div class="cp-page-head">
           <div>
-            <strong id="processing-current">Abrindo o arquivo recebido</strong>
-            <span id="processing-count">Preparando a conversa</span>
+            <h2>Panorama do dia</h2>
+            <p id="cpDashboardDate">Hoje</p>
           </div>
-          <time id="processing-elapsed">Tempo decorrido: 00:00</time>
+          <button type="button" class="cp-period-btn">Hoje <span>⌄</span></button>
         </div>
 
-        <div id="audio-period-panel" class="audio-period-panel" hidden>
-          <strong>Quais áudios devem ser transcritos?</strong>
-          <p>Todas as mensagens escritas serão importadas. Escolha apenas o período dos áudios.</p>
-          <div class="audio-period-options" role="group" aria-label="Período dos áudios">
-            <button type="button" data-audio-import-period="30" aria-pressed="false">30 dias</button>
-            <button type="button" data-audio-import-period="60" aria-pressed="false">60 dias</button>
-            <button class="active" type="button" data-audio-import-period="90" aria-pressed="true">90 dias</button>
-            <button type="button" data-audio-import-period="all" aria-pressed="false">Todo o período</button>
+        <div class="cp-kpi-grid">
+          <button type="button" class="cp-kpi-card" onclick="show('carteira')">
+            <span class="cp-kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 2v4M16 2v4M8 11h8M12 8v6"/></svg></span><strong id="cpKpiNovos">0</strong><small>Novos leads</small><em id="cpKpiNovosSub">no período</em>
+          </button>
+          <button type="button" class="cp-kpi-card" onclick="show('pipeline')">
+            <span class="cp-kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 15.5 15.5 8.5"/><path d="M7 6.5 4.5 9a4 4 0 0 0 5.5 5.5l2.5-2.5M17 17.5l2.5-2.5A4 4 0 0 0 14 9.5L11.5 12"/></svg></span><strong id="cpKpiAtivos">0</strong><small>Negócios ativos</small><em id="cpKpiAtivosSub">em acompanhamento</em>
+          </button>
+          <button type="button" class="cp-kpi-card" onclick="show('agenda')">
+            <span class="cp-kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 2v4M16 2v4M7 10h10M9 14h2M13 14h2M9 17h2"/></svg></span><strong id="cpKpiVisitas">0</strong><small>Visitas agendadas</small><em id="cpKpiVisitasSub">confirmadas</em>
+          </button>
+          <button type="button" class="cp-kpi-card" onclick="show('propostas')">
+            <span class="cp-kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg></span><strong id="cpKpiPropostas">0</strong><small>Propostas enviadas</small><em id="cpKpiPropostasSub">em negociação</em>
+          </button>
+          <button type="button" class="cp-kpi-card cp-kpi-revenue" onclick="show('vendas')">
+            <span class="cp-kpi-icon">R$</span><strong id="cpKpiReceita">R$ 0</strong><small>Receita projetada</small><em id="cpKpiReceitaSub">vendas do mês</em><i class="cp-mini-bars"><b></b><b></b><b></b><b></b><b></b></i>
+          </button>
+        </div>
+
+        <div class="cp-dashboard-grid cp-dashboard-grid-top">
+          <article class="cp-panel cp-next-panel">
+            <header><div><h3>Próximos atendimentos</h3><p>Prioridades do dia</p></div><button type="button" onclick="show('agenda')">Ver agenda →</button></header>
+            <div id="cpAppointments" class="cp-appointments"></div>
+          </article>
+
+          <article class="cp-panel cp-performance-panel">
+            <header><div><h3>Desempenho de atendimentos</h3><p>Distribuição por temperatura</p></div></header>
+            <div class="cp-donut-layout">
+              <div id="cpPerformanceDonut" class="cp-donut"><div><strong id="cpPerformanceTotal">0</strong><span>atendimentos</span></div></div>
+              <div id="cpPerformanceLegend" class="cp-legend"></div>
+            </div>
+            <button type="button" class="cp-panel-link" onclick="show('relatorio')">Ver relatório completo →</button>
+          </article>
+
+          <article class="cp-panel cp-stage-panel">
+            <header><div><h3>Negócios por etapa</h3><p>Conversão no pipeline</p></div></header>
+            <div id="cpStageBars" class="cp-stage-bars"></div>
+            <button type="button" class="cp-panel-link" onclick="show('pipeline')">Ver funil completo →</button>
+          </article>
+        </div>
+
+        <div class="cp-dashboard-grid cp-dashboard-grid-bottom">
+          <article class="cp-panel cp-progress-panel">
+            <header><div><h3>Atendimentos em andamento</h3><p>Leads que mais merecem sua atenção</p></div><button type="button" onclick="show('carteira')">Ver todos →</button></header>
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead><tr><th>Lead</th><th>Status</th><th>Última interação</th><th>Próxima ação</th><th>Prioridade</th><th></th></tr></thead>
+                <tbody id="cpOngoingTable"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="cp-panel cp-activity-panel">
+            <header><div><h3>Atividades do dia</h3><p>Acompanhamento das ações</p></div></header>
+            <div class="cp-activity-body">
+              <div id="cpActivityDonut" class="cp-donut cp-donut-activity"><div><strong id="cpActivityDone">0</strong><span id="cpActivityGoal">de 10<br>concluídas</span></div></div>
+              <div id="cpActivityLegend" class="cp-activity-list"></div>
+            </div>
+            <button type="button" class="cp-panel-link" onclick="show('agenda')">Ver todas atividades →</button>
+          </article>
+        </div>
+
+        <button type="button" id="cpContinueBtn" class="cp-continue-btn" onclick="abrirPrimeiroDashboard()">Continuar atendendo <span>→</span></button>
+      </div>
+
+      <div id="legacyHomeFlow" class="legacy-home-flow">
+        <div class="home-grid">
+          <div class="home-center">
+            <div class="home-page-heading"><h2 id="homePageTitle">Atendimentos</h2><div id="saudacaoDesktop" class="saudacao saud-desktop" style="display:none"></div></div>
+            <div id="saudacao" class="saudacao" style="display:none"></div>
+            <div id="resumoDia" class="resumo-dia" style="display:none"></div>
+            <div id="top3Area" class="top3-area" style="display:none"></div>
+            <div id="filaPrioridade" style="display:none;margin-bottom:14px"></div>
+            <div id="leadFocoArea"></div>
           </div>
-          <span id="audio-period-summary" class="audio-period-summary"></span>
-          <button id="audio-period-continue" class="audio-period-continue" type="button">Continuar importação</button>
+          <aside class="home-right" id="homeRight"></aside>
         </div>
+      </div>
+    </section>
 
-        <ol class="processing-steps">
-          <li data-step="read"><span>1</span>Lendo conversa</li>
-          <li data-step="audio"><span>2</span>Selecionando áudios</li>
-          <li data-step="transcribe"><span>3</span>Transcrevendo áudios</li>
-          <li data-step="timeline"><span>4</span>Montando linha do tempo</li>
-          <li data-step="save"><span>5</span>Salvando atendimento</li>
-        </ol>
-
-        <div class="progress-row">
-          <p id="progress-label" class="progress-label">0%</p>
-          <div class="progress-track" role="progressbar" aria-label="Progresso da importação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-bar"></span></div>
+    <section id="zip" class="screen">
+      <div class="cp-section-head" data-screen-head="zip"><div><h2>Importar atendimento</h2><p>Envie uma conversa do WhatsApp para análise completa.</p></div></div>
+      <div class="card compact" id="importCard">
+        <div class="label">Importar conversa</div>
+        <input class="file-native" type="file" id="zipInput" accept=".zip,application/zip,application/octet-stream">
+        <div class="upload-card" id="uploadBox">
+          <div class="upload-main">
+            <div><div class="upload-title">Selecionar ZIP do WhatsApp</div><div class="upload-sub">Texto + áudios. Ignora imagens, vídeos e docs.</div></div>
+            <button class="upload-action" type="button" id="pickZip">Anexar</button>
+          </div>
+          <div class="file-name" id="fileName"></div>
         </div>
-
-        <div class="processing-note">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
-          <span>Somente mensagens escritas e transcrições de áudio entram no atendimento.</span>
+        <div class="btns btns-row" style="margin-top:10px">
+          <button class="btn secondary" id="clearAnalysis" type="button">Nova análise</button>
+          <button class="btn secondary" id="diagnoseOpenAI" type="button">Diagnóstico</button>
         </div>
-
-        <button id="cancel-import-button" class="cancel-import-button" type="button">Cancelar importação</button>
+        <div class="processing" id="processingBox">
+          <div class="small" id="processingText">Processando...</div>
+          <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+          <ol id="processingSteps" style="list-style:none;padding:0;margin:10px 0 0 0;font-size:12px"></ol>
+        </div>
       </div>
-    </div>
-  </section>
 
-  <div id="toast" class="toast" role="status" hidden></div>
-
-  <dialog id="rename-dialog" class="rename-dialog">
-    <form method="dialog" id="rename-form">
-      <div class="dialog-heading">
-        <h2>Editar nome</h2>
-        <button class="icon-button dialog-close" value="cancel" aria-label="Fechar" type="submit">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+      <div class="card hidden-empty" id="resultCard"><div class="label">Resultado</div><div id="resultBox" class="empty">Aguardando.</div></div>
+      <div class="card hidden-empty" id="analysisCard"><div class="label">Análise do Cérebro</div><div id="analysisBox" class="empty">Aguardando análise.</div></div>
+      <div class="card hidden-empty" id="msgCard">
+        <div class="label">Resposta pronta pra enviar</div>
+        <div id="msgStyleTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <button type="button" class="msg-tab active" data-style="direta">Direta</button>
+          <button type="button" class="msg-tab" data-style="consultiva">Consultiva</button>
+          <button type="button" class="msg-tab" data-style="retomada">Retomada</button>
+        </div>
+        <div class="small" id="msgStyleHint" style="margin-bottom:6px;color:var(--muted)">Direta: vai direto ao ponto, propõe próximo passo.</div>
+        <textarea id="messageText" rows="6">Importe uma conversa para gerar uma mensagem sugerida.</textarea>
+        <label style="margin-top:10px">Nome / Telefone com DDD</label>
+        <div style="display:flex;gap:8px"><input id="clientName" placeholder="Nome"><input id="clientPhone" inputmode="tel" placeholder="54999013331"></div>
+        <div class="btns btns-row" style="margin-top:10px"><button class="btn" id="openWhatsapp">Abrir WhatsApp</button><button class="btn secondary" id="copyMessage">Copiar</button></div>
       </div>
-      <label for="rename-input">Nome do atendimento</label>
-      <input id="rename-input" name="name" autocomplete="off" maxlength="120" required>
-      <div class="dialog-actions">
-        <button class="secondary-button" value="cancel" type="submit">Cancelar</button>
-        <button class="primary-button" value="save" type="submit">Salvar</button>
+      <div class="card hidden-empty" id="memoriaCard">
+        <div class="label">Memória deste cliente</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Anote o que o agente precisa lembrar pra próximas abordagens.</div>
+        <div class="form-grid-2">
+          <div>
+            <label>Preferências (ex.: andar alto, sol da manhã)</label>
+            <textarea id="memoriaPreferencias" rows="3"></textarea>
+            <label>Pessoas na decisão (cônjuge, sócio, etc.)</label>
+            <textarea id="memoriaPessoasDecisao" rows="3"></textarea>
+          </div>
+          <div>
+            <label>Pontos sensíveis (preço, prazo, entrada)</label>
+            <textarea id="memoriaPontosSensiveis" rows="3"></textarea>
+            <label>Observações livres</label>
+            <textarea id="memoriaObservacoes" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="btns btns-row" style="margin-top:14px">
+          <button class="btn" type="button" id="memoriaSalvar">Salvar memória</button>
+          <button class="btn secondary" type="button" id="memoriaReanalisar">Reanalisar com memória</button>
+        </div>
+        <div class="small" id="memoriaStatus" style="margin-top:8px;color:var(--muted)"></div>
       </div>
-    </form>
-  </dialog>
-
-  <dialog id="add-lead-dialog" class="add-lead-dialog">
-    <form method="dialog" id="add-lead-form">
-      <div class="dialog-heading">
-        <h2>Novo atendimento</h2>
-        <button class="icon-button dialog-close" value="cancel" aria-label="Fechar" type="submit">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+      <div class="card hidden-empty mobile-only" id="goToTimelineCard">
+        <button type="button" class="btn secondary go" data-target="linhaTempo">↓ Ver conversa completa</button>
       </div>
-      <label for="add-lead-name">Nome <span aria-hidden="true">*</span></label>
-      <input id="add-lead-name" name="name" autocomplete="off" maxlength="120" required placeholder="Nome do lead">
-      <label for="add-lead-phone">Telefone</label>
-      <input id="add-lead-phone" name="phone" type="tel" autocomplete="off" maxlength="30" placeholder="Opcional">
-      <label for="add-lead-building">Empreendimento</label>
-      <input id="add-lead-building" name="empreendimento" autocomplete="off" maxlength="120" placeholder="Opcional">
-      <label for="add-lead-notes">Observações</label>
-      <textarea id="add-lead-notes" name="notes" maxlength="500" placeholder="Opcional" rows="3"></textarea>
-      <div class="dialog-actions">
-        <button class="secondary-button" value="cancel" type="submit">Cancelar</button>
-        <button class="primary-button" value="save" type="submit">Criar</button>
+    </section>
+
+    <section id="vendas" class="screen">
+      <div class="cp-section-head" data-screen-head="vendas"><div><h2>Vendas</h2><p>Negócios concluídos e valores registrados.</p></div></div>
+      <div class="card compact">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div class="label">Vendas registradas</div>
+          <button type="button" class="btn secondary" id="vendasRefresh" style="padding:6px 10px;font-size:12px">Atualizar</button>
+        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:8px">Leads que viraram venda. Não aparecem mais no pipeline principal.</div>
+        <div id="vendasList"></div>
       </div>
-    </form>
-  </dialog>
+    </section>
 
+    <section id="perdidos" class="screen">
+      <div class="cp-section-head" data-screen-head="perdidos"><div><h2>Arquivo</h2><p>Leads perdidos ou pausados para reativação futura.</p></div></div>
+      <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap">
+        <button type="button" id="arqTabPerdidos" onclick="arqTab('perdidos')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--lime);background:rgba(255,107,92,.15);color:var(--lime)">Perdidos</button>
+        <button type="button" id="arqTabGeladeira" onclick="arqTab('geladeira')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted)">Geladeira</button>
+      </div>
+      <div id="arqPerdidos">
+        <div class="card compact">
+          <div class="label" style="margin-bottom:6px">Leads perdidos</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Leads marcados como perdidos. Toque em "Reabrir" pra devolver pro pipeline ativo.</div>
+          <div id="perdidosList"></div>
+        </div>
+      </div>
+      <div id="arqGeladeira" style="display:none">
+        <div class="card compact">
+          <div class="label" style="margin-bottom:6px">❄ Geladeira</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Negócios que não valem a pena agora, mas você guarda pra revisitar daqui uns meses. Toque em "Reativar" pra devolver pro pipeline.</div>
+          <div id="geladeiraList"></div>
+        </div>
+      </div>
+    </section>
 
+    <section id="agenda" class="screen">
+      <div class="cp-section-head" data-screen-head="agenda"><div><h2>Agenda</h2><p>Compromissos, visitas e retomadas com data marcada.</p></div></div>
+      <div class="card compact">
+        <div style="margin-bottom:6px">
+          <div class="label">📅 Agenda</div>
+        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:8px">Só o que tem data marcada: lembretes agendados (ex.: "retomar em 60 dias") e compromissos confirmados. Quem está esfriando ou sem retorno é prioridade do dia — está em Hoje.</div>
+        <div id="agendaList"></div>
+      </div>
+    </section>
 
-  <script src="/version.js?v=091"></script>
-  <script src="/zip.min.js?v=091"></script>
-  <script type="module" src="/app.js?v=091"></script>
+    <section id="relatorio" class="screen">
+      <div class="cp-section-head" data-screen-head="relatorio"><div><h2>Relatórios</h2><p>Acompanhe desempenho, conversão e evolução da carteira.</p></div></div>
+      <div id="relatorioBody"><div class="empty">Carregando…</div></div>
+    </section>
+
+    <section id="carteira" class="screen">
+      <div class="cp-section-head" data-screen-head="carteira"><div><h2>Leads</h2><p>Todos os contatos organizados por prioridade e etapa.</p></div></div>
+      <div id="carteiraBody"><div class="empty">Carregando…</div></div>
+    </section>
+
+    <section id="linhaTempo" class="screen">
+      <div class="cp-section-head" data-screen-head="linhaTempo"><div><h2>Conversa</h2><p>Histórico integral do atendimento selecionado.</p></div></div>
+      <div class="card hidden-empty" id="timelineCard">
+        <div class="label">Linha do tempo da conversa</div>
+        <div id="timeline" class="timeline"><div class="event"><b>Aguardando</b><p>Importe um ZIP para ver a conversa aqui.</p></div></div>
+      </div>
+    </section>
+
+    <section id="pipeline" class="screen">
+      <div class="card compact">
+        <div class="pipe-head">
+          <div><h2 class="pipeline-page-title">Pipeline</h2><div class="pipeline-page-sub">Visão geral dos leads por etapa</div><div class="label" style="display:none" id="pipelineTitulo">Oportunidades</div></div>
+          <div class="pipe-head-acoes">
+            <button type="button" onclick="exportarLeadsCSV(this)" class="cart-export" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
+            <button type="button" onclick='show("home")' class="pipe-voltar" title="Voltar pra tela inicial">← Voltar pra Hoje</button>
+          </div>
+        </div>
+        <div class="pipe-tabs">
+          <button type="button" id="tabOportunidades" onclick="setPipelineTab('oportunidades')" class="pipe-tab active">Oportunidades</button>
+          <button type="button" id="tabUltimos" onclick="setPipelineTab('ultimos')" class="pipe-tab">Últimos atendimentos</button>
+          <button type="button" id="tabTodos" onclick="setPipelineTab('todos')" class="pipe-tab">Todos os contatos</button>
+        </div>
+        <select id="pipelineOrdem" onchange="setPipelineOrdem(this.value)" class="pipe-ordenar" title="Ordenar a lista">
+          <option value="prioridade">↕ Ordenar: prioridade</option>
+          <option value="sr-antigos">Sem resposta — mais antigos primeiro</option>
+          <option value="sr-recentes">Sem resposta — mais recentes primeiro</option>
+          <option value="ct-antigos">Sem contato há mais tempo</option>
+          <option value="ct-recentes">Contatados mais recentemente</option>
+          <option value="prob-maior">Maior probabilidade de venda</option>
+          <option value="prob-menor">Menor probabilidade de venda</option>
+          <option value="msg-mais">Mais mensagens no histórico</option>
+          <option value="msg-menos">Menos mensagens no histórico</option>
+        </select>
+        <div class="mobile-only" style="position:relative;margin-bottom:14px">
+          <input type="search" id="buscaPipeline" placeholder="Buscar lead..." autocomplete="off" oninput='buscaLeadInline(this.value, "buscaPipelineRes")' style="width:100%;box-sizing:border-box;padding:11px 16px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:14px;outline:none">
+          <div id="buscaPipelineRes" style="display:none;margin-top:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;max-height:340px;overflow-y:auto;box-shadow:0 18px 60px rgba(0,0,0,.45)"></div>
+        </div>
+        <div id="pipelineBoard"></div>
+      </div>
+    </section>
+
+    <section id="cerebro" class="screen">
+      <div class="cp-section-head" data-screen-head="cerebro"><div><h2>Inteligência Comercial</h2><p>Configurações de análise e aprendizado do seu método de vendas.</p></div></div>
+      <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap">
+        <button type="button" id="icTabCerebro" onclick="icTab('cerebro')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--lime);background:rgba(255,107,92,.15);color:var(--lime)">Cérebro</button>
+        <button type="button" id="icTabAprend" onclick="icTab('aprendizado')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted)">Aprendizado</button>
+      </div>
+      <div id="icAprendizado" style="display:none">
+      <div class="card compact">
+        <div class="label" style="margin-bottom:12px">O que a IA já aprendeu com você</div>
+        <div id="aprendizadoIABox"><div class="empty">Carregando…</div></div>
+      </div>
+      <div class="card compact" id="relatorioSemanaCard">
+        <div class="label">Esta semana</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Resumo dos últimos 7 dias.</div>
+        <div id="relatorioSemanaBox"></div>
+      </div>
+      <div class="card compact" id="aprendizadoCard" style="display:none">
+        <div class="label">Aprendizado</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">O que você mais usa, o que está funcionando.</div>
+        <div id="aprendizadoBox"></div>
+      </div>
+      <div class="card compact" id="estadoIACard">
+        <div class="label">Estado do aprendizado da IA</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Conforme você importa ZIPs, a IA observa o que você faz e acumula aqui. Quanto maior esse banco, menos os campos manuais abaixo são necessários — a IA passa a se guiar pelo seu jeito real.</div>
+        <div id="estadoIABox"><div class="small" style="color:var(--muted);padding:14px 0">Carregando…</div></div>
+      </div>
+      </div><!--/icAprendizado-->
+      <div id="icCerebro">
+      <div class="card compact">
+        <div class="label">Cérebro Comercial</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Estas instruções entram no prompt da OpenAI a cada análise. Edite pra moldar o tom e o método das respostas geradas.</div>
+        <div style="margin-bottom:14px">
+          <label>Seu nome (como aparece no WhatsApp)</label>
+          <input type="text" id="cerebroCorretorNome" placeholder="Ex.: Sanchai" style="width:100%;box-sizing:border-box">
+          <div class="small" style="color:var(--muted);margin-top:4px">Pra IA saber que VOCÊ é o corretor e escrever as mensagens pro cliente — não pra você.</div>
+        </div>
+        <div class="form-grid-2">
+          <div>
+            <label>Método (passo a passo que o agente deve seguir)</label>
+            <textarea id="cerebroMetodo" rows="14"></textarea>
+          </div>
+          <div>
+            <label>Tom de voz</label>
+            <textarea id="cerebroTom" rows="3"></textarea>
+            <label>Diferenciais a destacar</label>
+            <textarea id="cerebroDiferenciais" rows="4"></textarea>
+            <label>O que evitar</label>
+            <textarea id="cerebroEvitar" rows="3"></textarea>
+            <label>Janela de importação <span class="small" style="color:var(--muted);font-weight:400">(quantos dias mais recentes da conversa considerar)</span></label>
+            <input type="number" id="cerebroDiasImportacao" min="1" max="365" placeholder="90" style="max-width:120px">
+            <div class="small" style="color:var(--muted);margin-top:4px">Conversas longas (corretores parceiros, vários negócios) ficam mais rápidas e precisas se a análise olhar só os últimos dias. Padrão: 90 (desde a última mensagem).</div>
+          </div>
+        </div>
+        <div class="btns btns-row" style="margin-top:14px">
+          <button class="btn" id="cerebroSalvar" type="button">Salvar</button>
+          <button class="btn secondary" id="cerebroResetar" type="button">Restaurar padrão</button>
+          <button class="btn danger" id="cerebroZerar" type="button">Zerar Cérebro + Aprendizado</button>
+        </div>
+        <div class="small" id="cerebroStatus" style="margin-top:8px;color:var(--muted)"></div>
+      </div>
+
+      <!-- BASE DE REGRAS COMERCIAIS -->
+      <div class="card compact">
+        <div class="label">Regras comerciais</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Situação → como agir. Ex.: "Cliente sumiu depois de receber o valor → reconstruir percepção de valor antes de falar preço de novo." A IA segue estas regras toda vez que gera mensagem.</div>
+        <div id="cerebroRegrasList"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <input type="text" id="cerebroNovaRegra" placeholder="Escreva uma regra e toque em +" style="flex:1;min-width:200px">
+          <button type="button" class="btn" id="cerebroAddRegra" style="padding:12px 18px">+ Regra</button>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Ensinar por áudio</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Grave/escolha um áudio explicando sua abordagem. O app transcreve e vira uma regra (você revisa antes de salvar).</div>
+          <input type="file" id="cerebroAudioInput" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.aac" style="display:none">
+          <button type="button" class="btn secondary" id="cerebroAudioBtn" style="width:100%">Enviar áudio pra transcrever</button>
+          <div class="small" id="cerebroAudioStatus" style="margin-top:6px;color:var(--muted)"></div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Ensinar por vídeo (arquivo)</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Pra clipe curto que você tem no aparelho (até 25 MB). O app transcreve a fala, salva só o texto como regra e descarta o vídeo. <b>Aula/palestra longa do YouTube?</b> Use o campo "Aprender de vídeo / link" abaixo — ele puxa a legenda inteira sem limite.</div>
+          <input type="file" id="cerebroVideoInput" accept="video/mp4,video/webm,.mp4,.webm,.m4v" style="display:none">
+          <button type="button" class="btn secondary" id="cerebroVideoBtn" style="width:100%">Enviar vídeo pra transcrever</button>
+          <div class="small" id="cerebroVideoStatus" style="margin-top:6px;color:var(--muted)"></div>
+          <div id="cerebroVideoSugestoes" style="margin-top:8px"></div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Aprender de vídeo / link</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Cole o link de um vídeo do YouTube ou de um artigo. O app lê/transcreve, extrai as lições de venda e te mostra pra você escolher quais viram regra.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="url" id="cerebroLinkInput" placeholder="https://youtube.com/... ou link de artigo" style="flex:1;min-width:200px">
+            <button type="button" class="btn secondary" id="cerebroLinkBtn" style="padding:12px 18px">Aprender</button>
+          </div>
+          <div class="small" id="cerebroLinkStatus" style="margin-top:6px;color:var(--muted)"></div>
+          <div id="cerebroLinkSugestoes" style="margin-top:8px"></div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Aprender de um print</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Mande um print (screenshot de um post, slide, conselho de um mentor). A IA lê a imagem e extrai as lições pra você escolher.</div>
+          <input type="file" id="cerebroImgInput" accept="image/*" style="display:none">
+          <button type="button" class="btn secondary" id="cerebroImgBtn" style="width:100%">Enviar print pra ler</button>
+          <div class="small" id="cerebroImgStatus" style="margin-top:6px;color:var(--muted)"></div>
+          <div id="cerebroImgSugestoes" style="margin-top:8px"></div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Aprender de toda a carteira</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Faz o Cérebro aprender com <b>todas as conversas que já estão no Corretor Pro</b> (seu jeito, objeções que funcionaram, o que destravou cada venda). Roda de uma vez por toda a carteira — pode levar alguns minutos.</div>
+          <button type="button" class="btn secondary" id="cerebroCarteiraBtn" style="width:100%">Aprender de toda a carteira agora</button>
+          <div class="small" id="cerebroCarteiraStatus" style="margin-top:6px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <!-- BIBLIOTECA OBJEÇÃO → RESPOSTA -->
+      <div class="card compact">
+        <div class="label">Sinais de objeção → como conduzir</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Objeção raramente vem na frase ("ninguém diz 'tá caro'"). Descreva o <b>sinal/comportamento</b> que você reconhece na conversa e como você costuma conduzir. A IA identifica esses sinais pelo <b>sentido</b>, não pela palavra exata.</div>
+        <div id="cerebroObjecoesList"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+          <input type="text" id="cerebroNovaObjecao" placeholder="Sinal (ex.: some depois que mando o valor / 'vou pensar' / enrola no financiamento)">
+          <textarea id="cerebroNovaResposta" rows="2" placeholder="Como você conduz quando percebe esse sinal"></textarea>
+          <button type="button" class="btn" id="cerebroAddObjecao" style="align-self:flex-start;padding:12px 18px">+ Sinal</button>
+        </div>
+      </div>
+      </div><!--/icCerebro-->
+    </section>
+
+    <section id="propostas" class="screen">
+      <div class="cp-section-head" data-screen-head="propostas"><div><h2>Imóveis e propostas</h2><p>Prepare propostas comerciais com os dados reais do atendimento.</p></div></div>
+      <style>
+        .prop-wrap{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:16px;align-items:start}
+        @media(max-width:900px){.prop-wrap{grid-template-columns:1fr}}
+        /* Celular: papel da proposta sem estourar a largura da tela */
+        @media(max-width:560px){
+          .prop-paper{padding:18px 14px;max-width:100%}
+          #propostas .prop-form input[type=file]{max-width:100%;font-size:12px}
+          #prop-preview-area{overflow-x:auto}
+        }
+        .prop-form .prop-sec{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:rgba(255,255,255,.025)}
+        .prop-sec-title{font-family:var(--font-display);font-weight:800;font-size:12px;letter-spacing:.10em;text-transform:uppercase;color:var(--lime);margin-bottom:10px}
+        .prop-fg{margin-bottom:10px}
+        .prop-fg label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;letter-spacing:.02em}
+        .prop-input,.prop-form select,.prop-form textarea{width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13px;box-sizing:border-box;font-family:var(--font-body)}
+        .prop-input:focus,.prop-form select:focus,.prop-form textarea:focus{outline:none;border-color:var(--cyan)}
+        .prop-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .prop-prefix{position:relative}
+        .prop-prefix .pfx{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;font-weight:700;pointer-events:none}
+        .prop-prefix .prop-input{padding-left:34px}
+        .prop-add{width:100%;border:1px dashed var(--line);background:rgba(0,212,255,.06);color:var(--cyan);border-radius:9px;padding:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:var(--font-body)}
+        .prop-add:hover{border-color:var(--cyan)}
+        .prop-aporte{display:grid;grid-template-columns:1fr 1fr 34px;gap:6px;margin-bottom:6px;align-items:center}
+        .prop-aporte .prop-del{background:rgba(255,91,122,.12);border:1px solid rgba(255,91,122,.3);color:var(--risco);border-radius:8px;height:38px;cursor:pointer;font-size:16px;font-weight:900;line-height:1}
+        .prop-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+        .prop-btn{flex:1;min-width:130px;border:0;border-radius:14px;padding:13px;font-weight:950;font-size:14px;cursor:pointer;font-family:var(--font-display)}
+        .prop-btn.primary{color:var(--on-accent);background:linear-gradient(135deg,var(--lime),var(--cyan))}
+        .prop-btn.ghost{background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line)}
+        /* Papel da proposta — claro, profissional, pronto pra enviar ao cliente */
+        .prop-paper{background:#fff;color:#0D1117;border-radius:16px;padding:30px 30px 22px;box-shadow:0 18px 60px rgba(0,0,0,.5);font-family:var(--font-body);max-width:780px;position:relative}
+        .prop-paper *{box-sizing:border-box}
+        .pp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #0D1117;padding-bottom:16px;margin-bottom:18px}
+        .pp-brand{display:flex;align-items:center;gap:11px}
+        .pp-logo{width:50px;height:50px;border-radius:12px;background:url("/icon-192.png?v=__VERSION__") center/cover no-repeat,#0D1117}
+        .pp-brand h2{font-family:var(--font-display);font-weight:800;font-size:22px;margin:0;color:#0D1117;letter-spacing:-.01em}
+        .pp-brand .pp-sub{font-size:11px;color:#5a6573;margin-top:1px}
+        .pp-meta{text-align:right}
+        .pp-meta .pp-tag{font-family:var(--font-display);font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0D1117}
+        .pp-meta p{margin:2px 0 0;font-size:11px;color:#5a6573}
+        .pp-foto{display:block;float:right;margin:0 0 10px 18px;width:auto;height:auto;max-width:170px;max-height:115px;object-fit:cover;border-radius:10px}
+        .pp-prep{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7a8595;font-weight:700;margin-bottom:2px}
+        .pp-client{font-family:var(--font-display);font-weight:800;font-size:20px;margin:0 0 10px;color:#0D1117;line-height:1.15}
+        .pp-units{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:12px}
+        .pp-unit .pp-ulabel{font-size:9px;letter-spacing:.10em;text-transform:uppercase;color:#7a8595;font-weight:700;display:block}
+        .pp-unit .pp-uval{font-weight:800;font-size:13px;color:#0D1117}
+        .pp-cards{clear:both;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+        @media(max-width:520px){.pp-cards{grid-template-columns:repeat(2,1fr)}}
+        .pp-card{border:1px solid #e2e7ee;border-radius:10px;padding:9px 11px;background:#f7f9fc}
+        .pp-card.hl{background:linear-gradient(135deg,#0D1117,#1B222B);border-color:#0D1117}
+        .pp-card.hl .pp-clabel,.pp-card.hl .pp-cval{color:#fff}
+        .pp-clabel{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#7a8595;font-weight:700}
+        .pp-cval{font-weight:800;font-size:14px;color:#0D1117;margin-top:2px;font-family:var(--font-display)}
+        .pp-table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px}
+        .pp-table th{text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7a8595;font-weight:700;border-bottom:1px solid #e2e7ee;padding:8px 6px}
+        .pp-table td{padding:9px 6px;border-bottom:1px solid #eef1f6;vertical-align:top}
+        .pp-itit{font-weight:800;color:#0D1117}
+        .pp-idesc{font-size:11px;color:#7a8595;margin-top:2px;line-height:1.35}
+        .pp-idesc .pp-money{color:#0D1117;font-weight:700}
+        .pp-ival{text-align:right;font-weight:800;color:#0D1117;white-space:nowrap}
+        .pp-totals{margin-bottom:14px}
+        .pp-trow{display:flex;justify-content:space-between;padding:6px 2px;font-size:13px;color:#3a434f}
+        .pp-trow.grand{border-top:2px solid #0D1117;margin-top:4px;padding-top:10px;font-family:var(--font-display);font-weight:800;font-size:18px;color:#0D1117}
+        .pp-obs{margin-top:6px;padding:11px 13px;background:#f7f9fc;border:1px solid #e2e7ee;border-radius:10px;font-size:12px;color:#3a434f}
+        .pp-obs h5{margin:0 0 4px;font-size:10px;letter-spacing:.10em;text-transform:uppercase;color:#7a8595}
+        .pp-foot{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e2e7ee;padding-top:12px;margin-top:16px;font-size:10px;color:#7a8595}
+        @media print{
+          body{background:#fff !important;padding:0 !important}
+          body *{visibility:hidden !important}
+          #prop-paper,#prop-paper *{visibility:visible !important}
+          /* Força as cores de fundo/gradientes a imprimirem (sem depender do "Gráficos de fundo" do navegador) — sai colorida igual à tela. */
+          #prop-paper,#prop-paper *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+          #prop-paper{position:absolute;left:0;top:0;width:100%;max-width:none;box-shadow:none;border-radius:0;padding:24px}
+          /* Só o papel da proposta ocupa a folha. O resto (formulário, títulos, botões) sai do
+             fluxo pra não gerar páginas em branco. */
+          #propostas .prop-form,#propostas .label,#propostas .title,#propostas .small,#propVoltarTopo,#propVoltarRodape{display:none !important}
+          .bottom-nav,#toast,#btnVoltarTopo{display:none !important}
+        }
+      </style>
+      <div style="margin-bottom:10px"><button type="button" id="propVoltarTopo" onclick="voltarDaProposta()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button></div>
+      <div class="card">
+        <h2 class="title" style="margin-bottom:14px">Gerador de proposta</h2>
+        <div class="prop-wrap">
+          <div class="prop-form">
+            <div class="prop-sec">
+              <div class="prop-sec-title">1. Cliente e unidade</div>
+              <div class="prop-fg"><label>Nome do cliente</label><input class="prop-input" type="text" id="pf-cliente" placeholder="Ex: João Silva" oninput="propRender()"></div>
+              <div class="prop-fg"><label>Empreendimento</label><input class="prop-input" type="text" id="pf-empreendimento" placeholder="Ex: Renaissance" oninput="propRender()"></div>
+              <div class="prop-grid2">
+                <div class="prop-fg"><label>Apartamento</label><input class="prop-input" type="text" id="pf-apto" placeholder="Ex: 706" oninput="propRender()"></div>
+                <div class="prop-fg"><label>Box / Garagem</label><input class="prop-input" type="text" id="pf-box" placeholder="Ex: 12" oninput="propRender()"></div>
+              </div>
+              <div class="prop-fg"><label>Imagem da proposta (opcional)</label><input class="prop-input" type="file" id="pf-foto-input" accept="image/*" onchange="propFotoSelecionada(event)"><div id="pf-foto-preview" style="display:none;align-items:center;gap:10px;margin-top:8px"><img id="pf-foto-thumb" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="prop-del" onclick="propFotoRemover()" style="position:static">Remover imagem</button></div></div>
+            </div>
+            <div class="prop-sec">
+              <div class="prop-sec-title">2. Valores de venda</div>
+              <div class="prop-grid2">
+                <div class="prop-fg"><label>Valor do apto</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-apto" placeholder="0,00" oninput="propRender()"></div></div>
+                <div class="prop-fg"><label>Valor do box</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-box" placeholder="0,00" oninput="propRender()"></div></div>
+              </div>
+            </div>
+            <div class="prop-sec">
+              <div class="prop-sec-title">3. Condições de pagamento</div>
+              <div class="prop-fg"><label>Entrada / Ato</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-entrada" placeholder="0,00" oninput="propRender()"></div></div>
+              <div class="prop-fg"><label>Permuta (valor)</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-permuta" placeholder="0,00" oninput="propRender()"></div><input class="prop-input" type="text" id="pf-permuta-desc" placeholder="Descrição da permuta (ex: carro, terreno)" style="margin-top:6px" oninput="propRender()"></div>
+              <div class="prop-fg"><label>Aportes / Reforços</label><div id="pf-aportes-list"></div><button type="button" class="prop-add" onclick="propAddAporte()">+ Aporte</button></div>
+              <div class="prop-fg"><label>Chaves</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-chaves" placeholder="0,00" oninput="propRender()"></div></div>
+              <div class="prop-fg"><label>Parcelamento mensal</label><div class="prop-grid2"><input class="prop-input" type="number" id="pf-parc-mensais" placeholder="Nº parcelas" oninput="propRender()"><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-mensal" placeholder="Valor" oninput="propRender()"></div></div></div>
+              <div class="prop-fg"><label>Parcelamento semestral</label><div class="prop-grid2"><input class="prop-input" type="number" id="pf-parc-semestrais" placeholder="Nº parcelas" oninput="propRender()"><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-semestral" placeholder="Valor" oninput="propRender()"></div></div></div>
+              <div class="prop-fg"><label>Parcelamento anual</label><div class="prop-grid2"><input class="prop-input" type="number" id="pf-parc-anuais" placeholder="Nº parcelas" oninput="propRender()"><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-anual" placeholder="Valor" oninput="propRender()"></div></div></div>
+              <div class="prop-fg"><label>Correção</label><select id="pf-correcao" onchange="propRender()"><option value="">Sem correção</option><option value="INCC">INCC (durante a obra)</option><option value="0.95">0,95% ao mês</option><option value="IGPM">IGP-M + 1%</option></select><div class="small" style="color:var(--muted);margin-top:4px">INCC: corrige pelas obras (lançamento). IGP-M: índice de inflação (geralmente após as chaves). Na dúvida, deixe "Sem correção".</div></div>
+            </div>
+            <div class="prop-sec">
+              <div class="prop-sec-title">4. Informações adicionais</div>
+              <div class="prop-grid2">
+                <div class="prop-fg"><label>Data de emissão</label><input class="prop-input" type="date" id="pf-data" oninput="propRender()"></div>
+                <div class="prop-fg"><label>Validade</label><input class="prop-input" type="text" id="pf-validade" value="7 dias" placeholder="Ex: 7 dias" oninput="propRender()"></div>
+              </div>
+              <div class="prop-fg"><label>Observações</label><textarea id="pf-obs" rows="2" placeholder="Condições especiais, prazos, etc." oninput="propRender()"></textarea></div>
+            </div>
+            <div class="prop-actions">
+              <button type="button" class="prop-btn primary" onclick="imprimirProposta()">Imprimir / Salvar PDF</button>
+              <button type="button" class="prop-btn ghost" id="pf-registrar" onclick="registrarPropostaNoLead()">📌 Registrar no lead</button>
+              <button type="button" class="prop-btn ghost" onclick="propClear()">Limpar</button>
+            </div>
+            <div id="pf-salvo-msg" style="display:none;margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,107,92,.1);border:1px solid var(--lime);color:var(--lime);font-weight:950;font-size:13px;text-align:center"></div>
+          </div>
+
+          <div id="prop-preview-area">
+            <div class="prop-paper" id="prop-paper">
+              <div class="pp-head">
+                <div class="pp-brand"><div class="pp-logo"></div><div><h2>Corretor Pro</h2><div class="pp-sub">Construtora Senger · Carazinho/RS</div></div></div>
+                <div class="pp-meta"><div class="pp-tag">Proposta Comercial</div><p id="pp-data">Data: --/--/----</p><p id="pp-validade"></p></div>
+              </div>
+              <img id="pp-foto" class="pp-foto" alt="" style="display:none">
+              <div class="pp-prep">Proposta preparada para</div>
+              <h1 class="pp-client" id="pp-cliente">Nome do cliente</h1>
+              <div class="pp-units">
+                <div class="pp-unit"><span class="pp-ulabel">Empreendimento</span><span class="pp-uval" id="pp-empreendimento">--</span></div>
+                <div class="pp-unit"><span class="pp-ulabel">Apartamento</span><span class="pp-uval" id="pp-apto">--</span></div>
+                <div class="pp-unit"><span class="pp-ulabel">Box / Garagem</span><span class="pp-uval" id="pp-box">--</span></div>
+              </div>
+              <div class="pp-cards">
+                <div class="pp-card"><div class="pp-clabel">Valor apto</div><div class="pp-cval" id="pp-valor-apto">R$ 0,00</div></div>
+                <div class="pp-card"><div class="pp-clabel">Valor box</div><div class="pp-cval" id="pp-valor-box">R$ 0,00</div></div>
+                <div class="pp-card"><div class="pp-clabel">Total venda</div><div class="pp-cval" id="pp-total-venda">R$ 0,00</div></div>
+                <div class="pp-card hl" id="pp-saldo-card"><div class="pp-clabel">Saldo</div><div class="pp-cval" id="pp-saldo">R$ 0,00</div></div>
+              </div>
+              <table class="pp-table"><thead><tr><th>Descrição da condição</th><th style="text-align:right;width:130px">Valor (R$)</th></tr></thead><tbody id="pp-neg-body"></tbody></table>
+              <div class="pp-totals">
+                <div class="pp-trow"><span>Total composto</span><span id="pp-composto">R$ 0,00</span></div>
+                <div class="pp-trow grand"><span>Total da venda</span><span id="pp-total">R$ 0,00</span></div>
+              </div>
+              <div class="pp-obs" id="pp-obs-box" style="display:none"><h5>Observações</h5><div id="pp-obs"></div></div>
+              <div class="pp-foot"><div><b>Corretor Pro</b> · Proposta comercial</div><div style="text-align:right">Sujeito a análise de crédito e disponibilidade.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px"><button type="button" id="propVoltarRodape" onclick="voltarDaProposta()" style="width:100%;background:transparent;border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:var(--soft);font-size:13px;font-weight:950;cursor:pointer">‹ Voltar</button></div>
+    </section>
+
+    <section id="menu" class="screen">
+      <div class="cp-section-head" data-screen-head="menu"><div><h2>Configurações</h2><p>Aparência, importações, integrações e funções do sistema.</p></div></div>
+      <style>
+        .menu-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+        @media(min-width:760px){.menu-grid{grid-template-columns:repeat(2,1fr)}}
+        .menu-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));cursor:pointer;transition:transform .15s,box-shadow .2s,border-color .2s;text-align:left;color:var(--text)}
+        .menu-card:hover{transform:translateY(-2px);border-color:rgba(255,107,92,.4);box-shadow:0 8px 24px rgba(0,0,0,.25),0 0 0 1px rgba(255,107,92,.15)}
+        .menu-card-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;font-size:20px;font-weight:950;background:rgba(255,255,255,.04);color:var(--soft);border:1px solid var(--line)}
+        .menu-card-ico svg{width:20px;height:20px;display:block}
+        .menu-card-txt{flex:1;min-width:0}
+        .menu-card-titulo{font-weight:950;font-size:14px;line-height:1.2}
+        .menu-card-desc{color:var(--muted);font-size:11px;line-height:1.4;margin-top:3px}
+        .menu-card-seta{color:var(--lime);font-size:18px;font-weight:950;opacity:.7;transition:transform .15s,opacity .15s}
+        .menu-card:hover .menu-card-seta{transform:translateX(3px);opacity:1}
+      </style>
+      <div class="card">
+        <button type="button" class="go" data-target="home" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer;margin-bottom:10px">‹ Voltar pra Hoje</button>
+        <div class="label">Funções do Corretor Pro</div>
+        <h2 class="title">Menu</h2>
+        <div class="menu-grid menu-grid-primary">
+          <button type="button" class="menu-card go" data-target="zip">
+            <div class="menu-card-ico">⇪</div><div class="menu-card-txt"><div class="menu-card-titulo">Importar conversa</div><div class="menu-card-desc">Importe conversas do WhatsApp a partir de um ZIP.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card" onclick="abrirOnboarding()">
+            <div class="menu-card-ico">1 2 3</div><div class="menu-card-txt"><div class="menu-card-titulo">Como usar</div><div class="menu-card-desc">Aprenda o passo a passo e tire o máximo do app.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="pipeline">
+            <div class="menu-card-ico">▦</div><div class="menu-card-txt"><div class="menu-card-titulo">Pipeline · visão geral</div><div class="menu-card-desc">Acompanhe seus leads por etapas e prioridades.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="agenda">
+            <div class="menu-card-ico">□</div><div class="menu-card-txt"><div class="menu-card-titulo">Agenda</div><div class="menu-card-desc">Consulte compromissos e próximos contatos.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="propostas">
+            <div class="menu-card-ico">▤</div><div class="menu-card-txt"><div class="menu-card-titulo">Gerador de proposta</div><div class="menu-card-desc">Crie propostas personalizadas com IA.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card" onclick="show('cerebro');icTab('cerebro')">
+            <div class="menu-card-ico">◉</div><div class="menu-card-txt"><div class="menu-card-titulo">Cérebro Comercial</div><div class="menu-card-desc">Análises, insights e recomendações inteligentes.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card" onclick="show('cerebro');icTab('aprendizado')">
+            <div class="menu-card-ico">⌁</div><div class="menu-card-txt"><div class="menu-card-titulo">O que a IA aprendeu</div><div class="menu-card-desc">Veja aprendizados e padrões identificados.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="relatorio">
+            <div class="menu-card-ico">▥</div><div class="menu-card-txt"><div class="menu-card-titulo">Relatório</div><div class="menu-card-desc">Desempenho, métricas e resultados do período.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="vendas">
+            <div class="menu-card-ico">$</div><div class="menu-card-txt"><div class="menu-card-titulo">Vendas registradas</div><div class="menu-card-desc">Histórico de vendas e valores fechados.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="perdidos">
+            <div class="menu-card-ico">×</div><div class="menu-card-txt"><div class="menu-card-titulo">Leads perdidos</div><div class="menu-card-desc">Leads não convertidos e motivos registrados.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card go" data-target="geladeira">
+            <div class="menu-card-ico">▱</div><div class="menu-card-txt"><div class="menu-card-titulo">Geladeira</div><div class="menu-card-desc">Leads pausados para reativação futura.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card" id="btnInstalarApp" style="display:none">
+            <div class="menu-card-ico">↓</div><div class="menu-card-txt"><div class="menu-card-titulo">Instalar app</div><div class="menu-card-desc">Instale o Corretor Pro no seu dispositivo.</div></div><div class="menu-card-seta">›</div>
+          </button>
+        </div>
+        <div class="small" id="instalarDica" style="margin-top:10px;color:var(--muted);display:none">Pra instalar manualmente: toque no menu do navegador (⋮) e em <b>"Adicionar à tela inicial"</b> ou <b>"Instalar app"</b>.</div>
+      </div>
+      <div class="card theme-settings-card" id="themeSettingsCard">
+        <div class="label">Aparência</div>
+        <div class="theme-settings-head">
+          <div>
+            <h3>Escolha o tema</h3>
+            <p>Use a versão clara ou a versão escura azul-marinho do Corretor Pro.</p>
+          </div>
+          <div class="theme-current" id="themeCurrentLabel">Tema escuro</div>
+        </div>
+        <div class="theme-options" role="group" aria-label="Escolha do tema">
+          <button type="button" class="theme-option" data-theme-choice="light" aria-pressed="false">
+            <span class="theme-preview theme-preview-light" aria-hidden="true"><i></i><b></b><em></em></span>
+            <span><strong>Claro</strong><small>Fundo branco-gelo e cards claros</small></span>
+            <span class="theme-check">✓</span>
+          </button>
+          <button type="button" class="theme-option" data-theme-choice="dark" aria-pressed="false">
+            <span class="theme-preview theme-preview-dark" aria-hidden="true"><i></i><b></b><em></em></span>
+            <span><strong>Escuro</strong><small>Azul-marinho e petróleo predominantes</small></span>
+            <span class="theme-check">✓</span>
+          </button>
+        </div>
+      </div>
+      <div class="card compact" id="crmImportCard">
+        <div class="label">Importar leads por CSV</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Envie um arquivo .csv com seus leads. Cada lead entra com nome, telefone, empreendimento, etapa e a <b>observação inteira</b>. Os ativos são analisados na hora; os perdidos entram pra reativar depois. <b>Rode só uma vez</b> (rodar de novo duplica).</div>
+        <input class="file-native" type="file" id="crmCsvInput" accept=".csv,text/csv" style="display:none">
+        <button class="btn secondary" type="button" id="crmImportBtn" style="width:100%">Escolher CSV e importar</button>
+        <div class="small" id="crmImportStatus" style="margin-top:8px;color:var(--muted)"></div>
+        <div class="progress" id="crmImportProgressWrap" style="display:none;margin-top:8px"><div class="progress-bar" id="crmImportProgress" style="width:0%"></div></div>
+      </div>
+      <div class="card compact">
+        <div class="label">Inteligência (OpenAI)</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Testa a chave e o modelo de análise usados pelo Corretor Pro.</div>
+        <button class="btn secondary" type="button" onclick="testarIAOpenAI(this)" style="width:100%">Testar a IA agora</button>
+        <div class="small" id="openaiDiagOut" style="margin-top:10px;line-height:1.5"></div>
+      </div>
+      <div class="card danger-zone-visible" id="dangerZoneCard" style="display:block">
+        <div class="label">Zona perigosa</div>
+        <p class="small">Apaga todas as conversas processadas, leads importados e ZIPs guardados. Ação não tem volta.</p>
+        <div class="btns">
+          <button class="btn danger" id="wipeAll" type="button">Limpar tudo (zerar app)</button>
+        </div>
+        <div class="small" id="wipeResult" style="margin-top:10px;display:none"></div>
+      </div>
+      <div class="small" style="text-align:center;color:var(--muted);opacity:.6;margin-top:4px">Corretor Pro · Atualização #__VERSION__ · __BUILD_ID__</div>
+    </section>
+  </div>
+  </div>
+</main>
+
+<nav class="bottom-nav">
+  <div class="nav-inner cp-mobile-nav">
+    <button class="nav active" data-target="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span class="lbl">Dashboard</span></button>
+    <button class="nav" data-target="carteira"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span><span class="lbl">Atendimentos</span></button>
+    <button class="nav fab" type="button" onclick="abrirMaisAcoes()"><span class="fab-btn">＋</span><span class="lbl">Novo</span></button>
+    <button class="nav" data-target="agenda"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span><span class="lbl">Agenda</span></button>
+    <button class="nav" data-target="menu"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span class="lbl">Mais</span></button>
+  </div>
+</nav>
+<div id="menuDrawerBackdrop" onclick="fecharMenuGaveta()"></div>
+<div id="toast" class="toast"></div>
+<button type="button" id="btnVoltarTopo" title="Voltar ao topo" aria-label="Voltar ao topo" style="position:fixed;bottom:80px;right:18px;width:46px;height:46px;border-radius:50%;background:rgba(11,16,24,.92);color:var(--lime);border:1px solid var(--lime);font-size:20px;font-weight:950;cursor:pointer;z-index:998;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(255,107,92,.18);backdrop-filter:blur(6px);transition:transform .2s,opacity .2s">↑</button>
+
+<script src="/vendor/jszip.min.js?v=__VERSION__"></script>
+<script src="/app.js?v=__VERSION__"></script>
 </body>
 </html>

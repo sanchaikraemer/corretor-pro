@@ -1,15 +1,18 @@
 {
-  "name": "corretor-pro",
-  "version": "0.91.0",
-  "private": true,
   "type": "module",
-  "description": "PWA do Corretor Pro para receber conversas exportadas do WhatsApp, transcrever áudios e montar atendimentos textuais.",
   "scripts": {
     "build": "node build.js",
-    "check": "node --check app.js && node --check db.js && node --check whatsapp.js && node --check service-worker.js && node --check server.js && node --check api/[...path].js && node --check build.js",
-    "test": "node --test test-*.mjs"
+    "check": "node --check app.js && node --check build.js && node --check service-worker.js",
+    "test": "node teste-performance-historico.mjs",
+    "test:arquitetura": "node teste-arquitetura-gpt55.mjs && node teste-coerencia-documental.mjs",
+    "test:full": "node teste-noite.mjs && node teste-arquitetura-gpt55.mjs && node teste-coerencia-documental.mjs && node teste-comercial-real.mjs && node teste-fallback.mjs && node teste-fluxo-respostas.mjs && node teste-prioridade-negociacao.mjs && node teste-validacao-jessica.mjs && node teste-validacao-mauricio.mjs && node teste-seguranca-621.mjs",
+    "test:performance": "node teste-performance-historico.mjs && node teste-performance-v652.mjs"
   },
-  "engines": {
-    "node": ">=20"
-  }
+  "dependencies": {
+    "@supabase/supabase-js": "2.108.2",
+    "jszip": "3.10.1",
+    "openai": "4.104.0"
+  },
+  "name": "corretor-pro",
+  "version": "653.0.0"
 }
