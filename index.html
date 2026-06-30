@@ -11,7 +11,7 @@
   // Aplica somente o tema escolhido pelo usuário antes da pintura da tela.
   // As opções disponíveis são claro e escuro.
   (function(){
-    var tema = "dark";
+    var tema = "light";
     try{
       var salvo = localStorage.getItem("direciona_tema");
       if(salvo === "light" || salvo === "dark") tema = salvo;
@@ -46,14 +46,14 @@
 <main class="app">
   <aside class="sidebar">
     <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Atendimentos">
-      <div class="sb-logo" aria-hidden="true"></div>
+      <img class="sb-logo" src="/icon-192.png?v=__VERSION__" alt="" aria-hidden="true">
       <div class="sb-brand-copy">
         <div class="sb-wordmark"><h1>Corretor <em>Pro</em></h1><span>Plataforma de vendas imobiliárias</span></div>
         <div class="sb-ver-top">Atualização #__VERSION__</div>
       </div>
     </div>
     <nav class="sb-nav">
-      <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Atendimentos</button>
+      <button type="button" class="sb-item go active" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Atendimentos</button>
       <button type="button" class="sb-item go" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M8 20v-6h8v6"/></svg></span>Imóveis</button>
       <button type="button" class="sb-item go" data-target="carteira" data-nav-key="carteira"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span>Leads</button>
       <button type="button" class="sb-item go" data-target="agenda" data-nav-key="atividades"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 2v4M16 2v4M7 10h10M8 14h3M8 17h5"/></svg></span>Atividades</button>
@@ -65,14 +65,14 @@
     </nav>
     <div class="sb-profile">
       <div class="sb-profile-avatar">SK</div>
-      <div><strong>Seu perfil</strong><span>Corretor</span></div>
+      <div><strong>Sanchai</strong><span>Corretor</span></div>
       <button type="button" class="go" data-target="menu" aria-label="Abrir configurações">⌄</button>
     </div>
   </aside>
   <div class="main-col">
   <div class="top cp-topbar">
     <div class="brand go" data-target="home" style="cursor:pointer" title="Voltar para Atendimentos">
-      <div class="logo" aria-hidden="true"></div>
+      <img class="logo" src="/icon-192.png?v=__VERSION__" alt="" aria-hidden="true">
       <div class="mobile-wordmark"><h1>Corretor <em>Pro</em></h1><span>Plataforma de vendas imobiliárias</span><div class="sb-ver-top">v__VERSION__</div></div>
     </div>
     <div class="busca-global" style="position:relative">
@@ -81,9 +81,9 @@
       <div id="buscaGlobalResults"></div>
     </div>
     <div class="cp-top-actions">
+      <button type="button" class="cp-icon-btn top-bell" id="topBell" title="Agenda do dia" onclick="show('agenda')" aria-label="Agenda do dia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="bell-badge" id="bellBadge" hidden></span></button>
       <button type="button" class="cp-icon-btn desktop-only" onclick="show('carteira')" title="Leads" aria-label="Abrir leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></button>
       <button type="button" class="cp-icon-btn desktop-only" onclick="show('agenda')" title="Agenda" aria-label="Abrir agenda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg></button>
-      <button type="button" class="cp-icon-btn top-bell" id="topBell" title="Agenda do dia" onclick="show('agenda')" aria-label="Agenda do dia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="bell-badge" id="bellBadge" hidden></span></button>
       <button type="button" class="cp-icon-btn mobile-only" onclick="show('menu')" title="Menu" aria-label="Abrir menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <button type="button" class="cp-user-btn go desktop-only" data-target="menu" title="Configurações"><span>SK</span></button>
     </div>
@@ -701,7 +701,7 @@
           </div>
           <div class="theme-current" id="themeCurrentLabel">Tema escuro</div>
         </div>
-        <div class="theme-options" role="group" aria-label="Escolha do tema">
+        <div class="theme-options" role="group" aria-label="Escolha do tema do Corretor Pro">
           <button type="button" class="theme-option" data-theme-choice="light" aria-pressed="false">
             <span class="theme-preview theme-preview-light" aria-hidden="true"><i></i><b></b><em></em></span>
             <span><strong>Claro</strong><small>Fundo branco-gelo e cards claros</small></span>
@@ -747,7 +747,7 @@
     <button class="nav active" data-target="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span class="lbl">Dashboard</span></button>
     <button class="nav" data-target="carteira"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span><span class="lbl">Atendimentos</span></button>
     <button class="nav fab" type="button" onclick="abrirMaisAcoes()"><span class="fab-btn">＋</span><span class="lbl">Novo</span></button>
-    <button class="nav" data-target="agenda"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span><span class="lbl">Agenda</span></button>
+    <button class="nav" data-target="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M8 20v-6h8v6"/></svg></span><span class="lbl">Imóveis</span></button>
     <button class="nav" data-target="menu"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span class="lbl">Mais</span></button>
   </div>
 </nav>

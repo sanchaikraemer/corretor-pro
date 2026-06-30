@@ -3143,8 +3143,10 @@ function cpAvatarHTML(l){
   return `<span class="cp-avatar">${escapeHtml(cpIniciais(l?.name))}</span>`;
 }
 function cpTemperatura(l){
-  const p = Number(probabilidadeRefinada(l));
-  const prob = Number.isFinite(p) ? p : (Number(l?.probabilityPercent) || 0);
+  const refinada = probabilidadeRefinada(l);
+  const p = refinada == null || refinada === "" ? NaN : Number(refinada);
+  const base = Number(l?.probabilityPercent) || 0;
+  const prob = Number.isFinite(p) && p > 0 ? Math.max(p, base) : base;
   if(prob >= 70) return { nome:"Quente", cls:"hot", cor:"var(--cp-coral)" };
   if(prob >= 45) return { nome:"Morno", cls:"warm", cor:"var(--cp-orange)" };
   return { nome:"Frio", cls:"cold", cor:"var(--cp-blue)" };
@@ -3226,7 +3228,7 @@ function renderCorretorProDashboard(all, items, contexto){
   }).length;
   const visitas = items.filter(l => cpCompromissosDoLead(l).length || normalizarEtapa(l.etapa)==="Visita/Proposta").length;
   const propostas = items.filter(l => leadTemProposta(l) || ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l.etapa))).length;
-  const potencial = items.filter(leadTemProposta).reduce((acc,l)=>acc+cpValorPotencial(l),0);
+  const potencial = items.reduce((acc,l)=>acc+cpValorPotencial(l),0);
   const receita = potencial > 0 ? potencial : (Number(contexto.totalVendasMes)||0);
 
   cpSetText("cpKpiNovos", String(novos));
@@ -3253,10 +3255,12 @@ function renderCorretorProDashboard(all, items, contexto){
     usados.add(id); proximos.push({ lead:x.lead, quando:cpHoraCompromisso(x.ap?.quando), detalhe:x.ap?.tipo || x.ap?.descricao || "Compromisso confirmado" });
     if(proximos.length >= 4) break;
   }
-  for(const l of ordenados){
-    const id=String(l?.id||""); if(!id || usados.has(id)) continue;
-    usados.add(id); proximos.push({ lead:l, quando:Number(l.daysSinceLastInteraction)>0?cpDiasInteracao(l):"Agora", detalhe:motivoCurto(l) || produtosLabel(l) });
-    if(proximos.length >= 4) break;
+  if(proximos.length < 4){
+    for(const l of ordenados){
+      const id=String(l?.id||""); if(!id || usados.has(id)) continue;
+      usados.add(id); proximos.push({ lead:l, quando:Number(l.daysSinceLastInteraction)>0?cpDiasInteracao(l):"Agora", detalhe:motivoCurto(l) || produtosLabel(l) });
+      if(proximos.length >= 4) break;
+    }
   }
   const apBox=qs("#cpAppointments");
   if(apBox){
@@ -3306,7 +3310,7 @@ function renderCorretorProDashboard(all, items, contexto){
   // Atendimentos em andamento.
   const table=qs("#cpOngoingTable");
   if(table){
-    const lista=ordenados.slice(0,5);
+    const lista=ordenados.slice(0,4);
     table.innerHTML=lista.length ? lista.map(l=>{
       const t=cpTemperatura(l), pr=cpPrioridadeClasse(l), id=JSON.stringify(String(l.id||""));
       return `<tr onclick='abrirLead(${id})'>

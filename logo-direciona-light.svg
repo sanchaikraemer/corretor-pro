@@ -1,17 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Corretor Pro">
-  <defs>
-    <linearGradient id="g" x1="12" y1="8" x2="82" y2="90" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#092F42"/>
-      <stop offset="1" stop-color="#001722"/>
-    </linearGradient>
-    <linearGradient id="c" x1="24" y1="20" x2="76" y2="78" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FF7668"/>
-      <stop offset="1" stop-color="#FF4F42"/>
-    </linearGradient>
-  </defs>
-  <rect x="3" y="3" width="90" height="90" rx="23" fill="url(#g)" stroke="#416273" stroke-opacity=".7" stroke-width="2"/>
-  <path d="M20 39 48 19l28 20" fill="none" stroke="#F7FBFC" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M25 43v31h47V43" fill="none" stroke="#F7FBFC" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M34 67V55M47 67V46M60 67V38" fill="none" stroke="url(#c)" stroke-width="7" stroke-linecap="round"/>
-  <path d="m57 49 10 6 8-14" fill="none" stroke="#FF5C4D" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Direciona Corretor">
+  <path d="M14 10.5h36c3.59 0 6.5 2.91 6.5 6.5v24c0 3.59-2.91 6.5-6.5 6.5H29.3L17.4 56V47.5H14A6.5 6.5 0 0 1 7.5 41V17a6.5 6.5 0 0 1 6.5-6.5Z" fill="none" stroke="#0C1D24" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M25.2 22.2 43.8 29 25.2 35.8l4.5-6.8-4.5-6.8Z" fill="#FF6B5C"/>
 </svg>

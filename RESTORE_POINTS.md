@@ -1,11 +1,14 @@
 # Pontos de restauração ativos
 
-## Ponto #653 — 2026-06-30 — Identidade Corretor Pro aplicada ao sistema completo
+## Ponto #654 — 2026-06-30 — Corretor Pro fiel à Opção A
 
-- Home/Atendimentos passa a seguir a Opção A aprovada, em tema claro e escuro, com panorama, indicadores, próximos atendimentos, distribuição, funil, atividades e carteira prioritária.
-- Barra lateral, topo, navegação mobile, tipografia, espaçamentos, cores e componentes passam a usar a identidade Corretor Pro.
-- A linguagem visual foi estendida às telas de Leads, Negócios, Agenda, Relatórios, Importação, Propostas, Inteligência Comercial, Arquivo e Configurações.
-- Funções e dados existentes foram preservados; a alteração é estrutural e visual, mantendo o carregamento sob demanda e o histórico completo das versões 651/652.
+- Base funcional preservada: APIs, persistência, importação de ZIP, histórico integral, análises, agenda, pipeline, propostas, relatórios e configurações.
+- Interface reconstruída para reproduzir a Opção A nas versões clara e escura, com o mesmo shell, barra lateral, busca, indicadores, cards, gráficos, tabela e navegação mobile.
+- Home transformada em painel funcional: todos os indicadores usam a carteira real e abrem a tela correspondente ao clique.
+- Identidade Corretor Pro aplicada ao sistema, ao PWA, aos ícones e às telas internas.
+- Responsividade revisada para desktop e celular; mobile usa dois indicadores por linha, receita em largura total e navegação inferior com botão central.
+- Mantidas as otimizações da v652: carregamento sob demanda, cache de telas, histórico completo apenas no detalhe e renderização progressiva.
+- Nenhuma conversa é limitada a 40 mensagens.
 
 ## Ponto #652 — 2026-06-30 — Navegação sob demanda e fim dos cliques duplicados
 
