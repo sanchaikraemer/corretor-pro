@@ -371,3 +371,12 @@
 - Função protegida com try/catch: se der erro, aparece uma caixa vermelha explicando o problema com botão "Recarregar", em vez de travar sem aviso.
 - Nenhuma linha de lógica foi alterada — só o envelope try/catch entrou.
 - Cache PWA atualizado para a versão 661.
+
+
+## Ponto #662 — importação de leads mais simples e sem duplicar
+
+- O importador de leads (CSV) passou a aceitar um arquivo enxuto: só a coluna `Nome` é obrigatória. `Telefone` e `Interesse` são opcionais.
+- A coluna `id` deixou de ser exigida — quando não vem no arquivo, o sistema gera um código estável a partir do nome+telefone, então reimportar não duplica.
+- O interesse do lead pode vir como `Interesse` ou `Empreendimento` (aceita os dois nomes de coluna); o cabeçalho não diferencia maiúsculas.
+- Corrigida uma falha de deduplicação: o marcador gravado era `[CSV …]` mas a checagem procurava só `[CRM …]`, então reimportar podia duplicar leads sem telefone. Agora reconhece os dois.
+- Cache PWA atualizado para a versão 662.

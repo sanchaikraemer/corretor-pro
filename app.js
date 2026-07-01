@@ -7062,23 +7062,34 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     const texto = await file.text();
     const rows = parseCsvDireciona(texto);
     if(rows.length < 2){ st.textContent = "CSV vazio ou inválido."; e.target.value=""; return; }
-    const head = rows[0].map(h=>h.trim());
+    // Cabeçalho sem diferenciar maiúsculas/acentos: aceita "Nome", "NOME", "nome" etc.
+    const head = rows[0].map(h=>h.trim().toLowerCase());
     const ix = {}; head.forEach((h,i)=>ix[h]=i);
-    if(ix["id"] === undefined || ix["nome"] === undefined){ st.textContent = "Esse CSV não tem as colunas esperadas (id, nome…). Confira a exportação do sistema anterior."; e.target.value=""; return; }
-    const data = rows.slice(1).filter(r => (r[ix["id"]]||"").trim());
+    // Só o NOME é obrigatório. O "id" é opcional: se o arquivo não trouxer, geramos um
+    // código estável a partir do nome+telefone (assim reimportar não duplica). O interesse
+    // pode vir como "interesse" OU "empreendimento".
+    if(ix["nome"] === undefined){ st.textContent = "Esse arquivo precisa ter pelo menos uma coluna 'Nome'. Confira o arquivo."; e.target.value=""; return; }
+    const idEstavel = (get) => {
+      const bruto = get("id");
+      if(bruto) return bruto.slice(0,8);
+      const base = (get("nome")+"|"+get("telefone").replace(/\D/g,"")).toLowerCase();
+      let h = 0; for(let i=0;i<base.length;i++){ h = (h*31 + base.charCodeAt(i)) >>> 0; }
+      return ("0000000"+h.toString(16)).slice(-8);
+    };
+    const data = rows.slice(1).filter(r => ((r[ix["nome"]]||"").trim()));
     const leads = data.map(r => {
       const get = (k) => (ix[k] !== undefined ? (r[ix[k]] ?? "") : "").trim();
       const etapaMap = CRM_ETAPA_MAP[get("etapa").toUpperCase()] || "Novo";
       return {
         nome: get("nome") || "Cliente",
         telefone: get("telefone"),
-        empreendimento: get("empreendimento"),
+        empreendimento: get("empreendimento") || get("interesse"),
         etapaMap,
         ativo: etapaMap !== "Perdido",
         origem: get("origem"),
         observacao: get("observacao"),
         criado: get("criado_em") || new Date().toISOString(),
-        idShort: get("id").slice(0,8)
+        idShort: idEstavel(get)
       };
     });
 
@@ -7091,7 +7102,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     try{
       const dl = await getLeadsData(true);
       (dl.items||[]).forEach(it => {
-        const m = String(it.fileName||"").match(/\[CRM\s+([A-Za-z0-9]{1,8})\]/);
+        const m = String(it.fileName||"").match(/\[(?:CRM|CSV)\s+([A-Za-z0-9]{1,8})\]/);
         if(m) jaImportados.add(m[1].toLowerCase());
         const fone = String(it.phone||"").replace(/\D/g,"");
         if(fone.length >= 8 && it.id){
