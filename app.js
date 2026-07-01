@@ -87,6 +87,58 @@ async function garantirRestauracaoLeadsAntigos(){
 }
 window.restaurarLeadsAntigos = restaurarLeadsAntigos;
 
+const BASE_IMPORT_KEY = "corretor_pro_importacao_base_v661";
+let _baseImportInflight = null;
+async function importarBaseLeadsV661(force = false){
+  if(_baseImportInflight) return _baseImportInflight;
+  const statusEl = qs("#baseImportStatus");
+  const btn = qs("#baseImportBtn");
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = "Importando a base consolidada, sem repetidos e sem leads perdidos…";
+  _baseImportInflight = (async () => {
+    try{
+      const res = await fetch(`./api/importar-base-leads${force ? "?force=1" : ""}`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ force }),
+        cache:"no-store"
+      });
+      const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível importar a base de leads.");
+      try{
+        localStorage.setItem(BASE_IMPORT_KEY, JSON.stringify({
+          at:new Date().toISOString(),
+          sourceTotal:Number(data.sourceTotal||0),
+          inserted:Number(data.inserted||0),
+          updated:Number(data.updated||0)
+        }));
+      }catch(_){ }
+      if(Number(data.processed||0) > 0){
+        invalidarLeadsCache();
+        if(statusEl) statusEl.innerHTML = `<span style="color:var(--acao)">${Number(data.inserted||0)} novos e ${Number(data.updated||0)} atualizados. ${Number(data.lostExcluded||0)} perdidos ficaram de fora e ${Number(data.duplicatesMergedBeforeImport||0)} repetidos foram mesclados.</span>`;
+        toast(`Base restaurada: ${Number(data.inserted||0)} novos leads.`);
+      }else{
+        if(statusEl) statusEl.innerHTML = `<span style="color:var(--acao)">Base conferida: os ${Number(data.sourceTotal||0)} leads ativos já estão no sistema, sem repetidos e sem perdidos.</span>`;
+      }
+      return data;
+    }catch(err){
+      if(statusEl) statusEl.innerHTML = `<span style="color:var(--risco)">${escapeHtml(err?.message || String(err))}</span>`;
+      throw err;
+    }finally{
+      if(btn) btn.disabled = false;
+      _baseImportInflight = null;
+    }
+  })();
+  return _baseImportInflight;
+}
+async function garantirImportacaoBaseV661(){
+  let done = false;
+  try{ done = !!localStorage.getItem(BASE_IMPORT_KEY); }catch(_){ }
+  if(done) return null;
+  try{ return await importarBaseLeadsV661(false); }catch(err){ console.warn("importarBaseLeadsV661", err); return null; }
+}
+window.importarBaseLeadsV661 = importarBaseLeadsV661;
+
 const LEAD_DETAIL_CACHE_TTL = 10 * 60 * 1000;
 const _leadDetailCache = new Map();
 async function getLeadDetail(id, force){
@@ -8976,7 +9028,7 @@ configurarEscolhaTema();
 async function iniciarDireciona(){
   renderLeads();
   checkShared();
-  await garantirRestauracaoLeadsAntigos();
+  await garantirImportacaoBaseV661();
   try{
     const data = await getLeadsData(false);
     if(data?.ok && Array.isArray(data.items)){
@@ -9011,7 +9063,7 @@ document.addEventListener("visibilitychange", () => {
 
 
 /* =============================================================
-   ATUALIZAÇÃO #660 — DASHBOARD CORRETOR PRO / OPÇÃO A
+   ATUALIZAÇÃO #661 — BASE CONSOLIDADA DE LEADS / OPÇÃO A
    Estrutura visual definitiva, alimentada pelos dados reais.
    ============================================================= */
 function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }

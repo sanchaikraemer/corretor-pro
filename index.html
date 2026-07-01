@@ -684,15 +684,19 @@
           </button>
         </div>
       </div>
-      <div class="card compact" id="legacyRestoreCard">
+      <div class="card compact" id="baseImportCard">
+        <div class="label">Base consolidada de leads</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">A base enviada foi consolidada antes da importação: entram apenas os leads ativos, com histórico, perfil, observações e demais informações. Leads perdidos e registros repetidos ficam de fora.</div>
+        <button class="btn secondary" type="button" id="baseImportBtn" onclick="importarBaseLeadsV661(true)" style="width:100%">Conferir e importar a base agora</button>
+        <div class="small" id="baseImportStatus" style="margin-top:8px;color:var(--muted)"></div>
+      </div>
+      <div class="card compact" id="legacyRestoreCard" style="display:none">
         <div class="label">Restaurar leads da base anterior</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">O Corretor Pro confere automaticamente as tabelas antigas do Supabase e recoloca no sistema os leads que ainda não aparecem, sem duplicar os que já existem.</div>
-        <button class="btn secondary" type="button" id="legacyRestoreBtn" onclick="restaurarLeadsAntigos(false)" style="width:100%">Conferir e restaurar agora</button>
+        <button class="btn secondary" type="button" id="legacyRestoreBtn" onclick="restaurarLeadsAntigos(false)" style="width:100%">Conferir base antiga</button>
         <div class="small" id="legacyRestoreStatus" style="margin-top:8px;color:var(--muted)"></div>
       </div>
-      <div class="card compact" id="crmImportCard">
+      <div class="card compact" id="crmImportCard" style="display:none">
         <div class="label">Importar leads (CSV)</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Sobe o arquivo .csv exportado do seu sistema anterior. Cada lead entra com nome, telefone, empreendimento, etapa e a <b>observação inteira</b>. Os ativos são analisados na hora; os perdidos entram pra reativar depois. <b>Rode só uma vez</b> (rodar de novo duplica).</div>
         <input class="file-native" type="file" id="crmCsvInput" accept=".csv,text/csv" style="display:none">
         <button class="btn secondary" type="button" id="crmImportBtn" style="width:100%">Escolher CSV e importar</button>
         <div class="small" id="crmImportStatus" style="margin-top:8px;color:var(--muted)"></div>

@@ -363,3 +363,14 @@
 - Foi adicionada uma ação manual em Configurações para repetir a conferência.
 - Se as tabelas antigas já tiverem sido apagadas, o importador de CSV continua disponível como alternativa.
 - Atualização #660 permanece visível no topo.
+
+## Ponto #661 — importação da base consolidada sem repetidos e sem perdidos
+
+- A planilha consolidada enviada foi usada como fonte principal: 399 registros analisados.
+- 199 leads marcados como perdidos foram excluídos antes de gerar a base do sistema.
+- Dois pares de registros repetidos foram mesclados pelo telefone e pelo histórico, resultando em 198 leads ativos únicos.
+- Nome, telefone, empreendimento, etapa, prioridade, temperatura, perfil, motivo do ranking, preferências, observações, objeções e históricos completos foram preservados.
+- A importação é automática na primeira abertura e também pode ser executada manualmente nas Configurações.
+- Registros que já existem são atualizados e enriquecidos; não é criado um segundo card para o mesmo ID, telefone ou nome.
+- O importador antigo de CSV e a restauração genérica ficam ocultos para evitar a entrada acidental de perdidos ou duplicados.
+- Cache PWA isolado em `corretor-pro-static-v661` e Atualização #661 visível no topo.

@@ -1,5 +1,5 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v660-' + BUILD_ID;
+const STATIC_CACHE = 'corretor-pro-static-v661-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
@@ -79,10 +79,6 @@ const CORE_ASSETS = [
   '/service-worker.js',
   '/icon-192.png?v=__VERSION__',
   '/logo-cp.png?v=__VERSION__',
-  '/avatar-1.png?v=__VERSION__',
-  '/avatar-2.png?v=__VERSION__',
-  '/avatar-3.png?v=__VERSION__',
-  '/avatar-4.png?v=__VERSION__',
   '/icon-512.png?v=__VERSION__',
   '/favicon.png?v=__VERSION__',
   '/logo-direciona-light.svg?v=__VERSION__',

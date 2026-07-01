@@ -768,7 +768,7 @@ a{color:var(--accent)}
 /* Marca */
 .logo,.sb-logo{
   background-color:transparent !important;
-  background-image:url("/logo-direciona-dark.svg?v=657") !important;
+  background-image:url("/logo-direciona-dark.svg?v=661") !important;
   background-position:center !important;
   background-size:82% 82% !important;
   background-repeat:no-repeat !important;
@@ -776,8 +776,8 @@ a{color:var(--accent)}
   border:1px solid var(--line);
   box-shadow:none !important;
 }
-html[data-theme="dark"] .logo,html[data-theme="dark"] .sb-logo{background-image:url("/logo-direciona-dark.svg?v=657") !important}
-html[data-theme="light"] .logo,html[data-theme="light"] .sb-logo{background-image:url("/logo-direciona-light.svg?v=657") !important}
+html[data-theme="dark"] .logo,html[data-theme="dark"] .sb-logo{background-image:url("/logo-direciona-dark.svg?v=661") !important}
+html[data-theme="light"] .logo,html[data-theme="light"] .sb-logo{background-image:url("/logo-direciona-light.svg?v=661") !important}
 .logo{width:48px;height:48px;border-radius:14px;background-size:78% 78% !important;background-color:var(--panel) !important}
 .sb-logo{width:42px;height:42px;border-radius:13px;background-color:var(--panel2) !important}
 .sb-brand{gap:12px;padding:3px 6px 13px;border-bottom:1px solid var(--line)}

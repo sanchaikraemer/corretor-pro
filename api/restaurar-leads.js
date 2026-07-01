@@ -213,8 +213,14 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
   }
 
   const best = new Map();
+  let skippedLost = 0;
   for (const entry of sourceRows) {
     const normalized = normalizarLeadLegado(entry.row, entry.table);
+    // A restauração de segurança nunca recoloca leads perdidos na carteira ativa.
+    if (normalized?.payload?.etapa === "Perdido") {
+      skippedLost++;
+      continue;
+    }
     if (!normalized.id && !normalized.dedupeKey) continue;
     const key = normalized.id ? `id:${normalized.id}` : normalized.dedupeKey;
     const old = best.get(key);
@@ -246,6 +252,7 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
     currentBefore: current.count,
     legacyFound: sourceRows.length,
     uniqueLegacy: best.size,
+    skippedLost,
     restored,
     alreadyPresent: Math.max(0, best.size - selected.length),
     currentAfterEstimate: current.count + restored,

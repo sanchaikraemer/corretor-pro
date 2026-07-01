@@ -39,6 +39,106 @@ async function getLeadsData(force){
   })();
   return _leadsCache.inflight;
 }
+
+const LEGACY_RESTORE_KEY = "corretor_pro_restauracao_legado_v660";
+let _legacyRestoreInflight = null;
+async function restaurarLeadsAntigos(force = false){
+  if(_legacyRestoreInflight) return _legacyRestoreInflight;
+  const statusEl = qs("#legacyRestoreStatus");
+  const btn = qs("#legacyRestoreBtn");
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = "Conferindo a base anterior e restaurando os leads que faltam…";
+  _legacyRestoreInflight = (async () => {
+    try{
+      const res = await fetch("./api/restaurar-leads" + (force ? "?force=1" : ""), {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ force:false }),
+        cache:"no-store"
+      });
+      const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível restaurar os leads.");
+      try{ localStorage.setItem(LEGACY_RESTORE_KEY, JSON.stringify({at:new Date().toISOString(), restored:Number(data.restored||0), legacyFound:Number(data.legacyFound||0)})); }catch(_){ }
+      if(Number(data.restored||0) > 0){
+        invalidarLeadsCache();
+        if(statusEl) statusEl.innerHTML = `<span style="color:var(--acao)">${Number(data.restored||0)} leads restaurados. ${Number(data.alreadyPresent||0)} já estavam no sistema.</span>`;
+        toast(`${Number(data.restored||0)} leads restaurados da base anterior.`);
+      }else{
+        if(statusEl) statusEl.innerHTML = Number(data.legacyFound||0) > 0
+          ? `<span style="color:var(--acao)">Base conferida: todos os ${Number(data.uniqueLegacy||data.legacyFound||0)} leads antigos já estão no sistema.</span>`
+          : `<span style="color:var(--muted)">Não encontrei leads nas tabelas antigas. Use o CSV de backup abaixo para restaurar.</span>`;
+      }
+      return data;
+    }catch(err){
+      if(statusEl) statusEl.innerHTML = `<span style="color:var(--risco)">${escapeHtml(err?.message || String(err))}</span>`;
+      throw err;
+    }finally{
+      if(btn) btn.disabled = false;
+      _legacyRestoreInflight = null;
+    }
+  })();
+  return _legacyRestoreInflight;
+}
+async function garantirRestauracaoLeadsAntigos(){
+  let done = false;
+  try{ done = !!localStorage.getItem(LEGACY_RESTORE_KEY); }catch(_){ }
+  if(done) return null;
+  try{ return await restaurarLeadsAntigos(false); }catch(_){ return null; }
+}
+window.restaurarLeadsAntigos = restaurarLeadsAntigos;
+
+const BASE_IMPORT_KEY = "corretor_pro_importacao_base_v661";
+let _baseImportInflight = null;
+async function importarBaseLeadsV661(force = false){
+  if(_baseImportInflight) return _baseImportInflight;
+  const statusEl = qs("#baseImportStatus");
+  const btn = qs("#baseImportBtn");
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = "Importando a base consolidada, sem repetidos e sem leads perdidos…";
+  _baseImportInflight = (async () => {
+    try{
+      const res = await fetch(`./api/importar-base-leads${force ? "?force=1" : ""}`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ force }),
+        cache:"no-store"
+      });
+      const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível importar a base de leads.");
+      try{
+        localStorage.setItem(BASE_IMPORT_KEY, JSON.stringify({
+          at:new Date().toISOString(),
+          sourceTotal:Number(data.sourceTotal||0),
+          inserted:Number(data.inserted||0),
+          updated:Number(data.updated||0)
+        }));
+      }catch(_){ }
+      if(Number(data.processed||0) > 0){
+        invalidarLeadsCache();
+        if(statusEl) statusEl.innerHTML = `<span style="color:var(--acao)">${Number(data.inserted||0)} novos e ${Number(data.updated||0)} atualizados. ${Number(data.lostExcluded||0)} perdidos ficaram de fora e ${Number(data.duplicatesMergedBeforeImport||0)} repetidos foram mesclados.</span>`;
+        toast(`Base restaurada: ${Number(data.inserted||0)} novos leads.`);
+      }else{
+        if(statusEl) statusEl.innerHTML = `<span style="color:var(--acao)">Base conferida: os ${Number(data.sourceTotal||0)} leads ativos já estão no sistema, sem repetidos e sem perdidos.</span>`;
+      }
+      return data;
+    }catch(err){
+      if(statusEl) statusEl.innerHTML = `<span style="color:var(--risco)">${escapeHtml(err?.message || String(err))}</span>`;
+      throw err;
+    }finally{
+      if(btn) btn.disabled = false;
+      _baseImportInflight = null;
+    }
+  })();
+  return _baseImportInflight;
+}
+async function garantirImportacaoBaseV661(){
+  let done = false;
+  try{ done = !!localStorage.getItem(BASE_IMPORT_KEY); }catch(_){ }
+  if(done) return null;
+  try{ return await importarBaseLeadsV661(false); }catch(err){ console.warn("importarBaseLeadsV661", err); return null; }
+}
+window.importarBaseLeadsV661 = importarBaseLeadsV661;
+
 const LEAD_DETAIL_CACHE_TTL = 10 * 60 * 1000;
 const _leadDetailCache = new Map();
 async function getLeadDetail(id, force){
@@ -7005,7 +7105,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     if(rows.length < 2){ st.textContent = "CSV vazio ou inválido."; e.target.value=""; return; }
     const head = rows[0].map(h=>h.trim());
     const ix = {}; head.forEach((h,i)=>ix[h]=i);
-    if(ix["id"] === undefined || ix["nome"] === undefined){ st.textContent = "Esse CSV não tem as colunas esperadas (id, nome…). Confira a exportação do CRM."; e.target.value=""; return; }
+    if(ix["id"] === undefined || ix["nome"] === undefined){ st.textContent = "Esse CSV não tem as colunas esperadas (id, nome…). Confira a exportação do sistema anterior."; e.target.value=""; return; }
     const data = rows.slice(1).filter(r => (r[ix["id"]]||"").trim());
     const leads = data.map(r => {
       const get = (k) => (ix[k] !== undefined ? (r[ix[k]] ?? "") : "").trim();
@@ -7049,7 +7149,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
       e.target.value=""; return;
     }
     const ativosCount = aImportar.filter(l=>l.ativo).length;
-    if(!confirm(`Importar ${aImportar.length} leads do CRM?${jaTinha?`\n\n(${jaTinha} já estavam importados — vou pular esses, sem duplicar.)`:""}\n\n• Todos entram agora, na hora.\n• ${ativosCount} ativos serão analisados pelo Corretor Pro em seguida (isso demora, mas os leads JÁ ficam salvos — se a aba fechar, é só rodar de novo pra continuar de onde parou).`)){ e.target.value=""; return; }
+    if(!confirm(`Importar ${aImportar.length} leads do CSV?${jaTinha?`\n\n(${jaTinha} já estavam importados — vou pular esses, sem duplicar.)`:""}\n\n• Todos entram agora, na hora.\n• ${ativosCount} ativos serão analisados pelo Corretor Pro em seguida (isso demora, mas os leads JÁ ficam salvos — se a aba fechar, é só rodar de novo pra continuar de onde parou).`)){ e.target.value=""; return; }
 
     qs("#crmImportBtn").disabled = true;
     wrap.style.display = "block";
@@ -7066,7 +7166,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
       try{
         const res = await fetch("./api/reanalisar-lead", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ id: alvo.id, novoAtendimento: obs.slice(0,4000), apenasSalvar:true, autorManual:"Anotação do CRM", tipoManual:"nota" })
+          body: JSON.stringify({ id: alvo.id, novoAtendimento: obs.slice(0,4000), apenasSalvar:true, autorManual:"Anotação importada", tipoManual:"nota" })
         });
         const d = await res.json().catch(()=>({}));
         if(d?.ok){ alvo.obs = (alvo.obs ? alvo.obs+"\n" : "") + obs; return "mesclado"; }
@@ -7086,9 +7186,9 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
         origemCrm: L.origem || ""
       };
       const dataBR = crmDataBR(L.criado);
-      const timeline = L.observacao ? [{ id:1, date:dataBR, time:"", iso:L.criado, author:"Anotação do corretor (CRM)", text:L.observacao, type:"nota", source:"crm", order:1 }] : [];
+      const timeline = L.observacao ? [{ id:1, date:dataBR, time:"", iso:L.criado, author:"Anotação importada", text:L.observacao, type:"nota", source:"crm", order:1 }] : [];
       const result = { rawText: L.observacao || "", timeline, analysis, lead: { clientName:L.nome, phone:L.telefone, product:L.empreendimento }, audiosEncontrados:0, audiosTranscritos:0 };
-      const fileName = `${L.nome} [CRM ${L.idShort}]`;
+      const fileName = `${L.nome} [CSV ${L.idShort}]`;
       const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"salvar-novo", result, fileName, source:"crm-import" }) });
       const d = await res.json().catch(()=>({}));
       return d?.persistence?.processing?.id || null;
@@ -8220,7 +8320,7 @@ if("serviceWorker" in navigator){
   });
   addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("/service-worker.js?v=657", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/service-worker.js?v=661", { scope: "/" });
       // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;
@@ -8928,6 +9028,7 @@ configurarEscolhaTema();
 async function iniciarDireciona(){
   renderLeads();
   checkShared();
+  await garantirImportacaoBaseV661();
   try{
     const data = await getLeadsData(false);
     if(data?.ok && Array.isArray(data.items)){
@@ -8962,7 +9063,7 @@ document.addEventListener("visibilitychange", () => {
 
 
 /* =============================================================
-   ATUALIZAÇÃO #657 — DASHBOARD CORRETOR PRO / OPÇÃO A
+   ATUALIZAÇÃO #661 — BASE CONSOLIDADA DE LEADS / OPÇÃO A
    Estrutura visual definitiva, alimentada pelos dados reais.
    ============================================================= */
 function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
@@ -9009,9 +9110,9 @@ function cpSetText(id,val){ const el=qs("#"+id); if(el) el.textContent=val; }
 function cpPct(n,total){ return total>0?Math.round((n/total)*100):0; }
 function cpOpenLead(id){ if(id) abrirLead(String(id)); }
 function cpAvatarStyle(name){
-  const palette=["#e8a27d,#7d4b46","#6db8d9,#274d67","#c7a0d8,#5b4169","#83c8a0,#315b46","#e2bf69,#765623"];
   let h=0; for(const c of String(name||"")) h=(h*31+c.charCodeAt(0))>>>0;
-  return `background:linear-gradient(145deg,${palette[h%palette.length]})`;
+  const n=(h%4)+1;
+  return `background-image:url('/avatar-${n}.png?v=661');background-color:#315766`;
 }
 function renderCorretorProDashboard(items, all){
   items=Array.isArray(items)?items:[]; all=Array.isArray(all)?all:items;

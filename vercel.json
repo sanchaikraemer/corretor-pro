@@ -22,6 +22,9 @@
     },
     "api/restaurar-leads.js": {
       "maxDuration": 60
+    },
+    "api/importar-base-leads.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
