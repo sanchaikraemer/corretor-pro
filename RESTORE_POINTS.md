@@ -380,3 +380,10 @@
 - O interesse do lead pode vir como `Interesse` ou `Empreendimento` (aceita os dois nomes de coluna); o cabeçalho não diferencia maiúsculas.
 - Corrigida uma falha de deduplicação: o marcador gravado era `[CSV …]` mas a checagem procurava só `[CRM …]`, então reimportar podia duplicar leads sem telefone. Agora reconhece os dois.
 - Cache PWA atualizado para a versão 662.
+
+
+## Ponto #663 — importação mostra o erro real quando não salva
+
+- Quando a importação de leads não conseguia gravar nenhum lead, a tela dizia genericamente "a refazer" e escondia o motivo do servidor.
+- Agora, se nada for salvo, o importador mostra em vermelho o erro exato devolvido pelo servidor (ex.: recusa de gravação/coluna/permissão), pra identificar a causa de imediato.
+- Cache PWA atualizado para a versão 663.

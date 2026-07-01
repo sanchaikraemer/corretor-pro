@@ -7145,6 +7145,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     }
 
     // 1) CRIAR todos os registros — rápido, sem IA. 1 tentativa extra se a primeira falhar.
+    let ultimoErroServidor = ""; // guarda o motivo real quando o servidor recusa a gravação
     async function criarUm(L){
       const analysis = {
         clientName: L.nome,
@@ -7161,7 +7162,12 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
       const fileName = `${L.nome} [CSV ${L.idShort}]`;
       const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"salvar-novo", result, fileName, source:"crm-import" }) });
       const d = await res.json().catch(()=>({}));
-      return d?.persistence?.processing?.id || null;
+      const id = d?.persistence?.processing?.id || null;
+      if(!id){
+        const p = d?.persistence || {};
+        ultimoErroServidor = p.reason || (Array.isArray(p.attempts) && p.attempts[0]?.error) || d?.error || `o servidor respondeu ${res.status} sem salvar`;
+      }
+      return id;
     }
     for(let i=0;i<aImportar.length;i++){
       const L = aImportar[i];
@@ -7193,7 +7199,11 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     await loadRecentLeads();
     await carregarDashboard();
     await carregarAgendaTopo();
-    st.innerHTML = `<span style="color:var(--acao)">Pronto! ${criados} leads novos${mesclados?`, ${mesclados} juntados em leads que já existiam (mesmo telefone)`:""}${jaTinha?`, ${jaTinha} já importados antes`:""}${falhas?`, ${falhas} a refazer (rode de novo)`:""}. Já aparecem em Hoje e no Pipeline.</span>`;
+    if(criados === 0 && falhas > 0){
+      st.innerHTML = `<span style="color:var(--risco)"><b>Nenhum lead foi salvo.</b> O servidor recusou a gravação${ultimoErroServidor?`: <b>${escapeHtml(String(ultimoErroServidor))}</b>`:"."} Tira um print desta mensagem — é esse o problema a resolver.</span>`;
+    } else {
+      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${criados} leads novos${mesclados?`, ${mesclados} juntados em leads que já existiam (mesmo telefone)`:""}${jaTinha?`, ${jaTinha} já importados antes`:""}${falhas?`, ${falhas} a refazer (rode de novo)`:""}. Já aparecem em Hoje e no Pipeline.</span>`;
+    }
 
     // 2) ANALISAR os ativos — em segundo plano, em paralelo. Não trava: os leads já estão salvos.
     if(ativosIds.length){
