@@ -310,11 +310,83 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
+// ===== Histórico interno do app (Atualização #668) =====
+// O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
+// no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
+let cpApplyingHistory = false;
+function cpRouteForScreen(screen=state.active){
+  return {
+    cpApp:true,
+    screen:screen || "home",
+    navKey:state.navKey || undefined,
+    carteiraFiltro:state.carteiraFiltro || "todos",
+    pipelineFiltro:state.pipelineVisualFiltro || "todos",
+    grupoAtivo:state.grupoAtivo || null
+  };
+}
+function cpPushRoute(route){
+  if(cpApplyingHistory) return;
+  try{ history.pushState({...route,cpApp:true}, "", location.href); }catch(_){}
+}
+function cpReplaceRoute(route){
+  try{ history.replaceState({...route,cpApp:true}, "", location.href); }catch(_){}
+}
+function cpPushTransientRoute(kind){
+  if(cpApplyingHistory || history.state?.cpTransient === kind) return;
+  const base = history.state?.cpApp ? history.state : cpRouteForScreen(state.active);
+  try{ history.pushState({cpApp:true,cpTransient:kind,base}, "", location.href); }catch(_){}
+}
+function cpConsumeTransientRoute(kind){
+  const cur = history.state;
+  if(cur?.cpTransient !== kind) return;
+  const base = cur.base?.cpApp ? cur.base : cpRouteForScreen(state.active);
+  cpReplaceRoute(base);
+}
+function cpClearLeadState(){
+  if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
+  state.lead=null; state.focoLeadId=null; state.analysis=null; state.sequencia=null;
+}
+async function cpRestoreRoute(route){
+  cpApplyingHistory=true;
+  try{
+    if(document.body.classList.contains("menu-aberto")) fecharMenuGaveta({fromHistory:true});
+    const r = route?.cpApp ? route : {screen:"home"};
+    if(r.cpTransient){
+      if(r.cpTransient === "menu") abrirMenuGaveta();
+      return;
+    }
+    if(r.screen === "lead" && r.leadId){
+      if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
+      if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
+      if(r.grupoAtivo) state.grupoAtivo=r.grupoAtivo;
+      await abrirLead(r.leadId,{fromHistory:true});
+      return;
+    }
+    cpClearLeadState();
+    state.grupoAtivo=null;
+    if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
+    if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
+    show(r.screen || "home",{navKey:r.navKey,skipHistory:true});
+    if((r.screen||"home") === "home" && r.grupoAtivo){
+      state.grupoAtivo=r.grupoAtivo;
+      abrirGrupoHome(r.grupoAtivo,{fromHistory:true});
+    } else if((r.screen||"home") === "home") {
+      renderBotoesHome();
+    }
+  } finally { cpApplyingHistory=false; }
+}
+window.addEventListener("popstate",e=>{ cpRestoreRoute(e.state).catch(err=>console.warn("popstate",err)); });
+window.cpPushTransientRoute=cpPushTransientRoute;
+window.cpConsumeTransientRoute=cpConsumeTransientRoute;
+
 function show(t, options={}){
   const prev = state.active;
   const defaultNavKey = {home:"home",carteira:"leads",propostas:"imoveis",pipeline:"negocios",agenda:"agenda",relatorio:"relatorios",menu:"config"}[t] || t;
   state.navKey = options.navKey || defaultNavKey;
   state.active=t;
+  if(!options.skipHistory && !cpApplyingHistory && prev !== t){
+    cpPushRoute(cpRouteForScreen(t));
+  }
   if(!isDesktop()){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
     qs("#"+t)?.classList.add("active");
@@ -366,8 +438,21 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-function abrirMenuGaveta(){ document.body.classList.add("menu-aberto"); }
-function fecharMenuGaveta(){ document.body.classList.remove("menu-aberto"); }
+// Atualização #668: a seta física fecha a gaveta antes de sair da tela atual.
+function abrirMenuGaveta(){
+  if(document.body.classList.contains("menu-aberto")) return;
+  document.body.classList.add("menu-aberto");
+  if(typeof cpPushTransientRoute === "function") cpPushTransientRoute("menu");
+}
+function fecharMenuGaveta(options={}){
+  document.body.classList.remove("menu-aberto");
+  if(options.fromHistory) return;
+  if(options.replaceOnly){
+    if(typeof cpConsumeTransientRoute === "function") cpConsumeTransientRoute("menu");
+    return;
+  }
+  if(history.state?.cpTransient === "menu") history.back();
+}
 window.abrirMenuGaveta = abrirMenuGaveta;
 window.fecharMenuGaveta = fecharMenuGaveta;
 function renderLeads(){
@@ -2573,7 +2658,10 @@ function cardLeadHTML(l, opts){
 // Cards mostram: nome, etapa/produto/dias, tags (ESFRIANDO/PERMUTA), motivo curto e
 // ações rápidas (WhatsApp). Pro grupo com mais de 10 leads, divide em
 // "ataca agora — top 10" e o restante colapsado.
-function abrirGrupoHome(grupo){
+function abrirGrupoHome(grupo, options={}){
+  if(!options.fromHistory && !cpApplyingHistory){
+    cpPushRoute({...cpRouteForScreen("home"),screen:"home",grupoAtivo:grupo});
+  }
   const foco = qs("#leadFocoArea");
   if(!foco) return;
   document.body.classList.remove("lead-foco-aberto");
@@ -2625,7 +2713,7 @@ function abrirGrupoHome(grupo){
 
   foco.innerHTML =
     `<div style="display:flex;align-items:center;gap:12px;margin:0 0 4px;flex-wrap:wrap">
-       <button type="button" onclick="renderBotoesHome()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button>
+       <button type="button" onclick="voltarDaListaHome()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button>
        <b style="color:var(--lime);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:13px">${meta.titulo}</b>
        <span style="background:var(--lime);color:var(--on-accent);border-radius:999px;padding:0 9px;font-size:12px;font-weight:950">${arr.length}</span>
      </div>
@@ -2634,6 +2722,11 @@ function abrirGrupoHome(grupo){
      ${listaHtml}`;
   foco.scrollIntoView({ behavior:"smooth", block:"start" });
 }
+function voltarDaListaHome(){
+  if(history.state?.cpApp && history.state?.screen === "home" && history.state?.grupoAtivo){ history.back(); return; }
+  renderBotoesHome();
+}
+window.voltarDaListaHome=voltarDaListaHome;
 window.abrirGrupoHome = abrirGrupoHome;
 window.renderBotoesHome = renderBotoesHome;
 
@@ -3983,9 +4076,13 @@ async function excluirLeadDefinitivo(id, nome){
 }
 window.excluirLeadDefinitivo = excluirLeadDefinitivo;
 
-async function abrirLead(id){
+async function abrirLead(id, options={}){
   if(!id) return;
   const sid = String(id);
+  if(!options.fromHistory && !cpApplyingHistory){
+    const route={...cpRouteForScreen("lead"),screen:"lead",leadId:sid,grupoAtivo:state.grupoAtivo||null};
+    if(!(history.state?.cpApp && history.state?.screen === "lead" && String(history.state?.leadId) === sid)) cpPushRoute(route);
+  }
   state.focoLeadId = sid;
   state.timelineVisibleCount = TIMELINE_PAGE_SIZE;
   document.body.classList.add("lead-foco-aberto");
@@ -4025,7 +4122,7 @@ async function abrirLead(id){
     renderLeadFoco(state.lead);
     if(state.top3) renderTop3(state.top3);
     renderLeads();
-    show("home", { skipLoad:true });
+    show("home", { skipLoad:true, skipHistory:true });
     const t = qs("#toast"); if(t) t.classList.remove("show");
   };
 
@@ -4034,7 +4131,7 @@ async function abrirLead(id){
   let lead = emMemoria();
   const area = qs("#leadFocoArea");
   if(area) area.innerHTML = `<div class="skel-loading" style="padding:16px 0"><div style="height:26px;width:55%;border-radius:8px;background:var(--panel);border:1px solid var(--line);animation:skel-pulse 1.4s ease-in-out infinite;margin-bottom:10px"></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
-  show("home", { skipLoad:true });
+  show("home", { skipLoad:true, skipHistory:true });
 
   // Deixa o navegador pintar a tela/skeleton antes de montar o conteúdo do lead.
   await new Promise(resolve => requestAnimationFrame(resolve));
@@ -4269,11 +4366,9 @@ function iniciarBarraProgresso(btn, texto){
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 function voltarDoLead(){
-  if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
-  state.lead = null;
-  state.focoLeadId = null;
-  state.analysis = null;
-  if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo); }
+  if(history.state?.cpApp && history.state?.screen === "lead"){ history.back(); return; }
+  cpClearLeadState();
+  if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
   else { renderBotoesHome(); }
 }
 window.voltarDoLead = voltarDoLead;
@@ -6777,6 +6872,8 @@ async function checkShared(){
   }
 }
 qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
+  const estavaNaGaveta=document.body.classList.contains("menu-aberto");
+  if(estavaNaGaveta) fecharMenuGaveta({replaceOnly:true});
   const navKey = b.dataset.navKey || b.dataset.target || "home";
   // Ir manualmente pra home limpa lead aberto e grupo aberto, pra mostrar os botões iniciais.
   // (A guarda em renderListasHome impede que o auto-refresh derrube quem está num lead/grupo.)
@@ -6786,7 +6883,7 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
   // "Carteira" sempre abre na aba Oportunidades (priorizada), não na última aba usada (ex.: Últimos).
   if(b.dataset.target === "pipeline"){ setPipelineTab("oportunidades"); }
   show(b.dataset.target,{navKey});
-  fecharMenuGaveta(); // se veio da gaveta do celular, fecha ao navegar
+  if(!estavaNaGaveta) fecharMenuGaveta({fromHistory:true}); // garante gaveta fechada sem criar nova navegação
 }));
 // Qualquer item da lista lateral/gaveta fecha a gaveta do celular ao ser tocado (inclui os que usam onclick, como "Últimos atendimentos").
 qsa(".sb-item").forEach(b=>b.addEventListener("click", fecharMenuGaveta));
@@ -7725,24 +7822,26 @@ async function carregarCarteira(force){
 window.carregarCarteira = carregarCarteira;
 
 // ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["geladeira","Geladeira"]];
+const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["reaquecer","Reaquecer"],["geladeira","Geladeira"]];
 const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
 const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
 function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
 function carteiraPassaFiltro(l, f){
   const e = normalizarEtapa(l.etapa);
   if(f === "geladeira") return e === "Geladeira";
-  if(e === "Geladeira") return f === "todos";
+  if(!leadEhAtivo(l)) return false;
+  if(f === "reaquecer") return leadEhReaquecer(l);
+  if(f === "quentes") return leadEhQuente(l);
   const prob = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-  if(f === "quentes") return prob >= 55;
-  if(f === "mornos") return prob >= 40 && prob < 55;
-  if(f === "frios") return prob < 40;
+  if(f === "mornos") return !leadEhQuente(l) && prob >= 40;
+  if(f === "frios") return !leadEhQuente(l) && prob < 40;
   return true;
 }
 const CARTEIRA_PAGE_SIZE = 80;
 function setCarteiraFiltro(f){
   state.carteiraFiltro = f;
   state.carteiraVisibleCount = CARTEIRA_PAGE_SIZE;
+  if(state.active === "carteira") cpReplaceRoute(cpRouteForScreen("carteira"));
   renderCarteiraTabela();
 }
 function carregarMaisCarteira(){
@@ -7765,7 +7864,7 @@ function renderCarteiraTabela(){
   const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
   box.innerHTML = `
     <div class="cart-head">
-      <div><h2>Carteira</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} · ordenados por prioridade de contato</div></div>
+      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="cart-filtros">${chips}</div>
         <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
@@ -8777,30 +8876,50 @@ function ui631Icon(nome){
   return icons[nome] || icons.ativos;
 }
 
+// Classificação única usada pela Home, Atendimentos e Pipeline.
+// Antes cada tela tinha uma regra diferente, por isso a Home mostrava 5 quentes
+// e Atendimentos mostrava zero.
+function leadEhAtivo(l){
+  return !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l?.etapa));
+}
+function leadEhQuente(l){
+  if(!leadEhAtivo(l)) return false;
+  const p = probabilidadeRefinada(l) ?? (Number(l?.probabilityPercent)||0);
+  const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
+  const temp = String(l?.analysis?.leituraComercial?.temperatura||"").toLowerCase();
+  const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
+  const etapa = normalizarEtapa(l?.etapa);
+  return p >= 55 || tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
+}
+function leadEhReaquecer(l){
+  return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
+}
+function abrirAtendimentosFiltro(filtro="todos"){
+  state.carteiraFiltro=filtro;
+  state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE;
+  show("carteira",{navKey:"leads"});
+  cpReplaceRoute(cpRouteForScreen("carteira"));
+}
+window.leadEhQuente=leadEhQuente;
+window.abrirAtendimentosFiltro=abrirAtendimentosFiltro;
+
 renderResumoDia = function(items){
   const box = qs("#resumoDia");
   if(!box) return;
   if(!items?.length){ box.style.display="none"; box.innerHTML=""; return; }
   const prioridade = items.filter(l => !ehContatadoHoje(l) && !lembreteFuturo(l) && (classificarGrupoHome(l)==="acao-hoje" || classificarGrupoHome(l)==="retomar-cuidado" || Number(l.daysSinceLastInteraction)>=3)).length;
-  const muitoQuentes = items.filter(l => {
-    const p = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-    const tipo = String(l.analysis?.tipoRetomada||"").toLowerCase();
-    const temp = String(l.analysis?.leituraComercial?.temperatura||"").toLowerCase();
-    const interesse = String(l.analysis?.diagnostico?.interesse||"").toLowerCase();
-    const etapa = normalizarEtapa(l.etapa);
-    return p >= 55 || tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
-  }).length;
-  const retornos = items.filter(l => !ehContatadoHoje(l) && !lembreteFuturo(l) && Number(l.daysSinceLastInteraction||0)>=14).length;
+  const muitoQuentes = items.filter(leadEhQuente).length;
+  const retornos = items.filter(leadEhReaquecer).length;
   const visitas = items.filter(l => {
     const aps=l.analysis?.confirmedAppointments;
     return (Array.isArray(aps)&&aps.length) || !!l.analysis?.lembrete?.quando;
   }).length;
   box.style.display="grid";
   box.innerHTML = `
-    <div class="ui-kpi" onclick="show('carteira')"><span>Ativos</span><div><b>${items.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi active" onclick="show('pipeline');setPipelineVisualFiltro('quentes')"><span>Quentes</span><div><b>${muitoQuentes}</b><i>${ui631Icon('quente')}</i></div></div>
+    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('todos')"><span>Ativos</span><div><b>${items.filter(leadEhAtivo).length}</b><i>${ui631Icon('ativos')}</i></div></div>
+    <div class="ui-kpi active" onclick="abrirAtendimentosFiltro('quentes')"><span>Quentes</span><div><b>${muitoQuentes}</b><i>${ui631Icon('quente')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${visitas}</b><i>${ui631Icon('compromisso')}</i></div></div>
-    <div class="ui-kpi" onclick="show('pipeline');setPipelineVisualFiltro('reaquecer')"><span>Reaquecer</span><div><b>${retornos}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
+    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('reaquecer')"><span>Reaquecer</span><div><b>${retornos}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
@@ -8868,7 +8987,7 @@ renderListasHome = function(ordenados){
     <div class="ui-home-content">
       <section class="ui-insight-card">
         <div class="ui-insight-title"><i>✦</i><strong>O sistema percebeu</strong></div>
-        <p>${esfriando} leads esfriando, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
+        <p>${esfriando} ${esfriando===1?'lead esfriando':'leads esfriando'}, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
         <button type="button" onclick="show('pipeline')">Ver análise</button>
       </section>
       <section class="ui-priority-card">
@@ -8878,7 +8997,7 @@ renderListasHome = function(ordenados){
     </div>`;
 };
 
-window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; carregarPipeline(); };
+window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; if(state.active === "pipeline") cpReplaceRoute(cpRouteForScreen("pipeline")); carregarPipeline(); };
 function ui631EtapaFunil(l){
   const raw=String(l.analysis?.diagnostico?.etapa||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   if(raw.includes("descob")) return "Descoberta";
@@ -8901,20 +9020,10 @@ carregarPipeline = async function(){
   // Usa dados em memória se disponíveis — evita fetch a cada troca de filtro
   const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
   const renderPipeline = (data) => {
-    const all=(data?.items||[]).map(limparLead).filter(l=>{const e=normalizarEtapa(l.etapa);return !["Vendido","Perdido","Geladeira"].includes(e)});
-    const hot=l=>{
-      const p=probabilidadeRefinada(l)??(Number(l.probabilityPercent)||0);
-      if(p>=40) return true;
-      if((Number(l.probabilityPercent)||0)>=60) return true;
-      const tipo=String(l.analysis?.tipoRetomada||"").toLowerCase();
-      const temp=String(l.analysis?.leituraComercial?.temperatura||"").toLowerCase();
-      const interesse=String(l.analysis?.diagnostico?.interesse||"").toLowerCase();
-      if(tipo==="quente-fechar"||temp==="quente"||interesse==="alto") return true;
-      const e=normalizarEtapa(l.etapa);
-      return e==="Negociação"||e==="Visita/Proposta";
-    };
+    const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
+    const hot=leadEhQuente;
     const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
-    const reaquecer=l=>(Number(l.daysSinceLastInteraction)||0)>=14&&!ehContatadoHoje(l)&&!lembreteFuturo(l);
+    const reaquecer=leadEhReaquecer;
     const filtros={todos:all,quentes:all.filter(hot),esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)),compromisso:all.filter(compromisso),reaquecer:all.filter(reaquecer)};
     const filtro=state.pipelineVisualFiltro||"todos";
     const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
@@ -9060,6 +9169,13 @@ renderLeadFoco = function(lead){
   wrap.insertBefore(advanced,legacy); advanced.appendChild(legacy);
 };
 window.renderLeadFoco=renderLeadFoco;
+
+/* ============================================================
+   ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
+   - seta física volta lead → origem → Hoje antes de fechar o PWA
+   - Home, Atendimentos e Pipeline usam a mesma regra de Quentes
+   - Ativos exclui Geladeira em todas as telas
+   ============================================================ */
 
 configurarEscolhaTema();
 // Saudação correta desde o primeiro frame (antes dos dados carregarem)

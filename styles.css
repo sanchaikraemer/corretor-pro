@@ -1311,3 +1311,24 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 
 /* Atualização #667 — tela do lead sem saudação/KPIs da Home */
 #home:has(.lead-ui631) .home-page-heading,#home:has(.lead-ui631) #resumoDia{display:none!important}
+
+/* ============================================================
+   ATUALIZAÇÃO #668 — KPIs mobile sem corte / rolagem escondida
+   ============================================================ */
+@media (max-width:620px){
+  #home #resumoDia,
+  .ui-pipeline-kpis{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:10px!important;
+    overflow:visible!important;
+    margin-left:0!important;
+    margin-right:0!important;
+    padding-bottom:0!important;
+  }
+  #home .ui-kpi,
+  .ui-pipeline-kpis .ui-kpi{
+    min-width:0!important;
+    width:auto!important;
+  }
+}

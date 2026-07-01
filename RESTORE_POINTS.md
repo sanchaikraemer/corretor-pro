@@ -416,3 +416,15 @@
 - A marcação não cria mensagem artificial na linha do tempo, não agenda retorno e não inicia contagem regressiva.
 - O formulário completo `Registrar atendimento` permanece disponível dentro de `Mais detalhes e ferramentas`.
 - Cache PWA atualizado para a versão 667.
+
+## Ponto #668 — navegação pelo botão voltar e filtros consistentes
+
+- A seta física do Android agora volta do lead para a tela de origem e das telas internas para a anterior antes de fechar o PWA.
+- A gaveta lateral também fecha primeiro ao usar a seta de voltar.
+- Home, Atendimentos e Pipeline passaram a usar uma única regra para classificar leads quentes.
+- O número de Quentes da Home abre exatamente a mesma lista exibida em Atendimentos.
+- Ativos deixa de incluir leads da Geladeira; Geladeira continua em filtro próprio.
+- O indicador Reaquecer passou a abrir a lista correspondente em Atendimentos.
+- A tela antes intitulada “Carteira” foi renomeada para “Atendimentos”.
+- Corrigida a concordância “1 lead esfriando”.
+- Cache PWA atualizado para a versão 668.
