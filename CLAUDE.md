@@ -1,5 +1,16 @@
 # Corretor Pro
 
+## Como falar com o dono (obrigatório)
+
+O dono é corretor de imóveis, não é técnico. Em toda resposta:
+
+- Seja sucinto e direto.
+- NÃO use linguagem técnica (nada de "branch", "PR", "commit", "try/catch" etc.).
+- Faça o que precisa ser feito para a mudança ficar **funcionando no site e no app**
+  para ele conferir — não pare no meio do caminho.
+- No fim, diga sempre **qual o número da versão** que ele deve conferir no topo do app
+  (ex.: "confere a versão 661").
+
 ## Regra obrigatória de versão
 
 **SEMPRE incremente a versão ao subir uma atualização ou corrigir qualquer coisa
