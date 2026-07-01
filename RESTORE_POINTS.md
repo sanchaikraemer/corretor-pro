@@ -471,3 +471,9 @@
 - Mantém parceria ativa sem sugerir mensagem repetida.
 - Bloqueia orientação antiga até a atualização comercial.
 - Cache PWA atualizado para a versão 672.
+
+## Ponto #673 — reanálise direta e estado factual
+- Botão Atualizar análise comercial chama `/api/reanalisar-lead` diretamente.
+- Cache da lista e do detalhe é invalidado e recarregado após sucesso.
+- “Comprou outro imóvel” encerra a oportunidade mesmo com análise anterior.
+- Sem ação urgente não entra na lista de prioridades.
