@@ -387,3 +387,14 @@
 - Quando a importação de leads não conseguia gravar nenhum lead, a tela dizia genericamente "a refazer" e escondia o motivo do servidor.
 - Agora, se nada for salvo, o importador mostra em vermelho o erro exato devolvido pelo servidor (ex.: recusa de gravação/coluna/permissão), pra identificar a causa de imediato.
 - Cache PWA atualizado para a versão 663.
+
+## Ponto #664 — Home operacional do Direciona dentro do Corretor Pro
+
+- Base técnica mantida integralmente na versão 663: histórico completo, recuperação de leads, importação flexível, cache e tratamento de erros.
+- A tela principal voltou a ser a fila comercial “Hoje”, com prioridades, motivo da prioridade, diagnóstico e mensagens prontas.
+- O dashboard foi preservado e movido para “Desempenho”, sem ocupar a tela de trabalho.
+- Menus duplicados foram removidos; “Imóveis” voltou a se chamar “Propostas” enquanto não existe gestão real de imóveis.
+- Indicadores estimados de ligações, e-mails e tarefas foram substituídos por dados registrados: atendidos hoje, sem resposta, lembretes e compromissos.
+- Avatares deixaram de depender de quatro imagens ausentes no pacote.
+- Identidade visual e marca Corretor Pro preservadas.
+- Cache PWA atualizado para a versão 664.

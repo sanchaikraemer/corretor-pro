@@ -45,19 +45,19 @@
 <body data-app-version="__VERSION__">
 <main class="app">
   <aside class="sidebar">
-    <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Atendimentos">
+    <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Hoje">
       <img class="cp-brand-mark" src="/logo-cp.png?v=__VERSION__" alt="">
       <div class="cp-brand-name">Corretor <strong>Pro</strong><small>Plataforma de vendas imobiliárias</small><span class="sb-ver-top">Atualização #__VERSION__</span></div>
     </div>
     <nav class="sb-nav">
-      <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Atendimentos</button>
-      <button type="button" class="sb-item go" data-target="propostas" data-nav-key="imoveis"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-6 8 6v11"/><path d="M8 20v-6h8v6"/></svg></span>Imóveis</button>
-      <button type="button" class="sb-item go" data-target="carteira" data-nav-key="leads"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span>Leads</button>
-      <button type="button" class="sb-item go" data-target="agenda" data-nav-key="atividades"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>Atividades</button>
-      <button type="button" class="sb-item go" data-target="pipeline" data-nav-key="negocios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Negócios</button>
-      <button type="button" class="sb-item go" data-target="agenda" data-nav-key="tarefas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg></span>Tarefas</button>
-      <button type="button" class="sb-item go" data-target="relatorio" data-nav-key="relatorios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span>Relatórios</button>
+      <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Hoje</button>
+      <button type="button" class="sb-item go" data-target="carteira" data-nav-key="leads"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span>Atendimentos</button>
+      <button type="button" class="sb-item go" data-target="pipeline" data-nav-key="negocios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Pipeline</button>
       <button type="button" class="sb-item go" data-target="agenda" data-nav-key="agenda"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Agenda</button>
+      <button type="button" class="sb-item go" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg></span>Propostas</button>
+      <button type="button" class="sb-item go" data-target="cerebro" data-nav-key="cerebro"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span>Inteligência Comercial</button>
+      <button type="button" class="sb-item go" data-target="relatorio" data-nav-key="relatorios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span>Desempenho</button>
+      <button type="button" class="sb-item go" data-target="perdidos" data-nav-key="arquivo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v3H3z"/><path d="M5 10v10h14V10M9 13h6"/></svg></span>Arquivo <span id="geladeiraRevisitarBadge" style="display:none;background:var(--cp-coral);color:#fff;border-radius:999px;padding:0 8px;font-size:11px;font-weight:800;margin-left:4px"></span></button>
       <button type="button" class="sb-item go" data-target="menu" data-nav-key="config"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 7 2.6a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>Configurações</button>
     </nav>
     <div class="cp-sidebar-user">
@@ -66,12 +66,12 @@
   </aside>
   <div class="main-col">
   <div class="top cp-topbar">
-    <div class="brand go cp-mobile-brand" data-target="home" title="Voltar para Atendimentos">
+    <div class="brand go cp-mobile-brand" data-target="home" title="Voltar para Hoje">
       <img src="/logo-cp.png?v=__VERSION__" alt=""><span class="cp-mobile-brand-copy"><b>Corretor <strong>Pro</strong></b><small class="cp-mobile-version">Atualização #__VERSION__</small></span>
     </div>
     <div class="cp-search desktop-only">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input type="search" id="buscaGlobal" placeholder="Buscar leads, imóveis, atendimentos...">
+      <input type="search" id="buscaGlobal" placeholder="Buscar leads e atendimentos...">
       <div id="buscaGlobalResults" class="cp-search-results"></div>
     </div>
     <div class="cp-top-actions">
@@ -88,74 +88,14 @@
 
   <div class="desktop-layout">
     <section id="home" class="screen active">
-      <div id="cpDashboard" class="cp-dashboard">
-        <header class="cp-panorama-head">
-          <div><h2>Panorama do dia</h2><p id="cpDashboardDate">Hoje</p></div>
-          <button type="button" class="cp-period">Hoje <span>⌄</span></button>
-        </header>
-
-        <div class="cp-metrics">
-          <button type="button" class="cp-metric" onclick="show('carteira')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 11h8M12 8v6M9 11h6"/></svg></span>
-            <b id="cpNewLeads">0</b><small>Novos leads</small><em id="cpNewLeadsSub">no período</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="show('pipeline')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7a7 7 0 0 0-12-3L5 7"/><path d="M5 3v4h4M4 17a7 7 0 0 0 12 3l3-3"/><path d="M19 21v-4h-4"/></svg></span>
-            <b id="cpActiveDeals">0</b><small>Negócios ativos</small><em>em acompanhamento</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="show('agenda')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 10h8M8 14h4"/></svg></span>
-            <b id="cpVisits">0</b><small>Visitas agendadas</small><em>confirmadas</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="show('propostas')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg></span>
-            <b id="cpProposals">0</b><small>Propostas enviadas</small><em>em negociação</em>
-          </button>
-          <button type="button" class="cp-metric cp-metric-revenue" onclick="show('relatorio')">
-            <span class="cp-revenue-copy"><b id="cpRevenue">R$ 0</b><small>Receita projetada</small><em>vendas do mês</em></span>
-            <span class="cp-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-          </button>
-        </div>
-
-        <div class="cp-dashboard-grid">
-          <article class="cp-card cp-appointments-card">
-            <div class="cp-card-head"><div><h3>Próximos atendimentos</h3><p>Prioridades do dia</p></div><button onclick="show('agenda')">Ver agenda <span>›</span></button></div>
-            <div id="cpAppointments" class="cp-list"></div>
-          </article>
-
-          <article class="cp-card cp-performance-card">
-            <div class="cp-card-head"><div><h3>Desempenho de atendimentos</h3><p>Distribuição por status</p></div></div>
-            <div class="cp-chart-row"><div id="cpTempDonut" class="cp-donut"><span><b id="cpTotalAtendimentos">0</b><small>atendimentos</small></span></div><div id="cpTempLegend" class="cp-legend"></div></div>
-            <button class="cp-card-link" onclick="show('relatorio')">Ver relatório completo <span>›</span></button>
-          </article>
-
-          <article class="cp-card cp-stages-card">
-            <div class="cp-card-head"><div><h3>Negócios por etapa</h3><p>Conversão por etapa</p></div></div>
-            <div id="cpStageBars" class="cp-stage-bars"></div>
-            <button class="cp-card-link" onclick="show('pipeline')">Ver funil completo <span>›</span></button>
-          </article>
-
-          <article class="cp-card cp-running-card">
-            <div class="cp-card-head"><div><h3>Atendimentos em andamento</h3></div></div>
-            <div class="cp-table-head"><span>Lead</span><span>Status</span><span>Última interação</span><span>Próxima ação</span><span>Prioridade</span></div>
-            <div id="cpRunningDeals" class="cp-running-list"></div>
-          </article>
-
-          <article class="cp-card cp-activities-card">
-            <div class="cp-card-head"><div><h3>Atividades do dia</h3></div></div>
-            <div class="cp-chart-row cp-activity-row"><div id="cpActivityDonut" class="cp-donut cp-donut-activity"><span><b id="cpActivitiesDone">0</b><small>de <i id="cpActivitiesTotal">0</i><br>concluídas</small></span></div><div id="cpActivityLegend" class="cp-legend"></div></div>
-            <button class="cp-card-link" onclick="show('agenda')">Ver todas atividades <span>›</span></button>
-          </article>
-        </div>
-        <button type="button" class="cp-dashboard-continue" onclick="show('carteira')"><span>Continuar atendendo</span><b>›</b></button>
-      </div>
-
       <div id="cpLeadWorkspace" class="cp-lead-workspace">
-        <div class="home-grid"><div class="home-center">
+        <div class="home-page-heading">
+          <h2 id="homePageTitle">Hoje</h2>
           <div id="saudacao" class="saudacao" style="display:none"></div>
           <div id="saudacaoDesktop" class="saudacao" style="display:none"></div>
-          <h2 id="homePageTitle" hidden>Atendimentos</h2>
-          <div id="resumoDia" hidden></div>
+        </div>
+        <div class="home-grid"><div class="home-center">
+          <div id="resumoDia" class="resumo-dia"></div>
           <div id="top3Area" style="display:none"></div>
           <div id="filaPrioridade" style="display:none"></div>
           <div id="leadFocoArea"></div>
@@ -272,6 +212,71 @@
     </section>
 
     <section id="relatorio" class="screen">
+      <header class="performance-page-head"><div><h2>Desempenho</h2><p>Indicadores reais da carteira e resultados registrados.</p></div></header>
+      <div class="cp-performance-overview">
+      <div id="cpDashboard" class="cp-dashboard">
+        <header class="cp-panorama-head">
+          <div><h2>Visão geral da carteira</h2><p id="cpDashboardDate">Hoje</p></div>
+          <button type="button" class="cp-period">Hoje <span>⌄</span></button>
+        </header>
+
+        <div class="cp-metrics">
+          <button type="button" class="cp-metric" onclick="show('carteira')">
+            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 11h8M12 8v6M9 11h6"/></svg></span>
+            <b id="cpNewLeads">0</b><small>Leads ativos</small><em id="cpNewLeadsSub">em acompanhamento</em>
+          </button>
+          <button type="button" class="cp-metric" onclick="show('pipeline')">
+            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7a7 7 0 0 0-12-3L5 7"/><path d="M5 3v4h4M4 17a7 7 0 0 0 12 3l3-3"/><path d="M19 21v-4h-4"/></svg></span>
+            <b id="cpActiveDeals">0</b><small>Prioridades hoje</small><em>pedem ação comercial</em>
+          </button>
+          <button type="button" class="cp-metric" onclick="show('agenda')">
+            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 10h8M8 14h4"/></svg></span>
+            <b id="cpVisits">0</b><small>Compromissos</small><em>agenda e lembretes</em>
+          </button>
+          <button type="button" class="cp-metric" onclick="show('propostas')">
+            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg></span>
+            <b id="cpProposals">0</b><small>Em negociação</small><em>etapas avançadas</em>
+          </button>
+          <button type="button" class="cp-metric cp-metric-revenue" onclick="show('relatorio')">
+            <span class="cp-revenue-copy"><b id="cpRevenue">R$ 0</b><small>Vendas registradas</small><em>valor do mês</em></span>
+            <span class="cp-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          </button>
+        </div>
+
+        <div class="cp-dashboard-grid">
+          <article class="cp-card cp-appointments-card">
+            <div class="cp-card-head"><div><h3>Próximos compromissos</h3><p>Agenda e lembretes registrados</p></div><button onclick="show('agenda')">Ver agenda <span>›</span></button></div>
+            <div id="cpAppointments" class="cp-list"></div>
+          </article>
+
+          <article class="cp-card cp-performance-card">
+            <div class="cp-card-head"><div><h3>Prioridade de atendimento</h3><p>Distribuição real da carteira</p></div></div>
+            <div class="cp-chart-row"><div id="cpTempDonut" class="cp-donut"><span><b id="cpTotalAtendimentos">0</b><small>atendimentos</small></span></div><div id="cpTempLegend" class="cp-legend"></div></div>
+            <button class="cp-card-link" onclick="show('relatorio')">Ver relatório completo <span>›</span></button>
+          </article>
+
+          <article class="cp-card cp-stages-card">
+            <div class="cp-card-head"><div><h3>Negócios por etapa</h3><p>Conversão por etapa</p></div></div>
+            <div id="cpStageBars" class="cp-stage-bars"></div>
+            <button class="cp-card-link" onclick="show('pipeline')">Ver funil completo <span>›</span></button>
+          </article>
+
+          <article class="cp-card cp-running-card">
+            <div class="cp-card-head"><div><h3>Atendimentos em andamento</h3></div></div>
+            <div class="cp-table-head"><span>Lead</span><span>Status</span><span>Última interação</span><span>Próxima ação</span><span>Prioridade</span></div>
+            <div id="cpRunningDeals" class="cp-running-list"></div>
+          </article>
+
+          <article class="cp-card cp-activities-card">
+            <div class="cp-card-head"><div><h3>Movimentação da carteira</h3><p>Dados registrados no sistema</p></div></div>
+            <div class="cp-chart-row cp-activity-row"><div id="cpActivityDonut" class="cp-donut cp-donut-activity"><span><b id="cpActivitiesDone">0</b><small>de <i id="cpActivitiesTotal">0</i><br>atendidos hoje</small></span></div><div id="cpActivityLegend" class="cp-legend"></div></div>
+            <button class="cp-card-link" onclick="show('carteira')">Ver atendimentos <span>›</span></button>
+          </article>
+        </div>
+        <button type="button" class="cp-dashboard-continue" onclick="show('home')"><span>Ir para prioridades de hoje</span><b>›</b></button>
+      </div>
+
+      </div>
       <div id="relatorioBody"><div class="empty">Carregando…</div></div>
     </section>
 
@@ -720,10 +725,10 @@
 
 <nav class="bottom-nav cp-bottom-nav">
   <div class="nav-inner">
-    <button class="nav active" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span class="lbl">Dashboard</span></button>
+    <button class="nav active" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span class="lbl">Hoje</span></button>
     <button class="nav" data-target="carteira" data-nav-key="leads"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span><span class="lbl">Atendimentos</span></button>
     <button class="nav fab" type="button" onclick="abrirMaisAcoes()"><span class="fab-btn">＋</span><span class="lbl">Novo</span></button>
-    <button class="nav" data-target="propostas" data-nav-key="imoveis"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-6 8 6v11"/><path d="M8 20v-6h8v6"/></svg></span><span class="lbl">Imóveis</span></button>
+    <button class="nav" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-6 8 6v11"/><path d="M8 20v-6h8v6"/></svg></span><span class="lbl">Propostas</span></button>
     <button class="nav" data-target="menu" data-nav-key="config"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span class="lbl">Mais</span></button>
   </div>
 </nav>

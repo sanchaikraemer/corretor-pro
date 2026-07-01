@@ -2366,7 +2366,7 @@ function buildDesempenhoInsightsHTML(items){
       <button type="button" class="dash-btn" onclick="show('relatorio')">Ver relatório completo</button>
     </div>
     <div class="dash-card">
-      <div class="dh"><h4>✨ Insights do Direciona</h4></div>
+      <div class="dh"><h4>✨ Insights do Corretor Pro</h4></div>
       <div class="ins-item">
         <div class="ins-ic">↗</div>
         <div style="min-width:0">
@@ -3147,7 +3147,7 @@ async function _processarDashboard(data){
               <button type="button" class="btn pickZipShortcut" style="padding:14px 28px;font-size:14px">⇪ Importar conversa do WhatsApp</button>
               <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);text-align:left">
                 <div class="small" style="color:var(--muted);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:950;margin-bottom:8px">Como funciona</div>
-                <div class="small" style="line-height:1.7;color:var(--soft)">1. No WhatsApp, abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia"<br>2. Compartilhe o ZIP com o Corretor Pro<br>3. Em 30-60 segundos o Direciona mostra o que falar e quando</div>
+                <div class="small" style="line-height:1.7;color:var(--soft)">1. No WhatsApp, abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia"<br>2. Compartilhe o ZIP com o Corretor Pro<br>3. Em 30-60 segundos o Corretor Pro mostra o que falar e quando</div>
               </div>
             </div>
           </div>`;
@@ -3406,7 +3406,7 @@ function abrirEditarLead(id, nome, telefone){
             <button type="button" id="editLeadAvatarColar" style="flex:1;padding:10px;background:rgba(255,107,92,.08);color:var(--lime);border:1px dashed var(--lime);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">📋 Colar imagem</button>
           </div>
           <input type="file" id="editLeadAvatarInput" accept="image/*" style="display:none">
-          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Anexe uma imagem OU copie a foto (Ctrl+C) e clique em Colar. O Direciona recorta o rosto para o avatar.</div>
+          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Anexe uma imagem OU copie a foto (Ctrl+C) e clique em Colar. O Corretor Pro recorta o rosto para o avatar.</div>
         </div>
         <div style="margin-bottom:12px">
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
@@ -5499,7 +5499,7 @@ function renderLeadsParecidos(lead){
   return `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
     <div style="color:var(--cerebro);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Você já trabalhou clientes parecidos</div>
     ${itens}
-    <div class="small" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Baseado no que o Direciona já aprendeu com você. Considere replicar a abordagem que gerou interesse.</div>
+    <div class="small" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Baseado no que o Corretor Pro já aprendeu com você. Considere replicar a abordagem que gerou interesse.</div>
   </div>`;
 }
 
@@ -5627,7 +5627,7 @@ const APRENDIZADO_CATS = [
                 : e.funcionou === false ? `<span style="display:inline-block;padding:1px 7px;margin-left:6px;background:rgba(255,91,122,.14);color:var(--risco);border:1px solid var(--risco);border-radius:999px;font-size:10px;font-weight:950">NÃO funcionou</span>`
                 : `<span style="display:inline-block;padding:1px 7px;margin-left:6px;background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--line);border-radius:999px;font-size:10px;font-weight:950">incerto</span>`;
       return `<b>Objeção:</b> ${escapeHtml(e.objecao||"")} ${tag}<br><span style="color:var(--soft);font-size:12px"><b style="color:var(--muted)">Você respondeu:</b> ${escapeHtml(e.respostaUsada||"")}</span>`;
-    }, vazio:"Sem objeções identificadas ainda. O Direciona aprende quando vê objeções na conversa e a sua resposta." },
+    }, vazio:"Sem objeções identificadas ainda. O Corretor Pro aprende quando vê objeções na conversa e a sua resposta." },
   { key:"produtoVsPerfil", label:"Match produto × perfil do cliente", cor:"var(--dados)", render: e => `<b>Produto:</b> ${escapeHtml(e.produto||"")}<br><span style="color:var(--soft);font-size:12px"><b style="color:var(--muted)">Perfil:</b> ${escapeHtml(e.perfilCliente||"")}</span><br><span style="color:var(--soft);font-size:12px"><b style="color:var(--muted)">Reação:</b> ${escapeHtml(e.reacao||"")}</span>`, vazio:"Ainda não cruzei produto × perfil. Importe ZIPs onde você ofereceu um empreendimento específico." },
   { key:"movimentosOk", label:"Movimentos que destrancaram a venda", cor:"var(--acao)", render: e => e.texto, vazio:"Ainda não identifiquei movimentos vitoriosos seus." },
   { key:"movimentosTravaram", label:"Movimentos que travaram o lead (evitar)", cor:"var(--risco)", render: e => e.texto, vazio:"Nenhum movimento ruim identificado ainda." },
@@ -5690,7 +5690,7 @@ async function carregarAprendizado(){
 
 async function apagarItemAprendizado(categoria, indice){
   if(!cerebroIntel || !Array.isArray(cerebroIntel[categoria])) return;
-  if(!confirm("Apagar essa observação? O Direciona vai desconsiderar esse aprendizado.")) return;
+  if(!confirm("Apagar essa observação? O Corretor Pro vai desconsiderar esse aprendizado.")) return;
   cerebroIntel[categoria].splice(indice, 1);
   await salvarAprendizado();
   carregarAprendizado();
@@ -5748,7 +5748,7 @@ async function carregarEstadoIA(){
     const pct = Math.min(100, Math.round((total / META) * 100));
     const corBar = pct >= 100 ? "var(--acao)" : pct >= 50 ? "var(--lime)" : "var(--dados)";
     const statusTxt = pct >= 100
-      ? "Massa crítica atingida — o Direciona pode operar guiado principalmente pelo que aprendeu de você."
+      ? "Massa crítica atingida — o Corretor Pro pode operar guiado principalmente pelo que aprendeu de você."
       : pct >= 50
       ? "Banco crescendo bem. Continue importando ZIPs."
       : "Início do aprendizado. Importe mais ZIPs pra acelerar.";
@@ -5792,7 +5792,7 @@ async function carregarCerebro(){
   }
   if(!config){
     config = {
-      metodo: "Método Direciona:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
+      metodo: "Método Corretor Pro:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
       tom: "Direto, próximo, profissional.",
       diferenciais: "Construtora Senger. Carazinho/RS.",
       evitar: "Não usar 'faz sentido', 'retomando contato'.",
@@ -7933,7 +7933,7 @@ async function baixarRelatorioCarteira(){
   const finais = all.filter(l => carteiraEhFinal(normalizarEtapa(l.etapa)));
   const ordem = ativos.concat(finais);
   const linhas = [];
-  linhas.push("RELATORIO DA CARTEIRA — Direciona");
+  linhas.push("RELATÓRIO DA CARTEIRA — Corretor Pro");
   linhas.push("Gerado em " + new Date().toLocaleString("pt-BR"));
   linhas.push("Total de leads: " + all.length);
   linhas.push("=".repeat(60));
@@ -8320,7 +8320,7 @@ if("serviceWorker" in navigator){
       });
       setTimeout(checkShared,900);
     }catch(e){
-      console.warn("Falha ao registrar service worker do Direciona", e);
+      console.warn("Falha ao registrar service worker do Corretor Pro", e);
     }
   });
 }
@@ -9050,10 +9050,12 @@ function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
 function cpInitials(name){ return String(name||"C").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "C"; }
 function cpStage(lead){ return normalizarEtapa(lead?.etapa) || "Atendimento"; }
 function cpPriorityMeta(lead){
-  const refinada=Number(probabilidadeRefinada(lead)); const direta=Number(lead?.probabilityPercent)||0; const p=Math.max(Number.isFinite(refinada)?refinada:0,direta);
-  if(p >= 65) return {label:"Quente", cls:"hot", cor:"var(--cp-coral)"};
-  if(p >= 35) return {label:"Morno", cls:"warm", cor:"var(--cp-orange)"};
-  return {label:"Frio", cls:"cold", cor:"var(--cp-blue)"};
+  const p = prioridadeAtendimento(lead) || {};
+  const grupo = String(p.grupo || "");
+  if(grupo === "acao-hoje") return {label:"Atender hoje", cls:"hot", cor:"var(--cp-coral)"};
+  if(grupo === "retomar-cuidado") return {label:"Retomar", cls:"warm", cor:"var(--cp-orange)"};
+  if(grupo === "boa-sem-urgencia") return {label:"Em andamento", cls:"warm", cor:"var(--cp-orange)"};
+  return {label:"Pode aguardar", cls:"cold", cor:"var(--cp-blue)"};
 }
 function cpHasAppointment(lead){
   const aps=lead?.analysis?.confirmedAppointments;
@@ -9091,8 +9093,8 @@ function cpPct(n,total){ return total>0?Math.round((n/total)*100):0; }
 function cpOpenLead(id){ if(id) abrirLead(String(id)); }
 function cpAvatarStyle(name){
   let h=0; for(const c of String(name||"")) h=(h*31+c.charCodeAt(0))>>>0;
-  const n=(h%4)+1;
-  return `background-image:url('/avatar-${n}.png?v=__VERSION__');background-color:#315766`;
+  const palette=["#315766","#3B5F6A","#4B586E","#586655"];
+  return `background:${palette[h%palette.length]};`;
 }
 function renderCorretorProDashboard(items, all){
   items=Array.isArray(items)?items:[]; all=Array.isArray(all)?all:items;
@@ -9103,19 +9105,26 @@ function renderCorretorProDashboard(items, all){
     const txt=now.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
     dateEl.textContent=txt.charAt(0).toLowerCase()+txt.slice(1);
   }
-  const cutoff=Date.now()-7*86400000;
-  const novos=all.filter(l=>{ const v=l?.createdAt||l?.criadoEm||l?.created_at; const t=v?new Date(v).getTime():0; return t>=cutoff; }).length;
-  const visitas=items.filter(cpHasAppointment).length;
-  const propostas=items.filter(l=>{ const e=cpStage(l); return e==="Visita/Proposta"||e==="Negociação"||l?.hasProposal===true||(Array.isArray(l?.recentMessages)&&l.recentMessages.some(m=>m&&m.proposta)); }).length;
-  cpSetText("cpNewLeads",novos); cpSetText("cpActiveDeals",items.length); cpSetText("cpVisits",visitas); cpSetText("cpProposals",propostas); cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
-  const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=novos?"novos no período":"sem novos registros";
+
+  const prioridades=items.filter(l=>{
+    if(ehContatadoHoje(l)||lembreteFuturo(l)) return false;
+    const g=String((prioridadeAtendimento(l)||{}).grupo||"");
+    return g==="acao-hoje"||g==="retomar-cuidado";
+  }).length;
+  const compromissos=items.filter(cpHasAppointment).length;
+  const negociacao=items.filter(l=>["Visita/Proposta","Negociação"].includes(cpStage(l))||l?.hasProposal===true).length;
+  cpSetText("cpNewLeads",items.length);
+  cpSetText("cpActiveDeals",prioridades);
+  cpSetText("cpVisits",compromissos);
+  cpSetText("cpProposals",negociacao);
+  cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
+  const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=items.length?"ativos agora":"base sem leads ativos";
 
   const ordered=items.slice().sort(compararPrioridadeAtendimento);
   const withAppointment=items.filter(cpHasAppointment).sort((a,b)=>String(cpAppointmentData(a).time).localeCompare(String(cpAppointmentData(b).time)));
-  const apList=(withAppointment.length?withAppointment:ordered).slice(0,4);
   const apBox=qs("#cpAppointments");
   if(apBox){
-    apBox.innerHTML=apList.length?apList.map(l=>{
+    apBox.innerHTML=withAppointment.length?withAppointment.slice(0,4).map(l=>{
       const meta=cpPriorityMeta(l), ap=cpAppointmentData(l), id=String(l.id||"");
       return `<button type="button" class="cp-appointment" onclick='cpOpenLead(${JSON.stringify(id)})'>
         <span class="cp-time">${cpEscape(ap.time)}</span>
@@ -9123,32 +9132,36 @@ function renderCorretorProDashboard(items, all){
         <span class="cp-appointment-copy"><strong>${cpEscape(l.name||"Cliente")}</strong><small>${cpEscape(ap.text)}</small></span>
         <span class="cp-status ${meta.cls}">${meta.label}</span>
       </button>`;
-    }).join(""):`<div class="cp-empty cp-empty-compact"><strong>Nenhum atendimento agendado</strong><span>Os próximos compromissos aparecerão aqui.</span></div>`;
+    }).join(""):`<div class="cp-empty cp-empty-compact"><strong>Nenhum compromisso registrado</strong><span>Visitas, reuniões e lembretes aparecerão aqui.</span></div>`;
   }
 
-  const hot=items.filter(l=>cpPriorityMeta(l).cls==="hot").length;
-  const warm=items.filter(l=>cpPriorityMeta(l).cls==="warm").length;
-  const cold=Math.max(0,items.length-hot-warm);
-  const discarded=all.filter(l=>cpStage(l)==="Perdido").length;
+  const counts={hoje:0,retomar:0,andamento:0,aguardar:0};
+  for(const l of items){
+    const g=String((prioridadeAtendimento(l)||{}).grupo||"");
+    if(g==="acao-hoje") counts.hoje++;
+    else if(g==="retomar-cuidado") counts.retomar++;
+    else if(g==="boa-sem-urgencia") counts.andamento++;
+    else counts.aguardar++;
+  }
   const total=Math.max(1,items.length);
-  const hp=cpPct(hot,total), wp=cpPct(warm,total), cp=cpPct(cold,total);
+  const hp=cpPct(counts.hoje,total), rp=cpPct(counts.retomar,total), ap=cpPct(counts.andamento,total);
   const donut=qs("#cpTempDonut");
-  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+wp}%,var(--cp-blue) ${hp+wp}% ${Math.min(100,hp+wp+cp)}%,var(--cp-slate) ${Math.min(100,hp+wp+cp)}% 100%)`;
+  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+ap)}%,var(--cp-slate) ${Math.min(100,hp+rp+ap)}% 100%)`;
   cpSetText("cpTotalAtendimentos",items.length);
   const legend=qs("#cpTempLegend");
   if(legend) legend.innerHTML=[
-    ["Quentes",hot,cpPct(hot,total),"var(--cp-coral)"],
-    ["Mornos",warm,cpPct(warm,total),"var(--cp-orange)"],
-    ["Frios",cold,cpPct(cold,total),"var(--cp-blue)"],
-    ["Descartados",discarded,cpPct(discarded,Math.max(1,all.length)),"var(--cp-slate)"]
+    ["Atender hoje",counts.hoje,cpPct(counts.hoje,total),"var(--cp-coral)"],
+    ["Retomar",counts.retomar,cpPct(counts.retomar,total),"var(--cp-orange)"],
+    ["Em andamento",counts.andamento,cpPct(counts.andamento,total),"var(--cp-blue)"],
+    ["Pode aguardar",counts.aguardar,cpPct(counts.aguardar,total),"var(--cp-slate)"]
   ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[3]}"></i><span>${x[0]}</span><b>${x[2]}%</b></div>`).join("");
 
   const stageDefs=[
-    ["Leads",items.length],
+    ["Leads ativos",items.length],
     ["Qualificados",items.filter(l=>["Qualificado","Visita/Proposta","Negociação"].includes(cpStage(l))).length],
-    ["Proposta",propostas],
+    ["Visita/Proposta",items.filter(l=>cpStage(l)==="Visita/Proposta").length],
     ["Negociação",items.filter(l=>cpStage(l)==="Negociação").length],
-    ["Fechadas",all.filter(l=>cpStage(l)==="Vendido").length]
+    ["Vendidos",all.filter(l=>cpStage(l)==="Vendido").length]
   ];
   const maxStage=Math.max(1,...stageDefs.map(x=>x[1]));
   const stageBox=qs("#cpStageBars");
@@ -9166,18 +9179,30 @@ function renderCorretorProDashboard(items, all){
     }).join(""):`<div class="cp-empty cp-empty-table"><strong>Nenhum atendimento em andamento</strong><span>Importe uma conversa para começar.</span></div>`;
   }
 
-  const calls=items.filter(l=>Number(l.daysSinceLastInteraction||0)<=1).length;
-  const emails=0, visits=visitas, tasks=Math.min(items.length,Math.max(0,calls+visits));
-  const done=calls+visits, activityTotal=Math.max(done,tasks,1), donePct=cpPct(done,activityTotal);
+  const atendidosHoje=items.filter(ehContatadoHoje).length;
+  const semResposta=items.filter(l=>!ehContatadoHoje(l)&&!lembreteFuturo(l)&&Number(l.daysSinceLastInteraction||0)>=3).length;
+  const lembretes=items.filter(l=>!!l?.analysis?.lembrete?.quando).length;
+  const confirmados=items.filter(l=>Array.isArray(l?.analysis?.confirmedAppointments)&&l.analysis.confirmedAppointments.length>0).length;
+  const donePct=cpPct(atendidosHoje,Math.max(1,items.length));
   const ad=qs("#cpActivityDonut"); if(ad) ad.style.background=`conic-gradient(var(--cp-green) 0 ${donePct}%,var(--cp-slate) ${donePct}% 100%)`;
-  cpSetText("cpActivitiesDone",done); cpSetText("cpActivitiesTotal",activityTotal);
+  cpSetText("cpActivitiesDone",atendidosHoje); cpSetText("cpActivitiesTotal",items.length);
   const al=qs("#cpActivityLegend");
-  if(al) al.innerHTML=[["Ligações",calls,"var(--cp-green)"],["E-mails",emails,"var(--cp-green)"],["Visitas",visits,"var(--cp-blue)"],["Tarefas",tasks,"var(--cp-slate)"]].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[2]}"></i><span>${x[0]}</span><b>${x[1]}/${Math.max(x[1],1)}</b></div>`).join("");
+  if(al) al.innerHTML=[
+    ["Atendidos hoje",atendidosHoje,"var(--cp-green)"],
+    ["Sem resposta 3+ dias",semResposta,"var(--cp-coral)"],
+    ["Lembretes",lembretes,"var(--cp-blue)"],
+    ["Compromissos",confirmados,"var(--cp-slate)"]
+  ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[2]}"></i><span>${x[0]}</span><b>${x[1]}</b></div>`).join("");
 }
 window.cpOpenLead=cpOpenLead;
 window.renderCorretorProDashboard=renderCorretorProDashboard;
 const _renderResumoDiaAntes657=renderResumoDia;
 renderResumoDia=function(items){ try{_renderResumoDiaAntes657(items);}catch(_){} renderCorretorProDashboard(items,state.todosLeads||items); };
 const _renderBotoesHomeAntes657=renderBotoesHome;
-renderBotoesHome=function(){ document.body.classList.remove("lead-foco-aberto"); const dash=qs("#cpDashboard"); if(dash) dash.style.display=""; const ws=qs("#cpLeadWorkspace"); if(ws) ws.style.display=""; try{_renderBotoesHomeAntes657();}catch(_){} renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]); };
+renderBotoesHome=function(){
+  document.body.classList.remove("lead-foco-aberto");
+  const ws=qs("#cpLeadWorkspace"); if(ws) ws.style.display="block";
+  try{_renderBotoesHomeAntes657();}catch(_){}
+  renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]);
+};
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}

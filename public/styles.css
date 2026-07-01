@@ -768,7 +768,7 @@ a{color:var(--accent)}
 /* Marca */
 .logo,.sb-logo{
   background-color:transparent !important;
-  background-image:url("/logo-direciona-dark.svg?v=657") !important;
+  background-image:url("/logo-direciona-dark.svg?v=664") !important;
   background-position:center !important;
   background-size:82% 82% !important;
   background-repeat:no-repeat !important;
@@ -776,8 +776,8 @@ a{color:var(--accent)}
   border:1px solid var(--line);
   box-shadow:none !important;
 }
-html[data-theme="dark"] .logo,html[data-theme="dark"] .sb-logo{background-image:url("/logo-direciona-dark.svg?v=657") !important}
-html[data-theme="light"] .logo,html[data-theme="light"] .sb-logo{background-image:url("/logo-direciona-light.svg?v=657") !important}
+html[data-theme="dark"] .logo,html[data-theme="dark"] .sb-logo{background-image:url("/logo-direciona-dark.svg?v=664") !important}
+html[data-theme="light"] .logo,html[data-theme="light"] .sb-logo{background-image:url("/logo-direciona-light.svg?v=664") !important}
 .logo{width:48px;height:48px;border-radius:14px;background-size:78% 78% !important;background-color:var(--panel) !important}
 .sb-logo{width:42px;height:42px;border-radius:13px;background-color:var(--panel2) !important}
 .sb-brand{gap:12px;padding:3px 6px 13px;border-bottom:1px solid var(--line)}
@@ -1260,4 +1260,50 @@ html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{bac
 }
 @media(min-width:1000px){
   .sidebar{display:flex!important}.cp-bottom-nav{display:none!important}
+}
+
+
+/* ============================================================
+   ATUALIZAÇÃO #664 — HOME OPERACIONAL + DESEMPENHO SEPARADO
+   ============================================================ */
+#home .cp-lead-workspace{display:block!important;max-width:1240px!important;padding:24px 28px 38px!important}
+#home .home-page-heading{display:block!important;margin:0 0 16px!important}
+#home .home-page-heading h2{font-family:var(--font-display)!important;font-size:clamp(25px,2.6vw,36px)!important;line-height:1.05!important;letter-spacing:-.045em!important;color:var(--cp-text)!important}
+#home .saudacao{margin:7px 0 0!important;color:var(--cp-muted)!important;font-size:12px!important}
+#home .saudacao .destaque{color:var(--cp-coral)!important;font-weight:800!important}
+#home .resumo-dia{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;margin:0 0 15px!important;padding:0!important;background:transparent!important;border:0!important}
+#home .ui-kpi{background:var(--cp-panel)!important;border:1px solid var(--cp-border)!important;border-radius:10px!important;box-shadow:var(--cp-card-shadow)!important;min-height:88px!important;padding:14px!important}
+#home .ui-kpi.active{background:linear-gradient(180deg,color-mix(in srgb,var(--cp-coral) 9%,var(--cp-panel)),var(--cp-panel))!important;border-color:color-mix(in srgb,var(--cp-coral) 42%,var(--cp-border))!important}
+#home .ui-kpi>span{color:var(--cp-muted)!important;text-transform:none!important;letter-spacing:0!important}
+#home .ui-kpi b{color:var(--cp-text)!important;font-size:27px!important}
+#home .ui-kpi.active b,#home .ui-kpi.active i{color:var(--cp-coral)!important}
+#home .ui-kpi i{background:var(--cp-panel-2)!important;color:var(--cp-blue)!important}
+#home .ui-home-content{display:grid!important;grid-template-columns:1fr!important;gap:13px!important}
+#home .ui-insight-card,#home .ui-priority-card{background:var(--cp-panel)!important;border:1px solid var(--cp-border)!important;border-radius:12px!important;box-shadow:var(--cp-card-shadow)!important}
+#home .ui-insight-card{grid-template-columns:auto 1fr auto!important;background:linear-gradient(180deg,color-mix(in srgb,var(--cp-sidebar) 88%,var(--cp-panel)),var(--cp-panel))!important}
+#home .ui-insight-title i{background:color-mix(in srgb,var(--cp-coral) 14%,transparent)!important;color:var(--cp-coral)!important}
+#home .ui-insight-card button,#home .ui-section-head>button{color:var(--cp-coral)!important}
+#home .ui-row-action{border-color:color-mix(in srgb,var(--cp-coral) 40%,var(--cp-border))!important;background:color-mix(in srgb,var(--cp-coral) 10%,transparent)!important;color:var(--cp-coral)!important}
+#home .home-grid{grid-template-columns:minmax(0,1fr) 300px!important;gap:18px!important}
+#home .home-right{display:flex!important}
+body.lead-foco-aberto #home .home-grid{grid-template-columns:minmax(0,1fr)!important}
+body.lead-foco-aberto #home .home-right{display:none!important}
+#relatorio .performance-page-head{display:flex!important;align-items:flex-end!important;justify-content:space-between!important;margin:0 0 16px!important}
+#relatorio .performance-page-head h2{margin:0!important;color:var(--cp-text)!important;font-family:var(--font-display)!important;font-size:30px!important;letter-spacing:-.045em!important}
+#relatorio .performance-page-head p{margin:5px 0 0!important;color:var(--cp-muted)!important;font-size:12px!important}
+#relatorio .cp-performance-overview{margin-bottom:18px!important}
+#relatorio .cp-dashboard{display:block!important;max-width:none!important;padding:0!important;margin:0!important}
+#relatorio .cp-panorama-head{margin-bottom:14px!important}
+#relatorio .cp-dashboard-continue{display:flex!important}
+#relatorio #relatorioBody{margin-top:18px!important}
+@media(max-width:999px){
+  #home .cp-lead-workspace{padding:16px 12px 88px!important}
+  #home .home-grid{display:block!important}
+  #home .home-right{display:none!important}
+  #home .resumo-dia{grid-template-columns:repeat(4,118px)!important;overflow-x:auto!important;padding-bottom:4px!important}
+  #home .ui-kpi{min-height:80px!important;padding:11px!important}
+  #home .ui-insight-card{grid-template-columns:1fr auto!important}
+  #home .ui-insight-card p{grid-column:1/-1!important}
+  #relatorio .cp-dashboard{padding:0 0 74px!important}
+  #relatorio .performance-page-head{padding:0 1px!important}
 }
