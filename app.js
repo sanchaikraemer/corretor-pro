@@ -4269,6 +4269,7 @@ function iniciarBarraProgresso(btn, texto){
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 function voltarDoLead(){
+  if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
   state.lead = null;
   state.focoLeadId = null;
   state.analysis = null;
@@ -8960,7 +8961,59 @@ window.ui631SelectResponse=function(k){
 };
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
+
+// Atualização #667: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
+function ui667ModoDetalheLead(ativo){
+  document.body.classList.toggle("lead-foco-aberto", !!ativo);
+  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia")].filter(Boolean);
+  for(const el of alvos){
+    if(ativo) el.style.setProperty("display","none","important");
+    else el.style.removeProperty("display");
+  }
+}
+window.ui667ModoDetalheLead=ui667ModoDetalheLead;
+
+function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
+  if(!lead) return;
+  lead.analysis=lead.analysis||{};
+  lead.analysis.aprendizado=lead.analysis.aprendizado||{};
+  const eventos=Array.isArray(lead.analysis.aprendizado.eventos)?lead.analysis.aprendizado.eventos:[];
+  if(!eventos.some(e=>e?.evento==="contato_manual"&&e?.detalhes?.de==="botao_atendido"&&e?.quando===quando)){
+    eventos.push({evento:"contato_manual",estilo:null,detalhes:{tipo:"Atendido",de:"botao_atendido"},quando});
+  }
+  lead.analysis.aprendizado.eventos=eventos;
+  lead.analysis.memoria=lead.analysis.memoria||{};
+  const registro=`[${dataBR} ${horaBR}] Atendido.`;
+  const obs=String(lead.analysis.memoria.observacoes||"").trim();
+  if(!obs.includes(registro)) lead.analysis.memoria.observacoes=obs?`${obs}\n${registro}`:registro;
+}
+
+window.ui667MarcarAtendido=async function(btn){
+  const lead=state.lead;
+  if(!lead?.id){toast("Não consegui identificar este lead.");return;}
+  const original=btn?.textContent||"✓ Atendido";
+  if(btn){btn.disabled=true;btn.textContent="Marcando...";}
+  try{
+    const res=await fetch("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:lead.id,action:"marcar-atendido"})});
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
+    const quando=d.quando||new Date().toISOString();
+    ui667AplicarAtendidoLocal(lead,quando,d.dataBR||new Date().toLocaleDateString("pt-BR"),d.horaBR||new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
+      if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,d.dataBR,d.horaBR);
+    }
+    if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${d.horaBR||"hoje"}`;btn.disabled=true;}
+    invalidarLeadsCache();
+    toast(d.jaMarcado?`Já estava marcado às ${d.horaBR}.`:`Atendimento marcado às ${d.horaBR}.`);
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent=original;}
+    toast("Não consegui marcar: "+(err?.message||err));
+  }
+};
 renderLeadFoco = function(lead){
+  ui667ModoDetalheLead(true);
   __renderLeadFoco631Base(lead);
   const wrap=qs("#leadFocoArea .lead-foco"); const legacy=wrap?.querySelector(".lead590"); if(!wrap||!legacy)return;
   const a=lead.analysis||{},diag=(a.diagnostico&&typeof a.diagnostico==="object")?a.diagnostico:{};
@@ -8980,7 +9033,10 @@ renderLeadFoco = function(lead){
   const voltarLabel = state.grupoAtivo ? "Voltar pra "+escapeHtml((GRUPOS_HOME[state.grupoAtivo]||{}).titulo||"lista") : "Voltar pra Hoje";
   shell.innerHTML=`
     <div class="ui-lead-head">
-      <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
+      <div class="ui-lead-title-row">
+        <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
+        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>
+      </div>
       <div class="ui-lead-sub">
         <p>${escapeHtml(produtosLabel(lead)||"Produto não identificado")}</p>
         ${!state.sequencia ? `<button type="button" class="ui-lead-back" onclick="voltarDoLead()">‹ ${voltarLabel}</button>` : ''}
@@ -8998,11 +9054,8 @@ renderLeadFoco = function(lead){
     </div>
     <section class="ui-timeline-card"><h3>Linha do tempo da conversa</h3>${timeline}</section>`;
   wrap.insertBefore(shell,legacy);
-  // Extrai "Registrar atendimento" do legacy para ficar acessível no novo UI (não enterrado em 2 níveis de collapse)
-  const atendDetalhes = Array.from(legacy.querySelectorAll('details.bloco-recolhe')).find(
-    d => (d.querySelector('summary')?.textContent||'').trim() === 'Registrar atendimento'
-  );
-  if(atendDetalhes) shell.appendChild(atendDetalhes);
+  // O formulário completo de anotações continua disponível, mas fica em "Mais detalhes".
+  // O fluxo normal agora usa o botão de um clique "Atendido" no topo do lead.
   const advanced=document.createElement("details"); advanced.className="ui631-advanced"; advanced.innerHTML='<summary>Mais detalhes e ferramentas</summary>';
   wrap.insertBefore(advanced,legacy); advanced.appendChild(legacy);
 };
@@ -9206,7 +9259,7 @@ const _renderResumoDiaAntes657=renderResumoDia;
 renderResumoDia=function(items){ try{_renderResumoDiaAntes657(items);}catch(_){} renderCorretorProDashboard(items,state.todosLeads||items); };
 const _renderBotoesHomeAntes657=renderBotoesHome;
 renderBotoesHome=function(){
-  document.body.classList.remove("lead-foco-aberto");
+  ui667ModoDetalheLead(false);
   const ws=qs("#cpLeadWorkspace"); if(ws) ws.style.display="block";
   try{_renderBotoesHomeAntes657();}catch(_){}
   renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]);

@@ -407,3 +407,12 @@
 - O aplicativo passa a mostrar o detalhe real devolvido pelo Supabase caso o upload ainda falhe.
 - Corrigido o espaçamento entre “Corretor Pro” e “Atualização #665” no cabeçalho mobile.
 - Cache PWA atualizado para a versão 665.
+
+## Ponto #667 — botão Atendido e detalhe do lead limpo
+
+- A saudação e os quatro indicadores gerais deixam de aparecer quando um lead está aberto.
+- O lead passa a ter um botão visível `✓ Atendido` no topo, sem exigir texto ou abrir formulário.
+- Um clique grava apenas `[data hora] Atendido.` nas observações e registra internamente que houve contato hoje.
+- A marcação não cria mensagem artificial na linha do tempo, não agenda retorno e não inicia contagem regressiva.
+- O formulário completo `Registrar atendimento` permanece disponível dentro de `Mais detalhes e ferramentas`.
+- Cache PWA atualizado para a versão 667.
