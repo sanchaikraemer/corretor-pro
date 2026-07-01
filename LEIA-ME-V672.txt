@@ -1,0 +1,20 @@
+CORRETOR PRO — ATUALIZAÇÃO 672
+
+Suba o conteúdo desta pasta para a raiz do repositório, preservando a pasta api.
+
+Arquivos em api:
+- api/_pipeline.js
+- api/lead-update.js
+
+Arquivos na raiz:
+- app.js
+- service-worker.js
+- package.json
+- package-lock.json
+- RESTORE_POINTS.md
+- ALTERACOES_V672.md
+- teste-modelo-comercial-v672.mjs
+- teste-autores-interface-v672.mjs
+
+Commit sugerido:
+Correção de autores e estado comercial — v672

@@ -319,9 +319,12 @@ function mcAutorEhContato(author, lead, corretorNome) {
   const corretor = String(corretorNome || "").trim().toLowerCase();
   if (corretor && (autor.includes(corretor) || corretor.includes(autor))) return false;
   if (/\b(senger|construtora|atendimento|sanchai|miguel kirinus)\b/i.test(autor)) return false;
+  // O nome completo/primeiro nome do contato vence palavras de profissão presentes no nome.
   if (contato && (autor.includes(contato) || contato.includes(autor))) return true;
   if (primeiroContato && autor.includes(primeiroContato)) return true;
-  return null;
+  // Em uma exportação individual do WhatsApp, o outro participante real é o contato,
+  // inclusive quando o nome contém "Corretor", "Imobiliária" ou "Imóveis".
+  return true;
 }
 
 function mcUltimaMensagemReal(timeline, lead, corretorNome) {
@@ -463,7 +466,7 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
   const parceiro = contatoPareceParceiro(lead, timelineText) || /parceir|corretor/.test(String(parsed.tipoContato || bruto?.contato?.tipo || "").toLowerCase());
   const ultimo = mcUltimaMensagemReal(timeline, lead, corretorNome);
   const linhasReais = (Array.isArray(timeline) ? timeline : []).filter(m => m && String(m.text || "").trim());
-  const rePerdeuOutra = /\b(comprou|adquiriu|optou por|foi para)\b.{0,55}\b(outro|outra)\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou\b.{0,35}\b(apartamento|im[oó]vel|casa)\b/i;
+  const rePerdeuOutra = /\b(comprou|comprando|adquiriu|optou por|fechou com|foi para)\b.{0,80}\b(outro|outra)\b|\bacabou comprando\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou\b.{0,45}\b(apartamento|im[oó]vel|casa)\b|\bvendemos?\b.{0,80}\b(outro|outra)\b|\bfoi vendido\b.{0,80}\b(apartamento|im[oó]vel|casa)\b/i;
   const reNovaOportunidade = /\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
   let idxPerda = -1, idxNova = -1;
   linhasReais.forEach((m, i) => { const t = String(m.text || ""); if (rePerdeuOutra.test(t)) idxPerda = i; if (reNovaOportunidade.test(t)) idxNova = i; });
@@ -536,7 +539,7 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
     parceiro && statusOpp === "perdida" ? "O contato segue como parceiro e pode apresentar novos compradores." : mcTexto(parsed.clientProfile));
 
   parsed.modeloComercial = {
-    versao: 671,
+    versao: 672,
     contato: {
       id: mcTexto(bruto?.contato?.id || parsed?.contatoId),
       tipo: tipoContato,
@@ -584,13 +587,15 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
     parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
     if (parceiro) parsed.etapaSugerida = "Standby";
   }
-  parsed._schemaComercial = 671;
+  parsed._schemaComercial = 672;
   return parsed;
 }
 
-export function __testarModeloComercialV671({ parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai" } = {}) {
+export function __testarModeloComercialV672({ parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai" } = {}) {
   return normalizarModeloComercial(JSON.parse(JSON.stringify(parsed || {})), lead, timeline, corretorNome);
 }
+// Compatibilidade com o teste/pacote anterior.
+export const __testarModeloComercialV671 = __testarModeloComercialV672;
 
 // Lê um texto (próxima ação / fala do cliente) e devolve {dias, motivo} se houver
 // prazo claro pra retomar: "em N dias/semanas/meses", "dia 20" (próximo dia do mês),
@@ -1054,7 +1059,9 @@ function detectProduct(fullText = "") {
 }
 
 function pickClientName(authors = []) {
-  const businessHints = /(senger|construtora|corretor|imobiliaria|imobiliária|direciona|atendimento)/i;
+  // Profissões como "Corretor" e "Imobiliária" podem fazer parte do nome do contato parceiro.
+  // Excluímos apenas autores conhecidos como lado da empresa/corretor deste app.
+  const businessHints = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
   const productHints = /\b(renaissance|evolutti|boulevard|premium\s*office|quality|personalit[eé]|prime|terrenos?|nvri|nvr|eii|ii)\b/gi;
   const raw = authors.find(a => a && !businessHints.test(a)) || authors.find(Boolean) || "Cliente não identificado";
   // Tira sufixos de produto colados no nome (ex: "João Paulo Rodrigues Evolutti Quality")

@@ -462,3 +462,12 @@
 - A listagem deixa de fundir oportunidades diferentes apenas porque pertencem ao mesmo parceiro.
 - O novo comprador aparece no cabeçalho e nos detalhes da oportunidade.
 - Cache PWA atualizado para a versão 671.
+
+
+## Ponto #672 — autores e estado comercial corrigidos
+- Corrige contato parceiro com “Corretor” no nome sendo exibido como “Você”.
+- Corrige a última pessoa a falar e o responsável pelo próximo passo.
+- Reconhece “acabou comprando outro imóvel” como oportunidade encerrada.
+- Mantém parceria ativa sem sugerir mensagem repetida.
+- Bloqueia orientação antiga até a atualização comercial.
+- Cache PWA atualizado para a versão 672.

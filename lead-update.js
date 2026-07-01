@@ -443,9 +443,9 @@ async function acaoCriarManual(body, res) {
         confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
-        _schemaComercial: 671,
+        _schemaComercial: 672,
         modeloComercial: {
-          versao: 671,
+          versao: 672,
           contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
           oportunidade: { status: "descoberta", resultado: "em-andamento", produto: produto || "Não identificado", motivo: porQue },
           relacionamento: { status: "ativo", potencial: "não avaliado", motivo: "Contato recém-cadastrado." },
@@ -551,9 +551,9 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       confianca: 80,
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
-      _schemaComercial: 671,
+      _schemaComercial: 672,
       modeloComercial: {
-        versao: 671,
+        versao: 672,
         contato: {
           id: contatoId,
           tipo: "corretor-parceiro",
@@ -633,7 +633,7 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     oportunidadesVinculadas: vinculadas,
     modeloComercial: {
       ...(mcOrigem || {}),
-      versao: Math.max(671, Number(mcOrigem?.versao || 0)),
+      versao: Math.max(672, Number(mcOrigem?.versao || 0)),
       contato: { ...(mcOrigem?.contato || {}), id: contatoId, tipo: "corretor-parceiro" },
       relacionamento: {
         ...(mcOrigem?.relacionamento || {}),

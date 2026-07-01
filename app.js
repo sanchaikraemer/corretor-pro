@@ -1668,14 +1668,19 @@ function probabilidadeRefinadaTxt(l){
   const v = probabilidadeRefinada(l);
   return v == null ? (l?.probability || "--") : v + "%";
 }
-const BUSINESS_RE = /(senger|construtora|corretor|imobiliaria|imobiliária|direciona|atendimento)/i;
+const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
+// "Corretor", "Imobiliária" e "Imóveis" podem fazer parte do NOME do contato parceiro.
+// Por isso não podem, sozinhos, transformar a fala dele em mensagem da empresa.
 function ehMsgDoCliente(m, primeiroNomeCliente){
   const autor = String(m?.author || "").trim();
   if(!autor || autor === "Sistema") return false;
+  const autorNorm = autor.toLowerCase();
+  const nomeNorm = String(primeiroNomeCliente || "").trim().toLowerCase();
+  // O nome do contato tem prioridade sobre palavras de profissão no próprio nome
+  // (ex.: "Anderson Ruviaro Corretor SM Gabro").
+  if(nomeNorm && autorNorm.includes(nomeNorm) && !/^(sanchai|miguel\s+kirinus)$/i.test(autorNorm)) return true;
   if(BUSINESS_RE.test(autor)) return false;
-  // Se o autor bate com o nome do cliente, com certeza é dele.
-  if(primeiroNomeCliente && autor.toLowerCase().includes(primeiroNomeCliente)) return true;
-  // Caso contrário, assume cliente (não é business).
+  // Em conversa individual, qualquer outro participante real é o contato.
   return true;
 }
 
@@ -9447,7 +9452,7 @@ renderBotoesHome=function(){
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}
 
 /* ============================================================
-   ATUALIZAÇÃO #671 — INTELIGÊNCIA COMERCIAL VALIDADA + OPORTUNIDADES VINCULADAS
+   ATUALIZAÇÃO #672 — AUTORES CORRETOS + ESTADO COMERCIAL COERENTE
    - separa contato, oportunidade, relacionamento e ação
    - remove diagnósticos/mensagens duplicados do detalhe
    - corrige prioridades incompatíveis com oportunidade encerrada
@@ -9553,7 +9558,7 @@ function ui670ModeloComercial(lead){
   const txt=ui670TextoAnalise(lead);
   const last=ui670UltimaMensagemReal(lead);
   const real=Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>String(m?.text||"").trim()):[];
-  const rePerda=/\b(comprou|adquiriu|optou por)\b.{0,55}\b(outro|outra)\b|comprou outro im[oó]vel|j[aá] comprou.{0,35}(apartamento|im[oó]vel|casa)/i;
+  const rePerda=/\b(comprou|comprando|adquiriu|optou por|fechou com|foi para)\b.{0,80}\b(outro|outra)\b|\bacabou comprando\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou.{0,45}(apartamento|im[oó]vel|casa)\b|\bvendemos?\b.{0,80}\b(outro|outra)\b|\bfoi vendido\b.{0,80}\b(apartamento|im[oó]vel|casa)\b/i;
   const reNova=/\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
   let idxPerda=-1,idxNova=-1;real.forEach((m,i)=>{const t=String(m.text||"");if(rePerda.test(t))idxPerda=i;if(reNova.test(t))idxNova=i;});
   const aiPerda=String(mc?.oportunidade?.resultado||"")==="comprou-outra-opcao"||String(mc?.oportunidade?.status||"")==="perdida";
@@ -9722,7 +9727,7 @@ renderLeadFoco=function(lead){
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
-  const stale=Number(mc.versao||a._schemaComercial||0)!==671;
+  const stale=Number(mc.versao||a._schemaComercial||0)!==672;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
@@ -9735,12 +9740,16 @@ renderLeadFoco=function(lead){
   const type=ui670TipoContatoLabel(mc?.contato?.tipo);
   const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
   const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
-  const messageBlock=noAction?`<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`:`<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Toque em Atualizar análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
+  const messageBlock=stale
+    ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
+    : noAction
+      ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
+      : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
   const shell=document.createElement("div");shell.className="lead-ui670";
   shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div><button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button></div>
-  ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>A tela já eliminou as contradições evidentes, mas a leitura completa ainda precisa ser atualizada para o novo modelo.</span></div><button onclick="ui670Reanalisar()">Atualizar análise comercial</button></div>`:""}
+  ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button onclick="ui670Reanalisar()">Atualizar análise comercial</button></div>`:""}
   <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
-  <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${ui670Badge(act)}</div><h3>${escapeHtml(mc?.acao?.descricao||"Reanalisar para definir o próximo passo.")}</h3><div class="ui670-action-buttons">${lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Reanalisar()">Reanalisar</button><button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
+  <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
   ${messageBlock}
   <section class="ui670-card"><div class="ui670-section-title"><span>Últimas mensagens</span><em>${totalMensagensLead(lead)} no histórico</em></div><div class="ui670-timeline">${timeline}</div><div id="ui670HistorySlot"></div></section>
   <details class="ui670-details"><summary>Detalhes comerciais</summary><div class="ui670-details-body">${ui670DetailRows(lead,mc)}</div></details>
