@@ -2,9 +2,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.js",
-    "test:arquitetura": "node teste-arquitetura-gpt55.mjs && node teste-coerencia-documental.mjs",
-    "test": "node teste-noite.mjs && node teste-arquitetura-gpt55.mjs && node teste-coerencia-documental.mjs && node teste-comercial-real.mjs && node teste-fallback.mjs && node teste-fluxo-respostas.mjs && node teste-prioridade-negociacao.mjs && node teste-validacao-jessica.mjs && node teste-validacao-mauricio.mjs && node teste-seguranca-621.mjs",
-    "test:performance": "node teste-performance-historico.mjs"
+    "test": "node --check app.js && node --check build.js && node --check service-worker.js && node --check api/lead-update.js && node --check api/_pipeline.js && node teste-ui-v657.mjs && npm run test:performance",
+    "test:performance": "node teste-performance-historico.mjs && node teste-performance-v652.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
@@ -12,5 +11,5 @@
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "655.0.0"
+  "version": "657.0.0"
 }

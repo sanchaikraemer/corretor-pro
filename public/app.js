@@ -8220,7 +8220,7 @@ if("serviceWorker" in navigator){
   });
   addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("/service-worker.js?v=__VERSION__", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/service-worker.js?v=657", { scope: "/" });
       // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;

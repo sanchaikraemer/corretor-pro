@@ -1,4 +1,4 @@
-const BUILD_ID = '__BUILD_ID__';
+const BUILD_ID = '2026-07-01-00-21';
 const STATIC_CACHE = 'corretor-pro-static-v657-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
@@ -71,18 +71,18 @@ async function idbDel(id) {
 const CORE_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=__VERSION__',
-  '/app.js?v=__VERSION__',
-  '/vendor/jszip.min.js?v=__VERSION__',
+  '/styles.css?v=657',
+  '/app.js?v=657',
+  '/vendor/jszip.min.js?v=657',
   '/share.html',
   '/manifest.json',
   '/service-worker.js',
-  '/icon-192.png?v=__VERSION__',
-  '/logo-cp.png?v=__VERSION__',
-  '/icon-512.png?v=__VERSION__',
-  '/favicon.png?v=__VERSION__',
-  '/logo-direciona-light.svg?v=__VERSION__',
-  '/logo-direciona-dark.svg?v=__VERSION__'
+  '/icon-192.png?v=657',
+  '/logo-cp.png?v=657',
+  '/icon-512.png?v=657',
+  '/favicon.png?v=657',
+  '/logo-direciona-light.svg?v=657',
+  '/logo-direciona-dark.svg?v=657'
 ];
 
 self.addEventListener('install', event => {
