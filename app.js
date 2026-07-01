@@ -6232,7 +6232,7 @@ async function uploadLargeZipToSupabase(file){
   // 1) preparar → 2) transcrever em lotes → 3) analisar
   let analysisData;
   try{
-    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path);
+    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name);
   }catch(err){
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
@@ -6247,7 +6247,7 @@ async function uploadLargeZipToSupabase(file){
       if(stored?.bucket && stored?.path){
         qs("#processingText").textContent = "Tentando de novo (sem reenviar o ZIP)...";
         try{
-          const data = await processarStorageEmEtapas(stored.bucket, stored.path);
+          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name);
           qs("#progressBar").style.width="100%";
           qs("#processingText").textContent="Conversa processada.";
           renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path });
@@ -6268,7 +6268,9 @@ async function uploadLargeZipToSupabase(file){
 }
 
 // Orquestra o processamento em 3 etapas, cada chamada curta o suficiente pro servidor.
-async function processarStorageEmEtapas(bucket, path){
+// Na reimportação, reconhece o lead ANTES das APIs: reaproveita transcrições já salvas
+// e envia ao Cérebro somente as mensagens inéditas + contexto consolidado anterior.
+async function processarStorageEmEtapas(bucket, path, fileName){
   async function chamar(payload, timeoutMs){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
@@ -6283,19 +6285,67 @@ async function processarStorageEmEtapas(bucket, path){
     } finally { clearTimeout(to); }
   }
 
+  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
+  const extrairTextoAudioSalvo = (m) => {
+    const texto = String(m?.text || "");
+    const match = texto.match(/^\[Áudio transcrito\]\s*([\s\S]*)$/i);
+    if(match && match[1].trim()) return match[1].trim();
+    return "";
+  };
+
   // ETAPA 1 — preparar
-  renderEtapas(2, "lendo conversa e aplicando janela");
+  renderEtapas(2, "lendo conversa e identificando novidades");
   qs("#progressBar").style.width="35%";
-  // Conversa grande (muito áudio) pode levar quase os 60s do servidor pra baixar+abrir o ZIP.
-  // Espera até 58s antes de desistir (antes era 45s e desistia com o servidor ainda lendo).
   const prep = await chamar({ action: "preparar" }, 58000);
-  const audios = prep.audiosParaTranscrever || [];
   const janela = prep.janelaConversa;
 
-  // ETAPA 2 — transcrever em lotes de 3 (com retry automático antes de desistir)
+  // Reconhece o lead antes de transcrever/analisar. Só reaproveita automaticamente
+  // quando a identidade é segura: mesmo telefone ou o mesmo arquivo de conversa.
+  let matchAntecipado = null;
+  let existingLeadId = null;
+  let timelineAnterior = [];
+  try{
+    // Antes da análise, usa somente a identidade estável do arquivo exportado. Não usa telefone
+    // achado no texto, porque a conversa pode citar o número de outra pessoa.
+    matchAntecipado = await acharLeadExistente("", "", fileName || prep.txtFile || "");
+    const seguro = matchAntecipado && matchAntecipado.via === "arquivo";
+    if(seguro && matchAntecipado.lead?.id){
+      existingLeadId = String(matchAntecipado.lead.id);
+      const resDet = await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(existingLeadId)}`, { cache:"no-store" });
+      const det = await resDet.json().catch(()=>({ok:false}));
+      if(resDet.ok && det?.ok && det.item){
+        timelineAnterior = Array.isArray(det.item.recentMessages) ? det.item.recentMessages : [];
+      }
+    }
+  }catch(err){
+    console.warn("Não consegui preparar o reaproveitamento incremental; seguindo processamento normal:", err?.message || err);
+    existingLeadId = null;
+    timelineAnterior = [];
+  }
+
+  // Mapa das transcrições que já foram pagas e estão salvas no histórico.
   const transcriptionMap = {};
+  for(const m of timelineAnterior){
+    const nome = normalizarAudio(m?.mediaFile);
+    const texto = extrairTextoAudioSalvo(m);
+    if(nome && texto){
+      transcriptionMap[nome] = { status:"transcrito_reaproveitado", text:texto, reused:true };
+    }
+  }
+
+  const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
+  const audios = audiosTodos.filter(nome => {
+    const salvo = transcriptionMap[normalizarAudio(nome)];
+    return !(salvo && salvo.text);
+  });
+  const audiosReaproveitados = Math.max(0, audiosTodos.length - audios.length);
+
+  // ETAPA 2 — transcrever somente áudios inéditos (com retry automático)
   if(audios.length){
-    renderEtapas(4, `transcrevendo ${audios.length} áudio(s)`);
+    const detalhe = audiosReaproveitados
+      ? `${audios.length} novo(s); ${audiosReaproveitados} já reaproveitado(s)`
+      : `${audios.length} áudio(s)`;
+    renderEtapas(4, `transcrevendo ${detalhe}`);
     const LOTE = 3;
     const TIMEOUT_LOTE = 55000;
     for(let i=0; i<audios.length; i+=LOTE){
@@ -6313,16 +6363,18 @@ async function processarStorageEmEtapas(bucket, path){
       if(!r){ throw ultimoErr || new Error("Falha ao transcrever lote"); }
       Object.assign(transcriptionMap, r.transcriptions || {});
       const feito = Math.min(audios.length, i+LOTE);
-      const pct = 35 + Math.round((feito/audios.length) * 40); // 35% → 75%
+      const pct = 35 + Math.round((feito/audios.length) * 40);
       qs("#progressBar").style.width = pct + "%";
-      renderEtapas(4, `transcrevendo áudios (${feito}/${audios.length})`);
+      renderEtapas(4, `áudios novos (${feito}/${audios.length}) · reaproveitados ${audiosReaproveitados}`);
     }
+  } else if(audiosReaproveitados){
+    renderEtapas(5, `${audiosReaproveitados} áudio(s) já transcrito(s) — sem nova cobrança`);
   } else {
     renderEtapas(5, "sem áudios na janela");
   }
 
-  // ETAPA 3 — analisar (manda mensagens + transcrições, sem ZIP)
-  renderEtapas(6, "analisando atendimento com o Cérebro");
+  // ETAPA 3 — o servidor busca o histórico anterior pelo ID e analisa somente as novidades.
+  renderEtapas(6, existingLeadId ? "analisando somente o que mudou" : "analisando atendimento com o Cérebro");
   qs("#progressBar").style.width="85%";
   const result = await chamar({
     action: "analisar",
@@ -6335,8 +6387,12 @@ async function processarStorageEmEtapas(bucket, path){
     ignoredFiles: prep.ignoredFiles,
     audiosTotalNoZip: prep.audiosTotalNoZip,
     audiosDescartadosPorJanela: prep.audiosDescartadosPorJanela,
-    metricsBase: prep.metricsBase
+    metricsBase: prep.metricsBase,
+    existingLeadId,
+    audiosReaproveitados,
+    audiosNovosSolicitados: audios.length
   }, 60000);
+  result._matchAntecipado = matchAntecipado ? { id: matchAntecipado.lead?.id || null, via: matchAntecipado.via || null } : null;
   renderEtapas(8);
   return result;
 }
@@ -6372,6 +6428,8 @@ async function renderProcessedResult(data, meta){
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:#ffd9ad"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  const inc = data.incrementalMeta || {};
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada; a análise anterior foi mantida sem nova chamada de texto." : " O histórico antigo não foi enviado novamente por inteiro para a IA."}</div>` : "";
 
   // Já existe lead com mesmo TELEFONE (certeza = mesmo cliente) ou mesmo NOME (pode ser outra pessoa)?
   const match = await acharLeadExistente(state.lead.name, lead.phone, meta.fileName || state.pendingSave?.fileName);
@@ -6399,7 +6457,7 @@ async function renderProcessedResult(data, meta){
   if(existente && !perguntarNome){
     // Mesmo cliente (telefone igual, OU nome igual sem telefone pra distinguir) → atualiza sozinho.
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Atualizando ${escapeHtml((existente.name||"este lead").split(" ")[0])}...</b> ${state.pendingViaTelefone ? "Mesmo telefone" : "Mesmo nome"} — atualizo o atual, sem duplicar.</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Atualizando ${escapeHtml((existente.name||"este lead").split(" ")[0])}...</b> ${state.pendingViaTelefone ? "Mesmo telefone" : (match?.via === "arquivo" ? "Mesma conversa" : "Mesmo nome")} — atualizo o atual, sem duplicar.</div>` +
       `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar ${escapeHtml((existente.name||"").split(" ")[0])}</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Descartar</button></div>`;
   } else if(perguntarNome){
     // Nome igual, telefone não confirma → PERGUNTA: é o mesmo cliente ou outro?
@@ -6431,7 +6489,7 @@ async function renderProcessedResult(data, meta){
     `<b>Áudios encontrados na janela:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
     `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
-    janelaHtml + semMidiaHtml +
+    janelaHtml + semMidiaHtml + incrementalHtml +
     `</div>` +
     openAIErrorBlock(data);
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
@@ -6514,7 +6572,7 @@ async function acharLeadExistente(nome, telefone, arquivo){
     // 3) Mesmo ARQUIVO de conversa = mesmo contato reexportado → é reimportação, atualiza (não
     // duplica). Pega o caso em que a análise nova não extraiu o nome (vinha "Cliente importado").
     if(alvoArq.length >= 3 && l.fileName){
-      if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "nome" };
+      if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "arquivo" };
     }
   }
   return null;
@@ -6525,7 +6583,7 @@ async function atualizarLeadComEvolucao(){
   const viaTelefone = !!state.pendingViaTelefone; // atualização automática por número (sem o usuário escolher)
   if(!existente?.id || !state.pendingSave){ toast("Nada pra atualizar."); return; }
   const btn = qs("#btnAtualizarLead");
-  if(btn){ btn.disabled = true; btn.textContent = "Atualizando e comparando..."; }
+  if(btn){ btn.disabled = true; btn.textContent = "Atualizando..."; }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6533,11 +6591,12 @@ async function atualizarLeadComEvolucao(){
     });
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
+    const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     state.pendingSave = null;
     state.pendingExistente = null;
     state.pendingViaTelefone = false;
     const ev = data.evolucao;
-    const juntou = Number(data.preservadasDoAntigo||0) > 0; // o arquivo novo NÃO trazia parte da conversa salva → juntei as duas
+    const juntou = !incrementalMeta?.reimportacao && Number(data.preservadasDoAntigo||0) > 0; // no fluxo incremental, o servidor recebeu só as novidades de propósito
     const primeiroNome = (existente.name||"").split(" ")[0] || "o lead";
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
@@ -6549,7 +6608,14 @@ async function atualizarLeadComEvolucao(){
       let txt = viaTelefone
         ? `<b>✓ Reconheci pelo número — atualizei ${escapeHtml(primeiroNome)} (não criei outro lead).</b> `
         : "<b>Atualizado.</b> ";
-      if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} mensagem(ns) que só estavam na conversa anterior). `;
+      if(incrementalMeta?.reimportacao){
+        const nMsg = Number(incrementalMeta.mensagensNovas)||0;
+        const nAudio = Number(incrementalMeta.audiosNovosTranscritos)||0;
+        const nReuso = Number(incrementalMeta.audiosReaproveitados)||0;
+        txt += nMsg === 0
+          ? `Nenhuma mensagem nova encontrada; mantive a análise anterior sem nova cobrança de texto. `
+          : `${nMsg} mensagem(ns) nova(s) incorporada(s) · ${nAudio} áudio(s) novo(s) transcrito(s) · ${nReuso} reaproveitado(s). `;
+      } else if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} mensagem(ns) que só estavam na conversa anterior). `;
       if(ev){
         txt += `O que mudou: ${escapeHtml(ev.oQueMudou||"—")}. `;
         if(ev.abordagemFuncionou && ev.abordagemFuncionou !== "sem-dados") txt += `Abordagem anterior: <b>${escapeHtml(ev.abordagemFuncionou)}</b>. `;
@@ -6557,14 +6623,12 @@ async function atualizarLeadComEvolucao(){
       }
       pendingBox.innerHTML = txt;
     }
-    toast(viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução."));
+    toast(incrementalMeta?.reimportacao
+      ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} mensagem(ns) nova(s).`
+      : (viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução.")));
     loadRecentLeads();
-    // REIMPORTOU = tem conversa NOVA → reanalisa a conversa INTEIRA na hora (em segundo plano), pra
-    // as 3 respostas saírem ATUALIZADAS conforme o que mudou — SEM depender de abrir o lead nem de
-    // "juntar" arquivo antigo. (Antes só rodava quando juntava trechos; por isso reimportar às vezes
-    // mantinha resposta antiga. Pedido do dono: conversa nova tem que gerar resposta nova na hora.)
-    // Não trava a tela; quando termina, re-renderiza o lead sozinho com as sugestões já refinadas.
-    if(existente.id) reanalisarEmSegundoPlano(existente.id);
+    // A análise já foi atualizada durante a importação incremental. Não dispara uma segunda
+    // reanálise do histórico inteiro: isso repetiria custo de API e anularia a economia da v669.
     qs("#pendingActions")?.remove();
     // Abre o lead atualizado NA HORA pra o corretor ver (pedido do dono) — tanto na atualização
     // automática por número quanto na confirmada. Antes, no caso do número, ficava só um botão e

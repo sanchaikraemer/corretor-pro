@@ -428,3 +428,14 @@
 - A tela antes intitulada “Carteira” foi renomeada para “Atendimentos”.
 - Corrigida a concordância “1 lead esfriando”.
 - Cache PWA atualizado para a versão 668.
+
+## Ponto #669 — reimportação incremental e economia de API
+
+- O sistema reconhece a mesma conversa antes de chamar as APIs, usando o nome estável do arquivo exportado.
+- Áudios já transcritos e salvos são reaproveitados; somente arquivos de áudio inéditos seguem para transcrição.
+- A análise de uma reimportação usa as mensagens novas, o trecho recente necessário e o contexto consolidado anterior, sem reenviar todo o histórico antigo à IA.
+- Se a reexportação não trouxer nenhuma mensagem nova, a análise anterior é mantida sem nova chamada de texto.
+- A atualização do lead deixa de disparar uma segunda reanálise integral e deixa de fazer uma segunda chamada de IA só para comparar evolução.
+- O resultado informa quantas mensagens novas entraram, quantos áudios foram transcritos e quantos foram reaproveitados.
+- O histórico completo continua salvo e é mesclado sem duplicar mensagens.
+- Cache PWA atualizado para a versão 669.
