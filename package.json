@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.js",
-    "test": "node --check app.js && node --check build.js && node --check service-worker.js && node --check api/lead-update.js && node --check api/_pipeline.js && node --check api/_persistence.js && node --check api/processar-storage.js && node --check api/restaurar-leads.js && node teste-ui.mjs && node teste-hibrido-v664.mjs && node teste-restauracao-leads.mjs && node teste-incremental-v669.mjs && npm run test:performance",
+    "test": "node --check app.js && node --check build.js && node --check service-worker.js && node --check api/lead-update.js && node --check api/_pipeline.js && node --check api/_persistence.js && node --check api/processar-storage.js && node --check api/restaurar-leads.js && node teste-ui.mjs && node teste-hibrido-v664.mjs && node teste-restauracao-leads.mjs && node teste-incremental-v669.mjs && node teste-modelo-comercial-v671.mjs && npm run test:performance",
     "test:performance": "node teste-performance-historico.mjs && node teste-performance-v652.mjs"
   },
   "dependencies": {
@@ -11,5 +11,5 @@
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "669.0.0"
+  "version": "671.0.0"
 }

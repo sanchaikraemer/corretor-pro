@@ -9445,3 +9445,313 @@ renderBotoesHome=function(){
   renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]);
 };
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}
+
+/* ============================================================
+   ATUALIZAÇÃO #671 — INTELIGÊNCIA COMERCIAL VALIDADA + OPORTUNIDADES VINCULADAS
+   - separa contato, oportunidade, relacionamento e ação
+   - remove diagnósticos/mensagens duplicados do detalhe
+   - corrige prioridades incompatíveis com oportunidade encerrada
+   ============================================================ */
+
+const UI670_OPP_LABEL = {
+  "descoberta":["Em descoberta","neutral"],
+  "interesse":["Interesse identificado","info"],
+  "comparacao":["Em comparação","info"],
+  "analise-financeira":["Análise financeira","warn"],
+  "negociacao":["Em negociação","warn"],
+  "decisao":["Em decisão","warn"],
+  "ganha":["Venda concluída","success"],
+  "perdida":["Oportunidade encerrada","danger"],
+  "encerrada-sem-decisao":["Oportunidade encerrada","neutral"]
+};
+const UI670_REL_LABEL = {
+  "ativo":["Relacionamento ativo","success"],
+  "aguardando-nova-oportunidade":["Parceria ativa","success"],
+  "contato-periodico":["Contato periódico","info"],
+  "pausado":["Relacionamento pausado","neutral"],
+  "encerrado":["Relacionamento encerrado","danger"]
+};
+const UI670_ACTION_LABEL = {
+  "responder-agora":["Responder agora","danger"],
+  "aguardando-resposta":["Aguardando resposta","warn"],
+  "compromisso-agendado":["Compromisso agendado","info"],
+  "retomar":["Retomar contato","warn"],
+  "sem-acao-urgente":["Sem ação urgente","success"]
+};
+const UI670_CONTACT_LABEL = {
+  "comprador-direto":"Comprador direto",
+  "corretor-parceiro":"Corretor parceiro",
+  "intermediario":"Intermediário",
+  "familiar":"Familiar/intermediário",
+  "investidor":"Investidor",
+  "empresa":"Empresa",
+  "outro":"Contato"
+};
+const UI670_RESULT_LABEL = {
+  "em-andamento":"Em andamento",
+  "venda-conosco":"Venda conosco",
+  "comprou-outra-opcao":"Comprou outra opção",
+  "condicoes-incompativeis":"Condições incompatíveis",
+  "desistiu":"Desistiu desta oportunidade",
+  "sem-resposta":"Sem resposta",
+  "oportunidade-futura":"Oportunidade futura",
+  "outro":"Outro resultado"
+};
+
+function ui670TextoAnalise(lead){
+  const a=lead?.analysis||{};
+  const recent=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  return [a.summary,a.nextAction,a.risk,a.clientProfile,a?.memoria?.observacoes,a?.memoriaSugerida?.observacoes,
+    ...recent.slice(-20).map(m=>`${m?.author||""}: ${m?.text||""}`)].filter(Boolean).join(" ").toLowerCase();
+}
+function ui670UltimaMensagemReal(lead){
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  const pn=String(lead?.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
+  for(let i=msgs.length-1;i>=0;i--){
+    const m=msgs[i]; if(!m||!String(m.text||"").trim()) continue;
+    const source=String(m.source||""),type=String(m.type||"");
+    if(source==="manual"||source==="crm"||type==="print-whatsapp"||["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
+    return {m,falante:ehMsgDoCliente(m,pn)?"contato":"corretor"};
+  }
+  return {m:null,falante:"desconhecido"};
+}
+function ui670Parceiro(lead){
+  const a=lead?.analysis||{};
+  return /parceir|corretor|corretora|imobili[áa]ria|creci/.test([a.tipoContato,a?.modeloComercial?.contato?.tipo,lead?.name].join(" ").toLowerCase());
+}
+
+function ui671HojeIso(){
+  try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
+  catch(_){return new Date().toISOString().slice(0,10);}
+}
+function ui671DiasAte(data){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data||"")))return null;
+  const a=new Date(ui671HojeIso()+"T12:00:00-03:00"),b=new Date(String(data).slice(0,10)+"T12:00:00-03:00");
+  if(isNaN(a)||isNaN(b))return null;return Math.round((b-a)/86400000);
+}
+function ui671CompromissoAberto(lead){
+  const a=lead?.analysis||{},apps=Array.isArray(a.confirmedAppointments)?a.confirmedAppointments:[];
+  const concreto=/visita|caf[eé]|reuni[aã]o|liga[cç][aã]o|videochamada|assinatura|contrato|banco/i;
+  for(let i=apps.length-1;i>=0;i--){
+    const ap=apps[i]||{},prova=String(ap.trechoLiteral||ap.quando||ap.oQue||"").trim();if(!prova)continue;
+    const diff=ui671DiasAte(String(ap.data||"").slice(0,10));
+    const contato=/cliente|contato/i.test(String(ap.combinadoPor||""));
+    if(diff!=null&&diff>=0){const quando=diff===0?"hoje":diff===1?"amanhã":`em ${diff} dias`;return {status:concreto.test(`${ap.oQue||""} ${prova}`)?"compromisso-agendado":"aguardando-resposta",responsavel:contato?"contato":"ambos",urgencia:diff<=1?"media":"baixa",descricao:concreto.test(`${ap.oQue||""} ${prova}`)?`Compromisso confirmado para ${quando}. Acompanhe sem antecipar uma nova abordagem.`:`Aguardar o retorno combinado do contato para ${quando}.`,texto:prova};}
+    if(diff!=null&&diff<0&&diff>=-30)return {status:"retomar",responsavel:"corretor",urgencia:Math.abs(diff)>=3?"alta":"media",descricao:`O compromisso combinado venceu há ${Math.abs(diff)} dia(s). Retome usando essa pendência como gancho.`,texto:prova};
+  }
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[],pn=String(lead?.name||"").toLowerCase().split(/\s+/)[0]||"";
+  const re=/\b(vou|iremos|vamos|fico de|dou|darei|te|lhe)\b.{0,55}\b(retorno|retornar|respondo|responder|aviso|avisar|chamo|chamar|analiso|analisar|avalio|avaliar|converso|conversar|vejo|verificar)\b/i;
+  const cancel=/\b(desisti|n[aã]o vou|n[aã]o precisa|j[aá] resolvi|comprei|fechei com outro|comprou outro|sem interesse)\b/i;
+  for(let i=msgs.length-1;i>=Math.max(0,msgs.length-24);i--){const m=msgs[i];if(!ehMsgDoCliente(m,pn))continue;const t=String(m?.text||"").trim();if(!re.test(t))continue;const canc=msgs.slice(i+1).some(x=>ehMsgDoCliente(x,pn)&&cancel.test(String(x?.text||"")));if(canc)continue;let idade=null;try{const d=m?.iso?new Date(m.iso):null;if(d&&!isNaN(d))idade=Math.floor((Date.now()-d.getTime())/86400000);}catch(_){}if(idade!=null&&idade>180)continue;if(idade!=null&&idade>30)return {status:"retomar",responsavel:"corretor",urgencia:"alta",descricao:`O retorno combinado está vencido há ${idade} dia(s). Retome pela pendência.`,texto:t};return {status:"aguardando-resposta",responsavel:"contato",urgencia:"baixa",descricao:"Aguardar o retorno que o contato se comprometeu a dar.",texto:t};}
+  return null;
+}
+
+function ui670ModeloComercial(lead){
+  const a=lead?.analysis||{};
+  const mc=(a.modeloComercial&&typeof a.modeloComercial==="object")?JSON.parse(JSON.stringify(a.modeloComercial)):{};
+  const parceiro=ui670Parceiro(lead);
+  const txt=ui670TextoAnalise(lead);
+  const last=ui670UltimaMensagemReal(lead);
+  const real=Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>String(m?.text||"").trim()):[];
+  const rePerda=/\b(comprou|adquiriu|optou por)\b.{0,55}\b(outro|outra)\b|comprou outro im[oó]vel|j[aá] comprou.{0,35}(apartamento|im[oó]vel|casa)/i;
+  const reNova=/\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
+  let idxPerda=-1,idxNova=-1;real.forEach((m,i)=>{const t=String(m.text||"");if(rePerda.test(t))idxPerda=i;if(reNova.test(t))idxNova=i;});
+  const aiPerda=String(mc?.oportunidade?.resultado||"")==="comprou-outra-opcao"||String(mc?.oportunidade?.status||"")==="perdida";
+  const resumoPerda=rePerda.test(String(a.summary||""));
+  const novaDepois=idxNova>=0&&idxNova>idxPerda;
+  const comprouOutra=!novaDepois&&(aiPerda||idxPerda>=0||resumoPerda);
+  const vendaConosco=/contrato assinado|assinou o contrato|comprovante de pagamento|venda confirmada/.test(txt)&&!comprouOutra;
+  const despedida=last.falante==="contato"&&/^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(last.m?.text||"").trim());
+  const ultimaPedeResposta=last.falante==="contato"&&(/\?/.test(String(last.m?.text||""))||/^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(String(last.m?.text||"")));
+  const compromisso=ui671CompromissoAberto(lead);
+  const etapaLegacy=String(a?.diagnostico?.etapa||normalizarEtapa(lead?.etapa)||"descoberta").toLowerCase().replace(/\s+/g,"-");
+  mc.versao=Number(mc.versao||a._schemaComercial||0);
+  mc.contato=mc.contato||{};
+  mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
+  mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"Contato principal da oportunidade");
+  mc.oportunidade=mc.oportunidade||{};
+  mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
+  mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
+  mc.oportunidade.produto=mc.oportunidade.produto||a.produtoInteresse||lead?.product||"Não identificado";
+  mc.oportunidade.motivo=mc.oportunidade.motivo||a.summary||"Situação ainda não consolidada.";
+  if(vendaConosco){mc.oportunidade.status="ganha";mc.oportunidade.resultado="venda-conosco";mc.oportunidade.motivo="Venda confirmada conosco.";}
+  else if(comprouOutra){mc.oportunidade.status="perdida";mc.oportunidade.resultado="comprou-outra-opcao";mc.oportunidade.motivo="O comprador final adquiriu outro imóvel.";}
+  mc.relacionamento=mc.relacionamento||{};
+  mc.relacionamento.status=mc.relacionamento.status||(parceiro&&mc.oportunidade.status==="perdida"?"aguardando-nova-oportunidade":"ativo");
+  mc.relacionamento.potencial=mc.relacionamento.potencial||(parceiro?"médio":"não avaliado");
+  mc.relacionamento.motivo=mc.relacionamento.motivo||(parceiro?"O contato pode apresentar novos compradores.":a.clientProfile||"");
+  mc.acao=mc.acao||{};
+  mc.acao.status=mc.acao.status||(last.falante==="corretor"?"aguardando-resposta":"responder-agora");
+  mc.acao.responsavel=mc.acao.responsavel||(last.falante==="corretor"?"contato":"corretor");
+  mc.acao.urgencia=mc.acao.urgencia||(mc.acao.status==="responder-agora"?"alta":"baixa");
+  mc.acao.descricao=mc.acao.descricao||a.nextAction||"Reanalisar para definir o próximo passo.";
+  if(["ganha","perdida"].includes(mc.oportunidade.status)){
+    mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";
+    if(parceiro&&mc.oportunidade.status==="perdida") mc.acao.descricao="Nenhuma ação urgente. Mantenha a parceria ativa e registre uma nova oportunidade quando surgir outro cliente.";
+    else if(mc.oportunidade.status==="ganha") mc.acao.descricao="Venda concluída. Siga apenas com o pós-venda e os compromissos já combinados.";
+  }else if(ultimaPedeResposta){
+    mc.acao.status="responder-agora";mc.acao.responsavel="corretor";mc.acao.urgencia="alta";
+  }else if(compromisso){
+    mc.acao.status=compromisso.status;mc.acao.responsavel=compromisso.responsavel;mc.acao.urgencia=compromisso.urgencia;mc.acao.descricao=compromisso.descricao;
+  }else if(despedida){
+    mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";mc.acao.descricao="Nenhuma ação urgente neste momento.";
+  }
+  mc.contexto=mc.contexto||{};
+  mc.contexto.ultimaPessoaFalar=last.falante;
+  mc.contexto.ultimaMensagem=String(last.m?.text||mc.contexto.ultimaMensagem||"").trim();
+  mc.contexto.ultimoCompromisso=compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.";
+  mc.contexto.impedimentoPrincipal=mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
+  return mc;
+}
+window.ui670ModeloComercial=ui670ModeloComercial;
+
+const __prioridadeAtendimento670Base=prioridadeAtendimento;
+prioridadeAtendimento=function(l){
+  const mc=ui670ModeloComercial(l);
+  if(["ganha","perdida","encerrada-sem-decisao"].includes(String(mc?.oportunidade?.status||""))&&mc?.acao?.status==="sem-acao-urgente"){
+    return {score:-80,grupo:"pode-aguardar",titulo:"Sem ação urgente",motivo:mc?.relacionamento?.status==="aguardando-nova-oportunidade"?"oportunidade encerrada · parceria ativa":"oportunidade encerrada"};
+  }
+  return __prioridadeAtendimento670Base(l);
+};
+window.prioridadeAtendimento=prioridadeAtendimento;
+
+function ui670Badge(tuple){const [txt,cls]=tuple||["Não identificado","neutral"];return `<span class="ui670-badge ${cls}">${escapeHtml(txt)}</span>`;}
+function ui670TipoContatoLabel(tipo){return UI670_CONTACT_LABEL[tipo]||UI670_CONTACT_LABEL.outro;}
+function ui670FalanteLabel(lead,mc){
+  const f=mc?.contexto?.ultimaPessoaFalar;
+  if(f==="contato") return String(lead?.name||"Contato").split(/\s+/)[0];
+  if(f==="corretor") return "Você";
+  return "Não identificado";
+}
+function ui670Messages(analysis){
+  const m=analysis?.messages||{};
+  const base=mensagensDaAnalise(analysis||{});
+  return {
+    a:mensagemAprovadaSemAlteracao(base.a)||"",
+    b:mensagemAprovadaSemAlteracao(base.b)||mensagemAprovadaSemAlteracao(base.a)||"",
+    c:mensagemAprovadaSemAlteracao(base.c)||mensagemAprovadaSemAlteracao(base.a)||"",
+    aLabel:String(m.aLabel||"Melhor resposta"),
+    bLabel:String(m.bLabel||"Alternativa leve"),
+    cLabel:String(m.cLabel||"Alternativa firme"),
+    recomendada:["a","b","c"].includes(String(m.recomendada||base.recomendada||""))?String(m.recomendada||base.recomendada):"a"
+  };
+}
+window.ui670SelectMessage=function(k){
+  const map=state._ui670Messages||{};state._ui670MessageKey=k;
+  const el=qs("#ui670MessageText");if(el)el.textContent=map[k]||"";
+  qsa(".ui670-msg-option").forEach(b=>b.classList.toggle("active",b.dataset.key===k));
+};
+window.ui670CopyMessage=async function(){
+  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
+  if(!t){toast("Nenhuma mensagem necessária agora.");return;}
+  try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.");}catch(_){toast("Não consegui copiar.");}
+};
+window.ui670OpenWhats=function(){
+  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
+  const p=String(state._ui670LeadPhone||"");
+  if(!p){toast("Este contato está sem telefone.");return;}
+  window.open(whatsappLink(p,t),"_blank","noopener");
+};
+window.ui670OpenWhatsLivre=function(){
+  const p=String(state._ui670LeadPhone||"");if(!p){toast("Este contato está sem telefone.");return;}
+  window.open(whatsappLink(p,""),"_blank","noopener");
+};
+window.ui670Reanalisar=function(){const b=qs(".ui670-legacy-hidden #btnReanalisarSemTexto")||qs("#btnReanalisarSemTexto");if(b)b.click();else toast("Não encontrei a ação de reanálise.");};
+window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
+window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove();};
+window.ui670NovaOportunidade=function(){
+  const lead=state.lead;if(!lead?.id){toast("Abra o contato parceiro antes de registrar a oportunidade.");return;}
+  qs("#ui671NovaOppModal")?.remove();
+  const opts=(typeof EMPREENDIMENTOS_SENGER!=="undefined"?EMPREENDIMENTOS_SENGER:[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  const el=document.createElement("div");el.id="ui671NovaOppModal";el.className="ui671-modal";
+  el.innerHTML=`<div class="ui671-modal-card"><div class="ui671-modal-head"><div><small>Corretor parceiro</small><h3>Nova oportunidade</h3><p>${escapeHtml(lead.name||"Contato")}</p></div><button type="button" onclick="ui671FecharNovaOportunidade()">✕</button></div>
+  <label>Comprador final *</label><input id="ui671OppComprador" type="text" placeholder="Nome ou identificação do novo cliente" autocomplete="off">
+  <label>Empreendimento ou produto *</label><select id="ui671OppProduto"><option value="">Selecione</option>${opts}<option value="Outro">Outro</option></select>
+  <div id="ui671OppOutroWrap" hidden><label>Qual produto?</label><input id="ui671OppOutro" type="text" placeholder="Informe o empreendimento ou produto"></div>
+  <label>Contexto inicial</label><textarea id="ui671OppObs" rows="4" placeholder="O que o parceiro já informou sobre perfil, valor, prazo ou necessidade"></textarea>
+  <div class="ui671-modal-info">Será criada uma oportunidade independente, vinculada a este parceiro. A negociação anterior continuará preservada.</div>
+  <div class="ui671-modal-actions"><button class="secondary" type="button" onclick="ui671FecharNovaOportunidade()">Cancelar</button><button id="ui671OppSalvar" type="button" onclick="ui671SalvarNovaOportunidade()">Criar oportunidade</button></div></div>`;
+  document.body.appendChild(el);
+  el.addEventListener("click",e=>{if(e.target===el)ui671FecharNovaOportunidade();});
+  qs("#ui671OppProduto")?.addEventListener("change",e=>{const w=qs("#ui671OppOutroWrap");if(w)w.hidden=e.target.value!=="Outro";});
+  setTimeout(()=>qs("#ui671OppComprador")?.focus(),80);
+};
+window.ui671SalvarNovaOportunidade=async function(){
+  const lead=state.lead,comprador=String(qs("#ui671OppComprador")?.value||"").trim();
+  const sel=String(qs("#ui671OppProduto")?.value||"").trim();
+  const produto=sel==="Outro"?String(qs("#ui671OppOutro")?.value||"").trim():sel;
+  const observacao=String(qs("#ui671OppObs")?.value||"").trim();
+  if(!comprador){toast("Informe o novo comprador.");qs("#ui671OppComprador")?.focus();return;}
+  if(!produto){toast("Informe o empreendimento ou produto.");(sel==="Outro"?qs("#ui671OppOutro"):qs("#ui671OppProduto"))?.focus();return;}
+  const btn=qs("#ui671OppSalvar");if(btn){btn.disabled=true;btn.textContent="Criando...";}
+  try{
+    const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"nova-oportunidade-parceiro",id:lead.id,compradorFinal:comprador,produto,observacao})});
+    const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+    if(!r.ok||!d.ok)throw new Error(d.error||"Não foi possível criar a oportunidade.");
+    ui671FecharNovaOportunidade();invalidarLeadsCache();if(typeof loadRecentLeads==="function")await loadRecentLeads(true);toast("Nova oportunidade criada e vinculada ao parceiro.");
+    await abrirLead(String(d.id));
+  }catch(err){toast("Erro: "+(err?.message||err));if(btn){btn.disabled=false;btn.textContent="Criar oportunidade";}}
+};
+
+function ui670ScheduleHtml(lead){
+  if(!lead?.id)return "";
+  const id=JSON.stringify(String(lead.id));
+  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b><div class="ui670-quick-dates"><button onclick='reagendarDias(${id},0)'>Hoje</button><button onclick='reagendarDias(${id},1)'>Amanhã</button><button onclick='reagendarDias(${id},7)'>+7 dias</button><button onclick='reagendarDias(${id},15)'>+15 dias</button><button onclick='reagendarDias(${id},30)'>+30 dias</button></div><input type="date" onchange='reagendarLembrete(${id},this.value)'></div>`;
+}
+function ui670DetailRows(lead,mc){
+  const a=lead?.analysis||{},mem=a.memoria||a.memoriaSugerida||{};
+  const rows=[
+    ["Papel do contato",mc?.contato?.papel],
+    ["Comprador final",mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal],
+    ["Produto",mc?.oportunidade?.produto],
+    ["Identificador da oportunidade",mc?.oportunidade?.id],
+    ["Resultado",UI670_RESULT_LABEL[mc?.oportunidade?.resultado]||mc?.oportunidade?.resultado],
+    ["Motivo da oportunidade",mc?.oportunidade?.motivo],
+    ["Último compromisso",mc?.contexto?.ultimoCompromisso],
+    ["Impedimento principal",mc?.contexto?.impedimentoPrincipal],
+    ["Preferências",mem.preferencias],
+    ["Pessoas na decisão",mem.pessoasDecisao],
+    ["Observações",mem.observacoes]
+  ].filter(([,v])=>String(v||"").trim()&&!/^não identificado\.?$/i.test(String(v).trim()));
+  return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
+}
+
+renderLeadFoco=function(lead){
+  ui667ModoDetalheLead(true);
+  __renderLeadFoco631Base(lead);
+  const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
+  if(!wrap||!legacy)return;
+  const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
+  const stale=Number(mc.versao||a._schemaComercial||0)!==671;
+  const noAction=mc?.acao?.status==="sem-acao-urgente";
+  const preferred=noAction?"a":msgs.recomendada;
+  state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
+  const last=ui670UltimaMensagemReal(lead);
+  const recent=(Array.isArray(lead.recentMessages)?lead.recentMessages:[]).filter(m=>String(m?.text||"").trim()).slice(-4).reverse();
+  const timeline=recent.length?recent.map((m,i)=>{const pn=String(lead.name||"").toLowerCase().split(/\s+/)[0]||"";const cli=ehMsgDoCliente(m,pn);return `<div class="ui670-timeline-row"><i class="${i===0?'active':''}"></i><div><b>${escapeHtml(cli?String(lead.name||"Contato").split(/\s+/)[0]:"Você")}</b><p>${escapeHtml(String(m.text||"").slice(0,240))}</p><small>${escapeHtml([m.date,m.time].filter(Boolean).join(" "))}</small></div></div>`}).join(""):'<div class="empty">Sem mensagens recentes.</div>';
+  const opp=UI670_OPP_LABEL[mc?.oportunidade?.status]||["Situação não definida","neutral"];
+  const rel=UI670_REL_LABEL[mc?.relacionamento?.status]||["Relacionamento não definido","neutral"];
+  const act=UI670_ACTION_LABEL[mc?.acao?.status]||["Ação não definida","neutral"];
+  const type=ui670TipoContatoLabel(mc?.contato?.tipo);
+  const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
+  const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
+  const messageBlock=noAction?`<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`:`<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Toque em Atualizar análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
+  const shell=document.createElement("div");shell.className="lead-ui670";
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div><button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button></div>
+  ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>A tela já eliminou as contradições evidentes, mas a leitura completa ainda precisa ser atualizada para o novo modelo.</span></div><button onclick="ui670Reanalisar()">Atualizar análise comercial</button></div>`:""}
+  <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
+  <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${ui670Badge(act)}</div><h3>${escapeHtml(mc?.acao?.descricao||"Reanalisar para definir o próximo passo.")}</h3><div class="ui670-action-buttons">${lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Reanalisar()">Reanalisar</button><button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
+  ${messageBlock}
+  <section class="ui670-card"><div class="ui670-section-title"><span>Últimas mensagens</span><em>${totalMensagensLead(lead)} no histórico</em></div><div class="ui670-timeline">${timeline}</div><div id="ui670HistorySlot"></div></section>
+  <details class="ui670-details"><summary>Detalhes comerciais</summary><div class="ui670-details-body">${ui670DetailRows(lead,mc)}</div></details>
+  <details class="ui670-details" id="ui670NotePanel" hidden><summary>Registrar observação ou atendimento detalhado</summary><div id="ui670NoteSlot" class="ui670-details-body"></div></details>
+  <details class="ui670-details"><summary>Ferramentas e ações administrativas</summary><div class="ui670-admin-actions">${!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='abrirPropostaComLead(${safeJson(lead.name||"")},${safeJson(lead.product||"")},${JSON.stringify(String(lead.id||""))})'>Gerar proposta</button>`:""}${lead.id&&normalizarEtapa(lead.etapa)!=="Geladeira"?`<button onclick='arquivarLead(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Colocar na geladeira</button>`:""}${lead.id&&!ui670Parceiro(lead)&&!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='marcarPerdido(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Encerrar oportunidade</button>`:""}${lead.id?`<button class="danger" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Excluir definitivamente</button>`:""}</div></details>`;
+  wrap.insertBefore(shell,legacy);
+
+  // Reaproveita só os controles úteis do motor antigo; todo o conteúdo duplicado fica oculto.
+  const note=legacy.querySelector("#novoAtendimentoPanel");if(note)qs("#ui670NoteSlot")?.appendChild(note);
+  const hist=[...legacy.querySelectorAll("details")].find(d=>/ver histórico de conversa/i.test(d.querySelector("summary")?.textContent||""));
+  if(hist)qs("#ui670HistorySlot")?.appendChild(hist);
+  legacy.classList.add("ui670-legacy-hidden");
+};
+window.renderLeadFoco=renderLeadFoco;

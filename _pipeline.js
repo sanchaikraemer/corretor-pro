@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-unificado-v2";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-unificado-v3-modelo-comercial";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -286,6 +286,310 @@ function normalizarParceiroB2B(parsed, lead, timelineText) {
     parsed.diagnostico.objetivo = "objetivo-do-cliente-final";
   }
   return parsed;
+}
+
+
+// Atualização #670 — modelo comercial único.
+// Separa a pessoa com quem o corretor conversa, a oportunidade específica e o
+// relacionamento futuro. A IA interpreta; esta camada aplica regras duras para
+// impedir estados incompatíveis na tela e nas mensagens.
+const MC_CONTATOS = new Set(["comprador-direto", "corretor-parceiro", "intermediario", "familiar", "investidor", "empresa", "outro"]);
+const MC_OPORTUNIDADES = new Set(["descoberta", "interesse", "comparacao", "analise-financeira", "negociacao", "decisao", "ganha", "perdida", "encerrada-sem-decisao"]);
+const MC_RESULTADOS = new Set(["em-andamento", "venda-conosco", "comprou-outra-opcao", "condicoes-incompativeis", "desistiu", "sem-resposta", "oportunidade-futura", "outro"]);
+const MC_RELACIONAMENTOS = new Set(["ativo", "aguardando-nova-oportunidade", "contato-periodico", "pausado", "encerrado"]);
+const MC_ACOES = new Set(["responder-agora", "aguardando-resposta", "compromisso-agendado", "retomar", "sem-acao-urgente"]);
+const MC_RESPONSAVEIS = new Set(["corretor", "contato", "ambos", "ninguem"]);
+const MC_URGENCIAS = new Set(["alta", "media", "baixa", "nenhuma"]);
+
+function mcEnum(valor, permitidos, fallback) {
+  const v = String(valor || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, "-");
+  return permitidos.has(v) ? v : fallback;
+}
+
+function mcTexto(valor, fallback = "") {
+  const v = String(valor || "").replace(/\s+/g, " ").trim();
+  return v || fallback;
+}
+
+function mcAutorEhContato(author, lead, corretorNome) {
+  const autor = String(author || "").trim().toLowerCase();
+  if (!autor) return null;
+  const contato = String(lead?.clientName || lead?.name || "").trim().toLowerCase();
+  const primeiroContato = contato.split(/\s+/)[0] || "";
+  const corretor = String(corretorNome || "").trim().toLowerCase();
+  if (corretor && (autor.includes(corretor) || corretor.includes(autor))) return false;
+  if (/\b(senger|construtora|atendimento|sanchai|miguel kirinus)\b/i.test(autor)) return false;
+  if (contato && (autor.includes(contato) || contato.includes(autor))) return true;
+  if (primeiroContato && autor.includes(primeiroContato)) return true;
+  return null;
+}
+
+function mcUltimaMensagemReal(timeline, lead, corretorNome) {
+  const lista = Array.isArray(timeline) ? timeline : [];
+  for (let i = lista.length - 1; i >= 0; i--) {
+    const m = lista[i];
+    if (!m || !String(m.text || "").trim()) continue;
+    const source = String(m.source || "");
+    const type = String(m.type || "");
+    if (source === "manual" || source === "crm" || type === "print-whatsapp" || ["atendimento", "nota", "ligacao", "visita", "presencial"].includes(type)) continue;
+    if (/^(sistema|áudio sem referência exata)$/i.test(String(m.author || "").trim())) continue;
+    const ehContato = mcAutorEhContato(m.author, lead, corretorNome);
+    return { mensagem: m, falante: ehContato === true ? "contato" : ehContato === false ? "corretor" : "desconhecido" };
+  }
+  return { mensagem: null, falante: "desconhecido" };
+}
+
+
+function mcHojeIsoBR() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+}
+
+function mcDiasEntreIso(dataIso, hojeIso = mcHojeIsoBR()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataIso || ""))) return null;
+  const a = new Date(`${hojeIso}T12:00:00-03:00`);
+  const b = new Date(`${dataIso}T12:00:00-03:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+function mcDiasDesdeMensagem(m) {
+  try {
+    const iso = String(m?.iso || "");
+    let d = iso && !iso.startsWith("9999") ? new Date(iso) : null;
+    if (!d || Number.isNaN(d.getTime())) d = new Date(parseDateTime(m?.date, m?.time || "12:00"));
+    if (Number.isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  } catch (_) { return null; }
+}
+
+function mcUltimaMensagemPedeResposta(ultimo) {
+  if (ultimo?.falante !== "contato") return false;
+  const t = String(ultimo?.mensagem?.text || "").trim();
+  if (!t) return false;
+  return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|voc[eê] sabe|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
+}
+
+// Localiza compromisso REAL ainda aberto antes de considerar uma despedida cordial.
+// Isso evita o erro "vou analisar e te retorno sexta" + "muito obrigado" virar
+// "sem ação urgente". Compromissos com data futura aguardam; vencidos recentemente
+// viram retomada. Sem prova na timeline, a camada não inventa compromisso.
+function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
+  const hojeIso = mcHojeIsoBR();
+  const apps = Array.isArray(parsed?.confirmedAppointments) ? parsed.confirmedAppointments : [];
+  const concretos = /visita|caf[eé]|reuni[aã]o|liga[cç][aã]o|videochamada|assinatura|contrato|banco/i;
+  const retorno = /retorno|retornar|respondo|responder|aviso|avisar|chamo|chamar|analiso|analisar|avalio|avaliar|converso|conversar|vejo|verificar/i;
+
+  for (let i = apps.length - 1; i >= 0; i--) {
+    const ap = apps[i] || {};
+    const prova = mcTexto(ap.trechoLiteral || ap.quando || ap.oQue);
+    if (!prova) continue;
+    const diff = mcDiasEntreIso(String(ap.data || "").slice(0, 10), hojeIso);
+    const combinadoPorContato = /cliente|contato/i.test(String(ap.combinadoPor || ""));
+    const compromissoConcreto = concretos.test(`${ap.oQue || ""} ${prova}`);
+    if (diff != null && diff >= 0) {
+      const quando = diff === 0 ? "hoje" : diff === 1 ? "amanhã" : `em ${diff} dias`;
+      return {
+        status: compromissoConcreto ? "compromisso-agendado" : (combinadoPorContato ? "aguardando-resposta" : "compromisso-agendado"),
+        responsavel: combinadoPorContato ? "contato" : "ambos",
+        urgencia: diff <= 1 ? "media" : "baixa",
+        descricao: compromissoConcreto
+          ? `Compromisso confirmado para ${quando}. Acompanhe sem criar uma nova abordagem antes da hora.`
+          : `Aguardar o retorno combinado do contato para ${quando}.`,
+        texto: prova,
+        data: String(ap.data || "").slice(0, 10)
+      };
+    }
+    if (diff != null && diff < 0 && diff >= -30) {
+      return {
+        status: "retomar",
+        responsavel: "corretor",
+        urgencia: Math.abs(diff) >= 3 ? "alta" : "media",
+        descricao: `O compromisso combinado venceu há ${Math.abs(diff)} dia(s). Retome usando exatamente essa pendência como gancho.`,
+        texto: prova,
+        data: String(ap.data || "").slice(0, 10)
+      };
+    }
+  }
+
+  // Fallback determinístico para compromissos explícitos ainda não estruturados pela IA.
+  // Examina apenas falas do contato nas últimas mensagens, nunca um resumo inventado.
+  const reais = (Array.isArray(timeline) ? timeline : []).filter(m => m && String(m.text || "").trim());
+  const cancelar = /\b(desisti|n[aã]o vou|n[aã]o precisa|j[aá] resolvi|comprei|fechei com outro|comprou outro|sem interesse)\b/i;
+  for (let i = reais.length - 1; i >= Math.max(0, reais.length - 24); i--) {
+    const m = reais[i];
+    if (mcAutorEhContato(m.author, lead, corretorNome) !== true) continue;
+    const t = String(m.text || "").trim();
+    if (!retorno.test(t) || !/(\b(vou|iremos|vamos|fico de|dou|darei|te|lhe)\b)/i.test(t)) continue;
+    const houveCancelamentoDepois = reais.slice(i + 1).some(x => mcAutorEhContato(x.author, lead, corretorNome) === true && cancelar.test(String(x.text || "")));
+    if (houveCancelamentoDepois) continue;
+    const idadeDias = mcDiasDesdeMensagem(m);
+    if (idadeDias != null && idadeDias > 180) continue;
+    if (idadeDias != null && idadeDias > 30) {
+      return {
+        status: "retomar", responsavel: "corretor", urgencia: "alta",
+        descricao: `O retorno combinado está vencido há ${idadeDias} dia(s). Retome pela pendência, sem tratar como conversa encerrada.`,
+        texto: t, data: ""
+      };
+    }
+    const prazo = prazoEmDias(t);
+    if (prazo) {
+      return {
+        status: prazo.dias === 0 ? "aguardando-resposta" : "aguardando-resposta",
+        responsavel: "contato",
+        urgencia: prazo.dias <= 1 ? "media" : "baixa",
+        descricao: prazo.dias === 0 ? "Aguardar o retorno combinado para hoje." : `Aguardar o retorno combinado do contato em ${prazo.dias} dia(s).`,
+        texto: t,
+        data: ""
+      };
+    }
+    return {
+      status: "aguardando-resposta",
+      responsavel: "contato",
+      urgencia: "baixa",
+      descricao: "Aguardar o retorno que o contato se comprometeu a dar.",
+      texto: t,
+      data: ""
+    };
+  }
+  return null;
+}
+
+function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
+  if (!parsed || typeof parsed !== "object") return parsed;
+  const timelineText = (Array.isArray(timeline) ? timeline : []).map(m => `${m?.author || ""}: ${m?.text || ""}`).join("\n");
+  const bruto = (parsed.modeloComercial && typeof parsed.modeloComercial === "object") ? parsed.modeloComercial : {};
+  const parceiro = contatoPareceParceiro(lead, timelineText) || /parceir|corretor/.test(String(parsed.tipoContato || bruto?.contato?.tipo || "").toLowerCase());
+  const ultimo = mcUltimaMensagemReal(timeline, lead, corretorNome);
+  const linhasReais = (Array.isArray(timeline) ? timeline : []).filter(m => m && String(m.text || "").trim());
+  const rePerdeuOutra = /\b(comprou|adquiriu|optou por|foi para)\b.{0,55}\b(outro|outra)\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou\b.{0,35}\b(apartamento|im[oó]vel|casa)\b/i;
+  const reNovaOportunidade = /\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
+  let idxPerda = -1, idxNova = -1;
+  linhasReais.forEach((m, i) => { const t = String(m.text || ""); if (rePerdeuOutra.test(t)) idxPerda = i; if (reNovaOportunidade.test(t)) idxNova = i; });
+  const textoRecente = `${linhasReais.slice(-24).map(m => `${m.author || ""}: ${m.text || ""}`).join("\n")}\n${parsed.summary || ""}\n${parsed.nextAction || ""}`.toLowerCase();
+  const aiMarcouPerda = String(bruto?.oportunidade?.resultado || "") === "comprou-outra-opcao" || String(bruto?.oportunidade?.status || "") === "perdida";
+  const resumoMarcouPerda = rePerdeuOutra.test(String(parsed.summary || ""));
+  const existeNovaDepois = idxNova >= 0 && idxNova > idxPerda;
+  const comprouOutra = !existeNovaDepois && (aiMarcouPerda || idxPerda >= 0 || resumoMarcouPerda);
+  const vendaConosco = /contrato assinado|assinou o contrato|comprovante de pagamento|venda confirmada/.test(textoRecente) && !comprouOutra;
+  const condicoesIncompativeis = /condi[cç][oõ]es.{0,45}(n[aã]o encaix|inviabil|n[aã]o aceitou)|entrada.{0,35}(baixa|n[aã]o aceitou)|recus.{0,25}financi/.test(textoRecente);
+  const encerramentoCordial = ultimo.falante === "contato" && /^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(ultimo.mensagem?.text || "").trim());
+  const ultimaPedeResposta = mcUltimaMensagemPedeResposta(ultimo);
+  const compromissoAberto = mcCompromissoAberto(parsed, timeline, lead, corretorNome);
+
+  let tipoContato = mcEnum(bruto?.contato?.tipo, MC_CONTATOS, parceiro ? "corretor-parceiro" : "comprador-direto");
+  if (parceiro) tipoContato = "corretor-parceiro";
+
+  let statusOpp = mcEnum(bruto?.oportunidade?.status, MC_OPORTUNIDADES, mcEnum(parsed?.diagnostico?.etapa || parsed.etapaSugerida, MC_OPORTUNIDADES, "descoberta"));
+  let resultado = mcEnum(bruto?.oportunidade?.resultado, MC_RESULTADOS, "em-andamento");
+  if (vendaConosco) { statusOpp = "ganha"; resultado = "venda-conosco"; }
+  else if (comprouOutra) { statusOpp = "perdida"; resultado = "comprou-outra-opcao"; }
+  else if (condicoesIncompativeis && ["ganha", "perdida"].includes(statusOpp) === false && /encerr|n[aã]o deu|n[aã]o avan[cç]|desist/.test(textoRecente)) {
+    statusOpp = "perdida"; resultado = "condicoes-incompativeis";
+  }
+
+  let statusRel = mcEnum(bruto?.relacionamento?.status, MC_RELACIONAMENTOS, "ativo");
+  if (parceiro && statusOpp === "perdida") statusRel = "aguardando-nova-oportunidade";
+  if (!parceiro && statusOpp === "perdida" && statusRel === "ativo") statusRel = "pausado";
+  if (statusOpp === "ganha" && parceiro) statusRel = "ativo";
+
+  let statusAcao = mcEnum(bruto?.acao?.status, MC_ACOES, "responder-agora");
+  let responsavel = mcEnum(bruto?.acao?.responsavel, MC_RESPONSAVEIS, "corretor");
+  let urgencia = mcEnum(bruto?.acao?.urgencia, MC_URGENCIAS, statusAcao === "responder-agora" ? "alta" : "baixa");
+  if (statusOpp === "ganha" || statusOpp === "perdida") {
+    statusAcao = "sem-acao-urgente";
+    responsavel = "ninguem";
+    urgencia = "nenhuma";
+  } else if (ultimaPedeResposta) {
+    statusAcao = "responder-agora";
+    responsavel = "corretor";
+    urgencia = "alta";
+  } else if (compromissoAberto) {
+    statusAcao = compromissoAberto.status;
+    responsavel = compromissoAberto.responsavel;
+    urgencia = compromissoAberto.urgencia;
+  } else if (encerramentoCordial) {
+    statusAcao = "sem-acao-urgente";
+    responsavel = "ninguem";
+    urgencia = "nenhuma";
+  } else if (ultimo.falante === "corretor" && statusAcao === "responder-agora") {
+    statusAcao = "aguardando-resposta";
+    responsavel = "contato";
+    urgencia = "baixa";
+  }
+
+  let descricaoAcao = compromissoAberto && !["ganha", "perdida"].includes(statusOpp)
+    ? compromissoAberto.descricao
+    : mcTexto(bruto?.acao?.descricao || parsed.nextAction);
+  if (statusAcao === "sem-acao-urgente") {
+    if (parceiro && statusOpp === "perdida") descricaoAcao = "Nenhuma ação urgente. Mantenha a parceria ativa e registre uma nova oportunidade quando surgir outro cliente.";
+    else if (statusOpp === "ganha") descricaoAcao = "Venda concluída. Siga apenas com o pós-venda e os compromissos já combinados.";
+    else descricaoAcao = "Nenhuma ação urgente neste momento.";
+  }
+
+  const motivoOpp = mcTexto(bruto?.oportunidade?.motivo,
+    resultado === "comprou-outra-opcao" ? "O comprador final adquiriu outro imóvel." :
+    resultado === "condicoes-incompativeis" ? "As condições comerciais não se encaixaram para esta oportunidade." :
+    resultado === "venda-conosco" ? "Venda confirmada conosco." : mcTexto(parsed.summary));
+  const motivoRel = mcTexto(bruto?.relacionamento?.motivo,
+    parceiro && statusOpp === "perdida" ? "O contato segue como parceiro e pode apresentar novos compradores." : mcTexto(parsed.clientProfile));
+
+  parsed.modeloComercial = {
+    versao: 671,
+    contato: {
+      id: mcTexto(bruto?.contato?.id || parsed?.contatoId),
+      tipo: tipoContato,
+      papel: mcTexto(bruto?.contato?.papel, parceiro ? "Corretor parceiro que intermedeia compradores" : "Contato principal da oportunidade"),
+      compradorFinal: mcTexto(bruto?.contato?.compradorFinal || bruto?.oportunidade?.compradorFinal)
+    },
+    oportunidade: {
+      id: mcTexto(bruto?.oportunidade?.id || parsed?.oportunidadeId),
+      contatoId: mcTexto(bruto?.oportunidade?.contatoId || bruto?.contato?.id || parsed?.contatoId),
+      origemOportunidadeId: mcTexto(bruto?.oportunidade?.origemOportunidadeId || parsed?.origemOportunidadeId),
+      compradorFinal: mcTexto(bruto?.oportunidade?.compradorFinal || bruto?.contato?.compradorFinal),
+      status: statusOpp,
+      resultado,
+      produto: mcTexto(bruto?.oportunidade?.produto || parsed.produtoInteresse || lead?.product, "Não identificado"),
+      motivo: motivoOpp
+    },
+    relacionamento: {
+      status: statusRel,
+      potencial: mcTexto(bruto?.relacionamento?.potencial, parceiro ? "médio" : "não avaliado").toLowerCase(),
+      motivo: motivoRel
+    },
+    acao: {
+      status: statusAcao,
+      responsavel,
+      urgencia,
+      descricao: descricaoAcao
+    },
+    contexto: {
+      ultimaPessoaFalar: ultimo.falante,
+      ultimaMensagem: mcTexto(ultimo.mensagem?.text),
+      ultimoCompromisso: mcTexto(compromissoAberto?.texto || bruto?.contexto?.ultimoCompromisso || parsed?.diagnostico?.ultimoCompromissoCliente, "Nenhum compromisso identificado."),
+      impedimentoPrincipal: mcTexto(bruto?.contexto?.impedimentoPrincipal || parsed?.diagnostico?.objecaoPrincipal || parsed.risk, "Não identificado.")
+    }
+  };
+
+  parsed.tipoContato = parceiro ? "corretor-parceiro" : (parsed.tipoContato || tipoContato);
+  parsed.nextAction = descricaoAcao;
+  if (parsed.diagnostico && typeof parsed.diagnostico === "object") {
+    parsed.diagnostico.ultimaPessoaFalar = ultimo.falante === "contato" ? "Contato/cliente" : ultimo.falante === "corretor" ? "Corretor/construtora" : "Não identificado";
+    parsed.diagnostico.proximoPassoDeQuem = responsavel === "contato" ? "Do contato" : responsavel === "corretor" ? "Do corretor" : responsavel === "ambos" ? "Dos dois" : "De ninguém agora";
+  }
+  if (statusOpp === "perdida" || statusOpp === "ganha") {
+    parsed.probabilityPercent = statusOpp === "ganha" ? 100 : 0;
+    parsed.probability = statusOpp === "ganha" ? "100%" : "0%";
+    parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
+    if (parceiro) parsed.etapaSugerida = "Standby";
+  }
+  parsed._schemaComercial = 671;
+  return parsed;
+}
+
+export function __testarModeloComercialV671({ parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai" } = {}) {
+  return normalizarModeloComercial(JSON.parse(JSON.stringify(parsed || {})), lead, timeline, corretorNome);
 }
 
 // Lê um texto (próxima ação / fala do cliente) e devolve {dias, motivo} se houver
@@ -1666,6 +1970,7 @@ async function regenerarMensagensComModelo({ openai, lead, timelineText, parsed,
     tipoContato: parsed?.tipoContato || null,
     diagnostico: parsed?.diagnostico || null,
     leituraComercial: parsed?.leituraComercial || null,
+    modeloComercial: parsed?.modeloComercial || null,
     nextAction: parsed?.nextAction || null,
     produtoInteresse: parsed?.produtoInteresse || null,
     issues: issues || []
@@ -1681,6 +1986,7 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     tipoContato: parsed?.tipoContato || null,
     diagnostico: parsed?.diagnostico || null,
     leituraComercial: parsed?.leituraComercial || null,
+    modeloComercial: parsed?.modeloComercial || null,
     nextAction: parsed?.nextAction || null,
     produtoInteresse: parsed?.produtoInteresse || null,
     tipoRetomada: parsed?.tipoRetomada || null,
@@ -1788,11 +2094,29 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
+  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
 
 REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
 
 REGRA pro leituraComercial: preencha um objeto curto para o corretor entender a conversa em 10 segundos: { "ondeParou": "último ponto comercial real, sem ruído", "quemDeveProximoPasso": "cliente|corretor|ambos", "temperatura": "quente|morno|frio", "oQueDestravar": "a trava ou lacuna comercial de agora", "mensagemCurtaChance": "qual movimento de mensagem tem mais chance de resposta" }. Seja direto, sem texto longo.
+
+REGRA pro modeloComercial — ESTE É O ESTADO ÚNICO QUE COMANDA A TELA. Separe obrigatoriamente CONTATO, OPORTUNIDADE, RELACIONAMENTO e AÇÃO. Retorne:
+{
+  "contato": { "tipo": "comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro", "papel": "frase curta", "compradorFinal": "nome/descrição ou string vazia" },
+  "oportunidade": { "status": "descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|ganha|perdida|encerrada-sem-decisao", "resultado": "em-andamento|venda-conosco|comprou-outra-opcao|condicoes-incompativeis|desistiu|sem-resposta|oportunidade-futura|outro", "produto": "produto atual", "motivo": "fato curto que justifica" },
+  "relacionamento": { "status": "ativo|aguardando-nova-oportunidade|contato-periodico|pausado|encerrado", "potencial": "alto|medio|baixo|nao-avaliado", "motivo": "frase curta" },
+  "acao": { "status": "responder-agora|aguardando-resposta|compromisso-agendado|retomar|sem-acao-urgente", "responsavel": "corretor|contato|ambos|ninguem", "urgencia": "alta|media|baixa|nenhuma", "descricao": "ação objetiva" },
+  "contexto": { "ultimaPessoaFalar": "corretor|contato|desconhecido", "ultimaMensagem": "resumo literal curto", "ultimoCompromisso": "compromisso real ou nenhum", "impedimentoPrincipal": "principal trava real" }
+}
+REGRAS DE COERÊNCIA INEGOCIÁVEIS:
+- Contato e oportunidade NÃO são a mesma coisa. Um corretor parceiro pode continuar ativo mesmo quando a oportunidade do cliente final foi perdida.
+- Se o comprador final comprou outro imóvel: oportunidade.status="perdida", resultado="comprou-outra-opcao". Se o contato é parceiro: relacionamento.status="aguardando-nova-oportunidade" e acao.status="sem-acao-urgente".
+- Só use oportunidade.status="ganha" e resultado="venda-conosco" quando houver venda confirmada conosco.
+- Oportunidade ganha/perdida não pode continuar como negociação.
+- Se a última fala foi uma despedida cordial do contato e não há pergunta/pendência aberta, acao.status="sem-acao-urgente".
+- Se o corretor falou por último e aguarda retorno, acao.status="aguardando-resposta", não "responder-agora".
+- Se acao.status="sem-acao-urgente", não recomende nova mensagem de venda; a descrição deve orientar manter relação, pós-venda ou aguardar nova oportunidade.
+- A última pessoa a falar deve ser conferida na ÚLTIMA mensagem real da timeline, nunca inferida pelo resumo.
 
 REGRA CRÍTICA — PENDÊNCIA ABERTA ANTES DA OBJEÇÃO: antes de decidir nextAction, leituraComercial e messages, identifique a ÚLTIMA PENDÊNCIA COMERCIAL ABERTA. A próxima mensagem deve continuar exatamente desse ponto, não reiniciar descoberta.
 Sequência obrigatória de raciocínio:
@@ -2062,7 +2386,12 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
       maxOutputTokens: 4096,
       timeout: 32000
     });
-    const parsed = normalizarDiagnosticoJessica(normalizarParceiroB2B(parsedRaw, lead, timelineTextFull));
+    const parsed = normalizarModeloComercial(
+      normalizarDiagnosticoJessica(normalizarParceiroB2B(parsedRaw, lead, timelineTextFull)),
+      lead,
+      timeline,
+      corretorNome
+    );
     // Registra o modelo real usado no único raciocínio principal.
     parsed._modelo = completion?.model || modeloAnalise();
     // Calcula o horário de hábito do cliente a partir dos horários reais das mensagens dele
@@ -2148,9 +2477,13 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
       }
     }
     normalizarDiagnosticoJessica(parsed);
-    // Segunda chamada dedicada (gpt-4.1): gera as 3 mensagens com base no diagnóstico da chamada anterior.
-    // O modelo escreve as mensagens; o JavaScript só faz limpeza cosmética (emoji/espaços) e valida — nunca reescreve.
-    const msgResult = await gerarMensagensParaLead({ openai, lead, timelineText: timelineTextFull, parsed, corretorNome });
+    normalizarModeloComercial(parsed, lead, timeline, corretorNome);
+    // Quando não há ação urgente, não existe motivo comercial para gerar três novas mensagens.
+    // Isso evita pressão indevida, elimina contradição na tela e economiza uma chamada de IA.
+    const semAcaoUrgente = parsed?.modeloComercial?.acao?.status === "sem-acao-urgente";
+    const msgResult = semAcaoUrgente
+      ? { messages: { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" }, _modeloMensagens:null }
+      : await gerarMensagensParaLead({ openai, lead, timelineText: timelineTextFull, parsed, corretorNome });
     parsed.messages = (msgResult.messages && typeof msgResult.messages === "object") ? { ...msgResult.messages } : {};
     if (msgResult._modeloMensagens) parsed._modeloMensagens = msgResult._modeloMensagens;
     const m = parsed.messages;
@@ -2170,15 +2503,17 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
     if (!m.cLabel) m.cLabel = "Alternativa firme";
     if (!["a", "b", "c"].includes(String(m.recomendada || ""))) m.recomendada = "a";
 
-    // O validador só APROVA ou REPROVA. Ele nunca cria/substitui frases por regra fixa.
-    let validacaoFinal = validarMensagensComerciais({
-      mensagens: { a: m.a, b: m.b, c: m.c, recomendada: m.recomendada },
-      labels: { a: m.aLabel, b: m.bLabel, c: m.cLabel },
-      lead,
-      timelineText: timelineTextFull,
-      parsed
-    });
-    if (!validacaoFinal.ok) {
+    // O validador só APROVA ou REPROVA. Sem ação urgente, mensagens vazias são intencionais.
+    let validacaoFinal = semAcaoUrgente
+      ? { ok:true, corrigido:false, issues:[], mensagens:{ a:"", b:"", c:"" }, labels:{ a:"Sem mensagem agora", b:"", c:"" }, recomendada:"a" }
+      : validarMensagensComerciais({
+          mensagens: { a: m.a, b: m.b, c: m.c, recomendada: m.recomendada },
+          labels: { a: m.aLabel, b: m.bLabel, c: m.cLabel },
+          lead,
+          timelineText: timelineTextFull,
+          parsed
+        });
+    if (!semAcaoUrgente && !validacaoFinal.ok) {
       console.warn("[direciona] validação mensagens falhou:", JSON.stringify(validacaoFinal.issues));
       try {
         const reparo = await regenerarMensagensComModelo({
@@ -2219,8 +2554,8 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
     // Se validação falhou mas as mensagens têm CONTEÚDO, mostra mesmo assim —
     // uma mensagem com detalhe mínimo ruim é sempre melhor que tela vazia.
     // Só bloqueia (sugestoesPendentes) quando não há texto algum.
-    const temConteudo = !!(m.a && m.b && m.c);
-    parsed.sugestoesPendentes = !temConteudo;
+    const temConteudo = semAcaoUrgente || !!(m.a && m.b && m.c);
+    parsed.sugestoesPendentes = semAcaoUrgente ? false : !temConteudo;
     if (!validacaoFinal.ok) {
       console.warn("[direciona] validação mensagens ressalva:", JSON.stringify(validacaoFinal.issues));
       if (!temConteudo) {
@@ -2701,6 +3036,7 @@ function contextoAnteriorEnxuto(analysis) {
     probabilityPercent: a.probabilityPercent ?? null,
     diagnostico: a.diagnostico || null,
     leituraComercial: a.leituraComercial || null,
+    modeloComercial: a.modeloComercial || null,
     memoria: a.memoria || a.memoriaSugerida || null,
     objections: Array.isArray(a.objections) ? a.objections : [],
     risk: a.risk || null,

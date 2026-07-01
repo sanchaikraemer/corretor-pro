@@ -349,7 +349,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
       "tipoRetomada", "tipoContato", "avatarFoto", "venda", "motivoPerda", "motivo_perda",
       "permuta", "risk", "scoreAjuste", "produtoInteresse", "produtosInteresse", "mode",
-      "diagnostico", "leituraComercial", "evolucao", "memoria", "aprendizado", "objections",
+      "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
+      "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
       "sugestoesPendentes", "arquiteturaMensagens", "error"
     ];
     const out = {};
@@ -413,7 +414,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
     const nomeKey = normalizeKey(nomeResolvido);
     const nomeGenerico = !nomeKey || /^cliente importad[oa]$/i.test(String(nomeResolvido || "").trim());
-    const dedupeKey = nomeGenerico ? String(row.id || "") : nomeKey;
+    // O mesmo corretor parceiro pode ter várias oportunidades independentes. Registros com
+    // oportunidadeId explícito nunca são fundidos apenas porque o nome/telefone do parceiro é igual.
+    // Reimportações do mesmo negócio continuam atualizando o mesmo row, então o ID comercial é estável.
+    const oportunidadeId = String(analysis?.modeloComercial?.oportunidade?.id || analysis?.oportunidadeId || "").trim();
+    const dedupeKey = oportunidadeId ? `oportunidade:${oportunidadeId}` : (nomeGenerico ? String(row.id || "") : nomeKey);
 
     // Só materializa as mensagens que realmente serão enviadas ao navegador.
     // O histórico completo continua intacto no banco e é retornado em action=detalhe.

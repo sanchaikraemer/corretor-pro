@@ -439,3 +439,26 @@
 - O resultado informa quantas mensagens novas entraram, quantos áudios foram transcritos e quantos foram reaproveitados.
 - O histórico completo continua salvo e é mesclado sem duplicar mensagens.
 - Cache PWA atualizado para a versão 669.
+
+## Ponto #670 — inteligência comercial única e tela do lead enxuta
+
+- A análise passou a separar contato, oportunidade, relacionamento e ação atual.
+- Corretores parceiros não são mais tratados como compradores finais; uma oportunidade perdida não encerra a parceria.
+- Regras determinísticas impedem estados contraditórios, como oportunidade perdida ainda em negociação ou conversa concluída marcada como “Atender agora”.
+- A última pessoa a falar é conferida na timeline real.
+- Quando não há ação urgente, o sistema não gera mensagens desnecessárias nem faz a segunda chamada de IA.
+- A tela do lead foi consolidada em situação atual, próxima ação, uma única área de mensagem, últimas mensagens e detalhes recolhidos.
+- Diagnósticos, cabeçalhos, mensagens e narrativas duplicadas deixaram de aparecer.
+- Leads antigos exibem aviso para atualizar a análise; leads manuais já usam o novo modelo.
+- Cache PWA atualizado para a versão 670.
+
+## Ponto #671 — compromissos preservados e oportunidades vinculadas
+
+- Despedidas cordiais deixam de encerrar a ação quando existe compromisso ou retorno ainda pendente.
+- Compromissos futuros ficam como `Aguardando resposta` ou `Compromisso agendado`; compromissos vencidos recentemente viram `Retomar`.
+- Pergunta direta do contato sempre prevalece e mantém `Responder agora`.
+- O botão `Nova oportunidade` passa a abrir um cadastro real de comprador e empreendimento, sem depender de nova importação.
+- Cada nova oportunidade recebe identificador próprio e fica vinculada ao mesmo corretor parceiro, preservando a negociação anterior.
+- A listagem deixa de fundir oportunidades diferentes apenas porque pertencem ao mesmo parceiro.
+- O novo comprador aparece no cabeçalho e nos detalhes da oportunidade.
+- Cache PWA atualizado para a versão 671.
