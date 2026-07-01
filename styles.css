@@ -1227,6 +1227,7 @@ html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{bac
   .cp-mobile-brand{display:flex!important;align-items:center!important;gap:7px!important;margin-right:auto!important;cursor:pointer!important}
   .cp-mobile-brand img{display:block!important;width:25px!important;height:25px!important;border-radius:6px!important;object-fit:contain!important}
   .cp-mobile-brand span{color:var(--cp-text)!important;font-size:14px!important;font-weight:750!important;line-height:1!important;white-space:nowrap!important}.cp-mobile-brand strong{color:var(--cp-coral)!important;font-weight:800!important}
+  .cp-mobile-version{display:inline-block!important;margin-left:7px!important;font-size:9px!important;font-weight:650!important;color:var(--cp-muted)!important;letter-spacing:.01em!important}
   .cp-menu-mobile{display:grid!important}.cp-top-actions{gap:4px!important}.cp-icon-btn{width:32px!important;height:32px!important}.cp-icon-btn svg{width:18px!important;height:18px!important}
   .screen{padding:14px 12px 88px!important;max-width:none!important}
   .screen#home{padding:0!important}

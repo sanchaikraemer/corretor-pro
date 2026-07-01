@@ -1,11 +1,5 @@
 # Pontos de restauração ativos
 
-## Ponto #665 — 2026-07-01 — Importação cria o bucket sozinho quando ele some
-
-- A rota que prepara o envio do ZIP passa a criar o bucket do Storage automaticamente quando ele não existe (foi apagado ou nunca criado), em vez de só tentar ajustá-lo.
-- Se a geração da URL de upload falhar por bucket ausente, o servidor força a criação e tenta gerar a URL mais uma vez antes de desistir.
-- A mensagem de erro do app passa a incluir o detalhe técnico do servidor, facilitando identificar a causa real quando algo falha.
-
 ## Ponto #652 — 2026-06-30 — Navegação sob demanda e fim dos cliques duplicados
 
 - Inicialização deixa de montar Pipeline, Agenda, Carteira, Vendas e relatórios escondidos; somente a Home é processada na abertura.
@@ -404,3 +398,12 @@
 - Avatares deixaram de depender de quatro imagens ausentes no pacote.
 - Identidade visual e marca Corretor Pro preservadas.
 - Cache PWA atualizado para a versão 664.
+
+## Ponto #665 — correção do upload no Supabase Storage
+
+- A rota de upload agora verifica se o bucket `whatsapp-zips` existe e o cria automaticamente quando estiver ausente.
+- A tentativa de configurar limite alto deixou de bloquear arquivos pequenos quando o plano do Supabase recusa 2 GB.
+- Nome do bucket e variáveis de ambiente são normalizados para evitar espaços acidentais.
+- O aplicativo passa a mostrar o detalhe real devolvido pelo Supabase caso o upload ainda falhe.
+- Corrigido o espaçamento entre “Corretor Pro” e “Atualização #665” no cabeçalho mobile.
+- Cache PWA atualizado para a versão 665.

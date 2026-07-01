@@ -6086,9 +6086,13 @@ async function uploadLargeZipToSupabase(file){
   catch(e){ throw new Error("A rota de upload grande não respondeu em JSON."); }
 
   if(!metaRes.ok || !meta.ok){
-    const base = meta.error || "Não foi possível preparar o upload grande.";
-    const extra = meta.details && meta.details !== base ? " ("+meta.details+")" : "";
-    throw new Error(base + extra);
+    const partesErro = [
+      meta.error,
+      meta.details,
+      meta.bucket ? `Armazenamento: ${meta.bucket}` : "",
+      meta.bucketWarning ? `Aviso: ${meta.bucketWarning}` : ""
+    ].filter(Boolean);
+    throw new Error(partesErro.join("\n") || "Não foi possível preparar o upload grande.");
   }
 
   qs("#processingText").textContent="Enviando a conversa (arquivo grande)…";
