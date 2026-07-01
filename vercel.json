@@ -19,6 +19,9 @@
     },
     "api/diagnostico.js": {
       "maxDuration": 60
+    },
+    "api/restaurar-leads.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

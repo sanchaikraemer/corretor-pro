@@ -340,3 +340,26 @@
 - Histórico completo preservado; listagens continuam leves e o detalhe carrega sob demanda.
 - Cache estático isolado em `corretor-pro-static-v657`.
 
+
+## Ponto #658 — Reconstrução fiel Opção A
+- Dashboard desktop e mobile refeitos nas proporções das referências aprovadas.
+- Estrutura, tipografia, cards, gráficos, navegação e identidade Corretor Pro revisados.
+- Avatares visuais locais, sem dependências externas.
+- Histórico completo preservado e carregamento leve mantido.
+- Cache PWA isolado na versão 658.
+
+## Ponto #659 — versão visível no topo
+
+- Número da atualização exibido abaixo da marca no desktop e no mobile.
+- Removido o estado oculto do identificador de versão.
+- Cache PWA atualizado para a versão 659.
+
+
+## Ponto #660 — restauração automática dos leads antigos
+
+- O aplicativo confere automaticamente as tabelas antigas `leads` e `direciona_leads` no Supabase.
+- Leads ausentes são restaurados em `whatsapp_processamentos`, preservando nome, telefone, empreendimento, etapa, observações, próximo contato e motivo de perda.
+- A restauração é idempotente: não duplica registros já presentes por ID, telefone ou nome.
+- Foi adicionada uma ação manual em Configurações para repetir a conferência.
+- Se as tabelas antigas já tiverem sido apagadas, o importador de CSV continua disponível como alternativa.
+- Atualização #660 permanece visível no topo.

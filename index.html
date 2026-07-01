@@ -47,7 +47,7 @@
   <aside class="sidebar">
     <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Atendimentos">
       <img class="cp-brand-mark" src="/logo-cp.png?v=__VERSION__" alt="">
-      <div class="cp-brand-name">Corretor <strong>Pro</strong><small>Plataforma de vendas imobiliárias</small></div><span class="sb-ver-top" hidden>Atualização #__VERSION__</span>
+      <div class="cp-brand-name">Corretor <strong>Pro</strong><small>Plataforma de vendas imobiliárias</small><span class="sb-ver-top">Atualização #__VERSION__</span></div>
     </div>
     <nav class="sb-nav">
       <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Atendimentos</button>
@@ -67,7 +67,7 @@
   <div class="main-col">
   <div class="top cp-topbar">
     <div class="brand go cp-mobile-brand" data-target="home" title="Voltar para Atendimentos">
-      <img src="/logo-cp.png?v=__VERSION__" alt=""><span>Corretor <strong>Pro</strong></span>
+      <img src="/logo-cp.png?v=__VERSION__" alt=""><span class="cp-mobile-brand-copy"><b>Corretor <strong>Pro</strong></b><small class="cp-mobile-version">Atualização #__VERSION__</small></span>
     </div>
     <div class="cp-search desktop-only">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -147,6 +147,7 @@
             <button class="cp-card-link" onclick="show('agenda')">Ver todas atividades <span>›</span></button>
           </article>
         </div>
+        <button type="button" class="cp-dashboard-continue" onclick="show('carteira')"><span>Continuar atendendo</span><b>›</b></button>
       </div>
 
       <div id="cpLeadWorkspace" class="cp-lead-workspace">
@@ -683,9 +684,15 @@
           </button>
         </div>
       </div>
+      <div class="card compact" id="legacyRestoreCard">
+        <div class="label">Restaurar leads da base anterior</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">O Corretor Pro confere automaticamente as tabelas antigas do Supabase e recoloca no sistema os leads que ainda não aparecem, sem duplicar os que já existem.</div>
+        <button class="btn secondary" type="button" id="legacyRestoreBtn" onclick="restaurarLeadsAntigos(false)" style="width:100%">Conferir e restaurar agora</button>
+        <div class="small" id="legacyRestoreStatus" style="margin-top:8px;color:var(--muted)"></div>
+      </div>
       <div class="card compact" id="crmImportCard">
-        <div class="label">Importar leads do CRM (CSV)</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Sobe o arquivo .csv exportado do seu CRM. Cada lead entra com nome, telefone, empreendimento, etapa e a <b>observação inteira</b>. Os ativos são analisados na hora; os perdidos entram pra reativar depois. <b>Rode só uma vez</b> (rodar de novo duplica).</div>
+        <div class="label">Importar leads (CSV)</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Sobe o arquivo .csv exportado do seu sistema anterior. Cada lead entra com nome, telefone, empreendimento, etapa e a <b>observação inteira</b>. Os ativos são analisados na hora; os perdidos entram pra reativar depois. <b>Rode só uma vez</b> (rodar de novo duplica).</div>
         <input class="file-native" type="file" id="crmCsvInput" accept=".csv,text/csv" style="display:none">
         <button class="btn secondary" type="button" id="crmImportBtn" style="width:100%">Escolher CSV e importar</button>
         <div class="small" id="crmImportStatus" style="margin-top:8px;color:var(--muted)"></div>
