@@ -6241,6 +6241,7 @@ async function processarStorageEmEtapas(bucket, path){
 
 // ============ RENDERIZAÇÃO + SALVAR/DESCARTAR ============
 async function renderProcessedResult(data, meta){
+ try{
   const lead = data.lead || {};
   const analysis = data.analysis || {};
   state.lead = limparLead({
@@ -6357,6 +6358,16 @@ async function renderProcessedResult(data, meta){
     // Lead novo: importou = salvo. Salva e abre o lead automaticamente, sem clique.
     salvarLeadPendente();
   }
+ }catch(err){
+  // Antes: erro aqui virava tela travada em silêncio (função chamada sem await/catch). Agora avisa.
+  const box = qs("#resultBox");
+  if(box){
+    box.className = "notice error";
+    box.innerHTML = "<b>Deu erro ao mostrar o resultado.</b><br><br>" + escapeHtml(String(err?.message||err)) +
+      `<div style="margin-top:14px"><button type="button" class="btn" onclick="location.reload()">Recarregar</button></div>`;
+  }
+  toast("Erro ao processar o resultado: " + (err?.message||err));
+ }
 }
 
 // Acha um lead já salvo parecido (por TELEFONE ou NOME) pra reimportação virar atualização — nunca duplicar.

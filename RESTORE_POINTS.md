@@ -363,3 +363,11 @@
 - Foi adicionada uma ação manual em Configurações para repetir a conferência.
 - Se as tabelas antigas já tiverem sido apagadas, o importador de CSV continua disponível como alternativa.
 - Atualização #660 permanece visível no topo.
+
+
+## Ponto #661 — trava fantasma ao finalizar a importação
+
+- `renderProcessedResult` (finaliza a tela depois de importar o ZIP) é chamada em dois lugares sem `await` nem `.catch()`; um erro no meio dela sumia em silêncio e deixava a tela travada em "Conversa processada".
+- Função protegida com try/catch: se der erro, aparece uma caixa vermelha explicando o problema com botão "Recarregar", em vez de travar sem aviso.
+- Nenhuma linha de lógica foi alterada — só o envelope try/catch entrou.
+- Cache PWA atualizado para a versão 661.
