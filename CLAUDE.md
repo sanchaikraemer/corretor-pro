@@ -2,24 +2,39 @@
 
 ## Regra obrigatória de versão
 
-**SEMPRE incremente a versão ao subir uma atualização ou corrigir qualquer coisa.**
+**SEMPRE incremente a versão ao subir uma atualização ou corrigir qualquer coisa
+que afete o app publicado.**
 
-A versão fica em arquivos espelhados — ao mudar, atualize TODOS de uma vez:
+A versão canônica é o maior `## Ponto #NNN` do `RESTORE_POINTS.md` — é dele que o
+`build.js` tira o valor que substitui o placeholder `__VERSION__` em todos os
+arquivos publicados (`index.html`, `app.js`, `service-worker.js`, `styles.css`,
+`manifest.json`, `share.html`). Ou seja, na maioria dos arquivos você NÃO escreve
+o número: deixa `__VERSION__` e o build resolve.
 
-- `version.js` → `app: "vNNN"` e `package: "0.NN.0"` (fonte única de verdade)
-- `package.json` → `"version": "0.NN.0"`
-- `index.html` → versão no `<span id="header-version">` e todas as query strings `?v=NNN` (styles.css, version.js, zip.min.js, app.js)
-- `app.js` → imports internos `./db.js?v=NNN` e `./whatsapp.js?v=NNN`, e o fallback `VERSION_INFO`
-- `service-worker.js` → `importScripts("/version.js?v=NNN")`, fallback `VERSION_INFO`, e todas as query strings em `CORE_ASSETS`
-- `server.js` → fallback `VERSION_INFO`
-- `test-updates.mjs` → atualizar os testes que verificam a versão (`app: "vNNN"`, `header-version`, query strings, `pkg.version`)
+Ao subir de vNNN para v(NNN+1), altere manualmente só estes três pontos:
 
-Trocar a versão do `service-worker.js` é o que força o navegador a instalar o novo
-Service Worker e limpar o cache antigo do PWA. Se a versão não mudar nesse arquivo,
-o usuário continua vendo a versão antiga em cache.
+- `RESTORE_POINTS.md` → adicione um bloco novo `## Ponto #NNN — descrição` (é a
+  fonte da verdade lida pelo `build.js`).
+- `service-worker.js` → o nome do cache `const STATIC_CACHE = 'corretor-pro-static-vNNN-'`
+  (esse é o único lugar com o número escrito à mão, e é o que força o PWA a atualizar).
+- `package.json` → `"version": "NNN.0.0"`.
+
+Opcional, seguindo o padrão do repo: crie um `ALTERACOES_VNNN.md` descrevendo a mudança.
+
+Trocar o número do cache no `service-worker.js` é o que força o navegador a instalar
+o novo Service Worker e limpar o cache antigo do PWA. Se esse número não mudar, o
+usuário continua vendo a versão antiga em cache.
+
+Mudanças que NÃO tocam o app publicado (só testes, `CLAUDE.md`, docs) não precisam
+de bump — o `build.js` nem copia esses arquivos para `public/`.
 
 ## Antes de subir
 
-- Rode `node --test test-*.mjs` — todos os 53 testes devem passar.
+- Rode `npm test` — precisa passar. O script faz `node --check` em `app.js`,
+  `build.js`, `service-worker.js` e nos `api/*.js`, depois roda `teste-ui.mjs`,
+  `teste-restauracao-leads.mjs` e os testes de performance.
+  - `teste-ui.mjs` é **independente de versão**: ele descobre a versão pelo
+    `RESTORE_POINTS.md` e verifica que `service-worker.js` e `package.json` estão
+    batendo. Se você esquecer de bumpar um dos dois, o teste quebra na hora.
 - Faça commit com `user.email = noreply@anthropic.com` (senão o GitHub marca como Unverified).
 - Push para `main` e para a branch de trabalho.
