@@ -1,5 +1,5 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v664-' + BUILD_ID;
+const STATIC_CACHE = 'corretor-pro-static-v665-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];

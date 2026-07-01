@@ -6086,7 +6086,9 @@ async function uploadLargeZipToSupabase(file){
   catch(e){ throw new Error("A rota de upload grande não respondeu em JSON."); }
 
   if(!metaRes.ok || !meta.ok){
-    throw new Error(meta.error || meta.details || "Não foi possível preparar o upload grande.");
+    const base = meta.error || "Não foi possível preparar o upload grande.";
+    const extra = meta.details && meta.details !== base ? " ("+meta.details+")" : "";
+    throw new Error(base + extra);
   }
 
   qs("#processingText").textContent="Enviando a conversa (arquivo grande)…";
@@ -8300,7 +8302,7 @@ if("serviceWorker" in navigator){
   });
   addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("/service-worker.js?v=664", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/service-worker.js?v=665", { scope: "/" });
       // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;

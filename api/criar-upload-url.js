@@ -4,26 +4,46 @@ const BUCKET_MAX_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES) || 214748364
 
 let bucketConfigured = false;
 
+// Libera ZIP + vídeo/áudio (pra transcrição). null nem sempre limpa restrições antigas; lista explícita é mais confiável.
+const BUCKET_OPTIONS = {
+  public: false,
+  fileSizeLimit: BUCKET_MAX_BYTES,
+  allowedMimeTypes: [
+    "application/zip", "application/x-zip-compressed", "application/octet-stream",
+    "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
+    "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
+  ]
+};
+
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
 }
 
+function bucketNaoExiste(msg = "") {
+  return /not found|does not exist|no such bucket/i.test(String(msg));
+}
+
+// Garante que o bucket existe e aceita arquivos grandes.
+// Se não existir (foi apagado ou nunca criado), cria na hora — assim o upload
+// nunca falha por "bucket ausente" e o dono não precisa mexer no Supabase.
 async function ensureBucketAcceptsLargeFiles(supabase, bucket) {
   if (bucketConfigured) return null;
   try {
-    const { error } = await supabase.storage.updateBucket(bucket, {
-      public: false,
-      fileSizeLimit: BUCKET_MAX_BYTES,
-      // Libera ZIP + vídeo/áudio (pra transcrição). null nem sempre limpa restrições antigas; lista explícita é mais confiável.
-      allowedMimeTypes: [
-        "application/zip", "application/x-zip-compressed", "application/octet-stream",
-        "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
-        "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
-      ]
-    });
-    if (!error) bucketConfigured = true;
-    return error?.message || null;
+    const { error: updateError } = await supabase.storage.updateBucket(bucket, BUCKET_OPTIONS);
+    if (!updateError) { bucketConfigured = true; return null; }
+
+    // Bucket provavelmente não existe ainda — tenta criar.
+    const { error: createError } = await supabase.storage.createBucket(bucket, BUCKET_OPTIONS);
+    if (!createError) { bucketConfigured = true; return null; }
+
+    // Corrida: outro request criou primeiro. Considera resolvido.
+    if (/already exists|resource already exists|duplicate/i.test(createError.message || "")) {
+      bucketConfigured = true;
+      return null;
+    }
+
+    return createError.message || updateError.message || null;
   } catch (e) {
     return e?.message || String(e);
   }
@@ -99,10 +119,20 @@ export default async function handler(req, res) {
     const now = new Date();
     const storagePath = `whatsapp/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now()}-${fileName}`;
 
-    const { data: signed, error: signedError } = await supabase
+    let { data: signed, error: signedError } = await supabase
       .storage
       .from(bucket)
       .createSignedUploadUrl(storagePath, { upsert: true });
+
+    // Se falhou porque o bucket sumiu, força a criação e tenta mais uma vez.
+    if ((signedError || !signed?.signedUrl) && bucketNaoExiste(signedError?.message)) {
+      bucketConfigured = false;
+      await ensureBucketAcceptsLargeFiles(supabase, bucket);
+      ({ data: signed, error: signedError } = await supabase
+        .storage
+        .from(bucket)
+        .createSignedUploadUrl(storagePath, { upsert: true }));
+    }
 
     if (signedError || !signed?.signedUrl) {
       return json(res, 500, {
