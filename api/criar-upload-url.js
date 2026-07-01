@@ -1,52 +1,93 @@
 import { createClient } from "@supabase/supabase-js";
 
 const BUCKET_MAX_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES) || 2147483648;
+const ALLOWED_MIME_TYPES = [
+  "application/zip", "application/x-zip-compressed", "application/octet-stream",
+  "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
+  "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
+];
 
 let bucketConfigured = false;
 
-// Libera ZIP + vídeo/áudio (pra transcrição). null nem sempre limpa restrições antigas; lista explícita é mais confiável.
-const BUCKET_OPTIONS = {
-  public: false,
-  fileSizeLimit: BUCKET_MAX_BYTES,
-  allowedMimeTypes: [
-    "application/zip", "application/x-zip-compressed", "application/octet-stream",
-    "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
-    "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
-  ]
-};
-
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(payload));
 }
 
-function bucketNaoExiste(msg = "") {
-  return /not found|does not exist|no such bucket/i.test(String(msg));
+function errorMessage(value) {
+  return value?.message || value?.error_description || value?.error || String(value || "Erro desconhecido");
 }
 
-// Garante que o bucket existe e aceita arquivos grandes.
-// Se não existir (foi apagado ou nunca criado), cria na hora — assim o upload
-// nunca falha por "bucket ausente" e o dono não precisa mexer no Supabase.
-async function ensureBucketAcceptsLargeFiles(supabase, bucket) {
-  if (bucketConfigured) return null;
-  try {
-    const { error: updateError } = await supabase.storage.updateBucket(bucket, BUCKET_OPTIONS);
-    if (!updateError) { bucketConfigured = true; return null; }
+function isMissingBucket(error) {
+  const msg = errorMessage(error).toLowerCase();
+  return error?.statusCode === "404" || error?.status === 404 || error?.code === "404" ||
+    msg.includes("bucket not found") || msg.includes("not found") || msg.includes("does not exist");
+}
 
-    // Bucket provavelmente não existe ainda — tenta criar.
-    const { error: createError } = await supabase.storage.createBucket(bucket, BUCKET_OPTIONS);
-    if (!createError) { bucketConfigured = true; return null; }
+async function createBucketWithFallback(supabase, bucket) {
+  const attempts = [
+    { public: false, fileSizeLimit: BUCKET_MAX_BYTES, allowedMimeTypes: ALLOWED_MIME_TYPES },
+    { public: false, allowedMimeTypes: ALLOWED_MIME_TYPES },
+    { public: false }
+  ];
 
-    // Corrida: outro request criou primeiro. Considera resolvido.
-    if (/already exists|resource already exists|duplicate/i.test(createError.message || "")) {
-      bucketConfigured = true;
-      return null;
+  const failures = [];
+  for (const options of attempts) {
+    try {
+      const { error } = await supabase.storage.createBucket(bucket, options);
+      if (!error) return { created: true, warning: failures[0] || null };
+
+      const msg = errorMessage(error);
+      // Outro processo/deploy pode ter criado o bucket entre o GET e o CREATE.
+      if (/already exists|duplicate/i.test(msg)) return { created: false, warning: null };
+      failures.push(msg);
+    } catch (error) {
+      failures.push(errorMessage(error));
     }
-
-    return createError.message || updateError.message || null;
-  } catch (e) {
-    return e?.message || String(e);
   }
+
+  return { created: false, error: failures.filter(Boolean).join(" | ") || "Não foi possível criar o bucket." };
+}
+
+async function ensureBucketReady(supabase, bucket) {
+  if (bucketConfigured) return { ok: true, existed: true, configured: true };
+
+  let existed = false;
+  try {
+    const { data, error } = await supabase.storage.getBucket(bucket);
+    if (!error && data) {
+      existed = true;
+    } else if (error && !isMissingBucket(error)) {
+      return { ok: false, step: "consultar bucket", error: errorMessage(error) };
+    }
+  } catch (error) {
+    return { ok: false, step: "consultar bucket", error: errorMessage(error) };
+  }
+
+  if (!existed) {
+    const created = await createBucketWithFallback(supabase, bucket);
+    if (created.error) {
+      return { ok: false, step: "criar bucket", error: created.error };
+    }
+  }
+
+  // A configuração de 2 GB pode ser recusada pelo plano do Supabase. Isso não deve
+  // impedir arquivos pequenos de serem enviados; por isso a falha vira aviso.
+  let warning = null;
+  try {
+    const { error } = await supabase.storage.updateBucket(bucket, {
+      public: false,
+      fileSizeLimit: BUCKET_MAX_BYTES,
+      allowedMimeTypes: ALLOWED_MIME_TYPES
+    });
+    if (error) warning = errorMessage(error);
+  } catch (error) {
+    warning = errorMessage(error);
+  }
+
+  bucketConfigured = true;
+  return { ok: true, existed, configured: !warning, warning };
 }
 
 function sanitizeFileName(name = "conversa-whatsapp.zip") {
@@ -78,9 +119,9 @@ export default async function handler(req, res) {
     return json(res, 405, { ok: false, error: "Use POST para criar URL de upload." });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips";
+  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const bucket = String(process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips").trim() || "whatsapp-zips";
 
   if (!supabaseUrl || !serviceRoleKey) {
     return json(res, 500, {
@@ -100,10 +141,6 @@ export default async function handler(req, res) {
     return json(res, 400, { ok: false, error: "Não foi possível ler o corpo da requisição." });
   }
 
-  if (body && body.probe) {
-    return json(res, 200, { ok: true, bucket });
-  }
-
   const fileName = sanitizeFileName(body?.fileName);
   if (!/\.(zip|mp4|webm|mov|m4v|mkv|mp3|m4a|ogg|oga|opus|wav|aac)$/i.test(fileName)) {
     return json(res, 400, { ok: false, error: "Tipo de arquivo não suportado (envie ZIP do WhatsApp ou um vídeo/áudio)." });
@@ -114,33 +151,35 @@ export default async function handler(req, res) {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const bucketConfigError = await ensureBucketAcceptsLargeFiles(supabase, bucket);
+    const bucketState = await ensureBucketReady(supabase, bucket);
+    if (!bucketState.ok) {
+      return json(res, 500, {
+        ok: false,
+        error: `Não foi possível preparar o armazenamento “${bucket}”.`,
+        details: `${bucketState.step}: ${bucketState.error}`,
+        bucket
+      });
+    }
+
+    if (body && body.probe) {
+      return json(res, 200, { ok: true, bucket, bucketState });
+    }
 
     const now = new Date();
     const storagePath = `whatsapp/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now()}-${fileName}`;
 
-    let { data: signed, error: signedError } = await supabase
+    const { data: signed, error: signedError } = await supabase
       .storage
       .from(bucket)
       .createSignedUploadUrl(storagePath, { upsert: true });
-
-    // Se falhou porque o bucket sumiu, força a criação e tenta mais uma vez.
-    if ((signedError || !signed?.signedUrl) && bucketNaoExiste(signedError?.message)) {
-      bucketConfigured = false;
-      await ensureBucketAcceptsLargeFiles(supabase, bucket);
-      ({ data: signed, error: signedError } = await supabase
-        .storage
-        .from(bucket)
-        .createSignedUploadUrl(storagePath, { upsert: true }));
-    }
 
     if (signedError || !signed?.signedUrl) {
       return json(res, 500, {
         ok: false,
         error: "Não foi possível gerar a URL de upload no Supabase Storage.",
-        details: signedError?.message || "createSignedUploadUrl não retornou signedUrl.",
+        details: errorMessage(signedError || "createSignedUploadUrl não retornou signedUrl."),
         bucket,
-        bucketConfigError
+        bucketWarning: bucketState.warning || null
       });
     }
 
@@ -150,13 +189,14 @@ export default async function handler(req, res) {
       path: storagePath,
       token: signed.token,
       signedUrl: signed.signedUrl,
-      bucketConfigError: bucketConfigError || undefined
+      bucketWarning: bucketState.warning || undefined
     });
   } catch (error) {
     return json(res, 500, {
       ok: false,
       error: "Não foi possível preparar o upload grande.",
-      details: error?.message || String(error)
+      details: errorMessage(error),
+      bucket
     });
   }
 }
