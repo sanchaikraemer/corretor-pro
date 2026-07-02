@@ -487,3 +487,12 @@
 - A ausência temporária da IA ainda permite corrigir e salvar o estado factual já comprovado pela conversa.
 - Indicadores gerais continuam ocultos dentro do detalhe do lead.
 - Cache PWA atualizado para a versão 674.
+
+
+## Ponto #675 — reanálise resiliente e fallback persistente
+
+- O botão relê o lead no banco quando a função principal não devolve a análise completa.
+- Uma rota independente consolida e salva a análise comercial se houver incompatibilidade entre front e função serverless.
+- Nenhum sucesso é exibido sem análise persistida no schema 675.
+- Oportunidades encerradas permanecem sem mensagem, sem lembrete e fora da prioridade.
+- Cache PWA atualizado para a versão 675.

@@ -545,7 +545,7 @@ export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) 
     parceiro && statusOpp === "perdida" ? "O contato segue como parceiro e pode apresentar novos compradores." : mcTexto(parsed.clientProfile));
 
   parsed.modeloComercial = {
-    versao: 674,
+    versao: 675,
     contato: {
       id: mcTexto(bruto?.contato?.id || parsed?.contatoId),
       tipo: tipoContato,
@@ -595,7 +595,7 @@ export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) 
     parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
     if (parceiro) parsed.etapaSugerida = "Standby";
   }
-  parsed._schemaComercial = 674;
+  parsed._schemaComercial = 675;
   return parsed;
 }
 
@@ -620,8 +620,8 @@ export function finalizarAnaliseComercialV674(parsed = {}, lead = {}, timeline =
       out.lembreteSugerido = null;
     }
   }
-  out._schemaComercial = 674;
-  if (out.modeloComercial) out.modeloComercial.versao = 674;
+  out._schemaComercial = 675;
+  if (out.modeloComercial) out.modeloComercial.versao = 675;
   return out;
 }
 

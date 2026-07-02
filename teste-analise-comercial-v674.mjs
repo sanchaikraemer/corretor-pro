@@ -26,8 +26,8 @@ const anterior = {
 };
 
 const out = finalizarAnaliseComercialV674(structuredClone(anterior), {name:'Anderson Ruviaro Corretor SM Gabro',product:'Residencial GABRO'}, timeline, 'Sanchai');
-assert.equal(out._schemaComercial,674);
-assert.equal(out.modeloComercial.versao,674);
+assert.equal(out._schemaComercial,675);
+assert.equal(out.modeloComercial.versao,675);
 assert.equal(out.modeloComercial.oportunidade.status,'perdida');
 assert.equal(out.modeloComercial.oportunidade.resultado,'comprou-outra-opcao');
 assert.equal(out.modeloComercial.relacionamento.status,'aguardando-nova-oportunidade');
@@ -44,18 +44,18 @@ assert.match(out.nextAction,/nenhuma ação urgente/i);
 const app=fs.readFileSync(new URL('./app.js',import.meta.url),'utf8');
 const api=fs.readFileSync(new URL('./api/reanalisar-lead.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8');
-assert.match(app,/schema<674/);
+assert.match(app,/schema<675/);
 assert.match(app,/_leadDetailCache\.set\(String\(lead\.id\)/);
 assert.match(app,/const detalheAberto=!!state\.lead\?\.id/);
 assert.doesNotMatch(app,/getLeadDetail\(lead\.id,true\)/);
 assert.match(api,/Nunca informa sucesso sem ter gravado/);
 assert.match(api,/finalizarAnaliseComercialV674\(merged/);
-assert.match(api,/schemaComercial: 674/);
+assert.match(api,/schemaComercial: 675/);
 assert.match(css,/body\.lead-foco-aberto #home #resumoDia/);
 assert.match(css,/body\.lead-foco-aberto #home #homeRight/);
 
 const pkg=JSON.parse(fs.readFileSync(new URL('./package.json',import.meta.url),'utf8'));
-assert.equal(pkg.version,'674.0.0');
+assert.equal(pkg.version,'675.0.0');
 const sw=fs.readFileSync(new URL('./service-worker.js',import.meta.url),'utf8');
-assert.match(sw,/corretor-pro-static-v674-/);
+assert.match(sw,/corretor-pro-static-v675-/);
 console.log('teste-analise-comercial-v674: OK');

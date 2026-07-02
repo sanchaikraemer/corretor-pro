@@ -7,7 +7,7 @@
 
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao } from "./_pipeline.js";
+import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -80,8 +80,58 @@ export default async function handler(req, res) {
     case "lembrete-clear":return await acaoLembreteClear(id, res);
     case "apagar":        return await acaoApagar(id, res);
     case "editar-dados":  return await acaoEditarDados(id, body, res);
+    case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
   }
+}
+
+
+// ============ FALLBACK SEGURO DA ANÁLISE COMERCIAL ============
+// Usado quando a reanálise principal foi gravada mas uma função antiga não devolveu
+// o objeto completo, ou quando o front precisa consolidar fatos determinísticos.
+// O servidor relê o lead, reconcilia novamente e só então persiste.
+async function acaoAnaliseComercialSet(id, analysis, res) {
+  if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+    return json(res, 400, { ok: false, error: "Informe a análise comercial." });
+  }
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+
+  const { data: current, error: getErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
+    .eq("id", id)
+    .maybeSingle();
+  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
+  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
+
+  const anterior = current.resultado_analise || {};
+  const timeline = Array.isArray(current.timeline_json) ? current.timeline_json : [];
+  const lead = {
+    ...(anterior.lead || {}),
+    name: anterior?.lead?.name || anterior?.nome || String(current.nome_arquivo || current.arquivo_nome || "").replace(/\.(txt|zip)$/i, ""),
+    product: anterior?.produtoInteresse || anterior?.lead?.product || ""
+  };
+  let merged = {
+    ...anterior,
+    ...analysis,
+    memoria: { ...(anterior.memoria || {}), ...(analysis.memoria || {}) },
+    aprendizado: anterior.aprendizado || analysis.aprendizado,
+    venda: anterior.venda || analysis.venda,
+    reanalisadoEm: new Date().toISOString()
+  };
+  merged = finalizarAnaliseComercialV674(merged, lead, timeline, "Sanchai");
+  merged._schemaComercial = 675;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 675;
+
+  const { data: saved, error: putErr } = await supabase
+    .from("whatsapp_processamentos")
+    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
+  if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
+  return json(res, 200, { ok: true, analysis: merged, schemaComercial: 675 });
 }
 
 // ============ LEMBRETE (snooze manual) ============
@@ -443,9 +493,9 @@ async function acaoCriarManual(body, res) {
         confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
-        _schemaComercial: 674,
+        _schemaComercial: 675,
         modeloComercial: {
-          versao: 674,
+          versao: 675,
           contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
           oportunidade: { status: "descoberta", resultado: "em-andamento", produto: produto || "Não identificado", motivo: porQue },
           relacionamento: { status: "ativo", potencial: "não avaliado", motivo: "Contato recém-cadastrado." },
@@ -551,9 +601,9 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       confianca: 80,
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
-      _schemaComercial: 674,
+      _schemaComercial: 675,
       modeloComercial: {
-        versao: 674,
+        versao: 675,
         contato: {
           id: contatoId,
           tipo: "corretor-parceiro",
@@ -633,7 +683,7 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     oportunidadesVinculadas: vinculadas,
     modeloComercial: {
       ...(mcOrigem || {}),
-      versao: Math.max(674, Number(mcOrigem?.versao || 0)),
+      versao: Math.max(675, Number(mcOrigem?.versao || 0)),
       contato: { ...(mcOrigem?.contato || {}), id: contatoId, tipo: "corretor-parceiro" },
       relacionamento: {
         ...(mcOrigem?.relacionamento || {}),
