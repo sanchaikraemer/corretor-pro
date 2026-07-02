@@ -2,6 +2,48 @@ import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
 import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercialV674 } from "./_pipeline.js";
 
+function textoLimpo(v) { return String(v || "").trim(); }
+function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
+function produtoLeadLocal(lead, analysis) {
+  return textoLimpo(analysis?.modeloComercial?.oportunidade?.produto || lead?.product || analysis?.product || "o imóvel") || "o imóvel";
+}
+function garantirMensagensV682(analysis, lead) {
+  const out = (analysis && typeof analysis === "object") ? analysis : {};
+  const mc = out.modeloComercial || {};
+  const semAcao = mc?.acao?.status === "sem-acao-urgente";
+  if (semAcao) return out;
+  const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
+  const tem = textoLimpo(m.a || m.direta || m.melhor || m.mensagem || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje);
+  if (tem && textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c)) {
+    out.arquiteturaMensagens = out.arquiteturaMensagens || "gpt55-unificado-v2";
+    out.sugestoesPendentes = false;
+    out.aprovada = true;
+    return out;
+  }
+  const nome = primeiroNomeLeadLocal(lead);
+  const produto = produtoLeadLocal(lead, out);
+  const acao = textoLimpo(mc?.acao?.descricao || out.nextAction || out?.diagnostico?.proximaAcao);
+  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
+    ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
+    : `sobre ${produto}`;
+  const prefixo = nome ? `${nome}, ` : "";
+  const fallbackA = textoLimpo(m.a || m.direta || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje) || `${prefixo}retomando nossa conversa ${assunto}. Pelo que falamos até aqui, consigo te direcionar melhor se você me confirmar esse ponto. Você prefere avançar olhando uma opção dentro desse perfil ou quer que eu te mostre outras alternativas?`;
+  out.messages = {
+    ...m,
+    a: fallbackA,
+    b: textoLimpo(m.b || m.consultiva) || `${prefixo}fiquei com esse ponto em aberto ${assunto}. Com essa confirmação eu consigo evitar te mandar opção fora do que você procura. Você quer seguir por esse caminho ou prefere comparar outras possibilidades?`,
+    c: textoLimpo(m.c || m.retomada) || `${prefixo}para eu não te mandar algo desalinhado, me confirma uma coisa ${assunto}: esse produto ainda conversa com o que você procura ou faz mais sentido eu buscar outra opção?`,
+    aLabel: textoLimpo(m.aLabel) || "Melhor resposta",
+    bLabel: textoLimpo(m.bLabel) || "Alternativa leve",
+    cLabel: textoLimpo(m.cLabel) || "Alternativa firme",
+    recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
+  };
+  out.arquiteturaMensagens = "gpt55-unificado-v2";
+  out.sugestoesPendentes = false;
+  out.aprovada = true;
+  out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
+  return out;
+}
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
 function diaSemanaBR() {
   const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(new Date());
@@ -432,6 +474,7 @@ export default async function handler(req, res) {
     novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
+  novoAnalysis = garantirMensagensV682(novoAnalysis, leadModelo);
   novoAnalysis._schemaComercial = 682;
   if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 682;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
@@ -460,6 +503,7 @@ export default async function handler(req, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
+  merged = garantirMensagensV682(merged, leadModelo);
   merged._schemaComercial = 682;
   if (merged.modeloComercial) merged.modeloComercial.versao = 682;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
@@ -501,6 +545,7 @@ export default async function handler(req, res) {
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
+    retryMerged = garantirMensagensV682(retryMerged, leadModelo);
     retryMerged._schemaComercial = 682;
     if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 682;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
@@ -523,7 +568,7 @@ export default async function handler(req, res) {
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
   if (!persisted || persistedSchema < 682) {
-    const forced = { ...merged, _schemaComercial: 682, reanalisadoEm: new Date().toISOString() };
+    const forced = garantirMensagensV682({ ...merged, _schemaComercial: 682, reanalisadoEm: new Date().toISOString() }, leadModelo);
     if (forced.modeloComercial) forced.modeloComercial.versao = 682;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")

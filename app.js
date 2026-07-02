@@ -9939,6 +9939,61 @@ function ui670Messages(analysis){
     recomendada:["a","b","c"].includes(String(m.recomendada||base.recomendada||""))?String(m.recomendada||base.recomendada):"a"
   };
 }
+function ui682PrimeiroNomeLead(lead){
+  return String(lead?.name||"").trim().split(/\s+/)[0] || "";
+}
+function ui682ProdutoLead(lead, mc){
+  return String(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel").trim() || "o imóvel";
+}
+function ui682FallbackMessages(lead, mc){
+  const nome = ui682PrimeiroNomeLead(lead);
+  const produto = ui682ProdutoLead(lead, mc);
+  const acao = String(mc?.acao?.descricao || lead?.analysis?.nextAction || lead?.nextAction || "").trim();
+  const status = String(mc?.acao?.status || "");
+  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
+    ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
+    : `sobre ${produto}`;
+  const prefixo = nome ? `${nome}, ` : "";
+  const a = `${prefixo}retomando nossa conversa ${assunto}. Pelo que falamos até aqui, consigo te direcionar melhor se você me confirmar esse ponto. Você prefere avançar olhando uma opção dentro desse perfil ou quer que eu te mostre outras alternativas?`;
+  const b = `${prefixo}fiquei com esse ponto em aberto ${assunto}. Com essa confirmação eu consigo evitar te mandar opção fora do que você procura. Você quer seguir por esse caminho ou prefere comparar outras possibilidades?`;
+  const c = `${prefixo}para eu não te mandar algo desalinhado, me confirma uma coisa ${assunto}: esse produto ainda conversa com o que você procura ou faz mais sentido eu buscar outra opção?`;
+  return { a, b, c, aLabel:"Melhor resposta", bLabel:"Alternativa leve", cLabel:"Alternativa firme", recomendada: status === "retomar" ? "a" : "b", fallback:true };
+}
+function ui682MesclarMensagens(msgs, lead, mc){
+  const temAlguma = !!(String(msgs?.a||"").trim() || String(msgs?.b||"").trim() || String(msgs?.c||"").trim());
+  if(temAlguma) return msgs;
+  return ui682FallbackMessages(lead, mc);
+}
+function ui682FormatarDataHora(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return "";
+  return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+function ui682ProgressReanalise(btn){
+  if(!btn) return { set(){}, done(){}, fail(){} };
+  const old = btn.parentElement?.querySelector?.(".ui682-analysis-progress");
+  if(old) old.remove();
+  const box = document.createElement("div");
+  box.className = "ui682-analysis-progress";
+  box.style.cssText = "margin-top:10px;padding:10px 12px;border:1px solid rgba(255,194,102,.35);border-radius:12px;background:rgba(255,194,102,.08);color:var(--soft);font-size:12px;min-width:240px";
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;font-weight:950;color:#fff"><span id="ui682ProgressText">Preparando análise...</span><span id="ui682ProgressPct">5%</span></div><div style="height:6px;background:rgba(255,255,255,.10);border-radius:999px;overflow:hidden;margin-top:8px"><i id="ui682ProgressBar" style="display:block;height:100%;width:5%;background:linear-gradient(90deg,var(--morno),var(--lime));transition:width .35s ease"></i></div>`;
+  btn.parentElement?.insertAdjacentElement("afterend", box);
+  const set = (pct, txt) => {
+    const p = Math.max(0, Math.min(100, Number(pct)||0));
+    const bar = box.querySelector("#ui682ProgressBar");
+    const pctEl = box.querySelector("#ui682ProgressPct");
+    const txtEl = box.querySelector("#ui682ProgressText");
+    if(bar) bar.style.width = p + "%";
+    if(pctEl) pctEl.textContent = p + "%";
+    if(txtEl && txt) txtEl.textContent = txt;
+  };
+  return {
+    set,
+    done(txt){ set(100, txt||"Análise concluída e salva."); setTimeout(()=>{ try{ box.remove(); }catch(_){} }, 1800); },
+    fail(txt){ set(100, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; }
+  };
+}
 window.ui670SelectMessage=function(k){
   const map=state._ui670Messages||{};state._ui670MessageKey=k;
   const el=qs("#ui670MessageText");if(el)el.textContent=map[k]||"";
@@ -9979,6 +10034,16 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   }
   out.nextAction=mc?.acao?.descricao||ctx678?.nextAction||out.nextAction||"Ação ainda não definida.";
   const semAcao=mc?.acao?.status==="sem-acao-urgente";
+  if(!semAcao){
+    const fallbackMsgs = ui682FallbackMessages(leadBase, mc);
+    const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
+    if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
+      out.messages = { ...atuais, ...fallbackMsgs };
+      out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
+      out.sugestoesPendentes = false;
+      out.aprovada = true;
+    }
+  }
   if(semAcao){
     out.messages={a:"",b:"",c:"",aLabel:"Sem mensagem agora",bLabel:"",cLabel:"",recomendada:"a"};
     out.sugestoesPendentes=false;out.aprovada=true;out.validacaoSugestoes=[];out.tipoRetomada="stand-by";
@@ -10016,6 +10081,19 @@ window.ui670Reanalisar=async function(btn){
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
   const original=btn?.textContent||"Atualizar análise comercial";
   if(btn){btn.disabled=true;btn.textContent="Atualizando análise...";}
+  const progresso = ui682ProgressReanalise(btn);
+  progresso.set(8, "Lendo histórico do lead...");
+  let etapaFake = 0;
+  const etapasFake = [
+    [18, "Identificando intenção, objeção e pendência..."],
+    [34, "Recalculando prioridade comercial..."],
+    [52, "Gerando próxima ação e mensagem..."],
+    [72, "Gravando análise no banco..."],
+    [88, "Conferindo se ficou salvo..." ]
+  ];
+  const progressoTimer = setInterval(()=>{
+    if(etapaFake < etapasFake.length){ const e = etapasFake[etapaFake++]; progresso.set(e[0], e[1]); }
+  }, 1800);
   const ctrl=new AbortController();
   const timeout=setTimeout(()=>ctrl.abort(),90000);
   try{
@@ -10026,6 +10104,7 @@ window.ui670Reanalisar=async function(btn){
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok||!data?.ok)throw new Error(data?.error||"Não foi possível atualizar a análise.");
+    progresso.set(90, "Validando gravação no banco...");
 
     let analysis=(data?.analysis&&typeof data.analysis==="object")?data.analysis:null;
     let schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
@@ -10052,6 +10131,8 @@ window.ui670Reanalisar=async function(btn){
       usouFallback=true;
     }
     if(!analysis||schema<682)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+    clearInterval(progressoTimer);
+    progresso.done("Análise concluída e salva.");
 
     const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
@@ -10084,6 +10165,8 @@ window.ui670Reanalisar=async function(btn){
     },600);
   }catch(err){
     clearTimeout(timeout);
+    clearInterval(progressoTimer);
+    try{ progresso.fail("Não foi possível concluir a análise."); }catch(_){}
     const msg=err?.name==="AbortError"?"A atualização demorou demais. Tente novamente.":(err?.message||String(err));
     toast("Não foi possível atualizar: "+msg);
     if(btn){btn.disabled=false;btn.textContent=original;}
@@ -10153,7 +10236,9 @@ renderLeadFoco=function(lead){
   __renderLeadFoco631Base(lead);
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
-  const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
+  const a=lead.analysis||{},mc=ui670ModeloComercial(lead);
+  let msgs=ui670Messages(a);
+  msgs=ui682MesclarMensagens(msgs, lead, mc);
   const stale=Number(mc.versao||a._schemaComercial||0)<682;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
@@ -10166,6 +10251,8 @@ renderLeadFoco=function(lead){
   const act=UI670_ACTION_LABEL[mc?.acao?.status]||["Ação não definida","neutral"];
   const type=ui670TipoContatoLabel(mc?.contato?.tipo);
   const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
+  const ultimaAnaliseTxt = ui682FormatarDataHora(a.reanalisadoEm || a.updatedAt || a.atualizadoEm);
+  const ultimaAnaliseHtml = ultimaAnaliseTxt ? `<div class="ui682-last-analysis">Última análise: ${escapeHtml(ultimaAnaliseTxt)}</div>` : `<div class="ui682-last-analysis muted">Última análise: ainda não registrada</div>`;
   const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
   const statusTopo=oportunidadeEncerrada
     ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
@@ -10177,7 +10264,7 @@ renderLeadFoco=function(lead){
       ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
       : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
   const shell=document.createElement("div");shell.className="lead-ui670";
-  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div>${statusTopo}</div>
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div>${statusTopo}</div>
   ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
   <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
   <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
