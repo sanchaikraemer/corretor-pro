@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from "./_persistence.js";
+import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
 import { getOpenAI, transcreverBuffer, extrairInteligenciaObservada, registrarInteligenciaAprendida, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
 
 // Bloqueia URLs que apontem para endereços privados, loopback ou link-local (SSRF).
@@ -74,6 +74,7 @@ async function saveConfig(supabase, valor) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 

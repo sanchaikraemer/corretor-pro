@@ -1,3 +1,4 @@
+import { requireApiKey } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 
 const BUCKET_MAX_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES) || 2147483648;
@@ -115,6 +116,7 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Use POST para criar URL de upload." });
   }

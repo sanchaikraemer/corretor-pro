@@ -5,6 +5,7 @@
 // Uso: POST /api/lead-update com body { id, action, ...payload }
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
+import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";
@@ -32,6 +33,7 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   // GET pra ler memória sem precisar de body (usado pelo carregarMemoria do front).
   if (req.method === "GET") {
     const id = req.query?.id;
@@ -121,8 +123,8 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, lead, timeline, "Sanchai");
-  merged._schemaComercial = 675;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 675;
+  merged._schemaComercial = 676;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 676;
 
   const { data: saved, error: putErr } = await supabase
     .from("whatsapp_processamentos")
@@ -131,7 +133,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     .select("id");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
-  return json(res, 200, { ok: true, analysis: merged, schemaComercial: 675 });
+  return json(res, 200, { ok: true, analysis: merged, schemaComercial: 676 });
 }
 
 // ============ LEMBRETE (snooze manual) ============
@@ -493,9 +495,9 @@ async function acaoCriarManual(body, res) {
         confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
-        _schemaComercial: 675,
+        _schemaComercial: 676,
         modeloComercial: {
-          versao: 675,
+          versao: 676,
           contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
           oportunidade: { status: "descoberta", resultado: "em-andamento", produto: produto || "Não identificado", motivo: porQue },
           relacionamento: { status: "ativo", potencial: "não avaliado", motivo: "Contato recém-cadastrado." },
@@ -601,9 +603,9 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       confianca: 80,
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
-      _schemaComercial: 675,
+      _schemaComercial: 676,
       modeloComercial: {
-        versao: 675,
+        versao: 676,
         contato: {
           id: contatoId,
           tipo: "corretor-parceiro",
@@ -683,7 +685,7 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     oportunidadesVinculadas: vinculadas,
     modeloComercial: {
       ...(mcOrigem || {}),
-      versao: Math.max(675, Number(mcOrigem?.versao || 0)),
+      versao: Math.max(676, Number(mcOrigem?.versao || 0)),
       contato: { ...(mcOrigem?.contato || {}), id: contatoId, tipo: "corretor-parceiro" },
       relacionamento: {
         ...(mcOrigem?.relacionamento || {}),

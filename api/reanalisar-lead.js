@@ -1,3 +1,4 @@
+import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
 import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercialV674 } from "./_pipeline.js";
 
@@ -100,6 +101,7 @@ function ajusteScoreDoTexto(txt) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST." });
   const body = await readJsonBody(req).catch(() => ({}));
   const id = body?.id;
@@ -409,7 +411,7 @@ export default async function handler(req, res) {
     } catch (_) { /* mantém a nota crua */ }
   }
 
-  // 3º REANALISA. A IA aprofunda a leitura; a camada determinística 675
+  // 3º REANALISA. A IA aprofunda a leitura; a camada determinística 676
   // sempre reconcilia oportunidade, relacionamento, responsável e mensagem antes de salvar.
   let novoAnalysis;
   let avisoReanalise = "";
@@ -430,8 +432,8 @@ export default async function handler(req, res) {
     novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
-  novoAnalysis._schemaComercial = 675;
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 675;
+  novoAnalysis._schemaComercial = 676;
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 676;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -458,8 +460,8 @@ export default async function handler(req, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
-  merged._schemaComercial = 675;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 675;
+  merged._schemaComercial = 676;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 676;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
   if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
@@ -499,8 +501,8 @@ export default async function handler(req, res) {
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
-    retryMerged._schemaComercial = 675;
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 675;
+    retryMerged._schemaComercial = 676;
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 676;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -510,5 +512,5 @@ export default async function handler(req, res) {
     merged = retryMerged;
   }
 
-  return json(res, 200, { ok: true, analysis: merged, warning: avisoReanalise || null, schemaComercial: 675, apiVersion: 675 });
+  return json(res, 200, { ok: true, analysis: merged, warning: avisoReanalise || null, schemaComercial: 676, apiVersion: 676 });
 }

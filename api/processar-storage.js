@@ -1,3 +1,4 @@
+import { requireApiKey } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 import { processZipBuffer, prepararConversaDoZip, transcreverLoteDoZip, finalizarAnaliseDaConversa } from "./_pipeline.js";
 
@@ -21,6 +22,7 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Use POST para processar um ZIP do Storage." });
   }
@@ -90,6 +92,24 @@ export default async function handler(req, res) {
 
     // ===== ETAPA 3: ANALISAR (sem ZIP — recebe tudo pronto do front) =====
     if (action === "analisar") {
+      // Na reimportação, o front envia só o ID. O servidor busca o histórico anterior
+      // diretamente no Supabase: evita trafegar uma conversa enorme de volta pelo celular.
+      let existingTimeline = Array.isArray(body?.existingTimeline) ? body.existingTimeline : [];
+      let previousAnalysis = body?.previousAnalysis && typeof body.previousAnalysis === "object" ? body.previousAnalysis : null;
+      const existingLeadId = body?.existingLeadId ? String(body.existingLeadId) : "";
+      if (existingLeadId && (!existingTimeline.length || !previousAnalysis)) {
+        const { data: anterior, error: anteriorError } = await supabase
+          .from("whatsapp_processamentos")
+          .select("timeline_json, resultado_analise")
+          .eq("id", existingLeadId)
+          .maybeSingle();
+        if (anteriorError) throw new Error(`Não consegui recuperar o histórico anterior: ${anteriorError.message}`);
+        if (anterior) {
+          existingTimeline = Array.isArray(anterior.timeline_json) ? anterior.timeline_json : existingTimeline;
+          previousAnalysis = anterior.resultado_analise || previousAnalysis;
+        }
+      }
+
       const result = await finalizarAnaliseDaConversa({
         txtFile: body?.txtFile,
         rawText: body?.rawText,
@@ -101,7 +121,12 @@ export default async function handler(req, res) {
         ignoredFiles: body?.ignoredFiles,
         audiosTotalNoZip: body?.audiosTotalNoZip,
         audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
-        metricsBase: body?.metricsBase
+        metricsBase: body?.metricsBase,
+        existingTimeline,
+        previousAnalysis,
+        existingLeadId,
+        audiosReaproveitados: body?.audiosReaproveitados,
+        audiosNovosSolicitados: body?.audiosNovosSolicitados
       });
       return json(res, 200, { ok: true, bucket, path: storagePath, autoSaved: false, ...result });
     }

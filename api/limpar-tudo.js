@@ -1,3 +1,4 @@
+import { requireApiKey } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 
 function json(res, status, payload) {
@@ -164,6 +165,7 @@ function inspectKey(raw) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Use POST para limpar tudo." });
   }

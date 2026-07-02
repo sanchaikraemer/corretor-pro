@@ -1,3 +1,4 @@
+import { requireApiKey } from "./_persistence.js";
 // Endpoint de bastidor consolidado. Faz 3 trabalhos via ?mode=:
 //   ?mode=status (padrão) → checa variáveis de ambiente (OpenAI + Supabase)
 //   ?mode=openai          → testa a chave OpenAI de verdade (models.list + chat)
@@ -14,6 +15,7 @@ function json(res, status, payload) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   const mode = String(req.query?.mode || "status").toLowerCase();
   if (mode === "openai") return modoOpenAI(res);
   if (mode === "bucket") return modoBucket(res);

@@ -1,6 +1,37 @@
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { filtrarCompromissosReais } from "./_pipeline.js";
+
+
+function authJson(res, status, payload) {
+  res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(payload));
+}
+
+function safeEqualSecret(a, b) {
+  const aa = Buffer.from(String(a || ""));
+  const bb = Buffer.from(String(b || ""));
+  if (aa.length !== bb.length) return false;
+  return timingSafeEqual(aa, bb);
+}
+
+export function requireApiKey(req, res) {
+  if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event === "test") return true;
+  const expected = process.env.CORRETOR_PRO_API_KEY || process.env.API_SECRET || process.env.CP_API_SECRET || "";
+  const allowUnprotected = String(process.env.ALLOW_UNPROTECTED_API || "").toLowerCase() === "true";
+  if (!expected) {
+    if (allowUnprotected) return true;
+    authJson(res, 500, { ok: false, error: "API bloqueada: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel." });
+    return false;
+  }
+  const received = req.headers?.["x-corretor-pro-key"] || req.headers?.["x-api-key"] || req.query?.apiKey || "";
+  if (!received || !safeEqualSecret(received, expected)) {
+    authJson(res, 401, { ok: false, error: "Acesso bloqueado. Informe a chave de segurança do Corretor Pro." });
+    return false;
+  }
+  return true;
+}
 
 export function getSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -349,7 +380,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
       "tipoRetomada", "tipoContato", "avatarFoto", "venda", "motivoPerda", "motivo_perda",
       "permuta", "risk", "scoreAjuste", "produtoInteresse", "produtosInteresse", "mode",
-      "diagnostico", "leituraComercial", "evolucao", "memoria", "aprendizado", "objections",
+      "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
+      "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
       "sugestoesPendentes", "arquiteturaMensagens", "error"
     ];
     const out = {};
@@ -413,7 +445,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
     const nomeKey = normalizeKey(nomeResolvido);
     const nomeGenerico = !nomeKey || /^cliente importad[oa]$/i.test(String(nomeResolvido || "").trim());
-    const dedupeKey = nomeGenerico ? String(row.id || "") : nomeKey;
+    // O mesmo corretor parceiro pode ter várias oportunidades independentes. Registros com
+    // oportunidadeId explícito nunca são fundidos apenas porque o nome/telefone do parceiro é igual.
+    // Reimportações do mesmo negócio continuam atualizando o mesmo row, então o ID comercial é estável.
+    const oportunidadeId = String(analysis?.modeloComercial?.oportunidade?.id || analysis?.oportunidadeId || "").trim();
+    const dedupeKey = oportunidadeId ? `oportunidade:${oportunidadeId}` : (nomeGenerico ? String(row.id || "") : nomeKey);
 
     // Só materializa as mensagens que realmente serão enviadas ao navegador.
     // O histórico completo continua intacto no banco e é retornado em action=detalhe.
@@ -426,7 +462,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       type: m?.type,
       source: m?.source,
       proposta: m?.proposta || null,
-      iso: m?.iso || null
+      iso: m?.iso || null,
+      mediaFile: m?.mediaFile || null,
+      audioStatus: m?.audioStatus || null,
+      audioFingerprint: m?.audioFingerprint || null,
+      order: m?.order ?? null
     }));
 
     let hasProposal = false;

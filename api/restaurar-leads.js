@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from "./_persistence.js";
+import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -255,6 +255,7 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (!["GET", "POST"].includes(req.method)) return json(res, 405, { ok: false, error: "Use GET ou POST." });
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
