@@ -1,7 +1,7 @@
-// ===== Segurança v681: chave secreta nas chamadas /api =====
+// ===== Segurança v682: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
 // No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
-(function protegerChamadasApiV681(){
+(function protegerChamadasApiV682(){
   if (typeof window === "undefined" || window.__corretorProFetchProtegido) return;
   window.__corretorProFetchProtegido = true;
   const STORAGE_KEY = "corretor_pro_api_key_v679"; // mantém chave já salva no aparelho
@@ -993,6 +993,49 @@ function contextoPrioridadeIA(l){
   };
 }
 
+
+
+// v682 — Prioridade Comercial refinada.
+// Este bloco separa lead comprador real de curioso e puxa para cima casos que tinham
+// conversa forte, mas ficavam escondidos por estarem em etapa baixa ou sem lembrete.
+function sinaisPrioridadeComercial682(l){
+  const a = l?.analysis || {};
+  const txt = textoSinais(l);
+  const e = normalizarEtapa(l?.etapa);
+  const prob = Number(probabilidadeRefinada(l) ?? l?.probabilityPercent ?? 0) || 0;
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  const diasDistintos = (() => {
+    const set = new Set();
+    for(const m of msgs){
+      const iso = m && m.iso ? String(m.iso).slice(0,10) : "";
+      if(iso) set.add(iso);
+    }
+    return set.size;
+  })();
+  const compradorKeywords = /(entrada|parcela|financi|banco|caixa|simula(?:ção|cao|r)|proposta|contraproposta|condi[çc][ãa]o|valor|pre[çc]o|tabela|unidade|andar|box|vaga|planta|metragem|visita|decorado|reserva|documenta[çc][ãa]o|fgts|aprova[çc][ãa]o|contrato|fechar|negociar|sinal)/;
+  const curiosoKeywords = /(s[óo] curiosidade|s[oó] olhando|apenas olhando|s[óo] pesquisa|sem pressa|mais pra frente|não tenho pressa|nao tenho pressa|quando der|um dia|por enquanto n[aã]o|s[óo] queria saber|manda material|quero informa[çc][õo]es,? por favor)/;
+  const urgenciaKeywords = /(urgente|essa semana|hoje|amanh[ãa]|até sexta|ate sexta|ainda hoje|logo|mudar|mudan[çc]a|preciso resolver|pra fechar|vamos fechar|reservar|reserva|segurar|sinal|visita marcada|café|cafe|reuni[ãa]o|decorado)/;
+  const objecaoKeywords = /(caro|pre[çc]o|valor|entrada|parcela|financiamento|renda|banco|caixa|aprov|or[çc]amento|teto|localiza[çc][ãa]o|prazo|entrega|permuta|vender meu|vender a casa|vender o apartamento|juros)/;
+  const pendenciaKeywords = /(ficou de|promet|vou te mandar|vou te enviar|te envio|te mando|retorno|retornar|aguardando|esperando|preciso te passar|vou validar|vou ver|vou falar|proposta|simula[çc][ãa]o|condi[çc][ãa]o)/;
+
+  const compradorReal = compradorKeywords.test(txt) || ["Visita/Proposta","Negociação"].includes(e) || prob >= 68;
+  const curioso = curiosoKeywords.test(txt) && !/(proposta|simula|entrada|parcela|visita|unidade|financi|reserva|fechar)/.test(txt);
+  const urgencia = urgenciaKeywords.test(txt) || Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length > 0;
+  const objecao = objecaoKeywords.test(txt);
+  const pendencia = pendenciaKeywords.test(txt);
+  // Caso tipo Isabela: muito sinal comercial espalhado na conversa, mas etapa ainda "Atendimento".
+  const quenteEscondido = compradorReal && !curioso && e === "Atendimento" && (diasDistintos >= 3 || prob >= 60) && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
+
+  const motivos = [];
+  if(quenteEscondido) motivos.push("lead quente escondido: conversa forte mesmo ainda em Atendimento");
+  if(compradorReal && !curioso) motivos.push("sinais de comprador real");
+  if(curioso) motivos.push("parece curioso/pesquisa inicial");
+  if(urgencia) motivos.push("há urgência ou compromisso próximo");
+  if(objecao) motivos.push("há objeção para tratar");
+  if(pendencia) motivos.push("existe pendência aberta");
+  return { compradorReal, curioso, urgencia, objecao, pendencia, quenteEscondido, diasDistintos, motivos };
+}
+
 function scoreLead(l){
   return scorePrioridadeAtendimento(l);
 }
@@ -1035,6 +1078,7 @@ function prioridadeAtendimento(l){
   const ctxIA = contextoPrioridadeIA(l);
   const negociacaoAguardandoRetorno = !!(ctxIA.retornoProposta && (ctxIA.propostaAtiva || etapaAvancada));
   const parceiroComClienteFinal = !!(ctxIA.contatoParceiro && ctxIA.aguardandoTerceiro && ctxIA.propostaAtiva);
+  const sc682 = sinaisPrioridadeComercial682(l);
 
   let score = 0;
   const motivos = [];
@@ -1053,6 +1097,14 @@ function prioridadeAtendimento(l){
   if(sinalCompra){ score += 24; motivos.push("há sinal concreto de compra"); }
   if(esforcoCliente){ score += 22; motivos.push("cliente já se movimentou no processo"); }
   if(etapaAvancada){ score += 18; motivos.push("negociação já saiu da curiosidade"); }
+
+  // v682: comprador real não pode ficar escondido por falta de lembrete ou por etapa baixa.
+  if(sc682.quenteEscondido){ score += 46; motivos.unshift("lead quente escondido — priorizar antes que esfrie"); }
+  else if(sc682.compradorReal && !sc682.curioso){ score += 24; motivos.push("sinais de comprador real"); }
+  if(sc682.urgencia){ score += 28; motivos.push("urgência/compromisso próximo"); }
+  if(sc682.objecao){ score += 12; motivos.push("objeção clara para tratar"); }
+  if(sc682.pendencia){ score += 18; motivos.push("pendência aberta na conversa"); }
+  if(sc682.curioso && !sc682.compradorReal){ score -= 34; motivos.push("parece curioso/pesquisa inicial"); }
 
   if(Number.isFinite(diasResposta)){
     if(diasResposta >= 3 && diasResposta <= 14){ score += 16; motivos.push("tempo bom para retomar"); }
@@ -1100,7 +1152,7 @@ function prioridadeAtendimento(l){
   // SINAL URGENTE: ao menos um desses é necessário para entrar em "acao-hoje".
   // Sem sinal urgente, o maior grupo possível é "retomar-cuidado".
   const temSinalUrgente = lembreteVencido(l) || temAgenda || ultimoCliente ||
-    pendenciaCorretor || negociacaoAguardandoRetorno || parceiroComClienteFinal;
+    pendenciaCorretor || negociacaoAguardandoRetorno || parceiroComClienteFinal || sc682.quenteEscondido || sc682.urgencia || sc682.pendencia;
 
   let grupo, titulo;
   if(ehContatadoHoje(l)){
@@ -1215,6 +1267,13 @@ function scoreConversaoHoje(l){
 
   if(ultimoCliente) score += 12;
 
+  const sc682 = sinaisPrioridadeComercial682(l);
+  if(sc682.quenteEscondido) score += 32;
+  else if(sc682.compradorReal && !sc682.curioso) score += 18;
+  if(sc682.urgencia) score += 14;
+  if(sc682.objecao) score += 8;
+  if(sc682.curioso && !sc682.compradorReal) score -= 28;
+
   // Viabilidade financeira é acionável, mas ainda NÃO é fechamento.
   // Ex.: Jessica: boa prioridade, mas não deve superar proposta/visita/simulação.
   if(viabilidadeAntesDaProposta) score -= 18;
@@ -1322,6 +1381,12 @@ function motivoPrioridade(l){
   const e = normalizarEtapa(l.etapa);
   const dias = Number(l.daysSinceLastInteraction);
   const partes = [];
+  const sc682 = sinaisPrioridadeComercial682(l);
+  if(sc682.quenteEscondido) partes.push("lead quente escondido: há sinais fortes de compra mesmo sem etapa avançada");
+  else if(sc682.compradorReal && !sc682.curioso) partes.push("sinais de comprador real");
+  if(sc682.curioso && !sc682.compradorReal) partes.push("parece curioso/pesquisa inicial");
+  if(sc682.urgencia) partes.push("há urgência ou compromisso próximo");
+  if(sc682.objecao) partes.push("objeção identificada para tratar");
 
   // SINAL COMERCIAL primeiro — o motivo de verdade pra atender (ou não) hoje.
   const txt = textoSinais(l);
@@ -1499,6 +1564,11 @@ function formatarQuandoLead(quandoStr){
 
 function motivoCurto(l){
   try{
+    const sc682 = sinaisPrioridadeComercial682(l);
+    if(sc682.quenteEscondido) return "lead quente escondido — agir antes que esfrie";
+    if(sc682.compradorReal && sc682.urgencia) return "comprador real com urgência";
+    if(sc682.compradorReal && sc682.objecao) return "comprador real — tratar objeção";
+    if(sc682.curioso && !sc682.compradorReal) return "curioso/pesquisa inicial — baixa prioridade";
     const txt = textoSinais(l);
     const e = normalizarEtapa(l.etapa);
     const propostaOuSimulacao = /proposta|simula(?:ção|cao|r)|condi[çc][ãa]o enviada|tabela enviada|or[çc]amento enviado/.test(txt);
