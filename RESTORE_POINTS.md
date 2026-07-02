@@ -496,3 +496,22 @@
 - Nenhum sucesso é exibido sem análise persistida no schema 675.
 - Oportunidades encerradas permanecem sem mensagem, sem lembrete e fora da prioridade.
 - Cache PWA atualizado para a versão 675.
+
+## Ponto #676 — API publicada na pasta correta e proteção contra duplicatas
+
+- Corrige o desencontro entre o front-end 675 e as funções antigas que permaneceram em `/api`.
+- `api/lead-update.js` passa a aceitar o fallback `analise-comercial-set` usado pela atualização comercial.
+- `api/reanalisar-lead.js` e `api/_pipeline.js` usam o schema comercial 676.
+- O build falha de forma explícita se arquivos de backend forem enviados por engano para a raiz.
+- Erros de backend desatualizado passam a indicar exatamente que a pasta `/api` não foi substituída.
+- Cache PWA atualizado para a versão 676.
+
+## Ponto #677 — busca visível, inclusão manual e estado encerrado
+
+- A busca volta a aparecer diretamente nas telas Hoje e Atendimentos, funcionando por nome, interesse/empreendimento e telefone.
+- A busca carrega a base completa antes de apresentar os resultados, sem ficar limitada aos primeiros leads da Home.
+- As duas telas recebem o botão `Incluir manual`, com cadastro simples por nome, interesse e telefone.
+- Leads incluídos manualmente entram imediatamente na base e podem ser abertos sem importar conversa do WhatsApp.
+- O botão `Atendido` deixa de aparecer em oportunidades encerradas; o topo passa a mostrar `Encerrada` ou `Vendida`.
+- A opção `Excluir definitivamente` deixa de aparecer duplicada no fim do detalhe do lead.
+- Cache PWA atualizado para a versão 677.

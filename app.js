@@ -3639,50 +3639,31 @@ function abrirNovoLead(){
   qs("#novoLeadModal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "novoLeadModal";
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-  const opcoes = EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  overlay.className = "ui677-manual-modal";
+  const opcoes = EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
   overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:460px;width:100%;max-height:90vh;overflow:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:16px;font-weight:950">+ Novo lead</div>
-        <button type="button" id="novoLeadFechar" style="background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">✕</button>
+    <div class="ui677-manual-card" role="dialog" aria-modal="true" aria-labelledby="ui677ManualTitle">
+      <div class="ui677-manual-head">
+        <div><small>Novo atendimento</small><h3 id="ui677ManualTitle">Incluir lead manualmente</h3><p>Cadastre sem importar uma conversa do WhatsApp.</p></div>
+        <button type="button" id="novoLeadFechar" aria-label="Fechar">✕</button>
       </div>
-      <div class="small" style="color:var(--muted);font-size:11px;margin-bottom:14px">Pra quando alguém liga, comenta pessoalmente ou indica e ainda não houve troca no WhatsApp. Salva o lead pra você não esquecer.</div>
-      <div style="margin-bottom:16px">
-        <button type="button" id="novoLeadPrint" style="width:100%;padding:11px;background:rgba(255,255,255,.04);color:var(--soft);border:1px dashed var(--line);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">📷 Preencher por print da conversa</button>
-        <input type="file" id="novoLeadPrintInput" accept="image/*" style="display:none">
-        <div id="novoLeadPrintStatus" style="display:none;margin-top:7px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;line-height:1.35"></div>
-        <div id="novoLeadFotoWrap" style="display:none;align-items:center;gap:10px;margin-top:8px"><div id="novoLeadFotoPrev"></div><button type="button" id="novoLeadFotoRemover" style="background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--muted);font-size:11px;font-weight:900;cursor:pointer">Remover foto</button></div>
-        <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Manda o print do WhatsApp/formulário (ex.: lead do Instagram/Facebook) e o Corretor Pro preenche os campos abaixo — e tenta recortar a foto do cliente. Você confere e salva.</div>
+      <label for="novoLeadNome">Nome</label>
+      <input type="text" id="novoLeadNome" placeholder="Nome do lead" autocomplete="name">
+      <label for="novoLeadInteresse">Interesse</label>
+      <input type="text" id="novoLeadInteresse" list="ui677Interesses" placeholder="Ex.: Renaissance, apartamento de 2 suítes..." autocomplete="off">
+      <datalist id="ui677Interesses">${opcoes}</datalist>
+      <label for="novoLeadTel">Telefone</label>
+      <input type="tel" id="novoLeadTel" placeholder="(54) 99999-9999" autocomplete="tel" inputmode="tel">
+      <div class="ui677-manual-actions">
+        <button type="button" class="secondary" id="novoLeadCancelar">Cancelar</button>
+        <button type="button" class="primary" id="novoLeadSalvar">Incluir lead</button>
       </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome *</label>
-        <input type="text" id="novoLeadNome" placeholder="Nome do cliente" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone (WhatsApp)</label>
-        <input type="tel" id="novoLeadTel" placeholder="+55 54 99999-9999" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento de interesse</label>
-        <select id="novoLeadProduto" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-          <option value="">— Sem definir ainda —</option>
-          ${opcoes}
-        </select>
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação inicial</label>
-        <textarea id="novoLeadObs" rows="3" placeholder="Como o lead chegou, o que conversou, o que pediu..." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
-      </div>
-      <button type="button" id="novoLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer">Salvar lead</button>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => { if(e.target === overlay) fecharNovoLead(); });
   qs("#novoLeadFechar")?.addEventListener("click", fecharNovoLead);
+  qs("#novoLeadCancelar")?.addEventListener("click", fecharNovoLead);
   qs("#novoLeadSalvar")?.addEventListener("click", salvarNovoLead);
-  qs("#novoLeadPrint")?.addEventListener("click", () => qs("#novoLeadPrintInput")?.click());
-  qs("#novoLeadPrintInput")?.addEventListener("change", lerPrintLead);
-  qs("#novoLeadFotoRemover")?.addEventListener("click", () => { novoLeadAvatarFoto = null; mostrarPreviaFoto(); });
   setTimeout(() => qs("#novoLeadNome")?.focus(), 100);
 }
 function fecharNovoLead(){ qs("#novoLeadModal")?.remove(); }
@@ -3935,31 +3916,37 @@ function setPrintStatus(sel, tipo, msg){
 }
 async function salvarNovoLead(){
   const nome = (qs("#novoLeadNome")?.value || "").trim();
+  const interesse = (qs("#novoLeadInteresse")?.value || "").trim();
   const telefone = (qs("#novoLeadTel")?.value || "").trim();
-  const produto = (qs("#novoLeadProduto")?.value || "").trim();
-  const observacao = (qs("#novoLeadObs")?.value || "").trim();
-  if(!nome){ toast("Coloque o nome do lead."); qs("#novoLeadNome")?.focus(); return; }
+  if(!nome){ toast("Informe o nome do lead."); qs("#novoLeadNome")?.focus(); return; }
+  if(!interesse){ toast("Informe o interesse do lead."); qs("#novoLeadInteresse")?.focus(); return; }
+  const digitos = telefone.replace(/\D/g, "");
+  if(digitos.length < 8){ toast("Informe um telefone válido."); qs("#novoLeadTel")?.focus(); return; }
   const btn = qs("#novoLeadSalvar");
-  if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+  if(btn){ btn.disabled = true; btn.textContent = "Incluindo..."; }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action:"criar-manual", nome, telefone, produto, observacao, avatarFoto: novoLeadAvatarFoto || "" })
+      body: JSON.stringify({ action:"criar-manual", nome, telefone, produto: interesse, observacao:"" })
     });
     const data = await res.json().catch(() => ({ ok:false }));
     if(data?.ok){
-      toast("✓ Lead criado.");
+      toast("✓ Lead incluído.");
       fecharNovoLead();
-      await loadRecentLeads();
-      await carregarDashboard();
+      invalidarLeadsCache();
+      state.todosLeads = [];
+      state.carteiraLeads = [];
+      await loadRecentLeads(true);
+      await loadTodosLeadsBusca();
       if(data.id) abrirLead(data.id);
+      else show("carteira", { navKey:"leads" });
     } else {
-      toast("Erro: " + (data?.error || "falhou"));
-      if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
+      toast("Erro: " + (data?.error || "não foi possível incluir o lead"));
+      if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
     }
   }catch(err){
     toast("Erro: " + (err?.message || err));
-    if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
+    if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
   }
 }
 window.abrirNovoLead = abrirNovoLead;
@@ -4688,7 +4675,7 @@ function renderLeadFoco(lead){
         </details>
       </div>
     </div>
-    ${lead.id ? `<div style="margin-top:18px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center"><button type="button" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;opacity:.5;letter-spacing:.03em">Excluir lead definitivo</button></div>` : ""}`;
+    ${lead.id ? `<div class="legacy-delete-definitivo" style="margin-top:18px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center"><button type="button" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;opacity:.5;letter-spacing:.03em">Excluir lead definitivo</button></div>` : ""}`;
 
   // Liga troca de mensagem principal (cards de abordagem)
   const msgs = { a: cardsMensagens[0]?.msg || msgInicial, b: cardsMensagens[1]?.msg || msgInicial, c: cardsMensagens[2]?.msg || msgInicial };
@@ -7441,9 +7428,10 @@ function renderBuscaGlobal(termo){
   const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
   if(!state.todosLeads || !state.todosLeads.length) loadTodosLeadsBusca();
   const tt = semAcento(termo);
+  const numeros = String(termo||"").replace(/\D/g,"");
   const matches = fonte.filter(l => {
     if(foraDaBusca(l)) return false; // arquivado/geladeira não aparece na busca
-    return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt);
+    return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros));
   }).slice(0, 12);
   if(!matches.length){
     box.style.display = "block";
@@ -7471,22 +7459,48 @@ function barraBuscaLeadHTML(prefixo){
 }
 window.barraBuscaLeadHTML = barraBuscaLeadHTML;
 
+function ui677ToolbarHTML(prefixo){
+  const inputId = `ui677Busca_${prefixo}`;
+  const boxId = `ui677BuscaRes_${prefixo}`;
+  return `<div class="ui677-toolbar">
+    <div class="ui677-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="${inputId}" placeholder="Buscar por nome ou interesse" autocomplete="off" oninput='buscaLeadInline(this.value, ${JSON.stringify(boxId)})'>
+      <div id="${boxId}" class="ui677-search-results"></div>
+    </div>
+    <button type="button" class="ui677-manual-btn" onclick="abrirNovoLead()"><span>＋</span> Incluir manual</button>
+  </div>`;
+}
+window.ui677ToolbarHTML = ui677ToolbarHTML;
+
+window.ui677AbrirBuscaLead = function(id, boxId){
+  const box = qs("#" + boxId);
+  if(box){
+    box.style.display = "none";
+    box.innerHTML = "";
+    const input = box.parentElement?.querySelector('input[type="search"]');
+    if(input) input.value = "";
+  }
+  abrirLead(id);
+};
+
 let _buscaLeadTimer = null;
 function buscaLeadInline(termo, boxId){
   clearTimeout(_buscaLeadTimer);
-  _buscaLeadTimer = setTimeout(() => {
+  _buscaLeadTimer = setTimeout(async () => {
     const box = qs("#" + boxId);
     if(!box) return;
     const t = semAcento(termo);
     if(t.length < 2){ box.style.display = "none"; box.innerHTML = ""; return; }
+    if((!state.todosLeads || !state.todosLeads.length) && typeof loadTodosLeadsBusca === "function") await loadTodosLeadsBusca();
     const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
-    if((!state.todosLeads || !state.todosLeads.length) && typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
-    const matches = fonte.filter(l => !foraDaBusca(l) && (semAcento(l.name).includes(t) || semAcento(l.product).includes(t))).slice(0, 12);
+    const numeros = String(termo||"").replace(/\D/g,"");
+    const matches = fonte.filter(l => !foraDaBusca(l) && (semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros)))).slice(0, 12);
     box.style.display = "block";
     if(!matches.length){ box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(t)}"</div>`; return; }
     box.innerHTML = matches.map(l => {
       const idJs = JSON.stringify(String(l.id||""));
-      return `<div onclick='abrirLead(${idJs})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
         <span class="tag" style="font-size:10px;flex-shrink:0">${escapeHtml(probabilidadeRefinadaTxt(l))}</span>
       </div>`;
@@ -7932,6 +7946,7 @@ function renderCarteiraTabela(){
   const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>';
   const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
   box.innerHTML = `
+    ${ui677ToolbarHTML("atendimentos")}
     <div class="cart-head">
       <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -9054,6 +9069,7 @@ renderListasHome = function(ordenados){
   const oportunidades=prioritarios.length;
   foco.innerHTML=`
     <div class="ui-home-content">
+      ${ui677ToolbarHTML("home")}
       <section class="ui-insight-card">
         <div class="ui-insight-title"><i>✦</i><strong>O sistema percebeu</strong></div>
         <p>${esfriando} ${esfriando===1?'lead esfriando':'leads esfriando'}, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
@@ -9454,9 +9470,9 @@ renderBotoesHome=function(){
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}
 
 /* ============================================================
-   ATUALIZAÇÃO #675 — REANÁLISE COM FALLBACK PERSISTENTE
+   ATUALIZAÇÃO #676 — REANÁLISE COM FALLBACK PERSISTENTE
    - usa o resultado salvo da API sem sobrescrever com cache antigo
-   - schema comercial 675, leitura pós-gravação e fallback persistente
+   - schema comercial 676, leitura pós-gravação e fallback persistente
    - indicadores gerais permanecem ocultos dentro do lead
    ============================================================ */
 
@@ -9688,8 +9704,8 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const base=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
   const leadBase={...lead,analysis:base};
   const mc=ui670ModeloComercial(leadBase);
-  mc.versao=675;
-  const out={...base,modeloComercial:mc,_schemaComercial:675,reanalisadoEm:new Date().toISOString()};
+  mc.versao=676;
+  const out={...base,modeloComercial:mc,_schemaComercial:676,reanalisadoEm:new Date().toISOString()};
   out.nextAction=mc?.acao?.descricao||out.nextAction||"Ação ainda não definida.";
   const semAcao=mc?.acao?.status==="sem-acao-urgente";
   if(semAcao){
@@ -9715,7 +9731,13 @@ async function ui675BuscarDetalhe(id){
 async function ui675PersistirFallback(id,analysis){
   const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},cache:"no-store",body:JSON.stringify({action:"analise-comercial-set",id,analysis})});
   const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida ao salvar a análise."}));
-  if(!r.ok||!d?.ok||!d?.analysis)throw new Error(d?.error||"Não foi possível salvar a análise comercial corrigida.");
+  if(!r.ok||!d?.ok||!d?.analysis){
+    const erro=String(d?.error||"Não foi possível salvar a análise comercial corrigida.");
+    if(/action inválida/i.test(erro)){
+      throw new Error("Backend desatualizado: o arquivo api/lead-update.js não foi substituído na pasta /api.");
+    }
+    throw new Error(erro);
+  }
   return d.analysis;
 }
 window.ui670Reanalisar=async function(btn){
@@ -9728,7 +9750,7 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:675}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:676}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
@@ -9739,26 +9761,26 @@ window.ui670Reanalisar=async function(btn){
     let usouFallback=false;
 
     // Compatibilidade com uma função antiga ou resposta incompleta: relê o banco antes de desistir.
-    if(!analysis||schema<675){
+    if(!analysis||schema<676){
       for(const espera of [0,450,900]){
         if(espera)await new Promise(r=>setTimeout(r,espera));
         const detalhe=await ui675BuscarDetalhe(lead.id).catch(()=>null);
         const aDetalhe=detalhe?.analysis||null;
         const sDetalhe=Number(aDetalhe?._schemaComercial||aDetalhe?.modeloComercial?.versao||0);
-        if(aDetalhe&&sDetalhe>=675){analysis=aDetalhe;schema=sDetalhe;break;}
+        if(aDetalhe&&sDetalhe>=676){analysis=aDetalhe;schema=sDetalhe;break;}
         if(aDetalhe&&!analysis)analysis=aDetalhe;
       }
     }
 
     // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
     // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
-    if(!analysis||schema<675){
+    if(!analysis||schema<676){
       const local=ui675AnaliseDeterministica(lead,analysis||lead.analysis||{});
       analysis=await ui675PersistirFallback(lead.id,local);
       schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
       usouFallback=true;
     }
-    if(!analysis||schema<675)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+    if(!analysis||schema<676)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
 
     const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
@@ -9784,7 +9806,7 @@ window.ui670Reanalisar=async function(btn){
           state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
-          if(fresco&&freshSchema>=675){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          if(fresco&&freshSchema>=676){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
           renderLeads();
         }
       }catch(_){}
@@ -9861,7 +9883,7 @@ renderLeadFoco=function(lead){
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
-  const stale=Number(mc.versao||a._schemaComercial||0)<675;
+  const stale=Number(mc.versao||a._schemaComercial||0)<676;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
@@ -9873,6 +9895,10 @@ renderLeadFoco=function(lead){
   const act=UI670_ACTION_LABEL[mc?.acao?.status]||["Ação não definida","neutral"];
   const type=ui670TipoContatoLabel(mc?.contato?.tipo);
   const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
+  const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
+  const statusTopo=oportunidadeEncerrada
+    ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
+    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>`;
   const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
   const messageBlock=stale
     ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
@@ -9880,7 +9906,7 @@ renderLeadFoco=function(lead){
       ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
       : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
   const shell=document.createElement("div");shell.className="lead-ui670";
-  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div><button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button></div>
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div>${statusTopo}</div>
   ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
   <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
   <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
