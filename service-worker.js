@@ -129,6 +129,7 @@ self.addEventListener('activate', event => {
         .map(n => caches.delete(n).catch(() => false))
     );
 
+    try { if (self.registration.navigationPreload) await self.registration.navigationPreload.enable(); } catch (_) {}
     await self.clients.claim();
   })());
 });
@@ -161,15 +162,19 @@ self.addEventListener('fetch', event => {
   if (isHtml) {
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);
-      const cached = await caches.match(event.request) || await caches.match('/index.html');
-      const network = fetch(event.request).then(response => {
+      const cached = await caches.match(event.request) || await caches.match('/index.html') || await caches.match('/');
+
+      // Navegação deve pintar algo imediatamente. Nunca devolver resposta vazia,
+      // porque isso vira tela branca ao reabrir a aba/PWA.
+      const fallbackShell = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corretor Pro</title><style>html,body{margin:0;height:100%;background:#001E2B;color:#F4F7FB;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.boot{min-height:100%;display:grid;place-items:center;text-align:center}.logo{font-weight:900;font-size:22px}.sub{margin-top:8px;color:#8fb1bf}</style></head><body><div class="boot"><div><div class="logo">Corretor <span style="color:#ff6257">Pro</span></div><div class="sub">Abrindo sua base...</div></div></div><script>setTimeout(function(){location.reload()},1200)</script></body></html>';
+
+      const networkPromise = (event.preloadResponse || fetch(event.request)).then(response => {
         if(response && response.ok){ cache.put(event.request, response.clone()).catch(() => null); }
         return response;
       }).catch(() => null);
-      // Ao voltar para uma aba descartada ou reabrir o PWA, mostrar o shell em cache
-      // imediatamente. A atualização ocorre em segundo plano, sem tela branca.
-      if(cached) { network.catch(() => null); return cached; }
-      return (await network) || new Response('', { status: 504, statusText: 'offline' });
+
+      if(cached) { networkPromise.catch(() => null); return cached; }
+      return (await networkPromise) || new Response(fallbackShell, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     })());
     return;
   }

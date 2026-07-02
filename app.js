@@ -8649,46 +8649,33 @@ async function checarVersaoServidor(){
     const servidor = m ? (parseInt(m[1], 10) || 0) : 0;
     sessionStorage.setItem("vchk", "1"); // só tenta 1x por sessão — nunca entra em loop
     if(servidor > atual){
-      try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } }catch(_){}
-      location.reload();
+      // v682 estabilidade: não recarrega automaticamente. Atualização entra no próximo carregamento normal.
+      try{ console.info("Corretor Pro: versão nova detectada no servidor; mantendo tela atual ativa."); }catch(_){}
     }
   }catch(_){ /* offline/erro: ignora, segue na versão atual */ }
 }
 if("serviceWorker" in navigator){
-  // ATUALIZAÇÃO AUTOMÁTICA: quando uma versão nova chega com o app aberto, o novo service
-  // worker assume e a página recarrega SOZINHA pra versão nova — sem precisar fechar/reabrir
-  // o app na mão (era a causa do "fica preso na versão antiga").
-  let recarregandoSW = false;
-  const tinhaController = !!navigator.serviceWorker.controller; // já tinha versão rodando antes?
+  // v682 estabilidade: NUNCA recarregar automaticamente quando a aba volta ou quando
+  // o service worker troca de versão. O reload automático era a origem da tela branca
+  // e da demora para obedecer comandos ao reabrir a aba.
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    // Só recarrega numa ATUALIZAÇÃO (já havia uma versão ativa). Na 1ª instalação, não.
-    if(recarregandoSW || !tinhaController) return;
-    recarregandoSW = true;
-    location.reload();
+    try{ console.info("Corretor Pro: service worker atualizado sem recarregar a tela."); }catch(_){}
   });
   addEventListener("load", async ()=>{
     try{
       const reg = await navigator.serviceWorker.register("/service-worker.js?v=__VERSION__", { scope: "/" });
-      // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;
         if(!novo) return;
         novo.addEventListener("statechange", () => {
           if(novo.state === "installed" && navigator.serviceWorker.controller){
-            try{ toast("Nova versão — atualizando…"); }catch(_){}
+            try{ console.info("Corretor Pro: nova versão preparada para o próximo carregamento."); }catch(_){}
           }
         });
       });
-      try{ await reg.update(); }catch(e){}
+      // Atualiza em segundo plano, sem travar ou reiniciar a tela atual.
+      try{ setTimeout(() => reg.update().catch(()=>{}), 1500); }catch(e){}
       try{ await navigator.serviceWorker.ready; }catch(e){}
-      // Não força checagem/reload quando a aba volta do segundo plano.
-      // Isso causava tela branca e atraso ao alternar abas, porque o app reiniciava
-      // e precisava reler/renderizar a base antes de responder.
-      if ("requestIdleCallback" in window) {
-        requestIdleCallback(() => checarVersaoServidor(), { timeout: 8000 });
-      } else {
-        setTimeout(checarVersaoServidor, 4000);
-      }
       setTimeout(checkShared,900);
     }catch(e){
       console.warn("Falha ao registrar service worker do Corretor Pro", e);
