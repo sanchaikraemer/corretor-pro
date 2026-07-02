@@ -102,7 +102,7 @@ function gerarAuditoriaDados(rows = []) {
 
   return {
     ok: true,
-    version: "681",
+    version: "682",
     checkedAt: new Date().toISOString(),
     resumo: {
       totalLeads: total,
@@ -147,7 +147,7 @@ async function exportarTudo(req, res) {
   }
   const payload = {
     ok: true,
-    version: "681",
+    version: "682",
     type: "corretor-pro-full-backup",
     generatedAt,
     source: "api/leads-recentes?export=full",
