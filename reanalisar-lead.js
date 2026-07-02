@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercialV674 } from "./_pipeline.js";
 
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
 function diaSemanaBR() {
@@ -260,9 +260,14 @@ export default async function handler(req, res) {
   if (!timeline.length && !novoAtendimento) return json(res, 400, { ok: false, error: "Lead sem timeline pra reanalisar." });
 
   const openai = getOpenAI();
-  if (!openai && !apenasSalvar) return json(res, 500, { ok: false, error: "Análise não configurada no servidor." });
 
   const previous = row.resultado_analise || {};
+  const leadModelo = {
+    ...(previous.lead || {}),
+    name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
+    clientName: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
+    product: previous.produtoInteresse || previous?.modeloComercial?.oportunidade?.produto || previous?.lead?.product || ""
+  };
   // Ajuste manual de score (comando "aumentar/baixar score" na observação). Soma sobre o
   // campo scoreAjuste que o app já usa no número exibido — o corretor manda no score quando quiser.
   const ajusteScorePrev = Number(previous.scoreAjuste) || 0;
@@ -404,35 +409,30 @@ export default async function handler(req, res) {
     } catch (_) { /* mantém a nota crua */ }
   }
 
-  // 3º REANALISA. Trata erro da OpenAI (limite/timeout/sobrecarga) sem derrubar a função,
-  // devolvendo um motivo claro pro app — assim o lead pode ser repetido depois.
-  const lead = previous.lead || {};
+  // 3º REANALISA. A IA aprofunda a leitura; a camada determinística 674
+  // sempre reconcilia oportunidade, relacionamento, responsável e mensagem antes de salvar.
   let novoAnalysis;
-  try {
-    novoAnalysis = await analyzeWithBrain({ lead, timeline: timelineFinal, openai, leadId: id, forcarVariacao: true });
-  } catch (e) {
-    const msg = String(e?.message || e || "");
-    const motivo = /rate|429|limit/i.test(msg) ? "Limite do provedor de análise (tente de novo)"
-      : /timeout|timed out|aborted|ETIMEDOUT/i.test(msg) ? "O provedor de análise demorou demais (timeout)"
-      : /quota|insufficient/i.test(msg) ? "Cota/crédito do provedor de análise esgotado"
-      : ("Erro na análise: " + msg.slice(0, 120));
-    return json(res, 502, { ok: false, error: motivo });
-  }
-  if (!novoAnalysis || typeof novoAnalysis !== "object") {
-    return json(res, 502, { ok: false, error: "A análise não retornou resultado (tente de novo)." });
-  }
-  // analyzeWithBrain captura erros internamente e retorna mode:'erro_api' em vez de lançar.
-  // Se a análise falhou E não há mensagens anteriores pra preservar, retorna erro pro app.
-  if (novoAnalysis.mode === 'erro_api') {
-    const msgAntigasExistem = previous.messages && (previous.messages.a || previous.messages.b || previous.messages.c);
-    if (!msgAntigasExistem) {
-      return json(res, 502, { ok: false, error: novoAnalysis.error || "O provedor de análise não conseguiu gerar a análise agora. Tente de novo." });
+  let avisoReanalise = "";
+  if (openai) {
+    try {
+      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineFinal, openai, leadId: id, forcarVariacao: true });
+    } catch (e) {
+      avisoReanalise = String(e?.message || e || "");
     }
+  } else {
+    avisoReanalise = "Análise por IA não configurada no servidor.";
   }
 
+  // Uma falha do provedor não pode fazer o botão fingir sucesso nem restaurar mensagem antiga.
+  // Reconciliamos os fatos já salvos + a timeline sem custo de API e avisamos o front.
+  if (!novoAnalysis || typeof novoAnalysis !== "object" || novoAnalysis.mode === "erro_api") {
+    avisoReanalise = avisoReanalise || novoAnalysis?.error || "O provedor de análise não respondeu.";
+    novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
+  }
+  novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
-  atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
+  if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
 
   // Re-lê o estado ATUAL do banco antes de salvar. Armazena updated_at para
   // o optimistic lock no UPDATE: se outra reanálise gravou antes, essa não sobrescreve.
@@ -446,50 +446,63 @@ export default async function handler(req, res) {
   // Preserva venda/aprendizado; memória recebe o novo atendimento no resumo de observações.
   const msgAntigasValidas = !freshPrevious.sugestoesPendentes &&
     freshPrevious.messages && (freshPrevious.messages.a || freshPrevious.messages.b || freshPrevious.messages.c);
-  const merged = {
+  let merged = {
     ...freshPrevious,
     ...novoAnalysis,
     venda: freshPrevious.venda || undefined,
     memoria: { ...(freshPrevious.memoria || {}), observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,
     scoreAjuste: ajusteScoreNovo,
-    reanalisadoEm: new Date().toISOString() // quando a IA reanalisou pela última vez (≠ "última atualização", que é edição)
+    reanalisadoEm: new Date().toISOString()
   };
-  // Se a nova análise falhou em gerar mensagens mas havia mensagens anteriores válidas,
-  // preserva as mensagens antigas para não apagar o que já funcionou.
-  if (novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
+  merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
+  const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
+  // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
+  if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
     merged.messages = freshPrevious.messages;
     merged.sugestoesPendentes = false;
     merged.aprovada = freshPrevious.aprovada;
     merged.arquiteturaMensagens = freshPrevious.arquiteturaMensagens;
   }
-  // Marca aprovada=true quando a análise gerou as 3 mensagens com conteúdo.
   const m = merged.messages || {};
-  if (!merged.sugestoesPendentes && m.a && m.b && m.c) {
-    merged.aprovada = true;
-  }
+  if (semAcaoUrgente || (!merged.sugestoesPendentes && m.a && m.b && m.c)) merged.aprovada = true;
   aplicarLembrete(merged);
+  // Oportunidade encerrada não mantém lembrete/compromisso legado nem mensagem anterior.
+  if (semAcaoUrgente && ["perdida","ganha","encerrada-sem-decisao"].includes(String(merged?.modeloComercial?.oportunidade?.status || ""))) {
+    merged.lembrete = null;
+    merged.confirmedAppointments = [];
+  }
 
-  // Reanálise PURA (sem atendimento novo) NÃO mexe na "última atualização": é só recálculo da
-  // IA — o corretor não incluiu/editou nada. Só carimba atualizado_em quando há atendimento real.
-  const update = { resultado_analise: merged };
-  if (novoAtendimento) { update.timeline_json = timelineFinal; update.atualizado_em = new Date().toISOString(); }
-  // Quem decide etapa é a IA (a partir da conversa real). A etapa antiga importada do CRM é
-  // ignorada — mas estados finais marcados pelo corretor são preservados: "Vendido" (marcou venda)
-  // e "Perdido" (descartou explicitamente). Esses só saem por ação manual (Reabrir / Marcar venda).
+  const agoraSalvar = new Date().toISOString();
+  const update = { resultado_analise: merged, atualizado_em: agoraSalvar };
+  if (novoAtendimento) update.timeline_json = timelineFinal;
   const etapaAtual = String(row.etapa || "Novo").toLowerCase();
   const ehFinalCorretor = /vendido|perdido/.test(etapaAtual);
-  if (!ehFinalCorretor && novoAnalysis?.etapaSugerida) update.etapa = novoAnalysis.etapaSugerida;
+  if (!ehFinalCorretor && merged?.etapaSugerida) update.etapa = merged.etapaSugerida;
   const freshUpdatedAt = freshRow?.updated_at;
-  const updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id);
-  // Optimistic lock: só grava se ninguém atualizou a linha desde a releitura.
-  const finalQuery = freshUpdatedAt ? updateQuery.eq("updated_at", freshUpdatedAt) : updateQuery;
-  const { data: updatedRows, error: putErr } = await finalQuery.select("id");
+  let updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id);
+  let finalQuery = freshUpdatedAt ? updateQuery.eq("updated_at", freshUpdatedAt) : updateQuery;
+  let { data: updatedRows, error: putErr } = await finalQuery.select("id");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
-  // Se 0 linhas atualizadas, outra reanálise ganhou — retorna sucesso com os dados calculados.
+
+  // Nunca informa sucesso sem ter gravado. Em conflito, relê e tenta uma segunda vez.
   if (!updatedRows || updatedRows.length === 0) {
-    return json(res, 200, { ok: true, analysis: merged });
+    const { data: retryRow, error: retryReadErr } = await supabase
+      .from("whatsapp_processamentos")
+      .select("resultado_analise, updated_at")
+      .eq("id", id)
+      .single();
+    if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
+    let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
+    retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
+    const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
+    let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
+    if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
+    const retryResult = await retryQ.select("id");
+    if (retryResult.error) return json(res, 500, { ok:false, error:retryResult.error.message });
+    if (!retryResult.data || retryResult.data.length === 0) return json(res, 409, { ok:false, error:"Outra atualização ocorreu ao mesmo tempo. Toque novamente." });
+    merged = retryMerged;
   }
 
-  return json(res, 200, { ok: true, analysis: merged });
+  return json(res, 200, { ok: true, analysis: merged, warning: avisoReanalise || null, schemaComercial: 674 });
 }

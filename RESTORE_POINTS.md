@@ -477,3 +477,13 @@
 - Cache da lista e do detalhe é invalidado e recarregado após sucesso.
 - “Comprou outro imóvel” encerra a oportunidade mesmo com análise anterior.
 - Sem ação urgente não entra na lista de prioridades.
+
+## Ponto #674 — persistência da análise e bloqueio de mensagem indevida
+
+- O botão de atualização usa a análise devolvida e gravada pela API, sem ser sobrescrito por cache antigo.
+- A API deixa de informar sucesso sem confirmação de gravação no banco.
+- O estado comercial é reconciliado após a mesclagem com dados anteriores.
+- Oportunidade encerrada com parceiro ativo não gera nova mensagem nem mantém retorno antigo.
+- A ausência temporária da IA ainda permite corrigir e salvar o estado factual já comprovado pela conversa.
+- Indicadores gerais continuam ocultos dentro do detalhe do lead.
+- Cache PWA atualizado para a versão 674.

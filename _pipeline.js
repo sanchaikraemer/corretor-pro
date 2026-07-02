@@ -459,7 +459,7 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
   return null;
 }
 
-function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
+export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
   if (!parsed || typeof parsed !== "object") return parsed;
   const timelineText = (Array.isArray(timeline) ? timeline : []).map(m => `${m?.author || ""}: ${m?.text || ""}`).join("\n");
   const bruto = (parsed.modeloComercial && typeof parsed.modeloComercial === "object") ? parsed.modeloComercial : {};
@@ -470,11 +470,17 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
   const reNovaOportunidade = /\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
   let idxPerda = -1, idxNova = -1;
   linhasReais.forEach((m, i) => { const t = String(m.text || ""); if (rePerdeuOutra.test(t)) idxPerda = i; if (reNovaOportunidade.test(t)) idxNova = i; });
-  const textoRecente = `${linhasReais.slice(-24).map(m => `${m.author || ""}: ${m.text || ""}`).join("\n")}\n${parsed.summary || ""}\n${parsed.nextAction || ""}`.toLowerCase();
+  const evidenciasAnteriores = [
+    bruto?.oportunidade?.motivo, bruto?.oportunidade?.resultado, bruto?.oportunidade?.status,
+    bruto?.contexto?.ultimoCompromisso, parsed?.memoria?.observacoes, parsed?.memoriaSugerida?.observacoes,
+    parsed?.leituraComercial?.vendaTambem, parsed?.leituraComercial?.oQueTrava, parsed?.diagnostico?.pendencia,
+    parsed?.diagnostico?.objecaoPrincipal, parsed?.risk
+  ].filter(Boolean).join("\n");
+  const textoRecente = `${linhasReais.slice(-40).map(m => `${m.author || ""}: ${m.text || ""}`).join("\n")}\n${parsed.summary || ""}\n${parsed.nextAction || ""}\n${evidenciasAnteriores}`.toLowerCase();
   const aiMarcouPerda = String(bruto?.oportunidade?.resultado || "") === "comprou-outra-opcao" || String(bruto?.oportunidade?.status || "") === "perdida";
   const resumoMarcouPerda = rePerdeuOutra.test(String(parsed.summary || ""));
   const existeNovaDepois = idxNova >= 0 && idxNova > idxPerda;
-  const comprouOutra = !existeNovaDepois && (aiMarcouPerda || idxPerda >= 0 || resumoMarcouPerda);
+  const comprouOutra = !existeNovaDepois && (aiMarcouPerda || idxPerda >= 0 || resumoMarcouPerda || rePerdeuOutra.test(textoRecente));
   const vendaConosco = /contrato assinado|assinou o contrato|comprovante de pagamento|venda confirmada/.test(textoRecente) && !comprouOutra;
   const condicoesIncompativeis = /condi[cç][oõ]es.{0,45}(n[aã]o encaix|inviabil|n[aã]o aceitou)|entrada.{0,35}(baixa|n[aã]o aceitou)|recus.{0,25}financi/.test(textoRecente);
   const encerramentoCordial = ultimo.falante === "contato" && /^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(ultimo.mensagem?.text || "").trim());
@@ -531,15 +537,15 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
     else descricaoAcao = "Nenhuma ação urgente neste momento.";
   }
 
-  const motivoOpp = mcTexto(bruto?.oportunidade?.motivo,
-    resultado === "comprou-outra-opcao" ? "O comprador final adquiriu outro imóvel." :
+  const motivoOpp = resultado === "comprou-outra-opcao" ? "O comprador final adquiriu outro imóvel." :
     resultado === "condicoes-incompativeis" ? "As condições comerciais não se encaixaram para esta oportunidade." :
-    resultado === "venda-conosco" ? "Venda confirmada conosco." : mcTexto(parsed.summary));
+    resultado === "venda-conosco" ? "Venda confirmada conosco." :
+    mcTexto(bruto?.oportunidade?.motivo, mcTexto(parsed.summary));
   const motivoRel = mcTexto(bruto?.relacionamento?.motivo,
     parceiro && statusOpp === "perdida" ? "O contato segue como parceiro e pode apresentar novos compradores." : mcTexto(parsed.clientProfile));
 
   parsed.modeloComercial = {
-    versao: 672,
+    versao: 674,
     contato: {
       id: mcTexto(bruto?.contato?.id || parsed?.contatoId),
       tipo: tipoContato,
@@ -570,7 +576,9 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
     contexto: {
       ultimaPessoaFalar: ultimo.falante,
       ultimaMensagem: mcTexto(ultimo.mensagem?.text),
-      ultimoCompromisso: mcTexto(compromissoAberto?.texto || bruto?.contexto?.ultimoCompromisso || parsed?.diagnostico?.ultimoCompromissoCliente, "Nenhum compromisso identificado."),
+      ultimoCompromisso: resultado === "comprou-outra-opcao"
+        ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
+        : mcTexto(compromissoAberto?.texto || bruto?.contexto?.ultimoCompromisso || parsed?.diagnostico?.ultimoCompromissoCliente, "Nenhum compromisso identificado."),
       impedimentoPrincipal: mcTexto(bruto?.contexto?.impedimentoPrincipal || parsed?.diagnostico?.objecaoPrincipal || parsed.risk, "Não identificado.")
     }
   };
@@ -587,15 +595,42 @@ function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
     parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
     if (parceiro) parsed.etapaSugerida = "Standby";
   }
-  parsed._schemaComercial = 672;
+  parsed._schemaComercial = 674;
   return parsed;
 }
 
-export function __testarModeloComercialV672({ parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai" } = {}) {
-  return normalizarModeloComercial(JSON.parse(JSON.stringify(parsed || {})), lead, timeline, corretorNome);
+export function finalizarAnaliseComercialV674(parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai") {
+  const out = normalizarModeloComercial(parsed, lead, timeline, corretorNome);
+  const mc = out?.modeloComercial || {};
+  const semAcao = mc?.acao?.status === "sem-acao-urgente";
+  if (semAcao) {
+    out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
+    out.sugestoesPendentes = false;
+    out.aprovada = true;
+    out.validacaoSugestoes = [];
+    out.nextAction = mc?.acao?.descricao || "Nenhuma ação urgente neste momento.";
+    out.tipoRetomada = "stand-by";
+    out.diagnostico = (out.diagnostico && typeof out.diagnostico === "object") ? { ...out.diagnostico } : {};
+    out.diagnostico.mensagemQueEuEnviariaHoje = "";
+    out.diagnostico.proximaAcao = out.nextAction;
+    out.diagnostico.ultimaInfoPrometida = mc?.contexto?.ultimoCompromisso || "Nenhum compromisso pendente.";
+    if (["perdida", "ganha", "encerrada-sem-decisao"].includes(String(mc?.oportunidade?.status || ""))) {
+      out.confirmedAppointments = [];
+      out.lembrete = null;
+      out.lembreteSugerido = null;
+    }
+  }
+  out._schemaComercial = 674;
+  if (out.modeloComercial) out.modeloComercial.versao = 674;
+  return out;
 }
-// Compatibilidade com o teste/pacote anterior.
-export const __testarModeloComercialV671 = __testarModeloComercialV672;
+
+export function __testarModeloComercialV674({ parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai" } = {}) {
+  return finalizarAnaliseComercialV674(JSON.parse(JSON.stringify(parsed || {})), lead, timeline, corretorNome);
+}
+// Compatibilidade com os testes/pacotes anteriores.
+export const __testarModeloComercialV672 = __testarModeloComercialV674;
+export const __testarModeloComercialV671 = __testarModeloComercialV674;
 
 // Lê um texto (próxima ação / fala do cliente) e devolve {dias, motivo} se houver
 // prazo claro pra retomar: "em N dias/semanas/meses", "dia 20" (próximo dia do mês),
@@ -2484,7 +2519,7 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
       }
     }
     normalizarDiagnosticoJessica(parsed);
-    normalizarModeloComercial(parsed, lead, timeline, corretorNome);
+    finalizarAnaliseComercialV674(parsed, lead, timeline, corretorNome);
     // Quando não há ação urgente, não existe motivo comercial para gerar três novas mensagens.
     // Isso evita pressão indevida, elimina contradição na tela e economiza uma chamada de IA.
     const semAcaoUrgente = parsed?.modeloComercial?.acao?.status === "sem-acao-urgente";

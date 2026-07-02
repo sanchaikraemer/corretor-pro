@@ -33,7 +33,7 @@ assert.equal(normalized.modeloComercial.contexto.ultimaPessoaFalar,'contato');
 assert.equal(normalized.modeloComercial.oportunidade.status,'perdida');
 assert.equal(normalized.modeloComercial.relacionamento.status,'aguardando-nova-oportunidade');
 assert.equal(normalized.modeloComercial.acao.status,'sem-acao-urgente');
-assert.equal(normalized._schemaComercial,672);
+assert.equal(normalized._schemaComercial,674);
 
 const app=fs.readFileSync(new URL('./app.js',import.meta.url),'utf8');
 assert.match(app,/const BUSINESS_RE = \/\(senger\|construtora\|direciona\|atendimento\|sanchai\|miguel\\s\+kirinus\)\/i/);

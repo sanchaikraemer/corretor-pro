@@ -9145,7 +9145,7 @@ window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
-  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia")].filter(Boolean);
+  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia"),qs("#top3Area"),qs("#filaPrioridade"),qs("#homeRight")].filter(Boolean);
   for(const el of alvos){
     if(ativo) el.style.setProperty("display","none","important");
     else el.style.removeProperty("display");
@@ -9445,12 +9445,20 @@ const _renderResumoDiaAntes657=renderResumoDia;
 renderResumoDia=function(items){ try{_renderResumoDiaAntes657(items);}catch(_){} renderCorretorProDashboard(items,state.todosLeads||items); };
 const _renderBotoesHomeAntes657=renderBotoesHome;
 renderBotoesHome=function(){
-  ui667ModoDetalheLead(false);
+  const detalheAberto=!!state.lead?.id&&!!qs("#leadFocoArea .lead-ui670");
+  ui667ModoDetalheLead(detalheAberto);
   const ws=qs("#cpLeadWorkspace"); if(ws) ws.style.display="block";
   try{_renderBotoesHomeAntes657();}catch(_){}
   renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]);
 };
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}
+
+/* ============================================================
+   ATUALIZAÇÃO #674 — PERSISTÊNCIA CONFIÁVEL + SEM MENSAGEM INDEVIDA
+   - usa o resultado salvo da API sem sobrescrever com cache antigo
+   - schema comercial 674 e bloqueio determinístico de mensagem
+   - indicadores gerais permanecem ocultos dentro do lead
+   ============================================================ */
 
 /* ============================================================
    ATUALIZAÇÃO #673 — REANÁLISE DIRETA + FECHAMENTO FÁTICO
@@ -9512,10 +9520,14 @@ const UI670_RESULT_LABEL = {
 };
 
 function ui670TextoAnalise(lead){
-  const a=lead?.analysis||{};
+  const a=lead?.analysis||{},mc=a?.modeloComercial||{};
   const recent=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-  return [a.summary,a.nextAction,a.risk,a.clientProfile,a?.memoria?.observacoes,a?.memoriaSugerida?.observacoes,
-    ...recent.slice(-20).map(m=>`${m?.author||""}: ${m?.text||""}`)].filter(Boolean).join(" ").toLowerCase();
+  return [
+    a.summary,a.nextAction,a.risk,a.clientProfile,a?.memoria?.observacoes,a?.memoriaSugerida?.observacoes,
+    mc?.oportunidade?.motivo,mc?.oportunidade?.resultado,mc?.oportunidade?.status,
+    mc?.contexto?.ultimoCompromisso,a?.diagnostico?.pendencia,a?.diagnostico?.objecaoPrincipal,
+    ...recent.slice(-40).map(m=>`${m?.author||""}: ${m?.text||""}`)
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 function ui670UltimaMensagemReal(lead){
   const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
@@ -9591,6 +9603,7 @@ function ui670ModeloComercial(lead){
   else if(comprouOutra){mc.oportunidade.status="perdida";mc.oportunidade.resultado="comprou-outra-opcao";mc.oportunidade.motivo="O comprador final adquiriu outro imóvel.";}
   mc.relacionamento=mc.relacionamento||{};
   mc.relacionamento.status=mc.relacionamento.status||(parceiro&&mc.oportunidade.status==="perdida"?"aguardando-nova-oportunidade":"ativo");
+  if(parceiro&&mc.oportunidade.status==="perdida") mc.relacionamento.status="aguardando-nova-oportunidade";
   mc.relacionamento.potencial=mc.relacionamento.potencial||(parceiro?"médio":"não avaliado");
   mc.relacionamento.motivo=mc.relacionamento.motivo||(parceiro?"O contato pode apresentar novos compradores.":a.clientProfile||"");
   mc.acao=mc.acao||{};
@@ -9612,7 +9625,9 @@ function ui670ModeloComercial(lead){
   mc.contexto=mc.contexto||{};
   mc.contexto.ultimaPessoaFalar=last.falante;
   mc.contexto.ultimaMensagem=String(last.m?.text||mc.contexto.ultimaMensagem||"").trim();
-  mc.contexto.ultimoCompromisso=compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.";
+  mc.contexto.ultimoCompromisso=mc.oportunidade.resultado==="comprou-outra-opcao"
+    ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
+    : (compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
   mc.contexto.impedimentoPrincipal=mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
   return mc;
 }
@@ -9678,41 +9693,48 @@ window.ui670Reanalisar=async function(btn){
   const timeout=setTimeout(()=>ctrl.abort(),90000);
   try{
     const res=await fetch("./api/reanalisar-lead",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:lead.id}),
-      signal:ctrl.signal
+      method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial"}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok||!data?.ok)throw new Error(data?.error||"Não foi possível atualizar a análise.");
+    const schema=Number(data?.analysis?._schemaComercial||data?.analysis?.modeloComercial?.versao||0);
+    if(!data?.analysis||schema<674)throw new Error("O servidor não devolveu a análise comercial atualizada.");
 
-    // A ação visível não depende mais do botão legado escondido. Também força a leitura
-    // nova do servidor para não reapresentar a análise antiga que ficou no cache do app.
-    invalidarLeadsCache();
-    invalidarLeadDetail(lead.id);
-    const [baseResult,detailResult]=await Promise.allSettled([
-      getLeadsData(true),
-      getLeadDetail(lead.id,true)
-    ]);
-    if(baseResult.status==="fulfilled"&&Array.isArray(baseResult.value?.items)){
-      const itens=baseResult.value.items.map(limparLead);
-      state.todosLeads=itens;
-      state.leads=itens.slice(0,8);
-      state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
+    // Usa imediatamente a análise que acabou de ser gravada. Não deixa uma leitura antiga
+    // do cache sobrescrever o resultado novo e reapresentar mensagem indevida.
+    const atualizado=limparLead({...lead,analysis:data.analysis,summary:data.analysis.summary||lead.summary,nextAction:data.analysis.nextAction||lead.nextAction});
+    state.lead=atualizado;state.analysis=atualizado.analysis||null;
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      if(!Array.isArray(lista))continue;
+      const i=lista.findIndex(x=>String(x.id)===String(lead.id));
+      if(i>=0)lista[i]=limparLead({...lista[i],analysis:data.analysis,summary:data.analysis.summary||lista[i].summary,nextAction:data.analysis.nextAction||lista[i].nextAction});
     }
-    let atualizado=detailResult.status==="fulfilled"?detailResult.value:null;
-    if(!atualizado&&baseResult.status==="fulfilled") atualizado=(baseResult.value?.items||[]).find(l=>String(l.id)===String(lead.id))||null;
-    if(!atualizado&&data.analysis) atualizado={...lead,analysis:data.analysis};
-    if(!atualizado) throw new Error("A análise foi gerada, mas o lead atualizado não voltou do servidor.");
-
-    state.lead=limparLead(atualizado);
-    state.analysis=state.lead.analysis||null;
-    renderAnalysis(state.analysis,state.lead);
-    renderLeadFoco(state.lead);
+    invalidarLeadsCache();
+    _leadDetailCache.set(String(lead.id),{ts:Date.now(),data:atualizado,inflight:null});
+    renderLeadFoco(atualizado);
     renderLeads();
-    toast("✓ Análise comercial atualizada.");
+    const mc=data.analysis.modeloComercial||{};
+    const semAcao=mc?.acao?.status==="sem-acao-urgente";
+    toast(data.warning?"Análise comercial corrigida. A IA não respondeu, mas o estado factual foi salvo.":(semAcao?"✓ Análise atualizada: nenhuma ação urgente.":"✓ Análise comercial atualizada."));
     setTimeout(()=>qs("#leadFocoArea")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+
+    // Atualiza as listas em segundo plano, sem substituir a análise recém-recebida por cache antigo.
+    setTimeout(async()=>{
+      try{
+        const base=await getLeadsData(true);
+        if(base?.ok&&Array.isArray(base.items)){
+          const itens=base.items.map(limparLead);
+          state.todosLeads=itens;state.leads=itens.slice(0,8);
+          state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
+          const fresco=itens.find(x=>String(x.id)===String(lead.id));
+          const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
+          if(fresco&&freshSchema>=674){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          renderLeads();
+        }
+      }catch(_){}
+    },500);
   }catch(err){
     clearTimeout(timeout);
     const msg=err?.name==="AbortError"?"A atualização demorou demais. Tente novamente.":(err?.message||String(err));
@@ -9785,7 +9807,7 @@ renderLeadFoco=function(lead){
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
-  const stale=Number(mc.versao||a._schemaComercial||0)!==672;
+  const stale=Number(mc.versao||a._schemaComercial||0)<674;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";

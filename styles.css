@@ -1380,3 +1380,24 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .ui671-modal-card label{display:block;margin:13px 0 6px;color:var(--muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.ui671-modal-card input,.ui671-modal-card select,.ui671-modal-card textarea{width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit;font-size:13px;outline:none}.ui671-modal-card textarea{resize:vertical}.ui671-modal-card input:focus,.ui671-modal-card select:focus,.ui671-modal-card textarea:focus{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-soft)}
 .ui671-modal-info{margin-top:14px;padding:11px 12px;border:1px solid var(--accent-line);border-radius:10px;background:var(--accent-soft);color:var(--soft);font-size:11px;line-height:1.45}.ui671-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}.ui671-modal-actions button{border:1px solid var(--accent);border-radius:10px;padding:11px 12px;background:var(--accent);color:#fff;font-size:12px;font-weight:900;cursor:pointer}.ui671-modal-actions button.secondary{background:transparent;color:var(--soft);border-color:var(--line)}.ui671-modal-actions button:disabled{opacity:.55;cursor:wait}
 @media(max-width:560px){.ui671-modal{padding:10px;align-items:flex-end}.ui671-modal-card{border-radius:18px 18px 8px 8px;padding:18px}.ui671-modal-actions{grid-template-columns:1fr}}
+
+/* ============================================================
+   ATUALIZAÇÃO #674 — detalhe do lead sem indicadores gerais
+   A tela Hoje pode atualizar em segundo plano sem recolocar os cards
+   de Ativos/Quentes/Agenda/Reaquecer acima do atendimento aberto.
+   ============================================================ */
+body.lead-foco-aberto #home .home-page-heading,
+body.lead-foco-aberto #home #resumoDia,
+body.lead-foco-aberto #home #top3Area,
+body.lead-foco-aberto #home #filaPrioridade,
+body.lead-foco-aberto #home #homeRight {
+  display: none !important;
+}
+body.lead-foco-aberto #home .home-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.lead-foco-aberto #home .home-center,
+body.lead-foco-aberto #home #leadFocoArea {
+  width: 100% !important;
+  max-width: none !important;
+}
