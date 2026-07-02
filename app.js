@@ -8681,11 +8681,14 @@ if("serviceWorker" in navigator){
       });
       try{ await reg.update(); }catch(e){}
       try{ await navigator.serviceWorker.ready; }catch(e){}
-      checarVersaoServidor();
-      // Checa de novo por atualização ao voltar pro app (reabrir do segundo plano).
-      document.addEventListener("visibilitychange", () => {
-        if(document.visibilityState === "visible"){ reg.update().catch(()=>{}); checarVersaoServidor(); }
-      });
+      // Não força checagem/reload quando a aba volta do segundo plano.
+      // Isso causava tela branca e atraso ao alternar abas, porque o app reiniciava
+      // e precisava reler/renderizar a base antes de responder.
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(() => checarVersaoServidor(), { timeout: 8000 });
+      } else {
+        setTimeout(checarVersaoServidor, 4000);
+      }
       setTimeout(checkShared,900);
     }catch(e){
       console.warn("Falha ao registrar service worker do Corretor Pro", e);
@@ -9472,11 +9475,17 @@ setInterval(() => {
   }
 }, 3 * 60 * 1000);
 // Refresh quando a aba volta a ficar visível (depois de mudar pra outra aba)
+let __lastVisibleRefresh = 0;
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible" && state.active === "home"){
-    loadRecentLeads(false);
-    carregarDashboard();
-    carregarAgendaTopo();
+    const agora = Date.now();
+    if(agora - __lastVisibleRefresh < 45000) return;
+    __lastVisibleRefresh = agora;
+    setTimeout(() => {
+      loadRecentLeads(false);
+      carregarDashboard();
+      carregarAgendaTopo();
+    }, 250);
   }
 });
 
@@ -9955,7 +9964,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const leadBase={...lead,analysis:base};
   const mc=ui670ModeloComercial(leadBase);
   mc.versao=678;
-  const out={...base,modeloComercial:mc,_schemaComercial:678,reanalisadoEm:new Date().toISOString()};
+  const out={...base,modeloComercial:mc,_schemaComercial:682,reanalisadoEm:new Date().toISOString()};
   const ctx678=ui678ContextoMudouParaImovel(lead);
   if(ctx678 && ctx678.mudouParaImovel && !["ganha","perdida"].includes(String(mc?.oportunidade?.status||""))){
     out.summary=ctx678.resumo;
@@ -10012,7 +10021,7 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:678}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:682}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
@@ -10023,26 +10032,26 @@ window.ui670Reanalisar=async function(btn){
     let usouFallback=false;
 
     // Compatibilidade com uma função antiga ou resposta incompleta: relê o banco antes de desistir.
-    if(!analysis||schema<678){
+    if(!analysis||schema<682){
       for(const espera of [0,450,900]){
         if(espera)await new Promise(r=>setTimeout(r,espera));
         const detalhe=await ui675BuscarDetalhe(lead.id).catch(()=>null);
         const aDetalhe=detalhe?.analysis||null;
         const sDetalhe=Number(aDetalhe?._schemaComercial||aDetalhe?.modeloComercial?.versao||0);
-        if(aDetalhe&&sDetalhe>=678){analysis=aDetalhe;schema=sDetalhe;break;}
+        if(aDetalhe&&sDetalhe>=682){analysis=aDetalhe;schema=sDetalhe;break;}
         if(aDetalhe&&!analysis)analysis=aDetalhe;
       }
     }
 
     // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
     // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
-    if(!analysis||schema<678){
+    if(!analysis||schema<682){
       const local=ui675AnaliseDeterministica(lead,analysis||lead.analysis||{});
       analysis=await ui675PersistirFallback(lead.id,local);
       schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
       usouFallback=true;
     }
-    if(!analysis||schema<678)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+    if(!analysis||schema<682)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
 
     const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
@@ -10068,7 +10077,7 @@ window.ui670Reanalisar=async function(btn){
           state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
-          if(fresco&&freshSchema>=678){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          if(fresco&&freshSchema>=682){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
           renderLeads();
         }
       }catch(_){}
@@ -10145,7 +10154,7 @@ renderLeadFoco=function(lead){
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
-  const stale=Number(mc.versao||a._schemaComercial||0)<678;
+  const stale=Number(mc.versao||a._schemaComercial||0)<682;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";

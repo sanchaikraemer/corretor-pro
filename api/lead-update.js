@@ -123,17 +123,20 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, lead, timeline, "Sanchai");
-  merged._schemaComercial = 676;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 676;
+  merged._schemaComercial = 682;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 682;
 
   const { data: saved, error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
     .eq("id", id)
-    .select("id");
+    .select("resultado_analise");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
-  return json(res, 200, { ok: true, analysis: merged, schemaComercial: 676 });
+  const persisted = saved[0]?.resultado_analise || merged;
+  const schema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
+  if (schema < 682) return json(res, 500, { ok: false, error: "A análise foi gerada, mas o banco não confirmou a gravação no schema 682." });
+  return json(res, 200, { ok: true, analysis: persisted, schemaComercial: 682 });
 }
 
 // ============ LEMBRETE (snooze manual) ============
@@ -495,7 +498,7 @@ async function acaoCriarManual(body, res) {
         confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
-        _schemaComercial: 676,
+        _schemaComercial: 682,
         modeloComercial: {
           versao: 676,
           contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
@@ -603,7 +606,7 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       confianca: 80,
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
-      _schemaComercial: 676,
+      _schemaComercial: 682,
       modeloComercial: {
         versao: 676,
         contato: {

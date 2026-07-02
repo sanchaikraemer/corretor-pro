@@ -159,13 +159,18 @@ self.addEventListener('fetch', event => {
                  url.pathname.endsWith('/service-worker.js');
 
   if (isHtml) {
-    event.respondWith(
-      fetch(event.request).then(response => {
-        const copy = response.clone();
-        caches.open(STATIC_CACHE).then(cache => cache.put(event.request, copy)).catch(() => null);
+    event.respondWith((async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      const cached = await caches.match(event.request) || await caches.match('/index.html');
+      const network = fetch(event.request).then(response => {
+        if(response && response.ok){ cache.put(event.request, response.clone()).catch(() => null); }
         return response;
-      }).catch(() => caches.match(event.request).then(c => c || caches.match('/index.html')))
-    );
+      }).catch(() => null);
+      // Ao voltar para uma aba descartada ou reabrir o PWA, mostrar o shell em cache
+      // imediatamente. A atualização ocorre em segundo plano, sem tela branca.
+      if(cached) { network.catch(() => null); return cached; }
+      return (await network) || new Response('', { status: 504, statusText: 'offline' });
+    })());
     return;
   }
 

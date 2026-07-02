@@ -432,8 +432,8 @@ export default async function handler(req, res) {
     novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
-  novoAnalysis._schemaComercial = 676;
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 676;
+  novoAnalysis._schemaComercial = 682;
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 682;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -460,8 +460,8 @@ export default async function handler(req, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
-  merged._schemaComercial = 676;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 676;
+  merged._schemaComercial = 682;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 682;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
   if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
@@ -501,8 +501,8 @@ export default async function handler(req, res) {
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
-    retryMerged._schemaComercial = 676;
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 676;
+    retryMerged._schemaComercial = 682;
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 682;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -512,5 +512,29 @@ export default async function handler(req, res) {
     merged = retryMerged;
   }
 
-  return json(res, 200, { ok: true, analysis: merged, warning: avisoReanalise || null, schemaComercial: 676, apiVersion: 676 });
+  // Verificação final: não devolve sucesso baseado só no objeto em memória.
+  // Relê o banco e, se a gravação ainda não estiver no schema atual, faz uma última gravação direta.
+  const { data: verifyRow, error: verifyErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("resultado_analise")
+    .eq("id", id)
+    .single();
+  if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
+  let persisted = verifyRow?.resultado_analise || null;
+  let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
+  if (!persisted || persistedSchema < 682) {
+    const forced = { ...merged, _schemaComercial: 682, reanalisadoEm: new Date().toISOString() };
+    if (forced.modeloComercial) forced.modeloComercial.versao = 682;
+    const { data: forcedRows, error: forcedErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
+      .eq("id", id)
+      .select("resultado_analise");
+    if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
+    persisted = forcedRows?.[0]?.resultado_analise || forced;
+    persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
+    if (persistedSchema < 682) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 682." });
+  }
+
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 682, apiVersion: 682 });
 }
