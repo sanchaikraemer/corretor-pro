@@ -33,8 +33,13 @@ const buildId = sha
 let version = "679";
 try {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
-  const major = String(pkg.version || "679.0.0").split(".")[0];
-  if (/^\d+$/.test(major)) version = major.padStart(3, "0");
+  const parts = String(pkg.version || "679.0.0").split(".");
+  const major = parts[0];
+  const minor = Number(parts[1] || 0);
+  if (/^\d+$/.test(major)) {
+    version = major.padStart(3, "0");
+    if (minor > 0) version += `-${minor}`;
+  }
 } catch (_) {}
 
 const files = [
