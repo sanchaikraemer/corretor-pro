@@ -6,7 +6,8 @@
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
-import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao } from "./_pipeline.js";
+import { randomUUID } from "node:crypto";
+import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -56,6 +57,7 @@ export default async function handler(req, res) {
   // salvar-novo / criar-manual não precisam de id (o banco gera ao salvar)
   if (action === "salvar-novo") return await acaoSalvarNovo(body, res);
   if (action === "criar-manual") return await acaoCriarManual(body, res);
+  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res);
   if (action === "extrair-print") return await acaoExtrairPrint(body, res);
   if (action === "detectar-rosto") return await acaoDetectarRosto(body, res);
   if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res);
@@ -78,8 +80,58 @@ export default async function handler(req, res) {
     case "lembrete-clear":return await acaoLembreteClear(id, res);
     case "apagar":        return await acaoApagar(id, res);
     case "editar-dados":  return await acaoEditarDados(id, body, res);
-    default:              return json(res, 400, { ok: false, error: "Action inválida. Use salvar-novo, etapa, memoria-get, memoria-set, aprendizado, lembrete-set, lembrete-clear, editar-dados ou apagar." });
+    case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res);
+    default:              return json(res, 400, { ok: false, error: "Action inválida." });
   }
+}
+
+
+// ============ FALLBACK SEGURO DA ANÁLISE COMERCIAL ============
+// Usado quando a reanálise principal foi gravada mas uma função antiga não devolveu
+// o objeto completo, ou quando o front precisa consolidar fatos determinísticos.
+// O servidor relê o lead, reconcilia novamente e só então persiste.
+async function acaoAnaliseComercialSet(id, analysis, res) {
+  if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
+    return json(res, 400, { ok: false, error: "Informe a análise comercial." });
+  }
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+
+  const { data: current, error: getErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
+    .eq("id", id)
+    .maybeSingle();
+  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
+  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
+
+  const anterior = current.resultado_analise || {};
+  const timeline = Array.isArray(current.timeline_json) ? current.timeline_json : [];
+  const lead = {
+    ...(anterior.lead || {}),
+    name: anterior?.lead?.name || anterior?.nome || String(current.nome_arquivo || current.arquivo_nome || "").replace(/\.(txt|zip)$/i, ""),
+    product: anterior?.produtoInteresse || anterior?.lead?.product || ""
+  };
+  let merged = {
+    ...anterior,
+    ...analysis,
+    memoria: { ...(anterior.memoria || {}), ...(analysis.memoria || {}) },
+    aprendizado: anterior.aprendizado || analysis.aprendizado,
+    venda: anterior.venda || analysis.venda,
+    reanalisadoEm: new Date().toISOString()
+  };
+  merged = finalizarAnaliseComercialV674(merged, lead, timeline, "Sanchai");
+  merged._schemaComercial = 675;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 675;
+
+  const { data: saved, error: putErr } = await supabase
+    .from("whatsapp_processamentos")
+    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
+  if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
+  return json(res, 200, { ok: true, analysis: merged, schemaComercial: 675 });
 }
 
 // ============ LEMBRETE (snooze manual) ============
@@ -441,6 +493,15 @@ async function acaoCriarManual(body, res) {
         confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
+        _schemaComercial: 675,
+        modeloComercial: {
+          versao: 675,
+          contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
+          oportunidade: { status: "descoberta", resultado: "em-andamento", produto: produto || "Não identificado", motivo: porQue },
+          relacionamento: { status: "ativo", potencial: "não avaliado", motivo: "Contato recém-cadastrado." },
+          acao: { status: "responder-agora", responsavel: "corretor", urgencia: "alta", descricao: "Entrar em contato pelo WhatsApp pra iniciar a conversa e qualificar o interesse." },
+          contexto: { ultimaPessoaFalar: "desconhecido", ultimaMensagem: "", ultimoCompromisso: "Nenhum compromisso identificado.", impedimentoPrincipal: "Não identificado." }
+        },
         nextAction: "Entrar em contato pelo WhatsApp pra iniciar a conversa e qualificar o interesse.",
         summary: porQue,
         risk: porQue,
@@ -475,6 +536,175 @@ async function acaoCriarManual(body, res) {
   } catch (err) {
     return json(res, 500, { ok: false, error: err?.message || String(err) });
   }
+}
+
+
+// ============ NOVA OPORTUNIDADE VINCULADA A CORRETOR PARCEIRO ============
+// Cria um registro comercial independente para um novo comprador, preservando o
+// contato/parceiro original. Não exige alteração de schema no Supabase: o vínculo
+// fica dentro de resultado_analise.modeloComercial e oportunidadesVinculadas.
+async function acaoNovaOportunidadeParceiro(body, res) {
+  const idOrigem = String(body?.id || "").trim();
+  const compradorFinal = String(body?.compradorFinal || "").trim().slice(0, 120);
+  const produto = String(body?.produto || "").trim().slice(0, 100);
+  const observacao = String(body?.observacao || "").trim().slice(0, 2000);
+  if (!idOrigem) return json(res, 400, { ok: false, error: "Informe o contato parceiro de origem." });
+  if (!compradorFinal) return json(res, 400, { ok: false, error: "Informe o nome ou identificação do novo comprador." });
+  if (!produto) return json(res, 400, { ok: false, error: "Informe o empreendimento ou produto da nova oportunidade." });
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+  const { data: origem, error: getErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("id,resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
+    .eq("id", idOrigem)
+    .maybeSingle();
+  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
+  if (!origem) return json(res, 404, { ok: false, error: "Contato parceiro não encontrado." });
+
+  const aOrigem = origem.resultado_analise || {};
+  const mcOrigem = aOrigem.modeloComercial || {};
+  const nomeParceiro = String(aOrigem.clientName || aOrigem?.lead?.clientName || origem.nome_arquivo || origem.arquivo_nome || "Corretor parceiro").trim();
+  const telefone = String(aOrigem?.lead?.phone || "").trim();
+  const pareceParceiro = /parceir|corretor|corretora|imobili[áa]ria|creci/i.test([
+    aOrigem.tipoContato, mcOrigem?.contato?.tipo, mcOrigem?.contato?.papel, nomeParceiro
+  ].filter(Boolean).join(" "));
+  if (!pareceParceiro) return json(res, 400, { ok: false, error: "Este contato não está classificado como corretor parceiro." });
+
+  const now = new Date();
+  const p2 = n => String(n).padStart(2, "0");
+  const dataBR = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const horaBR = `${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  const oportunidadeId = `opp-${randomUUID()}`;
+  const contatoId = String(mcOrigem?.contato?.id || mcOrigem?.oportunidade?.contatoId || idOrigem);
+  const obsLinha = observacao ? ` Observação: ${observacao}` : "";
+  const motivo = `Nova oportunidade indicada por ${nomeParceiro} para ${compradorFinal}, com interesse em ${produto}.`;
+  const mensagemA = `Sobre ${compradorFinal} e o ${produto}, me passa o que ele procura e a faixa de investimento para eu separar as opções mais adequadas?`;
+  const mensagemB = `Para eu conduzir bem essa nova oportunidade no ${produto}, o que já está definido sobre perfil, prazo e forma de pagamento de ${compradorFinal}?`;
+  const mensagemC = `Me atualiza sobre ${compradorFinal}: qual é a principal prioridade dele no ${produto} neste momento?`;
+
+  const result = {
+    lead: { clientName: nomeParceiro, phone: telefone, product: produto, etapa: "Novo" },
+    analysis: {
+      clientName: nomeParceiro,
+      origem: "oportunidade-parceiro",
+      contatoId,
+      oportunidadeId,
+      origemOportunidadeId: String(mcOrigem?.oportunidade?.id || idOrigem),
+      lead: { clientName: nomeParceiro, phone: telefone, etapa: "Novo" },
+      clientProfile: `${nomeParceiro} atua como corretor parceiro. O comprador desta oportunidade é ${compradorFinal}.`,
+      produtoInteresse: produto,
+      produtosInteresse: [produto],
+      etapaSugerida: "Novo",
+      probability: "25%",
+      probabilityPercent: 25,
+      confianca: 80,
+      tipoRetomada: "primeiro-contato",
+      tipoContato: "corretor-parceiro",
+      _schemaComercial: 675,
+      modeloComercial: {
+        versao: 675,
+        contato: {
+          id: contatoId,
+          tipo: "corretor-parceiro",
+          papel: "Corretor parceiro que intermedeia compradores",
+          compradorFinal
+        },
+        oportunidade: {
+          id: oportunidadeId,
+          contatoId,
+          origemOportunidadeId: String(mcOrigem?.oportunidade?.id || idOrigem),
+          compradorFinal,
+          status: "descoberta",
+          resultado: "em-andamento",
+          produto,
+          motivo
+        },
+        relacionamento: {
+          status: "ativo",
+          potencial: String(mcOrigem?.relacionamento?.potencial || "médio"),
+          motivo: "Parceria ativa com uma nova oportunidade registrada."
+        },
+        acao: {
+          status: "responder-agora",
+          responsavel: "corretor",
+          urgencia: "alta",
+          descricao: "Qualificar o novo comprador com o parceiro e definir o próximo passo comercial."
+        },
+        contexto: {
+          ultimaPessoaFalar: "desconhecido",
+          ultimaMensagem: "",
+          ultimoCompromisso: "Nenhum compromisso identificado.",
+          impedimentoPrincipal: "Ainda não identificado."
+        }
+      },
+      nextAction: "Qualificar o novo comprador com o parceiro e definir o próximo passo comercial.",
+      summary: motivo,
+      risk: "O perfil e a capacidade de compra do novo comprador ainda precisam ser confirmados.",
+      memoria: {
+        observacoes: `[${dataBR} ${horaBR}] Nova oportunidade vinculada ao parceiro. Comprador: ${compradorFinal}. Produto: ${produto}.${obsLinha}`
+      },
+      memoriaSugerida: {},
+      objections: [],
+      confirmedAppointments: [],
+      messages: {
+        a: mensagemA, b: mensagemB, c: mensagemC,
+        aLabel: "Qualificar perfil", bLabel: "Mapear condições", cLabel: "Definir prioridade", recomendada: "a",
+        direta: mensagemA, consultiva: mensagemB, retomada: mensagemC
+      }
+    },
+    timeline: [{
+      id: 1, order: 1, date: dataBR, time: horaBR, iso: now.toISOString(),
+      author: "Atendimento (corretor)",
+      text: `Nova oportunidade registrada. Comprador: ${compradorFinal}. Produto: ${produto}.${obsLinha}`,
+      type: "nota", source: "manual"
+    }],
+    audiosEncontrados: 0,
+    audiosTranscritos: 0,
+    txtFile: `Oportunidade ${nomeParceiro} ${compradorFinal} ${oportunidadeId}`
+  };
+
+  const persistence = await persistProcessingResult({
+    result,
+    source: "oportunidade-parceiro",
+    bucket: null,
+    path: null,
+    fileName: result.txtFile,
+    fileSize: null
+  });
+  const novoId = persistence?.processing?.id;
+  if (!novoId) return json(res, 500, { ok: false, error: "Não foi possível criar a nova oportunidade.", details: persistence?.warnings || [] });
+
+  // Registra o vínculo também no contato/oportunidade de origem para auditoria.
+  const vinculadas = Array.isArray(aOrigem.oportunidadesVinculadas) ? aOrigem.oportunidadesVinculadas.slice(-49) : [];
+  vinculadas.push({ id: oportunidadeId, leadId: novoId, compradorFinal, produto, criadoEm: now.toISOString() });
+  const origemAtualizada = {
+    ...aOrigem,
+    oportunidadesVinculadas: vinculadas,
+    modeloComercial: {
+      ...(mcOrigem || {}),
+      versao: Math.max(675, Number(mcOrigem?.versao || 0)),
+      contato: { ...(mcOrigem?.contato || {}), id: contatoId, tipo: "corretor-parceiro" },
+      relacionamento: {
+        ...(mcOrigem?.relacionamento || {}),
+        status: "ativo",
+        motivo: `Parceria ativa. Nova oportunidade registrada para ${compradorFinal}.`
+      }
+    }
+  };
+  await supabase
+    .from("whatsapp_processamentos")
+    .update({ resultado_analise: origemAtualizada, atualizado_em: now.toISOString(), updated_at: now.toISOString() })
+    .eq("id", idOrigem);
+
+  return json(res, 200, {
+    ok: true,
+    id: novoId,
+    oportunidadeId,
+    contatoId,
+    compradorFinal,
+    produto
+  });
 }
 
 // ============ ATUALIZAR LEAD EXISTENTE COM EVOLUÇÃO (reimportação) ============
@@ -513,12 +743,44 @@ async function acaoAtualizarComEvolucao(body, res) {
   const chavesAntigas = new Set(timelineAntiga.map(assinaturaMsg));
   const novasMensagens = timelineNova.filter(m => !chavesAntigas.has(assinaturaMsg(m)));
 
-  // Compara evolução (1 chamada de IA, curta)
+  // Na v669 a própria análise já recebeu o contexto anterior + somente as novidades.
+  // Não faz uma segunda chamada de IA para comparar evolução: registra a mudança de forma
+  // determinística e evita cobrança duplicada. Mantém o comparador antigo só para fluxos legados.
   let evolucaoEntry = null;
-  try {
-    const openai = getOpenAI();
-    evolucaoEntry = await compararEvolucao({ anterior, atual: nova, novasMensagens, openai });
-  } catch (_) { /* sem evolução não bloqueia a atualização */ }
+  const metaIncremental = result?.incrementalMeta;
+  if (metaIncremental?.reimportacao && novasMensagens.length === 0) {
+    evolucaoEntry = null;
+  } else if (metaIncremental?.reimportacao) {
+    const probAnt = Number(anterior?.probabilityPercent);
+    const probNova = Number(nova?.probabilityPercent);
+    let evoluiu = "estagnou";
+    if (Number.isFinite(probAnt) && Number.isFinite(probNova)) {
+      if (probNova >= probAnt + 5) evoluiu = "avancou";
+      else if (probNova <= probAnt - 5) evoluiu = "esfriou";
+    }
+    const nomeLead = String(anterior?.clientName || anterior?.lead?.clientName || "").toLowerCase().split(/\s+/)[0];
+    const clienteFalou = novasMensagens.some(m => {
+      const autor = String(m?.author || "").toLowerCase();
+      if (!autor) return false;
+      if (nomeLead && (autor.includes(nomeLead) || nomeLead.includes(autor))) return true;
+      return !/(senger|construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
+    });
+    evolucaoEntry = {
+      houveResposta: clienteFalou,
+      comoReagiu: clienteFalou ? "houve nova interação do cliente" : "sem nova resposta identificada do cliente",
+      abordagemFuncionou: "sem-dados",
+      evoluiu,
+      oQueMudou: `${novasMensagens.length} mensagem(ns) nova(s) incorporada(s) na atualização incremental`,
+      licao: "Atualização incremental registrada sem reprocessar o histórico antigo.",
+      comparadoEm: new Date().toISOString(),
+      incremental: true
+    };
+  } else {
+    try {
+      const openai = getOpenAI();
+      evolucaoEntry = await compararEvolucao({ anterior, atual: nova, novasMensagens, openai });
+    } catch (_) { /* sem evolução não bloqueia a atualização */ }
+  }
 
   // Preserva o que é do relacionamento (não vem da análise nova)
   // Memória: mantém o que o corretor digitou; preenche campos vazios com o que a IA extraiu da conversa.
