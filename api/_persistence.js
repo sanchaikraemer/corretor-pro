@@ -115,6 +115,31 @@ async function tryUpsert(supabase, table, payload, onConflict = "id") {
   return adaptiveWrite(supabase, table, payload, "upsert", onConflict);
 }
 
+async function adaptiveUpdateById(supabase, table, id, payload) {
+  let current = compact(payload);
+  const removed = [];
+  for (let i = 0; i < 24; i++) {
+    const { data, error } = await supabase
+      .from(table)
+      .update(current)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (!error) return data;
+    const msg = error.message || "";
+    const noCol = msg.match(/Could not find the '([^']+)' column/i);
+    if (noCol && noCol[1] in current) {
+      removed.push(noCol[1]);
+      const { [noCol[1]]: _drop, ...rest } = current;
+      current = rest;
+      continue;
+    }
+    if (removed.length) error.message += ` (descartadas no update: ${removed.join(", ")})`;
+    throw error;
+  }
+  throw new Error(`${table}: muitos retries no update (descartadas: ${removed.join(", ")})`);
+}
+
 function _normNome(value = "") {
   return String(value || "")
     .toLowerCase()
@@ -128,6 +153,122 @@ function _normNome(value = "") {
 // fica salva no resultado_analise do lead anterior. Como cada importação cria um registro novo,
 // sem isso a foto sumia. Aqui buscamos o lead equivalente (mesmo telefone OU mesmo nome) que já
 // tenha avatarFoto e devolvemos pra carregar no registro novo.
+
+
+function _digitsIdentity(value = "") {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function _cleanArquivoIdentity(value = "") {
+  return String(value || "")
+    .replace(/\.zip$/i, "")
+    .replace(/\.txt$/i, "")
+    .replace(/-enxuto$/i, "")
+    .replace(/\s*\(\d+\)\s*$/g, "")
+    .replace(/^Conversa do WhatsApp com\s+/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function _nomeIdentity(value = "") {
+  return _normNome(_cleanArquivoIdentity(value))
+    .replace(/\b(renaissance|evolutti|boulevard|terrenos?|premium office|quality|personalite|personalité|prime|nova vila rica|vila rica|nvr|nvriii|nvrii|nvri|celular|cell|whatsapp|fone|telefone|terreno|lote|apartamento|apto)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function _nomeRuimIdentity(value = "") {
+  const s = String(value || "").trim();
+  const d = _digitsIdentity(s);
+  const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, "");
+  return !s || /^cliente importad[oa]?$/i.test(s) || (d.length >= 8 && letras.length < 3);
+}
+
+function _assinaturaTimelineV681(m) {
+  if (!m || typeof m !== "object") return "";
+  if (m.mediaFile) return "audio|" + String(m.mediaFile).split(/[\\/]/).pop().toLowerCase().trim();
+  const txt = String(m.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 220);
+  const sig = [String(m.date || "").trim(), String(m.time || "").trim(), String(m.author || "").trim().toLowerCase(), txt].join("|");
+  return sig.replace(/\|/g, "") ? sig : "";
+}
+
+function _mesclarTimelinesV681(antiga, nova) {
+  const a = Array.isArray(antiga) ? antiga : [];
+  const b = Array.isArray(nova) ? nova : [];
+  const vistos = new Set();
+  const out = [];
+  for (const m of [...a, ...b]) {
+    if (!m || typeof m !== "object") continue;
+    const k = _assinaturaTimelineV681(m);
+    if (k && vistos.has(k)) continue;
+    if (k) vistos.add(k);
+    out.push({ ...m });
+  }
+  out.sort((x, y) => String(x.iso || "9999").localeCompare(String(y.iso || "9999")) || Number(x.order || 0) - Number(y.order || 0));
+  out.forEach((m, i) => { m.id = i + 1; m.order = i + 1; });
+  const chavesAntigas = new Set(a.map(_assinaturaTimelineV681).filter(Boolean));
+  const novasUnicas = b.filter(m => { const k = _assinaturaTimelineV681(m); return k && !chavesAntigas.has(k); }).length;
+  const preservadasDoAntigo = a.filter(m => { const k = _assinaturaTimelineV681(m); return k && !new Set(b.map(_assinaturaTimelineV681).filter(Boolean)).has(k); }).length;
+  return { timeline: out, novasUnicas, preservadasDoAntigo, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
+}
+
+async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path }) {
+  const analysis = result?.analysis || {};
+  const lead = result?.lead || analysis?.lead || {};
+  const nomeArquivoNovo = _cleanArquivoIdentity(fileName || result?.txtFile || path?.split("/").pop() || "");
+  const arquivoKey = _nomeIdentity(nomeArquivoNovo);
+  const nomeNovo = _nomeIdentity(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || nomeArquivoNovo);
+  const phone = _digitsIdentity(lead?.phone || analysis?.lead?.phone || result?.phone || "");
+  const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
+  if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
+
+  const { data, error } = await supabase
+    .from("whatsapp_processamentos")
+    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+    .order("atualizado_em", { ascending: false })
+    .limit(5000);
+  if (error || !Array.isArray(data)) return null;
+  for (const row of data) {
+    const ra = row.resultado_analise || {};
+    const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return { row, via: "telefone" };
+  }
+  for (const row of data) {
+    const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return { row, via: "arquivo" };
+  }
+  if (nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo)) {
+    for (const row of data) {
+      const ra = row.resultado_analise || {};
+      const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
+      if (rowName && rowName === nomeNovo) return { row, via: "nome" };
+    }
+  }
+  return null;
+}
+
+function _mesclarAnaliseV681(anterior = {}, nova = {}) {
+  const merged = { ...(anterior || {}), ...(nova || {}) };
+  merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
+  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "lembrete", "avatarFoto", "scoreAjuste"]) {
+    if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];
+  }
+  const nomeAnt = anterior?.clientName || anterior?.lead?.clientName || "";
+  const nomeNovo = nova?.clientName || nova?.lead?.clientName || "";
+  if (_nomeRuimIdentity(nomeNovo) && !_nomeRuimIdentity(nomeAnt)) {
+    merged.clientName = nomeAnt;
+    merged.lead = { ...(merged.lead || {}), clientName: nomeAnt, phone: merged?.lead?.phone || anterior?.lead?.phone || "" };
+  }
+  const prodAnt = anterior?.produtoInteresse || anterior?.lead?.product || "";
+  const prodNovo = nova?.produtoInteresse || nova?.lead?.product || "";
+  if ((!prodNovo || /não identificado|nao identificado/i.test(prodNovo)) && prodAnt) {
+    merged.produtoInteresse = prodAnt;
+    merged.lead = { ...(merged.lead || {}), product: prodAnt };
+  }
+  return merged;
+}
+
 async function buscarAvatarAnterior(supabase, lead, analysis) {
   try {
     const phone = String(lead?.phone || analysis?.lead?.phone || "").replace(/\D/g, "");
@@ -174,6 +315,8 @@ export async function persistProcessingResult({ result, source = "api", bucket =
   const attempts = [];
   let processingRow = null;
 
+  const existenteV681 = await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path });
+
   const canonicalPayload = {
     nome_arquivo: nomeArquivo,
     arquivo_nome: nomeArquivo,
@@ -194,30 +337,54 @@ export async function persistProcessingResult({ result, source = "api", bucket =
     updated_at: new Date().toISOString()
   };
 
-  try {
-    processingRow = await tryInsert(supabase, "whatsapp_processamentos", canonicalPayload);
-  } catch (error) {
-    attempts.push({ table: "whatsapp_processamentos", model: "canonical", error: error.message });
-    const legacyPayload = {
-      arquivo_nome: nomeArquivo,
-      status: "pronto",
-      etapa: "Conversa processada pelo Motor Real do Direciona.",
-      progresso: 100,
-      erro: null,
-      texto_extraido: result?.rawText || null,
-      timeline_json: timeline,
-      resultado_analise: analysis,
-      storage_bucket: bucket,
-      storage_path: path,
-      file_size: fileSize,
-      audios_encontrados: audiosEncontrados,
-      audios_transcritos: audiosTranscritos,
+  if (existenteV681?.row?.id) {
+    const anterior = existenteV681.row;
+    const mergeTimeline = _mesclarTimelinesV681(anterior.timeline_json, timeline);
+    const mergedAnalysis = _mesclarAnaliseV681(anterior.resultado_analise || {}, analysis || {});
+    const updatePayload = {
+      ...canonicalPayload,
+      resultado_analise: mergedAnalysis,
+      timeline_json: mergeTimeline.timeline,
+      texto_extraido: mergeTimeline.timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
+      criado_em: anterior.criado_em || anterior.created_at || canonicalPayload.criado_em,
+      atualizado_em: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     try {
-      processingRow = await tryInsert(supabase, "whatsapp_processamentos", legacyPayload);
-    } catch (legacyError) {
-      attempts.push({ table: "whatsapp_processamentos", model: "legacy", error: legacyError.message });
+      const data = await adaptiveUpdateById(supabase, "whatsapp_processamentos", anterior.id, updatePayload);
+      processingRow = data || { id: anterior.id };
+      attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update", info: `Atualizado sem duplicar (via ${existenteV681.via}; ${mergeTimeline.novasUnicas} nova(s), ${mergeTimeline.duplicadasIgnoradas} duplicada(s) ignorada(s)).` });
+    } catch (error) {
+      attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update", error: error.message });
+    }
+  }
+
+  if (!processingRow) {
+    try {
+      processingRow = await tryInsert(supabase, "whatsapp_processamentos", canonicalPayload);
+    } catch (error) {
+      attempts.push({ table: "whatsapp_processamentos", model: "canonical", error: error.message });
+      const legacyPayload = {
+        arquivo_nome: nomeArquivo,
+        status: "pronto",
+        etapa: "Conversa processada pelo Motor Real do Direciona.",
+        progresso: 100,
+        erro: null,
+        texto_extraido: result?.rawText || null,
+        timeline_json: timeline,
+        resultado_analise: analysis,
+        storage_bucket: bucket,
+        storage_path: path,
+        file_size: fileSize,
+        audios_encontrados: audiosEncontrados,
+        audios_transcritos: audiosTranscritos,
+        updated_at: new Date().toISOString()
+      };
+      try {
+        processingRow = await tryInsert(supabase, "whatsapp_processamentos", legacyPayload);
+      } catch (legacyError) {
+        attempts.push({ table: "whatsapp_processamentos", model: "legacy", error: legacyError.message });
+      }
     }
   }
 
