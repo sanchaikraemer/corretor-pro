@@ -1,4 +1,4 @@
-// ===== Segurança v682: chave secreta nas chamadas /api =====
+// ===== Segurança v683: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
 // No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
 (function protegerChamadasApiV682(){
@@ -8649,33 +8649,46 @@ async function checarVersaoServidor(){
     const servidor = m ? (parseInt(m[1], 10) || 0) : 0;
     sessionStorage.setItem("vchk", "1"); // só tenta 1x por sessão — nunca entra em loop
     if(servidor > atual){
-      // v682 estabilidade: não recarrega automaticamente. Atualização entra no próximo carregamento normal.
-      try{ console.info("Corretor Pro: versão nova detectada no servidor; mantendo tela atual ativa."); }catch(_){}
+      try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } }catch(_){}
+      location.reload();
     }
   }catch(_){ /* offline/erro: ignora, segue na versão atual */ }
 }
 if("serviceWorker" in navigator){
-  // v682 estabilidade: NUNCA recarregar automaticamente quando a aba volta ou quando
-  // o service worker troca de versão. O reload automático era a origem da tela branca
-  // e da demora para obedecer comandos ao reabrir a aba.
+  // ATUALIZAÇÃO AUTOMÁTICA: quando uma versão nova chega com o app aberto, o novo service
+  // worker assume e a página recarrega SOZINHA pra versão nova — sem precisar fechar/reabrir
+  // o app na mão (era a causa do "fica preso na versão antiga").
+  let recarregandoSW = false;
+  const tinhaController = !!navigator.serviceWorker.controller; // já tinha versão rodando antes?
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    try{ console.info("Corretor Pro: service worker atualizado sem recarregar a tela."); }catch(_){}
+    // Só recarrega numa ATUALIZAÇÃO (já havia uma versão ativa). Na 1ª instalação, não.
+    if(recarregandoSW || !tinhaController) return;
+    recarregandoSW = true;
+    location.reload();
   });
   addEventListener("load", async ()=>{
     try{
       const reg = await navigator.serviceWorker.register("/service-worker.js?v=__VERSION__", { scope: "/" });
+      // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;
         if(!novo) return;
         novo.addEventListener("statechange", () => {
           if(novo.state === "installed" && navigator.serviceWorker.controller){
-            try{ console.info("Corretor Pro: nova versão preparada para o próximo carregamento."); }catch(_){}
+            try{ toast("Nova versão — atualizando…"); }catch(_){}
           }
         });
       });
-      // Atualiza em segundo plano, sem travar ou reiniciar a tela atual.
-      try{ setTimeout(() => reg.update().catch(()=>{}), 1500); }catch(e){}
+      try{ await reg.update(); }catch(e){}
       try{ await navigator.serviceWorker.ready; }catch(e){}
+      // Não força checagem/reload quando a aba volta do segundo plano.
+      // Isso causava tela branca e atraso ao alternar abas, porque o app reiniciava
+      // e precisava reler/renderizar a base antes de responder.
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(() => checarVersaoServidor(), { timeout: 8000 });
+      } else {
+        setTimeout(checarVersaoServidor, 4000);
+      }
       setTimeout(checkShared,900);
     }catch(e){
       console.warn("Falha ao registrar service worker do Corretor Pro", e);
@@ -10086,7 +10099,7 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:682}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:683}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
@@ -10226,7 +10239,7 @@ renderLeadFoco=function(lead){
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead);
   let msgs=ui670Messages(a);
   msgs=ui682MesclarMensagens(msgs, lead, mc);
-  const stale=Number(mc.versao||a._schemaComercial||0)<682;
+  const stale=Number(mc.versao||a._schemaComercial||0)<683;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
@@ -10269,3 +10282,180 @@ renderLeadFoco=function(lead){
   legacy.classList.add("ui670-legacy-hidden");
 };
 window.renderLeadFoco=renderLeadFoco;
+
+
+/* ============================================================
+   ATUALIZAÇÃO #683 — FLUXO DIÁRIO DO CORRETOR
+   - Atendidos hoje visível e clicável
+   - Último atendimento no detalhe do lead
+   - Botões rápidos: copiar, atendido, agendar, observação, proposta feita,
+     vendido, perdido e arquivar
+   - Atendido é ação registrada, não troca a etapa comercial do lead
+   ============================================================ */
+(function(){
+  if(window.__cp683FluxoDiario) return;
+  window.__cp683FluxoDiario = true;
+
+  function ui683InjectStyles(){
+    if(document.getElementById('ui683Styles')) return;
+    const st=document.createElement('style'); st.id='ui683Styles';
+    st.textContent=`
+      .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,107,92,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
+      .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
+      .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
+      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
+      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
+    document.head.appendChild(st);
+  }
+
+  function ui683Eventos(lead){ return Array.isArray(lead?.analysis?.aprendizado?.eventos) ? lead.analysis.aprendizado.eventos : []; }
+  function ui683ContatoManualEventos(lead){ return ui683Eventos(lead).filter(e=>e?.evento==='contato_manual' && e?.quando).sort((a,b)=>new Date(b.quando)-new Date(a.quando)); }
+  function ui683UltimoAtendimento(lead){ return ui683ContatoManualEventos(lead)[0] || null; }
+  function ui683DataHoraBR(iso){
+    try{return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));}catch(_){return '—';}
+  }
+  function ui683HoraBR(iso){
+    try{return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));}catch(_){return '—';}
+  }
+  function ui683Origem(ev){
+    const de=ev?.detalhes?.de||ev?.detalhes?.tipo||'';
+    return ({botao_atendido:'marcado no botão Atendido',novoAtendimento:'observação/atendimento registrado',listaPrioridade:'marcado pela lista',copiar_msg:'mensagem copiada',leadFoco:'detalhe do lead'})[de] || 'atendimento registrado';
+  }
+  function ui683AtendidosHoje(base){
+    const hoje = typeof inicioDoDiaBR === 'function' ? inicioDoDiaBR() : (()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
+    const lista=(Array.isArray(base)?base:[]).map(l=>({lead:l,ev:ui683UltimoAtendimento(l)})).filter(x=>x.ev?.quando && new Date(x.ev.quando)>=hoje);
+    return lista.sort((a,b)=>new Date(b.ev.quando)-new Date(a.ev.quando));
+  }
+
+  window.abrirAtendidosHoje = function(){
+    state.carteiraFiltro='atendidos-hoje';
+    state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE || 80;
+    if(typeof show==='function') show('carteira');
+    setTimeout(()=>{ try{ if(typeof carregarCarteira==='function') carregarCarteira(false); }catch(_){} }, 60);
+  };
+
+  function ui683RenderAtendidosHojeHome(){
+    ui683InjectStyles();
+    const area=qs('#leadFocoArea'); if(!area || state.active!=='home') return;
+    const all=state.todosLeads?.length ? state.todosLeads : state.itemsAtivos || [];
+    const lista=ui683AtendidosHoje(all);
+    const antigo=qs('#ui683AtendidosHojeCard'); if(antigo) antigo.remove();
+    const card=document.createElement('section'); card.id='ui683AtendidosHojeCard'; card.className='ui683-card';
+    const preview=lista.slice(0,4).map(x=>`<div class="ui683-row" onclick='abrirLead(${JSON.stringify(String(x.lead.id||''))})'><div class="ui683-time">${escapeHtml(ui683HoraBR(x.ev.quando))}</div><div style="min-width:0"><div class="ui683-name">${escapeHtml(x.lead.name||'Cliente')}</div><div class="ui683-sub">${escapeHtml(ui683Origem(x.ev))}${x.lead.product?` · ${escapeHtml(x.lead.product)}`:''}</div></div><div class="ui683-open">›</div></div>`).join('');
+    card.innerHTML=`<div class="ui683-head"><div><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div>${lista.length>4?`<div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os ${lista.length} atendidos de hoje</button></div>`:''}`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
+    const ref=qs('#filaPrioridade') || area.firstElementChild;
+    if(ref && ref.parentElement===area) area.insertBefore(card, ref.nextSibling); else area.prepend(card);
+  }
+
+  const __ui683ProcessarDashboard = window._processarDashboard || (typeof _processarDashboard==='function' ? _processarDashboard : null);
+  if(__ui683ProcessarDashboard){
+    _processarDashboard = async function(data){
+      const out = await __ui683ProcessarDashboard(data);
+      ui683RenderAtendidosHojeHome();
+      return out;
+    };
+    window._processarDashboard = _processarDashboard;
+  }
+
+  const __ui683BuildDesempenho = typeof buildDesempenhoInsightsHTML==='function' ? buildDesempenhoInsightsHTML : null;
+  if(__ui683BuildDesempenho){
+    buildDesempenhoInsightsHTML = function(items){
+      let html=__ui683BuildDesempenho(items);
+      html=html.replace(/onclick="show\('home'\)" title="Ver atendidos hoje"/g, 'onclick="abrirAtendidosHoje()" title="Ver atendidos hoje"');
+      return html;
+    };
+    window.buildDesempenhoInsightsHTML = buildDesempenhoInsightsHTML;
+  }
+
+  const __ui683CarteiraPassaFiltro = typeof carteiraPassaFiltro==='function' ? carteiraPassaFiltro : null;
+  if(__ui683CarteiraPassaFiltro){
+    carteiraPassaFiltro = function(l,f){ if(f==='atendidos-hoje') return !!ehContatadoHoje(l); return __ui683CarteiraPassaFiltro(l,f); };
+    window.carteiraPassaFiltro = carteiraPassaFiltro;
+  }
+
+  const __ui683CarteiraRowHTML = typeof carteiraRowHTML==='function' ? carteiraRowHTML : null;
+  if(__ui683CarteiraRowHTML){
+    carteiraRowHTML = function(l){
+      const ev=ui683UltimoAtendimento(l);
+      let html=__ui683CarteiraRowHTML(l);
+      if(ev?.quando){
+        html=html.replace('class="cart-row"', 'class="cart-row is-atendido-hoje"');
+        html=html.replace('<div class="cart-etapa">', `<span class="cart-last-att">✓ Atendido ${escapeHtml(ui683DataHoraBR(ev.quando))}</span><div class="cart-etapa">`);
+      }
+      return html;
+    };
+    window.carteiraRowHTML = carteiraRowHTML;
+  }
+
+  const __ui683RenderCarteiraTabela = typeof renderCarteiraTabela==='function' ? renderCarteiraTabela : null;
+  if(__ui683RenderCarteiraTabela){
+    renderCarteiraTabela = function(){
+      const box = qs('#carteiraBody');
+      if(!box) return;
+      const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== 'Vendido' && e !== 'Perdido'; });
+      const filtro = state.carteiraFiltro || 'todos';
+      const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(filtro==='atendidos-hoje' ? ((a,b)=>{const ea=ui683UltimoAtendimento(a), eb=ui683UltimoAtendimento(b); return new Date(eb?.quando||0)-new Date(ea?.quando||0);}) : compararPrioridadeAtendimento);
+      const filtros683 = [['todos','Todos'],['quentes','Quentes'],['mornos','Mornos'],['frios','Frios'],['reaquecer','Reaquecer'],['atendidos-hoje','✓ Atendidos hoje'],['geladeira','Geladeira']];
+      const chips = filtros683.map(([k,lbl]) => `<button type="button" class="${k===filtro?'active':''}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join('');
+      const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
+      const lote = lista.slice(0, visiveis);
+      const faltam = Math.max(0, lista.length - lote.length);
+      const linhas = lista.length ? lote.map(carteiraRowHTML).join('') : `<div class="empty" style="margin:14px">${filtro==='atendidos-hoje'?'Nenhum lead atendido hoje.':'Nenhum lead nesse filtro.'}</div>`;
+      const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : '';
+      box.innerHTML = `${ui677ToolbarHTML('atendimentos')}<div class="cart-head"><div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?'s':''} neste filtro · ${filtro==='atendidos-hoje'?'ordenados pelo horário atendido':'ordenados por prioridade de contato'}</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="cart-filtros">${chips}</div><button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button><button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button><button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button></div></div><div class="cart-table"><div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>${linhas}${carregarMais}</div>`;
+    };
+    window.renderCarteiraTabela = renderCarteiraTabela;
+  }
+
+  window.ui683MarcarEtapaRapida = async function(id, etapa, label){
+    if(!id) return toast('Lead não identificado.');
+    if(!confirm(`Marcar este lead como ${label||etapa}?`)) return;
+    try{
+      const res=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'etapa',etapa})});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok||!data?.ok) throw new Error(data?.error||'falha');
+      invalidarLeadsCache();
+      toast(`Lead marcado como ${label||etapa}.`);
+      const atualizado=await getLeadDetail(id).catch(()=>null);
+      if(atualizado){ state.lead=atualizado; renderLeadFoco(atualizado); }
+      if(typeof carregarDashboard==='function') carregarDashboard();
+    }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
+  };
+
+  const __ui683RenderLeadFoco = typeof renderLeadFoco==='function' ? renderLeadFoco : null;
+  if(__ui683RenderLeadFoco){
+    renderLeadFoco = function(lead){
+      __ui683RenderLeadFoco(lead);
+      try{ ui683EnhanceLead(lead); }catch(e){ console.warn('ui683EnhanceLead',e); }
+    };
+    window.renderLeadFoco = renderLeadFoco;
+  }
+
+  function ui683EnhanceLead(lead){
+    ui683InjectStyles();
+    const wrap=qs('#leadFocoArea .lead-foco'); if(!wrap) return;
+    qs('#ui683LeadTools')?.remove();
+    qs('#ui683LastAttendance')?.remove();
+    const head=wrap.querySelector('.ui-lead-head') || wrap.querySelector('.ui670-hero') || wrap.firstElementChild;
+    const ev=ui683UltimoAtendimento(lead);
+    const last=document.createElement('div'); last.id='ui683LastAttendance'; last.className='ui683-last';
+    last.innerHTML=ev?.quando ? `<b>Último atendimento:</b> ${escapeHtml(ui683DataHoraBR(ev.quando))} <span>· ${escapeHtml(ui683Origem(ev))}</span>` : `<b>Último atendimento:</b> ainda não registrado hoje`;
+    const actions=document.createElement('div'); actions.id='ui683LeadTools'; actions.className='ui683-actions';
+    const id=JSON.stringify(String(lead?.id||'')); const nome=safeJson(lead?.name||''); const prod=safeJson(lead?.product||'');
+    actions.innerHTML=`
+      <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Atendido agora</button>
+      <button type="button" onclick="ui631CopyResponse&&ui631CopyResponse()">Copiar resposta</button>
+      <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
+      <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
+      <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
+      <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
+      <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
+      <button type="button" class="danger" onclick="marcarPerdido(${id},${nome})">Perdido</button>
+      <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
+    if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
+    else { wrap.prepend(actions); wrap.prepend(last); }
+  }
+
+  // Atualiza a versão exigida pela análise comercial a partir desta atualização.
+  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = 683;
+})();

@@ -475,8 +475,8 @@ export default async function handler(req, res) {
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensV682(novoAnalysis, leadModelo);
-  novoAnalysis._schemaComercial = 682;
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 682;
+  novoAnalysis._schemaComercial = 683;
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 683;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -504,8 +504,8 @@ export default async function handler(req, res) {
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensV682(merged, leadModelo);
-  merged._schemaComercial = 682;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 682;
+  merged._schemaComercial = 683;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 683;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
   if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
@@ -546,8 +546,8 @@ export default async function handler(req, res) {
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensV682(retryMerged, leadModelo);
-    retryMerged._schemaComercial = 682;
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 682;
+    retryMerged._schemaComercial = 683;
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 683;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -567,9 +567,9 @@ export default async function handler(req, res) {
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 682) {
-    const forced = garantirMensagensV682({ ...merged, _schemaComercial: 682, reanalisadoEm: new Date().toISOString() }, leadModelo);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 682;
+  if (!persisted || persistedSchema < 683) {
+    const forced = garantirMensagensV682({ ...merged, _schemaComercial: 683, reanalisadoEm: new Date().toISOString() }, leadModelo);
+    if (forced.modeloComercial) forced.modeloComercial.versao = 683;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -578,8 +578,8 @@ export default async function handler(req, res) {
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
     persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 682) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 682." });
+    if (persistedSchema < 683) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 683." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 682, apiVersion: 682 });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 683, apiVersion: 683 });
 }
