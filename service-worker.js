@@ -1,5 +1,5 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v679-' + BUILD_ID;
+const STATIC_CACHE = 'corretor-pro-static-v680-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
@@ -136,6 +136,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+  // Performance/estabilidade: o SW só deve controlar arquivos do próprio app.
+  // Antes ele interceptava recursos externos (ex.: fontes do Google) e, quando falhava,
+  // devolvia index.html. Isso gerava erros de MIME/CSP, repetia tentativas e deixava
+  // a interface pesada/travada em alguns aparelhos.
+  if (url.origin !== self.location.origin) return;
+
   if (event.request.method === 'POST' && (
     url.pathname.endsWith('/share.html') ||
     url.pathname.endsWith('/share-target')
@@ -169,7 +175,7 @@ self.addEventListener('fetch', event => {
         const copy = response.clone();
         caches.open(STATIC_CACHE).then(cache => cache.put(event.request, copy)).catch(() => null);
         return response;
-      }).catch(() => caches.match('/index.html'));
+      }).catch(() => new Response('', { status: 504, statusText: 'offline' }));
     })
   );
 });

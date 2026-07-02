@@ -1,10 +1,10 @@
-// ===== Segurança v679: chave secreta nas chamadas /api =====
+// ===== Segurança v680: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
 // No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
-(function protegerChamadasApiV679(){
+(function protegerChamadasApiV680(){
   if (typeof window === "undefined" || window.__corretorProFetchProtegido) return;
   window.__corretorProFetchProtegido = true;
-  const STORAGE_KEY = "corretor_pro_api_key_v679";
+  const STORAGE_KEY = "corretor_pro_api_key_v679"; // mantém chave já salva no aparelho
   const originalFetch = window.fetch.bind(window);
   function isApiUrl(input){
     const url = typeof input === "string" ? input : (input && input.url) || "";
@@ -330,26 +330,36 @@ window.aplicarTemaDireciona = aplicarTemaDireciona;
 
 const VIEW_CACHEABLE = new Set(["pipeline","agenda","vendas","perdidos","geladeira","relatorio","carteira"]);
 let _viewLoadSeq = 0;
+let _viewLoadTimer = null;
+function agendarTarefaLeve(fn, delay=70){
+  if("requestIdleCallback" in window){
+    return requestIdleCallback(fn, { timeout: Math.max(250, delay + 180) });
+  }
+  return setTimeout(fn, delay);
+}
 function carregarTelaAtiva(t, force=false){
   const seq = ++_viewLoadSeq;
-  requestAnimationFrame(async () => {
-    if(seq !== _viewLoadSeq || state.active !== t) return;
-    const rev = Number(state.dataRevision) || 0;
-    if(!force && VIEW_CACHEABLE.has(t) && state.viewRendered?.[t] === rev) return;
-    try{
-      if(t === "home") await carregarDashboard();
-      else if(t === "pipeline") await carregarPipeline();
-      else if(t === "agenda") await carregarAgenda();
-      else if(t === "cerebro"){ await carregarCerebro(); await carregarAprendizado(); icTab("cerebro"); }
-      else if(t === "vendas") await carregarVendas();
-      else if(t === "perdidos"){ await carregarPerdidos(); await carregarGeladeira(); arqTab("perdidos"); }
-      else if(t === "geladeira") await carregarGeladeira();
-      else if(t === "aprendizado") await carregarAprendizado();
-      else if(t === "relatorio") await carregarRelatorio(force);
-      else if(t === "carteira") await carregarCarteira(force);
-      if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
-    }catch(err){ console.warn("carregarTelaAtiva", t, err); }
-  });
+  clearTimeout(_viewLoadTimer);
+  _viewLoadTimer = setTimeout(() => {
+    agendarTarefaLeve(async () => {
+      if(seq !== _viewLoadSeq || state.active !== t) return;
+      const rev = Number(state.dataRevision) || 0;
+      if(!force && VIEW_CACHEABLE.has(t) && state.viewRendered?.[t] === rev) return;
+      try{
+        if(t === "home") await carregarDashboard();
+        else if(t === "pipeline") await carregarPipeline();
+        else if(t === "agenda") await carregarAgenda();
+        else if(t === "cerebro"){ await carregarCerebro(); await carregarAprendizado(); icTab("cerebro"); }
+        else if(t === "vendas") await carregarVendas();
+        else if(t === "perdidos"){ await carregarPerdidos(); await carregarGeladeira(); arqTab("perdidos"); }
+        else if(t === "geladeira") await carregarGeladeira();
+        else if(t === "aprendizado") await carregarAprendizado();
+        else if(t === "relatorio") await carregarRelatorio(force);
+        else if(t === "carteira") await carregarCarteira(force);
+        if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
+      }catch(err){ console.warn("carregarTelaAtiva", t, err); }
+    });
+  }, 20);
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
@@ -3370,7 +3380,7 @@ function setPipelineTab(tab){
     else if(tab === "ultimos") titulo.textContent = "Últimos atendimentos · atividade recente";
     else titulo.textContent = "Todos os contatos · base completa";
   }
-  carregarPipeline();
+  if(state.active === "pipeline") carregarTelaAtiva("pipeline", true);
   destacarMenuPipeline();
 }
 window.setPipelineTab = setPipelineTab;
@@ -3439,7 +3449,10 @@ async function carregarPipeline(){
       // contraproposta/pendência aberta deve subir mesmo que o percentual de venda não seja o maior.
       ord = items.slice().sort(compararPrioridadeAtendimento);
     }
-    board.innerHTML = `<div class="leads-list">${ord.map(cardHtml).join("")}</div>`;
+    const limite = Number(state.pipelineVisibleCount) || 60;
+    const visiveis = ord.slice(0, limite);
+    const mais = ord.length > limite ? `<button type="button" class="btn secondary" style="width:100%;margin-top:10px" onclick="state.pipelineVisibleCount=${limite + 60}; carregarTelaAtiva('pipeline', true)">Mostrar mais ${Math.min(60, ord.length-limite)} leads</button>` : "";
+    board.innerHTML = `<div class="leads-list">${visiveis.map(cardHtml).join("")}</div>${mais}`;
     }catch(err){ board.innerHTML = boxErro("carregarPipeline()"); }
   };
   if(state.todosLeads?.length){
@@ -7994,7 +8007,7 @@ function renderCarteiraTabela(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="cart-filtros">${chips}</div>
         <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-        <button type="button" class="cart-export" onclick="exportarBackupCompletoV679(this)" title="Backup completo em JSON, com dados brutos do banco">🛡 Backup</button>
+        <button type="button" class="cart-export" onclick="exportarBackupCompletoV680(this)" title="Backup completo em JSON, com dados brutos do banco">🛡 Backup</button>
       </div>
     </div>
     <div class="cart-table">
@@ -8129,7 +8142,7 @@ async function exportarLeadsCSV(btn){
 window.exportarLeadsCSV = exportarLeadsCSV;
 
 
-async function exportarBackupCompletoV679(btn){
+async function exportarBackupCompletoV680(btn){
   const txt0 = btn ? btn.textContent : "";
   if(btn){ btn.disabled = true; btn.textContent = "Gerando backup..."; }
   try{
@@ -8153,7 +8166,7 @@ async function exportarBackupCompletoV679(btn){
     if(btn){ btn.disabled = false; btn.textContent = txt0 || "🛡 Backup"; }
   }
 }
-window.exportarBackupCompletoV679 = exportarBackupCompletoV679;
+window.exportarBackupCompletoV680 = exportarBackupCompletoV680;
 
 // Testa a OpenAI e o modelo principal de análise/mensagens pelo mesmo endpoint usado no deploy.
 async function testarIAOpenAI(btn){
