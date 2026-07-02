@@ -10304,7 +10304,8 @@ window.renderLeadFoco=renderLeadFoco;
       .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
       .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
       .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
-      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
+      .ui683-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}.ui683-modal-card{width:min(460px,100%);border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 24px 80px rgba(0,0,0,.45);padding:18px}.ui683-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.ui683-modal-head small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.ui683-modal-head h3{margin:2px 0 2px;font-size:19px}.ui683-modal-head p{margin:0;color:var(--muted);font-size:13px}.ui683-modal-head button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:7px 10px;cursor:pointer}.ui683-modal-card label{display:block;margin:12px 0 6px;color:var(--soft);font-size:12px;font-weight:900}.ui683-modal-card input,.ui683-modal-card textarea{width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 11px;font:inherit}.ui683-quick-dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.ui683-quick-dates button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:900;cursor:pointer}.ui683-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}.ui683-modal-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:12px;padding:10px 14px;font-weight:950;cursor:pointer}.ui683-modal-actions button:last-child{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-modal-actions .secondary{color:var(--muted)}
+      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}.ui683-modal{align-items:flex-end;padding:12px}.ui683-modal-card{border-radius:20px 20px 14px 14px}}`;
     document.head.appendChild(st);
   }
 
@@ -10455,6 +10456,89 @@ window.renderLeadFoco=renderLeadFoco;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
   }
+
+
+
+  // v683-2 — Agendar retorno: função real para o botão rápido.
+  // Antes o botão chamava abrirModalAgendar, mas a função não existia.
+  // Agora abre um painel simples, grava o lembrete no banco e atualiza a tela do lead.
+  window.fecharModalAgendar = function(){
+    try{ document.querySelector('#ui683AgendaModal')?.remove(); }catch(_){ }
+  };
+
+  function ui683DateOffset(dias){
+    const d = new Date();
+    d.setDate(d.getDate() + Number(dias||0));
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function ui683AgendaMotivoPadrao(lead){
+    const a = lead?.analysis || {};
+    const mc = ui670ModeloComercial ? ui670ModeloComercial(lead) : (a.modeloComercial || {});
+    return String(mc?.acao?.proxima || a?.lembrete?.motivo || 'Retomar contato').slice(0,180);
+  }
+
+  window.abrirModalAgendar = function(id, nome){
+    const lead = (state.lead && String(state.lead.id||'')===String(id||'')) ? state.lead : null;
+    const leadNome = String(nome || lead?.name || 'Lead');
+    const hoje = ui683DateOffset(0);
+    const amanha = ui683DateOffset(1);
+    const sete = ui683DateOffset(7);
+    const motivo = ui683AgendaMotivoPadrao(lead);
+    fecharModalAgendar();
+    const el = document.createElement('div');
+    el.id = 'ui683AgendaModal';
+    el.className = 'ui683-modal';
+    el.innerHTML = `<div class="ui683-modal-card" role="dialog" aria-modal="true" aria-label="Agendar retorno">
+      <div class="ui683-modal-head"><div><small>Fluxo diário</small><h3>Agendar retorno</h3><p>${escapeHtml(leadNome)}</p></div><button type="button" onclick="fecharModalAgendar()">✕</button></div>
+      <label>Data do retorno</label>
+      <input id="ui683AgendaData" type="date" min="${hoje}" value="${amanha}">
+      <div class="ui683-quick-dates">
+        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${hoje}'">Hoje</button>
+        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${amanha}'">Amanhã</button>
+        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${sete}'">+7 dias</button>
+      </div>
+      <label>Motivo</label>
+      <textarea id="ui683AgendaMotivo" rows="3" placeholder="Ex.: Retomar proposta, confirmar visita, enviar simulação">${escapeHtml(motivo)}</textarea>
+      <div class="ui683-modal-actions"><button type="button" class="secondary" onclick="fecharModalAgendar()">Cancelar</button><button id="ui683AgendaSalvar" type="button" onclick='salvarModalAgendar(${JSON.stringify(String(id||''))})'>Salvar retorno</button></div>
+    </div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => { if(e.target===el) fecharModalAgendar(); });
+    setTimeout(()=>document.querySelector('#ui683AgendaData')?.focus(),60);
+  };
+
+  window.salvarModalAgendar = async function(id){
+    const data = String(document.querySelector('#ui683AgendaData')?.value || '').trim();
+    const motivo = String(document.querySelector('#ui683AgendaMotivo')?.value || 'Retomar contato').trim().slice(0,200);
+    if(!id){ toast('Lead não identificado.'); return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)){ toast('Escolha uma data válida.'); return; }
+    const btn = document.querySelector('#ui683AgendaSalvar');
+    if(btn){ btn.disabled = true; btn.textContent = 'Salvando...'; }
+    try{
+      // Usa a rota que já aceita data exata. Depois consolida o motivo no detalhe local.
+      const res = await fetch('./api/reanalisar-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, action:'reagendar-lembrete', data }) });
+      const out = await res.json().catch(()=>({}));
+      if(!res.ok || !out?.ok) throw new Error(out?.error || 'Não foi possível agendar.');
+      fecharModalAgendar();
+      invalidarLeadsCache();
+      toast('Retorno agendado.');
+      const atualizado = await getLeadDetail(id).catch(()=>null);
+      if(atualizado){
+        // Mantém motivo visível no estado atual quando a rota antiga não salva motivo novo.
+        atualizado.analysis = atualizado.analysis || {};
+        atualizado.analysis.lembrete = { ...(atualizado.analysis.lembrete || {}), quando: out.quando || atualizado.analysis.lembrete?.quando, motivo, auto:false };
+        state.lead = atualizado;
+        renderLeadFoco(atualizado);
+      }
+      if(typeof carregarDashboard==='function') carregarDashboard();
+    }catch(err){
+      toast('Erro ao agendar: ' + (err?.message || err));
+      if(btn){ btn.disabled = false; btn.textContent = 'Salvar retorno'; }
+    }
+  };
 
   // Atualiza a versão exigida pela análise comercial a partir desta atualização.
   window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = 683;
