@@ -11,7 +11,7 @@ assert.doesNotMatch(app,/ui670Reanalisar=function\(\)\{const b=qs\("\.ui670-lega
 assert.match(app,/rePerda\.test\(txt\)/);
 assert.match(app,/listaPrioritaria=lista\.filter/);
 const pkg=JSON.parse(fs.readFileSync(new URL('./package.json',import.meta.url),'utf8'));
-assert.equal(pkg.version,'677.0.0');
+assert.equal(pkg.version,'679.0.0');
 const sw=fs.readFileSync(new URL('./service-worker.js',import.meta.url),'utf8');
-assert.match(sw,/corretor-pro-static-v677-/);
+assert.match(sw,/corretor-pro-static-v679-/);
 console.log('teste-reanalise-v673: OK');

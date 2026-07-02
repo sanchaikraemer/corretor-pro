@@ -6,6 +6,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
 
+// Proteção estrutural: estes arquivos pertencem exclusivamente à pasta /api.
+// Se forem enviados para a raiz, o front pode ser atualizado enquanto a função
+// serverless real continua antiga, causando erros difíceis de diagnosticar.
+const apiDuplicadosNaRaiz = [
+  "_persistence.js", "_pipeline.js", "lead-update.js",
+  "processar-storage.js", "reanalisar-lead.js"
+].filter((file) => fs.existsSync(path.join(__dirname, file)));
+if (apiDuplicadosNaRaiz.length) {
+  throw new Error(
+    "Arquivos de API duplicados na raiz. Exclua: " +
+    apiDuplicadosNaRaiz.join(", ") +
+    ". As versões válidas devem existir somente dentro de /api."
+  );
+}
+
 // Build sempre limpo: impede que protótipos e arquivos de versões antigas continuem publicados.
 fs.rmSync(publicDir, { recursive: true, force: true });
 fs.mkdirSync(publicDir, { recursive: true });

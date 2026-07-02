@@ -6,10 +6,10 @@ import { pathToFileURL } from 'node:url';
 const apiDir=path.resolve('./api');
 const srcPath=path.join(apiDir,'lead-update.js');
 let src=fs.readFileSync(srcPath,'utf8');
-src=src.replace('import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";', 'const { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } = globalThis.__v675Mocks;');
+src=src.replace('import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";', 'const { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } = globalThis.__v676Mocks;');
 src=src.replace('import { randomUUID } from "node:crypto";', 'const randomUUID = ()=>"uuid-test";');
-src=src.replace('import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";', 'const { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } = globalThis.__v675Mocks;');
-const tmp=path.join(apiDir,`.tmp-lead-update-v675-${Date.now()}.mjs`);
+src=src.replace('import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";', 'const { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } = globalThis.__v676Mocks;');
+const tmp=path.join(apiDir,`.tmp-lead-update-v676-${Date.now()}.mjs`);
 fs.writeFileSync(tmp,src);
 
 const { finalizarAnaliseComercialV674 } = await import('./api/_pipeline.js');
@@ -39,7 +39,7 @@ function queryBuilder(){
   };
 }
 const supabase={from(){return queryBuilder();}};
-globalThis.__v675Mocks={
+globalThis.__v676Mocks={
   getSupabaseAdmin:()=>supabase,
   persistProcessingResult:async()=>({}),
   listRecentProcessings:async()=>({ok:true,items:[]}),
@@ -50,17 +50,17 @@ const mod=await import(pathToFileURL(tmp).href+`?v=${Date.now()}`);
 let statusCode=200,body='';
 const res={status(n){statusCode=n;return this;},setHeader(){return this;},end(v){body=String(v||'');}};
 await mod.default({method:'POST',body:{id:'lead-1',action:'analise-comercial-set',analysis:stored.resultado_analise}},res);
-fs.unlinkSync(tmp);delete globalThis.__v675Mocks;
+fs.unlinkSync(tmp);delete globalThis.__v676Mocks;
 
 assert.equal(statusCode,200,body);
 const response=JSON.parse(body);
 assert.equal(response.ok,true);
-assert.equal(response.schemaComercial,675);
-assert.equal(stored.resultado_analise._schemaComercial,675);
+assert.equal(response.schemaComercial,676);
+assert.equal(stored.resultado_analise._schemaComercial,676);
 assert.equal(stored.resultado_analise.modeloComercial.oportunidade.status,'perdida');
 assert.equal(stored.resultado_analise.modeloComercial.oportunidade.resultado,'comprou-outra-opcao');
 assert.equal(stored.resultado_analise.modeloComercial.relacionamento.status,'aguardando-nova-oportunidade');
 assert.equal(stored.resultado_analise.modeloComercial.acao.status,'sem-acao-urgente');
 assert.equal(stored.resultado_analise.messages.a,'');
 assert.equal(stored.resultado_analise.lembrete,null);
-console.log('teste-fallback-persistencia-v675: OK');
+console.log('teste-fallback-persistencia-v676: OK');

@@ -44,7 +44,7 @@ assert.match(out.nextAction,/nenhuma ação urgente/i);
 const app=fs.readFileSync(new URL('./app.js',import.meta.url),'utf8');
 const api=fs.readFileSync(new URL('./api/reanalisar-lead.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('./styles.css',import.meta.url),'utf8');
-assert.match(app,/schema<676/);
+assert.match(app,/schema<678/);
 assert.match(app,/_leadDetailCache\.set\(String\(lead\.id\)/);
 assert.match(app,/const detalheAberto=!!state\.lead\?\.id/);
 assert.doesNotMatch(app,/getLeadDetail\(lead\.id,true\)/);
@@ -55,7 +55,7 @@ assert.match(css,/body\.lead-foco-aberto #home #resumoDia/);
 assert.match(css,/body\.lead-foco-aberto #home #homeRight/);
 
 const pkg=JSON.parse(fs.readFileSync(new URL('./package.json',import.meta.url),'utf8'));
-assert.equal(pkg.version,'677.0.0');
+assert.equal(pkg.version,'679.0.0');
 const sw=fs.readFileSync(new URL('./service-worker.js',import.meta.url),'utf8');
-assert.match(sw,/corretor-pro-static-v677-/);
+assert.match(sw,/corretor-pro-static-v679-/);
 console.log('teste-analise-comercial-v674: OK');

@@ -1,5 +1,5 @@
-const BUILD_ID = '2026-07-01-19-42';
-const STATIC_CACHE = 'corretor-pro-static-v665-' + BUILD_ID;
+const BUILD_ID = '2026-07-02-02-23';
+const STATIC_CACHE = 'corretor-pro-static-v678-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
@@ -71,18 +71,18 @@ async function idbDel(id) {
 const CORE_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=665',
-  '/app.js?v=665',
-  '/vendor/jszip.min.js?v=665',
+  '/styles.css?v=678',
+  '/app.js?v=678',
+  '/vendor/jszip.min.js?v=678',
   '/share.html',
   '/manifest.json',
   '/service-worker.js',
-  '/icon-192.png?v=665',
-  '/logo-cp.png?v=665',
-  '/icon-512.png?v=665',
-  '/favicon.png?v=665',
-  '/logo-direciona-light.svg?v=665',
-  '/logo-direciona-dark.svg?v=665'
+  '/icon-192.png?v=678',
+  '/logo-cp.png?v=678',
+  '/icon-512.png?v=678',
+  '/favicon.png?v=678',
+  '/logo-direciona-light.svg?v=678',
+  '/logo-direciona-dark.svg?v=678'
 ];
 
 self.addEventListener('install', event => {

@@ -515,3 +515,19 @@
 - O botão `Atendido` deixa de aparecer em oportunidades encerradas; o topo passa a mostrar `Encerrada` ou `Vendida`.
 - A opção `Excluir definitivamente` deixa de aparecer duplicada no fim do detalhe do lead.
 - Cache PWA atualizado para a versão 677.
+
+## Ponto #678 — botão manual na barra inferior e correção de contexto misto
+
+- O botão `Incluir manual` sai do topo das telas Hoje/Atendimentos e vai para o espaço central da barra inferior, como atalho direto.
+- O FAB central volta a aparecer corretamente na navegação mobile.
+- A busca continua visível nas telas Hoje e Atendimentos.
+- A leitura comercial passa a detectar conversas que começaram em outro assunto (ex.: trabalho/zelador) e depois viraram interesse imobiliário.
+- Nesses casos, a oportunidade atual passa a ser tratada como compra de imóvel, sem deixar o assunto antigo dominar a análise.
+- A próxima ação considera se o corretor já deixou uma pergunta de qualificação pendente e, se sim, marca `Aguardando resposta` em vez de reiniciar a conversa.
+- Cache PWA atualizado para a versão 678.
+
+
+## Ponto #679 — Segurança e backup
+- Proteção das rotas da API com `CORRETOR_PRO_API_KEY`.
+- Botão de backup completo em JSON.
+- Exportação completa via rota existente `leads-recentes?export=full`.

@@ -34,7 +34,7 @@ assert.equal(anderson.modeloComercial.oportunidade.status,"perdida");
 assert.equal(anderson.modeloComercial.relacionamento.status,"aguardando-nova-oportunidade");
 assert.equal(anderson.modeloComercial.acao.status,"sem-acao-urgente");
 assert.equal(anderson.modeloComercial.contexto.ultimaPessoaFalar,"contato");
-assert.equal(anderson._schemaComercial,675);
+assert.equal(anderson._schemaComercial,676);
 
 // 2. “Muito obrigado” NÃO apaga retorno futuro confirmado.
 const retornoFuturo = __testarModeloComercialV672({
@@ -108,7 +108,7 @@ assert.match(app,/Comprador final/);
 assert.match(app,/A negociação anterior continuará preservada/);
 assert.match(api,/async function acaoNovaOportunidadeParceiro/);
 assert.match(api,/oportunidadesVinculadas/);
-assert.match(api,/_schemaComercial: 675/);
+assert.match(api,/_schemaComercial: 676/);
 assert.match(persistence,/oportunidade:\$\{oportunidadeId\}/);
 
 // Regressão #672: contato parceiro com "Corretor" no nome não pode virar "Você".

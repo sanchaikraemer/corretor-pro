@@ -1,3 +1,46 @@
+// ===== Segurança v679: chave secreta nas chamadas /api =====
+// Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
+// No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
+(function protegerChamadasApiV679(){
+  if (typeof window === "undefined" || window.__corretorProFetchProtegido) return;
+  window.__corretorProFetchProtegido = true;
+  const STORAGE_KEY = "corretor_pro_api_key_v679";
+  const originalFetch = window.fetch.bind(window);
+  function isApiUrl(input){
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    return /(^|\/)api\//.test(String(url));
+  }
+  function getKey(){
+    try { return localStorage.getItem(STORAGE_KEY) || ""; } catch(_) { return ""; }
+  }
+  window.definirChaveSegurancaCorretorPro = function(){
+    const atual = getKey();
+    const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
+    if (valor && valor.trim()) {
+      try { localStorage.setItem(STORAGE_KEY, valor.trim()); } catch(_) {}
+      alert("Chave salva neste aparelho. Recarregue o app se a tela não atualizar sozinha.");
+      return valor.trim();
+    }
+    return atual;
+  };
+  window.fetch = async function(input, init = {}){
+    if (!isApiUrl(input)) return originalFetch(input, init);
+    const key = getKey();
+    const headers = new Headers((init && init.headers) || (typeof input !== "string" && input?.headers) || {});
+    if (key && !headers.has("X-Corretor-Pro-Key")) headers.set("X-Corretor-Pro-Key", key);
+    const res = await originalFetch(input, { ...init, headers });
+    if (res.status === 401) {
+      const nova = window.definirChaveSegurancaCorretorPro();
+      if (nova && nova !== key) {
+        const retryHeaders = new Headers(headers);
+        retryHeaders.set("X-Corretor-Pro-Key", nova);
+        return originalFetch(input, { ...init, headers: retryHeaders });
+      }
+    }
+    return res;
+  };
+})();
+
 const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
 const state={
   lead:null, leads:[], active:"home", navKey:"home", processing:false, analysis:null, msgStyle:"direta",
@@ -7462,13 +7505,12 @@ window.barraBuscaLeadHTML = barraBuscaLeadHTML;
 function ui677ToolbarHTML(prefixo){
   const inputId = `ui677Busca_${prefixo}`;
   const boxId = `ui677BuscaRes_${prefixo}`;
-  return `<div class="ui677-toolbar">
+  return `<div class="ui677-toolbar ui678-toolbar-search-only">
     <div class="ui677-search-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="search" id="${inputId}" placeholder="Buscar por nome ou interesse" autocomplete="off" oninput='buscaLeadInline(this.value, ${JSON.stringify(boxId)})'>
       <div id="${boxId}" class="ui677-search-results"></div>
     </div>
-    <button type="button" class="ui677-manual-btn" onclick="abrirNovoLead()"><span>＋</span> Incluir manual</button>
   </div>`;
 }
 window.ui677ToolbarHTML = ui677ToolbarHTML;
@@ -7952,6 +7994,7 @@ function renderCarteiraTabela(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="cart-filtros">${chips}</div>
         <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
+        <button type="button" class="cart-export" onclick="exportarBackupCompletoV679(this)" title="Backup completo em JSON, com dados brutos do banco">🛡 Backup</button>
       </div>
     </div>
     <div class="cart-table">
@@ -8084,6 +8127,33 @@ async function exportarLeadsCSV(btn){
   }
 }
 window.exportarLeadsCSV = exportarLeadsCSV;
+
+
+async function exportarBackupCompletoV679(btn){
+  const txt0 = btn ? btn.textContent : "";
+  if(btn){ btn.disabled = true; btn.textContent = "Gerando backup..."; }
+  try{
+    const res = await fetch("./api/leads-recentes?export=full", { cache:"no-store" });
+    if(!res.ok){
+      const d = await res.json().catch(()=>({}));
+      throw new Error(d?.error || "Não foi possível gerar o backup completo.");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `corretor-pro-backup-completo-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
+    toast("Backup completo baixado com segurança.");
+  }catch(err){
+    toast("Falhou ao exportar backup: " + (err?.message || err));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = txt0 || "🛡 Backup"; }
+  }
+}
+window.exportarBackupCompletoV679 = exportarBackupCompletoV679;
 
 // Testa a OpenAI e o modelo principal de análise/mensagens pelo mesmo endpoint usado no deploy.
 async function testarIAOpenAI(btn){
@@ -9561,6 +9631,61 @@ function ui670Parceiro(lead){
   return /parceir|corretor|corretora|imobili[áa]ria|creci/.test([a.tipoContato,a?.modeloComercial?.contato?.tipo,lead?.name].join(" ").toLowerCase());
 }
 
+function ui678ContextoMudouParaImovel(lead){
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  if(!msgs.length) return null;
+  const pn=String(lead?.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
+  const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const jobRe=/\b(trabalho|emprego|vaga|zelador|curriculo|currículo|sindico|síndico|empresa|servico|serviço)\b/;
+  const imovelRe=/\b(apartamento|imovel|imóvel|parcela|mensal|entrada|fgts|caixa|banrisul|financi|pronto|na planta|dormitorio|dormitório|suite|suíte|box|semimobiliado|alto padrao|alto padrão|condicoes|condições)\b/;
+  const qualifPergRe=/\b(pronto ou na planta|na planta|quantos dormit|quantos quartos|qual faixa|faixa de valor|perfil|objetivo|mais ao perfil|entra no perfil|outras opcoes|outras opções|valor e condicoes|valor e condições|que tipo de imovel|que tipo de imóvel|o ideal pra voce|o ideal pra você|duvida especifica|dúvida específica)\b/;
+  const financiamentoRe=/\b(parcela|mensal|entrada|fgts|caixa|banrisul|financi)\b/;
+  let idxJob=-1,idxImovel=-1,lastPergQualif=-1,lastClienteImovel=-1,lastCorretorImovel=-1,temFinanciamento=false,temDorms=false;
+  const usados=[];
+  for(let i=0;i<msgs.length;i++){
+    const m=msgs[i];
+    const text=String(m?.text||"").trim();
+    if(!text) continue;
+    const source=String(m.source||""),type=String(m.type||"");
+    if(source==="manual"||source==="crm"||type==="print-whatsapp"||["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
+    const t=norm(text);
+    const cliente=ehMsgDoCliente(m,pn);
+    usados.push({ i, text, t, cliente });
+    if(jobRe.test(t) && idxJob<0) idxJob=i;
+    if(imovelRe.test(t)){
+      idxImovel=i;
+      if(cliente) lastClienteImovel=i; else lastCorretorImovel=i;
+      if(financiamentoRe.test(t)) temFinanciamento=true;
+      if(/dormit|quartos|suite|suíte/.test(t)) temDorms=true;
+    }
+    if(!cliente && qualifPergRe.test(t)) lastPergQualif=i;
+  }
+  if(idxJob<0 || idxImovel<0 || idxImovel<=idxJob) return null;
+  const mudou=true;
+  const ultimoRelevante=usados.length?usados[usados.length-1]:null;
+  const aguardandoResposta=!!(ultimoRelevante && !ultimoRelevante.cliente && lastPergQualif>=0 && lastPergQualif===ultimoRelevante.i && (lastClienteImovel<0 || lastPergQualif>lastClienteImovel));
+  const produtoBase=(String(lead?.product||"").trim() && !/não identificad/i.test(String(lead?.product||""))) ? String(lead.product).trim() : "Apartamento pronto";
+  const resumo=`Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, com dúvidas sobre financiamento e parcelas, mas ainda sem perfil de compra confirmado.`;
+  const ultimoCompromisso=aguardandoResposta
+    ? `Você pediu para alinhar se ele busca algo pronto ou na planta, qual faixa faz sentido e quantos dormitórios seriam ideais.`
+    : `O cliente demonstrou interesse no imóvel e pediu esclarecimentos sobre valor, financiamento e parcelas.`;
+  const impedimento=`Perfil de compra ainda não qualificado: falta confirmar objetivo, faixa de valor e tipologia ideal.`;
+  const nextAction=aguardandoResposta
+    ? `Aguardar a resposta do contato sobre perfil, faixa de valor e se busca imóvel pronto ou na planta antes de uma nova abordagem.`
+    : `Retomar usando a pendência aberta: confirmar se ele busca imóvel pronto ou na planta, faixa de valor e número de dormitórios.`;
+  return {
+    mudouParaImovel:mudou,
+    aguardandoResposta,
+    produto:produtoBase,
+    resumo,
+    ultimoCompromisso,
+    impedimento,
+    nextAction,
+    temFinanciamento,
+    temDorms
+  };
+}
+
 function ui671HojeIso(){
   try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
   catch(_){return new Date().toISOString().slice(0,10);}
@@ -9610,6 +9735,7 @@ function ui670ModeloComercial(lead){
   mc.contato=mc.contato||{};
   mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
   mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"Contato principal da oportunidade");
+  const ctx678=ui678ContextoMudouParaImovel(lead);
   mc.oportunidade=mc.oportunidade||{};
   mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
   mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
@@ -9622,6 +9748,16 @@ function ui670ModeloComercial(lead){
   if(parceiro&&mc.oportunidade.status==="perdida") mc.relacionamento.status="aguardando-nova-oportunidade";
   mc.relacionamento.potencial=mc.relacionamento.potencial||(parceiro?"médio":"não avaliado");
   mc.relacionamento.motivo=mc.relacionamento.motivo||(parceiro?"O contato pode apresentar novos compradores.":a.clientProfile||"");
+  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !comprouOutra && !vendaConosco){
+    mc.contato.tipo="comprador-direto";
+    mc.contato.papel="Potencial comprador direto; o assunto antigo sobre trabalho ficou superado por um interesse imobiliário posterior.";
+    mc.oportunidade.status="descoberta";
+    mc.oportunidade.resultado="em-andamento";
+    if(!mc.oportunidade.produto || /não identificado/i.test(String(mc.oportunidade.produto||""))) mc.oportunidade.produto=ctx678.produto;
+    mc.oportunidade.motivo=ctx678.resumo;
+    mc.relacionamento.status="ativo";
+    mc.relacionamento.motivo="Existe interesse inicial no imóvel, mas o perfil de compra ainda precisa ser qualificado.";
+  }
   mc.acao=mc.acao||{};
   mc.acao.status=mc.acao.status||(last.falante==="corretor"?"aguardando-resposta":"responder-agora");
   mc.acao.responsavel=mc.acao.responsavel||(last.falante==="corretor"?"contato":"corretor");
@@ -9638,13 +9774,19 @@ function ui670ModeloComercial(lead){
   }else if(despedida){
     mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";mc.acao.descricao="Nenhuma ação urgente neste momento.";
   }
+  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !["ganha","perdida"].includes(String(mc.oportunidade.status||""))){
+    mc.acao.status=ctx678.aguardandoResposta?"aguardando-resposta":"retomar";
+    mc.acao.responsavel=ctx678.aguardandoResposta?"contato":"corretor";
+    mc.acao.urgencia=ctx678.aguardandoResposta?"baixa":"media";
+    mc.acao.descricao=ctx678.nextAction;
+  }
   mc.contexto=mc.contexto||{};
   mc.contexto.ultimaPessoaFalar=last.falante;
   mc.contexto.ultimaMensagem=String(last.m?.text||mc.contexto.ultimaMensagem||"").trim();
   mc.contexto.ultimoCompromisso=mc.oportunidade.resultado==="comprou-outra-opcao"
     ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
-    : (compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
-  mc.contexto.impedimentoPrincipal=mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
+    : (ctx678?.ultimoCompromisso||compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
+  mc.contexto.impedimentoPrincipal=ctx678?.impedimento||mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
   return mc;
 }
 window.ui670ModeloComercial=ui670ModeloComercial;
@@ -9704,9 +9846,21 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const base=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
   const leadBase={...lead,analysis:base};
   const mc=ui670ModeloComercial(leadBase);
-  mc.versao=676;
-  const out={...base,modeloComercial:mc,_schemaComercial:676,reanalisadoEm:new Date().toISOString()};
-  out.nextAction=mc?.acao?.descricao||out.nextAction||"Ação ainda não definida.";
+  mc.versao=678;
+  const out={...base,modeloComercial:mc,_schemaComercial:678,reanalisadoEm:new Date().toISOString()};
+  const ctx678=ui678ContextoMudouParaImovel(lead);
+  if(ctx678 && ctx678.mudouParaImovel && !["ganha","perdida"].includes(String(mc?.oportunidade?.status||""))){
+    out.summary=ctx678.resumo;
+    out.tipoContato="comprador-direto";
+    out.clientProfile=out.clientProfile||"Interesse inicial em imóvel, ainda sem perfil qualificado.";
+    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==="object")?{...out.diagnostico}:{};
+    out.diagnostico.etapa="descoberta";
+    out.diagnostico.interesse="médio";
+    out.diagnostico.objecaoPrincipal=ctx678.impedimento;
+    out.diagnostico.ultimoCompromissoCliente=ctx678.ultimoCompromisso;
+    out.diagnostico.proximaAcao=ctx678.nextAction;
+  }
+  out.nextAction=mc?.acao?.descricao||ctx678?.nextAction||out.nextAction||"Ação ainda não definida.";
   const semAcao=mc?.acao?.status==="sem-acao-urgente";
   if(semAcao){
     out.messages={a:"",b:"",c:"",aLabel:"Sem mensagem agora",bLabel:"",cLabel:"",recomendada:"a"};
@@ -9750,7 +9904,7 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:676}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:678}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
@@ -9761,26 +9915,26 @@ window.ui670Reanalisar=async function(btn){
     let usouFallback=false;
 
     // Compatibilidade com uma função antiga ou resposta incompleta: relê o banco antes de desistir.
-    if(!analysis||schema<676){
+    if(!analysis||schema<678){
       for(const espera of [0,450,900]){
         if(espera)await new Promise(r=>setTimeout(r,espera));
         const detalhe=await ui675BuscarDetalhe(lead.id).catch(()=>null);
         const aDetalhe=detalhe?.analysis||null;
         const sDetalhe=Number(aDetalhe?._schemaComercial||aDetalhe?.modeloComercial?.versao||0);
-        if(aDetalhe&&sDetalhe>=676){analysis=aDetalhe;schema=sDetalhe;break;}
+        if(aDetalhe&&sDetalhe>=678){analysis=aDetalhe;schema=sDetalhe;break;}
         if(aDetalhe&&!analysis)analysis=aDetalhe;
       }
     }
 
     // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
     // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
-    if(!analysis||schema<676){
+    if(!analysis||schema<678){
       const local=ui675AnaliseDeterministica(lead,analysis||lead.analysis||{});
       analysis=await ui675PersistirFallback(lead.id,local);
       schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
       usouFallback=true;
     }
-    if(!analysis||schema<676)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+    if(!analysis||schema<678)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
 
     const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
@@ -9806,7 +9960,7 @@ window.ui670Reanalisar=async function(btn){
           state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
-          if(fresco&&freshSchema>=676){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          if(fresco&&freshSchema>=678){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
           renderLeads();
         }
       }catch(_){}
@@ -9883,7 +10037,7 @@ renderLeadFoco=function(lead){
   const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
   if(!wrap||!legacy)return;
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
-  const stale=Number(mc.versao||a._schemaComercial||0)<676;
+  const stale=Number(mc.versao||a._schemaComercial||0)<678;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";

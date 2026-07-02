@@ -137,7 +137,7 @@ details.ficha-cliente>summary::-webkit-details-marker,details.bloco-recolhe>summ
 details.ficha-cliente>summary::before,details.bloco-recolhe>summary::before{content:"▸";color:var(--muted);font-size:12px;transition:transform .15s ease}
 details[open].ficha-cliente>summary::before,details[open].bloco-recolhe>summary::before{transform:rotate(90deg)}
 details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-color:var(--line2);color:var(--text)}
-.nav-inner{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.nav-inner{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
 .nav{border:0;background:transparent;color:var(--muted);border-radius:18px;padding:8px 4px;font-size:12px;font-weight:950;min-height:58px;cursor:pointer;position:relative}.nav span{display:block;font-size:18px;margin-bottom:2px}.nav.active{color:var(--accent);background:var(--accent-soft)}
 .nav-badge{display:inline-block;position:absolute;top:6px;right:10px;background:var(--risco);color:#fff;font-size:9px;font-weight:950;border-radius:999px;padding:2px 6px;min-width:18px;text-align:center;line-height:1.2}
 .toast{position:fixed;left:50%;bottom:94px;z-index:80;transform:translateX(-50%) translateY(20px);background:#161a22;border:1px solid var(--line);border-radius:16px;padding:12px 14px;max-width:88%;font-size:13px;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 18px 60px rgba(0,0,0,.45)}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -375,7 +375,8 @@ details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-c
 /* FAB central da barra de baixo (mobile) */
 .nav.fab{position:relative;overflow:visible}
 .nav.fab .fab-btn{position:absolute;left:50%;top:-24px;transform:translateX(-50%);width:52px;height:52px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:30px;font-weight:800;line-height:1;box-shadow:0 6px 18px rgba(86,199,242,.30);border:3px solid var(--bg)}
-.nav.fab span{visibility:hidden}
+.nav.fab .lbl{visibility:hidden}
+.nav.fab .fab-btn{visibility:visible}
 
 /* === Desktop: liga o shell de 3 colunas (substitui regras de .app acima) === */
 @media(min-width:1000px){
@@ -1405,7 +1406,7 @@ body.lead-foco-aberto #home #leadFocoArea {
 /* ============================================================
    ATUALIZAÇÃO #677 — busca visível, inclusão manual e lead encerrado
    ============================================================ */
-.ui677-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;margin:0 0 16px}
+.ui677-toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start;margin:0 0 16px}
 .ui677-search-wrap{position:relative;min-width:0}
 .ui677-search-wrap>svg{position:absolute;left:13px;top:12px;width:17px;height:17px;color:var(--muted);pointer-events:none}
 .ui677-search-wrap>input{width:100%;height:42px;box-sizing:border-box;padding:0 14px 0 40px;border:1px solid var(--line);border-radius:12px;background:var(--input);color:var(--text);font:inherit;font-size:13px;outline:none}
@@ -1441,3 +1442,8 @@ body.lead-foco-aberto .legacy-delete-definitivo{display:none!important}
   .ui677-manual-actions{grid-template-columns:1fr}
   .ui677-closed-badge{min-height:34px;padding:0 11px;font-size:10px}
 }
+
+/* ATUALIZAÇÃO #678 — botão manual central + leitura de mudança de contexto */
+.ui678-toolbar-search-only{grid-template-columns:minmax(0,1fr)}
+.bottom-nav .nav.fab{z-index:2}
+.bottom-nav .nav.fab .fab-btn{box-shadow:0 10px 26px rgba(255,107,92,.30)}

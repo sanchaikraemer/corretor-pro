@@ -310,11 +310,83 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
+// ===== Histórico interno do app (Atualização #668) =====
+// O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
+// no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
+let cpApplyingHistory = false;
+function cpRouteForScreen(screen=state.active){
+  return {
+    cpApp:true,
+    screen:screen || "home",
+    navKey:state.navKey || undefined,
+    carteiraFiltro:state.carteiraFiltro || "todos",
+    pipelineFiltro:state.pipelineVisualFiltro || "todos",
+    grupoAtivo:state.grupoAtivo || null
+  };
+}
+function cpPushRoute(route){
+  if(cpApplyingHistory) return;
+  try{ history.pushState({...route,cpApp:true}, "", location.href); }catch(_){}
+}
+function cpReplaceRoute(route){
+  try{ history.replaceState({...route,cpApp:true}, "", location.href); }catch(_){}
+}
+function cpPushTransientRoute(kind){
+  if(cpApplyingHistory || history.state?.cpTransient === kind) return;
+  const base = history.state?.cpApp ? history.state : cpRouteForScreen(state.active);
+  try{ history.pushState({cpApp:true,cpTransient:kind,base}, "", location.href); }catch(_){}
+}
+function cpConsumeTransientRoute(kind){
+  const cur = history.state;
+  if(cur?.cpTransient !== kind) return;
+  const base = cur.base?.cpApp ? cur.base : cpRouteForScreen(state.active);
+  cpReplaceRoute(base);
+}
+function cpClearLeadState(){
+  if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
+  state.lead=null; state.focoLeadId=null; state.analysis=null; state.sequencia=null;
+}
+async function cpRestoreRoute(route){
+  cpApplyingHistory=true;
+  try{
+    if(document.body.classList.contains("menu-aberto")) fecharMenuGaveta({fromHistory:true});
+    const r = route?.cpApp ? route : {screen:"home"};
+    if(r.cpTransient){
+      if(r.cpTransient === "menu") abrirMenuGaveta();
+      return;
+    }
+    if(r.screen === "lead" && r.leadId){
+      if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
+      if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
+      if(r.grupoAtivo) state.grupoAtivo=r.grupoAtivo;
+      await abrirLead(r.leadId,{fromHistory:true});
+      return;
+    }
+    cpClearLeadState();
+    state.grupoAtivo=null;
+    if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
+    if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
+    show(r.screen || "home",{navKey:r.navKey,skipHistory:true});
+    if((r.screen||"home") === "home" && r.grupoAtivo){
+      state.grupoAtivo=r.grupoAtivo;
+      abrirGrupoHome(r.grupoAtivo,{fromHistory:true});
+    } else if((r.screen||"home") === "home") {
+      renderBotoesHome();
+    }
+  } finally { cpApplyingHistory=false; }
+}
+window.addEventListener("popstate",e=>{ cpRestoreRoute(e.state).catch(err=>console.warn("popstate",err)); });
+window.cpPushTransientRoute=cpPushTransientRoute;
+window.cpConsumeTransientRoute=cpConsumeTransientRoute;
+
 function show(t, options={}){
   const prev = state.active;
   const defaultNavKey = {home:"home",carteira:"leads",propostas:"imoveis",pipeline:"negocios",agenda:"agenda",relatorio:"relatorios",menu:"config"}[t] || t;
   state.navKey = options.navKey || defaultNavKey;
   state.active=t;
+  if(!options.skipHistory && !cpApplyingHistory && prev !== t){
+    cpPushRoute(cpRouteForScreen(t));
+  }
   if(!isDesktop()){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
     qs("#"+t)?.classList.add("active");
@@ -366,8 +438,21 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-function abrirMenuGaveta(){ document.body.classList.add("menu-aberto"); }
-function fecharMenuGaveta(){ document.body.classList.remove("menu-aberto"); }
+// Atualização #668: a seta física fecha a gaveta antes de sair da tela atual.
+function abrirMenuGaveta(){
+  if(document.body.classList.contains("menu-aberto")) return;
+  document.body.classList.add("menu-aberto");
+  if(typeof cpPushTransientRoute === "function") cpPushTransientRoute("menu");
+}
+function fecharMenuGaveta(options={}){
+  document.body.classList.remove("menu-aberto");
+  if(options.fromHistory) return;
+  if(options.replaceOnly){
+    if(typeof cpConsumeTransientRoute === "function") cpConsumeTransientRoute("menu");
+    return;
+  }
+  if(history.state?.cpTransient === "menu") history.back();
+}
 window.abrirMenuGaveta = abrirMenuGaveta;
 window.fecharMenuGaveta = fecharMenuGaveta;
 function renderLeads(){
@@ -1583,14 +1668,19 @@ function probabilidadeRefinadaTxt(l){
   const v = probabilidadeRefinada(l);
   return v == null ? (l?.probability || "--") : v + "%";
 }
-const BUSINESS_RE = /(senger|construtora|corretor|imobiliaria|imobiliária|direciona|atendimento)/i;
+const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
+// "Corretor", "Imobiliária" e "Imóveis" podem fazer parte do NOME do contato parceiro.
+// Por isso não podem, sozinhos, transformar a fala dele em mensagem da empresa.
 function ehMsgDoCliente(m, primeiroNomeCliente){
   const autor = String(m?.author || "").trim();
   if(!autor || autor === "Sistema") return false;
+  const autorNorm = autor.toLowerCase();
+  const nomeNorm = String(primeiroNomeCliente || "").trim().toLowerCase();
+  // O nome do contato tem prioridade sobre palavras de profissão no próprio nome
+  // (ex.: "Anderson Ruviaro Corretor SM Gabro").
+  if(nomeNorm && autorNorm.includes(nomeNorm) && !/^(sanchai|miguel\s+kirinus)$/i.test(autorNorm)) return true;
   if(BUSINESS_RE.test(autor)) return false;
-  // Se o autor bate com o nome do cliente, com certeza é dele.
-  if(primeiroNomeCliente && autor.toLowerCase().includes(primeiroNomeCliente)) return true;
-  // Caso contrário, assume cliente (não é business).
+  // Em conversa individual, qualquer outro participante real é o contato.
   return true;
 }
 
@@ -2573,7 +2663,10 @@ function cardLeadHTML(l, opts){
 // Cards mostram: nome, etapa/produto/dias, tags (ESFRIANDO/PERMUTA), motivo curto e
 // ações rápidas (WhatsApp). Pro grupo com mais de 10 leads, divide em
 // "ataca agora — top 10" e o restante colapsado.
-function abrirGrupoHome(grupo){
+function abrirGrupoHome(grupo, options={}){
+  if(!options.fromHistory && !cpApplyingHistory){
+    cpPushRoute({...cpRouteForScreen("home"),screen:"home",grupoAtivo:grupo});
+  }
   const foco = qs("#leadFocoArea");
   if(!foco) return;
   document.body.classList.remove("lead-foco-aberto");
@@ -2625,7 +2718,7 @@ function abrirGrupoHome(grupo){
 
   foco.innerHTML =
     `<div style="display:flex;align-items:center;gap:12px;margin:0 0 4px;flex-wrap:wrap">
-       <button type="button" onclick="renderBotoesHome()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button>
+       <button type="button" onclick="voltarDaListaHome()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button>
        <b style="color:var(--lime);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:13px">${meta.titulo}</b>
        <span style="background:var(--lime);color:var(--on-accent);border-radius:999px;padding:0 9px;font-size:12px;font-weight:950">${arr.length}</span>
      </div>
@@ -2634,6 +2727,11 @@ function abrirGrupoHome(grupo){
      ${listaHtml}`;
   foco.scrollIntoView({ behavior:"smooth", block:"start" });
 }
+function voltarDaListaHome(){
+  if(history.state?.cpApp && history.state?.screen === "home" && history.state?.grupoAtivo){ history.back(); return; }
+  renderBotoesHome();
+}
+window.voltarDaListaHome=voltarDaListaHome;
 window.abrirGrupoHome = abrirGrupoHome;
 window.renderBotoesHome = renderBotoesHome;
 
@@ -3541,50 +3639,31 @@ function abrirNovoLead(){
   qs("#novoLeadModal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "novoLeadModal";
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-  const opcoes = EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  overlay.className = "ui677-manual-modal";
+  const opcoes = EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
   overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:460px;width:100%;max-height:90vh;overflow:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:16px;font-weight:950">+ Novo lead</div>
-        <button type="button" id="novoLeadFechar" style="background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">✕</button>
+    <div class="ui677-manual-card" role="dialog" aria-modal="true" aria-labelledby="ui677ManualTitle">
+      <div class="ui677-manual-head">
+        <div><small>Novo atendimento</small><h3 id="ui677ManualTitle">Incluir lead manualmente</h3><p>Cadastre sem importar uma conversa do WhatsApp.</p></div>
+        <button type="button" id="novoLeadFechar" aria-label="Fechar">✕</button>
       </div>
-      <div class="small" style="color:var(--muted);font-size:11px;margin-bottom:14px">Pra quando alguém liga, comenta pessoalmente ou indica e ainda não houve troca no WhatsApp. Salva o lead pra você não esquecer.</div>
-      <div style="margin-bottom:16px">
-        <button type="button" id="novoLeadPrint" style="width:100%;padding:11px;background:rgba(255,255,255,.04);color:var(--soft);border:1px dashed var(--line);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">📷 Preencher por print da conversa</button>
-        <input type="file" id="novoLeadPrintInput" accept="image/*" style="display:none">
-        <div id="novoLeadPrintStatus" style="display:none;margin-top:7px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;line-height:1.35"></div>
-        <div id="novoLeadFotoWrap" style="display:none;align-items:center;gap:10px;margin-top:8px"><div id="novoLeadFotoPrev"></div><button type="button" id="novoLeadFotoRemover" style="background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--muted);font-size:11px;font-weight:900;cursor:pointer">Remover foto</button></div>
-        <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Manda o print do WhatsApp/formulário (ex.: lead do Instagram/Facebook) e o Corretor Pro preenche os campos abaixo — e tenta recortar a foto do cliente. Você confere e salva.</div>
+      <label for="novoLeadNome">Nome</label>
+      <input type="text" id="novoLeadNome" placeholder="Nome do lead" autocomplete="name">
+      <label for="novoLeadInteresse">Interesse</label>
+      <input type="text" id="novoLeadInteresse" list="ui677Interesses" placeholder="Ex.: Renaissance, apartamento de 2 suítes..." autocomplete="off">
+      <datalist id="ui677Interesses">${opcoes}</datalist>
+      <label for="novoLeadTel">Telefone</label>
+      <input type="tel" id="novoLeadTel" placeholder="(54) 99999-9999" autocomplete="tel" inputmode="tel">
+      <div class="ui677-manual-actions">
+        <button type="button" class="secondary" id="novoLeadCancelar">Cancelar</button>
+        <button type="button" class="primary" id="novoLeadSalvar">Incluir lead</button>
       </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome *</label>
-        <input type="text" id="novoLeadNome" placeholder="Nome do cliente" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone (WhatsApp)</label>
-        <input type="tel" id="novoLeadTel" placeholder="+55 54 99999-9999" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento de interesse</label>
-        <select id="novoLeadProduto" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-          <option value="">— Sem definir ainda —</option>
-          ${opcoes}
-        </select>
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação inicial</label>
-        <textarea id="novoLeadObs" rows="3" placeholder="Como o lead chegou, o que conversou, o que pediu..." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
-      </div>
-      <button type="button" id="novoLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer">Salvar lead</button>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => { if(e.target === overlay) fecharNovoLead(); });
   qs("#novoLeadFechar")?.addEventListener("click", fecharNovoLead);
+  qs("#novoLeadCancelar")?.addEventListener("click", fecharNovoLead);
   qs("#novoLeadSalvar")?.addEventListener("click", salvarNovoLead);
-  qs("#novoLeadPrint")?.addEventListener("click", () => qs("#novoLeadPrintInput")?.click());
-  qs("#novoLeadPrintInput")?.addEventListener("change", lerPrintLead);
-  qs("#novoLeadFotoRemover")?.addEventListener("click", () => { novoLeadAvatarFoto = null; mostrarPreviaFoto(); });
   setTimeout(() => qs("#novoLeadNome")?.focus(), 100);
 }
 function fecharNovoLead(){ qs("#novoLeadModal")?.remove(); }
@@ -3837,31 +3916,37 @@ function setPrintStatus(sel, tipo, msg){
 }
 async function salvarNovoLead(){
   const nome = (qs("#novoLeadNome")?.value || "").trim();
+  const interesse = (qs("#novoLeadInteresse")?.value || "").trim();
   const telefone = (qs("#novoLeadTel")?.value || "").trim();
-  const produto = (qs("#novoLeadProduto")?.value || "").trim();
-  const observacao = (qs("#novoLeadObs")?.value || "").trim();
-  if(!nome){ toast("Coloque o nome do lead."); qs("#novoLeadNome")?.focus(); return; }
+  if(!nome){ toast("Informe o nome do lead."); qs("#novoLeadNome")?.focus(); return; }
+  if(!interesse){ toast("Informe o interesse do lead."); qs("#novoLeadInteresse")?.focus(); return; }
+  const digitos = telefone.replace(/\D/g, "");
+  if(digitos.length < 8){ toast("Informe um telefone válido."); qs("#novoLeadTel")?.focus(); return; }
   const btn = qs("#novoLeadSalvar");
-  if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+  if(btn){ btn.disabled = true; btn.textContent = "Incluindo..."; }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action:"criar-manual", nome, telefone, produto, observacao, avatarFoto: novoLeadAvatarFoto || "" })
+      body: JSON.stringify({ action:"criar-manual", nome, telefone, produto: interesse, observacao:"" })
     });
     const data = await res.json().catch(() => ({ ok:false }));
     if(data?.ok){
-      toast("✓ Lead criado.");
+      toast("✓ Lead incluído.");
       fecharNovoLead();
-      await loadRecentLeads();
-      await carregarDashboard();
+      invalidarLeadsCache();
+      state.todosLeads = [];
+      state.carteiraLeads = [];
+      await loadRecentLeads(true);
+      await loadTodosLeadsBusca();
       if(data.id) abrirLead(data.id);
+      else show("carteira", { navKey:"leads" });
     } else {
-      toast("Erro: " + (data?.error || "falhou"));
-      if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
+      toast("Erro: " + (data?.error || "não foi possível incluir o lead"));
+      if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
     }
   }catch(err){
     toast("Erro: " + (err?.message || err));
-    if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
+    if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
   }
 }
 window.abrirNovoLead = abrirNovoLead;
@@ -3983,9 +4068,13 @@ async function excluirLeadDefinitivo(id, nome){
 }
 window.excluirLeadDefinitivo = excluirLeadDefinitivo;
 
-async function abrirLead(id){
+async function abrirLead(id, options={}){
   if(!id) return;
   const sid = String(id);
+  if(!options.fromHistory && !cpApplyingHistory){
+    const route={...cpRouteForScreen("lead"),screen:"lead",leadId:sid,grupoAtivo:state.grupoAtivo||null};
+    if(!(history.state?.cpApp && history.state?.screen === "lead" && String(history.state?.leadId) === sid)) cpPushRoute(route);
+  }
   state.focoLeadId = sid;
   state.timelineVisibleCount = TIMELINE_PAGE_SIZE;
   document.body.classList.add("lead-foco-aberto");
@@ -4025,7 +4114,7 @@ async function abrirLead(id){
     renderLeadFoco(state.lead);
     if(state.top3) renderTop3(state.top3);
     renderLeads();
-    show("home", { skipLoad:true });
+    show("home", { skipLoad:true, skipHistory:true });
     const t = qs("#toast"); if(t) t.classList.remove("show");
   };
 
@@ -4034,7 +4123,7 @@ async function abrirLead(id){
   let lead = emMemoria();
   const area = qs("#leadFocoArea");
   if(area) area.innerHTML = `<div class="skel-loading" style="padding:16px 0"><div style="height:26px;width:55%;border-radius:8px;background:var(--panel);border:1px solid var(--line);animation:skel-pulse 1.4s ease-in-out infinite;margin-bottom:10px"></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
-  show("home", { skipLoad:true });
+  show("home", { skipLoad:true, skipHistory:true });
 
   // Deixa o navegador pintar a tela/skeleton antes de montar o conteúdo do lead.
   await new Promise(resolve => requestAnimationFrame(resolve));
@@ -4269,10 +4358,9 @@ function iniciarBarraProgresso(btn, texto){
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 function voltarDoLead(){
-  state.lead = null;
-  state.focoLeadId = null;
-  state.analysis = null;
-  if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo); }
+  if(history.state?.cpApp && history.state?.screen === "lead"){ history.back(); return; }
+  cpClearLeadState();
+  if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
   else { renderBotoesHome(); }
 }
 window.voltarDoLead = voltarDoLead;
@@ -4587,7 +4675,7 @@ function renderLeadFoco(lead){
         </details>
       </div>
     </div>
-    ${lead.id ? `<div style="margin-top:18px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center"><button type="button" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;opacity:.5;letter-spacing:.03em">Excluir lead definitivo</button></div>` : ""}`;
+    ${lead.id ? `<div class="legacy-delete-definitivo" style="margin-top:18px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center"><button type="button" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;opacity:.5;letter-spacing:.03em">Excluir lead definitivo</button></div>` : ""}`;
 
   // Liga troca de mensagem principal (cards de abordagem)
   const msgs = { a: cardsMensagens[0]?.msg || msgInicial, b: cardsMensagens[1]?.msg || msgInicial, c: cardsMensagens[2]?.msg || msgInicial };
@@ -6086,9 +6174,13 @@ async function uploadLargeZipToSupabase(file){
   catch(e){ throw new Error("A rota de upload grande não respondeu em JSON."); }
 
   if(!metaRes.ok || !meta.ok){
-    const base = meta.error || "Não foi possível preparar o upload grande.";
-    const extra = meta.details && meta.details !== base ? " ("+meta.details+")" : "";
-    throw new Error(base + extra);
+    const partesErro = [
+      meta.error,
+      meta.details,
+      meta.bucket ? `Armazenamento: ${meta.bucket}` : "",
+      meta.bucketWarning ? `Aviso: ${meta.bucketWarning}` : ""
+    ].filter(Boolean);
+    throw new Error(partesErro.join("\n") || "Não foi possível preparar o upload grande.");
   }
 
   qs("#processingText").textContent="Enviando a conversa (arquivo grande)…";
@@ -6132,7 +6224,7 @@ async function uploadLargeZipToSupabase(file){
   // 1) preparar → 2) transcrever em lotes → 3) analisar
   let analysisData;
   try{
-    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path);
+    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name);
   }catch(err){
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
@@ -6147,7 +6239,7 @@ async function uploadLargeZipToSupabase(file){
       if(stored?.bucket && stored?.path){
         qs("#processingText").textContent = "Tentando de novo (sem reenviar o ZIP)...";
         try{
-          const data = await processarStorageEmEtapas(stored.bucket, stored.path);
+          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name);
           qs("#progressBar").style.width="100%";
           qs("#processingText").textContent="Conversa processada.";
           renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path });
@@ -6168,7 +6260,9 @@ async function uploadLargeZipToSupabase(file){
 }
 
 // Orquestra o processamento em 3 etapas, cada chamada curta o suficiente pro servidor.
-async function processarStorageEmEtapas(bucket, path){
+// Na reimportação, reconhece o lead ANTES das APIs: reaproveita transcrições já salvas
+// e envia ao Cérebro somente as mensagens inéditas + contexto consolidado anterior.
+async function processarStorageEmEtapas(bucket, path, fileName){
   async function chamar(payload, timeoutMs){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
@@ -6183,19 +6277,67 @@ async function processarStorageEmEtapas(bucket, path){
     } finally { clearTimeout(to); }
   }
 
+  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
+  const extrairTextoAudioSalvo = (m) => {
+    const texto = String(m?.text || "");
+    const match = texto.match(/^\[Áudio transcrito\]\s*([\s\S]*)$/i);
+    if(match && match[1].trim()) return match[1].trim();
+    return "";
+  };
+
   // ETAPA 1 — preparar
-  renderEtapas(2, "lendo conversa e aplicando janela");
+  renderEtapas(2, "lendo conversa e identificando novidades");
   qs("#progressBar").style.width="35%";
-  // Conversa grande (muito áudio) pode levar quase os 60s do servidor pra baixar+abrir o ZIP.
-  // Espera até 58s antes de desistir (antes era 45s e desistia com o servidor ainda lendo).
   const prep = await chamar({ action: "preparar" }, 58000);
-  const audios = prep.audiosParaTranscrever || [];
   const janela = prep.janelaConversa;
 
-  // ETAPA 2 — transcrever em lotes de 3 (com retry automático antes de desistir)
+  // Reconhece o lead antes de transcrever/analisar. Só reaproveita automaticamente
+  // quando a identidade é segura: mesmo telefone ou o mesmo arquivo de conversa.
+  let matchAntecipado = null;
+  let existingLeadId = null;
+  let timelineAnterior = [];
+  try{
+    // Antes da análise, usa somente a identidade estável do arquivo exportado. Não usa telefone
+    // achado no texto, porque a conversa pode citar o número de outra pessoa.
+    matchAntecipado = await acharLeadExistente("", "", fileName || prep.txtFile || "");
+    const seguro = matchAntecipado && matchAntecipado.via === "arquivo";
+    if(seguro && matchAntecipado.lead?.id){
+      existingLeadId = String(matchAntecipado.lead.id);
+      const resDet = await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(existingLeadId)}`, { cache:"no-store" });
+      const det = await resDet.json().catch(()=>({ok:false}));
+      if(resDet.ok && det?.ok && det.item){
+        timelineAnterior = Array.isArray(det.item.recentMessages) ? det.item.recentMessages : [];
+      }
+    }
+  }catch(err){
+    console.warn("Não consegui preparar o reaproveitamento incremental; seguindo processamento normal:", err?.message || err);
+    existingLeadId = null;
+    timelineAnterior = [];
+  }
+
+  // Mapa das transcrições que já foram pagas e estão salvas no histórico.
   const transcriptionMap = {};
+  for(const m of timelineAnterior){
+    const nome = normalizarAudio(m?.mediaFile);
+    const texto = extrairTextoAudioSalvo(m);
+    if(nome && texto){
+      transcriptionMap[nome] = { status:"transcrito_reaproveitado", text:texto, reused:true };
+    }
+  }
+
+  const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
+  const audios = audiosTodos.filter(nome => {
+    const salvo = transcriptionMap[normalizarAudio(nome)];
+    return !(salvo && salvo.text);
+  });
+  const audiosReaproveitados = Math.max(0, audiosTodos.length - audios.length);
+
+  // ETAPA 2 — transcrever somente áudios inéditos (com retry automático)
   if(audios.length){
-    renderEtapas(4, `transcrevendo ${audios.length} áudio(s)`);
+    const detalhe = audiosReaproveitados
+      ? `${audios.length} novo(s); ${audiosReaproveitados} já reaproveitado(s)`
+      : `${audios.length} áudio(s)`;
+    renderEtapas(4, `transcrevendo ${detalhe}`);
     const LOTE = 3;
     const TIMEOUT_LOTE = 55000;
     for(let i=0; i<audios.length; i+=LOTE){
@@ -6213,16 +6355,18 @@ async function processarStorageEmEtapas(bucket, path){
       if(!r){ throw ultimoErr || new Error("Falha ao transcrever lote"); }
       Object.assign(transcriptionMap, r.transcriptions || {});
       const feito = Math.min(audios.length, i+LOTE);
-      const pct = 35 + Math.round((feito/audios.length) * 40); // 35% → 75%
+      const pct = 35 + Math.round((feito/audios.length) * 40);
       qs("#progressBar").style.width = pct + "%";
-      renderEtapas(4, `transcrevendo áudios (${feito}/${audios.length})`);
+      renderEtapas(4, `áudios novos (${feito}/${audios.length}) · reaproveitados ${audiosReaproveitados}`);
     }
+  } else if(audiosReaproveitados){
+    renderEtapas(5, `${audiosReaproveitados} áudio(s) já transcrito(s) — sem nova cobrança`);
   } else {
     renderEtapas(5, "sem áudios na janela");
   }
 
-  // ETAPA 3 — analisar (manda mensagens + transcrições, sem ZIP)
-  renderEtapas(6, "analisando atendimento com o Cérebro");
+  // ETAPA 3 — o servidor busca o histórico anterior pelo ID e analisa somente as novidades.
+  renderEtapas(6, existingLeadId ? "analisando somente o que mudou" : "analisando atendimento com o Cérebro");
   qs("#progressBar").style.width="85%";
   const result = await chamar({
     action: "analisar",
@@ -6235,8 +6379,12 @@ async function processarStorageEmEtapas(bucket, path){
     ignoredFiles: prep.ignoredFiles,
     audiosTotalNoZip: prep.audiosTotalNoZip,
     audiosDescartadosPorJanela: prep.audiosDescartadosPorJanela,
-    metricsBase: prep.metricsBase
+    metricsBase: prep.metricsBase,
+    existingLeadId,
+    audiosReaproveitados,
+    audiosNovosSolicitados: audios.length
   }, 60000);
+  result._matchAntecipado = matchAntecipado ? { id: matchAntecipado.lead?.id || null, via: matchAntecipado.via || null } : null;
   renderEtapas(8);
   return result;
 }
@@ -6272,6 +6420,8 @@ async function renderProcessedResult(data, meta){
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:#ffd9ad"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  const inc = data.incrementalMeta || {};
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada; a análise anterior foi mantida sem nova chamada de texto." : " O histórico antigo não foi enviado novamente por inteiro para a IA."}</div>` : "";
 
   // Já existe lead com mesmo TELEFONE (certeza = mesmo cliente) ou mesmo NOME (pode ser outra pessoa)?
   const match = await acharLeadExistente(state.lead.name, lead.phone, meta.fileName || state.pendingSave?.fileName);
@@ -6299,7 +6449,7 @@ async function renderProcessedResult(data, meta){
   if(existente && !perguntarNome){
     // Mesmo cliente (telefone igual, OU nome igual sem telefone pra distinguir) → atualiza sozinho.
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Atualizando ${escapeHtml((existente.name||"este lead").split(" ")[0])}...</b> ${state.pendingViaTelefone ? "Mesmo telefone" : "Mesmo nome"} — atualizo o atual, sem duplicar.</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Atualizando ${escapeHtml((existente.name||"este lead").split(" ")[0])}...</b> ${state.pendingViaTelefone ? "Mesmo telefone" : (match?.via === "arquivo" ? "Mesma conversa" : "Mesmo nome")} — atualizo o atual, sem duplicar.</div>` +
       `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar ${escapeHtml((existente.name||"").split(" ")[0])}</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Descartar</button></div>`;
   } else if(perguntarNome){
     // Nome igual, telefone não confirma → PERGUNTA: é o mesmo cliente ou outro?
@@ -6331,7 +6481,7 @@ async function renderProcessedResult(data, meta){
     `<b>Áudios encontrados na janela:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
     `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
-    janelaHtml + semMidiaHtml +
+    janelaHtml + semMidiaHtml + incrementalHtml +
     `</div>` +
     openAIErrorBlock(data);
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
@@ -6414,7 +6564,7 @@ async function acharLeadExistente(nome, telefone, arquivo){
     // 3) Mesmo ARQUIVO de conversa = mesmo contato reexportado → é reimportação, atualiza (não
     // duplica). Pega o caso em que a análise nova não extraiu o nome (vinha "Cliente importado").
     if(alvoArq.length >= 3 && l.fileName){
-      if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "nome" };
+      if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "arquivo" };
     }
   }
   return null;
@@ -6425,7 +6575,7 @@ async function atualizarLeadComEvolucao(){
   const viaTelefone = !!state.pendingViaTelefone; // atualização automática por número (sem o usuário escolher)
   if(!existente?.id || !state.pendingSave){ toast("Nada pra atualizar."); return; }
   const btn = qs("#btnAtualizarLead");
-  if(btn){ btn.disabled = true; btn.textContent = "Atualizando e comparando..."; }
+  if(btn){ btn.disabled = true; btn.textContent = "Atualizando..."; }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6433,11 +6583,12 @@ async function atualizarLeadComEvolucao(){
     });
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
+    const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     state.pendingSave = null;
     state.pendingExistente = null;
     state.pendingViaTelefone = false;
     const ev = data.evolucao;
-    const juntou = Number(data.preservadasDoAntigo||0) > 0; // o arquivo novo NÃO trazia parte da conversa salva → juntei as duas
+    const juntou = !incrementalMeta?.reimportacao && Number(data.preservadasDoAntigo||0) > 0; // no fluxo incremental, o servidor recebeu só as novidades de propósito
     const primeiroNome = (existente.name||"").split(" ")[0] || "o lead";
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
@@ -6449,7 +6600,14 @@ async function atualizarLeadComEvolucao(){
       let txt = viaTelefone
         ? `<b>✓ Reconheci pelo número — atualizei ${escapeHtml(primeiroNome)} (não criei outro lead).</b> `
         : "<b>Atualizado.</b> ";
-      if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} mensagem(ns) que só estavam na conversa anterior). `;
+      if(incrementalMeta?.reimportacao){
+        const nMsg = Number(incrementalMeta.mensagensNovas)||0;
+        const nAudio = Number(incrementalMeta.audiosNovosTranscritos)||0;
+        const nReuso = Number(incrementalMeta.audiosReaproveitados)||0;
+        txt += nMsg === 0
+          ? `Nenhuma mensagem nova encontrada; mantive a análise anterior sem nova cobrança de texto. `
+          : `${nMsg} mensagem(ns) nova(s) incorporada(s) · ${nAudio} áudio(s) novo(s) transcrito(s) · ${nReuso} reaproveitado(s). `;
+      } else if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} mensagem(ns) que só estavam na conversa anterior). `;
       if(ev){
         txt += `O que mudou: ${escapeHtml(ev.oQueMudou||"—")}. `;
         if(ev.abordagemFuncionou && ev.abordagemFuncionou !== "sem-dados") txt += `Abordagem anterior: <b>${escapeHtml(ev.abordagemFuncionou)}</b>. `;
@@ -6457,14 +6615,12 @@ async function atualizarLeadComEvolucao(){
       }
       pendingBox.innerHTML = txt;
     }
-    toast(viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução."));
+    toast(incrementalMeta?.reimportacao
+      ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} mensagem(ns) nova(s).`
+      : (viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução.")));
     loadRecentLeads();
-    // REIMPORTOU = tem conversa NOVA → reanalisa a conversa INTEIRA na hora (em segundo plano), pra
-    // as 3 respostas saírem ATUALIZADAS conforme o que mudou — SEM depender de abrir o lead nem de
-    // "juntar" arquivo antigo. (Antes só rodava quando juntava trechos; por isso reimportar às vezes
-    // mantinha resposta antiga. Pedido do dono: conversa nova tem que gerar resposta nova na hora.)
-    // Não trava a tela; quando termina, re-renderiza o lead sozinho com as sugestões já refinadas.
-    if(existente.id) reanalisarEmSegundoPlano(existente.id);
+    // A análise já foi atualizada durante a importação incremental. Não dispara uma segunda
+    // reanálise do histórico inteiro: isso repetiria custo de API e anularia a economia da v669.
     qs("#pendingActions")?.remove();
     // Abre o lead atualizado NA HORA pra o corretor ver (pedido do dono) — tanto na atualização
     // automática por número quanto na confirmada. Antes, no caso do número, ficava só um botão e
@@ -6772,6 +6928,8 @@ async function checkShared(){
   }
 }
 qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
+  const estavaNaGaveta=document.body.classList.contains("menu-aberto");
+  if(estavaNaGaveta) fecharMenuGaveta({replaceOnly:true});
   const navKey = b.dataset.navKey || b.dataset.target || "home";
   // Ir manualmente pra home limpa lead aberto e grupo aberto, pra mostrar os botões iniciais.
   // (A guarda em renderListasHome impede que o auto-refresh derrube quem está num lead/grupo.)
@@ -6781,7 +6939,7 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
   // "Carteira" sempre abre na aba Oportunidades (priorizada), não na última aba usada (ex.: Últimos).
   if(b.dataset.target === "pipeline"){ setPipelineTab("oportunidades"); }
   show(b.dataset.target,{navKey});
-  fecharMenuGaveta(); // se veio da gaveta do celular, fecha ao navegar
+  if(!estavaNaGaveta) fecharMenuGaveta({fromHistory:true}); // garante gaveta fechada sem criar nova navegação
 }));
 // Qualquer item da lista lateral/gaveta fecha a gaveta do celular ao ser tocado (inclui os que usam onclick, como "Últimos atendimentos").
 qsa(".sb-item").forEach(b=>b.addEventListener("click", fecharMenuGaveta));
@@ -7270,9 +7428,10 @@ function renderBuscaGlobal(termo){
   const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
   if(!state.todosLeads || !state.todosLeads.length) loadTodosLeadsBusca();
   const tt = semAcento(termo);
+  const numeros = String(termo||"").replace(/\D/g,"");
   const matches = fonte.filter(l => {
     if(foraDaBusca(l)) return false; // arquivado/geladeira não aparece na busca
-    return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt);
+    return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros));
   }).slice(0, 12);
   if(!matches.length){
     box.style.display = "block";
@@ -7300,22 +7459,47 @@ function barraBuscaLeadHTML(prefixo){
 }
 window.barraBuscaLeadHTML = barraBuscaLeadHTML;
 
+function ui677ToolbarHTML(prefixo){
+  const inputId = `ui677Busca_${prefixo}`;
+  const boxId = `ui677BuscaRes_${prefixo}`;
+  return `<div class="ui677-toolbar ui678-toolbar-search-only">
+    <div class="ui677-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="${inputId}" placeholder="Buscar por nome ou interesse" autocomplete="off" oninput='buscaLeadInline(this.value, ${JSON.stringify(boxId)})'>
+      <div id="${boxId}" class="ui677-search-results"></div>
+    </div>
+  </div>`;
+}
+window.ui677ToolbarHTML = ui677ToolbarHTML;
+
+window.ui677AbrirBuscaLead = function(id, boxId){
+  const box = qs("#" + boxId);
+  if(box){
+    box.style.display = "none";
+    box.innerHTML = "";
+    const input = box.parentElement?.querySelector('input[type="search"]');
+    if(input) input.value = "";
+  }
+  abrirLead(id);
+};
+
 let _buscaLeadTimer = null;
 function buscaLeadInline(termo, boxId){
   clearTimeout(_buscaLeadTimer);
-  _buscaLeadTimer = setTimeout(() => {
+  _buscaLeadTimer = setTimeout(async () => {
     const box = qs("#" + boxId);
     if(!box) return;
     const t = semAcento(termo);
     if(t.length < 2){ box.style.display = "none"; box.innerHTML = ""; return; }
+    if((!state.todosLeads || !state.todosLeads.length) && typeof loadTodosLeadsBusca === "function") await loadTodosLeadsBusca();
     const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
-    if((!state.todosLeads || !state.todosLeads.length) && typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
-    const matches = fonte.filter(l => !foraDaBusca(l) && (semAcento(l.name).includes(t) || semAcento(l.product).includes(t))).slice(0, 12);
+    const numeros = String(termo||"").replace(/\D/g,"");
+    const matches = fonte.filter(l => !foraDaBusca(l) && (semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros)))).slice(0, 12);
     box.style.display = "block";
     if(!matches.length){ box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(t)}"</div>`; return; }
     box.innerHTML = matches.map(l => {
       const idJs = JSON.stringify(String(l.id||""));
-      return `<div onclick='abrirLead(${idJs})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
         <span class="tag" style="font-size:10px;flex-shrink:0">${escapeHtml(probabilidadeRefinadaTxt(l))}</span>
       </div>`;
@@ -7720,24 +7904,26 @@ async function carregarCarteira(force){
 window.carregarCarteira = carregarCarteira;
 
 // ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["geladeira","Geladeira"]];
+const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["reaquecer","Reaquecer"],["geladeira","Geladeira"]];
 const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
 const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
 function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
 function carteiraPassaFiltro(l, f){
   const e = normalizarEtapa(l.etapa);
   if(f === "geladeira") return e === "Geladeira";
-  if(e === "Geladeira") return f === "todos";
+  if(!leadEhAtivo(l)) return false;
+  if(f === "reaquecer") return leadEhReaquecer(l);
+  if(f === "quentes") return leadEhQuente(l);
   const prob = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-  if(f === "quentes") return prob >= 55;
-  if(f === "mornos") return prob >= 40 && prob < 55;
-  if(f === "frios") return prob < 40;
+  if(f === "mornos") return !leadEhQuente(l) && prob >= 40;
+  if(f === "frios") return !leadEhQuente(l) && prob < 40;
   return true;
 }
 const CARTEIRA_PAGE_SIZE = 80;
 function setCarteiraFiltro(f){
   state.carteiraFiltro = f;
   state.carteiraVisibleCount = CARTEIRA_PAGE_SIZE;
+  if(state.active === "carteira") cpReplaceRoute(cpRouteForScreen("carteira"));
   renderCarteiraTabela();
 }
 function carregarMaisCarteira(){
@@ -7759,8 +7945,9 @@ function renderCarteiraTabela(){
   const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>';
   const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
   box.innerHTML = `
+    ${ui677ToolbarHTML("atendimentos")}
     <div class="cart-head">
-      <div><h2>Carteira</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} · ordenados por prioridade de contato</div></div>
+      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="cart-filtros">${chips}</div>
         <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
@@ -8302,7 +8489,7 @@ if("serviceWorker" in navigator){
   });
   addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("/service-worker.js?v=665", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/service-worker.js?v=678", { scope: "/" });
       // Avisa quando uma versão nova terminou de baixar (vai assumir e recarregar).
       reg.addEventListener("updatefound", () => {
         const novo = reg.installing;
@@ -8772,30 +8959,50 @@ function ui631Icon(nome){
   return icons[nome] || icons.ativos;
 }
 
+// Classificação única usada pela Home, Atendimentos e Pipeline.
+// Antes cada tela tinha uma regra diferente, por isso a Home mostrava 5 quentes
+// e Atendimentos mostrava zero.
+function leadEhAtivo(l){
+  return !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l?.etapa));
+}
+function leadEhQuente(l){
+  if(!leadEhAtivo(l)) return false;
+  const p = probabilidadeRefinada(l) ?? (Number(l?.probabilityPercent)||0);
+  const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
+  const temp = String(l?.analysis?.leituraComercial?.temperatura||"").toLowerCase();
+  const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
+  const etapa = normalizarEtapa(l?.etapa);
+  return p >= 55 || tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
+}
+function leadEhReaquecer(l){
+  return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
+}
+function abrirAtendimentosFiltro(filtro="todos"){
+  state.carteiraFiltro=filtro;
+  state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE;
+  show("carteira",{navKey:"leads"});
+  cpReplaceRoute(cpRouteForScreen("carteira"));
+}
+window.leadEhQuente=leadEhQuente;
+window.abrirAtendimentosFiltro=abrirAtendimentosFiltro;
+
 renderResumoDia = function(items){
   const box = qs("#resumoDia");
   if(!box) return;
   if(!items?.length){ box.style.display="none"; box.innerHTML=""; return; }
   const prioridade = items.filter(l => !ehContatadoHoje(l) && !lembreteFuturo(l) && (classificarGrupoHome(l)==="acao-hoje" || classificarGrupoHome(l)==="retomar-cuidado" || Number(l.daysSinceLastInteraction)>=3)).length;
-  const muitoQuentes = items.filter(l => {
-    const p = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-    const tipo = String(l.analysis?.tipoRetomada||"").toLowerCase();
-    const temp = String(l.analysis?.leituraComercial?.temperatura||"").toLowerCase();
-    const interesse = String(l.analysis?.diagnostico?.interesse||"").toLowerCase();
-    const etapa = normalizarEtapa(l.etapa);
-    return p >= 55 || tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
-  }).length;
-  const retornos = items.filter(l => !ehContatadoHoje(l) && !lembreteFuturo(l) && Number(l.daysSinceLastInteraction||0)>=14).length;
+  const muitoQuentes = items.filter(leadEhQuente).length;
+  const retornos = items.filter(leadEhReaquecer).length;
   const visitas = items.filter(l => {
     const aps=l.analysis?.confirmedAppointments;
     return (Array.isArray(aps)&&aps.length) || !!l.analysis?.lembrete?.quando;
   }).length;
   box.style.display="grid";
   box.innerHTML = `
-    <div class="ui-kpi" onclick="show('carteira')"><span>Ativos</span><div><b>${items.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi active" onclick="show('pipeline');setPipelineVisualFiltro('quentes')"><span>Quentes</span><div><b>${muitoQuentes}</b><i>${ui631Icon('quente')}</i></div></div>
+    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('todos')"><span>Ativos</span><div><b>${items.filter(leadEhAtivo).length}</b><i>${ui631Icon('ativos')}</i></div></div>
+    <div class="ui-kpi active" onclick="abrirAtendimentosFiltro('quentes')"><span>Quentes</span><div><b>${muitoQuentes}</b><i>${ui631Icon('quente')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${visitas}</b><i>${ui631Icon('compromisso')}</i></div></div>
-    <div class="ui-kpi" onclick="show('pipeline');setPipelineVisualFiltro('reaquecer')"><span>Reaquecer</span><div><b>${retornos}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
+    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('reaquecer')"><span>Reaquecer</span><div><b>${retornos}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
@@ -8861,9 +9068,10 @@ renderListasHome = function(ordenados){
   const oportunidades=prioritarios.length;
   foco.innerHTML=`
     <div class="ui-home-content">
+      ${ui677ToolbarHTML("home")}
       <section class="ui-insight-card">
         <div class="ui-insight-title"><i>✦</i><strong>O sistema percebeu</strong></div>
-        <p>${esfriando} leads esfriando, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
+        <p>${esfriando} ${esfriando===1?'lead esfriando':'leads esfriando'}, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
         <button type="button" onclick="show('pipeline')">Ver análise</button>
       </section>
       <section class="ui-priority-card">
@@ -8873,7 +9081,7 @@ renderListasHome = function(ordenados){
     </div>`;
 };
 
-window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; carregarPipeline(); };
+window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; if(state.active === "pipeline") cpReplaceRoute(cpRouteForScreen("pipeline")); carregarPipeline(); };
 function ui631EtapaFunil(l){
   const raw=String(l.analysis?.diagnostico?.etapa||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   if(raw.includes("descob")) return "Descoberta";
@@ -8896,23 +9104,14 @@ carregarPipeline = async function(){
   // Usa dados em memória se disponíveis — evita fetch a cada troca de filtro
   const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
   const renderPipeline = (data) => {
-    const all=(data?.items||[]).map(limparLead).filter(l=>{const e=normalizarEtapa(l.etapa);return !["Vendido","Perdido","Geladeira"].includes(e)});
-    const hot=l=>{
-      const p=probabilidadeRefinada(l)??(Number(l.probabilityPercent)||0);
-      if(p>=40) return true;
-      if((Number(l.probabilityPercent)||0)>=60) return true;
-      const tipo=String(l.analysis?.tipoRetomada||"").toLowerCase();
-      const temp=String(l.analysis?.leituraComercial?.temperatura||"").toLowerCase();
-      const interesse=String(l.analysis?.diagnostico?.interesse||"").toLowerCase();
-      if(tipo==="quente-fechar"||temp==="quente"||interesse==="alto") return true;
-      const e=normalizarEtapa(l.etapa);
-      return e==="Negociação"||e==="Visita/Proposta";
-    };
+    const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
+    const hot=leadEhQuente;
     const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
-    const reaquecer=l=>(Number(l.daysSinceLastInteraction)||0)>=14&&!ehContatadoHoje(l)&&!lembreteFuturo(l);
+    const reaquecer=leadEhReaquecer;
     const filtros={todos:all,quentes:all.filter(hot),esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)),compromisso:all.filter(compromisso),reaquecer:all.filter(reaquecer)};
     const filtro=state.pipelineVisualFiltro||"todos";
     const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
+    const listaPrioritaria=lista.filter(l=>ui670ModeloComercial(l)?.acao?.status!=="sem-acao-urgente");
     const etapas=["Novo","Atendimento","Visita/Proposta","Negociação","Standby"];
     const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
     all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
@@ -8930,7 +9129,7 @@ carregarPipeline = async function(){
         <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
         <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
       </div>
-      <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list">${lista.length?lista.slice(0,12).map(l=>ui631LeadRow(l,acaoRow(l))).join(''):'<div class="empty">Nenhum lead nesse filtro.</div>'}</div></section>`;
+      <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list">${listaPrioritaria.length?listaPrioritaria.slice(0,12).map(l=>ui631LeadRow(l,acaoRow(l))).join(''):'<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>'}</div></section>`;
   };
 
   if(emMemoria){
@@ -8956,7 +9155,59 @@ window.ui631SelectResponse=function(k){
 };
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
+
+// Atualização #667: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
+function ui667ModoDetalheLead(ativo){
+  document.body.classList.toggle("lead-foco-aberto", !!ativo);
+  const alvos=[qs("#home .home-page-heading"),qs("#resumoDia"),qs("#top3Area"),qs("#filaPrioridade"),qs("#homeRight")].filter(Boolean);
+  for(const el of alvos){
+    if(ativo) el.style.setProperty("display","none","important");
+    else el.style.removeProperty("display");
+  }
+}
+window.ui667ModoDetalheLead=ui667ModoDetalheLead;
+
+function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
+  if(!lead) return;
+  lead.analysis=lead.analysis||{};
+  lead.analysis.aprendizado=lead.analysis.aprendizado||{};
+  const eventos=Array.isArray(lead.analysis.aprendizado.eventos)?lead.analysis.aprendizado.eventos:[];
+  if(!eventos.some(e=>e?.evento==="contato_manual"&&e?.detalhes?.de==="botao_atendido"&&e?.quando===quando)){
+    eventos.push({evento:"contato_manual",estilo:null,detalhes:{tipo:"Atendido",de:"botao_atendido"},quando});
+  }
+  lead.analysis.aprendizado.eventos=eventos;
+  lead.analysis.memoria=lead.analysis.memoria||{};
+  const registro=`[${dataBR} ${horaBR}] Atendido.`;
+  const obs=String(lead.analysis.memoria.observacoes||"").trim();
+  if(!obs.includes(registro)) lead.analysis.memoria.observacoes=obs?`${obs}\n${registro}`:registro;
+}
+
+window.ui667MarcarAtendido=async function(btn){
+  const lead=state.lead;
+  if(!lead?.id){toast("Não consegui identificar este lead.");return;}
+  const original=btn?.textContent||"✓ Atendido";
+  if(btn){btn.disabled=true;btn.textContent="Marcando...";}
+  try{
+    const res=await fetch("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:lead.id,action:"marcar-atendido"})});
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
+    const quando=d.quando||new Date().toISOString();
+    ui667AplicarAtendidoLocal(lead,quando,d.dataBR||new Date().toLocaleDateString("pt-BR"),d.horaBR||new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
+      if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,d.dataBR,d.horaBR);
+    }
+    if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${d.horaBR||"hoje"}`;btn.disabled=true;}
+    invalidarLeadsCache();
+    toast(d.jaMarcado?`Já estava marcado às ${d.horaBR}.`:`Atendimento marcado às ${d.horaBR}.`);
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent=original;}
+    toast("Não consegui marcar: "+(err?.message||err));
+  }
+};
 renderLeadFoco = function(lead){
+  ui667ModoDetalheLead(true);
   __renderLeadFoco631Base(lead);
   const wrap=qs("#leadFocoArea .lead-foco"); const legacy=wrap?.querySelector(".lead590"); if(!wrap||!legacy)return;
   const a=lead.analysis||{},diag=(a.diagnostico&&typeof a.diagnostico==="object")?a.diagnostico:{};
@@ -8976,7 +9227,10 @@ renderLeadFoco = function(lead){
   const voltarLabel = state.grupoAtivo ? "Voltar pra "+escapeHtml((GRUPOS_HOME[state.grupoAtivo]||{}).titulo||"lista") : "Voltar pra Hoje";
   shell.innerHTML=`
     <div class="ui-lead-head">
-      <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
+      <div class="ui-lead-title-row">
+        <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
+        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>
+      </div>
       <div class="ui-lead-sub">
         <p>${escapeHtml(produtosLabel(lead)||"Produto não identificado")}</p>
         ${!state.sequencia ? `<button type="button" class="ui-lead-back" onclick="voltarDoLead()">‹ ${voltarLabel}</button>` : ''}
@@ -8994,15 +9248,19 @@ renderLeadFoco = function(lead){
     </div>
     <section class="ui-timeline-card"><h3>Linha do tempo da conversa</h3>${timeline}</section>`;
   wrap.insertBefore(shell,legacy);
-  // Extrai "Registrar atendimento" do legacy para ficar acessível no novo UI (não enterrado em 2 níveis de collapse)
-  const atendDetalhes = Array.from(legacy.querySelectorAll('details.bloco-recolhe')).find(
-    d => (d.querySelector('summary')?.textContent||'').trim() === 'Registrar atendimento'
-  );
-  if(atendDetalhes) shell.appendChild(atendDetalhes);
+  // O formulário completo de anotações continua disponível, mas fica em "Mais detalhes".
+  // O fluxo normal agora usa o botão de um clique "Atendido" no topo do lead.
   const advanced=document.createElement("details"); advanced.className="ui631-advanced"; advanced.innerHTML='<summary>Mais detalhes e ferramentas</summary>';
   wrap.insertBefore(advanced,legacy); advanced.appendChild(legacy);
 };
 window.renderLeadFoco=renderLeadFoco;
+
+/* ============================================================
+   ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
+   - seta física volta lead → origem → Hoje antes de fechar o PWA
+   - Home, Atendimentos e Pipeline usam a mesma regra de Quentes
+   - Ativos exclui Geladeira em todas as telas
+   ============================================================ */
 
 configurarEscolhaTema();
 // Saudação correta desde o primeiro frame (antes dos dados carregarem)
@@ -9202,9 +9460,550 @@ const _renderResumoDiaAntes657=renderResumoDia;
 renderResumoDia=function(items){ try{_renderResumoDiaAntes657(items);}catch(_){} renderCorretorProDashboard(items,state.todosLeads||items); };
 const _renderBotoesHomeAntes657=renderBotoesHome;
 renderBotoesHome=function(){
-  document.body.classList.remove("lead-foco-aberto");
+  const detalheAberto=!!state.lead?.id&&!!qs("#leadFocoArea .lead-ui670");
+  ui667ModoDetalheLead(detalheAberto);
   const ws=qs("#cpLeadWorkspace"); if(ws) ws.style.display="block";
   try{_renderBotoesHomeAntes657();}catch(_){}
   renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||state.itemsAtivos||[]);
 };
 try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }catch(_){}
+
+/* ============================================================
+   ATUALIZAÇÃO #676 — REANÁLISE COM FALLBACK PERSISTENTE
+   - usa o resultado salvo da API sem sobrescrever com cache antigo
+   - schema comercial 676, leitura pós-gravação e fallback persistente
+   - indicadores gerais permanecem ocultos dentro do lead
+   ============================================================ */
+
+/* ============================================================
+   ATUALIZAÇÃO #673 — REANÁLISE DIRETA + FECHAMENTO FÁTICO
+   - botão visível chama a API diretamente e força atualização dos caches
+   - "comprou outro imóvel" encerra a oportunidade mesmo em análise antiga
+   - contatos sem ação urgente não aparecem entre os prioritários
+   ============================================================ */
+
+/* ============================================================
+   ATUALIZAÇÃO #672 — AUTORES CORRETOS + ESTADO COMERCIAL COERENTE
+   - separa contato, oportunidade, relacionamento e ação
+   - remove diagnósticos/mensagens duplicados do detalhe
+   - corrige prioridades incompatíveis com oportunidade encerrada
+   ============================================================ */
+
+const UI670_OPP_LABEL = {
+  "descoberta":["Em descoberta","neutral"],
+  "interesse":["Interesse identificado","info"],
+  "comparacao":["Em comparação","info"],
+  "analise-financeira":["Análise financeira","warn"],
+  "negociacao":["Em negociação","warn"],
+  "decisao":["Em decisão","warn"],
+  "ganha":["Venda concluída","success"],
+  "perdida":["Oportunidade encerrada","danger"],
+  "encerrada-sem-decisao":["Oportunidade encerrada","neutral"]
+};
+const UI670_REL_LABEL = {
+  "ativo":["Relacionamento ativo","success"],
+  "aguardando-nova-oportunidade":["Parceria ativa","success"],
+  "contato-periodico":["Contato periódico","info"],
+  "pausado":["Relacionamento pausado","neutral"],
+  "encerrado":["Relacionamento encerrado","danger"]
+};
+const UI670_ACTION_LABEL = {
+  "responder-agora":["Responder agora","danger"],
+  "aguardando-resposta":["Aguardando resposta","warn"],
+  "compromisso-agendado":["Compromisso agendado","info"],
+  "retomar":["Retomar contato","warn"],
+  "sem-acao-urgente":["Sem ação urgente","success"]
+};
+const UI670_CONTACT_LABEL = {
+  "comprador-direto":"Comprador direto",
+  "corretor-parceiro":"Corretor parceiro",
+  "intermediario":"Intermediário",
+  "familiar":"Familiar/intermediário",
+  "investidor":"Investidor",
+  "empresa":"Empresa",
+  "outro":"Contato"
+};
+const UI670_RESULT_LABEL = {
+  "em-andamento":"Em andamento",
+  "venda-conosco":"Venda conosco",
+  "comprou-outra-opcao":"Comprou outra opção",
+  "condicoes-incompativeis":"Condições incompatíveis",
+  "desistiu":"Desistiu desta oportunidade",
+  "sem-resposta":"Sem resposta",
+  "oportunidade-futura":"Oportunidade futura",
+  "outro":"Outro resultado"
+};
+
+function ui670TextoAnalise(lead){
+  const a=lead?.analysis||{},mc=a?.modeloComercial||{};
+  const recent=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  return [
+    a.summary,a.nextAction,a.risk,a.clientProfile,a?.memoria?.observacoes,a?.memoriaSugerida?.observacoes,
+    mc?.oportunidade?.motivo,mc?.oportunidade?.resultado,mc?.oportunidade?.status,
+    mc?.contexto?.ultimoCompromisso,a?.diagnostico?.pendencia,a?.diagnostico?.objecaoPrincipal,
+    ...recent.slice(-40).map(m=>`${m?.author||""}: ${m?.text||""}`)
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+function ui670UltimaMensagemReal(lead){
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  const pn=String(lead?.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
+  for(let i=msgs.length-1;i>=0;i--){
+    const m=msgs[i]; if(!m||!String(m.text||"").trim()) continue;
+    const source=String(m.source||""),type=String(m.type||"");
+    if(source==="manual"||source==="crm"||type==="print-whatsapp"||["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
+    return {m,falante:ehMsgDoCliente(m,pn)?"contato":"corretor"};
+  }
+  return {m:null,falante:"desconhecido"};
+}
+function ui670Parceiro(lead){
+  const a=lead?.analysis||{};
+  return /parceir|corretor|corretora|imobili[áa]ria|creci/.test([a.tipoContato,a?.modeloComercial?.contato?.tipo,lead?.name].join(" ").toLowerCase());
+}
+
+function ui678ContextoMudouParaImovel(lead){
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+  if(!msgs.length) return null;
+  const pn=String(lead?.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
+  const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const jobRe=/\b(trabalho|emprego|vaga|zelador|curriculo|currículo|sindico|síndico|empresa|servico|serviço)\b/;
+  const imovelRe=/\b(apartamento|imovel|imóvel|parcela|mensal|entrada|fgts|caixa|banrisul|financi|pronto|na planta|dormitorio|dormitório|suite|suíte|box|semimobiliado|alto padrao|alto padrão|condicoes|condições)\b/;
+  const qualifPergRe=/\b(pronto ou na planta|na planta|quantos dormit|quantos quartos|qual faixa|faixa de valor|perfil|objetivo|mais ao perfil|entra no perfil|outras opcoes|outras opções|valor e condicoes|valor e condições|que tipo de imovel|que tipo de imóvel|o ideal pra voce|o ideal pra você|duvida especifica|dúvida específica)\b/;
+  const financiamentoRe=/\b(parcela|mensal|entrada|fgts|caixa|banrisul|financi)\b/;
+  let idxJob=-1,idxImovel=-1,lastPergQualif=-1,lastClienteImovel=-1,lastCorretorImovel=-1,temFinanciamento=false,temDorms=false;
+  const usados=[];
+  for(let i=0;i<msgs.length;i++){
+    const m=msgs[i];
+    const text=String(m?.text||"").trim();
+    if(!text) continue;
+    const source=String(m.source||""),type=String(m.type||"");
+    if(source==="manual"||source==="crm"||type==="print-whatsapp"||["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
+    const t=norm(text);
+    const cliente=ehMsgDoCliente(m,pn);
+    usados.push({ i, text, t, cliente });
+    if(jobRe.test(t) && idxJob<0) idxJob=i;
+    if(imovelRe.test(t)){
+      idxImovel=i;
+      if(cliente) lastClienteImovel=i; else lastCorretorImovel=i;
+      if(financiamentoRe.test(t)) temFinanciamento=true;
+      if(/dormit|quartos|suite|suíte/.test(t)) temDorms=true;
+    }
+    if(!cliente && qualifPergRe.test(t)) lastPergQualif=i;
+  }
+  if(idxJob<0 || idxImovel<0 || idxImovel<=idxJob) return null;
+  const mudou=true;
+  const ultimoRelevante=usados.length?usados[usados.length-1]:null;
+  const aguardandoResposta=!!(ultimoRelevante && !ultimoRelevante.cliente && lastPergQualif>=0 && lastPergQualif===ultimoRelevante.i && (lastClienteImovel<0 || lastPergQualif>lastClienteImovel));
+  const produtoBase=(String(lead?.product||"").trim() && !/não identificad/i.test(String(lead?.product||""))) ? String(lead.product).trim() : "Apartamento pronto";
+  const resumo=`Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, com dúvidas sobre financiamento e parcelas, mas ainda sem perfil de compra confirmado.`;
+  const ultimoCompromisso=aguardandoResposta
+    ? `Você pediu para alinhar se ele busca algo pronto ou na planta, qual faixa faz sentido e quantos dormitórios seriam ideais.`
+    : `O cliente demonstrou interesse no imóvel e pediu esclarecimentos sobre valor, financiamento e parcelas.`;
+  const impedimento=`Perfil de compra ainda não qualificado: falta confirmar objetivo, faixa de valor e tipologia ideal.`;
+  const nextAction=aguardandoResposta
+    ? `Aguardar a resposta do contato sobre perfil, faixa de valor e se busca imóvel pronto ou na planta antes de uma nova abordagem.`
+    : `Retomar usando a pendência aberta: confirmar se ele busca imóvel pronto ou na planta, faixa de valor e número de dormitórios.`;
+  return {
+    mudouParaImovel:mudou,
+    aguardandoResposta,
+    produto:produtoBase,
+    resumo,
+    ultimoCompromisso,
+    impedimento,
+    nextAction,
+    temFinanciamento,
+    temDorms
+  };
+}
+
+function ui671HojeIso(){
+  try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
+  catch(_){return new Date().toISOString().slice(0,10);}
+}
+function ui671DiasAte(data){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data||"")))return null;
+  const a=new Date(ui671HojeIso()+"T12:00:00-03:00"),b=new Date(String(data).slice(0,10)+"T12:00:00-03:00");
+  if(isNaN(a)||isNaN(b))return null;return Math.round((b-a)/86400000);
+}
+function ui671CompromissoAberto(lead){
+  const a=lead?.analysis||{},apps=Array.isArray(a.confirmedAppointments)?a.confirmedAppointments:[];
+  const concreto=/visita|caf[eé]|reuni[aã]o|liga[cç][aã]o|videochamada|assinatura|contrato|banco/i;
+  for(let i=apps.length-1;i>=0;i--){
+    const ap=apps[i]||{},prova=String(ap.trechoLiteral||ap.quando||ap.oQue||"").trim();if(!prova)continue;
+    const diff=ui671DiasAte(String(ap.data||"").slice(0,10));
+    const contato=/cliente|contato/i.test(String(ap.combinadoPor||""));
+    if(diff!=null&&diff>=0){const quando=diff===0?"hoje":diff===1?"amanhã":`em ${diff} dias`;return {status:concreto.test(`${ap.oQue||""} ${prova}`)?"compromisso-agendado":"aguardando-resposta",responsavel:contato?"contato":"ambos",urgencia:diff<=1?"media":"baixa",descricao:concreto.test(`${ap.oQue||""} ${prova}`)?`Compromisso confirmado para ${quando}. Acompanhe sem antecipar uma nova abordagem.`:`Aguardar o retorno combinado do contato para ${quando}.`,texto:prova};}
+    if(diff!=null&&diff<0&&diff>=-30)return {status:"retomar",responsavel:"corretor",urgencia:Math.abs(diff)>=3?"alta":"media",descricao:`O compromisso combinado venceu há ${Math.abs(diff)} dia(s). Retome usando essa pendência como gancho.`,texto:prova};
+  }
+  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[],pn=String(lead?.name||"").toLowerCase().split(/\s+/)[0]||"";
+  const re=/\b(vou|iremos|vamos|fico de|dou|darei|te|lhe)\b.{0,55}\b(retorno|retornar|respondo|responder|aviso|avisar|chamo|chamar|analiso|analisar|avalio|avaliar|converso|conversar|vejo|verificar)\b/i;
+  const cancel=/\b(desisti|n[aã]o vou|n[aã]o precisa|j[aá] resolvi|comprei|fechei com outro|comprou outro|sem interesse)\b/i;
+  for(let i=msgs.length-1;i>=Math.max(0,msgs.length-24);i--){const m=msgs[i];if(!ehMsgDoCliente(m,pn))continue;const t=String(m?.text||"").trim();if(!re.test(t))continue;const canc=msgs.slice(i+1).some(x=>ehMsgDoCliente(x,pn)&&cancel.test(String(x?.text||"")));if(canc)continue;let idade=null;try{const d=m?.iso?new Date(m.iso):null;if(d&&!isNaN(d))idade=Math.floor((Date.now()-d.getTime())/86400000);}catch(_){}if(idade!=null&&idade>180)continue;if(idade!=null&&idade>30)return {status:"retomar",responsavel:"corretor",urgencia:"alta",descricao:`O retorno combinado está vencido há ${idade} dia(s). Retome pela pendência.`,texto:t};return {status:"aguardando-resposta",responsavel:"contato",urgencia:"baixa",descricao:"Aguardar o retorno que o contato se comprometeu a dar.",texto:t};}
+  return null;
+}
+
+function ui670ModeloComercial(lead){
+  const a=lead?.analysis||{};
+  const mc=(a.modeloComercial&&typeof a.modeloComercial==="object")?JSON.parse(JSON.stringify(a.modeloComercial)):{};
+  const parceiro=ui670Parceiro(lead);
+  const txt=ui670TextoAnalise(lead);
+  const last=ui670UltimaMensagemReal(lead);
+  const real=Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>String(m?.text||"").trim()):[];
+  const rePerda=/\b(comprou|comprando|adquiriu|optou por|fechou com|foi para)\b.{0,80}\b(outro|outra)\b|\bacabou comprando\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou.{0,45}(apartamento|im[oó]vel|casa)\b|\bvendemos?\b.{0,80}\b(outro|outra)\b|\bfoi vendido\b.{0,80}\b(apartamento|im[oó]vel|casa)\b/i;
+  const reNova=/\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
+  let idxPerda=-1,idxNova=-1;real.forEach((m,i)=>{const t=String(m.text||"");if(rePerda.test(t))idxPerda=i;if(reNova.test(t))idxNova=i;});
+  const aiPerda=String(mc?.oportunidade?.resultado||"")==="comprou-outra-opcao"||String(mc?.oportunidade?.status||"")==="perdida";
+  const resumoPerda=rePerda.test(String(a.summary||""));
+  const novaDepois=idxNova>=0&&idxNova>idxPerda;
+  const comprouOutra=!novaDepois&&(aiPerda||idxPerda>=0||resumoPerda||rePerda.test(txt));
+  const vendaConosco=/contrato assinado|assinou o contrato|comprovante de pagamento|venda confirmada/.test(txt)&&!comprouOutra;
+  const despedida=last.falante==="contato"&&/^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(last.m?.text||"").trim());
+  const ultimaPedeResposta=last.falante==="contato"&&(/\?/.test(String(last.m?.text||""))||/^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(String(last.m?.text||"")));
+  const compromisso=ui671CompromissoAberto(lead);
+  const etapaLegacy=String(a?.diagnostico?.etapa||normalizarEtapa(lead?.etapa)||"descoberta").toLowerCase().replace(/\s+/g,"-");
+  mc.versao=Number(mc.versao||a._schemaComercial||0);
+  mc.contato=mc.contato||{};
+  mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
+  mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"Contato principal da oportunidade");
+  const ctx678=ui678ContextoMudouParaImovel(lead);
+  mc.oportunidade=mc.oportunidade||{};
+  mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
+  mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
+  mc.oportunidade.produto=mc.oportunidade.produto||a.produtoInteresse||lead?.product||"Não identificado";
+  mc.oportunidade.motivo=mc.oportunidade.motivo||a.summary||"Situação ainda não consolidada.";
+  if(vendaConosco){mc.oportunidade.status="ganha";mc.oportunidade.resultado="venda-conosco";mc.oportunidade.motivo="Venda confirmada conosco.";}
+  else if(comprouOutra){mc.oportunidade.status="perdida";mc.oportunidade.resultado="comprou-outra-opcao";mc.oportunidade.motivo="O comprador final adquiriu outro imóvel.";}
+  mc.relacionamento=mc.relacionamento||{};
+  mc.relacionamento.status=mc.relacionamento.status||(parceiro&&mc.oportunidade.status==="perdida"?"aguardando-nova-oportunidade":"ativo");
+  if(parceiro&&mc.oportunidade.status==="perdida") mc.relacionamento.status="aguardando-nova-oportunidade";
+  mc.relacionamento.potencial=mc.relacionamento.potencial||(parceiro?"médio":"não avaliado");
+  mc.relacionamento.motivo=mc.relacionamento.motivo||(parceiro?"O contato pode apresentar novos compradores.":a.clientProfile||"");
+  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !comprouOutra && !vendaConosco){
+    mc.contato.tipo="comprador-direto";
+    mc.contato.papel="Potencial comprador direto; o assunto antigo sobre trabalho ficou superado por um interesse imobiliário posterior.";
+    mc.oportunidade.status="descoberta";
+    mc.oportunidade.resultado="em-andamento";
+    if(!mc.oportunidade.produto || /não identificado/i.test(String(mc.oportunidade.produto||""))) mc.oportunidade.produto=ctx678.produto;
+    mc.oportunidade.motivo=ctx678.resumo;
+    mc.relacionamento.status="ativo";
+    mc.relacionamento.motivo="Existe interesse inicial no imóvel, mas o perfil de compra ainda precisa ser qualificado.";
+  }
+  mc.acao=mc.acao||{};
+  mc.acao.status=mc.acao.status||(last.falante==="corretor"?"aguardando-resposta":"responder-agora");
+  mc.acao.responsavel=mc.acao.responsavel||(last.falante==="corretor"?"contato":"corretor");
+  mc.acao.urgencia=mc.acao.urgencia||(mc.acao.status==="responder-agora"?"alta":"baixa");
+  mc.acao.descricao=mc.acao.descricao||a.nextAction||"Reanalisar para definir o próximo passo.";
+  if(["ganha","perdida"].includes(mc.oportunidade.status)){
+    mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";
+    if(parceiro&&mc.oportunidade.status==="perdida") mc.acao.descricao="Nenhuma ação urgente. Mantenha a parceria ativa e registre uma nova oportunidade quando surgir outro cliente.";
+    else if(mc.oportunidade.status==="ganha") mc.acao.descricao="Venda concluída. Siga apenas com o pós-venda e os compromissos já combinados.";
+  }else if(ultimaPedeResposta){
+    mc.acao.status="responder-agora";mc.acao.responsavel="corretor";mc.acao.urgencia="alta";
+  }else if(compromisso){
+    mc.acao.status=compromisso.status;mc.acao.responsavel=compromisso.responsavel;mc.acao.urgencia=compromisso.urgencia;mc.acao.descricao=compromisso.descricao;
+  }else if(despedida){
+    mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";mc.acao.descricao="Nenhuma ação urgente neste momento.";
+  }
+  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !["ganha","perdida"].includes(String(mc.oportunidade.status||""))){
+    mc.acao.status=ctx678.aguardandoResposta?"aguardando-resposta":"retomar";
+    mc.acao.responsavel=ctx678.aguardandoResposta?"contato":"corretor";
+    mc.acao.urgencia=ctx678.aguardandoResposta?"baixa":"media";
+    mc.acao.descricao=ctx678.nextAction;
+  }
+  mc.contexto=mc.contexto||{};
+  mc.contexto.ultimaPessoaFalar=last.falante;
+  mc.contexto.ultimaMensagem=String(last.m?.text||mc.contexto.ultimaMensagem||"").trim();
+  mc.contexto.ultimoCompromisso=mc.oportunidade.resultado==="comprou-outra-opcao"
+    ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
+    : (ctx678?.ultimoCompromisso||compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
+  mc.contexto.impedimentoPrincipal=ctx678?.impedimento||mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
+  return mc;
+}
+window.ui670ModeloComercial=ui670ModeloComercial;
+
+const __prioridadeAtendimento670Base=prioridadeAtendimento;
+prioridadeAtendimento=function(l){
+  const mc=ui670ModeloComercial(l);
+  if(["ganha","perdida","encerrada-sem-decisao"].includes(String(mc?.oportunidade?.status||""))&&mc?.acao?.status==="sem-acao-urgente"){
+    return {score:-80,grupo:"pode-aguardar",titulo:"Sem ação urgente",motivo:mc?.relacionamento?.status==="aguardando-nova-oportunidade"?"oportunidade encerrada · parceria ativa":"oportunidade encerrada"};
+  }
+  return __prioridadeAtendimento670Base(l);
+};
+window.prioridadeAtendimento=prioridadeAtendimento;
+
+function ui670Badge(tuple){const [txt,cls]=tuple||["Não identificado","neutral"];return `<span class="ui670-badge ${cls}">${escapeHtml(txt)}</span>`;}
+function ui670TipoContatoLabel(tipo){return UI670_CONTACT_LABEL[tipo]||UI670_CONTACT_LABEL.outro;}
+function ui670FalanteLabel(lead,mc){
+  const f=mc?.contexto?.ultimaPessoaFalar;
+  if(f==="contato") return String(lead?.name||"Contato").split(/\s+/)[0];
+  if(f==="corretor") return "Você";
+  return "Não identificado";
+}
+function ui670Messages(analysis){
+  const m=analysis?.messages||{};
+  const base=mensagensDaAnalise(analysis||{});
+  return {
+    a:mensagemAprovadaSemAlteracao(base.a)||"",
+    b:mensagemAprovadaSemAlteracao(base.b)||mensagemAprovadaSemAlteracao(base.a)||"",
+    c:mensagemAprovadaSemAlteracao(base.c)||mensagemAprovadaSemAlteracao(base.a)||"",
+    aLabel:String(m.aLabel||"Melhor resposta"),
+    bLabel:String(m.bLabel||"Alternativa leve"),
+    cLabel:String(m.cLabel||"Alternativa firme"),
+    recomendada:["a","b","c"].includes(String(m.recomendada||base.recomendada||""))?String(m.recomendada||base.recomendada):"a"
+  };
+}
+window.ui670SelectMessage=function(k){
+  const map=state._ui670Messages||{};state._ui670MessageKey=k;
+  const el=qs("#ui670MessageText");if(el)el.textContent=map[k]||"";
+  qsa(".ui670-msg-option").forEach(b=>b.classList.toggle("active",b.dataset.key===k));
+};
+window.ui670CopyMessage=async function(){
+  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
+  if(!t){toast("Nenhuma mensagem necessária agora.");return;}
+  try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.");}catch(_){toast("Não consegui copiar.");}
+};
+window.ui670OpenWhats=function(){
+  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
+  const p=String(state._ui670LeadPhone||"");
+  if(!p){toast("Este contato está sem telefone.");return;}
+  window.open(whatsappLink(p,t),"_blank","noopener");
+};
+window.ui670OpenWhatsLivre=function(){
+  const p=String(state._ui670LeadPhone||"");if(!p){toast("Este contato está sem telefone.");return;}
+  window.open(whatsappLink(p,""),"_blank","noopener");
+};
+function ui675AnaliseDeterministica(lead, baseAnalysis){
+  const base=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
+  const leadBase={...lead,analysis:base};
+  const mc=ui670ModeloComercial(leadBase);
+  mc.versao=678;
+  const out={...base,modeloComercial:mc,_schemaComercial:678,reanalisadoEm:new Date().toISOString()};
+  const ctx678=ui678ContextoMudouParaImovel(lead);
+  if(ctx678 && ctx678.mudouParaImovel && !["ganha","perdida"].includes(String(mc?.oportunidade?.status||""))){
+    out.summary=ctx678.resumo;
+    out.tipoContato="comprador-direto";
+    out.clientProfile=out.clientProfile||"Interesse inicial em imóvel, ainda sem perfil qualificado.";
+    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==="object")?{...out.diagnostico}:{};
+    out.diagnostico.etapa="descoberta";
+    out.diagnostico.interesse="médio";
+    out.diagnostico.objecaoPrincipal=ctx678.impedimento;
+    out.diagnostico.ultimoCompromissoCliente=ctx678.ultimoCompromisso;
+    out.diagnostico.proximaAcao=ctx678.nextAction;
+  }
+  out.nextAction=mc?.acao?.descricao||ctx678?.nextAction||out.nextAction||"Ação ainda não definida.";
+  const semAcao=mc?.acao?.status==="sem-acao-urgente";
+  if(semAcao){
+    out.messages={a:"",b:"",c:"",aLabel:"Sem mensagem agora",bLabel:"",cLabel:"",recomendada:"a"};
+    out.sugestoesPendentes=false;out.aprovada=true;out.validacaoSugestoes=[];out.tipoRetomada="stand-by";
+    out.confirmedAppointments=[];out.lembrete=null;out.lembreteSugerido=null;
+    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==="object")?{...out.diagnostico}:{};
+    out.diagnostico.mensagemQueEuEnviariaHoje="";
+    out.diagnostico.proximaAcao=out.nextAction;
+    out.diagnostico.ultimaInfoPrometida=mc?.contexto?.ultimoCompromisso||"Nenhum compromisso pendente.";
+  }
+  if(mc?.oportunidade?.status==="perdida"){
+    out.probabilityPercent=0;out.probability="0%";out.etapaSugerida=ui670Parceiro(lead)?"Standby":(out.etapaSugerida||"Perdido");
+  }
+  return out;
+}
+async function ui675BuscarDetalhe(id){
+  const r=await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(id)}&_=${Date.now()}`,{cache:"no-store",headers:{"Cache-Control":"no-cache"}});
+  const d=await r.json().catch(()=>({ok:false}));
+  if(!r.ok||!d?.ok)return null;
+  return d.item||null;
+}
+async function ui675PersistirFallback(id,analysis){
+  const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},cache:"no-store",body:JSON.stringify({action:"analise-comercial-set",id,analysis})});
+  const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida ao salvar a análise."}));
+  if(!r.ok||!d?.ok||!d?.analysis){
+    const erro=String(d?.error||"Não foi possível salvar a análise comercial corrigida.");
+    if(/action inválida/i.test(erro)){
+      throw new Error("Backend desatualizado: o arquivo api/lead-update.js não foi substituído na pasta /api.");
+    }
+    throw new Error(erro);
+  }
+  return d.analysis;
+}
+window.ui670Reanalisar=async function(btn){
+  const lead=state.lead;
+  if(!lead?.id){toast("Não consegui identificar este lead.");return;}
+  const original=btn?.textContent||"Atualizar análise comercial";
+  if(btn){btn.disabled=true;btn.textContent="Atualizando análise...";}
+  const ctrl=new AbortController();
+  const timeout=setTimeout(()=>ctrl.abort(),90000);
+  try{
+    const res=await fetch("./api/reanalisar-lead",{
+      method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:678}),signal:ctrl.signal,cache:"no-store"
+    });
+    clearTimeout(timeout);
+    const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+    if(!res.ok||!data?.ok)throw new Error(data?.error||"Não foi possível atualizar a análise.");
+
+    let analysis=(data?.analysis&&typeof data.analysis==="object")?data.analysis:null;
+    let schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
+    let usouFallback=false;
+
+    // Compatibilidade com uma função antiga ou resposta incompleta: relê o banco antes de desistir.
+    if(!analysis||schema<678){
+      for(const espera of [0,450,900]){
+        if(espera)await new Promise(r=>setTimeout(r,espera));
+        const detalhe=await ui675BuscarDetalhe(lead.id).catch(()=>null);
+        const aDetalhe=detalhe?.analysis||null;
+        const sDetalhe=Number(aDetalhe?._schemaComercial||aDetalhe?.modeloComercial?.versao||0);
+        if(aDetalhe&&sDetalhe>=678){analysis=aDetalhe;schema=sDetalhe;break;}
+        if(aDetalhe&&!analysis)analysis=aDetalhe;
+      }
+    }
+
+    // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
+    // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
+    if(!analysis||schema<678){
+      const local=ui675AnaliseDeterministica(lead,analysis||lead.analysis||{});
+      analysis=await ui675PersistirFallback(lead.id,local);
+      schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
+      usouFallback=true;
+    }
+    if(!analysis||schema<678)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+
+    const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
+    state.lead=atualizado;state.analysis=atualizado.analysis||null;
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      if(!Array.isArray(lista))continue;
+      const i=lista.findIndex(x=>String(x.id)===String(lead.id));
+      if(i>=0)lista[i]=limparLead({...lista[i],analysis,summary:analysis.summary||lista[i].summary,nextAction:analysis.nextAction||lista[i].nextAction});
+    }
+    invalidarLeadsCache();
+    _leadDetailCache.set(String(lead.id),{ts:Date.now(),data:atualizado,inflight:null});
+    renderLeadFoco(atualizado);renderLeads();
+    const mc=analysis.modeloComercial||{};
+    const semAcao=mc?.acao?.status==="sem-acao-urgente";
+    const aviso=data?.warning||"";
+    toast(usouFallback?"✓ Análise corrigida e salva.":(aviso?"✓ Análise comercial atualizada com reconciliação factual.":(semAcao?"✓ Análise atualizada: nenhuma ação urgente.":"✓ Análise comercial atualizada.")));
+    setTimeout(()=>qs("#leadFocoArea")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+
+    setTimeout(async()=>{
+      try{
+        const base=await getLeadsData(true);
+        if(base?.ok&&Array.isArray(base.items)){
+          const itens=base.items.map(limparLead);state.todosLeads=itens;state.leads=itens.slice(0,8);
+          state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
+          const fresco=itens.find(x=>String(x.id)===String(lead.id));
+          const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
+          if(fresco&&freshSchema>=678){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          renderLeads();
+        }
+      }catch(_){}
+    },600);
+  }catch(err){
+    clearTimeout(timeout);
+    const msg=err?.name==="AbortError"?"A atualização demorou demais. Tente novamente.":(err?.message||String(err));
+    toast("Não foi possível atualizar: "+msg);
+    if(btn){btn.disabled=false;btn.textContent=original;}
+  }
+};
+window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
+window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove();};
+window.ui670NovaOportunidade=function(){
+  const lead=state.lead;if(!lead?.id){toast("Abra o contato parceiro antes de registrar a oportunidade.");return;}
+  qs("#ui671NovaOppModal")?.remove();
+  const opts=(typeof EMPREENDIMENTOS_SENGER!=="undefined"?EMPREENDIMENTOS_SENGER:[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  const el=document.createElement("div");el.id="ui671NovaOppModal";el.className="ui671-modal";
+  el.innerHTML=`<div class="ui671-modal-card"><div class="ui671-modal-head"><div><small>Corretor parceiro</small><h3>Nova oportunidade</h3><p>${escapeHtml(lead.name||"Contato")}</p></div><button type="button" onclick="ui671FecharNovaOportunidade()">✕</button></div>
+  <label>Comprador final *</label><input id="ui671OppComprador" type="text" placeholder="Nome ou identificação do novo cliente" autocomplete="off">
+  <label>Empreendimento ou produto *</label><select id="ui671OppProduto"><option value="">Selecione</option>${opts}<option value="Outro">Outro</option></select>
+  <div id="ui671OppOutroWrap" hidden><label>Qual produto?</label><input id="ui671OppOutro" type="text" placeholder="Informe o empreendimento ou produto"></div>
+  <label>Contexto inicial</label><textarea id="ui671OppObs" rows="4" placeholder="O que o parceiro já informou sobre perfil, valor, prazo ou necessidade"></textarea>
+  <div class="ui671-modal-info">Será criada uma oportunidade independente, vinculada a este parceiro. A negociação anterior continuará preservada.</div>
+  <div class="ui671-modal-actions"><button class="secondary" type="button" onclick="ui671FecharNovaOportunidade()">Cancelar</button><button id="ui671OppSalvar" type="button" onclick="ui671SalvarNovaOportunidade()">Criar oportunidade</button></div></div>`;
+  document.body.appendChild(el);
+  el.addEventListener("click",e=>{if(e.target===el)ui671FecharNovaOportunidade();});
+  qs("#ui671OppProduto")?.addEventListener("change",e=>{const w=qs("#ui671OppOutroWrap");if(w)w.hidden=e.target.value!=="Outro";});
+  setTimeout(()=>qs("#ui671OppComprador")?.focus(),80);
+};
+window.ui671SalvarNovaOportunidade=async function(){
+  const lead=state.lead,comprador=String(qs("#ui671OppComprador")?.value||"").trim();
+  const sel=String(qs("#ui671OppProduto")?.value||"").trim();
+  const produto=sel==="Outro"?String(qs("#ui671OppOutro")?.value||"").trim():sel;
+  const observacao=String(qs("#ui671OppObs")?.value||"").trim();
+  if(!comprador){toast("Informe o novo comprador.");qs("#ui671OppComprador")?.focus();return;}
+  if(!produto){toast("Informe o empreendimento ou produto.");(sel==="Outro"?qs("#ui671OppOutro"):qs("#ui671OppProduto"))?.focus();return;}
+  const btn=qs("#ui671OppSalvar");if(btn){btn.disabled=true;btn.textContent="Criando...";}
+  try{
+    const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"nova-oportunidade-parceiro",id:lead.id,compradorFinal:comprador,produto,observacao})});
+    const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+    if(!r.ok||!d.ok)throw new Error(d.error||"Não foi possível criar a oportunidade.");
+    ui671FecharNovaOportunidade();invalidarLeadsCache();if(typeof loadRecentLeads==="function")await loadRecentLeads(true);toast("Nova oportunidade criada e vinculada ao parceiro.");
+    await abrirLead(String(d.id));
+  }catch(err){toast("Erro: "+(err?.message||err));if(btn){btn.disabled=false;btn.textContent="Criar oportunidade";}}
+};
+
+function ui670ScheduleHtml(lead){
+  if(!lead?.id)return "";
+  const id=JSON.stringify(String(lead.id));
+  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b><div class="ui670-quick-dates"><button onclick='reagendarDias(${id},0)'>Hoje</button><button onclick='reagendarDias(${id},1)'>Amanhã</button><button onclick='reagendarDias(${id},7)'>+7 dias</button><button onclick='reagendarDias(${id},15)'>+15 dias</button><button onclick='reagendarDias(${id},30)'>+30 dias</button></div><input type="date" onchange='reagendarLembrete(${id},this.value)'></div>`;
+}
+function ui670DetailRows(lead,mc){
+  const a=lead?.analysis||{},mem=a.memoria||a.memoriaSugerida||{};
+  const rows=[
+    ["Papel do contato",mc?.contato?.papel],
+    ["Comprador final",mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal],
+    ["Produto",mc?.oportunidade?.produto],
+    ["Identificador da oportunidade",mc?.oportunidade?.id],
+    ["Resultado",UI670_RESULT_LABEL[mc?.oportunidade?.resultado]||mc?.oportunidade?.resultado],
+    ["Motivo da oportunidade",mc?.oportunidade?.motivo],
+    ["Último compromisso",mc?.contexto?.ultimoCompromisso],
+    ["Impedimento principal",mc?.contexto?.impedimentoPrincipal],
+    ["Preferências",mem.preferencias],
+    ["Pessoas na decisão",mem.pessoasDecisao],
+    ["Observações",mem.observacoes]
+  ].filter(([,v])=>String(v||"").trim()&&!/^não identificado\.?$/i.test(String(v).trim()));
+  return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
+}
+
+renderLeadFoco=function(lead){
+  ui667ModoDetalheLead(true);
+  __renderLeadFoco631Base(lead);
+  const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
+  if(!wrap||!legacy)return;
+  const a=lead.analysis||{},mc=ui670ModeloComercial(lead),msgs=ui670Messages(a);
+  const stale=Number(mc.versao||a._schemaComercial||0)<678;
+  const noAction=mc?.acao?.status==="sem-acao-urgente";
+  const preferred=noAction?"a":msgs.recomendada;
+  state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
+  const last=ui670UltimaMensagemReal(lead);
+  const recent=(Array.isArray(lead.recentMessages)?lead.recentMessages:[]).filter(m=>String(m?.text||"").trim()).slice(-4).reverse();
+  const timeline=recent.length?recent.map((m,i)=>{const pn=String(lead.name||"").toLowerCase().split(/\s+/)[0]||"";const cli=ehMsgDoCliente(m,pn);return `<div class="ui670-timeline-row"><i class="${i===0?'active':''}"></i><div><b>${escapeHtml(cli?String(lead.name||"Contato").split(/\s+/)[0]:"Você")}</b><p>${escapeHtml(String(m.text||"").slice(0,240))}</p><small>${escapeHtml([m.date,m.time].filter(Boolean).join(" "))}</small></div></div>`}).join(""):'<div class="empty">Sem mensagens recentes.</div>';
+  const opp=UI670_OPP_LABEL[mc?.oportunidade?.status]||["Situação não definida","neutral"];
+  const rel=UI670_REL_LABEL[mc?.relacionamento?.status]||["Relacionamento não definido","neutral"];
+  const act=UI670_ACTION_LABEL[mc?.acao?.status]||["Ação não definida","neutral"];
+  const type=ui670TipoContatoLabel(mc?.contato?.tipo);
+  const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
+  const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
+  const statusTopo=oportunidadeEncerrada
+    ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
+    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>`;
+  const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
+  const messageBlock=stale
+    ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
+    : noAction
+      ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
+      : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
+  const shell=document.createElement("div");shell.className="lead-ui670";
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div></div>${statusTopo}</div>
+  ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
+  <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
+  <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
+  ${messageBlock}
+  <section class="ui670-card"><div class="ui670-section-title"><span>Últimas mensagens</span><em>${totalMensagensLead(lead)} no histórico</em></div><div class="ui670-timeline">${timeline}</div><div id="ui670HistorySlot"></div></section>
+  <details class="ui670-details"><summary>Detalhes comerciais</summary><div class="ui670-details-body">${ui670DetailRows(lead,mc)}</div></details>
+  <details class="ui670-details" id="ui670NotePanel" hidden><summary>Registrar observação ou atendimento detalhado</summary><div id="ui670NoteSlot" class="ui670-details-body"></div></details>
+  <details class="ui670-details"><summary>Ferramentas e ações administrativas</summary><div class="ui670-admin-actions">${!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='abrirPropostaComLead(${safeJson(lead.name||"")},${safeJson(lead.product||"")},${JSON.stringify(String(lead.id||""))})'>Gerar proposta</button>`:""}${lead.id&&normalizarEtapa(lead.etapa)!=="Geladeira"?`<button onclick='arquivarLead(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Colocar na geladeira</button>`:""}${lead.id&&!ui670Parceiro(lead)&&!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='marcarPerdido(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Encerrar oportunidade</button>`:""}${lead.id?`<button class="danger" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Excluir definitivamente</button>`:""}</div></details>`;
+  wrap.insertBefore(shell,legacy);
+
+  // Reaproveita só os controles úteis do motor antigo; todo o conteúdo duplicado fica oculto.
+  const note=legacy.querySelector("#novoAtendimentoPanel");if(note)qs("#ui670NoteSlot")?.appendChild(note);
+  const hist=[...legacy.querySelectorAll("details")].find(d=>/ver histórico de conversa/i.test(d.querySelector("summary")?.textContent||""));
+  if(hist)qs("#ui670HistorySlot")?.appendChild(hist);
+  legacy.classList.add("ui670-legacy-hidden");
+};
+window.renderLeadFoco=renderLeadFoco;
