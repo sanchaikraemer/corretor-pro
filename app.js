@@ -1,7 +1,7 @@
-// ===== Segurança v680: chave secreta nas chamadas /api =====
+// ===== Segurança v681: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
 // No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
-(function protegerChamadasApiV680(){
+(function protegerChamadasApiV681(){
   if (typeof window === "undefined" || window.__corretorProFetchProtegido) return;
   window.__corretorProFetchProtegido = true;
   const STORAGE_KEY = "corretor_pro_api_key_v679"; // mantém chave já salva no aparelho
@@ -8007,7 +8007,8 @@ function renderCarteiraTabela(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="cart-filtros">${chips}</div>
         <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-        <button type="button" class="cart-export" onclick="exportarBackupCompletoV680(this)" title="Backup completo em JSON, com dados brutos do banco">🛡 Backup</button>
+        <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
+        <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
       </div>
     </div>
     <div class="cart-table">
@@ -8142,7 +8143,7 @@ async function exportarLeadsCSV(btn){
 window.exportarLeadsCSV = exportarLeadsCSV;
 
 
-async function exportarBackupCompletoV680(btn){
+async function exportarBackupCompletoV681(btn){
   const txt0 = btn ? btn.textContent : "";
   if(btn){ btn.disabled = true; btn.textContent = "Gerando backup..."; }
   try{
@@ -8166,7 +8167,31 @@ async function exportarBackupCompletoV680(btn){
     if(btn){ btn.disabled = false; btn.textContent = txt0 || "🛡 Backup"; }
   }
 }
-window.exportarBackupCompletoV680 = exportarBackupCompletoV680;
+window.exportarBackupCompletoV681 = exportarBackupCompletoV681;
+
+
+async function auditarDadosV681(btn){
+  const txt0 = btn ? btn.textContent : "";
+  if(btn){ btn.disabled = true; btn.textContent = "Auditando..."; }
+  try{
+    const res = await fetch("./api/leads-recentes?audit=1", { cache:"no-store" });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível auditar a base.");
+    const r = data.resumo || {};
+    const problemas = Array.isArray(data.problemas) ? data.problemas : [];
+    const msg = problemas.length
+      ? `Auditoria concluída: ${r.totalLeads||0} leads. Atenção: ${problemas.slice(0,3).join(" · ")}`
+      : `Auditoria concluída: ${r.totalLeads||0} leads, sem inconsistência crítica detectada.`;
+    toast(msg);
+    console.log("Auditoria Corretor Pro v681", data);
+  }catch(err){
+    toast("Falhou ao auditar: " + (err?.message || err));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = txt0 || "✓ Auditar"; }
+  }
+}
+window.auditarDadosV681 = auditarDadosV681;
+
 
 // Testa a OpenAI e o modelo principal de análise/mensagens pelo mesmo endpoint usado no deploy.
 async function testarIAOpenAI(btn){
