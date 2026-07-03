@@ -166,7 +166,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   if (tem(/visita|decorado|conhecer|ver o im[oó]vel|café|construtora|plant[aã]o/)) sinais.push("Existe sinal de avanço prático: visita, café, decorado ou ida à construtora.");
   if (tem(/proposta|valor final|desconto|reserva|unidade|box|vaga|contraproposta/)) sinais.push("Existe sinal de negociação: proposta, unidade, vaga, reserva, desconto ou contraproposta.");
   if (tem(/gostei|interesse|me interessa|quero|combina|perfeito|vamos/)) sinais.push("Existe sinal verbal de interesse real no produto ou na continuidade.");
-  if (tem(/vou pensar|vou analisar|te aviso|te retorno|qualquer coisa|mais pra frente|semana que vem|m[eê]s que vem/)) alertas.push("Há risco de esfriar: o cliente pediu tempo, deixou retorno em aberto ou empurrou decisão.");
+  if (tem(/vou pensar|vou analisar|te aviso|te retorno|qualquer coisa|mais pra frente|semana que vem|m[eê]s que vem/)) alertas.push("A probabilidade de venda cai quando o cliente pede tempo, deixa retorno em aberto ou empurra a decisão.");
   if (tem(/caro|alto|n[aã]o cabe|fora do orçamento|parcel(a|as).*pesad|entrada.*alta/)) alertas.push("Objeção de preço ou capacidade de pagamento aparece como trava provável.");
   if (tem(/concorr|outro empreendimento|outra construtora|tamb[eé]m estou vendo|comparando/)) alertas.push("Cliente está comparando alternativas; abordagem precisa defender diferencial, não só preço.");
 
@@ -192,10 +192,10 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     score = Math.max(5, Math.min(95, score));
     const nivel = score >= 70 ? "alto" : score >= 45 ? "médio" : "baixo";
     const explicacao = fatores.length
-      ? `Risco ${nivel} porque ${fatores[0].replace(/\.$/, "")}.`
+      ? `Probabilidade afetada porque ${fatores[0].replace(/\.$/, "")}.`
       : protecao.length
-        ? `Risco ${nivel}: há sinais de avanço e uma pendência objetiva para retomar.`
-        : `Risco ${nivel}: calculado pela etapa atual e pela ausência de sinais negativos fortes.`;
+        ? `Probabilidade protegida por sinais de avanço e uma pendência objetiva para retomar.`
+        : `Probabilidade calculada pela etapa atual, engajamento e ausência de sinais negativos fortes.`;
     return { percentual: score, nivel, motivo: explicacao, explicacao, fatores: fatores.slice(0, 4), protecao: protecao.slice(0, 4) };
   })();
 
@@ -222,14 +222,15 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     : /visita|café|conhecer|decorado/i.test(proximaAcao + " " + txt)
       ? "há sinais suficientes para transformar interesse em compromisso prático"
       : alertas.length
-        ? "há risco de esfriamento; a retomada precisa usar o último ponto concreto da conversa"
+        ? "a probabilidade de venda cai se a retomada não usar o último ponto concreto da conversa"
         : "é o próximo passo mais direto com base no estágio e nas pendências identificadas";
   out.iaComercialV2 = {
-    versao: "684-2",
+    versao: "684-final",
     perfilCliente: perfil,
     etapaComercial: etapa,
     mudancaComportamento: alertas.length ? "Atenção: a conversa mostra sinais de esfriamento, comparação ou trava financeira. A retomada precisa ser precisa e com próximo passo claro." : "Sem mudança negativa clara; manter avanço pelo último ponto concreto da conversa.",
     riscoPerda,
+    probabilidadeVenda: { percentual: Math.max(0, Math.min(100, 100 - riscoPerda.percentual)), nivel: (100 - riscoPerda.percentual) >= 80 ? "muito alta" : (100 - riscoPerda.percentual) >= 65 ? "alta" : (100 - riscoPerda.percentual) >= 45 ? "média" : "baixa", explicacao: riscoPerda.explicacao },
     proximaAcaoIdeal: proximaAcao,
     motivoProximaAcao,
     produtoMaisAdequado: produto,
@@ -238,7 +239,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     alertas: alertas.slice(0, 4),
     indiceComercial: { total: indiceTotal, interesse, engajamento, financeiro, urgencia, risco: riscoPerda.percentual },
     confiancaAnalise: { percentual: Math.round(confianca), motivo: `${Array.isArray(timeline)?timeline.length:0} registros analisados, ${sinais.length} sinais positivos e ${alertas.length} alertas.` },
-    raciocinioComercial: `Perfil: ${perfil}. Etapa: ${etapa}. Risco: ${riscoPerda.percentual}% (${riscoPerda.nivel}). Melhor caminho agora: ${estrategia}. Próxima ação: ${proximaAcao}. Motivo: ${motivoProximaAcao}.`,
+    raciocinioComercial: `Perfil: ${perfil}. Etapa: ${etapa}. Probabilidade de venda: ${100-riscoPerda.percentual}% (${(100-riscoPerda.percentual) >= 80 ? "muito alta" : (100-riscoPerda.percentual) >= 65 ? "alta" : (100-riscoPerda.percentual) >= 45 ? "média" : "baixa"}). Melhor caminho agora: ${estrategia}. Próxima ação: ${proximaAcao}. Motivo: ${motivoProximaAcao}.`,
     geradoEm: new Date().toISOString()
   };
   return out;
@@ -579,7 +580,7 @@ export default async function handler(req, res) {
   novoAnalysis = garantirMensagensV682(novoAnalysis, leadModelo);
   novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
   novoAnalysis._schemaComercial = 684;
-  novoAnalysis._schemaComercialMinor = "684-2";
+  novoAnalysis._schemaComercialMinor = "684-final";
   if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 684;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
@@ -610,7 +611,7 @@ export default async function handler(req, res) {
   merged = garantirMensagensV682(merged, leadModelo);
   merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
   merged._schemaComercial = 684;
-  merged._schemaComercialMinor = "684-2";
+  merged._schemaComercialMinor = "684-final";
   if (merged.modeloComercial) merged.modeloComercial.versao = 684;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
@@ -654,7 +655,7 @@ export default async function handler(req, res) {
     retryMerged = garantirMensagensV682(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
     retryMerged._schemaComercial = 684;
-    retryMerged._schemaComercialMinor = "684-2";
+    retryMerged._schemaComercialMinor = "684-final";
     if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 684;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
@@ -689,5 +690,5 @@ export default async function handler(req, res) {
     if (persistedSchema < 684) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 684." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 684, apiVersion: "684-2" });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 684, apiVersion: "684-final" });
 }
