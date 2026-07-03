@@ -1508,3 +1508,28 @@ button,.card,.menu-card,.top3-mini,.fila-row,.ui670-card,.ui670-status-card,.res
 @media (prefers-reduced-motion:no-preference){
   .cp687-toast,.cp687-notify-panel.open{animation-duration:.12s!important;}
 }
+
+/* ============================================================
+   Atualização #687-3 — loading inicial e atendimentos limpos
+   ============================================================ */
+.cp-boot-paint{
+  position:fixed; inset:0; z-index:999999; display:grid; place-items:center;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255,98,87,.14), transparent 34%),
+    linear-gradient(180deg,#001E2B 0%,#001520 100%);
+  color:#F4F7FB; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  pointer-events:auto; transition:opacity .28s ease, transform .28s ease; opacity:1;
+}
+.cp-boot-paint.is-done{opacity:0; transform:scale(1.01); pointer-events:none;}
+.cp-boot-card{width:min(320px,86vw); text-align:center; padding:28px 24px; border:1px solid rgba(139,177,191,.22); border-radius:24px; background:rgba(3,36,51,.74); box-shadow:0 30px 90px rgba(0,0,0,.42); backdrop-filter:blur(18px);}
+.cp-boot-logo{width:54px;height:54px;object-fit:contain;border-radius:16px;margin-bottom:12px;filter:drop-shadow(0 8px 22px rgba(255,98,87,.18));}
+.cp-boot-title{font-size:24px;font-weight:950;letter-spacing:-.04em;margin-bottom:18px;}
+.cp-boot-title span{color:#ff6257;}
+.cp-boot-spinner{width:34px;height:34px;border-radius:999px;border:3px solid rgba(143,177,191,.22);border-top-color:#ff6257;margin:0 auto 16px;animation:cpBootSpin .82s linear infinite;}
+.cp-boot-copy b{display:block;font-size:15px;color:#F4F7FB;margin-bottom:5px;}
+.cp-boot-copy small{display:block;font-size:12px;line-height:1.45;color:#8fb1bf;}
+@keyframes cpBootSpin{to{transform:rotate(360deg)}}
+.cp6873-carteira-minimal .cart-head{align-items:flex-start;}
+.cp6873-carteira-minimal .cart-head .sub{max-width:720px;}
+.cp6873-carteira-minimal .cart-table{margin-top:12px;}
+@media (max-width:720px){.cp-boot-card{padding:24px 20px;border-radius:22px}.cp-boot-title{font-size:22px}.cp-boot-logo{width:48px;height:48px}}

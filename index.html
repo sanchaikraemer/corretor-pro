@@ -49,10 +49,30 @@
 </script>
 </head>
 <body data-app-version="__VERSION__">
-<div id="bootPaint" style="position:fixed;inset:0;background:#001E2B;color:#F4F7FB;z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
-  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#ff6257">Pro</span></div><div style="margin-top:8px;color:#8fb1bf;font-size:14px">Abrindo sua base...</div></div>
+<div id="bootPaint" class="cp-boot-paint" aria-live="polite" aria-busy="true">
+  <div class="cp-boot-card">
+    <img src="/logo-cp.png?v=__VERSION__" alt="" class="cp-boot-logo">
+    <div class="cp-boot-title">Corretor <span>Pro</span></div>
+    <div class="cp-boot-spinner"></div>
+    <div class="cp-boot-copy"><b>Carregando sua carteira...</b><small>Organizando leads, prioridades e indicadores.</small></div>
+  </div>
 </div>
-<script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 350);});</script>
+<script>
+  window.cpHideBootPaint = function(){
+    var b=document.getElementById('bootPaint');
+    if(!b || b.dataset.done) return;
+    b.dataset.done='1';
+    b.classList.add('is-done');
+    setTimeout(function(){ if(b && b.parentNode) b.parentNode.removeChild(b); }, 320);
+  };
+  window.addEventListener('load', function(){
+    var started=Date.now();
+    var t=setInterval(function(){
+      var ready=document.querySelector('#resumoDia > * , #top3Area > * , #carteiraBody > * , .screen.active .empty, .screen.active .notice');
+      if(ready || Date.now()-started>12000){ clearInterval(t); window.cpHideBootPaint(); }
+    }, 120);
+  });
+</script>
 
 <main class="app">
   <aside class="sidebar">
