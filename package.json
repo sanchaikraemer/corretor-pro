@@ -10,5 +10,6 @@
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "684.2.0"
+  "version": "684.3.0",
+  "displayVersion": "684-final"
 }

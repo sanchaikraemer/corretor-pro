@@ -9258,7 +9258,7 @@ renderListasHome = function(ordenados){
       </section>
       <section class="ui-priority-card">
         <div class="ui-section-head"><div><h3>Leads prioritários para hoje</h3><p>Toque num lead para ver o diagnóstico e a mensagem pronta pra enviar no WhatsApp.</p></div><button type="button" onclick="show('pipeline')">Ver todos</button></div>
-        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l, l.analysis?.confirmedAppointments?.length?'Ver visita':'O que falar', i)).join(''):'<div class="empty">Nenhum lead prioritário agora.</div>'}</div>
+        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l, l.analysis?.confirmedAppointments?.length?'Ver visita':'Responder', i)).join(''):'<div class="empty">Nenhum lead prioritário agora.</div>'}</div>
       </section>
     </div>`;
 };
@@ -10599,14 +10599,14 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   V684-2 — IA COMERCIAL 2.0
+   V684-FINAL — IA COMERCIAL 2.0
    - mostra raciocínio comercial proativo no lead
    - perfil do cliente, risco de perda, mudança de comportamento
    - próxima ação ideal, produto adequado, estratégia e sinais
    ============================================================ */
 (function(){
-  if(window.__cp684IAComercialV2) return;
-  window.__cp684IAComercialV2 = true;
+  if(window.__cp684IAComercialFinal) return;
+  window.__cp684IAComercialFinal = true;
 
   function ui684InjectStyles(){
     if(document.getElementById('ui684Styles')) return;
@@ -10614,13 +10614,32 @@ window.renderLeadFoco=renderLeadFoco;
     st.textContent=`
       .ui684-card{margin:14px 0;padding:16px;border:1px solid rgba(55,232,255,.28);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.075),rgba(255,107,92,.04));box-shadow:0 12px 36px rgba(0,0,0,.14)}
       .ui684-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.ui684-head h3{margin:0;font-size:17px;color:#fff}.ui684-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.ui684-badge{border:1px solid rgba(55,232,255,.42);color:var(--dados);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
-      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-risk{font-size:22px;font-weight:950;color:var(--acao);line-height:1}.ui684-risk small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-risk-reason{margin-top:7px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(55,232,255,.22);border-radius:13px;background:rgba(55,232,255,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}.ui684-score{display:flex;gap:10px;align-items:baseline}.ui684-score strong{font-size:26px;color:#fff}.ui684-score span{font-size:11px;color:var(--muted);font-weight:900}
-      @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}.ui684-card{margin-top:12px}}
+      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-prob{font-size:24px;font-weight:950;line-height:1}.ui684-prob small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-prob-reason{margin-top:7px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-details{margin-top:10px}.ui684-details summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--soft);font-size:12px;font-weight:950}.ui684-details[open] summary{color:var(--dados);border-color:rgba(55,232,255,.35)}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(55,232,255,.22);border-radius:13px;background:rgba(55,232,255,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}.ui684-score{display:flex;gap:10px;align-items:baseline}.ui684-score strong{font-size:26px;color:#fff}.ui684-score span{font-size:11px;color:var(--muted);font-weight:900}
+      #btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:92px!important}.lead-acts button{border-radius:999px!important} @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}.ui684-card{margin-top:12px}#btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:104px!important}}
     `;
     document.head.appendChild(st);
   }
   function ui684Esc(v){ return typeof escapeHtml==='function' ? escapeHtml(String(v||'')) : String(v||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
   function ui684List(arr){ arr=Array.isArray(arr)?arr.filter(Boolean):[]; return arr.length ? `<ul class="ui684-list">${arr.slice(0,4).map(x=>`<li>${ui684Esc(x)}</li>`).join('')}</ul>` : `<div class="ui684-empty">Nenhum sinal forte registrado ainda.</div>`; }
+  function ui684VendaInfo(lead, risco){
+    const riscoPct = Number(risco?.percentual ?? risco?.valor ?? risco?.score);
+    const baseProb = Number.isFinite(riscoPct) ? (100 - riscoPct) : (Number(probabilidadeRefinada(lead)) || Number(lead?.probabilityPercent) || 0);
+    const pct = Math.max(0, Math.min(100, Math.round(baseProb)));
+    const nivel = pct >= 80 ? 'Muito alta' : pct >= 65 ? 'Alta' : pct >= 45 ? 'Média' : 'Baixa';
+    const cor = pct >= 65 ? 'var(--acao)' : pct >= 45 ? 'var(--morno)' : 'var(--risco)';
+    return { pct, nivel, cor };
+  }
+  function ui684TextoAcaoPratica(txt){
+    txt = String(txt||'').trim();
+    if(!txt) return 'Definir o próximo passo comercial com base no histórico antes de responder.';
+    const low = txt.toLowerCase();
+    if(low.includes('parâmetro') || low.includes('parametro') || low.includes('financeir')) return 'Solicitar entrada disponível, renda aproximada e parcela ideal para montar a simulação correta.';
+    if(low.includes('visita')) return 'Propor dois horários objetivos para visita e confirmar quem participa da decisão.';
+    if(low.includes('proposta')) return 'Enviar ou revisar a proposta e combinar claramente o próximo retorno.';
+    if(low.includes('retomar')) return 'Retomar a conversa usando o último compromisso do cliente como gancho, sem mensagem genérica.';
+    if(/^receber/i.test(txt)) return 'Pedir os dados que faltam para avançar: ' + txt.replace(/^receber\s*/i,'').trim();
+    return txt;
+  }
   function ui684Data(lead){
     const a=lead?.analysis||{};
     const ia=(a.iaComercialV2&&typeof a.iaComercialV2==='object')?a.iaComercialV2:null;
@@ -10642,30 +10661,37 @@ window.renderLeadFoco=renderLeadFoco;
   function ui684RenderCard(lead){
     const ia=ui684Data(lead);
     const risco=ia.riscoPerda||{};
-    const pct=Number(risco.percentual); const pctTxt=Number.isFinite(pct)?`${Math.round(pct)}%`:'—';
-    const indice=Number(ia.indiceComercial?.total ?? ia.indiceComercial);
+    const venda=ia.probabilidadeVenda?.percentual != null ? { pct: Math.max(0, Math.min(100, Math.round(Number(ia.probabilidadeVenda.percentual)||0))), nivel: ia.probabilidadeVenda.nivel || (Number(ia.probabilidadeVenda.percentual)>=80?'Muito alta':Number(ia.probabilidadeVenda.percentual)>=65?'Alta':Number(ia.probabilidadeVenda.percentual)>=45?'Média':'Baixa'), cor: Number(ia.probabilidadeVenda.percentual)>=65?'var(--acao)':Number(ia.probabilidadeVenda.percentual)>=45?'var(--morno)':'var(--risco)' } : ui684VendaInfo(lead, risco);
+    const indice=Number(ia.indiceComercial?.geral ?? ia.indiceComercial);
     const confianca=Number(ia.confiancaAnalise?.percentual ?? ia.confiancaAnalise);
     const fatoresRisco=Array.isArray(risco.fatores)?risco.fatores:[];
-    const fatoresProtecao=Array.isArray(risco.protecao)?risco.protecao:[];
-    const motivoRisco=risco.explicacao||risco.motivo||'Risco calculado pelos sinais da conversa, etapa comercial e pendências abertas.';
+    const fatoresProtecao=Array.isArray(risco.fatoresProtecao)?risco.fatoresProtecao:[];
+    const motivoVenda=ia.probabilidadeVenda?.explicacao||risco.explicacao||risco.motivo||'Probabilidade calculada pelos sinais da conversa, etapa comercial, engajamento e pendências abertas.';
+    const proximaPratica = ui684TextoAcaoPratica(ia.proximaAcaoIdeal);
     return `<section id="ui684IAComercial" class="ui684-card">
-      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: risco, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-2</span></div>
+      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: probabilidade de venda, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-final</span></div>
       <div class="ui684-grid">
         <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Risco de perda</span><div class="ui684-risk">${ui684Esc(pctTxt)} <small>${ui684Esc(risco.nivel||'')}</small></div><div class="ui684-risk-reason">${ui684Esc(motivoRisco)}</div></div>
-        ${Number.isFinite(indice)?`<div class="ui684-item"><span class="ui684-lab">Índice comercial</span><div class="ui684-score"><strong>${Math.round(indice)}</strong><span>/100</span></div></div>`:''}
-        ${Number.isFinite(confianca)?`<div class="ui684-item"><span class="ui684-lab">Confiança da leitura</span><div class="ui684-score"><strong>${Math.round(confianca)}%</strong></div></div>`:''}
-        <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(ia.proximaAcaoIdeal)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Probabilidade de venda</span><div class="ui684-prob" style="color:${venda.cor}">${venda.pct}% <small>${ui684Esc(venda.nivel)}</small></div><div class="ui684-prob-reason">${ui684Esc(motivoVenda)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(proximaPratica)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Produto mais adequado</span><div class="ui684-val">${ui684Esc(ia.produtoMaisAdequado)}</div></div>
-        <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
-        <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
-        ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Por que este risco?</span>${fatoresRisco.length?`<div class="ui684-val"><b>Pressiona:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Protege:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
-        <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
       </div>
+      <details class="ui684-details">
+        <summary>Ver análise completa</summary>
+        <div class="ui684-grid" style="margin-top:10px">
+          ${Number.isFinite(indice)?`<div class="ui684-item"><span class="ui684-lab">Índice comercial</span><div class="ui684-score"><strong>${Math.round(indice)}</strong><span>/100</span></div></div>`:''}
+          ${Number.isFinite(confianca)?`<div class="ui684-item"><span class="ui684-lab">Confiança da leitura</span><div class="ui684-score"><strong>${Math.round(confianca)}%</strong></div></div>`:''}
+          <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
+          <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
+          <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
+          <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
+          ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Por que esta probabilidade?</span>${fatoresRisco.length?`<div class="ui684-val"><b>Reduz a chance:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Aumenta a chance:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
+          <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
+        </div>
+      </details>
     </section>`;
   }
+
   function ui684MotivoProximaAcao(lead){
     const ia=ui684Data(lead);
     const risco=ia.riscoPerda||{};
@@ -10710,5 +10736,5 @@ window.renderLeadFoco=renderLeadFoco;
     };
     renderLeadFoco=window.renderLeadFoco;
   }
-  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-2';
+  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
