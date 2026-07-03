@@ -7962,7 +7962,7 @@ async function carregarRelatorio(force){
     renderDe({ items: state.todosLeads });
     return;
   }
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
+  box.innerHTML = '<div class="cp-db-loading"><div class="cp-db-spinner"></div><div><b>Carregando banco de dados</b><span>Organizando atendimentos por prioridade.</span></div></div>';
   try{
     const data = await getLeadsData(force);
     renderDe(data);
@@ -8081,7 +8081,7 @@ async function carregarCarteira(force){
     renderDe({ items: state.todosLeads });
     return;
   }
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
+  box.innerHTML = '<div class="cp-db-loading"><div class="cp-db-spinner"></div><div><b>Carregando banco de dados</b><span>Organizando atendimentos por prioridade.</span></div></div>';
   try{
     const data = await getLeadsData(force);
     renderDe(data);
@@ -8124,27 +8124,18 @@ function renderCarteiraTabela(){
   const _perfStart = cpPerfNow();
   const box = qs("#carteiraBody");
   if(!box) return;
-  const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido"; });
-  const filtro = state.carteiraFiltro || "todos";
-  const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
-  const chips = CART_FILTROS.map(([k,lbl]) => `<button type="button" class="${k===filtro?"active":""}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join("");
+  const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; });
+  const lista = base.map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
   const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
   const lote = lista.slice(0, visiveis);
   const faltam = Math.max(0, lista.length - lote.length);
-  const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>';
+  const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum atendimento na fila.</div>';
   const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
   box.innerHTML = `
-    ${ui677ToolbarHTML("atendimentos")}
-    <div class="cart-head">
-      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="cart-filtros">${chips}</div>
-        <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-        <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
-        <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
-      </div>
+    <div class="cart-head v687-simple">
+      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} em ordem de atendimento. Clique no lead para abrir.</div></div>
     </div>
-    <div class="cart-table">
+    <div class="cart-table v687-simple">
       <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
       ${linhas}
       ${carregarMais}
@@ -11789,126 +11780,58 @@ window.renderLeadFoco=renderLeadFoco;
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>screenPolish({animate:false})); else screenPolish({animate:false});
 })();
 
-/* ============================================================
-   Atualização #687-3 — correções finais de UX
-   - Loading inicial profissional até a carteira/home ficar pronta.
-   - Botão Perdido com ação garantida e atualização imediata.
-   - Atendimentos limpo: apenas busca/lista ordenada, sem filtros/admin.
-   ============================================================ */
+
+// ===== v687-4 — correção objetiva: loading, Perdido e Atendimentos limpo =====
 (function(){
-  if(window.__cp6873UxFinal) return;
-  window.__cp6873UxFinal = true;
+  if(window.__cp6874Fix) return;
+  window.__cp6874Fix = true;
 
-  function hideBootSoon(){
-    try{ setTimeout(()=>window.cpHideBootPaint && window.cpHideBootPaint(), 120); }catch(_){ }
+  function removeBootWhenReady(){
+    try{
+      const b = document.getElementById('bootPaint');
+      if(b) b.remove();
+    }catch(_){ }
   }
-  window.addEventListener('DOMContentLoaded', function(){
-    const started = Date.now();
-    const t = setInterval(function(){
-      const ready = document.querySelector('#resumoDia > *, #top3Area > *, #carteiraBody > *, #pipelineBoard > *, #leadFocoArea > *');
-      if(ready || Date.now() - started > 12000){ clearInterval(t); hideBootSoon(); }
-    }, 120);
-  });
 
-  function hojeISO6873(){
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const oldProcessar = window._processarDashboard || (typeof _processarDashboard === 'function' ? _processarDashboard : null);
+  if(oldProcessar && !oldProcessar.__cp6874){
+    const wrapped = async function(data){
+      const r = await oldProcessar.apply(this, arguments);
+      removeBootWhenReady();
+      return r;
+    };
+    wrapped.__cp6874 = true;
+    try{ window._processarDashboard = wrapped; _processarDashboard = wrapped; }catch(_){ window._processarDashboard = wrapped; }
   }
-  async function postLeadUpdate6873(payload){
-    const r = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    const d = await r.json().catch(()=>({}));
-    if(!r.ok || !d?.ok) throw new Error(d?.error || 'falha ao atualizar lead');
-    return d;
+  setTimeout(removeBootWhenReady, 4500);
+
+  async function cp6874AtualizarCachesDepoisDesfecho(id){
+    try{ if(typeof removerLeadDosCaches === 'function') removerLeadDosCaches(id); }catch(_){ }
+    try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){ }
+    try{ await loadRecentLeads(true); }catch(_){ }
+    try{ await carregarDashboard(); }catch(_){ }
+    try{ if(state.active === 'carteira') await carregarCarteira(true); }catch(_){ }
+    try{ if(state.active === 'perdidos') await carregarPerdidos(); }catch(_){ }
   }
 
   window.marcarPerdido = async function(id, nome){
     id = String(id || '');
-    if(!id) return toast && toast('Lead não identificado.');
-    const ok = confirm(`Marcar ${nome || 'este lead'} como perdido? Ele sairá dos atendimentos e ficará em Arquivo > Perdidos.`);
+    if(!id){ toast('Lead inválido.'); return; }
+    const ok = confirm(`Marcar ${nome || 'este lead'} como perdido? Ele sairá dos atendimentos e irá para Arquivo > Perdidos.`);
     if(!ok) return;
     try{
-      try{
-        await postLeadUpdate6873({ id, action:'desfecho', tipo:'perdido', motivoPerda:'Sem retorno', data:hojeISO6873(), observacao:'Marcado pelo botão Perdido.' });
-      }catch(_){
-        await postLeadUpdate6873({ id, action:'etapa', etapa:'Perdido' });
-      }
-      try{ removerLeadDosCaches && removerLeadDosCaches(id); }catch(_){ }
-      try{ invalidarLeadsCache && invalidarLeadsCache(); }catch(_){ }
-      toast && toast('Lead marcado como perdido.');
-      try{ voltarDoLead && voltarDoLead(); }catch(_){ }
-      try{ await loadRecentLeads(true); }catch(_){ }
-      try{ await carregarDashboard(); }catch(_){ }
-      try{ if(state.active === 'carteira') renderCarteiraTabela(); }catch(_){ }
+      const res = await fetch('./api/lead-update', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ id, action:'etapa', etapa:'Perdido' })
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao marcar perdido');
+      toast('Lead marcado como perdido.');
+      await cp6874AtualizarCachesDepoisDesfecho(id);
+      try{ if(typeof voltarDoLead === 'function') voltarDoLead(); else show('carteira'); }catch(_){ show('carteira'); }
     }catch(err){
-      toast && toast('Erro ao marcar como perdido: ' + (err?.message || err));
+      toast('Não consegui marcar como perdido: ' + (err?.message || err));
     }
   };
-
-  const ROW_H = 82;
-  const BUFFER = 10;
-  function clamp6873(n,min,max){ return Math.max(min, Math.min(max, n)); }
-  function carteiraVirtual6873(items){
-    const total = Array.isArray(items) ? items.length : 0;
-    if(!total) return '<div class="empty" style="margin:14px">Nenhum atendimento ativo no momento.</div>';
-    const top = Number(state.carteiraScrollTop || 0);
-    const viewport = Number(state.carteiraViewport || 620);
-    const start = clamp6873(Math.floor(top / ROW_H) - BUFFER, 0, Math.max(0, total - 1));
-    const visible = clamp6873(Math.ceil(viewport / ROW_H) + BUFFER * 2, 20, 90);
-    const end = clamp6873(start + visible, start, total);
-    const slice = items.slice(start, end);
-    state.carteiraRendered = { total, start, end, rendered:slice.length };
-    return `<div class="cp-virtual-wrap" data-vkey="carteira" onscroll="cp6873CarteiraScroll(this)" style="max-height:min(72vh,720px);overflow:auto;contain:content;overscroll-behavior:contain">
-      <div style="height:${start * ROW_H}px"></div>
-      ${slice.map(carteiraRowHTML).join('')}
-      <div style="height:${Math.max(0, (total - end) * ROW_H)}px"></div>
-    </div>`;
-  }
-  window.cp6873CarteiraScroll = function(el){
-    state.carteiraScrollTop = el.scrollTop || 0;
-    state.carteiraViewport = el.clientHeight || 620;
-    if(state.carteiraRaf) cancelAnimationFrame(state.carteiraRaf);
-    state.carteiraRaf = requestAnimationFrame(()=>renderCarteiraTabela());
-  };
-
-  renderCarteiraTabela = function(){
-    const t0 = (typeof cpPerfNow === 'function') ? cpPerfNow() : performance.now();
-    const box = qs('#carteiraBody');
-    if(!box) return;
-    const lista = (state.carteiraLeads || [])
-      .filter(l => {
-        const e = normalizarEtapa(l?.etapa);
-        return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
-      })
-      .map(l => ({ ...l, _s: scoreRankingHoje(l) }))
-      .sort(compararPrioridadeAtendimento);
-    const rows = carteiraVirtual6873(lista);
-    const r = state.carteiraRendered || {};
-    box.classList.add('cp6873-carteira-minimal');
-    box.innerHTML = `
-      <div class="cart-head">
-        <div>
-          <h2>Atendimentos</h2>
-          <div class="sub">${lista.length} lead${lista.length!==1?'s':''} em ordem de atendimento${r.rendered ? ` · ${r.rendered} visíveis por janela` : ''}</div>
-        </div>
-      </div>
-      <div class="cart-table">
-        <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
-        ${rows}
-      </div>`;
-    const sc = box.querySelector('.cp-virtual-wrap[data-vkey="carteira"]');
-    if(sc) sc.scrollTop = Number(state.carteiraScrollTop || 0);
-    try{ cpPerfMark('renderCarteira6873', t0, { total: lista.length, rendered: state.carteiraRendered?.rendered || 0 }); }catch(_){ }
-    hideBootSoon();
-  };
-
-  try{
-    const oldLoad = window.loadRecentLeads;
-    if(typeof oldLoad === 'function'){
-      window.loadRecentLeads = async function(){
-        const ret = await oldLoad.apply(this, arguments);
-        hideBootSoon();
-        return ret;
-      };
-    }
-  }catch(_){ }
 })();
