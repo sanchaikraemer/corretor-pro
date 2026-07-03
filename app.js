@@ -11054,3 +11054,180 @@ window.renderLeadFoco=renderLeadFoco;
   window.marcarPerdido = function(id){ abrirModalDesfechoFinal(String(id),'perdido'); };
   window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-final';
 })();
+
+// ===== v685-ajustes — Editar lead e exibir telefone =====
+// Escopo fechado: editar apenas Nome, Telefone e Produto; exibir telefone no lead; sem misturar com v686.
+(function(){
+  if(window.__cp685AjustesLead) return;
+  window.__cp685AjustesLead = true;
+
+  function q(sel){ return document.querySelector(sel); }
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function produtosOptions(){
+    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER)
+      ? window.EMPREENDIMENTOS_SENGER
+      : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
+  }
+  function produtoDoLead(lead){
+    return String(lead?.product || lead?.analysis?.produtoInteresse || lead?.analysis?.product || lead?.analysis?.lead?.product || '').trim();
+  }
+  function telefoneDoLead(lead){
+    return String(lead?.phone || lead?.analysis?.lead?.phone || lead?.analysis?.telefone || '').trim();
+  }
+  function nomeDoLead(lead){
+    return String(lead?.name || lead?.analysis?.clientName || lead?.analysis?.lead?.clientName || '').trim();
+  }
+  function atualizarLeadLocal(id, patch){
+    try{ patchLeadCache(id, { name: patch.nome, phone: patch.telefone, product: patch.produto }); }catch(_){ }
+    try{
+      if(state.lead && String(state.lead.id) === String(id)){
+        if(patch.nome) state.lead.name = patch.nome;
+        if(patch.telefone) state.lead.phone = patch.telefone;
+        if(patch.produto) state.lead.product = patch.produto;
+        state.lead.analysis = state.lead.analysis || {};
+        state.lead.analysis.lead = state.lead.analysis.lead || {};
+        if(patch.nome){ state.lead.analysis.clientName = patch.nome; state.lead.analysis.lead.clientName = patch.nome; }
+        if(patch.telefone){ state.lead.analysis.lead.phone = patch.telefone; }
+        if(patch.produto){ state.lead.analysis.produtoInteresse = patch.produto; state.lead.analysis.product = patch.produto; state.lead.analysis.lead.product = patch.produto; }
+      }
+    }catch(_){ }
+  }
+
+  window.fecharEditarLead = function(){ document.getElementById('editarLeadModal')?.remove(); };
+
+  window.abrirEditarLead = function(id, nome, telefone){
+    const lead = (state && state.lead && String(state.lead.id) === String(id)) ? state.lead : {};
+    const nomeIni = String(nome || nomeDoLead(lead) || '').trim();
+    const telIni = String(telefone || telefoneDoLead(lead) || '').trim();
+    const produtoIni = produtoDoLead(lead);
+    document.getElementById('editarLeadModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'editarLeadModal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
+    overlay.innerHTML = `
+      <div style="width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px">
+          <div>
+            <div style="font-size:18px;font-weight:950;color:var(--text)">Editar lead</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">Altere somente os dados principais.</div>
+          </div>
+          <button type="button" id="editLeadFechar" style="border:0;background:transparent;color:var(--muted);font-size:24px;cursor:pointer;line-height:1">×</button>
+        </div>
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
+        <input type="text" id="editLeadNome" value="${esc(nomeIni)}" placeholder="Nome do cliente" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px">
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
+        <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" inputmode="tel" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px">
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
+        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" value="${esc(produtoIni)}" placeholder="Ex.: Renaissance" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:16px">
+        <datalist id="editLeadProdutoLista">${produtosOptions()}</datalist>
+        <button type="button" id="editLeadSalvar" style="width:100%;padding:13px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:15px;font-weight:950;cursor:pointer">Salvar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if(e.target === overlay) fecharEditarLead(); });
+    q('#editLeadFechar')?.addEventListener('click', fecharEditarLead);
+    q('#editLeadSalvar')?.addEventListener('click', () => salvarEditarLead(String(id)));
+    setTimeout(() => q('#editLeadNome')?.focus(), 80);
+  };
+
+  window.salvarEditarLead = async function(id){
+    const nome = (q('#editLeadNome')?.value || '').trim();
+    const telefone = (q('#editLeadTelefone')?.value || '').trim();
+    const produto = (q('#editLeadProduto')?.value || '').trim();
+    if(!nome && !telefone && !produto){ toast('Informe nome, telefone ou produto.'); return; }
+    const btn = q('#editLeadSalvar');
+    if(btn){ btn.disabled = true; btn.textContent = 'Salvando...'; }
+    try{
+      const res = await fetch('./api/lead-update', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id, action:'editar-dados', nome, telefone, produto })
+      });
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
+      try{
+        await fetch('./api/lead-update', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ id, action:'aprendizado', evento:'dados_lead_editados', estilo:'operacional', detalhes:{ nome, telefone, produto, de:'v685-ajustes' } })
+        });
+      }catch(_){ }
+      fecharEditarLead();
+      atualizarLeadLocal(id, { nome, telefone, produto });
+      try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){ }
+      toast('Lead atualizado.');
+      try{ await loadRecentLeads(true); }catch(_){ }
+      try{ await carregarDashboard(); }catch(_){ }
+      try{ await abrirLead(id); }catch(_){ if(state.lead) renderLeadFoco(state.lead); }
+    }catch(err){
+      toast('Erro ao salvar: ' + (err?.message || err));
+      if(btn){ btn.disabled = false; btn.textContent = 'Salvar'; }
+    }
+  };
+
+  function injetarAjustesLead(lead){
+    const root = document.querySelector('#leadFocoArea .lead-foco');
+    if(!root || !lead?.id) return;
+    document.querySelectorAll('#ui685AjustesPhone,#ui685AjustesEditQuick,#ui685AjustesEditAdmin').forEach(el => el.remove());
+    const telefone = telefoneDoLead(lead);
+    const id = String(lead.id);
+    const nome = nomeDoLead(lead);
+    const editar = () => abrirEditarLead(id, nome, telefone);
+
+    const lastAnalysis = root.querySelector('.ui682-last-analysis');
+    if(telefone && lastAnalysis){
+      const tel = document.createElement('div');
+      tel.id = 'ui685AjustesPhone';
+      tel.className = 'ui685-phone-line';
+      tel.innerHTML = `<b>Telefone:</b> ${esc(telefone)}`;
+      lastAnalysis.insertAdjacentElement('afterend', tel);
+    }
+
+    const actions = document.getElementById('ui683LeadTools');
+    if(actions){
+      const btn = document.createElement('button');
+      btn.id = 'ui685AjustesEditQuick';
+      btn.type = 'button';
+      btn.textContent = 'Editar lead';
+      btn.addEventListener('click', editar);
+      actions.insertBefore(btn, actions.firstElementChild);
+    }
+
+    const admin = root.querySelector('.ui670-admin-actions');
+    if(admin){
+      const btn = document.createElement('button');
+      btn.id = 'ui685AjustesEditAdmin';
+      btn.type = 'button';
+      btn.textContent = 'Editar lead';
+      btn.addEventListener('click', editar);
+      admin.insertBefore(btn, admin.firstElementChild);
+    }
+  }
+
+  function injetarEstiloAjustes(){
+    if(document.getElementById('ui685AjustesStyle')) return;
+    const st = document.createElement('style');
+    st.id = 'ui685AjustesStyle';
+    st.textContent = `
+      .ui685-phone-line{margin-top:6px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.35}
+      .ui685-phone-line b{color:var(--text);font-weight:950}
+      #ui685AjustesEditQuick{border-color:rgba(255,107,92,.45)!important;color:var(--text)!important}
+      #ui685AjustesEditAdmin{font-weight:950!important}
+    `;
+    document.head.appendChild(st);
+  }
+
+  if(typeof renderLeadFoco === 'function' && !window.__cp685AjustesRenderWrapped){
+    window.__cp685AjustesRenderWrapped = true;
+    const prev = renderLeadFoco;
+    window.renderLeadFoco = function(lead){
+      const out = prev.apply(this, arguments);
+      try{ injetarEstiloAjustes(); injetarAjustesLead(lead); }catch(e){ console.warn('v685-ajustes', e); }
+      return out;
+    };
+    renderLeadFoco = window.renderLeadFoco;
+  }
+
+  window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
+})();
