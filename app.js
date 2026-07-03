@@ -9395,7 +9395,7 @@ renderLeadFoco = function(lead){
   const a=lead.analysis||{},diag=(a.diagnostico&&typeof a.diagnostico==="object")?a.diagnostico:{};
   const msgs=mensagensDaAnalise(a);
   const map={direta:mensagemAprovadaSemAlteracao(msgs.a)||"",consultiva:mensagemAprovadaSemAlteracao(msgs.b)||mensagemAprovadaSemAlteracao(msgs.a)||"",retomada:mensagemAprovadaSemAlteracao(msgs.c)||mensagemAprovadaSemAlteracao(msgs.a)||""};
-  state._ui631Responses=map; state._ui631ResponseKey=msgs.recomendada==="c"?"retomada":msgs.recomendada==="b"?"consultiva":"direta"; state._ui631LeadPhone=lead.phone||"";
+  state._ui631Responses=map; state._ui631ResponseKey="direta"; state._ui631LeadPhone=lead.phone||""; // v683-4: abre sempre na Melhor resposta
   const chosen=map[state._ui631ResponseKey]||Object.values(map).find(Boolean)||"Toque em Reanalisar para gerar uma resposta.";
   const prioridade=prioridadeAtendimento(lead)||{};
   const interesse=String(diag.interesse||a.leituraComercial?.temperatura||"—");
@@ -10303,7 +10303,7 @@ window.renderLeadFoco=renderLeadFoco;
       .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,107,92,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
       .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
       .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
-      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
+      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary,.ui683-actions .sale,.ui683-actions .proposal{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .sale{color:#86f0aa;border-color:rgba(134,240,170,.5);background:rgba(134,240,170,.10)}.ui683-actions .proposal{color:#ffd37a;border-color:rgba(255,211,122,.45);background:rgba(255,211,122,.09)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.ui683-reason{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
       .ui683-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}.ui683-modal-card{width:min(460px,100%);border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 24px 80px rgba(0,0,0,.45);padding:18px}.ui683-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.ui683-modal-head small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.ui683-modal-head h3{margin:2px 0 2px;font-size:19px}.ui683-modal-head p{margin:0;color:var(--muted);font-size:13px}.ui683-modal-head button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:7px 10px;cursor:pointer}.ui683-modal-card label{display:block;margin:12px 0 6px;color:var(--soft);font-size:12px;font-weight:900}.ui683-modal-card input,.ui683-modal-card textarea{width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 11px;font:inherit}.ui683-quick-dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.ui683-quick-dates button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:900;cursor:pointer}.ui683-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}.ui683-modal-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:12px;padding:10px 14px;font-weight:950;cursor:pointer}.ui683-modal-actions button:last-child{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-modal-actions .secondary{color:var(--muted)}
       @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}.ui683-modal{align-items:flex-end;padding:12px}.ui683-modal-card{border-radius:20px 20px 14px 14px}}`;
     document.head.appendChild(st);
@@ -10343,7 +10343,7 @@ window.renderLeadFoco=renderLeadFoco;
     const antigo=qs('#ui683AtendidosHojeCard'); if(antigo) antigo.remove();
     const card=document.createElement('section'); card.id='ui683AtendidosHojeCard'; card.className='ui683-card';
     const preview=lista.slice(0,4).map(x=>`<div class="ui683-row" onclick='abrirLead(${JSON.stringify(String(x.lead.id||''))})'><div class="ui683-time">${escapeHtml(ui683HoraBR(x.ev.quando))}</div><div style="min-width:0"><div class="ui683-name">${escapeHtml(x.lead.name||'Cliente')}</div><div class="ui683-sub">${escapeHtml(ui683Origem(x.ev))}${x.lead.product?` · ${escapeHtml(x.lead.product)}`:''}</div></div><div class="ui683-open">›</div></div>`).join('');
-    card.innerHTML=`<div class="ui683-head"><div><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div>${lista.length>4?`<div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os ${lista.length} atendidos de hoje</button></div>`:''}`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
+    card.innerHTML=`<div class="ui683-head"><div onclick="abrirAtendidosHoje()" style="cursor:pointer"><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div><div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os atendidos de hoje</button></div>`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
     const ref=qs('#filaPrioridade') || area.firstElementChild;
     if(ref && ref.parentElement===area) area.insertBefore(card, ref.nextSibling); else area.prepend(card);
   }
@@ -10432,6 +10432,15 @@ window.renderLeadFoco=renderLeadFoco;
     window.renderLeadFoco = renderLeadFoco;
   }
 
+  function ui683MotivoProximaAcao(lead){
+    const a=lead?.analysis||{};
+    const diag=(a.diagnostico&&typeof a.diagnostico==='object')?a.diagnostico:{};
+    const mc=(a.modeloComercial&&typeof a.modeloComercial==='object')?a.modeloComercial:{};
+    const motivo=String(mc?.acao?.motivo||mc?.acao?.justificativa||diag?.ultimoCompromissoDoCliente||diag?.ultimaInfoPrometida||diag?.pendenciaFinanceira||a.summary||'').trim();
+    if(!motivo) return '';
+    return motivo.length>150?motivo.slice(0,147)+'...':motivo;
+  }
+
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
     const wrap=qs('#leadFocoArea .lead-foco'); if(!wrap) return;
@@ -10449,12 +10458,23 @@ window.renderLeadFoco=renderLeadFoco;
       <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
       <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
-      <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
-      <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
+      <button type="button" class="proposal" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
+      <button type="button" class="sale" onclick="abrirVenda(${id},${nome})">Vendido</button>
       <button type="button" class="danger" onclick="marcarPerdido(${id},${nome})">Perdido</button>
       <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
+    // v683-4: mostra por que o sistema recomenda a próxima ação.
+    const motivoAcao=ui683MotivoProximaAcao(lead);
+    if(motivoAcao && !qs('#ui683ActionReason')){
+      const cards=[...wrap.querySelectorAll('section, .card, .lead-card, div')];
+      const alvo=cards.find(el=>/Próxima ação/i.test(el.textContent||'') && !/Mensagem recomendada/i.test(el.textContent||''));
+      if(alvo){
+        const r=document.createElement('div'); r.id='ui683ActionReason'; r.className='ui683-reason';
+        r.innerHTML='<b>Motivo:</b> '+escapeHtml(motivoAcao);
+        alvo.appendChild(r);
+      }
+    }
   }
 
 
@@ -10541,5 +10561,5 @@ window.renderLeadFoco=renderLeadFoco;
   };
 
   // Atualiza a versão exigida pela análise comercial a partir desta atualização.
-  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = 683;
+  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = "683-4";
 })();
