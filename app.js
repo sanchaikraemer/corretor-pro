@@ -9473,7 +9473,7 @@ renderLeadFoco = function(lead){
     <div class="ui-lead-head">
       <div class="ui-lead-title-row">
         <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
-        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>
+        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendimento marcado':'✓ Marcar atendimento'}</button>
       </div>
       <div class="ui-lead-sub">
         <p>${escapeHtml(produtosLabel(lead)||"Produto não identificado")}</p>
@@ -10246,6 +10246,37 @@ window.ui670Reanalisar=async function(btn){
     if(btn){btn.disabled=false;btn.textContent=original;}
   }
 };
+
+
+// Atualização #688-2 — reanálise visível e acionável no topo do lead.
+// Mantém o motor ui670Reanalisar, mas expõe um botão fixo nos atalhos do lead.
+window.ui688ReanalisarIA = async function(btn){
+  const lead = state.lead;
+  if(!lead?.id){ toast("Abra um lead antes de reanalisar."); return; }
+  const original = btn?.textContent || "↻ Reanalisar IA";
+  if(btn){ btn.disabled = true; btn.classList.add("is-loading"); btn.textContent = "Reanalisando IA..."; }
+  try{
+    if(typeof ui670Reanalisar === "function"){
+      await ui670Reanalisar(btn || null);
+      return;
+    }
+    const res = await fetch("./api/reanalisar-lead", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
+      cache:"no-store",
+      body: JSON.stringify({ id: lead.id, action:"atualizar-analise-comercial", versaoCliente:688 })
+    });
+    const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível reanalisar.");
+    invalidarLeadsCache && invalidarLeadsCache();
+    toast("✓ Análise atualizada.");
+    await abrirLead(lead.id);
+  }catch(err){
+    toast("Não consegui reanalisar: " + (err?.message || err));
+    if(btn){ btn.disabled = false; btn.textContent = original; btn.classList.remove("is-loading"); }
+  }
+};
+
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
 window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove();};
 window.ui670NovaOportunidade=function(){
@@ -10330,7 +10361,7 @@ renderLeadFoco=function(lead){
   const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
   const statusTopo=oportunidadeEncerrada
     ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
-    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>`;
+    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendimento marcado':'✓ Marcar atendimento'}</button>`;
   const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
   const messageBlock=stale
     ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
@@ -10338,7 +10369,7 @@ renderLeadFoco=function(lead){
       ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
       : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
   const shell=document.createElement("div");shell.className="lead-ui670";
-  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div>${statusTopo}</div>
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div><div class="ui688-head-actions">${statusTopo}<button type="button" class="ui688-head-reanalyze" onclick="ui688ReanalisarIA(this)">↻ Reanalisar IA</button></div></div>
   ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
   <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
   <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
@@ -10377,7 +10408,7 @@ window.renderLeadFoco=renderLeadFoco;
       .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,107,92,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
       .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
       .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
-      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
+      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui688-reanalyze-main{border-color:rgba(55,232,255,.55)!important;background:rgba(55,232,255,.12)!important;color:var(--dados)!important}.ui688-reanalyze-main.is-loading{opacity:.72;cursor:wait}.ui688-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.ui688-head-reanalyze{border:1px solid rgba(55,232,255,.50);background:rgba(55,232,255,.10);color:var(--dados);border-radius:999px;padding:10px 14px;font-size:12px;font-weight:950;cursor:pointer}.ui688-head-reanalyze:hover{background:rgba(55,232,255,.16)}.ui688-head-reanalyze.is-loading{opacity:.72;cursor:wait}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
       @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
     document.head.appendChild(st);
   }
@@ -10518,6 +10549,7 @@ window.renderLeadFoco=renderLeadFoco;
     const id=JSON.stringify(String(lead?.id||'')); const nome=safeJson(lead?.name||''); const prod=safeJson(lead?.product||'');
     actions.innerHTML=`
       <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Marcar atendimento</button>
+      <button type="button" class="primary ui688-reanalyze-main" onclick="ui688ReanalisarIA(this)">↻ Reanalisar IA</button>
       <button type="button" onclick="ui631CopyResponse&&ui631CopyResponse()">Copiar resposta</button>
       <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
