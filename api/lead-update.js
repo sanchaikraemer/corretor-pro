@@ -1130,7 +1130,7 @@ async function acaoEditarDados(id, body, res) {
       .maybeSingle();
   }
   if (attempt.error) return json(res, 500, { ok: false, error: attempt.error.message });
-  return json(res, 200, { ok: true, nome, telefone });
+  return json(res, 200, { ok: true, nome, telefone, produto });
 }
 
 async function acaoApagar(id, res) {
