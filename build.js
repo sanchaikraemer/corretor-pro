@@ -35,11 +35,8 @@ try {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
   const parts = String(pkg.version || "679.0.0").split(".");
   const major = parts[0];
-  const minor = Number(parts[1] || 0);
-  if (/^\d+$/.test(major)) {
-    version = major.padStart(3, "0");
-    if (minor > 0) version += `-${minor}`;
-  }
+  const step = Number(parts[1] || 0);
+  if (/^\d+$/.test(major)) version = step > 0 ? `${major.padStart(3, "0")}-${step}` : major.padStart(3, "0");
 } catch (_) {}
 
 const files = [

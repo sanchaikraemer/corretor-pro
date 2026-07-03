@@ -9991,7 +9991,7 @@ function ui682ProgressReanalise(btn){
   return {
     set,
     done(txt){ set(100, txt||"Análise concluída e salva."); setTimeout(()=>{ try{ box.remove(); }catch(_){} }, 1800); },
-    fail(txt){ set(100, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; }
+    fail(txt){ set(0, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; const pctEl=box.querySelector("#ui682ProgressPct"); if(pctEl) pctEl.textContent="erro"; }
   };
 }
 window.ui670SelectMessage=function(k){
