@@ -516,7 +516,7 @@ export default async function handler(req, res) {
   if (apenasSalvar) {
     // RESUMO AUTOMÁTICO da anotação ditada (free-form). O texto cru fica preservado na timeline;
     // nas Observações entra só um resumo limpo — pra o campo não virar um depósito de texto cru.
-    // Só vale pra atendimento ditado; mensagem copiada/proposta/CRM/print ficam como vieram.
+    // Só vale pra atendimento ditado; mensagem copiada/proposta/sistema antigo/print ficam como vieram.
     if (openai && novoAtendimento && tipoManual === "atendimento") {
       try {
         const resumo = await resumirAtendimento(novoAtendimento, openai);

@@ -44,8 +44,63 @@
 const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
 const state={
   lead:null, leads:[], active:"home", navKey:"home", processing:false, analysis:null, msgStyle:"direta",
-  dataRevision:0, viewRendered:{}, carteiraVisibleCount:80
+  dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
+
+// ===== Atualização #686-2: instrumentação leve de performance =====
+const CP_PERF_MAX = 80;
+function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
+function cpPerfMark(nome, inicio, extra={}){
+  try{
+    const ms = Math.max(0, Math.round(cpPerfNow() - Number(inicio || cpPerfNow())));
+    const arr = state.performance[nome] || (state.performance[nome] = []);
+    arr.push({ ms, at:new Date().toISOString(), ...extra });
+    if(arr.length > CP_PERF_MAX) arr.splice(0, arr.length - CP_PERF_MAX);
+    return ms;
+  }catch(_){ return 0; }
+}
+function cpPerfMedia(nome){
+  const arr = state.performance?.[nome] || [];
+  if(!arr.length) return 0;
+  return Math.round(arr.reduce((s,x)=>s+Number(x.ms||0),0)/arr.length);
+}
+function cpMemoriaMB(){
+  try{ return performance?.memory?.usedJSHeapSize ? Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) : null; }catch(_){ return null; }
+}
+function cpPerformanceResumo(){
+  const cacheHits = Number(state.performance?.cacheHits || 0);
+  const cacheMisses = Number(state.performance?.cacheMisses || 0);
+  const totalCache = cacheHits + cacheMisses;
+  return {
+    leadsCarregados: Array.isArray(state.todosLeads) ? state.todosLeads.length : (Array.isArray(state.leads) ? state.leads.length : 0),
+    homeMs: cpPerfMedia("home"),
+    leadMs: cpPerfMedia("leadDetail"),
+    consultaMs: cpPerfMedia("leadsFetch"),
+    renderCarteiraMs: cpPerfMedia("renderCarteira"),
+    renderPipelineMs: cpPerfMedia("renderPipeline"),
+    cacheHitPct: totalCache ? Math.round(cacheHits / totalCache * 100) : 0,
+    memoriaMB: cpMemoriaMB()
+  };
+}
+window.cpPerformanceResumo = cpPerformanceResumo;
+function atualizarDiagnosticoPerformance(){
+  const out = qs("#performanceDiagOut");
+  const r = cpPerformanceResumo();
+  if(out){
+    out.innerHTML = `
+      <b>Leads em memória:</b> ${Number(r.leadsCarregados||0)}<br>
+      <b>Consulta da base:</b> ${Number(r.consultaMs||0)} ms<br>
+      <b>Abrir lead:</b> ${Number(r.leadMs||0)} ms<br>
+      <b>Render carteira:</b> ${Number(r.renderCarteiraMs||0)} ms<br>
+      <b>Render pipeline:</b> ${Number(r.renderPipelineMs||0)} ms<br>
+      <b>Cache hit:</b> ${Number(r.cacheHitPct||0)}%${r.memoriaMB != null ? `<br><b>Memória:</b> ${Number(r.memoriaMB||0)} MB` : ""}
+    `;
+  }
+  toast("Diagnóstico de performance atualizado.");
+  return r;
+}
+window.atualizarDiagnosticoPerformance = atualizarDiagnosticoPerformance;
+
 
 // ===== Cache da base de leads (limit=2000) =====
 // O app busca a base inteira em vários pontos (dashboard, agenda, pipeline, busca...).
@@ -56,7 +111,9 @@ const LEADS_CACHE_TTL = 300000; // 5 min
 let _leadsCache = { ts: 0, data: null, inflight: null };
 async function getLeadsData(force){
   const agora = Date.now();
-  if(!force && _leadsCache.data && (agora - _leadsCache.ts) < LEADS_CACHE_TTL) return _leadsCache.data;
+  if(!force && _leadsCache.data && (agora - _leadsCache.ts) < LEADS_CACHE_TTL){ state.performance.cacheHits = Number(state.performance.cacheHits||0)+1; return _leadsCache.data; }
+  state.performance.cacheMisses = Number(state.performance.cacheMisses||0)+1;
+  const _perfStart = cpPerfNow();
   if(_leadsCache.inflight) return _leadsCache.inflight; // junta chamadas simultâneas numa só
   _leadsCache.inflight = (async () => {
     try{
@@ -74,9 +131,11 @@ async function getLeadsData(force){
       } else {
         _leadsCache = { ts: 0, data: _leadsCache.data, inflight: null };
       }
+      cpPerfMark("leadsFetch", _perfStart, { total:Array.isArray(data?.items)?data.items.length:0, force:!!force });
       return data;
     }catch(e){
       _leadsCache = { ts: 0, data: _leadsCache.data, inflight: null };
+      cpPerfMark("leadsFetch", _perfStart, { error:true, force:!!force });
       return { ok:false, items:[] };
     }
   })();
@@ -138,11 +197,13 @@ async function getLeadDetail(id, force){
   const cached = _leadDetailCache.get(key);
   if(!force && cached?.data && (Date.now() - cached.ts) < LEAD_DETAIL_CACHE_TTL) return cached.data;
   if(cached?.inflight) return cached.inflight;
+  const _perfStart = cpPerfNow();
   const inflight = (async () => {
     const res = await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
     const data = await res.json().catch(()=>({ok:false}));
     if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "Não foi possível carregar o histórico completo.");
     const item = limparLead(data.item);
+    cpPerfMark("leadDetail", _perfStart, { mensagens: totalMensagensLead(item) });
     _leadDetailCache.set(key, { ts:Date.now(), data:item, inflight:null });
     return item;
   })().catch(err => {
@@ -610,7 +671,8 @@ async function loadRecentLeads(force = false){
     if(force) invalidarLeadDetail();
     const data = await getLeadsData(!!force);
     if(data?.ok && Array.isArray(data.items)){
-      state.leads = data.items.slice(0, 8).map(limparLead);
+      state.todosLeads = data.items.map(limparLead);
+      state.leads = state.todosLeads.slice(0, 8);
       renderLeads();
     }
   }catch(_){
@@ -809,7 +871,7 @@ function diagnosticoClienteHTML(a){
 
 
 // Módulo antigo de "mensagens por objetivo" desativado.
-// Ele criava uma segunda camada paralela de sugestões estilo CRM. Agora a tela trabalha
+// Ele criava uma segunda camada paralela de sugestões estilo sistema antigo. Agora a tela trabalha
 // somente com as 3 respostas principais geradas pela IA.
 const OBJETIVOS_MSG_LABELS = [];
 function normalizarObjetivosMensagens(_obj){ return []; }
@@ -2301,7 +2363,7 @@ function radarRowHTML(l){
 // Raio-X da carteira (Regras 4/5/9): até 3 frases de DECISÃO que leem a carteira inteira —
 // (R5) onde os clientes estão travando, (R4) esforço x resultado (conversa longa sem nenhuma
 // visita) e (R9/R1) a oportunidade parada de maior valor. NÃO é painel/funil: é diagnóstico em
-// frase, no topo da Home. Usa a etapa só pra CALCULAR (não exibe board). Sem CRM.
+// frase, no topo da Home. Usa a etapa só pra CALCULAR (não exibe board). Sem painel confuso.
 function insightFocoHTML(items, esquecidos){
   const ativos = (items || []).filter(l => l && l.id && !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
   if(ativos.length < 5) return ""; // base pequena: diagnóstico não é confiável
@@ -4565,7 +4627,7 @@ function renderLeadFoco(lead){
   const _labelB = _msgsSalvas.bLabel;
   const _labelC = _msgsSalvas.cLabel;
   const _rec = _msgsSalvas.recomendada;
-  // Desativado: as "Outras sugestões por objetivo" vinham do motor antigo de CRM e podiam
+  // Desativado: as "Outras sugestões por objetivo" vinham do motor antigo de sugestões e podiam
   // exibir rótulos/mensagens genéricas mesmo quando as 3 respostas principais estavam boas.
   // O foco agora é: 3 respostas geradas pela IA, sem camada paralela.
   const _objetivos = [];
@@ -7325,7 +7387,7 @@ qs("#cerebroVideoInput")?.addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
-// ============ IMPORTAR LEADS DO CRM (CSV) ============
+// ============ IMPORTAR LEADS DE CSV ============
 function parseCsvDireciona(t){
   const rows=[]; let row=[], cur="", q=false;
   for(let i=0;i<t.length;i++){const c=t[i];
@@ -7335,7 +7397,7 @@ function parseCsvDireciona(t){
   if(cur.length||row.length){row.push(cur);rows.push(row);}
   return rows;
 }
-const CRM_ETAPA_MAP = { "PERDIDO":"Perdido","ATENDIMENTO":"Atendimento","NOVO / INICIAL":"Novo","NOVO/INICIAL":"Novo","STAND BY":"Standby","STANDBY":"Standby","VISITA / PROPOSTA":"Visita/Proposta","NEGOCIAÇÃO":"Negociação","NEGOCIACAO":"Negociação" };
+const CSV_ETAPA_MAP = { "PERDIDO":"Perdido","ATENDIMENTO":"Atendimento","NOVO / INICIAL":"Novo","NOVO/INICIAL":"Novo","STAND BY":"Standby","STANDBY":"Standby","VISITA / PROPOSTA":"Visita/Proposta","NEGOCIAÇÃO":"Negociação","NEGOCIACAO":"Negociação" };
 function crmDataBR(iso){ try{ const d=new Date(iso); if(isNaN(d))return ""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; } }
 
 qs("#crmImportBtn")?.addEventListener("click", () => qs("#crmCsvInput")?.click());
@@ -7365,7 +7427,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     const data = rows.slice(1).filter(r => ((r[ix["nome"]]||"").trim()));
     const leads = data.map(r => {
       const get = (k) => (ix[k] !== undefined ? (r[ix[k]] ?? "") : "").trim();
-      const etapaMap = CRM_ETAPA_MAP[get("etapa").toUpperCase()] || "Novo";
+      const etapaMap = CSV_ETAPA_MAP[get("etapa").toUpperCase()] || "Novo";
       return {
         nome: get("nome") || "Cliente",
         telefone: get("telefone"),
@@ -7380,7 +7442,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     });
 
     // Quem já foi importado antes? Evita duplicar e deixa rodar de novo pra completar o que faltou.
-    // Também monta o mapa de TELEFONES já existentes (de qualquer origem: WhatsApp, CRM antigo, etc)
+    // Também monta o mapa de TELEFONES já existentes (de qualquer origem: WhatsApp, sistema antigo, etc)
     // pra juntar no lead existente em vez de duplicar.
     st.textContent = "Conferindo o que já está importado…";
     const jaImportados = new Set();
@@ -7388,7 +7450,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     try{
       const dl = await getLeadsData(true);
       (dl.items||[]).forEach(it => {
-        const m = String(it.fileName||"").match(/\[(?:CRM|CSV)\s+([A-Za-z0-9]{1,8})\]/);
+        const m = String(it.fileName||"").match(/\[(?:SISTEMA|CSV)\s+([A-Za-z0-9]{1,8})\]/);
         if(m) jaImportados.add(m[1].toLowerCase());
         const fone = String(it.phone||"").replace(/\D/g,"");
         if(fone.length >= 8 && it.id){
@@ -8059,6 +8121,7 @@ function carregarMaisCarteira(){
 window.setCarteiraFiltro = setCarteiraFiltro;
 window.carregarMaisCarteira = carregarMaisCarteira;
 function renderCarteiraTabela(){
+  const _perfStart = cpPerfNow();
   const box = qs("#carteiraBody");
   if(!box) return;
   const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido"; });
@@ -8086,6 +8149,7 @@ function renderCarteiraTabela(){
       ${linhas}
       ${carregarMais}
     </div>`;
+  cpPerfMark("renderCarteira", _perfStart, { total:lista.length, visiveis:lote.length });
 }
 function carteiraRowHTML(l){
   const idJs = JSON.stringify(String(l.id||""));
@@ -9263,7 +9327,8 @@ renderListasHome = function(ordenados){
     </div>`;
 };
 
-window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; if(state.active === "pipeline") cpReplaceRoute(cpRouteForScreen("pipeline")); carregarPipeline(); };
+window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; state.pipelineVisibleCount=60; if(state.active === "pipeline") cpReplaceRoute(cpRouteForScreen("pipeline")); carregarPipeline(); };
+window.carregarMaisPipelineVisual = function(){ state.pipelineVisibleCount = Math.max(60, Number(state.pipelineVisibleCount||60)) + 60; carregarPipeline(); };
 function ui631EtapaFunil(l){
   const raw=String(l.analysis?.diagnostico?.etapa||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   if(raw.includes("descob")) return "Descoberta";
@@ -9286,6 +9351,7 @@ carregarPipeline = async function(){
   // Usa dados em memória se disponíveis — evita fetch a cada troca de filtro
   const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
   const renderPipeline = (data) => {
+    const _perfStart = cpPerfNow();
     const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
     const hot=leadEhQuente;
     const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
@@ -9294,6 +9360,10 @@ carregarPipeline = async function(){
     const filtro=state.pipelineVisualFiltro||"todos";
     const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
     const listaPrioritaria=lista.filter(l=>ui670ModeloComercial(l)?.acao?.status!=="sem-acao-urgente");
+    const limiteLista = Math.max(60, Number(state.pipelineVisibleCount || 60));
+    const listaVisivel = listaPrioritaria.slice(0, limiteLista);
+    const faltamLista = Math.max(0, listaPrioritaria.length - listaVisivel.length);
+    const btnMaisLista = faltamLista > 0 ? `<button type="button" class="btn secondary" style="width:100%;margin-top:10px" onclick="carregarMaisPipelineVisual()">Mostrar mais ${Math.min(60, faltamLista)} leads <span>(${listaVisivel.length} de ${listaPrioritaria.length})</span></button>` : "";
     const etapas=["Novo","Atendimento","Visita/Proposta","Negociação","Standby"];
     const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
     all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
@@ -9311,7 +9381,8 @@ carregarPipeline = async function(){
         <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
         <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
       </div>
-      <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list">${listaPrioritaria.length?listaPrioritaria.slice(0,12).map(l=>ui631LeadRow(l,acaoRow(l))).join(''):'<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>'}</div></section>`;
+      <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list">${listaPrioritaria.length?listaVisivel.map(l=>ui631LeadRow(l,acaoRow(l))).join('')+btnMaisLista:'<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>'}</div></section>`;
+    cpPerfMark("renderPipeline", _perfStart, { total:listaPrioritaria.length, visiveis:listaVisivel.length });
   };
 
   if(emMemoria){
@@ -11064,11 +11135,11 @@ window.renderLeadFoco=renderLeadFoco;
   }
   window.abrirVenda = function(id){ abrirModalDesfechoFinal(String(id),'vendido'); };
   window.marcarPerdido = function(id){ abrirModalDesfechoFinal(String(id),'perdido'); };
-  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '686-1';
+  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '686-2';
 })();
 
 // ===== v685-ajustes — Editar lead e exibir telefone =====
-// Escopo fechado: editar apenas Nome, Telefone e Produto; exibir telefone no lead; sem misturar com v686.
+// Escopo fechado: editar apenas Nome, Telefone e Produto; exibir telefone no lead; sem misturar com v686-2.
 (function(){
   if(window.__cp685AjustesLead) return;
   window.__cp685AjustesLead = true;
@@ -11307,4 +11378,156 @@ window.renderLeadFoco=renderLeadFoco;
 
   setTimeout(reforcarBotaoEditar, 0);
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
+})();
+
+
+/* ============================================================
+   Atualização #686-2 — revisão de auditoria
+   Objetivo: completar a camada segura de performance sem alterar
+   a identidade visual nem remover funcionalidades.
+   - listas longas em blocos: vendidos, perdidos e geladeira
+   - métricas de renderização dessas listas
+   - contadores de cache também no detalhe do lead
+   ============================================================ */
+(function(){
+  if(window.__cp6862AuditPatch) return;
+  window.__cp6862AuditPatch = true;
+  const PAGE = 80;
+  function leadId(l){ return JSON.stringify(String(l?.id || "")); }
+  function ensureVisibleKey(key){
+    state[key] = Math.max(PAGE, Number(state[key] || PAGE));
+    return state[key];
+  }
+  function loadMore(key, renderFn){
+    state[key] = ensureVisibleKey(key) + PAGE;
+    if(typeof renderFn === 'function') renderFn();
+  }
+  function baseRows(items){
+    return (Array.isArray(items) ? items : []).map(limparLead);
+  }
+  function renderLoadMore(key, total, visible, fnName){
+    const faltam = Math.max(0, total - visible);
+    return faltam > 0
+      ? `<button type="button" class="cart-load-more" onclick="${fnName}()">Carregar mais ${Math.min(PAGE, faltam)} <span>(${visible} de ${total})</span></button>`
+      : "";
+  }
+  window.cp6862MaisVendas = function(){ loadMore('vendasVisibleCount', window.carregarVendas); };
+  window.cp6862MaisPerdidos = function(){ loadMore('perdidosVisibleCount', window.carregarPerdidos); };
+  window.cp6862MaisGeladeira = function(){ loadMore('geladeiraVisibleCount', window.carregarGeladeira); };
+
+  window.carregarVendas = async function(){
+    const start = cpPerfNow();
+    const box = qs('#vendasList');
+    if(!box) return;
+    box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
+    try{
+      const data = await getLeadsData(false);
+      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Vendido');
+      const limite = ensureVisibleKey('vendasVisibleCount');
+      const lote = items.slice(0, limite);
+      if(!items.length){
+        box.innerHTML = '<div class="empty">Nenhuma venda registrada ainda. Abra o lead e use o botão "Marcar venda".</div>';
+        cpPerfMark('renderVendas', start, { total:0, visiveis:0 });
+        return;
+      }
+      box.innerHTML = lote.map(l => {
+        const v = l.analysis?.venda || {};
+        const valor = v.valor ? 'R$ '+escapeHtml(String(v.valor)) : '';
+        return `
+          <div style="border:1px solid var(--line);background:rgba(104,255,149,.05);border-radius:14px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${leadId(l)})'>${escapeHtml(l.name||'Cliente')}</strong>
+              <span class="tag hot" style="background:rgba(104,255,149,.18);color:#bdffd0;border-color:rgba(104,255,149,.32)">VENDIDO</span>
+            </div>
+            ${v.empreendimento ? `<div class="small" style="margin-top:6px">${escapeHtml(v.empreendimento)}${v.unidade?' · Unid. '+escapeHtml(v.unidade):''}${v.box?' · Box '+escapeHtml(v.box):''}</div>` : ''}
+            ${valor ? `<div class="small" style="margin-top:4px;color:var(--acao);font-weight:950">${valor}</div>` : ''}
+            ${v.observacoes ? `<div class="small" style="margin-top:6px">${escapeHtml(v.observacoes)}</div>` : ''}
+            ${v.registradaEm ? `<div class="small" style="margin-top:6px;color:var(--muted)">Registrada em ${escapeHtml(new Date(v.registradaEm).toLocaleString('pt-BR'))}</div>` : ''}
+          </div>`;
+      }).join('') + renderLoadMore('vendasVisibleCount', items.length, lote.length, 'cp6862MaisVendas');
+      cpPerfMark('renderVendas', start, { total:items.length, visiveis:lote.length });
+    }catch(err){
+      box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
+      cpPerfMark('renderVendas', start, { error:true });
+    }
+  };
+
+  window.carregarPerdidos = async function(){
+    const start = cpPerfNow();
+    const box = qs('#perdidosList');
+    if(!box) return;
+    box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
+    try{
+      const data = await getLeadsData(false);
+      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Perdido');
+      const limite = ensureVisibleKey('perdidosVisibleCount');
+      const lote = items.slice(0, limite);
+      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum lead perdido no momento.</div>'; cpPerfMark('renderPerdidos', start, { total:0, visiveis:0 }); return; }
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} lead${items.length>1?'s':''} perdido${items.length>1?'s':''}.</div>` + lote.map(l => {
+        const idJs = leadId(l);
+        const motivo = l.analysis?.motivoPerda || l.analysis?.motivo_perda || l.analysis?.perda?.motivo || '';
+        const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
+        return `
+          <div data-perdido-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(255,91,122,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div style="flex:1;min-width:0">
+                <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
+                <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
+                ${motivo ? `<div class="small" style="margin-top:6px"><b>Motivo:</b> ${escapeHtml(motivo)}</div>` : ''}
+              </div>
+              <span class="tag" style="background:rgba(255,91,122,.12);color:#ffdbe2;border-color:rgba(255,91,122,.32);font-size:10px">PERDIDO</span>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
+              <button type="button" onclick='reabrirLeadPerdido(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reabrir</button>
+            </div>
+          </div>`;
+      }).join('') + renderLoadMore('perdidosVisibleCount', items.length, lote.length, 'cp6862MaisPerdidos');
+      cpPerfMark('renderPerdidos', start, { total:items.length, visiveis:lote.length });
+    }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderPerdidos', start, { error:true }); }
+  };
+
+  window.carregarGeladeira = async function(){
+    const start = cpPerfNow();
+    const box = qs('#geladeiraList');
+    if(!box) return;
+    box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
+    try{
+      const data = await getLeadsData(false);
+      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Geladeira');
+      const limite = ensureVisibleKey('geladeiraVisibleCount');
+      const lote = items.slice(0, limite);
+      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum lead na geladeira no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(l => {
+        const idJs = leadId(l);
+        const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
+        return `
+          <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div style="flex:1;min-width:0">
+                <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
+                <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
+              </div>
+              <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">❄ GELADEIRA</span>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
+              <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
+            </div>
+          </div>`;
+      }).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
+      cpPerfMark('renderGeladeira', start, { total:items.length, visiveis:lote.length });
+    }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderGeladeira', start, { error:true }); }
+  };
+
+  try{
+    const antigoResumo = window.cpPerformanceResumo;
+    window.cpPerformanceResumo = function(){
+      const r = typeof antigoResumo === 'function' ? antigoResumo() : {};
+      r.renderVendasMs = cpPerfMedia('renderVendas');
+      r.renderPerdidosMs = cpPerfMedia('renderPerdidos');
+      r.renderGeladeiraMs = cpPerfMedia('renderGeladeira');
+      return r;
+    };
+  }catch(_){}
 })();

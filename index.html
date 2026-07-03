@@ -714,6 +714,13 @@
         <div class="small" id="crmImportStatus" style="margin-top:8px;color:var(--muted)"></div>
         <div class="progress" id="crmImportProgressWrap" style="display:none;margin-top:8px"><div class="progress-bar" id="crmImportProgress" style="width:0%"></div></div>
       </div>
+
+      <div class="card compact" id="performanceDiagCard">
+        <div class="label">Diagnóstico de performance</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Mede carregamento, cache e renderização para manter o app rápido com bases grandes.</div>
+        <button class="btn secondary" type="button" onclick="atualizarDiagnosticoPerformance()" style="width:100%">Atualizar diagnóstico</button>
+        <div class="small" id="performanceDiagOut" style="margin-top:10px;line-height:1.5;color:var(--soft)"></div>
+      </div>
       <div class="card compact">
         <div class="label">Inteligência (OpenAI)</div>
         <div class="small" style="color:var(--muted);margin-bottom:10px">Testa a chave e o modelo de análise usados pelo Corretor Pro.</div>

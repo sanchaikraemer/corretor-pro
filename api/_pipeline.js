@@ -2085,7 +2085,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const timelineTextFull = timeline.map(linhaDe).join("\n");
   // Manda o HISTÓRICO INTEIRO pra IA reanalisar tudo. Limite alto só por segurança
   // (conversas absurdas). Mesmo quando corta a conversa antiga, as ANOTAÇÕES DO CORRETOR
-  // (manuais/CRM) são SEMPRE mantidas — são fatos confirmados do que já aconteceu.
+  // (manuais/sistema antigo) são SEMPRE mantidas — são fatos confirmados do que já aconteceu.
   const PROMPT_TL_MAX = 300000;
   let timelineText = timelineTextFull;
   if (timelineTextFull.length > PROMPT_TL_MAX) {
