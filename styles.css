@@ -1487,3 +1487,24 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .cp687-screen-polish{animation:cp687Screen .18s var(--cp687-ease)}@keyframes cp687Screen{from{opacity:.96;transform:translateY(3px)}to{opacity:1;transform:none}}
 @media(max-width:900px){.cp687-toast-wrap{left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));}.cp687-toast{min-width:0;width:100%;box-sizing:border-box}.cp687-notify-panel{left:12px;right:12px;top:70px;width:auto}.ui670-action-buttons,.ui670-message-actions{position:relative}.lead-ui670{padding-bottom:calc(78px + env(safe-area-inset-bottom))}.cart-filtros{overflow:auto;padding-bottom:4px;scrollbar-width:none}.cart-filtros::-webkit-scrollbar{display:none}.cp-topbar{position:sticky;top:0;z-index:90}.ui670-head h2,.screen>h1,.screen>h2{font-size:clamp(25px,8vw,36px)!important}.card,.compact{border-radius:17px!important}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+
+/* ============================================================
+   HOTFIX #687-2 — estabilidade visual
+   Remove microanimações que causavam tremor/repintura contínua em desktop.
+   Mantém identidade visual e funcionalidades.
+   ============================================================ */
+html{scroll-behavior:auto!important;overflow-y:scroll;}
+body{overflow-x:hidden;}
+.cp687-screen-polish{animation:none!important;}
+.card:hover,.menu-card:hover,.top3-mini:hover,.fila-row:hover,.ui670-card:hover,.ui670-status-card:hover,
+.resumo-dia .item:hover,.dash-card:hover,.metric-card:hover,
+button:hover,.sb-brand:hover,.cp-sidebar-user:hover{transform:none!important;}
+button,.card,.menu-card,.top3-mini,.fila-row,.ui670-card,.ui670-status-card,.resumo-dia .item,.dash-card,.metric-card,.sb-brand,.cp-sidebar-user{
+  transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease,opacity .14s ease!important;
+}
+.cp-topbar{transform:none!important;will-change:auto!important;}
+#home,.screen,.desktop-layout,.app{backface-visibility:hidden;}
+@media (prefers-reduced-motion:no-preference){
+  .cp687-toast,.cp687-notify-panel.open{animation-duration:.12s!important;}
+}

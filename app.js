@@ -11670,7 +11670,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #687 — acabamento profissional e feedback de uso
+   Atualização #687-2 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11743,10 +11743,17 @@ window.renderLeadFoco=renderLeadFoco;
     });
   }
 
-  function screenPolish(){
+  function screenPolish(opts={}){
     const active = $('.screen.active');
-    if(active){ active.classList.remove('cp687-screen-polish'); void active.offsetWidth; active.classList.add('cp687-screen-polish'); }
-    document.body.dataset.cpScreen = window.state?.active || active?.id || 'home';
+    // Hotfix 687-2: não reaplica animação em toda mutação da tela.
+    // A versão anterior removia/adicionava a classe cp687-screen-polish repetidamente,
+    // causando tremor visual quando a Home recebia pequenos updates internos.
+    const currentScreen = window.state?.active || active?.id || 'home';
+    if(opts.animate && active && document.body.dataset.cpScreen !== currentScreen){
+      active.classList.add('cp687-screen-polish');
+      setTimeout(()=>active.classList.remove('cp687-screen-polish'), 240);
+    }
+    document.body.dataset.cpScreen = currentScreen;
     updateBell();
     polishEmptyStates(active||document);
   }
@@ -11755,7 +11762,7 @@ window.renderLeadFoco=renderLeadFoco;
   if(typeof oldShow === 'function'){
     window.show = function(){
       const ret = oldShow.apply(this, arguments);
-      requestAnimationFrame(()=>setTimeout(screenPolish, 40));
+      requestAnimationFrame(()=>setTimeout(()=>screenPolish({animate:true}), 40));
       return ret;
     };
   }
@@ -11777,7 +11784,7 @@ window.renderLeadFoco=renderLeadFoco;
   }, true);
 
   document.addEventListener('submit', function(){ setTimeout(()=>window.cpToast && window.cpToast('Alteração registrada','Os dados foram atualizados com segurança.','ok'), 120); }, true);
-  const mo = new MutationObserver(()=>{ clearTimeout(window.__cp687MutT); window.__cp687MutT=setTimeout(()=>screenPolish(),120); });
-  mo.observe(document.body,{childList:true,subtree:true});
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', screenPolish); else screenPolish();
+  // Hotfix 687-2: evita observar o body inteiro continuamente.
+  // Rodamos o polimento na carga e depois apenas quando a navegação chama show().
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>screenPolish({animate:false})); else screenPolish({animate:false});
 })();
