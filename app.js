@@ -1,4 +1,4 @@
-// ===== Segurança v683: chave secreta nas chamadas /api =====
+// ===== Segurança v684-1: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
 // No primeiro uso, o app pergunta a chave e guarda apenas no navegador deste aparelho.
 (function protegerChamadasApiV682(){
@@ -9395,7 +9395,7 @@ renderLeadFoco = function(lead){
   const a=lead.analysis||{},diag=(a.diagnostico&&typeof a.diagnostico==="object")?a.diagnostico:{};
   const msgs=mensagensDaAnalise(a);
   const map={direta:mensagemAprovadaSemAlteracao(msgs.a)||"",consultiva:mensagemAprovadaSemAlteracao(msgs.b)||mensagemAprovadaSemAlteracao(msgs.a)||"",retomada:mensagemAprovadaSemAlteracao(msgs.c)||mensagemAprovadaSemAlteracao(msgs.a)||""};
-  state._ui631Responses=map; state._ui631ResponseKey="direta"; state._ui631LeadPhone=lead.phone||""; // v683-4: abre sempre na Melhor resposta
+  state._ui631Responses=map; state._ui631ResponseKey=msgs.recomendada==="c"?"retomada":msgs.recomendada==="b"?"consultiva":"direta"; state._ui631LeadPhone=lead.phone||"";
   const chosen=map[state._ui631ResponseKey]||Object.values(map).find(Boolean)||"Toque em Reanalisar para gerar uma resposta.";
   const prioridade=prioridadeAtendimento(lead)||{};
   const interesse=String(diag.interesse||a.leituraComercial?.temperatura||"—");
@@ -9991,7 +9991,7 @@ function ui682ProgressReanalise(btn){
   return {
     set,
     done(txt){ set(100, txt||"Análise concluída e salva."); setTimeout(()=>{ try{ box.remove(); }catch(_){} }, 1800); },
-    fail(txt){ set(0, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; const pctEl=box.querySelector("#ui682ProgressPct"); if(pctEl) pctEl.textContent="erro"; }
+    fail(txt){ set(100, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; }
   };
 }
 window.ui670SelectMessage=function(k){
@@ -10099,7 +10099,7 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:683}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:684}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
@@ -10239,7 +10239,7 @@ renderLeadFoco=function(lead){
   const a=lead.analysis||{},mc=ui670ModeloComercial(lead);
   let msgs=ui670Messages(a);
   msgs=ui682MesclarMensagens(msgs, lead, mc);
-  const stale=Number(mc.versao||a._schemaComercial||0)<683;
+  const stale=Number(mc.versao||a._schemaComercial||0)<684;
   const noAction=mc?.acao?.status==="sem-acao-urgente";
   const preferred=noAction?"a":msgs.recomendada;
   state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
@@ -10303,9 +10303,8 @@ window.renderLeadFoco=renderLeadFoco;
       .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,107,92,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
       .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
       .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
-      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary,.ui683-actions .sale,.ui683-actions .proposal{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .sale{color:#86f0aa;border-color:rgba(134,240,170,.5);background:rgba(134,240,170,.10)}.ui683-actions .proposal{color:#ffd37a;border-color:rgba(255,211,122,.45);background:rgba(255,211,122,.09)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.ui683-reason{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
-      .ui683-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}.ui683-modal-card{width:min(460px,100%);border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 24px 80px rgba(0,0,0,.45);padding:18px}.ui683-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.ui683-modal-head small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.ui683-modal-head h3{margin:2px 0 2px;font-size:19px}.ui683-modal-head p{margin:0;color:var(--muted);font-size:13px}.ui683-modal-head button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:7px 10px;cursor:pointer}.ui683-modal-card label{display:block;margin:12px 0 6px;color:var(--soft);font-size:12px;font-weight:900}.ui683-modal-card input,.ui683-modal-card textarea{width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 11px;font:inherit}.ui683-quick-dates{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.ui683-quick-dates button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:900;cursor:pointer}.ui683-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}.ui683-modal-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:12px;padding:10px 14px;font-weight:950;cursor:pointer}.ui683-modal-actions button:last-child{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-modal-actions .secondary{color:var(--muted)}
-      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}.ui683-modal{align-items:flex-end;padding:12px}.ui683-modal-card{border-radius:20px 20px 14px 14px}}`;
+      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
+      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
     document.head.appendChild(st);
   }
 
@@ -10343,7 +10342,7 @@ window.renderLeadFoco=renderLeadFoco;
     const antigo=qs('#ui683AtendidosHojeCard'); if(antigo) antigo.remove();
     const card=document.createElement('section'); card.id='ui683AtendidosHojeCard'; card.className='ui683-card';
     const preview=lista.slice(0,4).map(x=>`<div class="ui683-row" onclick='abrirLead(${JSON.stringify(String(x.lead.id||''))})'><div class="ui683-time">${escapeHtml(ui683HoraBR(x.ev.quando))}</div><div style="min-width:0"><div class="ui683-name">${escapeHtml(x.lead.name||'Cliente')}</div><div class="ui683-sub">${escapeHtml(ui683Origem(x.ev))}${x.lead.product?` · ${escapeHtml(x.lead.product)}`:''}</div></div><div class="ui683-open">›</div></div>`).join('');
-    card.innerHTML=`<div class="ui683-head"><div onclick="abrirAtendidosHoje()" style="cursor:pointer"><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div><div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os atendidos de hoje</button></div>`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
+    card.innerHTML=`<div class="ui683-head"><div><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div>${lista.length>4?`<div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os ${lista.length} atendidos de hoje</button></div>`:''}`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
     const ref=qs('#filaPrioridade') || area.firstElementChild;
     if(ref && ref.parentElement===area) area.insertBefore(card, ref.nextSibling); else area.prepend(card);
   }
@@ -10432,15 +10431,6 @@ window.renderLeadFoco=renderLeadFoco;
     window.renderLeadFoco = renderLeadFoco;
   }
 
-  function ui683MotivoProximaAcao(lead){
-    const a=lead?.analysis||{};
-    const diag=(a.diagnostico&&typeof a.diagnostico==='object')?a.diagnostico:{};
-    const mc=(a.modeloComercial&&typeof a.modeloComercial==='object')?a.modeloComercial:{};
-    const motivo=String(mc?.acao?.motivo||mc?.acao?.justificativa||diag?.ultimoCompromissoDoCliente||diag?.ultimaInfoPrometida||diag?.pendenciaFinanceira||a.summary||'').trim();
-    if(!motivo) return '';
-    return motivo.length>150?motivo.slice(0,147)+'...':motivo;
-  }
-
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
     const wrap=qs('#leadFocoArea .lead-foco'); if(!wrap) return;
@@ -10458,108 +10448,232 @@ window.renderLeadFoco=renderLeadFoco;
       <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
       <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
-      <button type="button" class="proposal" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
-      <button type="button" class="sale" onclick="abrirVenda(${id},${nome})">Vendido</button>
+      <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
+      <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
       <button type="button" class="danger" onclick="marcarPerdido(${id},${nome})">Perdido</button>
       <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
-    // v683-4: mostra por que o sistema recomenda a próxima ação.
-    const motivoAcao=ui683MotivoProximaAcao(lead);
-    if(motivoAcao && !qs('#ui683ActionReason')){
-      const cards=[...wrap.querySelectorAll('section, .card, .lead-card, div')];
-      const alvo=cards.find(el=>/Próxima ação/i.test(el.textContent||'') && !/Mensagem recomendada/i.test(el.textContent||''));
-      if(alvo){
-        const r=document.createElement('div'); r.id='ui683ActionReason'; r.className='ui683-reason';
-        r.innerHTML='<b>Motivo:</b> '+escapeHtml(motivoAcao);
-        alvo.appendChild(r);
-      }
-    }
   }
 
+  // Atualiza a versão exigida pela análise comercial a partir desta atualização.
+  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = 683;
+})();
 
+/* ============================================================
+   #683 FECHAMENTO — BOTÕES RÁPIDOS E FLUXO DIÁRIO COMPLETO
+   Complementa a v683 para garantir que todos os atalhos funcionem
+   em 1 clique e registrem rastreabilidade operacional.
+   ============================================================ */
+(function(){
+  if(window.__cp683FechamentoCompleto) return;
+  window.__cp683FechamentoCompleto = true;
 
-  // v683-2 — Agendar retorno: função real para o botão rápido.
-  // Antes o botão chamava abrirModalAgendar, mas a função não existia.
-  // Agora abre um painel simples, grava o lembrete no banco e atualiza a tela do lead.
-  window.fecharModalAgendar = function(){
-    try{ document.querySelector('#ui683AgendaModal')?.remove(); }catch(_){ }
-  };
+  async function ui683RegistrarEvento(id, evento, detalhes){
+    if(!id) return { ok:false };
+    try{
+      const res = await fetch('./api/lead-update', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id, action:'aprendizado', evento, detalhes: detalhes || {} })
+      });
+      return await res.json().catch(()=>({ ok:false }));
+    }catch(_){ return { ok:false }; }
+  }
 
-  function ui683DateOffset(dias){
+  function ui683DataISO(dias){
     const d = new Date();
-    d.setDate(d.getDate() + Number(dias||0));
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,'0');
-    const day = String(d.getDate()).padStart(2,'0');
-    return `${y}-${m}-${day}`;
-  }
-
-  function ui683AgendaMotivoPadrao(lead){
-    const a = lead?.analysis || {};
-    const mc = ui670ModeloComercial ? ui670ModeloComercial(lead) : (a.modeloComercial || {});
-    return String(mc?.acao?.proxima || a?.lembrete?.motivo || 'Retomar contato').slice(0,180);
+    d.setDate(d.getDate() + Number(dias || 0));
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
   window.abrirModalAgendar = function(id, nome){
-    const lead = (state.lead && String(state.lead.id||'')===String(id||'')) ? state.lead : null;
-    const leadNome = String(nome || lead?.name || 'Lead');
-    const hoje = ui683DateOffset(0);
-    const amanha = ui683DateOffset(1);
-    const sete = ui683DateOffset(7);
-    const motivo = ui683AgendaMotivoPadrao(lead);
-    fecharModalAgendar();
-    const el = document.createElement('div');
-    el.id = 'ui683AgendaModal';
-    el.className = 'ui683-modal';
-    el.innerHTML = `<div class="ui683-modal-card" role="dialog" aria-modal="true" aria-label="Agendar retorno">
-      <div class="ui683-modal-head"><div><small>Fluxo diário</small><h3>Agendar retorno</h3><p>${escapeHtml(leadNome)}</p></div><button type="button" onclick="fecharModalAgendar()">✕</button></div>
-      <label>Data do retorno</label>
-      <input id="ui683AgendaData" type="date" min="${hoje}" value="${amanha}">
-      <div class="ui683-quick-dates">
-        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${hoje}'">Hoje</button>
-        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${amanha}'">Amanhã</button>
-        <button type="button" onclick="document.querySelector('#ui683AgendaData').value='${sete}'">+7 dias</button>
+    if(!id) return toast('Lead não identificado.');
+    document.getElementById('ui683AgendaModal')?.remove();
+    const hoje = ui683DataISO(0);
+    const html = document.createElement('div');
+    html.id = 'ui683AgendaModal';
+    html.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px';
+    html.innerHTML = `<div style="width:min(440px,100%);background:var(--bg);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">
+        <div><h3 style="margin:0;color:var(--text)">Agendar retorno</h3><div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(nome || 'Lead')}</div></div>
+        <button type="button" onclick="document.getElementById('ui683AgendaModal')?.remove()" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
       </div>
-      <label>Motivo</label>
-      <textarea id="ui683AgendaMotivo" rows="3" placeholder="Ex.: Retomar proposta, confirmar visita, enviar simulação">${escapeHtml(motivo)}</textarea>
-      <div class="ui683-modal-actions"><button type="button" class="secondary" onclick="fecharModalAgendar()">Cancelar</button><button id="ui683AgendaSalvar" type="button" onclick='salvarModalAgendar(${JSON.stringify(String(id||''))})'>Salvar retorno</button></div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0">
+        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},0)">Hoje</button>
+        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},1)">Amanhã</button>
+        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},3)">+3 dias</button>
+        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},7)">+7 dias</button>
+      </div>
+      <label class="small" style="display:block;margin:10px 0 6px;color:var(--muted);font-weight:900">Escolher data</label>
+      <input id="ui683AgendaData" type="date" min="${hoje}" value="${hoje}" style="width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text)">
+      <button class="btn primary" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},null,document.getElementById('ui683AgendaData')?.value)" style="width:100%;margin-top:12px">Salvar retorno</button>
     </div>`;
-    document.body.appendChild(el);
-    el.addEventListener('click', e => { if(e.target===el) fecharModalAgendar(); });
-    setTimeout(()=>document.querySelector('#ui683AgendaData')?.focus(),60);
+    document.body.appendChild(html);
   };
 
-  window.salvarModalAgendar = async function(id){
-    const data = String(document.querySelector('#ui683AgendaData')?.value || '').trim();
-    const motivo = String(document.querySelector('#ui683AgendaMotivo')?.value || 'Retomar contato').trim().slice(0,200);
-    if(!id){ toast('Lead não identificado.'); return; }
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)){ toast('Escolha uma data válida.'); return; }
-    const btn = document.querySelector('#ui683AgendaSalvar');
-    if(btn){ btn.disabled = true; btn.textContent = 'Salvando...'; }
+  window.ui683AgendarRetorno = async function(id, dias, dataManual){
+    const data = dataManual || ui683DataISO(dias);
+    await reagendarLembrete(id, data);
+    await ui683RegistrarEvento(id, 'retorno_agendado', { data, de:'botao_rapido' });
+    document.getElementById('ui683AgendaModal')?.remove();
+  };
+
+  window.ui683AdicionarObservacaoRapida = function(){
+    const alvo = document.querySelector('#novoAtendimentoTexto, #memoriaObservacoes, textarea');
+    if(alvo){ alvo.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>alvo.focus(),260); }
+    else toast('Campo de observação não encontrado neste lead.');
+  };
+
+  const antigoCopy = window.ui631CopyResponse;
+  window.ui631CopyResponse = async function(){
+    const txt = document.querySelector('#ui631ResponseText')?.textContent || document.querySelector('#msgFocoText')?.textContent || '';
+    if(!txt.trim()) return toast('Nenhuma mensagem disponível.');
     try{
-      // Usa a rota que já aceita data exata. Depois consolida o motivo no detalhe local.
-      const res = await fetch('./api/reanalisar-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, action:'reagendar-lembrete', data }) });
-      const out = await res.json().catch(()=>({}));
-      if(!res.ok || !out?.ok) throw new Error(out?.error || 'Não foi possível agendar.');
-      fecharModalAgendar();
-      invalidarLeadsCache();
-      toast('Retorno agendado.');
-      const atualizado = await getLeadDetail(id).catch(()=>null);
-      if(atualizado){
-        // Mantém motivo visível no estado atual quando a rota antiga não salva motivo novo.
-        atualizado.analysis = atualizado.analysis || {};
-        atualizado.analysis.lembrete = { ...(atualizado.analysis.lembrete || {}), quando: out.quando || atualizado.analysis.lembrete?.quando, motivo, auto:false };
-        state.lead = atualizado;
-        renderLeadFoco(atualizado);
+      await navigator.clipboard.writeText(txt);
+      toast('Mensagem copiada.');
+      const lead = state.lead;
+      if(lead?.id){
+        try{ await ui683RegistrarEvento(lead.id, 'mensagem_copiada', { de:'botao_rapido', preview: txt.slice(0,240) }); }catch(_){}
+        try{ if(typeof registrarMensagemEnviada === 'function') await registrarMensagemEnviada(lead, txt); }catch(_){}
       }
-      if(typeof carregarDashboard==='function') carregarDashboard();
-    }catch(err){
-      toast('Erro ao agendar: ' + (err?.message || err));
-      if(btn){ btn.disabled = false; btn.textContent = 'Salvar retorno'; }
+    }catch(_){
+      if(typeof antigoCopy === 'function') return antigoCopy();
+      toast('Não consegui copiar.');
     }
   };
 
-  // Atualiza a versão exigida pela análise comercial a partir desta atualização.
-  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = "683-4";
+  async function ui683MoverEtapaComEvento(id, etapa, label, evento){
+    if(!id) return toast('Lead não identificado.');
+    if(!confirm(`Marcar este lead como ${label || etapa}?`)) return;
+    try{
+      const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
+      await ui683RegistrarEvento(id, evento || 'etapa_alterada', { etapa, label: label || etapa, de:'botao_rapido' });
+      invalidarLeadsCache();
+      toast(`${label || etapa} registrado.`);
+      try{ await carregarDashboard(); }catch(_){}
+      try{ if(state.active === 'pipeline') carregarPipeline(); }catch(_){}
+      try{ await abrirLead(id); }catch(_){}
+    }catch(err){ toast('Não consegui atualizar: ' + (err?.message || err)); }
+  }
+
+  window.ui683MarcarEtapaRapida = function(id, etapa, label){
+    const evento = etapa === 'Visita/Proposta' ? 'proposta_feita' : 'etapa_alterada';
+    return ui683MoverEtapaComEvento(id, etapa, label, evento);
+  };
+
+  const antigoAbrirVenda = window.abrirVenda;
+  window.abrirVenda = function(id, nome){
+    return ui683MoverEtapaComEvento(id, 'Vendido', 'Vendido', 'venda_registrada');
+  };
+
+  const antigoMarcarPerdido = window.marcarPerdido;
+  window.marcarPerdido = function(id, nome){
+    return ui683MoverEtapaComEvento(id, 'Perdido', 'Perdido', 'perda_registrada');
+  };
+
+  const antigoArquivarLead = window.arquivarLead;
+  window.arquivarLead = function(id, nome){
+    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Arquivado/Geladeira', 'lead_arquivado');
+  };
+
+  function ui683CorrigirBotoesRapidos(){
+    const tools = document.getElementById('ui683LeadTools');
+    if(!tools || tools.dataset.fechar683 === '1') return;
+    tools.dataset.fechar683 = '1';
+    tools.innerHTML = tools.innerHTML
+      .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
+      .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
+  }
+  const antigoRender = window.renderLeadFoco;
+  if(typeof antigoRender === 'function'){
+    window.renderLeadFoco = function(lead){
+      antigoRender(lead);
+      setTimeout(ui683CorrigirBotoesRapidos, 30);
+    };
+    renderLeadFoco = window.renderLeadFoco;
+  }
+})();
+
+
+/* ============================================================
+   V684-1 — IA COMERCIAL 2.0
+   - mostra raciocínio comercial proativo no lead
+   - perfil do cliente, risco de perda, mudança de comportamento
+   - próxima ação ideal, produto adequado, estratégia e sinais
+   ============================================================ */
+(function(){
+  if(window.__cp684IAComercialV2) return;
+  window.__cp684IAComercialV2 = true;
+
+  function ui684InjectStyles(){
+    if(document.getElementById('ui684Styles')) return;
+    const st=document.createElement('style'); st.id='ui684Styles';
+    st.textContent=`
+      .ui684-card{margin:14px 0;padding:16px;border:1px solid rgba(55,232,255,.28);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.075),rgba(255,107,92,.04));box-shadow:0 12px 36px rgba(0,0,0,.14)}
+      .ui684-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.ui684-head h3{margin:0;font-size:17px;color:#fff}.ui684-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.ui684-badge{border:1px solid rgba(55,232,255,.42);color:var(--dados);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-risk{font-size:22px;font-weight:950;color:var(--acao);line-height:1}.ui684-risk small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}
+      @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}}
+    `;
+    document.head.appendChild(st);
+  }
+  function ui684Esc(v){ return typeof escapeHtml==='function' ? escapeHtml(String(v||'')) : String(v||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  function ui684List(arr){ arr=Array.isArray(arr)?arr.filter(Boolean):[]; return arr.length ? `<ul class="ui684-list">${arr.slice(0,4).map(x=>`<li>${ui684Esc(x)}</li>`).join('')}</ul>` : `<div class="ui684-empty">Nenhum sinal forte registrado ainda.</div>`; }
+  function ui684Data(lead){
+    const a=lead?.analysis||{};
+    const ia=(a.iaComercialV2&&typeof a.iaComercialV2==='object')?a.iaComercialV2:null;
+    if(ia) return ia;
+    const diag=(a.diagnostico&&typeof a.diagnostico==='object')?a.diagnostico:{};
+    const lc=(a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
+    return {
+      versao:684,
+      perfilCliente:a.clientProfile||'Perfil ainda em leitura; reanalise para a IA Comercial 2.0 aprofundar.',
+      etapaComercial:diag.etapa||lc.etapa||normalizarEtapa(lead?.etapa)||'Não definida',
+      mudancaComportamento:'Reanalise este lead para detectar mudança de comportamento com mais precisão.',
+      riscoPerda:{percentual:Math.max(0,Math.min(95,100-(Number(lead?.probabilityPercent)||45))),nivel:'estimado',motivo:'estimativa local até a próxima reanálise'},
+      proximaAcaoIdeal:a.nextAction||lc.oQueDestravar||a.melhorPergunta||'Reanalisar para definir próxima ação ideal.',
+      produtoMaisAdequado:lead?.product||a.product||'Produto ainda não definido',
+      estrategiaAbordagem:'Retomar pelo último ponto concreto da conversa e fazer uma pergunta principal.',
+      sinaisPositivos:[],alertas:[],raciocinioComercial:''
+    };
+  }
+  function ui684RenderCard(lead){
+    const ia=ui684Data(lead);
+    const risco=ia.riscoPerda||{};
+    const pct=Number(risco.percentual); const pctTxt=Number.isFinite(pct)?`${Math.round(pct)}%`:'—';
+    return `<section id="ui684IAComercial" class="ui684-card">
+      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: risco, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684</span></div>
+      <div class="ui684-grid">
+        <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Risco de perda</span><div class="ui684-risk">${ui684Esc(pctTxt)} <small>${ui684Esc(risco.nivel||'')}</small></div><div class="ui684-val" style="margin-top:6px;color:var(--muted)">${ui684Esc(risco.motivo||'')}</div></div>
+        <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(ia.proximaAcaoIdeal)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Produto mais adequado</span><div class="ui684-val">${ui684Esc(ia.produtoMaisAdequado)}</div></div>
+        <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
+        <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
+        <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
+      </div>
+    </section>`;
+  }
+  const anterior=window.renderLeadFoco;
+  if(typeof anterior==='function'){
+    window.renderLeadFoco=function(lead){
+      anterior(lead);
+      try{
+        ui684InjectStyles();
+        const wrap=document.querySelector('#leadFocoArea .lead-foco')||document.querySelector('#leadFocoArea');
+        if(!wrap) return;
+        document.getElementById('ui684IAComercial')?.remove();
+        const ref=document.querySelector('.ui-lead-main')||document.querySelector('#ui683LeadTools')||wrap.firstElementChild;
+        const tmp=document.createElement('div'); tmp.innerHTML=ui684RenderCard(lead);
+        const card=tmp.firstElementChild;
+        if(ref && ref.parentNode) ref.parentNode.insertBefore(card, ref.nextSibling); else wrap.prepend(card);
+      }catch(e){ console.warn('ui684',e); }
+    };
+    renderLeadFoco=window.renderLeadFoco;
+  }
+  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-1';
 })();
