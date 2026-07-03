@@ -44,6 +44,40 @@ function garantirMensagensV682(analysis, lead) {
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
   return out;
 }
+
+function timelineSinteticaParaReanalise(row, previous) {
+  const nome = textoLimpo(previous?.clientName || previous?.lead?.clientName || previous?.lead?.name || row?.nome_arquivo || "Contato");
+  const produto = textoLimpo(previous?.produtoInteresse || previous?.modeloComercial?.oportunidade?.produto || previous?.lead?.product || row?.etapa || "Não identificado");
+  const partes = [];
+  if (nome) partes.push(`Contato: ${nome}.`);
+  if (produto) partes.push(`Produto/empreendimento: ${produto}.`);
+  if (textoLimpo(previous?.summary)) partes.push(`Resumo anterior: ${textoLimpo(previous.summary)}`);
+  if (textoLimpo(previous?.clientProfile)) partes.push(`Perfil anterior: ${textoLimpo(previous.clientProfile)}`);
+  if (textoLimpo(previous?.nextAction)) partes.push(`Próxima ação anterior: ${textoLimpo(previous.nextAction)}`);
+  if (textoLimpo(previous?.diagnostico?.proximaAcao)) partes.push(`Diagnóstico anterior: ${textoLimpo(previous.diagnostico.proximaAcao)}`);
+  if (textoLimpo(previous?.diagnostico?.objecaoPrincipal)) partes.push(`Objeção anterior: ${textoLimpo(previous.diagnostico.objecaoPrincipal)}`);
+  if (textoLimpo(previous?.memoria?.observacoes)) partes.push(`Observações do corretor: ${textoLimpo(previous.memoria.observacoes)}`);
+  if (previous?.messages && typeof previous.messages === "object") {
+    const msg = textoLimpo(previous.messages.a || previous.messages.mensagem || previous.messages.direta);
+    if (msg) partes.push(`Última mensagem sugerida anteriormente: ${msg}`);
+  }
+  const texto = partes.join("\n") || "Lead sem histórico de mensagens importado. Recalcule com base nos dados cadastrais e mantenha uma abordagem comercial segura, curta e consultiva.";
+  const now = new Date();
+  const br = agoraBR(now);
+  return [{
+    id: 1,
+    date: br.dataBR,
+    time: br.horaBR,
+    iso: now.toISOString(),
+    author: "Sistema",
+    text: texto.slice(0, 12000),
+    type: "resumo-sintetico",
+    source: "sistema",
+    order: 1,
+    sintetico: true
+  }];
+}
+
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
 function diaSemanaBR() {
   const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(new Date());
@@ -160,7 +194,9 @@ export default async function handler(req, res) {
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!row) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
-  const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
+  const timelineOriginal = Array.isArray(row.timeline_json) ? row.timeline_json : [];
+  let timeline = timelineOriginal;
+  const previousBase = row.resultado_analise || {};
 
   // Excluir UM item da timeline (ex.: proposta duplicada). Identifica pelo iso. Não reanalisa.
   if (body?.action === "remover-item") {
@@ -301,11 +337,14 @@ export default async function handler(req, res) {
   // Permite marcar outros tipos, ex: "Mensagem enviada (WhatsApp)" quando o corretor copia a mensagem.
   const autorManual = String(body?.autorManual || "Atendimento (corretor)").slice(0, 60);
   const tipoManual = String(body?.tipoManual || "atendimento").slice(0, 30);
-  if (!timeline.length && !novoAtendimento) return json(res, 400, { ok: false, error: "Lead sem timeline pra reanalisar." });
+  // A partir da v683-3, lead sem timeline recebe fallback sintético acima.
 
   const openai = getOpenAI();
 
-  const previous = row.resultado_analise || {};
+  const previous = previousBase;
+  // Leads criados/importados sem timeline não podem travar a atualização comercial.
+  // Usa um resumo sintético apenas para cálculo; não grava timeline falsa no banco.
+  if (!timeline.length && !novoAtendimento) timeline = timelineSinteticaParaReanalise(row, previous);
   const leadModelo = {
     ...(previous.lead || {}),
     name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
