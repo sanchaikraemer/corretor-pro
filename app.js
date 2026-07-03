@@ -11729,7 +11729,10 @@ window.renderLeadFoco=renderLeadFoco;
   function polishEmptyStates(root=document){
     const patterns = ['Nenhum lead perdido no momento.','Nada agendado.','Nenhum compromisso registrado','Nenhum lead marcado como atendido hoje ainda.','Nenhuma condição de pagamento definida.'];
     $$('div,td,p,span', root).forEach(el=>{
-      if(el.dataset.cp687Empty) return;
+      // Hotfix 687-1: evita reprocessar o próprio estado vazio e seus filhos.
+      // Sem essa proteção, o MutationObserver podia embrulhar o mesmo texto
+      // repetidas vezes e gerar vários cards aninhados na tela.
+      if(el.dataset.cp687Empty || el.closest('.cp-empty-premium')) return;
       const txt = (el.textContent||'').trim();
       if(!txt || txt.length>170) return;
       if(patterns.some(p=>txt.includes(p))){
