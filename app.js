@@ -11667,3 +11667,114 @@ window.renderLeadFoco=renderLeadFoco;
     };
   }catch(_){}
 })();
+
+
+/* ============================================================
+   Atualização #687 — acabamento profissional e feedback de uso
+   ============================================================ */
+(function(){
+  if(window.__cp687Polish) return;
+  window.__cp687Polish = true;
+  const $ = (s,root=document)=>root.querySelector(s);
+  const $$ = (s,root=document)=>Array.from(root.querySelectorAll(s));
+  const safe = (fn)=>{ try{return fn();}catch(e){ console.warn('687 polish', e); } };
+
+  function ensureToastWrap(){
+    let wrap = $('.cp687-toast-wrap');
+    if(!wrap){ wrap=document.createElement('div'); wrap.className='cp687-toast-wrap'; document.body.appendChild(wrap); }
+    return wrap;
+  }
+  window.cpToast = function(title, detail='', type='ok'){
+    const wrap = ensureToastWrap();
+    const el = document.createElement('div');
+    el.className = 'cp687-toast ' + (type||'ok');
+    const icon = type === 'err' ? '!' : (type === 'warn' ? '•' : '✓');
+    el.innerHTML = `<i>${icon}</i><div><b>${title||'Pronto'}</b>${detail?`<small>${detail}</small>`:''}</div>`;
+    wrap.appendChild(el);
+    setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(8px)'; setTimeout(()=>el.remove(),220); }, 3400);
+  };
+
+  function notifyData(){
+    const leads = Array.isArray(window.leads) ? window.leads : (Array.isArray(window.state?.leads) ? window.state.leads : []);
+    const total = leads.length || Number($('#pillTotalLeadsDesktop')?.textContent?.match(/\d+/)?.[0]||0) || 0;
+    const urgentes = leads.filter(l=>String(l.prioridade||l.statusPrioridade||l.proxima_acao||'').toLowerCase().includes('atender')).length || Number((document.body.innerText.match(/(\d+)\s+leads?\s+pra atender/i)||[])[1]||0);
+    const propostas = leads.filter(l=>String(l.etapa||l.status||l.resultado||'').toLowerCase().includes('proposta') || String(l.proxima_acao||'').toLowerCase().includes('proposta')).length;
+    const frios = leads.filter(l=>String(l.prioridade||l.relacionamento||'').toLowerCase().includes('esfri')).length;
+    return {total, urgentes, propostas, frios};
+  }
+  function openNotifyPanel(){
+    let panel = $('.cp687-notify-panel');
+    if(!panel){ panel=document.createElement('div'); panel.className='cp687-notify-panel'; document.body.appendChild(panel); }
+    const d = notifyData();
+    panel.innerHTML = `
+      <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>Resumo prático do que merece ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
+      <div class="cp687-notify-item" data-go="carteira"><i>!</i><div><b>${d.urgentes||0} clientes pedem ação</b><span>Abra Atendimentos para priorizar de cima para baixo.</span></div></div>
+      <div class="cp687-notify-item" data-go="pipeline"><i>↗</i><div><b>${d.propostas||0} oportunidades em etapa avançada</b><span>Confira negociações e propostas sem retorno.</span></div></div>
+      <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>Agenda e retornos</b><span>Veja compromissos e lembretes marcados.</span></div></div>
+      <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total||0} leads na carteira</b><span>Acompanhe desempenho, movimentação e prioridades.</span></div></div>`;
+    panel.classList.add('open');
+    panel.querySelector('.cp687-notify-close')?.addEventListener('click',()=>panel.classList.remove('open'));
+    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{ panel.classList.remove('open'); if(typeof window.show==='function') window.show(el.dataset.go); }));
+    setTimeout(()=>document.addEventListener('click', outside, {once:true}),0);
+    function outside(ev){ if(!panel.contains(ev.target) && !ev.target.closest('#topBell')) panel.classList.remove('open'); }
+  }
+  function updateBell(){
+    const badge = $('#bellBadge');
+    if(!badge) return;
+    const n = notifyData().urgentes || 0;
+    badge.hidden = !n;
+    badge.textContent = n > 9 ? '9+' : String(n);
+  }
+
+  function polishEmptyStates(root=document){
+    const patterns = ['Nenhum lead perdido no momento.','Nada agendado.','Nenhum compromisso registrado','Nenhum lead marcado como atendido hoje ainda.','Nenhuma condição de pagamento definida.'];
+    $$('div,td,p,span', root).forEach(el=>{
+      if(el.dataset.cp687Empty) return;
+      const txt = (el.textContent||'').trim();
+      if(!txt || txt.length>170) return;
+      if(patterns.some(p=>txt.includes(p))){
+        el.dataset.cp687Empty='1';
+        el.classList.add('cp-empty-premium');
+        el.innerHTML = `<span class="cp-empty-icon">✓</span><span><b>${txt.split('.')[0]}.</b><small>${txt.includes('Nada agendado')?'Quando houver retorno marcado, ele aparece aqui.': txt.includes('perdido')?'Quando um lead for marcado como perdido, ele aparece aqui para reabertura.':'O sistema vai atualizar este bloco automaticamente quando houver dados.'}</small></span>`;
+      }
+    });
+  }
+
+  function screenPolish(){
+    const active = $('.screen.active');
+    if(active){ active.classList.remove('cp687-screen-polish'); void active.offsetWidth; active.classList.add('cp687-screen-polish'); }
+    document.body.dataset.cpScreen = window.state?.active || active?.id || 'home';
+    updateBell();
+    polishEmptyStates(active||document);
+  }
+
+  const oldShow = window.show;
+  if(typeof oldShow === 'function'){
+    window.show = function(){
+      const ret = oldShow.apply(this, arguments);
+      requestAnimationFrame(()=>setTimeout(screenPolish, 40));
+      return ret;
+    };
+  }
+  const bell = $('#topBell');
+  if(bell){
+    bell.onclick = null;
+    bell.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); openNotifyPanel(); }, true);
+    bell.setAttribute('aria-label','Abrir central de atenção');
+  }
+
+  document.addEventListener('click', function(ev){
+    const btn = ev.target.closest('button');
+    if(!btn || btn.disabled) return;
+    const label = (btn.textContent||'').trim().toLowerCase();
+    if(/marcar atendimento|proposta feita|vendido|perdido|arquivar|adicionar observação|agendar retorno/.test(label)){
+      btn.classList.add('cp687-pressed');
+      setTimeout(()=>btn.classList.remove('cp687-pressed'),220);
+    }
+  }, true);
+
+  document.addEventListener('submit', function(){ setTimeout(()=>window.cpToast && window.cpToast('Alteração registrada','Os dados foram atualizados com segurança.','ok'), 120); }, true);
+  const mo = new MutationObserver(()=>{ clearTimeout(window.__cp687MutT); window.__cp687MutT=setTimeout(()=>screenPolish(),120); });
+  mo.observe(document.body,{childList:true,subtree:true});
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', screenPolish); else screenPolish();
+})();
