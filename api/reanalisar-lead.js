@@ -87,6 +87,48 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+
+
+// Atualização #686-3 — IA incremental/custo: assinatura estável da timeline,
+// reuso de análise quando nada mudou e compactação segura de histórico gigante para o provedor.
+function hashTexto6863(str) {
+  let h = 2166136261;
+  const txt = String(str || "");
+  for (let i = 0; i < txt.length; i++) {
+    h ^= txt.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+}
+function assinaturaTimeline6863(timeline) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const base = arr.map((m) => [m?.iso || m?.date || "", m?.time || "", m?.author || "", m?.text || m?.body || ""].join("|")).join("\n");
+  return { hash: hashTexto6863(base), total: arr.length };
+}
+function analiseEstaUtil6863(a) {
+  return !!(a && typeof a === "object" && a.messages && (a.messages.a || a.messages.b || a.messages.c) && a.iaComercialV2);
+}
+function compactarTimelineParaIA6863(timeline, previous, novoAtendimento) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const limite = 140;
+  if (arr.length <= limite) return arr;
+  const resumo = String(previous?.summary || previous?.diagnostico?.resumo || previous?.memoria?.observacoes || "").trim();
+  const eventos = Array.isArray(previous?.aprendizado?.eventos) ? previous.aprendizado.eventos.slice(-12) : [];
+  const venda = previous?.venda ? `Venda registrada: ${JSON.stringify(previous.venda).slice(0, 700)}` : "";
+  const perda = previous?.perda ? `Perda registrada: ${JSON.stringify(previous.perda).slice(0, 700)}` : "";
+  const sintese = [
+    resumo ? `Resumo comercial anterior: ${resumo.slice(0, 1800)}` : "Resumo comercial anterior indisponível.",
+    previous?.clientProfile ? `Perfil já identificado: ${String(previous.clientProfile).slice(0, 700)}` : "",
+    previous?.nextAction ? `Próxima ação anterior: ${String(previous.nextAction).slice(0, 500)}` : "",
+    venda,
+    perda,
+    eventos.length ? `Últimos eventos internos: ${eventos.map(e => `${e.evento || "evento"} em ${e.quando || ""}`).join("; ").slice(0, 900)}` : ""
+  ].filter(Boolean).join("\n");
+  const head = [{ id: "resumo-incremental-6863", author: "Resumo anterior do sistema", text: sintese, type: "resumo", source: "incremental", iso: new Date().toISOString() }];
+  const tail = arr.slice(-(novoAtendimento ? 100 : 120));
+  return head.concat(tail);
+}
+
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   if (typeof req.body === "string" && req.body.trim()) {
@@ -409,6 +451,23 @@ export default async function handler(req, res) {
   const openai = getOpenAI();
 
   const previous = row.resultado_analise || {};
+  const sigAtual6863 = assinaturaTimeline6863(timelineFinal || timeline);
+  const sigAnterior6863 = previous?._iaIncremental?.timelineHash;
+  const podeReusar6863 = !body?.force && !body?.forcarVariacao && !novoAtendimento && !["corrigir-observacao"].includes(String(body?.action || ""));
+  if (podeReusar6863 && sigAnterior6863 === sigAtual6863.hash && analiseEstaUtil6863(previous)) {
+    const mergedReuse = {
+      ...previous,
+      _iaIncremental: {
+        ...(previous._iaIncremental || {}),
+        timelineHash: sigAtual6863.hash,
+        timelineTotal: sigAtual6863.total,
+        modo: "cache-reuso-sem-mudanca",
+        ultimaVerificacao: new Date().toISOString()
+      },
+      reanalisadoEm: previous.reanalisadoEm || new Date().toISOString()
+    };
+    return json(res, 200, { ok: true, reused: true, incremental: true, analysis: mergedReuse });
+  }
   const leadModelo = {
     ...(previous.lead || {}),
     name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
@@ -562,7 +621,9 @@ export default async function handler(req, res) {
   let avisoReanalise = "";
   if (openai) {
     try {
-      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineFinal, openai, leadId: id, forcarVariacao: true });
+      const timelineParaIA6863 = compactarTimelineParaIA6863(timelineFinal, previous, novoAtendimento);
+      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true });
+      novoAnalysis._iaEntrada6863 = { totalOriginal: timelineFinal.length, totalEnviado: timelineParaIA6863.length, compactado: timelineParaIA6863.length < timelineFinal.length };
     } catch (e) {
       avisoReanalise = String(e?.message || e || "");
     }
@@ -613,6 +674,16 @@ export default async function handler(req, res) {
   merged._schemaComercial = 684;
   merged._schemaComercialMinor = "684-final";
   if (merged.modeloComercial) merged.modeloComercial.versao = 684;
+  const sigFinal6863 = assinaturaTimeline6863(timelineFinal);
+  merged._iaIncremental = {
+    ...(freshPrevious._iaIncremental || {}),
+    timelineHash: sigFinal6863.hash,
+    timelineTotal: sigFinal6863.total,
+    ultimaAnalise: new Date().toISOString(),
+    modo: novoAnalysis?._iaEntrada6863?.compactado ? "compactado-completo-preservado" : "completo",
+    totalOriginal: novoAnalysis?._iaEntrada6863?.totalOriginal || sigFinal6863.total,
+    totalEnviadoIA: novoAnalysis?._iaEntrada6863?.totalEnviado || sigFinal6863.total
+  };
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
   if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {

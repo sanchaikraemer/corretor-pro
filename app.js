@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #686-2: instrumentação leve de performance =====
+// ===== Atualização #686-3: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -11382,7 +11382,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #686-2 — revisão de auditoria
+   Atualização #686-3 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11527,6 +11527,142 @@ window.renderLeadFoco=renderLeadFoco;
       r.renderVendasMs = cpPerfMedia('renderVendas');
       r.renderPerdidosMs = cpPerfMedia('renderPerdidos');
       r.renderGeladeiraMs = cpPerfMedia('renderGeladeira');
+      return r;
+    };
+  }catch(_){}
+})();
+
+
+/* ============================================================
+   Atualização #686-3 — fechamento real da pendência de performance
+   - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
+   - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
+   - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
+   ============================================================ */
+(function(){
+  if(window.__cp6863VirtualPatch) return;
+  window.__cp6863VirtualPatch = true;
+  const ROW_H = 82;
+  const BUFFER = 10;
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+  function metric(name, t0, meta){ try{ cpPerfMark(name, t0, meta || {}); }catch(_){} }
+  function virtualHtml(key, items, rowFn, emptyHtml, opts){
+    opts = opts || {};
+    const total = Array.isArray(items) ? items.length : 0;
+    if(!total) return emptyHtml || '<div class="empty">Nenhum item encontrado.</div>';
+    const top = Number(state[key+'ScrollTop'] || 0);
+    const viewport = Number(state[key+'Viewport'] || opts.viewport || 620);
+    const start = clamp(Math.floor(top / ROW_H) - BUFFER, 0, Math.max(0, total - 1));
+    const visible = clamp(Math.ceil(viewport / ROW_H) + BUFFER * 2, 20, 90);
+    const end = clamp(start + visible, start, total);
+    const slice = items.slice(start, end);
+    const before = start * ROW_H;
+    const after = Math.max(0, (total - end) * ROW_H);
+    state[key+'Rendered'] = { total, start, end, rendered: slice.length };
+    return `<div class="cp-virtual-wrap" data-vkey="${key}" onscroll="cp6863VirtualScroll(this,'${key}')" style="max-height:min(72vh,720px);overflow:auto;contain:content;overscroll-behavior:contain">
+      <div style="height:${before}px"></div>
+      ${slice.map(rowFn).join('')}
+      <div style="height:${after}px"></div>
+    </div>`;
+  }
+  window.cp6863VirtualScroll = function(el, key){
+    state[key+'ScrollTop'] = el.scrollTop || 0;
+    state[key+'Viewport'] = el.clientHeight || 620;
+    if(state[key+'Raf']) cancelAnimationFrame(state[key+'Raf']);
+    state[key+'Raf'] = requestAnimationFrame(()=>{
+      if(key === 'carteira') renderCarteiraTabela();
+      if(key === 'pipeline') carregarPipeline();
+    });
+  };
+  try{
+    const oldSetFiltro = window.setCarteiraFiltro;
+    window.setCarteiraFiltro = function(f){ state.carteiraScrollTop = 0; if(typeof oldSetFiltro === 'function') return oldSetFiltro(f); };
+  }catch(_){}
+  try{
+    renderCarteiraTabela = function(){
+      const t0 = cpPerfNow();
+      const box = qs('#carteiraBody');
+      if(!box) return;
+      const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== 'Vendido' && e !== 'Perdido'; });
+      const filtro = state.carteiraFiltro || 'todos';
+      const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
+      const chips = CART_FILTROS.map(([k,lbl]) => `<button type="button" class="${k===filtro?'active':''}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join('');
+      const rows = virtualHtml('carteira', lista, carteiraRowHTML, '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>');
+      const r = state.carteiraRendered || {};
+      box.innerHTML = `
+        ${ui677ToolbarHTML('atendimentos')}
+        <div class="cart-head">
+          <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?'s':''} neste filtro · renderizando ${Number(r.rendered||Math.min(lista.length,90))} por janela</div></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="cart-filtros">${chips}</div>
+            <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
+            <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
+            <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
+          </div>
+        </div>
+        <div class="cart-table">
+          <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
+          ${rows}
+        </div>`;
+      const sc = box.querySelector('.cp-virtual-wrap[data-vkey="carteira"]');
+      if(sc) sc.scrollTop = Number(state.carteiraScrollTop || 0);
+      metric('renderCarteiraVirtual', t0, { total: lista.length, rendered: state.carteiraRendered?.rendered || 0 });
+    };
+  }catch(e){ console.warn('686-3 carteira virtual não aplicada', e); }
+
+  try{
+    const oldSetPipe = window.setPipelineVisualFiltro;
+    window.setPipelineVisualFiltro = function(f){ state.pipelineScrollTop = 0; if(typeof oldSetPipe === 'function') return oldSetPipe(f); state.pipelineVisualFiltro=f||'todos'; carregarPipeline(); };
+    carregarPipeline = async function(){
+      if(state.active !== 'pipeline') return;
+      const board = qs('#pipelineBoard'); if(!board) return;
+      const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
+      const render = (data) => {
+        const t0 = cpPerfNow();
+        const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
+        const hot=leadEhQuente;
+        const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
+        const reaquecer=leadEhReaquecer;
+        const filtros={todos:all,quentes:all.filter(hot),esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)),compromisso:all.filter(compromisso),reaquecer:all.filter(reaquecer)};
+        const filtro=state.pipelineVisualFiltro||'todos';
+        const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
+        const listaPrioritaria=lista.filter(l=>ui670ModeloComercial(l)?.acao?.status!=='sem-acao-urgente');
+        const etapas=['Novo','Atendimento','Visita/Proposta','Negociação','Standby'];
+        const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
+        all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
+        const tabs=[['todos','Todos'],['quentes','Quentes'],['esfriando','Esfriando'],['compromisso','Agenda'],['reaquecer','Reaquecer']];
+        const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Quente':'Retomar';
+        const listHtml = virtualHtml('pipeline', listaPrioritaria, l=>ui631LeadRow(l, acaoRow(l)), '<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>', {viewport:620});
+        const r = state.pipelineRendered || {};
+        board.innerHTML=`
+          <div class="ui-pipeline-kpis">
+            <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${ui631Icon('ativos')}</i></div></div>
+            <div class="ui-kpi active"><span>Quentes</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
+            <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${ui631Icon('compromisso')}</i></div></div>
+            <div class="ui-kpi"><span>Reaquecer</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
+          </div>
+          <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
+          <div class="ui-pipeline-grid">
+            <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
+            <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
+          </div>
+          <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento · ${Number(r.rendered||Math.min(listaPrioritaria.length,90))} renderizados por janela.</p></div></div><div class="ui-priority-list">${listHtml}</div></section>`;
+        const sc = board.querySelector('.cp-virtual-wrap[data-vkey="pipeline"]');
+        if(sc) sc.scrollTop = Number(state.pipelineScrollTop || 0);
+        metric('renderPipelineVirtual', t0, { total: listaPrioritaria.length, rendered: state.pipelineRendered?.rendered || 0 });
+      };
+      if(emMemoria) render({items:emMemoria}); else { board.innerHTML='<div class="small ui-loading">Carregando...</div>'; getLeadsData().then(render).catch(()=>{ board.innerHTML=boxErro('carregarPipeline()'); }); }
+    };
+  }catch(e){ console.warn('686-3 pipeline virtual não aplicado', e); }
+
+  try{
+    const oldResumo = window.cpPerformanceResumo;
+    window.cpPerformanceResumo = function(){
+      const r = typeof oldResumo === 'function' ? oldResumo() : {};
+      r.renderCarteiraVirtualMs = cpPerfMedia('renderCarteiraVirtual');
+      r.renderPipelineVirtualMs = cpPerfMedia('renderPipelineVirtual');
+      r.carteiraDomRenderizado = state.carteiraRendered?.rendered || 0;
+      r.pipelineDomRenderizado = state.pipelineRendered?.rendered || 0;
       return r;
     };
   }catch(_){}
