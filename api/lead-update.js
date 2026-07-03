@@ -78,6 +78,7 @@ export default async function handler(req, res) {
     case "memoria-get":   return await acaoMemoriaGet(id, res);
     case "memoria-set":   return await acaoMemoriaSet(id, body, res);
     case "aprendizado":   return await acaoAprendizado(id, body, res);
+    case "desfecho":      return await acaoDesfecho(id, body, res);
     case "lembrete-set":  return await acaoLembreteSet(id, body, res);
     case "lembrete-clear":return await acaoLembreteClear(id, res);
     case "apagar":        return await acaoApagar(id, res);
@@ -1027,6 +1028,147 @@ async function acaoMemoriaSet(id, body, res) {
   }
 
   return json(res, 200, { ok: true, id, memoria });
+}
+
+
+
+// ============ DESFECHO / APRENDIZADO CONTÍNUO v685-final ============
+function normalizarDinheiroV685(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const limpo = s.replace(/[^0-9,\.]/g, "");
+  if (!limpo) return null;
+  let n;
+  if (limpo.includes(",")) n = Number(limpo.replace(/\./g, "").replace(",", "."));
+  else n = Number(limpo);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function dataPrimeiroContatoV685(timeline, fallback) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  for (const m of arr) {
+    const iso = m?.iso || m?.date || m?.datetime || m?.timestamp;
+    const d = iso ? new Date(iso) : null;
+    if (d && !Number.isNaN(d.getTime())) return d;
+  }
+  const fb = fallback ? new Date(fallback) : null;
+  return fb && !Number.isNaN(fb.getTime()) ? fb : new Date();
+}
+
+function contarContatosV685(timeline, eventos) {
+  const msgs = Array.isArray(timeline) ? timeline : [];
+  const mensagensVoce = msgs.filter(m => {
+    const from = String(m?.from || m?.speaker || m?.autor || m?.role || "").toLowerCase();
+    return /você|voce|sanchai|corretor|construtora|atendente|eu|me/.test(from);
+  }).length;
+  const evs = Array.isArray(eventos) ? eventos : [];
+  const contatosManuais = evs.filter(e => /contato_manual|mensagem_copiada|atendido|proposta/i.test(String(e?.evento || ""))).length;
+  return Math.max(mensagensVoce, contatosManuais, 0);
+}
+
+async function acaoDesfecho(id, body, res) {
+  const tipo = String(body?.tipo || "").toLowerCase();
+  if (!["vendido", "perdido"].includes(tipo)) return json(res, 400, { ok: false, error: "Informe tipo vendido ou perdido." });
+  const vendido = tipo === "vendido";
+  const etapa = vendido ? "Vendido" : "Perdido";
+  const produto = typeof body?.produto === "string" ? body.produto.trim().slice(0, 120) : "";
+  const valorVendido = normalizarDinheiroV685(body?.valorVendido);
+  const motivoPerda = typeof body?.motivoPerda === "string" ? body.motivoPerda.trim().slice(0, 180) : "";
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+
+  const { data: current, error: getErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("resultado_analise,timeline_json,criado_em,created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
+  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
+
+  const now = new Date();
+  const merged = { ...(current.resultado_analise || {}) };
+  if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
+  merged.lead.etapa = etapa;
+  if (produto) {
+    merged.produtoInteresse = produto;
+    merged.product = produto;
+    merged.lead.product = produto;
+  }
+
+  const timeline = Array.isArray(current.timeline_json) ? current.timeline_json : [];
+  const aprendizado = merged.aprendizado || { eventos: [] };
+  aprendizado.eventos = Array.isArray(aprendizado.eventos) ? aprendizado.eventos : [];
+  const primeiro = dataPrimeiroContatoV685(timeline, current.criado_em || current.created_at);
+  const tempoDias = Math.max(0, Math.ceil((now.getTime() - primeiro.getTime()) / 86400000));
+  const contatosAteDesfecho = contarContatosV685(timeline, aprendizado.eventos);
+  const funilReal = {
+    etapaFinal: etapa,
+    produto: produto || merged.produtoInteresse || merged.product || merged.lead.product || "",
+    tempoAteFechamentoDias: tempoDias,
+    contatosAteVenda: vendido ? contatosAteDesfecho : null,
+    contatosAtePerda: vendido ? null : contatosAteDesfecho,
+    dataPrimeiroContato: primeiro.toISOString(),
+    dataDesfecho: now.toISOString()
+  };
+
+  const evento = {
+    evento: vendido ? "venda_registrada" : "perda_registrada",
+    estilo: "desfecho",
+    detalhes: {
+      produto: funilReal.produto,
+      valorVendido: vendido ? valorVendido : null,
+      motivoPerda: vendido ? null : (motivoPerda || "não informado"),
+      tempoAteFechamentoDias: tempoDias,
+      contatosAteVenda: vendido ? contatosAteDesfecho : null,
+      contatosAtePerda: vendido ? null : contatosAteDesfecho,
+      funilReal,
+      de: "v685-final"
+    },
+    quando: now.toISOString()
+  };
+  aprendizado.eventos.push(evento);
+  if (aprendizado.eventos.length > 80) aprendizado.eventos = aprendizado.eventos.slice(-80);
+  merged.aprendizado = aprendizado;
+
+  if (vendido) {
+    merged.venda = {
+      produto: funilReal.produto,
+      valor: valorVendido,
+      vendidoEm: now.toISOString(),
+      tempoAteFechamentoDias: tempoDias,
+      contatosAteVenda: contatosAteDesfecho,
+      funilReal
+    };
+    delete merged.perda;
+  } else {
+    merged.perda = {
+      produto: funilReal.produto,
+      motivo: motivoPerda || "não informado",
+      perdidoEm: now.toISOString(),
+      tempoAtePerdaDias: tempoDias,
+      contatosAtePerda: contatosAteDesfecho,
+      funilReal
+    };
+    delete merged.venda;
+  }
+
+  const updates = { resultado_analise: merged, atualizado_em: now.toISOString() };
+  // Tenta gravar etapa na coluna se existir; se não existir, mantém etapa no JSON.
+  updates.etapa = etapa;
+  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).select("id,resultado_analise").maybeSingle();
+  if (attempt.error && /column .* does not exist|etapa.*does not exist/i.test(attempt.error.message || "")) {
+    attempt = await supabase
+      .from("whatsapp_processamentos")
+      .update({ resultado_analise: merged, atualizado_em: now.toISOString() })
+      .eq("id", id)
+      .select("id,resultado_analise")
+      .maybeSingle();
+  }
+  if (attempt.error) return json(res, 500, { ok: false, error: attempt.error.message });
+  if (!attempt.data) return json(res, 404, { ok: false, error: "Lead não encontrado." });
+  return json(res, 200, { ok: true, id, etapa, analysis: attempt.data.resultado_analise || merged, desfecho: vendido ? merged.venda : merged.perda });
 }
 
 // ============ APRENDIZADO ============
