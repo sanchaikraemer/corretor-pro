@@ -11231,3 +11231,68 @@ window.renderLeadFoco=renderLeadFoco;
 
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
 })();
+
+
+/* ============================================================
+   V685-AJUSTES-2 — correção do botão Editar lead
+   O botão era inserido com addEventListener, mas outro ajuste da v683
+   reescrevia o innerHTML dos botões rápidos e removia o listener.
+   Esta delegação captura o clique mesmo após re-render/innerHTML.
+   ============================================================ */
+(function(){
+  if(window.__cp685Ajustes2EditarLeadClick) return;
+  window.__cp685Ajustes2EditarLeadClick = true;
+
+  function leadAtual(){
+    try { return state && state.lead ? state.lead : null; } catch(_) { return null; }
+  }
+  function nomeLead(lead){
+    return String(lead?.name || lead?.analysis?.clientName || lead?.analysis?.lead?.clientName || '').trim();
+  }
+  function telefoneLead(lead){
+    return String(lead?.phone || lead?.analysis?.lead?.phone || lead?.analysis?.telefone || '').trim();
+  }
+  function abrirEditorDoLeadAtual(ev){
+    const btn = ev.target && ev.target.closest ? ev.target.closest('#ui685AjustesEditQuick,#ui685AjustesEditAdmin,[data-action="editar-lead"]') : null;
+    if(!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const lead = leadAtual();
+    if(!lead || !lead.id){
+      try { toast('Abra um lead antes de editar.'); } catch(_) {}
+      return;
+    }
+    if(typeof window.abrirEditarLead !== 'function'){
+      try { toast('Editor do lead não carregou. Recarregue a página.'); } catch(_) {}
+      return;
+    }
+    window.abrirEditarLead(String(lead.id), nomeLead(lead), telefoneLead(lead));
+  }
+
+  document.addEventListener('click', abrirEditorDoLeadAtual, true);
+
+  function reforcarBotaoEditar(){
+    try{
+      document.querySelectorAll('#ui685AjustesEditQuick,#ui685AjustesEditAdmin').forEach(btn => {
+        btn.setAttribute('data-action','editar-lead');
+        btn.onclick = null;
+        btn.style.pointerEvents = 'auto';
+      });
+    }catch(_){}
+  }
+
+  const prevRender = window.renderLeadFoco;
+  if(typeof prevRender === 'function' && !window.__cp685Ajustes2RenderWrapped){
+    window.__cp685Ajustes2RenderWrapped = true;
+    window.renderLeadFoco = function(lead){
+      const out = prevRender.apply(this, arguments);
+      setTimeout(reforcarBotaoEditar, 0);
+      setTimeout(reforcarBotaoEditar, 80);
+      return out;
+    };
+    try { renderLeadFoco = window.renderLeadFoco; } catch(_) {}
+  }
+
+  setTimeout(reforcarBotaoEditar, 0);
+  window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
+})();
