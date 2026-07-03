@@ -10010,16 +10010,28 @@ function ui682ProdutoLead(lead, mc){
 function ui682FallbackMessages(lead, mc){
   const nome = ui682PrimeiroNomeLead(lead);
   const produto = ui682ProdutoLead(lead, mc);
-  const acao = String(mc?.acao?.descricao || lead?.analysis?.nextAction || lead?.nextAction || "").trim();
+  const analysis = lead?.analysis || {};
+  const diag = analysis?.diagnostico || {};
+  const memoria = analysis?.memoriaSugerida || {};
+  const acao = String(mc?.acao?.descricao || analysis?.nextAction || lead?.nextAction || "").trim();
   const status = String(mc?.acao?.status || "");
-  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
-    ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
-    : `sobre ${produto}`;
   const prefixo = nome ? `${nome}, ` : "";
-  const a = `${prefixo}retomando nossa conversa ${assunto}. Pelo que falamos até aqui, consigo te direcionar melhor se você me confirmar esse ponto. Você prefere avançar olhando uma opção dentro desse perfil ou quer que eu te mostre outras alternativas?`;
-  const b = `${prefixo}fiquei com esse ponto em aberto ${assunto}. Com essa confirmação eu consigo evitar te mandar opção fora do que você procura. Você quer seguir por esse caminho ou prefere comparar outras possibilidades?`;
-  const c = `${prefixo}para eu não te mandar algo desalinhado, me confirma uma coisa ${assunto}: esse produto ainda conversa com o que você procura ou faz mais sentido eu buscar outra opção?`;
-  return { a, b, c, aLabel:"Melhor resposta", bLabel:"Alternativa leve", cLabel:"Alternativa firme", recomendada: status === "retomar" ? "a" : "b", fallback:true };
+  const perfil = String(memoria?.perfil || diag?.percepcaoTodaConversa || diag?.sabemos?.join?.(", ") || "").trim();
+  const compromisso = String(diag?.ultimoCompromissoCliente || "").trim();
+  const entregue = String(diag?.ultimaInformacaoPrometida || "").trim();
+  const temVideoFotos = /v[ií]deo|foto|imagem|material|proposta|simula[cç][aã]o/i.test(`${entregue} ${acao}`);
+  const temDecisor = /espos|marid|fam[ií]lia|filh|s[oó]ci|dire[cç][aã]o/i.test(`${compromisso} ${perfil}`);
+  const perfilCurto = /100|110|ampl|pronto|su[ií]te|financi|parcel|entrada|moradia|invest/i.test(perfil) ? perfil : "o perfil que você comentou";
+  const gancho = temVideoFotos
+    ? `Conseguiu ver o material que te enviei${temDecisor ? " e conversar com quem decide junto com você" : ""}?`
+    : `Conseguiu avaliar essa opção com calma?`;
+  const encaixe = produto && produto !== "o imóvel"
+    ? `Como o ${produto} entra bem nesse perfil, queria entender se ele ficou dentro do que vocês procuram`
+    : `Queria entender se essa opção ficou dentro do que vocês procuram`;
+  const a = `${prefixo}tudo bem? ${gancho} ${encaixe} ou se vale eu separar outras opções compatíveis para compararmos melhor.`;
+  const b = `${prefixo}tudo bem? Olhei novamente para ${perfilCurto} e o ${produto} continua sendo uma opção forte para comparar. Vocês conseguiram avaliar o material que enviei?`;
+  const c = `${prefixo}tudo bem? Antes de eu separar novas opções, queria só confirmar a reação de vocês ao ${produto}. Se ele não encaixou, eu já busco alternativas no mesmo padrão.`;
+  return { a, b, c, aLabel:"Retomar pelo combinado", bLabel:"Confirmar reação", cLabel:"Comparar sem perder", recomendada: status === "retomar" ? "a" : "b", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
   const temAlguma = !!(String(msgs?.a||"").trim() || String(msgs?.b||"").trim() || String(msgs?.c||"").trim());
