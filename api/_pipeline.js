@@ -108,6 +108,9 @@ const TERMOS_PROIBIDOS = [
   "pressionar", "pressionando", "forçar", "forçando", "apertar", "apertando",
   "diagnosticar", "ponto final", "passando para saber",
   "fiquei pensando", "estive pensando",
+  "retomando nossa conversa", "ainda conversa com o que",
+  "te mandar algo desalinhado", "opção fora do que você procura",
+  "seguir por esse caminho", "comparar outras possibilidades",
   "caso não tenha agradado", "se não gostou"
 ];
 const RE_TERMOS_PROIBIDOS = new RegExp(
@@ -117,6 +120,11 @@ const RE_TERMOS_PROIBIDOS = new RegExp(
 
 function mensagemTemTermoProibido(txt) {
   return RE_TERMOS_PROIBIDOS.test(String(txt || ""));
+}
+
+function mensagemGenericaSemContexto(txt) {
+  const s = String(txt || "").toLowerCase();
+  return /ainda\s+conversa\s+com\s+o\s+que|quer\s+que\s+eu\s+te\s+mostre\s+outras|prefere\s+comparar\s+outras|outra\s+op[cç][aã]o\s*\?/i.test(s);
 }
 
 function mensagemTemEmoji(txt) {
@@ -137,11 +145,27 @@ const REGRAS_MSG = {
   maxChars: 520
 };
 
+const METODO_RESPOSTA_CONTEXTUAL = `
+MÉTODO OBRIGATÓRIO PARA ESCREVER A MENSAGEM:
+Antes de escrever, reconstrua o ponto exato da conversa e use isso na mensagem. A resposta precisa parecer escrita por um corretor que lembra do histórico, não por um robô olhando apenas o status.
+1) Identifique o último combinado real do cliente (ex.: conversar com esposo, ver vídeo, calcular entrada, falar com banco, retornar em tal dia).
+2) Identifique a última entrega do corretor (ex.: enviou vídeo/fotos, simulação, tabela, localização, convite de visita).
+3) Recupere o perfil declarado pelo cliente (ex.: pronto, amplo, acima de 100 m², 3 suítes, faixa de parcela, financiamento, investimento, moradia).
+4) A mensagem deve citar pelo menos UMA âncora concreta do histórico quando existir: material enviado, pessoa decisora, metragem, produto, combinado ou objeção.
+5) Abra comparação qualificada sem abandonar o produto principal: se o produto encaixa, primeiro teste a reação a ele; só depois ofereça separar opções compatíveis.
+6) Nunca escreva pergunta genérica como “ainda tem interesse?”, “gostou do imóvel?”, “esse produto ainda conversa?”, “quer outra opção?” ou “retomando nossa conversa”.
+7) Quando houver vídeo/fotos enviados e alguém ficou de conversar com esposo/esposa/família, o padrão correto é: perguntar se conseguiram ver o material e conversar, reforçar por que o imóvel encaixa no perfil e oferecer comparar opções equivalentes.
+EXEMPLO DE PADRÃO BOM (adapte aos fatos reais; não copie se não houver esses fatos): “Oi, Silvana! Tudo bem? Conseguiu ver o vídeo do Personalité e conversar com seu esposo? Como ele entra bem nesse perfil de apartamento mais amplo, queria entender se vocês gostaram da opção ou se preferem que eu separe outras alternativas prontas, acima de 100 m², para compararmos melhor.”
+`;
+
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
 const REGRAS_MSG_PROMPT = [
   "- Use exclusivamente a conversa e o diagnóstico abaixo.",
   "- Não invente fato, proposta, valor, visita, produto ou objeção que não esteja na conversa.",
   "- Continue do ponto onde a conversa parou (pendência aberta e próxima ação do diagnóstico).",
+  "- A mensagem precisa conter uma âncora concreta do histórico quando existir: último combinado, material enviado, produto, perfil declarado, decisor, objeção ou valor.",
+  "- Se o cliente ficou de conversar com esposo/esposa/família após receber vídeo, fotos ou proposta, retome exatamente isso antes de oferecer alternativa.",
+  "- Abra comparação qualificada somente depois de testar a reação ao produto principal; não abandone o imóvel que encaixa no perfil.",
   '- Se o contato for corretor parceiro, fale com ele como intermediador ("teu cliente", "cliente final"), nunca como comprador.',
   "- Não repita pergunta já respondida na conversa.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} interrogações por mensagem (de preferência uma pergunta só).`,
@@ -204,6 +228,7 @@ function validarMensagensComerciais({ mensagens, labels, lead, timelineText, par
     if (!label || label.length < 3 || label.length > 48) issues.push(`${k}: rótulo inválido`);
     if (/^(a|b|c|direta|consultiva|retomada|resposta|alternativa|próximo passo)$/i.test(label)) issues.push(`${k}: rótulo genérico`);
     if (mensagemTemTermoProibido(msg) || mensagemTemTermoProibido(label)) issues.push(`${k}: termo proibido`);
+    if (mensagemGenericaSemContexto(msg)) issues.push(`${k}: mensagem genérica sem âncora do histórico`);
     if (mensagemTemEmoji(msg)) issues.push(`${k}: emoji não permitido`);
     if (msg.length > REGRAS_MSG.maxChars) issues.push(`${k}: longa demais para WhatsApp`);
     if ((jaTratouEntrada || /entrada/.test(naoPerguntar)) && mensagemPerguntaEntradaRepetida(msg)) issues.push(`${k}: pergunta entrada novamente`);
@@ -2136,7 +2161,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
+  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
 
 REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
 

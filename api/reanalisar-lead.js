@@ -23,19 +23,26 @@ function garantirMensagensV682(analysis, lead) {
   const nome = primeiroNomeLeadLocal(lead);
   const produto = produtoLeadLocal(lead, out);
   const acao = textoLimpo(mc?.acao?.descricao || out.nextAction || out?.diagnostico?.proximaAcao);
-  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
-    ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
-    : `sobre ${produto}`;
   const prefixo = nome ? `${nome}, ` : "";
-  const fallbackA = textoLimpo(m.a || m.direta || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje) || `${prefixo}retomando nossa conversa ${assunto}. Pelo que falamos até aqui, consigo te direcionar melhor se você me confirmar esse ponto. Você prefere avançar olhando uma opção dentro desse perfil ou quer que eu te mostre outras alternativas?`;
+  const diag = out?.diagnostico || {};
+  const memoria = out?.memoriaSugerida || {};
+  const perfil = textoLimpo(memoria?.perfil || diag?.percepcaoTodaConversa || (Array.isArray(diag?.sabemos) ? diag.sabemos.join(", ") : ""));
+  const compromisso = textoLimpo(diag?.ultimoCompromissoCliente);
+  const entregue = textoLimpo(diag?.ultimaInformacaoPrometida);
+  const temVideoFotos = /v[ií]deo|foto|imagem|material|proposta|simula[cç][aã]o/i.test(`${entregue} ${acao}`);
+  const temDecisor = /espos|marid|fam[ií]lia|filh|s[oó]ci|dire[cç][aã]o/i.test(`${compromisso} ${perfil}`);
+  const perfilCurto = /100|110|ampl|pronto|su[ií]te|financi|parcel|entrada|moradia|invest/i.test(perfil) ? perfil : "o perfil que você comentou";
+  const gancho = temVideoFotos ? `Conseguiu ver o material que te enviei${temDecisor ? " e conversar com quem decide junto com você" : ""}?` : `Conseguiu avaliar essa opção com calma?`;
+  const encaixe = produto && produto !== "o imóvel" ? `Como o ${produto} entra bem nesse perfil, queria entender se ele ficou dentro do que vocês procuram` : `Queria entender se essa opção ficou dentro do que vocês procuram`;
+  const fallbackA = textoLimpo(m.a || m.direta || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje) || `${prefixo}tudo bem? ${gancho} ${encaixe} ou se vale eu separar outras opções compatíveis para compararmos melhor.`;
   out.messages = {
     ...m,
     a: fallbackA,
-    b: textoLimpo(m.b || m.consultiva) || `${prefixo}fiquei com esse ponto em aberto ${assunto}. Com essa confirmação eu consigo evitar te mandar opção fora do que você procura. Você quer seguir por esse caminho ou prefere comparar outras possibilidades?`,
-    c: textoLimpo(m.c || m.retomada) || `${prefixo}para eu não te mandar algo desalinhado, me confirma uma coisa ${assunto}: esse produto ainda conversa com o que você procura ou faz mais sentido eu buscar outra opção?`,
-    aLabel: textoLimpo(m.aLabel) || "Melhor resposta",
-    bLabel: textoLimpo(m.bLabel) || "Alternativa leve",
-    cLabel: textoLimpo(m.cLabel) || "Alternativa firme",
+    b: textoLimpo(m.b || m.consultiva) || `${prefixo}tudo bem? Olhei novamente para ${perfilCurto} e o ${produto} continua sendo uma opção forte para comparar. Vocês conseguiram avaliar o material que enviei?`,
+    c: textoLimpo(m.c || m.retomada) || `${prefixo}tudo bem? Antes de eu separar novas opções, queria só confirmar a reação de vocês ao ${produto}. Se ele não encaixou, eu já busco alternativas no mesmo padrão.`,
+    aLabel: textoLimpo(m.aLabel) || "Retomar pelo combinado",
+    bLabel: textoLimpo(m.bLabel) || "Confirmar reação",
+    cLabel: textoLimpo(m.cLabel) || "Comparar sem perder",
     recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
   };
   out.arquiteturaMensagens = "gpt55-unificado-v2";
