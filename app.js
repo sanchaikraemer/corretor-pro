@@ -10738,3 +10738,163 @@ window.renderLeadFoco=renderLeadFoco;
   }
   window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
+
+
+// ===== v685-1 — Edição do lead + início do Aprendizado Contínuo =====
+// Escopo fechado desta etapa:
+// 1) Editar lead simples: nome, telefone e produto.
+// 2) Registrar desfecho básico de venda/perda para iniciar o aprendizado contínuo.
+(function(){
+  function el(sel){ return document.querySelector(sel); }
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  }
+  function produtoLeadAtual(id){
+    try{
+      if(state.lead && String(state.lead.id) === String(id)) return String(state.lead.product || state.lead.analysis?.produtoInteresse || state.lead.analysis?.product || '');
+    }catch(_){ }
+    return '';
+  }
+  function opcoesProdutos(){
+    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER) ? window.EMPREENDIMENTOS_SENGER : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
+  }
+
+  window.abrirEditarLead = function(id, nome, telefone){
+    if(!id) return;
+    document.getElementById('editarLeadModal')?.remove();
+    const overlay=document.createElement('div');
+    overlay.id='editarLeadModal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
+    let nomeIni=String(nome||'');
+    let telIni=String(telefone||'');
+    try{ if(typeof parecePhone === 'function' && parecePhone(nomeIni)){ if(!telIni) telIni=nomeIni; nomeIni=''; } }catch(_){ }
+    const produtoIni=produtoLeadAtual(id);
+    overlay.innerHTML=`
+      <div style="width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:16px;font-weight:950;color:var(--text)">Editar lead</div><div style="font-size:12px;color:var(--muted);margin-top:3px">Ajuste só os dados principais do atendimento.</div></div>
+          <button type="button" id="editLeadFechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
+        </div>
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
+        <input type="text" id="editLeadNome" value="${esc(nomeIni)}" placeholder="Nome do cliente" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
+        <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" autocomplete="off" inputmode="tel" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
+        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${esc(produtoIni)}" value="${esc(produtoIni)}" placeholder="Ex.: Renaissance" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:16px">
+        <datalist id="editLeadProdutoLista">${opcoesProdutos()}</datalist>
+        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">Salvar alterações</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e=>{ if(e.target===overlay) fecharEditarLead(); });
+    el('#editLeadFechar')?.addEventListener('click', fecharEditarLead);
+    el('#editLeadSalvar')?.addEventListener('click', ()=>salvarEditarLead(String(id)));
+    setTimeout(()=>el('#editLeadNome')?.focus(),100);
+  };
+
+  window.salvarEditarLead = async function(id){
+    const nome=(el('#editLeadNome')?.value||'').trim();
+    const telefone=(el('#editLeadTelefone')?.value||'').trim();
+    const produto=(el('#editLeadProduto')?.value||'').trim();
+    if(!nome && !telefone && !produto){ toast('Informe nome, telefone ou produto.'); return; }
+    const btn=el('#editLeadSalvar');
+    if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+    try{
+      const res=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'editar-dados',nome,telefone,produto})});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok || !data?.ok) throw new Error(data?.error||'falha ao salvar');
+      try{ await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'aprendizado',evento:'dados_lead_editados',estilo:'operacional',detalhes:{nome,telefone,produto,de:'editar_lead_v685'}})}); }catch(_){ }
+      fecharEditarLead();
+      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
+      try{ patchLeadCache(id,{name:nome,phone:telefone,product:produto}); }catch(_){ }
+      if(state.lead && String(state.lead.id)===String(id)){
+        state.lead.name=nome || state.lead.name;
+        state.lead.phone=telefone || state.lead.phone;
+        state.lead.product=produto || state.lead.product;
+        if(state.lead.analysis){
+          if(nome) state.lead.analysis.clientName=nome;
+          if(produto){ state.lead.analysis.produtoInteresse=produto; state.lead.analysis.product=produto; }
+          state.lead.analysis.lead=state.lead.analysis.lead||{};
+          if(nome) state.lead.analysis.lead.clientName=nome;
+          if(telefone) state.lead.analysis.lead.phone=telefone;
+          if(produto) state.lead.analysis.lead.product=produto;
+        }
+      }
+      toast('Lead atualizado.');
+      try{ await loadRecentLeads(); }catch(_){ }
+      try{ await carregarDashboard(); }catch(_){ }
+      try{ await abrirLead(id); }catch(_){ if(state.lead) renderLeadFoco(state.lead); }
+    }catch(err){
+      toast('Erro ao salvar: '+(err?.message||err));
+      if(btn){ btn.disabled=false; btn.textContent='Salvar alterações'; }
+    }
+  };
+
+  function abrirModalDesfecho(id, tipo){
+    const lead=state.lead||{};
+    const nome=lead.name||'Lead';
+    const produto=produtoLeadAtual(id);
+    const vendido=tipo==='vendido';
+    document.getElementById('ui685DesfechoModal')?.remove();
+    const overlay=document.createElement('div');
+    overlay.id='ui685DesfechoModal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
+    overlay.innerHTML=`
+      <div style="width:min(460px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
+        <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:16px;font-weight:950;color:var(--text)">${vendido?'Registrar venda':'Registrar perda'}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(nome)}</div></div>
+          <button type="button" onclick="document.getElementById('ui685DesfechoModal')?.remove()" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
+        </div>
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
+        <input id="ui685Produto" list="ui685Produtos" value="${esc(produto)}" placeholder="Produto relacionado" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
+        ${vendido?`
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Valor vendido (opcional)</label>
+          <input id="ui685Valor" inputmode="decimal" placeholder="Ex.: 650000" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        `:`
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Motivo da perda</label>
+          <select id="ui685Motivo" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+            <option value="não respondeu">Não respondeu</option>
+            <option value="preço">Preço</option>
+            <option value="financiamento/renda">Financiamento / renda</option>
+            <option value="comprou concorrente">Comprou concorrente</option>
+            <option value="produto não aderente">Produto não aderente</option>
+            <option value="desistiu/adiou">Desistiu / adiou</option>
+            <option value="outro">Outro</option>
+          </select>
+        `}
+        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'linear-gradient(135deg,var(--lime),var(--acao))':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+    el('#ui685SalvarDesfecho')?.addEventListener('click', ()=>salvarDesfecho(id,tipo));
+  }
+
+  async function salvarDesfecho(id,tipo){
+    const vendido=tipo==='vendido';
+    const etapa=vendido?'Vendido':'Perdido';
+    const produto=(el('#ui685Produto')?.value||'').trim();
+    const valor=(el('#ui685Valor')?.value||'').trim();
+    const motivo=(el('#ui685Motivo')?.value||'').trim();
+    const btn=el('#ui685SalvarDesfecho'); if(btn){btn.disabled=true;btn.textContent='Salvando...';}
+    try{
+      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'etapa',etapa})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok || !d?.ok) throw new Error(d?.error||'falha ao alterar etapa');
+      await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'aprendizado',evento:vendido?'venda_registrada':'perda_registrada',estilo:'desfecho',detalhes:{produto,valorVendido:valor,motivoPerda:motivo,registradoEm:new Date().toISOString(),de:'v685-1'}})}).catch(()=>null);
+      if(produto){
+        await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'editar-dados',produto})}).catch(()=>null);
+      }
+      document.getElementById('ui685DesfechoModal')?.remove();
+      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
+      toast(vendido?'Venda registrada.':'Perda registrada.');
+      try{ await carregarDashboard(); }catch(_){ }
+      try{ await abrirLead(id); }catch(_){ }
+    }catch(err){ toast('Não consegui registrar: '+(err?.message||err)); if(btn){btn.disabled=false;btn.textContent=vendido?'Confirmar venda':'Confirmar perda';} }
+  }
+
+  window.abrirVenda = function(id){ abrirModalDesfecho(String(id),'vendido'); };
+  window.marcarPerdido = function(id){ abrirModalDesfecho(String(id),'perdido'); };
+  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-1';
+})();
