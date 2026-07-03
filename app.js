@@ -10319,7 +10319,7 @@ window.renderLeadFoco=renderLeadFoco;
   }
   function ui683Origem(ev){
     const de=ev?.detalhes?.de||ev?.detalhes?.tipo||'';
-    return ({botao_atendido:'marcado no botão Atendido',novoAtendimento:'observação/atendimento registrado',listaPrioridade:'marcado pela lista',copiar_msg:'mensagem copiada',leadFoco:'detalhe do lead'})[de] || 'atendimento registrado';
+    return ({botao_atendido:'marcado no botão Marcar atendimento',novoAtendimento:'observação/atendimento registrado',listaPrioridade:'marcado pela lista',copiar_msg:'mensagem copiada',leadFoco:'detalhe do lead'})[de] || 'atendimento registrado';
   }
   function ui683AtendidosHoje(base){
     const hoje = typeof inicioDoDiaBR === 'function' ? inicioDoDiaBR() : (()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
@@ -10443,7 +10443,7 @@ window.renderLeadFoco=renderLeadFoco;
     const actions=document.createElement('div'); actions.id='ui683LeadTools'; actions.className='ui683-actions';
     const id=JSON.stringify(String(lead?.id||'')); const nome=safeJson(lead?.name||''); const prod=safeJson(lead?.product||'');
     actions.innerHTML=`
-      <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Atendido agora</button>
+      <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Marcar atendimento</button>
       <button type="button" onclick="ui631CopyResponse&&ui631CopyResponse()">Copiar resposta</button>
       <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
@@ -11004,24 +11004,32 @@ window.renderLeadFoco=renderLeadFoco;
           <div><div style="font-size:16px;font-weight:950;color:var(--text)">${vendido?'Registrar venda':'Registrar perda'}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(lead.name || 'Lead')}</div></div>
           <button type="button" id="ui685Fechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
         </div>
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento vendido / relacionado</label>
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento</label>
         <input id="ui685Produto" list="ui685Produtos" value="${esc(produtoAtual(lead))}" placeholder="Ex.: Renaissance" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
         <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
         ${vendido ? `
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Unidade <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700">(opcional)</span></label>
+          <input id="ui685Unidade" placeholder="Ex.: 903, 1801, lote 22" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Valor vendido</label>
           <input id="ui685Valor" inputmode="decimal" placeholder="Ex.: 650000" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Comissão <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700">(opcional)</span></label>
+          <input id="ui685Comissao" inputmode="decimal" placeholder="Ex.: 19500" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
         ` : `
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Motivo da perda</label>
           <select id="ui685Motivo" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-            <option value="não respondeu">Não respondeu</option>
-            <option value="preço">Preço</option>
-            <option value="financiamento/renda">Financiamento / renda</option>
-            <option value="comprou concorrente">Comprou concorrente</option>
-            <option value="produto não aderente">Produto não aderente</option>
-            <option value="desistiu/adiou">Desistiu / adiou</option>
-            <option value="outro">Outro</option>
+            <option value="Comprou concorrente">Comprou concorrente</option>
+            <option value="Valor">Valor</option>
+            <option value="Financiamento">Financiamento</option>
+            <option value="Produto inadequado">Produto inadequado</option>
+            <option value="Desistiu">Desistiu</option>
+            <option value="Sem retorno">Sem retorno</option>
+            <option value="Outro">Outro</option>
           </select>
         `}
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Data</label>
+        <input id="ui685Data" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação</label>
+        <textarea id="ui685Observacao" rows="3" placeholder="Anote o que pesou nesse desfecho" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px;resize:vertical"></textarea>
         <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px">O sistema calculará tempo até o desfecho, quantidade de contatos e registrará isso no aprendizado do lead.</div>
         <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'linear-gradient(135deg,var(--lime),var(--acao))':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
       </div>`;
@@ -11033,13 +11041,17 @@ window.renderLeadFoco=renderLeadFoco;
   async function salvarDesfechoFinal(id,tipo){
     const vendido = tipo === 'vendido';
     const produto = (q('#ui685Produto')?.value || '').trim();
+    const unidade = (q('#ui685Unidade')?.value || '').trim();
     const valor = (q('#ui685Valor')?.value || '').trim();
+    const comissao = (q('#ui685Comissao')?.value || '').trim();
     const motivo = (q('#ui685Motivo')?.value || '').trim();
+    const data = (q('#ui685Data')?.value || '').trim();
+    const observacao = (q('#ui685Observacao')?.value || '').trim();
     if(vendido && !valor){ toast('Informe o valor vendido.'); return; }
     if(!vendido && !motivo){ toast('Informe o motivo da perda.'); return; }
     const btn=q('#ui685SalvarDesfecho'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
     try{
-      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'desfecho',tipo,produto,valorVendido:valor,motivoPerda:motivo})});
+      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'desfecho',tipo,produto,unidade,valorVendido:valor,comissao,motivoPerda:motivo,data,observacao})});
       const d=await r.json().catch(()=>({}));
       if(!r.ok || !d?.ok) throw new Error(d?.error || 'falha ao registrar desfecho');
       document.getElementById('ui685DesfechoModal')?.remove();
@@ -11052,7 +11064,7 @@ window.renderLeadFoco=renderLeadFoco;
   }
   window.abrirVenda = function(id){ abrirModalDesfechoFinal(String(id),'vendido'); };
   window.marcarPerdido = function(id){ abrirModalDesfechoFinal(String(id),'perdido'); };
-  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-final';
+  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '686-1';
 })();
 
 // ===== v685-ajustes — Editar lead e exibir telefone =====

@@ -1045,6 +1045,17 @@ function normalizarDinheiroV685(raw) {
   return Math.round(n * 100) / 100;
 }
 
+function normalizarDataDesfechoV686(valor) {
+  const raw = String(valor || "").trim();
+  if (!raw) return new Date();
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00.000Z`) : new Date(raw);
+  return d && !Number.isNaN(d.getTime()) ? d : new Date();
+}
+
+function textoCurtoV686(valor, max = 500) {
+  return typeof valor === "string" ? valor.trim().slice(0, max) : "";
+}
+
 function dataPrimeiroContatoV685(timeline, fallback) {
   const arr = Array.isArray(timeline) ? timeline : [];
   for (const m of arr) {
@@ -1072,9 +1083,13 @@ async function acaoDesfecho(id, body, res) {
   if (!["vendido", "perdido"].includes(tipo)) return json(res, 400, { ok: false, error: "Informe tipo vendido ou perdido." });
   const vendido = tipo === "vendido";
   const etapa = vendido ? "Vendido" : "Perdido";
-  const produto = typeof body?.produto === "string" ? body.produto.trim().slice(0, 120) : "";
+  const produto = textoCurtoV686(body?.produto, 120);
+  const unidade = textoCurtoV686(body?.unidade, 80);
   const valorVendido = normalizarDinheiroV685(body?.valorVendido);
-  const motivoPerda = typeof body?.motivoPerda === "string" ? body.motivoPerda.trim().slice(0, 180) : "";
+  const comissao = normalizarDinheiroV685(body?.comissao);
+  const motivoPerda = textoCurtoV686(body?.motivoPerda, 180);
+  const observacao = textoCurtoV686(body?.observacao, 1000);
+  const dataDesfecho = normalizarDataDesfechoV686(body?.data || body?.dataDesfecho);
 
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
@@ -1110,7 +1125,7 @@ async function acaoDesfecho(id, body, res) {
     contatosAteVenda: vendido ? contatosAteDesfecho : null,
     contatosAtePerda: vendido ? null : contatosAteDesfecho,
     dataPrimeiroContato: primeiro.toISOString(),
-    dataDesfecho: now.toISOString()
+    dataDesfecho: dataDesfecho.toISOString()
   };
 
   const evento = {
@@ -1118,13 +1133,17 @@ async function acaoDesfecho(id, body, res) {
     estilo: "desfecho",
     detalhes: {
       produto: funilReal.produto,
+      unidade: vendido ? unidade : null,
       valorVendido: vendido ? valorVendido : null,
+      comissao: vendido ? comissao : null,
       motivoPerda: vendido ? null : (motivoPerda || "não informado"),
+      observacao: observacao || null,
+      dataInformada: dataDesfecho.toISOString(),
       tempoAteFechamentoDias: tempoDias,
       contatosAteVenda: vendido ? contatosAteDesfecho : null,
       contatosAtePerda: vendido ? null : contatosAteDesfecho,
       funilReal,
-      de: "v685-final"
+      de: "v686"
     },
     quando: now.toISOString()
   };
@@ -1134,9 +1153,16 @@ async function acaoDesfecho(id, body, res) {
 
   if (vendido) {
     merged.venda = {
+      empreendimento: funilReal.produto,
       produto: funilReal.produto,
+      unidade,
       valor: valorVendido,
-      vendidoEm: now.toISOString(),
+      comissao,
+      observacao,
+      observacoes: observacao,
+      data: dataDesfecho.toISOString(),
+      registradaEm: dataDesfecho.toISOString(),
+      vendidoEm: dataDesfecho.toISOString(),
       tempoAteFechamentoDias: tempoDias,
       contatosAteVenda: contatosAteDesfecho,
       funilReal
@@ -1144,9 +1170,14 @@ async function acaoDesfecho(id, body, res) {
     delete merged.perda;
   } else {
     merged.perda = {
+      empreendimento: funilReal.produto,
       produto: funilReal.produto,
       motivo: motivoPerda || "não informado",
-      perdidoEm: now.toISOString(),
+      observacao,
+      observacoes: observacao,
+      data: dataDesfecho.toISOString(),
+      registradaEm: dataDesfecho.toISOString(),
+      perdidoEm: dataDesfecho.toISOString(),
       tempoAtePerdaDias: tempoDias,
       contatosAtePerda: contatosAteDesfecho,
       funilReal
