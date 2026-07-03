@@ -10599,7 +10599,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   V684-1 — IA COMERCIAL 2.0
+   V684-2 — IA COMERCIAL 2.0
    - mostra raciocínio comercial proativo no lead
    - perfil do cliente, risco de perda, mudança de comportamento
    - próxima ação ideal, produto adequado, estratégia e sinais
@@ -10614,8 +10614,8 @@ window.renderLeadFoco=renderLeadFoco;
     st.textContent=`
       .ui684-card{margin:14px 0;padding:16px;border:1px solid rgba(55,232,255,.28);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.075),rgba(255,107,92,.04));box-shadow:0 12px 36px rgba(0,0,0,.14)}
       .ui684-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.ui684-head h3{margin:0;font-size:17px;color:#fff}.ui684-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.ui684-badge{border:1px solid rgba(55,232,255,.42);color:var(--dados);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
-      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-risk{font-size:22px;font-weight:950;color:var(--acao);line-height:1}.ui684-risk small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}
-      @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}}
+      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-risk{font-size:22px;font-weight:950;color:var(--acao);line-height:1}.ui684-risk small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-risk-reason{margin-top:7px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(55,232,255,.22);border-radius:13px;background:rgba(55,232,255,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}.ui684-score{display:flex;gap:10px;align-items:baseline}.ui684-score strong{font-size:26px;color:#fff}.ui684-score span{font-size:11px;color:var(--muted);font-weight:900}
+      @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}.ui684-card{margin-top:12px}}
     `;
     document.head.appendChild(st);
   }
@@ -10643,20 +10643,49 @@ window.renderLeadFoco=renderLeadFoco;
     const ia=ui684Data(lead);
     const risco=ia.riscoPerda||{};
     const pct=Number(risco.percentual); const pctTxt=Number.isFinite(pct)?`${Math.round(pct)}%`:'—';
+    const indice=Number(ia.indiceComercial?.total ?? ia.indiceComercial);
+    const confianca=Number(ia.confiancaAnalise?.percentual ?? ia.confiancaAnalise);
+    const fatoresRisco=Array.isArray(risco.fatores)?risco.fatores:[];
+    const fatoresProtecao=Array.isArray(risco.protecao)?risco.protecao:[];
+    const motivoRisco=risco.explicacao||risco.motivo||'Risco calculado pelos sinais da conversa, etapa comercial e pendências abertas.';
     return `<section id="ui684IAComercial" class="ui684-card">
-      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: risco, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684</span></div>
+      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: risco, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-2</span></div>
       <div class="ui684-grid">
         <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Risco de perda</span><div class="ui684-risk">${ui684Esc(pctTxt)} <small>${ui684Esc(risco.nivel||'')}</small></div><div class="ui684-val" style="margin-top:6px;color:var(--muted)">${ui684Esc(risco.motivo||'')}</div></div>
+        <div class="ui684-item"><span class="ui684-lab">Risco de perda</span><div class="ui684-risk">${ui684Esc(pctTxt)} <small>${ui684Esc(risco.nivel||'')}</small></div><div class="ui684-risk-reason">${ui684Esc(motivoRisco)}</div></div>
+        ${Number.isFinite(indice)?`<div class="ui684-item"><span class="ui684-lab">Índice comercial</span><div class="ui684-score"><strong>${Math.round(indice)}</strong><span>/100</span></div></div>`:''}
+        ${Number.isFinite(confianca)?`<div class="ui684-item"><span class="ui684-lab">Confiança da leitura</span><div class="ui684-score"><strong>${Math.round(confianca)}%</strong></div></div>`:''}
         <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(ia.proximaAcaoIdeal)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Produto mais adequado</span><div class="ui684-val">${ui684Esc(ia.produtoMaisAdequado)}</div></div>
         <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
         <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
+        ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Por que este risco?</span>${fatoresRisco.length?`<div class="ui684-val"><b>Pressiona:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Protege:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
         <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
       </div>
     </section>`;
+  }
+  function ui684MotivoProximaAcao(lead){
+    const ia=ui684Data(lead);
+    const risco=ia.riscoPerda||{};
+    const motivo=ia.motivoProximaAcao||ia.porqueProximaAcao||ia.explicacaoProximaAcao||risco.motivo||'';
+    if(motivo) return motivo;
+    const acao=String(ia.proximaAcaoIdeal||'').toLowerCase();
+    if(/simula|par[aâ]metro|financeir|entrada|parcela/.test(acao)) return 'porque a pendência principal é financeira e a próxima conversa precisa destravar viabilidade.';
+    if(/visita|café|conhecer|decorado/.test(acao)) return 'porque o lead já tem sinais de interesse e precisa de um compromisso prático.';
+    if(/responder|retomar/.test(acao)) return 'porque existe pendência aberta e a retomada deve usar o último ponto concreto da conversa.';
+    return 'porque esta é a ação com maior chance de avançar o lead sem gerar pressão desnecessária.';
+  }
+  function ui684EnhanceActionCard(lead){
+    const action=document.querySelector('.ui670-action-card');
+    if(!action) return;
+    action.querySelector('.ui684-action-reason')?.remove();
+    const div=document.createElement('div');
+    div.className='ui684-action-reason';
+    div.innerHTML=`<b>Por que:</b> ${ui684Esc(ui684MotivoProximaAcao(lead))}`;
+    const h3=action.querySelector('h3');
+    if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
   const anterior=window.renderLeadFoco;
   if(typeof anterior==='function'){
@@ -10667,13 +10696,19 @@ window.renderLeadFoco=renderLeadFoco;
         const wrap=document.querySelector('#leadFocoArea .lead-foco')||document.querySelector('#leadFocoArea');
         if(!wrap) return;
         document.getElementById('ui684IAComercial')?.remove();
-        const ref=document.querySelector('.ui-lead-main')||document.querySelector('#ui683LeadTools')||wrap.firstElementChild;
         const tmp=document.createElement('div'); tmp.innerHTML=ui684RenderCard(lead);
         const card=tmp.firstElementChild;
-        if(ref && ref.parentNode) ref.parentNode.insertBefore(card, ref.nextSibling); else wrap.prepend(card);
+        const actionCard=document.querySelector('.ui670-action-card');
+        const msgCard=document.querySelector('.ui670-message-card');
+        const details=document.querySelector('.ui670-details');
+        if(actionCard && actionCard.parentNode) actionCard.parentNode.insertBefore(card, actionCard.nextSibling);
+        else if(msgCard && msgCard.parentNode) msgCard.parentNode.insertBefore(card, msgCard);
+        else if(details && details.parentNode) details.parentNode.insertBefore(card, details);
+        else wrap.prepend(card);
+        ui684EnhanceActionCard(lead);
       }catch(e){ console.warn('ui684',e); }
     };
     renderLeadFoco=window.renderLeadFoco;
   }
-  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-1';
+  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-2';
 })();
