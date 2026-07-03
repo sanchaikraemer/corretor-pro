@@ -44,40 +44,6 @@ function garantirMensagensV682(analysis, lead) {
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
   return out;
 }
-
-function timelineSinteticaParaReanalise(row, previous) {
-  const nome = textoLimpo(previous?.clientName || previous?.lead?.clientName || previous?.lead?.name || row?.nome_arquivo || "Contato");
-  const produto = textoLimpo(previous?.produtoInteresse || previous?.modeloComercial?.oportunidade?.produto || previous?.lead?.product || row?.etapa || "Não identificado");
-  const partes = [];
-  if (nome) partes.push(`Contato: ${nome}.`);
-  if (produto) partes.push(`Produto/empreendimento: ${produto}.`);
-  if (textoLimpo(previous?.summary)) partes.push(`Resumo anterior: ${textoLimpo(previous.summary)}`);
-  if (textoLimpo(previous?.clientProfile)) partes.push(`Perfil anterior: ${textoLimpo(previous.clientProfile)}`);
-  if (textoLimpo(previous?.nextAction)) partes.push(`Próxima ação anterior: ${textoLimpo(previous.nextAction)}`);
-  if (textoLimpo(previous?.diagnostico?.proximaAcao)) partes.push(`Diagnóstico anterior: ${textoLimpo(previous.diagnostico.proximaAcao)}`);
-  if (textoLimpo(previous?.diagnostico?.objecaoPrincipal)) partes.push(`Objeção anterior: ${textoLimpo(previous.diagnostico.objecaoPrincipal)}`);
-  if (textoLimpo(previous?.memoria?.observacoes)) partes.push(`Observações do corretor: ${textoLimpo(previous.memoria.observacoes)}`);
-  if (previous?.messages && typeof previous.messages === "object") {
-    const msg = textoLimpo(previous.messages.a || previous.messages.mensagem || previous.messages.direta);
-    if (msg) partes.push(`Última mensagem sugerida anteriormente: ${msg}`);
-  }
-  const texto = partes.join("\n") || "Lead sem histórico de mensagens importado. Recalcule com base nos dados cadastrais e mantenha uma abordagem comercial segura, curta e consultiva.";
-  const now = new Date();
-  const br = agoraBR(now);
-  return [{
-    id: 1,
-    date: br.dataBR,
-    time: br.horaBR,
-    iso: now.toISOString(),
-    author: "Sistema",
-    text: texto.slice(0, 12000),
-    type: "resumo-sintetico",
-    source: "sistema",
-    order: 1,
-    sintetico: true
-  }];
-}
-
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
 function diaSemanaBR() {
   const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(new Date());
@@ -176,6 +142,84 @@ function ajusteScoreDoTexto(txt) {
   return delta;
 }
 
+
+function normalizarTextoV684(v) {
+  return String(v || "").trim();
+}
+function textoTimelineV684(timeline) {
+  return (Array.isArray(timeline) ? timeline : [])
+    .map(m => `${m?.author || ""}: ${m?.text || m?.body || ""}`)
+    .join("\n")
+    .toLowerCase();
+}
+function enriquecerIAComercialV684(analysis, lead, timeline) {
+  const out = (analysis && typeof analysis === "object") ? analysis : {};
+  const txt = textoTimelineV684(timeline);
+  const diag = (out.diagnostico && typeof out.diagnostico === "object") ? out.diagnostico : {};
+  const lc = (out.leituraComercial && typeof out.leituraComercial === "object") ? out.leituraComercial : {};
+  const ac = (out.analiseComercial && typeof out.analiseComercial === "object") ? out.analiseComercial : {};
+  const mem = (out.memoria && typeof out.memoria === "object") ? out.memoria : {};
+  const sinais = [];
+  const alertas = [];
+  const tem = (re) => re.test(txt);
+  if (tem(/financi|caixa|fgts|entrada|parcela|simula|aprova|cr[eé]dito/)) sinais.push("Existe sinal financeiro na conversa: financiamento, entrada, parcela, FGTS ou simulação.");
+  if (tem(/visita|decorado|conhecer|ver o im[oó]vel|café|construtora|plant[aã]o/)) sinais.push("Existe sinal de avanço prático: visita, café, decorado ou ida à construtora.");
+  if (tem(/proposta|valor final|desconto|reserva|unidade|box|vaga|contraproposta/)) sinais.push("Existe sinal de negociação: proposta, unidade, vaga, reserva, desconto ou contraproposta.");
+  if (tem(/gostei|interesse|me interessa|quero|combina|perfeito|vamos/)) sinais.push("Existe sinal verbal de interesse real no produto ou na continuidade.");
+  if (tem(/vou pensar|vou analisar|te aviso|te retorno|qualquer coisa|mais pra frente|semana que vem|m[eê]s que vem/)) alertas.push("Há risco de esfriar: o cliente pediu tempo, deixou retorno em aberto ou empurrou decisão.");
+  if (tem(/caro|alto|n[aã]o cabe|fora do orçamento|parcel(a|as).*pesad|entrada.*alta/)) alertas.push("Objeção de preço ou capacidade de pagamento aparece como trava provável.");
+  if (tem(/concorr|outro empreendimento|outra construtora|tamb[eé]m estou vendo|comparando/)) alertas.push("Cliente está comparando alternativas; abordagem precisa defender diferencial, não só preço.");
+
+  const objetivo = normalizarTextoV684(diag.objetivo || ac.produtoPrincipalInteresse || lead?.product || out.product || "produto ainda pouco definido");
+  const etapa = normalizarTextoV684(diag.etapa || ac.etapaFunil || lc.etapa || out.stage || "etapa não definida");
+  const perfil = (() => {
+    if (tem(/invest|alugar|renda|valoriza/)) return "investidor: tende a responder melhor a rentabilidade, liquidez, prazo e valorização";
+    if (tem(/morar|fam[ií]lia|esposa|marido|filho|casa pr[oó]pria/)) return "moradia: tende a decidir por segurança, conforto, localização e encaixe financeiro";
+    if (tem(/corretor|cliente meu|meu cliente|parceir/)) return "intermediador/parceiro: precisa de informação objetiva para levar ao cliente final";
+    if (tem(/quanto|valor|tabela|preço|preco|condi[cç][aã]o/) && !tem(/visita|proposta|simula/)) return "pesquisador inicial: ainda está coletando preço e precisa ser qualificado";
+    return normalizarTextoV684(out.clientProfile) || "perfil ainda em leitura; continuar qualificando sem pressionar";
+  })();
+
+  const riscoPerda = (() => {
+    let score = 25;
+    if (alertas.length) score += 25;
+    if (tem(/concorr|comparando|outra construtora/)) score += 15;
+    if (tem(/proposta|visita|simula|reserva|contraproposta/)) score -= 10;
+    if (tem(/gostei|quero|vamos|me interessa/)) score -= 8;
+    score = Math.max(5, Math.min(95, score));
+    const nivel = score >= 70 ? "alto" : score >= 45 ? "médio" : "baixo";
+    return { percentual: score, nivel, motivo: alertas[0] || "risco calculado pelos sinais da conversa e pela etapa atual" };
+  })();
+
+  const proximaAcao = normalizarTextoV684(
+    lc.oQueDestravar || diag.proximaAcaoCorreta || ac.proximaAcaoCorreta || out.nextAction || out.melhorPergunta ||
+    "fazer uma pergunta objetiva para destravar o próximo passo comercial"
+  );
+  const produto = normalizarTextoV684(ac.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || out.product || "produto mais aderente ao perfil demonstrado");
+  const estrategia = (() => {
+    if (/financeir|entrada|parcela|fgts|simula/i.test(proximaAcao + " " + txt)) return "conduzir por viabilidade financeira: confirmar entrada, parcela confortável e prazo antes de empurrar produto";
+    if (/visita|conhecer|café|decorado/i.test(proximaAcao + " " + txt)) return "conduzir para compromisso prático: visita, café ou apresentação objetiva do produto";
+    if (/compar|concorr/i.test(txt)) return "comparar com segurança: destacar diferencial real do produto sem desvalorizar concorrente";
+    return "retomar com contexto específico da conversa e uma pergunta principal, sem mensagem genérica";
+  })();
+
+  out.iaComercialV2 = {
+    versao: 684,
+    perfilCliente: perfil,
+    etapaComercial: etapa,
+    mudancaComportamento: alertas.length ? "Atenção: a conversa mostra sinais de esfriamento ou comparação. A retomada precisa ser precisa e com próximo passo claro." : "Sem mudança negativa clara; manter avanço pelo último ponto concreto da conversa.",
+    riscoPerda,
+    proximaAcaoIdeal: proximaAcao,
+    produtoMaisAdequado: produto,
+    estrategiaAbordagem: estrategia,
+    sinaisPositivos: sinais.slice(0, 4),
+    alertas: alertas.slice(0, 4),
+    raciocinioComercial: `Perfil: ${perfil}. Etapa: ${etapa}. Melhor caminho agora: ${estrategia}. Próxima ação: ${proximaAcao}.`,
+    geradoEm: new Date().toISOString()
+  };
+  return out;
+}
+
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST." });
@@ -194,9 +238,7 @@ export default async function handler(req, res) {
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!row) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
-  const timelineOriginal = Array.isArray(row.timeline_json) ? row.timeline_json : [];
-  let timeline = timelineOriginal;
-  const previousBase = row.resultado_analise || {};
+  const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
 
   // Excluir UM item da timeline (ex.: proposta duplicada). Identifica pelo iso. Não reanalisa.
   if (body?.action === "remover-item") {
@@ -337,14 +379,11 @@ export default async function handler(req, res) {
   // Permite marcar outros tipos, ex: "Mensagem enviada (WhatsApp)" quando o corretor copia a mensagem.
   const autorManual = String(body?.autorManual || "Atendimento (corretor)").slice(0, 60);
   const tipoManual = String(body?.tipoManual || "atendimento").slice(0, 30);
-  // A partir da v683-3, lead sem timeline recebe fallback sintético acima.
+  if (!timeline.length && !novoAtendimento) return json(res, 400, { ok: false, error: "Lead sem timeline pra reanalisar." });
 
   const openai = getOpenAI();
 
-  const previous = previousBase;
-  // Leads criados/importados sem timeline não podem travar a atualização comercial.
-  // Usa um resumo sintético apenas para cálculo; não grava timeline falsa no banco.
-  if (!timeline.length && !novoAtendimento) timeline = timelineSinteticaParaReanalise(row, previous);
+  const previous = row.resultado_analise || {};
   const leadModelo = {
     ...(previous.lead || {}),
     name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
@@ -514,8 +553,9 @@ export default async function handler(req, res) {
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensV682(novoAnalysis, leadModelo);
-  novoAnalysis._schemaComercial = 683;
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 683;
+  novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
+  novoAnalysis._schemaComercial = 684;
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 684;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -543,8 +583,9 @@ export default async function handler(req, res) {
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensV682(merged, leadModelo);
-  merged._schemaComercial = 683;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 683;
+  merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
+  merged._schemaComercial = 684;
+  if (merged.modeloComercial) merged.modeloComercial.versao = 684;
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
   // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
   if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
@@ -585,8 +626,9 @@ export default async function handler(req, res) {
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensV682(retryMerged, leadModelo);
-    retryMerged._schemaComercial = 683;
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 683;
+    retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
+    retryMerged._schemaComercial = 684;
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 684;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -606,9 +648,9 @@ export default async function handler(req, res) {
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 683) {
-    const forced = garantirMensagensV682({ ...merged, _schemaComercial: 683, reanalisadoEm: new Date().toISOString() }, leadModelo);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 683;
+  if (!persisted || persistedSchema < 684) {
+    const forced = enriquecerIAComercialV684(garantirMensagensV682({ ...merged, _schemaComercial: 684, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
+    if (forced.modeloComercial) forced.modeloComercial.versao = 684;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -617,8 +659,8 @@ export default async function handler(req, res) {
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
     persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 683) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 683." });
+    if (persistedSchema < 684) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 684." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 683, apiVersion: 683 });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 684, apiVersion: 684 });
 }
