@@ -10898,3 +10898,159 @@ window.renderLeadFoco=renderLeadFoco;
   window.marcarPerdido = function(id){ abrirModalDesfecho(String(id),'perdido'); };
   window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-1';
 })();
+
+// ===== v685-final — Aprendizado Contínuo completo =====
+// Fecha o módulo 685: venda/perda com produto, valor/motivo, tempo, contatos e funil real.
+(function(){
+  function q(sel){ return document.querySelector(sel); }
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function moedaBR(v){
+    const n = Number(v);
+    if(!Number.isFinite(n) || n <= 0) return 'não informado';
+    try{ return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }catch(_){ return 'R$ '+String(n); }
+  }
+  function diasTexto(n){
+    const d = Number(n);
+    if(!Number.isFinite(d) || d < 0) return 'não calculado';
+    if(d === 0) return 'no mesmo dia';
+    if(d === 1) return '1 dia';
+    return `${d} dias`;
+  }
+  function produtoAtual(lead){
+    return String(lead?.product || lead?.analysis?.produtoInteresse || lead?.analysis?.product || lead?.analysis?.lead?.product || '').trim();
+  }
+  function opcoesProdutos(){
+    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER) ? window.EMPREENDIMENTOS_SENGER : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
+  }
+  function desfechoAtual(lead){
+    const a = lead?.analysis || {};
+    if(a.venda) return { tipo:'vendido', ...a.venda };
+    if(a.perda) return { tipo:'perdido', ...a.perda };
+    const evs = Array.isArray(a?.aprendizado?.eventos) ? a.aprendizado.eventos : [];
+    const ev = [...evs].reverse().find(e => /venda_registrada|perda_registrada/.test(String(e?.evento||'')));
+    if(!ev) return null;
+    const d = ev.detalhes || {};
+    return ev.evento === 'venda_registrada'
+      ? { tipo:'vendido', produto:d.produto, valor:d.valorVendido, vendidoEm:ev.quando, tempoAteFechamentoDias:d.tempoAteFechamentoDias, contatosAteVenda:d.contatosAteVenda, funilReal:d.funilReal }
+      : { tipo:'perdido', produto:d.produto, motivo:d.motivoPerda, perdidoEm:ev.quando, tempoAtePerdaDias:d.tempoAteFechamentoDias || d.tempoAtePerdaDias, contatosAtePerda:d.contatosAtePerda, funilReal:d.funilReal };
+  }
+  function cardAprendizado(lead){
+    const d = desfechoAtual(lead);
+    if(!d) return '';
+    const vendido = d.tipo === 'vendido';
+    const titulo = vendido ? 'Venda registrada' : 'Perda registrada';
+    const data = vendido ? (d.vendidoEm || d.funilReal?.dataDesfecho) : (d.perdidoEm || d.funilReal?.dataDesfecho);
+    const tempo = vendido ? d.tempoAteFechamentoDias : (d.tempoAtePerdaDias ?? d.funilReal?.tempoAteFechamentoDias);
+    const contatos = vendido ? d.contatosAteVenda : d.contatosAtePerda;
+    return `<section class="card ui685-final-card" style="margin-top:14px;border-color:${vendido?'rgba(124,240,165,.28)':'rgba(255,107,122,.28)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:18px;font-weight:950;color:var(--text)">${vendido?'✅':'⚠️'} Aprendizado contínuo</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px">Este desfecho alimenta o funil real e as próximas recomendações da IA.</div>
+        </div>
+        <span style="font-size:12px;font-weight:950;border:1px solid ${vendido?'rgba(124,240,165,.35)':'rgba(255,107,122,.35)'};color:${vendido?'var(--acao)':'#ff8b8b'};border-radius:999px;padding:7px 10px">${titulo}</span>
+      </div>
+      <div class="grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <div class="mini"><b>Produto</b><span>${esc(d.produto || d.funilReal?.produto || produtoAtual(lead) || 'não informado')}</span></div>
+        ${vendido ? `<div class="mini"><b>Valor vendido</b><span>${esc(moedaBR(d.valor))}</span></div>` : `<div class="mini"><b>Motivo da perda</b><span>${esc(d.motivo || 'não informado')}</span></div>`}
+        <div class="mini"><b>Tempo até ${vendido?'fechamento':'perda'}</b><span>${esc(diasTexto(tempo))}</span></div>
+        <div class="mini"><b>Contatos até ${vendido?'venda':'perda'}</b><span>${esc(contatos ?? 'não calculado')}</span></div>
+      </div>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px">Registrado em: ${esc(typeof formatarQuandoLead === 'function' ? formatarQuandoLead(data) : (data || 'agora'))}</div>
+    </section>`;
+  }
+  function injectStyles(){
+    if(document.getElementById('ui685FinalStyle')) return;
+    const st=document.createElement('style'); st.id='ui685FinalStyle'; st.textContent=`
+      .ui685-final-card .mini{border:1px solid var(--line);border-radius:13px;padding:10px;background:rgba(255,255,255,.025)}
+      .ui685-final-card .mini b{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px}
+      .ui685-final-card .mini span{display:block;color:var(--text);font-weight:850;font-size:13px;line-height:1.35}
+      @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
+    `; document.head.appendChild(st);
+  }
+  if(typeof renderLeadFoco === 'function' && !window.__ui685FinalWrapped){
+    window.__ui685FinalWrapped = true;
+    const prev = renderLeadFoco;
+    window.renderLeadFoco = function(lead){
+      const out = prev.apply(this, arguments);
+      try{
+        injectStyles();
+        document.querySelector('.ui685-final-card')?.remove();
+        const html = cardAprendizado(lead);
+        if(html){
+          const tmp=document.createElement('div'); tmp.innerHTML=html;
+          const ref=document.querySelector('.ui670-details') || document.querySelector('.ui684-card') || document.querySelector('#leadFocoArea .lead-foco');
+          if(ref && ref.parentNode) ref.parentNode.insertBefore(tmp.firstElementChild, ref.nextSibling);
+        }
+      }catch(e){ console.warn('ui685-final-card', e); }
+      return out;
+    };
+    renderLeadFoco = window.renderLeadFoco;
+  }
+  function abrirModalDesfechoFinal(id, tipo){
+    const lead = (state && state.lead) || {};
+    const vendido = tipo === 'vendido';
+    document.getElementById('ui685DesfechoModal')?.remove();
+    const overlay=document.createElement('div');
+    overlay.id='ui685DesfechoModal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
+    overlay.innerHTML=`
+      <div style="width:min(460px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
+        <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div><div style="font-size:16px;font-weight:950;color:var(--text)">${vendido?'Registrar venda':'Registrar perda'}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(lead.name || 'Lead')}</div></div>
+          <button type="button" id="ui685Fechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
+        </div>
+        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento vendido / relacionado</label>
+        <input id="ui685Produto" list="ui685Produtos" value="${esc(produtoAtual(lead))}" placeholder="Ex.: Renaissance" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
+        ${vendido ? `
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Valor vendido</label>
+          <input id="ui685Valor" inputmode="decimal" placeholder="Ex.: 650000" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        ` : `
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Motivo da perda</label>
+          <select id="ui685Motivo" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+            <option value="não respondeu">Não respondeu</option>
+            <option value="preço">Preço</option>
+            <option value="financiamento/renda">Financiamento / renda</option>
+            <option value="comprou concorrente">Comprou concorrente</option>
+            <option value="produto não aderente">Produto não aderente</option>
+            <option value="desistiu/adiou">Desistiu / adiou</option>
+            <option value="outro">Outro</option>
+          </select>
+        `}
+        <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px">O sistema calculará tempo até o desfecho, quantidade de contatos e registrará isso no aprendizado do lead.</div>
+        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'linear-gradient(135deg,var(--lime),var(--acao))':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+    q('#ui685Fechar')?.addEventListener('click', ()=>overlay.remove());
+    q('#ui685SalvarDesfecho')?.addEventListener('click', ()=>salvarDesfechoFinal(id, tipo));
+  }
+  async function salvarDesfechoFinal(id,tipo){
+    const vendido = tipo === 'vendido';
+    const produto = (q('#ui685Produto')?.value || '').trim();
+    const valor = (q('#ui685Valor')?.value || '').trim();
+    const motivo = (q('#ui685Motivo')?.value || '').trim();
+    if(vendido && !valor){ toast('Informe o valor vendido.'); return; }
+    if(!vendido && !motivo){ toast('Informe o motivo da perda.'); return; }
+    const btn=q('#ui685SalvarDesfecho'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+    try{
+      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'desfecho',tipo,produto,valorVendido:valor,motivoPerda:motivo})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok || !d?.ok) throw new Error(d?.error || 'falha ao registrar desfecho');
+      document.getElementById('ui685DesfechoModal')?.remove();
+      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
+      toast(vendido ? 'Venda registrada e aprendizado atualizado.' : 'Perda registrada e aprendizado atualizado.');
+      try{ await loadRecentLeads(true); }catch(_){ }
+      try{ await carregarDashboard(); }catch(_){ }
+      try{ await abrirLead(id); }catch(_){ }
+    }catch(err){ toast('Não consegui registrar: '+(err?.message||err)); if(btn){ btn.disabled=false; btn.textContent=vendido?'Confirmar venda':'Confirmar perda'; } }
+  }
+  window.abrirVenda = function(id){ abrirModalDesfechoFinal(String(id),'vendido'); };
+  window.marcarPerdido = function(id){ abrirModalDesfechoFinal(String(id),'perdido'); };
+  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-final';
+})();
