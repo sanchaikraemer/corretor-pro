@@ -11961,3 +11961,368 @@ window.renderLeadFoco=renderLeadFoco;
   `;
   document.head.appendChild(css);
 })();
+
+
+/* ============================================================
+   Atualização #695 — Correção real da lista mobile
+   - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
+   - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
+   - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
+   ============================================================ */
+(function(){
+  if(window.__cp695RealMobileFix) return;
+  window.__cp695RealMobileFix = true;
+  const VERSION = '695';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
+
+  function esc(v){
+    try{ return escapeHtml(String(v ?? '')); }
+    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
+  function activeItems(){
+    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads :
+      (Array.isArray(state?.itemsAtivos) && state.itemsAtivos.length ? state.itemsAtivos :
+      (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
+    return arr.filter(l=>{
+      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
+      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    });
+  }
+  function sortedLeads(list){
+    return (list||[]).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
+      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
+  }
+  function etapaProduto(l){
+    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
+    const p = String(l?.product || '').trim();
+    return p ? `${e} · ${p}` : e;
+  }
+  function resumoAcao(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
+    return raw.length > 72 ? raw.slice(0,69).trim() + '...' : raw;
+  }
+  function badge(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
+    const t = String(p.titulo || '').trim();
+    if(/atender/i.test(t)) return 'Atender';
+    if(/retomar/i.test(t)) return 'Retomar';
+    if(/aguardar/i.test(t)) return 'Aguardar';
+    if(/sem/i.test(t)) return 'Sem ação';
+    return t || 'Abrir';
+  }
+  function cls(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
+    if(p.grupo === 'acao-hoje') return 'hot';
+    if(p.grupo === 'retomar-cuidado') return 'warm';
+    if(p.grupo === 'baixa-prioridade') return 'low';
+    return 'normal';
+  }
+  function row(l){
+    return `<button type="button" class="cp695-lead-row ${cls(l)}" onclick='abrirLead(${idJs(l)})'>
+      <span class="cp695-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapaProduto(l))}</em><small>${esc(resumoAcao(l))}</small></span>
+      <span class="cp695-status">${esc(badge(l))}</span>
+      <span class="cp695-chevron">›</span>
+    </button>`;
+  }
+
+  function fixVersion(){
+    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
+      const txt = el.textContent || '';
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #695');
+    });
+  }
+  function fixFab(){
+    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
+      el.style.setProperty('position','relative','important');
+      el.style.setProperty('height','56px','important');
+      el.style.setProperty('min-height','56px','important');
+      el.style.setProperty('display','flex','important');
+      el.style.setProperty('align-items','center','important');
+      el.style.setProperty('justify-content','center','important');
+      el.style.setProperty('padding','0','important');
+      el.style.setProperty('transform','none','important');
+    });
+    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
+      el.removeAttribute('style');
+      el.style.setProperty('position','relative','important');
+      el.style.setProperty('top','0','important');
+      el.style.setProperty('left','0','important');
+      el.style.setProperty('transform','none','important');
+      el.style.setProperty('width','34px','important');
+      el.style.setProperty('height','34px','important');
+      el.style.setProperty('margin','0','important');
+      el.style.setProperty('border','2px solid var(--cp-shell, var(--bg))','important');
+      el.style.setProperty('border-radius','999px','important');
+      el.style.setProperty('font-size','23px','important');
+      el.style.setProperty('font-weight','500','important');
+      el.style.setProperty('line-height','1','important');
+      el.style.setProperty('box-shadow','0 5px 12px rgba(0,0,0,.22)','important');
+    });
+  }
+  function fixScrollContainers(){
+    document.querySelectorAll('#carteira,#carteiraBody,#pipeline,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner,.cp694-lista,.cp695-list').forEach(el=>{
+      el.style.setProperty('height','auto','important');
+      el.style.setProperty('max-height','none','important');
+      el.style.setProperty('overflow','visible','important');
+      el.style.setProperty('overflow-y','visible','important');
+      el.style.setProperty('contain','none','important');
+      el.style.setProperty('transform','none','important');
+    });
+  }
+  function fixLayout(){ fixVersion(); fixFab(); fixScrollContainers(); }
+
+  window.renderCarteiraTabela = function(){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const lista = sortedLeads(activeItems());
+    box.innerHTML = `<section class="cp695-atendimentos">
+      <header class="cp695-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp695-list">${lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhum atendimento agora.</div>'}</div>
+    </section>`;
+    requestAnimationFrame(fixLayout);
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){}
+
+  window.setCarteiraFiltro = function(){
+    state.carteiraFiltro = 'todos';
+    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
+    else window.renderCarteiraTabela();
+  };
+
+  window.carregarPipeline = async function(){
+    if(state.active !== 'pipeline') return;
+    const board = document.querySelector('#pipelineBoard');
+    if(!board) return;
+    const render = (data) => {
+      const all = (data?.items || []).map(typeof limparLead === 'function' ? limparLead : (x=>x)).filter(typeof leadEhAtivo === 'function' ? leadEhAtivo : (()=>true));
+      const hot = typeof leadEhQuente === 'function' ? leadEhQuente : (()=>false);
+      const compromisso = l => { const a = l?.analysis?.confirmedAppointments; return (Array.isArray(a)&&a.length)||!!l?.analysis?.lembrete?.quando; };
+      const reaquecer = typeof leadEhReaquecer === 'function' ? leadEhReaquecer : (()=>false);
+      const filtros = { todos:all, quentes:all.filter(hot), esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)), compromisso:all.filter(compromisso), reaquecer:all.filter(reaquecer) };
+      const filtro = state.pipelineVisualFiltro || 'todos';
+      const lista = sortedLeads(filtros[filtro] || all);
+      const listaPrioritaria = lista.filter(l=>{
+        try{ return ui670ModeloComercial(l)?.acao?.status !== 'sem-acao-urgente'; }catch(_){ return true; }
+      });
+      const etapas=['Novo','Atendimento','Visita/Proposta','Negociação','Standby'];
+      const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
+      all.forEach(l=>{ const e=typeof normalizarEtapa==='function'?normalizarEtapa(l?.etapa):String(l?.etapa||''); if(cnt[e]!==undefined) cnt[e]++; });
+      const tabs=[['todos','Todos'],['quentes','Quentes'],['esfriando','Esfriando'],['compromisso','Agenda'],['reaquecer','Reaquecer']];
+      const listRows = listaPrioritaria.length ? listaPrioritaria.map(row).join('') : '<div class="cp695-empty">Nenhum lead com ação pendente nesse filtro.</div>';
+      board.innerHTML=`
+        <div class="ui-pipeline-kpis">
+          <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
+          <div class="ui-kpi active"><span>Quentes</span><div><b>${filtros.quentes.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('quente'):''}</i></div></div>
+          <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
+          <div class="ui-kpi"><span>Reaquecer</span><div><b>${filtros.reaquecer.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('reaquecer'):''}</i></div></div>
+        </div>
+        <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
+        <div class="ui-pipeline-grid">
+          <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
+          <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
+        </div>
+        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list cp695-list">${listRows}</div></section>`;
+      requestAnimationFrame(fixLayout);
+      try{ cpPerfMark('renderPipeline695', cpPerfNow(), {total:listaPrioritaria.length}); }catch(_){}
+    };
+    const emMemoria = [state.todosLeads, state.itemsAtivos, state.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
+    if(emMemoria) render({items:emMemoria});
+    else { board.innerHTML='<div class="cp695-loading">Carregando pipeline...</div>'; try{ render(await getLeadsData()); }catch(e){ board.innerHTML = typeof boxErro==='function'?boxErro('carregarPipeline()'):'<div class="empty">Falha ao carregar.</div>'; } }
+  };
+  try{ carregarPipeline = window.carregarPipeline; }catch(_){}
+
+  window.setPipelineVisualFiltro = function(f){
+    state.pipelineVisualFiltro = f || 'todos';
+    if(state.active !== 'pipeline' && typeof show === 'function') show('pipeline');
+    else window.carregarPipeline();
+  };
+
+  const css=document.createElement('style');
+  css.id='cp695RealMobileFixCSS';
+  css.textContent=`
+    html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
+    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner,.cp694-lista,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
+    .cp-virtual-wrap>div[style*="height"],.cp-virtual-pad{display:none!important;height:0!important}
+    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page,#carteira .cp694-atendimentos{display:none!important}
+    .cp695-atendimentos,.cp695-list{max-width:760px;margin-left:auto;margin-right:auto}.cp695-atendimentos{padding-bottom:calc(122px + env(safe-area-inset-bottom,0px))}.cp695-head{margin:0 0 14px}.cp695-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.04em}.cp695-head p{margin:8px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
+    .cp695-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-lead-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;align-items:center;gap:9px;min-height:70px;padding:11px 9px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}.cp695-lead-row:last-child{border-bottom:0}.cp695-lead-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp695-lead-row.hot:before{background:var(--lime)}.cp695-lead-row.warm:before{background:var(--morno)}.cp695-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp695-copy b{color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-copy em{color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-copy small{color:rgba(227,245,249,.75);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-status{display:inline-flex;align-items:center;justify-content:center;min-width:56px;max-width:64px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp695-lead-row.low .cp695-status,.cp695-lead-row.normal .cp695-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}.cp695-chevron{color:var(--muted);font-size:18px}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
+    .cp-bottom-nav{z-index:1000!important}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
+    #btnVoltarTopo{display:none!important}
+    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.ui-pipeline-grid{display:block!important}.ui-pipe-summary{margin-top:12px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}.cp695-copy b{font-size:17px!important}.cp695-copy small{font-size:12.5px!important}.cp695-lead-row{min-height:68px}}
+  `;
+  document.head.appendChild(css);
+
+  document.addEventListener('DOMContentLoaded', fixLayout);
+  window.addEventListener('resize', fixLayout);
+  setTimeout(fixLayout,60); setTimeout(fixLayout,300); setTimeout(fixLayout,1000);
+  const oldShow = window.show;
+  if(typeof oldShow === 'function'){
+    window.show = function(){ const out = oldShow.apply(this, arguments); setTimeout(()=>{ if(state.active==='carteira') window.renderCarteiraTabela(); if(state.active==='pipeline') window.carregarPipeline(); fixLayout(); }, 40); return out; };
+  }
+})();
+
+
+/* ============================================================
+   Atualização #696 — Correção definitiva carregamento total Atendimentos
+   - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
+   - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
+   - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
+   ============================================================ */
+(function(){
+  if(window.__cp696AtendimentosFullList) return;
+  window.__cp696AtendimentosFullList = true;
+  const VERSION = '696';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
+
+  function esc(v){
+    try{ return escapeHtml(String(v ?? '')); }
+    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function normalEtapa(l){
+    try{ return normalizarEtapa(l?.etapa); }catch(_){ return String(l?.etapa || 'Atendimento'); }
+  }
+  function isAtivo(l){
+    const e = normalEtapa(l);
+    return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+  }
+  function sortLeads(list){
+    const arr = Array.isArray(list) ? list.slice() : [];
+    try{ return arr.map(l=>({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento); }
+    catch(_){ return arr; }
+  }
+  function meta(l){
+    const e = normalEtapa(l);
+    const p = String(l?.product || '').trim();
+    const dias = Number(l?.daysSinceLastInteraction || l?.diasSemResposta || 0);
+    const d = dias > 0 ? ` · ${dias}d` : '';
+    return p ? `${p}${d}` : `${e}${d}`;
+  }
+  function acao(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
+    return raw.length > 74 ? raw.slice(0,71).trim() + '...' : raw;
+  }
+  function badge(l){
+    let t = '';
+    try{ t = String((prioridadeAtendimento(l)||{}).titulo || ''); }catch(_){}
+    if(/atender/i.test(t)) return 'Atender';
+    if(/retomar/i.test(t)) return 'Retomar';
+    if(/aguardar/i.test(t)) return 'Aguardar';
+    if(/sem/i.test(t)) return 'Sem ação';
+    return t || 'Abrir';
+  }
+  function cls(l){
+    let g = '';
+    try{ g = String((prioridadeAtendimento(l)||{}).grupo || ''); }catch(_){}
+    if(g === 'acao-hoje') return 'hot';
+    if(g === 'retomar-cuidado') return 'warm';
+    if(g === 'baixa-prioridade') return 'low';
+    return 'normal';
+  }
+  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
+  function row(l){
+    return `<button type="button" class="cp696-row ${cls(l)}" onclick='abrirLead(${idJs(l)})'>
+      <span class="cp696-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta(l))}</em><small>${esc(acao(l))}</small></span>
+      <span class="cp696-status">${esc(badge(l))}</span>
+      <span class="cp696-chevron">›</span>
+    </button>`;
+  }
+  function updateVersion(){
+    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
+      const txt = el.textContent || '';
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #696');
+    });
+  }
+  function applyLayoutFixes(){
+    updateVersion();
+    document.querySelectorAll('#carteira,#carteiraBody,.cp696-list,.cp695-list,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner').forEach(el=>{
+      el.style.setProperty('height','auto','important');
+      el.style.setProperty('max-height','none','important');
+      el.style.setProperty('overflow','visible','important');
+      el.style.setProperty('overflow-y','visible','important');
+      el.style.setProperty('contain','none','important');
+    });
+    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
+      el.style.setProperty('position','relative','important');
+      el.style.setProperty('display','flex','important');
+      el.style.setProperty('align-items','center','important');
+      el.style.setProperty('justify-content','center','important');
+      el.style.setProperty('height','56px','important');
+      el.style.setProperty('padding','0','important');
+    });
+    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
+      el.style.setProperty('position','relative','important');
+      el.style.setProperty('top','0','important');
+      el.style.setProperty('left','0','important');
+      el.style.setProperty('transform','none','important');
+      el.style.setProperty('width','34px','important');
+      el.style.setProperty('height','34px','important');
+      el.style.setProperty('margin','0','important');
+    });
+  }
+  async function fetchAllLeads(force){
+    try{
+      const data = await getLeadsData(!!force);
+      if(data && Array.isArray(data.items) && data.items.length) return data.items;
+    }catch(_){}
+    try{
+      const res = await fetch(`./api/leads-recentes?limit=2000${force?'&fresh=1':''}`, { cache:'no-store' });
+      const data = await res.json();
+      if(data && Array.isArray(data.items)) return data.items;
+    }catch(_){}
+    return [];
+  }
+  function renderAtendimentosCompleto(leads){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const lista = sortLeads((leads || []).filter(isAtivo));
+    try{ state.carteiraLeads = lista; state.carteiraFiltro = 'todos'; }catch(_){}
+    const rows = lista.length ? lista.map(row).join('') : '<div class="cp696-empty">Nenhum atendimento agora.</div>';
+    box.innerHTML = `<section class="cp696-page">
+      <header class="cp696-head"><h2>Atendimentos</h2><p>${lista.length} leads · prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp696-list">${rows}</div>
+    </section>`;
+    requestAnimationFrame(applyLayoutFixes);
+  }
+  window.carregarCarteira = async function(force){
+    if(state.active !== 'carteira') return;
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    box.innerHTML = '<div class="cp696-loading"><i></i><b>Carregando atendimentos...</b><span>Buscando toda sua carteira de leads.</span></div>';
+    const leads = await fetchAllLeads(force);
+    renderAtendimentosCompleto(leads);
+  };
+  try{ carregarCarteira = window.carregarCarteira; }catch(_){}
+  window.renderCarteiraTabela = function(){
+    const sources = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].filter(a=>Array.isArray(a));
+    const biggest = sources.sort((a,b)=>b.length-a.length)[0] || [];
+    if(biggest.length >= 80) renderAtendimentosCompleto(biggest);
+    else window.carregarCarteira(false);
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){}
+  window.setCarteiraFiltro = function(){
+    try{ state.carteiraFiltro = 'todos'; }catch(_){}
+    if(typeof show === 'function' && state.active !== 'carteira') show('carteira');
+    else window.carregarCarteira(false);
+  };
+  const oldShow = window.show;
+  if(typeof oldShow === 'function'){
+    window.show = function(name, ...args){
+      const ret = oldShow.apply(this, [name, ...args]);
+      if(name === 'carteira') setTimeout(()=>window.carregarCarteira(false), 0);
+      else setTimeout(applyLayoutFixes, 0);
+      return ret;
+    };
+    try{ show = window.show; }catch(_){}
+  }
+  const css = document.createElement('style');
+  css.id = 'cp696AtendimentosFullCSS';
+  css.textContent = `
+    html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}.main-col,.desktop-layout,.app,.screen,#carteira,#carteiraBody,.cp696-page,.cp696-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}.cp-virtual-wrap>div[style*="height"],.cp-virtual-pad{display:none!important;height:0!important}#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page,#carteira .cp694-atendimentos,#carteira .cp695-atendimentos{display:none!important}.cp696-page{max-width:760px;margin:0 auto;padding-bottom:calc(128px + env(safe-area-inset-bottom,0px))}.cp696-head{margin:0 0 14px}.cp696-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.04em}.cp696-head p{margin:8px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}.cp696-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp696-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;align-items:center;gap:9px;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}.cp696-row:last-child{border-bottom:0}.cp696-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp696-row.hot:before{background:var(--lime)}.cp696-row.warm:before{background:var(--morno)}.cp696-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp696-copy b{color:var(--text);font-size:17px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-copy em{color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-copy small{color:rgba(227,245,249,.75);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-status{display:inline-flex;align-items:center;justify-content:center;min-width:54px;max-width:62px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp696-row.low .cp696-status,.cp696-row.normal .cp696-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}.cp696-chevron{color:var(--muted);font-size:18px}.cp696-empty,.cp696-loading{padding:24px;color:var(--muted);text-align:center}.cp696-loading{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}.cp696-loading b{color:var(--text)}.cp696-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp696spin .8s linear infinite}@keyframes cp696spin{to{transform:rotate(360deg)}}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}#btnVoltarTopo{display:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.cp696-page{padding-bottom:calc(136px + env(safe-area-inset-bottom,0px))}.cp696-list{margin-bottom:calc(136px + env(safe-area-inset-bottom,0px))}}
+  `;
+  document.head.appendChild(css);
+  document.addEventListener('DOMContentLoaded', applyLayoutFixes);
+  window.addEventListener('resize', applyLayoutFixes);
+  setTimeout(applyLayoutFixes,50); setTimeout(applyLayoutFixes,250); setTimeout(applyLayoutFixes,1000);
+  if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
+})();
