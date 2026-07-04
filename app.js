@@ -7962,7 +7962,7 @@ async function carregarRelatorio(force){
     renderDe({ items: state.todosLeads });
     return;
   }
-  box.innerHTML = '<div class="cp-db-loading"><div class="cp-db-spinner"></div><div><b>Carregando banco de dados</b><span>Organizando atendimentos por prioridade.</span></div></div>';
+  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
   try{
     const data = await getLeadsData(force);
     renderDe(data);
@@ -8081,7 +8081,7 @@ async function carregarCarteira(force){
     renderDe({ items: state.todosLeads });
     return;
   }
-  box.innerHTML = '<div class="cp-db-loading"><div class="cp-db-spinner"></div><div><b>Carregando banco de dados</b><span>Organizando atendimentos por prioridade.</span></div></div>';
+  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
   try{
     const data = await getLeadsData(force);
     renderDe(data);
@@ -8124,18 +8124,27 @@ function renderCarteiraTabela(){
   const _perfStart = cpPerfNow();
   const box = qs("#carteiraBody");
   if(!box) return;
-  const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; });
-  const lista = base.map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
+  const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido"; });
+  const filtro = state.carteiraFiltro || "todos";
+  const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
+  const chips = CART_FILTROS.map(([k,lbl]) => `<button type="button" class="${k===filtro?"active":""}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join("");
   const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
   const lote = lista.slice(0, visiveis);
   const faltam = Math.max(0, lista.length - lote.length);
-  const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum atendimento na fila.</div>';
+  const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>';
   const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
   box.innerHTML = `
-    <div class="cart-head v687-simple">
-      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} em ordem de atendimento. Clique no lead para abrir.</div></div>
+    ${ui677ToolbarHTML("atendimentos")}
+    <div class="cart-head">
+      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="cart-filtros">${chips}</div>
+        <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
+        <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
+        <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
+      </div>
     </div>
-    <div class="cart-table v687-simple">
+    <div class="cart-table">
       <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
       ${linhas}
       ${carregarMais}
@@ -9473,7 +9482,7 @@ renderLeadFoco = function(lead){
     <div class="ui-lead-head">
       <div class="ui-lead-title-row">
         <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
-        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendimento marcado':'✓ Marcar atendimento'}</button>
+        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>
       </div>
       <div class="ui-lead-sub">
         <p>${escapeHtml(produtosLabel(lead)||"Produto não identificado")}</p>
@@ -10010,28 +10019,16 @@ function ui682ProdutoLead(lead, mc){
 function ui682FallbackMessages(lead, mc){
   const nome = ui682PrimeiroNomeLead(lead);
   const produto = ui682ProdutoLead(lead, mc);
-  const analysis = lead?.analysis || {};
-  const diag = analysis?.diagnostico || {};
-  const memoria = analysis?.memoriaSugerida || {};
-  const acao = String(mc?.acao?.descricao || analysis?.nextAction || lead?.nextAction || "").trim();
+  const acao = String(mc?.acao?.descricao || lead?.analysis?.nextAction || lead?.nextAction || "").trim();
   const status = String(mc?.acao?.status || "");
+  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
+    ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
+    : `sobre ${produto}`;
   const prefixo = nome ? `${nome}, ` : "";
-  const perfil = String(memoria?.perfil || diag?.percepcaoTodaConversa || diag?.sabemos?.join?.(", ") || "").trim();
-  const compromisso = String(diag?.ultimoCompromissoCliente || "").trim();
-  const entregue = String(diag?.ultimaInformacaoPrometida || "").trim();
-  const temVideoFotos = /v[ií]deo|foto|imagem|material|proposta|simula[cç][aã]o/i.test(`${entregue} ${acao}`);
-  const temDecisor = /espos|marid|fam[ií]lia|filh|s[oó]ci|dire[cç][aã]o/i.test(`${compromisso} ${perfil}`);
-  const perfilCurto = /100|110|ampl|pronto|su[ií]te|financi|parcel|entrada|moradia|invest/i.test(perfil) ? perfil : "o perfil que você comentou";
-  const gancho = temVideoFotos
-    ? `Conseguiu ver o material que te enviei${temDecisor ? " e conversar com quem decide junto com você" : ""}?`
-    : `Conseguiu avaliar essa opção com calma?`;
-  const encaixe = produto && produto !== "o imóvel"
-    ? `Como o ${produto} entra bem nesse perfil, queria entender se ele ficou dentro do que vocês procuram`
-    : `Queria entender se essa opção ficou dentro do que vocês procuram`;
-  const a = `${prefixo}tudo bem? ${gancho} ${encaixe} ou se vale eu separar outras opções compatíveis para compararmos melhor.`;
-  const b = `${prefixo}tudo bem? Olhei novamente para ${perfilCurto} e o ${produto} continua sendo uma opção forte para comparar. Vocês conseguiram avaliar o material que enviei?`;
-  const c = `${prefixo}tudo bem? Antes de eu separar novas opções, queria só confirmar a reação de vocês ao ${produto}. Se ele não encaixou, eu já busco alternativas no mesmo padrão.`;
-  return { a, b, c, aLabel:"Retomar pelo combinado", bLabel:"Confirmar reação", cLabel:"Comparar sem perder", recomendada: status === "retomar" ? "a" : "b", fallback:true };
+  const a = `${prefixo}retomando nossa conversa ${assunto}. Pelo que falamos até aqui, consigo te direcionar melhor se você me confirmar esse ponto. Você prefere avançar olhando uma opção dentro desse perfil ou quer que eu te mostre outras alternativas?`;
+  const b = `${prefixo}fiquei com esse ponto em aberto ${assunto}. Com essa confirmação eu consigo evitar te mandar opção fora do que você procura. Você quer seguir por esse caminho ou prefere comparar outras possibilidades?`;
+  const c = `${prefixo}para eu não te mandar algo desalinhado, me confirma uma coisa ${assunto}: esse produto ainda conversa com o que você procura ou faz mais sentido eu buscar outra opção?`;
+  return { a, b, c, aLabel:"Melhor resposta", bLabel:"Alternativa leve", cLabel:"Alternativa firme", recomendada: status === "retomar" ? "a" : "b", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
   const temAlguma = !!(String(msgs?.a||"").trim() || String(msgs?.b||"").trim() || String(msgs?.c||"").trim());
@@ -10246,37 +10243,6 @@ window.ui670Reanalisar=async function(btn){
     if(btn){btn.disabled=false;btn.textContent=original;}
   }
 };
-
-
-// Atualização #688-2 — reanálise visível e acionável no topo do lead.
-// Mantém o motor ui670Reanalisar, mas expõe um botão fixo nos atalhos do lead.
-window.ui688ReanalisarIA = async function(btn){
-  const lead = state.lead;
-  if(!lead?.id){ toast("Abra um lead antes de reanalisar."); return; }
-  const original = btn?.textContent || "↻ Reanalisar IA";
-  if(btn){ btn.disabled = true; btn.classList.add("is-loading"); btn.textContent = "Reanalisando IA..."; }
-  try{
-    if(typeof ui670Reanalisar === "function"){
-      await ui670Reanalisar(btn || null);
-      return;
-    }
-    const res = await fetch("./api/reanalisar-lead", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      cache:"no-store",
-      body: JSON.stringify({ id: lead.id, action:"atualizar-analise-comercial", versaoCliente:688 })
-    });
-    const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
-    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível reanalisar.");
-    invalidarLeadsCache && invalidarLeadsCache();
-    toast("✓ Análise atualizada.");
-    await abrirLead(lead.id);
-  }catch(err){
-    toast("Não consegui reanalisar: " + (err?.message || err));
-    if(btn){ btn.disabled = false; btn.textContent = original; btn.classList.remove("is-loading"); }
-  }
-};
-
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
 window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove();};
 window.ui670NovaOportunidade=function(){
@@ -10361,7 +10327,7 @@ renderLeadFoco=function(lead){
   const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
   const statusTopo=oportunidadeEncerrada
     ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
-    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendimento marcado':'✓ Marcar atendimento'}</button>`;
+    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>`;
   const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
   const messageBlock=stale
     ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
@@ -10369,7 +10335,7 @@ renderLeadFoco=function(lead){
       ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
       : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
   const shell=document.createElement("div");shell.className="lead-ui670";
-  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div><div class="ui688-head-actions">${statusTopo}<button type="button" class="ui688-head-reanalyze" onclick="ui688ReanalisarIA(this)">↻ Reanalisar IA</button></div></div>
+  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div>${statusTopo}</div>
   ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
   <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
   <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
@@ -10408,7 +10374,7 @@ window.renderLeadFoco=renderLeadFoco;
       .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,107,92,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
       .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,107,92,.45);background:rgba(255,107,92,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
       .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
-      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui688-reanalyze-main{border-color:rgba(55,232,255,.55)!important;background:rgba(55,232,255,.12)!important;color:var(--dados)!important}.ui688-reanalyze-main.is-loading{opacity:.72;cursor:wait}.ui688-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.ui688-head-reanalyze{border:1px solid rgba(55,232,255,.50);background:rgba(55,232,255,.10);color:var(--dados);border-radius:999px;padding:10px 14px;font-size:12px;font-weight:950;cursor:pointer}.ui688-head-reanalyze:hover{background:rgba(55,232,255,.16)}.ui688-head-reanalyze.is-loading{opacity:.72;cursor:wait}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
+      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,107,92,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
       @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
     document.head.appendChild(st);
   }
@@ -10549,7 +10515,6 @@ window.renderLeadFoco=renderLeadFoco;
     const id=JSON.stringify(String(lead?.id||'')); const nome=safeJson(lead?.name||''); const prod=safeJson(lead?.product||'');
     actions.innerHTML=`
       <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Marcar atendimento</button>
-      <button type="button" class="primary ui688-reanalyze-main" onclick="ui688ReanalisarIA(this)">↻ Reanalisar IA</button>
       <button type="button" onclick="ui631CopyResponse&&ui631CopyResponse()">Copiar resposta</button>
       <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
@@ -11825,57 +11790,196 @@ window.renderLeadFoco=renderLeadFoco;
 })();
 
 
-// ===== v687-4 — correção objetiva: loading, Perdido e Atendimentos limpo =====
+/* ============================================================
+   Atualização #689 — Correção de uso diário
+   - Atendimentos mobile/desktop limpo: busca + lista, sem filtros administrativos.
+   - Corrige scroll que voltava ao início: renderização simples e estável da carteira.
+   - Ajusta card mobile para não quebrar "Atender agora" e reduz ruído visual.
+   - Mantém botão de reanálise visível no lead.
+   ============================================================ */
 (function(){
-  if(window.__cp6874Fix) return;
-  window.__cp6874Fix = true;
+  if(window.__cp689UsoDiario) return;
+  window.__cp689UsoDiario = true;
 
-  function removeBootWhenReady(){
-    try{
-      const b = document.getElementById('bootPaint');
-      if(b) b.remove();
-    }catch(_){ }
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function leadIdJS(l){ return JSON.stringify(String(l?.id || '')); }
+  function primeiraLinhaAcao(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || '').trim();
+    if(!raw) return 'Abrir lead para ver o próximo passo.';
+    const limpo = raw.replace(/\s+/g,' ');
+    return limpo.length > 96 ? limpo.slice(0,93).trim() + '...' : limpo;
+  }
+  function etapaProduto(l){
+    const etapa = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
+    const produto = String(l?.product || '').trim();
+    return produto ? `${etapa} · ${produto}` : etapa;
+  }
+  function statusPrioridade(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    const titulo = String(p.titulo || '').trim();
+    if(/atender/i.test(titulo)) return 'Atender agora';
+    if(/aguardar/i.test(titulo)) return 'Aguardar';
+    if(/retomar/i.test(titulo)) return 'Retomar';
+    return titulo || 'Ver lead';
+  }
+  function classePrioridade(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    return p.grupo === 'acao-hoje' ? 'is-hot' : p.grupo === 'retomar-cuidado' ? 'is-warm' : p.grupo === 'baixa-prioridade' ? 'is-low' : 'is-normal';
+  }
+  function carteiraRowCleanHTML(l){
+    const id = leadIdJS(l);
+    const etapa = etapaProduto(l);
+    const acao = primeiraLinhaAcao(l);
+    const status = statusPrioridade(l);
+    return `<button type="button" class="cp689-att-row ${classePrioridade(l)}" onclick='abrirLead(${id})'>
+      <span class="cp689-att-main">
+        <b>${esc(l?.name || 'Cliente')}</b>
+        <em>${esc(etapa)}</em>
+        <small>${esc(acao)}</small>
+      </span>
+      <span class="cp689-att-status">${esc(status)}</span>
+    </button>`;
   }
 
-  const oldProcessar = window._processarDashboard || (typeof _processarDashboard === 'function' ? _processarDashboard : null);
-  if(oldProcessar && !oldProcessar.__cp6874){
-    const wrapped = async function(data){
-      const r = await oldProcessar.apply(this, arguments);
-      removeBootWhenReady();
-      return r;
-    };
-    wrapped.__cp6874 = true;
-    try{ window._processarDashboard = wrapped; _processarDashboard = wrapped; }catch(_){ window._processarDashboard = wrapped; }
-  }
-  setTimeout(removeBootWhenReady, 4500);
-
-  async function cp6874AtualizarCachesDepoisDesfecho(id){
-    try{ if(typeof removerLeadDosCaches === 'function') removerLeadDosCaches(id); }catch(_){ }
-    try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){ }
-    try{ await loadRecentLeads(true); }catch(_){ }
-    try{ await carregarDashboard(); }catch(_){ }
-    try{ if(state.active === 'carteira') await carregarCarteira(true); }catch(_){ }
-    try{ if(state.active === 'perdidos') await carregarPerdidos(); }catch(_){ }
-  }
-
-  window.marcarPerdido = async function(id, nome){
-    id = String(id || '');
-    if(!id){ toast('Lead inválido.'); return; }
-    const ok = confirm(`Marcar ${nome || 'este lead'} como perdido? Ele sairá dos atendimentos e irá para Arquivo > Perdidos.`);
-    if(!ok) return;
-    try{
-      const res = await fetch('./api/lead-update', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ id, action:'etapa', etapa:'Perdido' })
+  window.renderCarteiraTabela = function(){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const t0 = (typeof cpPerfNow === 'function') ? cpPerfNow() : Date.now();
+    const base = (Array.isArray(state?.carteiraLeads) ? state.carteiraLeads : [])
+      .filter(l => {
+        const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
+        return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
       });
+    const lista = base
+      .filter(l => typeof carteiraPassaFiltro === 'function' ? carteiraPassaFiltro(l, 'todos') : true)
+      .map(l => ({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
+      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (() => 0));
+    const linhas = lista.length
+      ? lista.map(carteiraRowCleanHTML).join('')
+      : `<div class="cp689-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
+    box.innerHTML = `
+      <div class="cp689-att-head">
+        <div>
+          <h2>Atendimentos</h2>
+          <p>Prioridade de atendimento, de cima para baixo.</p>
+        </div>
+        <span>${lista.length} lead${lista.length===1?'':'s'}</span>
+      </div>
+      <div class="cp689-att-list" id="cp689AtendimentosLista">${linhas}</div>`;
+    try{ if(typeof cpPerfMark === 'function') cpPerfMark('renderCarteira689', t0, { total: lista.length, rendered: lista.length }); }catch(_){}
+  };
+
+  const oldSetFiltro = window.setCarteiraFiltro;
+  window.setCarteiraFiltro = function(){
+    state.carteiraFiltro = 'todos';
+    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
+    renderCarteiraTabela();
+  };
+
+  window.cp689ReanalisarLead = async function(btn){
+    const lead = state?.lead;
+    const id = lead?.id;
+    if(!id) return toast('Lead não identificado.');
+    const original = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = '↻ Reanalisando...'; }
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 90000);
+    try{
+      const res = await fetch('./api/reanalisar-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }), signal: ctrl.signal });
+      clearTimeout(to);
       const data = await res.json().catch(()=>({}));
-      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao marcar perdido');
-      toast('Lead marcado como perdido.');
-      await cp6874AtualizarCachesDepoisDesfecho(id);
-      try{ if(typeof voltarDoLead === 'function') voltarDoLead(); else show('carteira'); }catch(_){ show('carteira'); }
+      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha na reanálise');
+      try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){}
+      toast('Análise atualizada.');
+      if(typeof abrirLead === 'function') await abrirLead(id);
     }catch(err){
-      toast('Não consegui marcar como perdido: ' + (err?.message || err));
+      clearTimeout(to);
+      toast(err?.name === 'AbortError' ? 'A reanálise demorou demais. Tente novamente.' : 'Não consegui reanalisar: ' + (err?.message || err));
+      if(btn){ btn.disabled = false; btn.textContent = original || '↻ Reanalisar IA'; }
     }
   };
+
+  function inserirBotaoReanalise(){
+    const lead = state?.lead;
+    if(!lead?.id) return;
+    if(document.querySelector('#cp689ReanalisarTop')) return;
+    const top = document.querySelector('#ui667AtendidoBtn');
+    if(top){
+      const btn = document.createElement('button');
+      btn.id = 'cp689ReanalisarTop';
+      btn.type = 'button';
+      btn.className = 'cp689-reanalisar-top';
+      btn.textContent = '↻ Reanalisar IA';
+      btn.onclick = function(){ cp689ReanalisarLead(this); };
+      top.insertAdjacentElement('afterend', btn);
+    }
+    const actions = document.querySelector('#ui683LeadTools');
+    if(actions && !actions.querySelector('#cp689ReanalisarQuick')){
+      const q = document.createElement('button');
+      q.id = 'cp689ReanalisarQuick';
+      q.type = 'button';
+      q.textContent = '↻ Reanalisar IA';
+      q.onclick = function(){ cp689ReanalisarLead(this); };
+      const first = actions.querySelector('button:nth-child(2)') || actions.firstElementChild;
+      if(first) first.insertAdjacentElement('afterend', q); else actions.prepend(q);
+    }
+  }
+
+  const prevRenderLead = window.renderLeadFoco;
+  if(typeof prevRenderLead === 'function'){
+    window.renderLeadFoco = function(lead){
+      const out = prevRenderLead.apply(this, arguments);
+      setTimeout(inserirBotaoReanalise, 30);
+      return out;
+    };
+    try{ renderLeadFoco = window.renderLeadFoco; }catch(_){}
+  }
+
+  const css = document.createElement('style');
+  css.id = 'cp689UsoDiarioCSS';
+  css.textContent = `
+    #carteiraBody{padding-bottom:120px!important}
+    .cp689-att-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:0 0 16px}
+    .cp689-att-head h2{font-size:clamp(28px,4vw,42px);line-height:1;margin:0;color:var(--text);font-weight:950;letter-spacing:-.04em}
+    .cp689-att-head p{margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.35}
+    .cp689-att-head span{color:var(--muted);font-weight:850;font-size:13px;white-space:nowrap}
+    .cp689-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:18px;overflow:hidden;background:rgba(7,52,64,.66);box-shadow:0 22px 70px rgba(0,0,0,.18);margin-bottom:110px}
+    .cp689-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;padding:18px 20px;background:transparent;color:var(--text);border:0;border-bottom:1px solid rgba(255,255,255,.09);cursor:pointer;min-height:92px;position:relative;font:inherit}
+    .cp689-att-row:last-child{border-bottom:0}
+    .cp689-att-row::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:transparent}
+    .cp689-att-row.is-hot::before{background:var(--lime)}
+    .cp689-att-row.is-warm::before{background:var(--morno)}
+    .cp689-att-row:hover{background:rgba(255,255,255,.035)}
+    .cp689-att-main{min-width:0;display:flex;flex-direction:column;gap:5px}
+    .cp689-att-main b{font-size:17px;font-weight:950;color:var(--text);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp689-att-main em{font-style:normal;color:var(--muted);font-size:13px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp689-att-main small{color:rgba(227,245,249,.78);font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp689-att-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:96px;max-width:118px;padding:8px 10px;border-radius:999px;border:1px solid rgba(255,107,92,.45);color:var(--lime);font-size:12px;font-weight:950;line-height:1;white-space:nowrap;background:rgba(255,107,92,.08)}
+    .cp689-att-row.is-low .cp689-att-status,.cp689-att-row.is-normal .cp689-att-status{border-color:rgba(255,255,255,.14);color:var(--muted);background:rgba(255,255,255,.035)}
+    .cp689-empty{padding:24px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}
+    .cp689-empty b{color:var(--text);font-size:16px}
+    .cp689-reanalisar-top{margin-left:10px;border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.06);color:var(--text);border-radius:14px;padding:13px 17px;font-weight:950;cursor:pointer;box-shadow:0 12px 28px rgba(0,0,0,.20)}
+    .cp689-reanalisar-top:disabled{opacity:.65;cursor:wait}
+    .fab,.floating-add,.mobile-fab,#mobileFab{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
+    @media(max-width:760px){
+      #carteiraBody{padding:0 14px 150px!important}
+      .cp689-att-head{align-items:flex-start;margin-top:6px}
+      .cp689-att-head h2{font-size:32px}
+      .cp689-att-head span{display:none}
+      .cp689-att-list{border-radius:20px;margin-bottom:140px}
+      .cp689-att-row{grid-template-columns:minmax(0,1fr) auto;min-height:108px;padding:16px 14px 16px 18px;gap:10px}
+      .cp689-att-main b{font-size:20px}
+      .cp689-att-main em{font-size:13px}
+      .cp689-att-main small{font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow:hidden}
+      .cp689-att-status{min-width:86px;max-width:92px;padding:8px 8px;font-size:12px;line-height:1.05;text-align:center;white-space:normal}
+      .cp689-reanalisar-top{display:block;margin:10px 0 0 0;width:100%;padding:14px 16px}
+      .ui-lead-title-row{align-items:flex-start;flex-direction:column!important}
+    }
+  `;
+  document.head.appendChild(css);
+
+  window.CORRETOR_PRO_VERSAO_USO_DIARIO = '689';
 })();
