@@ -11983,3 +11983,177 @@ window.renderLeadFoco=renderLeadFoco;
 
   window.CORRETOR_PRO_VERSAO_USO_DIARIO = '689';
 })();
+
+
+/* ============================================================
+   Atualização #690 — Correção final de Atendimentos, Home e rolagem
+   - Atendimentos: rolagem natural da página, sem container interno instável.
+   - Remove qualquer toolbar/filtro administrativo remanescente na tela Atendimentos.
+   - Cards mais limpos no mobile, botão de status menor e sem quebrar layout.
+   - Botão + não cobre busca/lista.
+   - Home ganha conteúdo útil imediato enquanto dados carregam e encurta vazio.
+   - Preserva scroll da carteira durante re-render.
+   ============================================================ */
+(function(){
+  if(window.__cp690CorrecoesFinais) return;
+  window.__cp690CorrecoesFinais = true;
+
+  const VERSION = '690';
+  function esc690(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function idJS690(l){ return JSON.stringify(String(l?.id || '')); }
+  function etapa690(l){
+    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
+    const p = String(l?.product || '').trim();
+    return p ? `${e} · ${p}` : e;
+  }
+  function acao690(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || '').replace(/\s+/g,' ').trim();
+    if(!raw) return 'Abrir lead para conferir o próximo passo.';
+    return raw.length > 112 ? raw.slice(0,109).trim() + '...' : raw;
+  }
+  function prio690(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    const t = String(p.titulo || '').trim();
+    if(/atender/i.test(t)) return 'Atender';
+    if(/aguardar/i.test(t)) return 'Aguardar';
+    if(/retomar/i.test(t)) return 'Retomar';
+    if(/sem/i.test(t)) return 'Sem ação';
+    return t || 'Abrir';
+  }
+  function cls690(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    if(p.grupo === 'acao-hoje') return 'is-hot';
+    if(p.grupo === 'retomar-cuidado') return 'is-warm';
+    if(p.grupo === 'baixa-prioridade') return 'is-low';
+    return 'is-normal';
+  }
+  function row690(l){
+    return `<button type="button" class="cp690-att-row ${cls690(l)}" onclick='abrirLead(${idJS690(l)})'>
+      <span class="cp690-att-left"><b>${esc690(l?.name || 'Cliente')}</b><em>${esc690(etapa690(l))}</em><small>${esc690(acao690(l))}</small></span>
+      <span class="cp690-att-pill">${esc690(prio690(l))}</span>
+    </button>`;
+  }
+  function listaAtendimento690(){
+    const base = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads : (Array.isArray(state?.itemsAtivos) ? state.itemsAtivos : (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
+    return base.filter(l => {
+      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
+      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    }).map(l => ({...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0}))
+      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
+  }
+
+  window.renderCarteiraTabela = function(){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const oldY = window.scrollY || document.documentElement.scrollTop || 0;
+    const lista = listaAtendimento690();
+    const linhas = lista.length ? lista.map(row690).join('') : `<div class="cp690-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
+    box.innerHTML = `<section class="cp690-att-page">
+      <header class="cp690-att-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp690-att-list" id="cp690AtendimentosLista">${linhas}</div>
+    </section>`;
+    requestAnimationFrame(()=>{
+      if(state.active === 'carteira' && oldY > 80) window.scrollTo(0, oldY);
+      document.querySelectorAll('#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cp-virtual-wrap').forEach(el=>{
+        if(!el.closest('.cp690-att-page')) el.remove();
+      });
+    });
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
+
+  window.setCarteiraFiltro = function(){
+    state.carteiraFiltro = 'todos';
+    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
+    else renderCarteiraTabela();
+  };
+
+  const _show690 = window.show || (typeof show === 'function' ? show : null);
+  if(_show690){
+    window.show = function(t, options={}){
+      if(state.active === 'carteira' && t === 'carteira') options = {...options, skipLoad:false};
+      return _show690.call(this, t, options);
+    };
+    try{ show = window.show; }catch(_){ }
+  }
+
+  function homeLoading690(){
+    const foco = document.querySelector('#leadFocoArea');
+    if(!foco || foco.dataset.cp690Loaded === '1') return;
+    foco.innerHTML = `<div class="cp690-home-load"><div class="cp690-spin"></div><div><b>Carregando sua carteira...</b><span>Organizando prioridades, últimos atendimentos e oportunidades.</span></div></div>`;
+  }
+  const _carregarDashboard690 = window.carregarDashboard || (typeof carregarDashboard === 'function' ? carregarDashboard : null);
+  if(_carregarDashboard690){
+    window.carregarDashboard = async function(){
+      if(state.active === 'home') homeLoading690();
+      const r = await _carregarDashboard690.apply(this, arguments);
+      const foco = document.querySelector('#leadFocoArea'); if(foco) foco.dataset.cp690Loaded = '1';
+      return r;
+    };
+    try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
+  }
+
+  const _renderListasHome690 = window.renderListasHome || (typeof renderListasHome === 'function' ? renderListasHome : null);
+  if(_renderListasHome690){
+    window.renderListasHome = function(ordenados){
+      const out = _renderListasHome690.apply(this, arguments);
+      try{
+        const foco = document.querySelector('#leadFocoArea');
+        if(foco) foco.dataset.cp690Loaded = '1';
+        const top3 = document.querySelector('#top3Area');
+        const area = document.querySelector('#leadFocoArea');
+        if(top3 && area && !area.querySelector('.cp690-home-priority')){
+          const lista = (Array.isArray(ordenados)?ordenados:[]).slice(0,5);
+          const cards = lista.map(l=>`<button type="button" class="cp690-home-lead" onclick='abrirLead(${idJS690(l)})'><b>${esc690(l?.name||'Cliente')}</b><span>${esc690(acao690(l))}</span></button>`).join('');
+          area.insertAdjacentHTML('afterbegin', `<div class="cp690-home-priority"><div class="cp690-home-title"><b>Merecem atenção agora</b><button type="button" onclick="show('carteira')">Ver todos</button></div>${cards || '<p>Nenhum lead prioritário agora.</p>'}</div>`);
+        }
+      }catch(_){ }
+      return out;
+    };
+    try{ renderListasHome = window.renderListasHome; }catch(_){ }
+  }
+
+  function ajustarFAB690(){
+    document.querySelectorAll('.fab,.floating-add,.mobile-fab,#mobileFab,.cp-mobile-add').forEach(el=>{
+      el.style.bottom = 'calc(72px + env(safe-area-inset-bottom,0px))';
+      el.style.zIndex = '95';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', ajustarFAB690);
+  window.addEventListener('resize', ajustarFAB690);
+  setInterval(ajustarFAB690, 1500);
+
+  const css = document.createElement('style');
+  css.id = 'cp690CorrecoesCSS';
+  css.textContent = `
+    html,body{overscroll-behavior-y:auto!important;scroll-behavior:auto!important}
+    #carteira,#carteiraBody,.cp690-att-page{overflow:visible!important;height:auto!important;max-height:none!important;contain:none!important}
+    #carteira .cp-virtual-wrap{max-height:none!important;height:auto!important;overflow:visible!important;contain:none!important}
+    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-thead{display:none!important}
+    #carteiraBody{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}
+    .cp690-att-page{max-width:1120px;margin:0 auto;padding-bottom:36px}
+    .cp690-att-head{margin:0 0 18px}.cp690-att-head h2{margin:0;font-size:clamp(30px,5vw,44px);font-weight:950;line-height:1;letter-spacing:-.045em;color:var(--text)}
+    .cp690-att-head p{margin:8px 0 0;color:var(--muted);font-size:15px;line-height:1.35}.cp690-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:20px;background:rgba(7,52,64,.62);overflow:visible!important;box-shadow:0 22px 70px rgba(0,0,0,.18);margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
+    .cp690-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;text-align:left;padding:18px 18px 18px 22px;min-height:94px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer;border-radius:0}
+    .cp690-att-row:last-child{border-bottom:0}.cp690-att-row::before{content:'';position:absolute;left:0;top:16px;bottom:16px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp690-att-row.is-hot::before{background:var(--lime)}.cp690-att-row.is-warm::before{background:var(--morno)}.cp690-att-row:active{background:rgba(255,107,92,.08)}
+    .cp690-att-left{min-width:0;display:flex;flex-direction:column;gap:5px}.cp690-att-left b{font-size:18px;font-weight:950;line-height:1.08;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-att-left em{font-style:normal;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-att-left small{font-size:14px;line-height:1.28;color:rgba(227,245,249,.78);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp690-att-pill{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:74px;max-width:88px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,107,92,.42);background:rgba(255,107,92,.07);color:var(--lime);font-size:12px;font-weight:950;line-height:1;white-space:nowrap}.cp690-att-row.is-normal .cp690-att-pill,.cp690-att-row.is-low .cp690-att-pill{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
+    .cp690-empty{padding:24px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}.cp690-empty b{color:var(--text)}
+    .cp690-home-load{min-height:210px;border:1px solid rgba(255,255,255,.10);border-radius:22px;background:rgba(7,52,64,.55);display:flex;align-items:center;justify-content:center;gap:14px;padding:26px;margin-top:16px;color:var(--text)}.cp690-home-load b{display:block;font-size:18px}.cp690-home-load span{display:block;color:var(--muted);font-size:13px;margin-top:4px;line-height:1.35}.cp690-spin{width:28px;height:28px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp690Spin .8s linear infinite}@keyframes cp690Spin{to{transform:rotate(360deg)}}
+    .cp690-home-priority{border:1px solid rgba(255,255,255,.10);border-radius:22px;background:rgba(7,52,64,.58);padding:16px;margin-bottom:16px}.cp690-home-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.cp690-home-title b{font-size:17px;color:var(--text)}.cp690-home-title button{border:0;background:transparent;color:var(--lime);font-weight:950;cursor:pointer}.cp690-home-lead{width:100%;display:flex;flex-direction:column;gap:4px;text-align:left;border:0;border-top:1px solid rgba(255,255,255,.08);padding:12px 0;background:transparent;color:var(--text);font:inherit}.cp690-home-lead b{font-size:15px}.cp690-home-lead span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-home-lead:first-of-type{border-top:0}
+    .fab,.floating-add,.mobile-fab,#mobileFab,.cp-mobile-add{bottom:calc(72px + env(safe-area-inset-bottom,0px))!important;z-index:95!important}
+    @media(max-width:760px){
+      #home .home-grid{gap:14px!important}#home .home-center{gap:14px!important}.resumo-dia{margin-bottom:8px!important}
+      #carteira.screen.active{padding:18px 24px calc(120px + env(safe-area-inset-bottom,0px))!important}
+      #carteiraBody{padding:0 6px calc(170px + env(safe-area-inset-bottom,0px))!important}
+      .cp690-att-head{margin:2px 0 14px}.cp690-att-head h2{font-size:34px}.cp690-att-head p{font-size:16px}.cp690-att-list{border-radius:20px;margin-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
+      .cp690-att-row{grid-template-columns:minmax(0,1fr) auto;min-height:108px;padding:16px 12px 16px 20px;gap:8px}.cp690-att-left b{font-size:22px}.cp690-att-left em{font-size:14px}.cp690-att-left small{font-size:17px;line-height:1.28;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.cp690-att-pill{min-width:70px;max-width:76px;padding:7px 6px;font-size:12px;line-height:1.05;white-space:normal;text-align:center}
+      .cp690-home-load{min-height:160px;margin-top:12px;align-items:flex-start;justify-content:flex-start}.cp690-home-priority{margin:4px 0 14px}.cp690-home-lead span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    }
+  `;
+  document.head.appendChild(css);
+
+  window.CORRETOR_PRO_VERSAO_USO_DIARIO = VERSION;
+})();
