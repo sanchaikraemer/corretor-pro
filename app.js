@@ -12157,3 +12157,132 @@ window.renderLeadFoco=renderLeadFoco;
 
   window.CORRETOR_PRO_VERSAO_USO_DIARIO = VERSION;
 })();
+
+/* ============================================================
+   Atualização #691 — Correção real mobile de Atendimentos
+   - Atendimentos sem rolagem interna e sem re-render ao rolar.
+   - Cards compactos no celular; textos e botão menores.
+   - FAB reposicionado para não cobrir a leitura.
+   ============================================================ */
+(function(){
+  if(window.__cp691MobileFix) return;
+  window.__cp691MobileFix = true;
+  const VERSION = '691';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
+
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function idJS(l){ return JSON.stringify(String(l?.id || '')); }
+  function etapa(l){
+    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
+    const p = String(l?.product || '').trim();
+    return p ? `${e} · ${p}` : e;
+  }
+  function acao(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para ver o próximo passo.').replace(/\s+/g,' ').trim();
+    return raw.length > 74 ? raw.slice(0,71).trim() + '...' : raw;
+  }
+  function prioridade(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    const t = String(p.titulo || '').trim();
+    if(/atender/i.test(t)) return 'Atender';
+    if(/retomar/i.test(t)) return 'Retomar';
+    if(/aguardar/i.test(t)) return 'Aguardar';
+    if(/sem ação/i.test(t)) return 'Sem ação';
+    return t || 'Abrir';
+  }
+  function classe(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+    if(p.grupo === 'acao-hoje') return 'is-hot';
+    if(p.grupo === 'retomar-cuidado') return 'is-warm';
+    if(p.grupo === 'baixa-prioridade') return 'is-low';
+    return 'is-normal';
+  }
+  function lista(){
+    const arr = Array.isArray(state?.carteiraLeads) ? state.carteiraLeads : [];
+    return arr
+      .filter(l => {
+        const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
+        return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+      })
+      .filter(l => typeof carteiraPassaFiltro === 'function' ? carteiraPassaFiltro(l, 'todos') : true)
+      .map(l => ({...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0}))
+      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
+  }
+  function row(l){
+    return `<button type="button" class="cp691-att-row ${classe(l)}" onclick='abrirLead(${idJS(l)})'>
+      <span class="cp691-att-left"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapa(l))}</em><small>${esc(acao(l))}</small></span>
+      <span class="cp691-att-pill">${esc(prioridade(l))}</span>
+    </button>`;
+  }
+  let lastSig = '';
+  window.renderCarteiraTabela = function(force=false){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const data = lista();
+    const sig = data.map(l => `${l.id||''}:${l.updated_at||l.updatedAt||''}:${l.etapa||''}:${l.nextAction||''}`).join('|');
+    // Se o usuário está rolando a tela de Atendimentos e nada mudou, não recria a lista.
+    if(!force && state?.active === 'carteira' && box.dataset.cp691Sig === sig && box.querySelector('.cp691-att-page')) return;
+    box.dataset.cp691Sig = sig;
+    const htmlRows = data.length ? data.map(row).join('') : `<div class="cp691-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
+    box.innerHTML = `<section class="cp691-att-page">
+      <header class="cp691-att-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp691-att-list">${htmlRows}</div>
+    </section>`;
+    requestAnimationFrame(()=>{
+      document.querySelectorAll('#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cp-virtual-wrap,#carteira .cp689-att-page,#carteira .cp690-att-page').forEach(el=>{
+        if(!el.closest('.cp691-att-page')) el.remove();
+      });
+      ajustarFAB691();
+    });
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
+
+  window.setCarteiraFiltro = function(){
+    state.carteiraFiltro = 'todos';
+    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
+    else renderCarteiraTabela(true);
+  };
+
+  function ajustarFAB691(){
+    document.querySelectorAll('.bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn').forEach(el=>{
+      el.style.top = '-12px';
+      el.style.width = '42px';
+      el.style.height = '42px';
+      el.style.fontSize = '25px';
+      el.style.zIndex = '4';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', ajustarFAB691);
+  window.addEventListener('resize', ajustarFAB691);
+  setInterval(ajustarFAB691, 2000);
+
+  const css = document.createElement('style');
+  css.id = 'cp691MobileFixCSS';
+  css.textContent = `
+    html,body{overflow-x:hidden!important;scroll-behavior:auto!important;overscroll-behavior-y:auto!important}
+    #carteira,#carteiraBody,.cp691-att-page,.cp691-att-list{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}
+    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-thead,#carteira .cp-virtual-wrap,#carteira .cp689-att-page,#carteira .cp690-att-page{display:none!important}
+    #carteiraBody{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}
+    .cp691-att-page{max-width:1120px;margin:0 auto;padding-bottom:36px}
+    .cp691-att-head{margin:0 0 14px}.cp691-att-head h2{margin:0;color:var(--text);font-size:clamp(28px,4.5vw,40px);font-weight:950;line-height:1;letter-spacing:-.04em}.cp691-att-head p{margin:7px 0 0;color:var(--muted);font-size:14px;line-height:1.35}
+    .cp691-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.62);box-shadow:0 16px 52px rgba(0,0,0,.16);margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
+    .cp691-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;text-align:left;padding:14px 14px 14px 18px;min-height:82px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer;border-radius:0}
+    .cp691-att-row:last-child{border-bottom:0}.cp691-att-row::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp691-att-row.is-hot::before{background:var(--lime)}.cp691-att-row.is-warm::before{background:var(--morno)}.cp691-att-row:active{background:rgba(255,107,92,.08)}
+    .cp691-att-left{min-width:0;display:flex;flex-direction:column;gap:4px}.cp691-att-left b{font-size:17px!important;font-weight:900;line-height:1.08;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp691-att-left em{font-style:normal;font-size:12px!important;color:var(--muted);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp691-att-left small{font-size:13px!important;line-height:1.22;color:rgba(227,245,249,.78);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp691-att-pill{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:64px;max-width:72px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:11px!important;font-weight:900;line-height:1;white-space:nowrap;text-align:center}.cp691-att-row.is-normal .cp691-att-pill,.cp691-att-row.is-low .cp691-att-pill{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
+    .cp691-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp691-empty b{color:var(--text)}
+    .bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn{top:-12px!important;width:42px!important;height:42px!important;font-size:25px!important;z-index:4!important;box-shadow:0 7px 18px rgba(0,0,0,.30)!important}
+    @media(max-width:760px){
+      #carteira.screen.active{padding:18px 24px calc(104px + env(safe-area-inset-bottom,0px))!important}
+      #carteiraBody{padding:0 6px calc(145px + env(safe-area-inset-bottom,0px))!important}
+      .cp691-att-head{margin:0 0 12px}.cp691-att-head h2{font-size:30px!important}.cp691-att-head p{font-size:14px!important}
+      .cp691-att-list{border-radius:16px;margin-bottom:calc(125px + env(safe-area-inset-bottom,0px))}
+      .cp691-att-row{min-height:78px!important;padding:12px 10px 12px 17px!important;gap:8px!important}.cp691-att-left b{font-size:18px!important}.cp691-att-left em{font-size:12px!important}.cp691-att-left small{font-size:13px!important;white-space:nowrap!important;display:block!important;overflow:hidden!important;text-overflow:ellipsis!important}.cp691-att-pill{min-width:60px!important;max-width:66px!important;padding:6px 6px!important;font-size:10.5px!important;white-space:nowrap!important}
+      .bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn{top:-10px!important;width:40px!important;height:40px!important;font-size:24px!important}
+    }
+  `;
+  document.head.appendChild(css);
+})();
