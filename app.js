@@ -11791,658 +11791,173 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #689 — Correção de uso diário
-   - Atendimentos mobile/desktop limpo: busca + lista, sem filtros administrativos.
-   - Corrige scroll que voltava ao início: renderização simples e estável da carteira.
-   - Ajusta card mobile para não quebrar "Atender agora" e reduz ruído visual.
-   - Mantém botão de reanálise visível no lead.
+   Atualização #694 — Hotfix real mobile
+   - Remove as correções conflitantes anteriores de Atendimentos.
+   - Atendimentos: lista simples, página com rolagem natural, sem container interno.
+   - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
+   - Loading da Home não fica preso: mostra skeleton e libera fallback se a API demorar.
    ============================================================ */
 (function(){
-  if(window.__cp689UsoDiario) return;
-  window.__cp689UsoDiario = true;
+  if(window.__cp694HotfixMobile) return;
+  window.__cp694HotfixMobile = true;
+  const VERSION = '694';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
     try { return escapeHtml(String(v ?? '')); }
     catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   }
-  function leadIdJS(l){ return JSON.stringify(String(l?.id || '')); }
-  function primeiraLinhaAcao(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || '').trim();
-    if(!raw) return 'Abrir lead para ver o próximo passo.';
-    const limpo = raw.replace(/\s+/g,' ');
-    return limpo.length > 96 ? limpo.slice(0,93).trim() + '...' : limpo;
-  }
-  function etapaProduto(l){
-    const etapa = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
-    const produto = String(l?.product || '').trim();
-    return produto ? `${etapa} · ${produto}` : etapa;
-  }
-  function statusPrioridade(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
-    const titulo = String(p.titulo || '').trim();
-    if(/atender/i.test(titulo)) return 'Atender agora';
-    if(/aguardar/i.test(titulo)) return 'Aguardar';
-    if(/retomar/i.test(titulo)) return 'Retomar';
-    return titulo || 'Ver lead';
-  }
-  function classePrioridade(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
-    return p.grupo === 'acao-hoje' ? 'is-hot' : p.grupo === 'retomar-cuidado' ? 'is-warm' : p.grupo === 'baixa-prioridade' ? 'is-low' : 'is-normal';
-  }
-  function carteiraRowCleanHTML(l){
-    const id = leadIdJS(l);
-    const etapa = etapaProduto(l);
-    const acao = primeiraLinhaAcao(l);
-    const status = statusPrioridade(l);
-    return `<button type="button" class="cp689-att-row ${classePrioridade(l)}" onclick='abrirLead(${id})'>
-      <span class="cp689-att-main">
-        <b>${esc(l?.name || 'Cliente')}</b>
-        <em>${esc(etapa)}</em>
-        <small>${esc(acao)}</small>
-      </span>
-      <span class="cp689-att-status">${esc(status)}</span>
-    </button>`;
-  }
-
-  window.renderCarteiraTabela = function(){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const t0 = (typeof cpPerfNow === 'function') ? cpPerfNow() : Date.now();
-    const base = (Array.isArray(state?.carteiraLeads) ? state.carteiraLeads : [])
-      .filter(l => {
-        const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-        return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
-      });
-    const lista = base
-      .filter(l => typeof carteiraPassaFiltro === 'function' ? carteiraPassaFiltro(l, 'todos') : true)
-      .map(l => ({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
-      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (() => 0));
-    const linhas = lista.length
-      ? lista.map(carteiraRowCleanHTML).join('')
-      : `<div class="cp689-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
-    box.innerHTML = `
-      <div class="cp689-att-head">
-        <div>
-          <h2>Atendimentos</h2>
-          <p>Prioridade de atendimento, de cima para baixo.</p>
-        </div>
-        <span>${lista.length} lead${lista.length===1?'':'s'}</span>
-      </div>
-      <div class="cp689-att-list" id="cp689AtendimentosLista">${linhas}</div>`;
-    try{ if(typeof cpPerfMark === 'function') cpPerfMark('renderCarteira689', t0, { total: lista.length, rendered: lista.length }); }catch(_){}
-  };
-
-  const oldSetFiltro = window.setCarteiraFiltro;
-  window.setCarteiraFiltro = function(){
-    state.carteiraFiltro = 'todos';
-    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
-    renderCarteiraTabela();
-  };
-
-  window.cp689ReanalisarLead = async function(btn){
-    const lead = state?.lead;
-    const id = lead?.id;
-    if(!id) return toast('Lead não identificado.');
-    const original = btn ? btn.textContent : '';
-    if(btn){ btn.disabled = true; btn.textContent = '↻ Reanalisando...'; }
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 90000);
-    try{
-      const res = await fetch('./api/reanalisar-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }), signal: ctrl.signal });
-      clearTimeout(to);
-      const data = await res.json().catch(()=>({}));
-      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha na reanálise');
-      try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){}
-      toast('Análise atualizada.');
-      if(typeof abrirLead === 'function') await abrirLead(id);
-    }catch(err){
-      clearTimeout(to);
-      toast(err?.name === 'AbortError' ? 'A reanálise demorou demais. Tente novamente.' : 'Não consegui reanalisar: ' + (err?.message || err));
-      if(btn){ btn.disabled = false; btn.textContent = original || '↻ Reanalisar IA'; }
-    }
-  };
-
-  function inserirBotaoReanalise(){
-    const lead = state?.lead;
-    if(!lead?.id) return;
-    if(document.querySelector('#cp689ReanalisarTop')) return;
-    const top = document.querySelector('#ui667AtendidoBtn');
-    if(top){
-      const btn = document.createElement('button');
-      btn.id = 'cp689ReanalisarTop';
-      btn.type = 'button';
-      btn.className = 'cp689-reanalisar-top';
-      btn.textContent = '↻ Reanalisar IA';
-      btn.onclick = function(){ cp689ReanalisarLead(this); };
-      top.insertAdjacentElement('afterend', btn);
-    }
-    const actions = document.querySelector('#ui683LeadTools');
-    if(actions && !actions.querySelector('#cp689ReanalisarQuick')){
-      const q = document.createElement('button');
-      q.id = 'cp689ReanalisarQuick';
-      q.type = 'button';
-      q.textContent = '↻ Reanalisar IA';
-      q.onclick = function(){ cp689ReanalisarLead(this); };
-      const first = actions.querySelector('button:nth-child(2)') || actions.firstElementChild;
-      if(first) first.insertAdjacentElement('afterend', q); else actions.prepend(q);
-    }
-  }
-
-  const prevRenderLead = window.renderLeadFoco;
-  if(typeof prevRenderLead === 'function'){
-    window.renderLeadFoco = function(lead){
-      const out = prevRenderLead.apply(this, arguments);
-      setTimeout(inserirBotaoReanalise, 30);
-      return out;
-    };
-    try{ renderLeadFoco = window.renderLeadFoco; }catch(_){}
-  }
-
-  const css = document.createElement('style');
-  css.id = 'cp689UsoDiarioCSS';
-  css.textContent = `
-    #carteiraBody{padding-bottom:120px!important}
-    .cp689-att-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:0 0 16px}
-    .cp689-att-head h2{font-size:clamp(28px,4vw,42px);line-height:1;margin:0;color:var(--text);font-weight:950;letter-spacing:-.04em}
-    .cp689-att-head p{margin:8px 0 0;color:var(--muted);font-size:14px;line-height:1.35}
-    .cp689-att-head span{color:var(--muted);font-weight:850;font-size:13px;white-space:nowrap}
-    .cp689-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:18px;overflow:hidden;background:rgba(7,52,64,.66);box-shadow:0 22px 70px rgba(0,0,0,.18);margin-bottom:110px}
-    .cp689-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;padding:18px 20px;background:transparent;color:var(--text);border:0;border-bottom:1px solid rgba(255,255,255,.09);cursor:pointer;min-height:92px;position:relative;font:inherit}
-    .cp689-att-row:last-child{border-bottom:0}
-    .cp689-att-row::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:transparent}
-    .cp689-att-row.is-hot::before{background:var(--lime)}
-    .cp689-att-row.is-warm::before{background:var(--morno)}
-    .cp689-att-row:hover{background:rgba(255,255,255,.035)}
-    .cp689-att-main{min-width:0;display:flex;flex-direction:column;gap:5px}
-    .cp689-att-main b{font-size:17px;font-weight:950;color:var(--text);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp689-att-main em{font-style:normal;color:var(--muted);font-size:13px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp689-att-main small{color:rgba(227,245,249,.78);font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp689-att-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:96px;max-width:118px;padding:8px 10px;border-radius:999px;border:1px solid rgba(255,107,92,.45);color:var(--lime);font-size:12px;font-weight:950;line-height:1;white-space:nowrap;background:rgba(255,107,92,.08)}
-    .cp689-att-row.is-low .cp689-att-status,.cp689-att-row.is-normal .cp689-att-status{border-color:rgba(255,255,255,.14);color:var(--muted);background:rgba(255,255,255,.035)}
-    .cp689-empty{padding:24px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}
-    .cp689-empty b{color:var(--text);font-size:16px}
-    .cp689-reanalisar-top{margin-left:10px;border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.06);color:var(--text);border-radius:14px;padding:13px 17px;font-weight:950;cursor:pointer;box-shadow:0 12px 28px rgba(0,0,0,.20)}
-    .cp689-reanalisar-top:disabled{opacity:.65;cursor:wait}
-    .fab,.floating-add,.mobile-fab,#mobileFab{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
-    @media(max-width:760px){
-      #carteiraBody{padding:0 14px 150px!important}
-      .cp689-att-head{align-items:flex-start;margin-top:6px}
-      .cp689-att-head h2{font-size:32px}
-      .cp689-att-head span{display:none}
-      .cp689-att-list{border-radius:20px;margin-bottom:140px}
-      .cp689-att-row{grid-template-columns:minmax(0,1fr) auto;min-height:108px;padding:16px 14px 16px 18px;gap:10px}
-      .cp689-att-main b{font-size:20px}
-      .cp689-att-main em{font-size:13px}
-      .cp689-att-main small{font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow:hidden}
-      .cp689-att-status{min-width:86px;max-width:92px;padding:8px 8px;font-size:12px;line-height:1.05;text-align:center;white-space:normal}
-      .cp689-reanalisar-top{display:block;margin:10px 0 0 0;width:100%;padding:14px 16px}
-      .ui-lead-title-row{align-items:flex-start;flex-direction:column!important}
-    }
-  `;
-  document.head.appendChild(css);
-
-  window.CORRETOR_PRO_VERSAO_USO_DIARIO = '689';
-})();
-
-
-/* ============================================================
-   Atualização #690 — Correção final de Atendimentos, Home e rolagem
-   - Atendimentos: rolagem natural da página, sem container interno instável.
-   - Remove qualquer toolbar/filtro administrativo remanescente na tela Atendimentos.
-   - Cards mais limpos no mobile, botão de status menor e sem quebrar layout.
-   - Botão + não cobre busca/lista.
-   - Home ganha conteúdo útil imediato enquanto dados carregam e encurta vazio.
-   - Preserva scroll da carteira durante re-render.
-   ============================================================ */
-(function(){
-  if(window.__cp690CorrecoesFinais) return;
-  window.__cp690CorrecoesFinais = true;
-
-  const VERSION = '690';
-  function esc690(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function idJS690(l){ return JSON.stringify(String(l?.id || '')); }
-  function etapa690(l){
+  function safeId(l){ return JSON.stringify(String(l?.id || '')); }
+  function etapaTxt(l){
     const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
     const p = String(l?.product || '').trim();
     return p ? `${e} · ${p}` : e;
   }
-  function acao690(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || '').replace(/\s+/g,' ').trim();
-    if(!raw) return 'Abrir lead para conferir o próximo passo.';
-    return raw.length > 112 ? raw.slice(0,109).trim() + '...' : raw;
+  function acaoTxt(l){
+    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
+    return raw.length > 72 ? raw.slice(0,69).trim() + '...' : raw;
   }
-  function prio690(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
+  function statusTxt(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
     const t = String(p.titulo || '').trim();
     if(/atender/i.test(t)) return 'Atender';
-    if(/aguardar/i.test(t)) return 'Aguardar';
     if(/retomar/i.test(t)) return 'Retomar';
+    if(/aguardar/i.test(t)) return 'Aguardar';
     if(/sem/i.test(t)) return 'Sem ação';
     return t || 'Abrir';
   }
-  function cls690(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
-    if(p.grupo === 'acao-hoje') return 'is-hot';
-    if(p.grupo === 'retomar-cuidado') return 'is-warm';
-    if(p.grupo === 'baixa-prioridade') return 'is-low';
-    return 'is-normal';
+  function statusClass(l){
+    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
+    if(p.grupo === 'acao-hoje') return 'hot';
+    if(p.grupo === 'retomar-cuidado') return 'warm';
+    if(p.grupo === 'baixa-prioridade') return 'low';
+    return 'normal';
   }
-  function row690(l){
-    return `<button type="button" class="cp690-att-row ${cls690(l)}" onclick='abrirLead(${idJS690(l)})'>
-      <span class="cp690-att-left"><b>${esc690(l?.name || 'Cliente')}</b><em>${esc690(etapa690(l))}</em><small>${esc690(acao690(l))}</small></span>
-      <span class="cp690-att-pill">${esc690(prio690(l))}</span>
-    </button>`;
-  }
-  function listaAtendimento690(){
-    const base = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads : (Array.isArray(state?.itemsAtivos) ? state.itemsAtivos : (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
-    return base.filter(l => {
-      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
-    }).map(l => ({...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0}))
-      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
-  }
-
-  window.renderCarteiraTabela = function(){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const oldY = window.scrollY || document.documentElement.scrollTop || 0;
-    const lista = listaAtendimento690();
-    const linhas = lista.length ? lista.map(row690).join('') : `<div class="cp690-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
-    box.innerHTML = `<section class="cp690-att-page">
-      <header class="cp690-att-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp690-att-list" id="cp690AtendimentosLista">${linhas}</div>
-    </section>`;
-    requestAnimationFrame(()=>{
-      if(state.active === 'carteira' && oldY > 80) window.scrollTo(0, oldY);
-      document.querySelectorAll('#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cp-virtual-wrap').forEach(el=>{
-        if(!el.closest('.cp690-att-page')) el.remove();
-      });
-    });
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
-
-  window.setCarteiraFiltro = function(){
-    state.carteiraFiltro = 'todos';
-    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
-    else renderCarteiraTabela();
-  };
-
-  const _show690 = window.show || (typeof show === 'function' ? show : null);
-  if(_show690){
-    window.show = function(t, options={}){
-      if(state.active === 'carteira' && t === 'carteira') options = {...options, skipLoad:false};
-      return _show690.call(this, t, options);
-    };
-    try{ show = window.show; }catch(_){ }
-  }
-
-  function homeLoading690(){
-    const foco = document.querySelector('#leadFocoArea');
-    if(!foco || foco.dataset.cp690Loaded === '1') return;
-    foco.innerHTML = `<div class="cp690-home-load"><div class="cp690-spin"></div><div><b>Carregando sua carteira...</b><span>Organizando prioridades, últimos atendimentos e oportunidades.</span></div></div>`;
-  }
-  const _carregarDashboard690 = window.carregarDashboard || (typeof carregarDashboard === 'function' ? carregarDashboard : null);
-  if(_carregarDashboard690){
-    window.carregarDashboard = async function(){
-      if(state.active === 'home') homeLoading690();
-      const r = await _carregarDashboard690.apply(this, arguments);
-      const foco = document.querySelector('#leadFocoArea'); if(foco) foco.dataset.cp690Loaded = '1';
-      return r;
-    };
-    try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
-  }
-
-  const _renderListasHome690 = window.renderListasHome || (typeof renderListasHome === 'function' ? renderListasHome : null);
-  if(_renderListasHome690){
-    window.renderListasHome = function(ordenados){
-      const out = _renderListasHome690.apply(this, arguments);
-      try{
-        const foco = document.querySelector('#leadFocoArea');
-        if(foco) foco.dataset.cp690Loaded = '1';
-        const top3 = document.querySelector('#top3Area');
-        const area = document.querySelector('#leadFocoArea');
-        if(top3 && area && !area.querySelector('.cp690-home-priority')){
-          const lista = (Array.isArray(ordenados)?ordenados:[]).slice(0,5);
-          const cards = lista.map(l=>`<button type="button" class="cp690-home-lead" onclick='abrirLead(${idJS690(l)})'><b>${esc690(l?.name||'Cliente')}</b><span>${esc690(acao690(l))}</span></button>`).join('');
-          area.insertAdjacentHTML('afterbegin', `<div class="cp690-home-priority"><div class="cp690-home-title"><b>Merecem atenção agora</b><button type="button" onclick="show('carteira')">Ver todos</button></div>${cards || '<p>Nenhum lead prioritário agora.</p>'}</div>`);
-        }
-      }catch(_){ }
-      return out;
-    };
-    try{ renderListasHome = window.renderListasHome; }catch(_){ }
-  }
-
-  function ajustarFAB690(){
-    document.querySelectorAll('.fab,.floating-add,.mobile-fab,#mobileFab,.cp-mobile-add').forEach(el=>{
-      el.style.bottom = 'calc(72px + env(safe-area-inset-bottom,0px))';
-      el.style.zIndex = '95';
-    });
-  }
-  document.addEventListener('DOMContentLoaded', ajustarFAB690);
-  window.addEventListener('resize', ajustarFAB690);
-  setInterval(ajustarFAB690, 1500);
-
-  const css = document.createElement('style');
-  css.id = 'cp690CorrecoesCSS';
-  css.textContent = `
-    html,body{overscroll-behavior-y:auto!important;scroll-behavior:auto!important}
-    #carteira,#carteiraBody,.cp690-att-page{overflow:visible!important;height:auto!important;max-height:none!important;contain:none!important}
-    #carteira .cp-virtual-wrap{max-height:none!important;height:auto!important;overflow:visible!important;contain:none!important}
-    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-thead{display:none!important}
-    #carteiraBody{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}
-    .cp690-att-page{max-width:1120px;margin:0 auto;padding-bottom:36px}
-    .cp690-att-head{margin:0 0 18px}.cp690-att-head h2{margin:0;font-size:clamp(30px,5vw,44px);font-weight:950;line-height:1;letter-spacing:-.045em;color:var(--text)}
-    .cp690-att-head p{margin:8px 0 0;color:var(--muted);font-size:15px;line-height:1.35}.cp690-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:20px;background:rgba(7,52,64,.62);overflow:visible!important;box-shadow:0 22px 70px rgba(0,0,0,.18);margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
-    .cp690-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;text-align:left;padding:18px 18px 18px 22px;min-height:94px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer;border-radius:0}
-    .cp690-att-row:last-child{border-bottom:0}.cp690-att-row::before{content:'';position:absolute;left:0;top:16px;bottom:16px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp690-att-row.is-hot::before{background:var(--lime)}.cp690-att-row.is-warm::before{background:var(--morno)}.cp690-att-row:active{background:rgba(255,107,92,.08)}
-    .cp690-att-left{min-width:0;display:flex;flex-direction:column;gap:5px}.cp690-att-left b{font-size:18px;font-weight:950;line-height:1.08;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-att-left em{font-style:normal;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-att-left small{font-size:14px;line-height:1.28;color:rgba(227,245,249,.78);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp690-att-pill{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:74px;max-width:88px;padding:7px 9px;border-radius:999px;border:1px solid rgba(255,107,92,.42);background:rgba(255,107,92,.07);color:var(--lime);font-size:12px;font-weight:950;line-height:1;white-space:nowrap}.cp690-att-row.is-normal .cp690-att-pill,.cp690-att-row.is-low .cp690-att-pill{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
-    .cp690-empty{padding:24px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}.cp690-empty b{color:var(--text)}
-    .cp690-home-load{min-height:210px;border:1px solid rgba(255,255,255,.10);border-radius:22px;background:rgba(7,52,64,.55);display:flex;align-items:center;justify-content:center;gap:14px;padding:26px;margin-top:16px;color:var(--text)}.cp690-home-load b{display:block;font-size:18px}.cp690-home-load span{display:block;color:var(--muted);font-size:13px;margin-top:4px;line-height:1.35}.cp690-spin{width:28px;height:28px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp690Spin .8s linear infinite}@keyframes cp690Spin{to{transform:rotate(360deg)}}
-    .cp690-home-priority{border:1px solid rgba(255,255,255,.10);border-radius:22px;background:rgba(7,52,64,.58);padding:16px;margin-bottom:16px}.cp690-home-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.cp690-home-title b{font-size:17px;color:var(--text)}.cp690-home-title button{border:0;background:transparent;color:var(--lime);font-weight:950;cursor:pointer}.cp690-home-lead{width:100%;display:flex;flex-direction:column;gap:4px;text-align:left;border:0;border-top:1px solid rgba(255,255,255,.08);padding:12px 0;background:transparent;color:var(--text);font:inherit}.cp690-home-lead b{font-size:15px}.cp690-home-lead span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp690-home-lead:first-of-type{border-top:0}
-    .fab,.floating-add,.mobile-fab,#mobileFab,.cp-mobile-add{bottom:calc(72px + env(safe-area-inset-bottom,0px))!important;z-index:95!important}
-    @media(max-width:760px){
-      #home .home-grid{gap:14px!important}#home .home-center{gap:14px!important}.resumo-dia{margin-bottom:8px!important}
-      #carteira.screen.active{padding:18px 24px calc(120px + env(safe-area-inset-bottom,0px))!important}
-      #carteiraBody{padding:0 6px calc(170px + env(safe-area-inset-bottom,0px))!important}
-      .cp690-att-head{margin:2px 0 14px}.cp690-att-head h2{font-size:34px}.cp690-att-head p{font-size:16px}.cp690-att-list{border-radius:20px;margin-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
-      .cp690-att-row{grid-template-columns:minmax(0,1fr) auto;min-height:108px;padding:16px 12px 16px 20px;gap:8px}.cp690-att-left b{font-size:22px}.cp690-att-left em{font-size:14px}.cp690-att-left small{font-size:17px;line-height:1.28;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.cp690-att-pill{min-width:70px;max-width:76px;padding:7px 6px;font-size:12px;line-height:1.05;white-space:normal;text-align:center}
-      .cp690-home-load{min-height:160px;margin-top:12px;align-items:flex-start;justify-content:flex-start}.cp690-home-priority{margin:4px 0 14px}.cp690-home-lead span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    }
-  `;
-  document.head.appendChild(css);
-
-  window.CORRETOR_PRO_VERSAO_USO_DIARIO = VERSION;
-})();
-
-/* ============================================================
-   Atualização #691 — Correção real mobile de Atendimentos
-   - Atendimentos sem rolagem interna e sem re-render ao rolar.
-   - Cards compactos no celular; textos e botão menores.
-   - FAB reposicionado para não cobrir a leitura.
-   ============================================================ */
-(function(){
-  if(window.__cp691MobileFix) return;
-  window.__cp691MobileFix = true;
-  const VERSION = '691';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function idJS(l){ return JSON.stringify(String(l?.id || '')); }
-  function etapa(l){
-    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
-    const p = String(l?.product || '').trim();
-    return p ? `${e} · ${p}` : e;
-  }
-  function acao(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para ver o próximo passo.').replace(/\s+/g,' ').trim();
-    return raw.length > 74 ? raw.slice(0,71).trim() + '...' : raw;
-  }
-  function prioridade(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
-    const t = String(p.titulo || '').trim();
-    if(/atender/i.test(t)) return 'Atender';
-    if(/retomar/i.test(t)) return 'Retomar';
-    if(/aguardar/i.test(t)) return 'Aguardar';
-    if(/sem ação/i.test(t)) return 'Sem ação';
-    return t || 'Abrir';
-  }
-  function classe(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l) || {}) : {};
-    if(p.grupo === 'acao-hoje') return 'is-hot';
-    if(p.grupo === 'retomar-cuidado') return 'is-warm';
-    if(p.grupo === 'baixa-prioridade') return 'is-low';
-    return 'is-normal';
-  }
-  function lista(){
-    const arr = Array.isArray(state?.carteiraLeads) ? state.carteiraLeads : [];
-    return arr
-      .filter(l => {
-        const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-        return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
-      })
-      .filter(l => typeof carteiraPassaFiltro === 'function' ? carteiraPassaFiltro(l, 'todos') : true)
-      .map(l => ({...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0}))
-      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
-  }
-  function row(l){
-    return `<button type="button" class="cp691-att-row ${classe(l)}" onclick='abrirLead(${idJS(l)})'>
-      <span class="cp691-att-left"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapa(l))}</em><small>${esc(acao(l))}</small></span>
-      <span class="cp691-att-pill">${esc(prioridade(l))}</span>
-    </button>`;
-  }
-  let lastSig = '';
-  window.renderCarteiraTabela = function(force=false){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const data = lista();
-    const sig = data.map(l => `${l.id||''}:${l.updated_at||l.updatedAt||''}:${l.etapa||''}:${l.nextAction||''}`).join('|');
-    // Se o usuário está rolando a tela de Atendimentos e nada mudou, não recria a lista.
-    if(!force && state?.active === 'carteira' && box.dataset.cp691Sig === sig && box.querySelector('.cp691-att-page')) return;
-    box.dataset.cp691Sig = sig;
-    const htmlRows = data.length ? data.map(row).join('') : `<div class="cp691-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
-    box.innerHTML = `<section class="cp691-att-page">
-      <header class="cp691-att-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp691-att-list">${htmlRows}</div>
-    </section>`;
-    requestAnimationFrame(()=>{
-      document.querySelectorAll('#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cp-virtual-wrap,#carteira .cp689-att-page,#carteira .cp690-att-page').forEach(el=>{
-        if(!el.closest('.cp691-att-page')) el.remove();
-      });
-      ajustarFAB691();
-    });
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
-
-  window.setCarteiraFiltro = function(){
-    state.carteiraFiltro = 'todos';
-    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
-    else renderCarteiraTabela(true);
-  };
-
-  function ajustarFAB691(){
-    document.querySelectorAll('.bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn').forEach(el=>{
-      el.style.top = '-12px';
-      el.style.width = '42px';
-      el.style.height = '42px';
-      el.style.fontSize = '25px';
-      el.style.zIndex = '4';
-    });
-  }
-  document.addEventListener('DOMContentLoaded', ajustarFAB691);
-  window.addEventListener('resize', ajustarFAB691);
-  setInterval(ajustarFAB691, 2000);
-
-  const css = document.createElement('style');
-  css.id = 'cp691MobileFixCSS';
-  css.textContent = `
-    html,body{overflow-x:hidden!important;scroll-behavior:auto!important;overscroll-behavior-y:auto!important}
-    #carteira,#carteiraBody,.cp691-att-page,.cp691-att-list{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}
-    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-thead,#carteira .cp-virtual-wrap,#carteira .cp689-att-page,#carteira .cp690-att-page{display:none!important}
-    #carteiraBody{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))!important}
-    .cp691-att-page{max-width:1120px;margin:0 auto;padding-bottom:36px}
-    .cp691-att-head{margin:0 0 14px}.cp691-att-head h2{margin:0;color:var(--text);font-size:clamp(28px,4.5vw,40px);font-weight:950;line-height:1;letter-spacing:-.04em}.cp691-att-head p{margin:7px 0 0;color:var(--muted);font-size:14px;line-height:1.35}
-    .cp691-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.62);box-shadow:0 16px 52px rgba(0,0,0,.16);margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
-    .cp691-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;text-align:left;padding:14px 14px 14px 18px;min-height:82px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer;border-radius:0}
-    .cp691-att-row:last-child{border-bottom:0}.cp691-att-row::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp691-att-row.is-hot::before{background:var(--lime)}.cp691-att-row.is-warm::before{background:var(--morno)}.cp691-att-row:active{background:rgba(255,107,92,.08)}
-    .cp691-att-left{min-width:0;display:flex;flex-direction:column;gap:4px}.cp691-att-left b{font-size:17px!important;font-weight:900;line-height:1.08;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp691-att-left em{font-style:normal;font-size:12px!important;color:var(--muted);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp691-att-left small{font-size:13px!important;line-height:1.22;color:rgba(227,245,249,.78);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp691-att-pill{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:64px;max-width:72px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:11px!important;font-weight:900;line-height:1;white-space:nowrap;text-align:center}.cp691-att-row.is-normal .cp691-att-pill,.cp691-att-row.is-low .cp691-att-pill{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
-    .cp691-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp691-empty b{color:var(--text)}
-    .bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn{top:-12px!important;width:42px!important;height:42px!important;font-size:25px!important;z-index:4!important;box-shadow:0 7px 18px rgba(0,0,0,.30)!important}
-    @media(max-width:760px){
-      #carteira.screen.active{padding:18px 24px calc(104px + env(safe-area-inset-bottom,0px))!important}
-      #carteiraBody{padding:0 6px calc(145px + env(safe-area-inset-bottom,0px))!important}
-      .cp691-att-head{margin:0 0 12px}.cp691-att-head h2{font-size:30px!important}.cp691-att-head p{font-size:14px!important}
-      .cp691-att-list{border-radius:16px;margin-bottom:calc(125px + env(safe-area-inset-bottom,0px))}
-      .cp691-att-row{min-height:78px!important;padding:12px 10px 12px 17px!important;gap:8px!important}.cp691-att-left b{font-size:18px!important}.cp691-att-left em{font-size:12px!important}.cp691-att-left small{font-size:13px!important;white-space:nowrap!important;display:block!important;overflow:hidden!important;text-overflow:ellipsis!important}.cp691-att-pill{min-width:60px!important;max-width:66px!important;padding:6px 6px!important;font-size:10.5px!important;white-space:nowrap!important}
-      .bottom-nav .nav.fab .fab-btn,.cp-bottom-nav .nav.fab .fab-btn{top:-10px!important;width:40px!important;height:40px!important;font-size:24px!important}
-    }
-  `;
-  document.head.appendChild(css);
-})();
-
-
-/* ============================================================
-   Atualização #693 — Correção definitiva mobile: rolagem e botão +
-   - Remove rolagem interna em listas de leads no mobile.
-   - Usa rolagem natural da página em Atendimentos e Pipeline.
-   - Coloca o botão + dentro da barra inferior, no centro, sem cobrir conteúdo.
-   - Reduz card/lista de leads em todas as listas móveis.
-   ============================================================ */
-(function(){
-  if(window.__cp693MobileScrollFab) return;
-  window.__cp693MobileScrollFab = true;
-  const VERSION = '693';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-
-  function syncVersion692(){
-    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
-      if(el && /Atualiza[cç][aã]o\s*#\d+/i.test(el.textContent||'')) el.textContent = (el.textContent||'').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #693');
-    });
-  }
-
-  function fixFab692(){
-    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
-      el.style.position = 'static';
-      el.style.left = 'auto';
-      el.style.top = 'auto';
-      el.style.transform = 'none';
-      el.style.width = '38px';
-      el.style.height = '38px';
-      el.style.fontSize = '24px';
-      el.style.borderWidth = '3px';
-      el.style.margin = '0 auto 2px';
-      el.style.boxShadow = '0 6px 14px rgba(0,0,0,.28)';
-      el.style.zIndex = '1';
-    });
-    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
-      el.style.position = 'relative';
-      el.style.overflow = 'visible';
-      el.style.justifyContent = 'center';
-      el.style.paddingTop = '0';
-    });
-  }
-
-  function removeInternalScroll692(root=document){
-    const selectors = [
-      '.cp-virtual-wrap', '.cp-virtual-inner', '.ui-priority-list', '.cp691-att-list', '.cp691-att-page',
-      '.cart-table', '#carteiraBody', '#pipelineBoard', '#carteira', '#pipeline'
-    ];
-    root.querySelectorAll(selectors.join(',')).forEach(el=>{
-      el.style.maxHeight = 'none';
-      el.style.height = 'auto';
-      el.style.overflow = 'visible';
-      el.style.overflowY = 'visible';
-      el.style.contain = 'none';
-      el.style.willChange = 'auto';
-    });
-  }
-
-  // Atendimentos: renderização simples, sem janela virtual e sem barra interna.
-  function esc(v){
-    try{ return escapeHtml(String(v ?? '')); }
-    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function getAtendimentos692(){
-    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads : (Array.isArray(state?.todosLeads) ? state.todosLeads : []);
+  function leadsAtendimento(){
+    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads :
+      (Array.isArray(state?.itemsAtivos) && state.itemsAtivos.length ? state.itemsAtivos :
+      (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
     return arr.filter(l=>{
-      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa||'');
+      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
       return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
     }).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
       .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
   }
-  function row692(l){
-    const id = JSON.stringify(String(l?.id||''));
-    const nome = l?.name || 'Cliente';
-    const etapa = (typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa||'Atendimento')) || 'Atendimento';
-    const prod = String(l?.product||'').trim();
-    const sub = prod ? `${etapa} · ${prod}` : etapa;
-    const raw = String(l?.nextAction || l?.summary || 'Abrir lead para ver o próximo passo.').replace(/\s+/g,' ').trim();
-    const acao = raw.length > 58 ? raw.slice(0,55).trim() + '...' : raw;
-    const pr = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
-    const titulo = /atender/i.test(pr.titulo||'') ? 'Atender' : /retomar/i.test(pr.titulo||'') ? 'Retomar' : /aguardar/i.test(pr.titulo||'') ? 'Aguardar' : /sem ação/i.test(pr.titulo||'') ? 'Sem ação' : 'Abrir';
-    const cls = pr.grupo === 'acao-hoje' ? 'hot' : pr.grupo === 'retomar-cuidado' ? 'warm' : pr.grupo === 'baixa-prioridade' ? 'low' : 'normal';
-    return `<button type="button" class="cp693-row ${cls}" onclick='abrirLead(${id})'>
-      <span class="cp693-copy"><b>${esc(nome)}</b><em>${esc(sub)}</em><small>${esc(acao)}</small></span>
-      <span class="cp693-status">${esc(titulo)}</span>
+  function rowLead(l){
+    return `<button type="button" class="cp694-lead-row ${statusClass(l)}" onclick='abrirLead(${safeId(l)})'>
+      <span class="cp694-lead-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapaTxt(l))}</em><small>${esc(acaoTxt(l))}</small></span>
+      <span class="cp694-lead-status">${esc(statusTxt(l))}</span>
     </button>`;
   }
+
   window.renderCarteiraTabela = function(){
     const box = document.querySelector('#carteiraBody');
     if(!box) return;
-    const lista = getAtendimentos692();
-    const rows = lista.length ? lista.map(row692).join('') : '<div class="cp693-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui.</span></div>';
-    box.innerHTML = `<section class="cp693-page">
-      <header class="cp693-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp693-list">${rows}</div>
+    const old = window.scrollY || document.documentElement.scrollTop || 0;
+    const lista = leadsAtendimento();
+    const rows = lista.length ? lista.map(rowLead).join('') : `<div class="cp694-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
+    box.innerHTML = `<section class="cp694-atendimentos">
+      <header class="cp694-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp694-lista">${rows}</div>
     </section>`;
-    removeInternalScroll692(box);
-    fixFab692();
+    requestAnimationFrame(()=>{
+      cp694FixLayout();
+      if(state?.active === 'carteira' && old > 80) window.scrollTo(0, old);
+    });
   };
   try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
 
-  // Pipeline/Home: se ainda existir lista virtual, transforma em fluxo normal da página.
-  function flattenVirtualLists692(){
-    document.querySelectorAll('.cp-virtual-wrap').forEach(w=>{
-      const inner = w.querySelector('.cp-virtual-inner');
-      if(inner){
-        inner.style.transform = 'none';
-        inner.style.position = 'static';
-        inner.style.height = 'auto';
-        inner.style.minHeight = '0';
-      }
-      w.style.height = 'auto';
-      w.style.maxHeight = 'none';
-      w.style.overflow = 'visible';
-      w.style.overflowY = 'visible';
-    });
-    document.querySelectorAll('.ui-priority-card,.ui-priority-list,.ui-pipeline-list').forEach(el=>{
-      el.style.maxHeight = 'none';
-      el.style.height = 'auto';
-      el.style.overflow = 'visible';
-      el.style.overflowY = 'visible';
+  window.setCarteiraFiltro = function(){
+    state.carteiraFiltro = 'todos';
+    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
+    else window.renderCarteiraTabela();
+  };
+
+  function cp694FixVersion(){
+    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
+      const txt = el.textContent || '';
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #694');
     });
   }
+  function cp694FixFab(){
+    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
+      el.removeAttribute('style');
+      el.style.setProperty('position','static','important');
+      el.style.setProperty('left','auto','important');
+      el.style.setProperty('top','auto','important');
+      el.style.setProperty('transform','none','important');
+      el.style.setProperty('width','38px','important');
+      el.style.setProperty('height','38px','important');
+      el.style.setProperty('margin','0 auto','important');
+      el.style.setProperty('border-width','3px','important');
+      el.style.setProperty('font-size','24px','important');
+      el.style.setProperty('line-height','1','important');
+      el.style.setProperty('z-index','1','important');
+    });
+    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
+      el.style.setProperty('position','relative','important');
+      el.style.setProperty('display','flex','important');
+      el.style.setProperty('align-items','center','important');
+      el.style.setProperty('justify-content','center','important');
+      el.style.setProperty('padding','0','important');
+      el.style.setProperty('overflow','visible','important');
+    });
+  }
+  function cp694FixScroll(){
+    document.querySelectorAll('#carteira,#carteiraBody,#pipeline,#pipelineBoard,.cp-virtual-wrap,.cp-virtual-inner,.ui-priority-list,.ui-pipeline-list,.cp694-lista').forEach(el=>{
+      el.style.setProperty('height','auto','important');
+      el.style.setProperty('max-height','none','important');
+      el.style.setProperty('overflow','visible','important');
+      el.style.setProperty('overflow-y','visible','important');
+      el.style.setProperty('contain','none','important');
+      el.style.setProperty('transform','none','important');
+    });
+  }
+  function cp694FixLayout(){ cp694FixVersion(); cp694FixFab(); cp694FixScroll(); }
 
-  const mo = new MutationObserver(()=>{
-    syncVersion692();
-    fixFab692();
-    flattenVirtualLists692();
-    removeInternalScroll692();
-  });
-  try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(_){ }
-  document.addEventListener('DOMContentLoaded',()=>{syncVersion692();fixFab692();flattenVirtualLists692();removeInternalScroll692();});
-  window.addEventListener('resize',()=>{fixFab692();flattenVirtualLists692();removeInternalScroll692();});
-  setInterval(()=>{fixFab692();flattenVirtualLists692();removeInternalScroll692();},1200);
+  const oldDash = window.carregarDashboard || (typeof carregarDashboard === 'function' ? carregarDashboard : null);
+  if(oldDash){
+    window.carregarDashboard = async function(){
+      const foco = document.querySelector('#leadFocoArea');
+      if(state?.active === 'home' && foco && !foco.children.length){
+        foco.innerHTML = '<div class="cp694-loading"><div class="cp694-spinner"></div><b>Carregando sua carteira...</b><span>Organizando leads e prioridades.</span></div>';
+      }
+      const watchdog = setTimeout(()=>{
+        const area = document.querySelector('#leadFocoArea');
+        if(state?.active === 'home' && area && /Carregando sua carteira/i.test(area.textContent||'')){
+          area.innerHTML = '<div class="cp694-loading"><b>Carregamento demorou mais que o normal.</b><span>Atualize a página ou abra Atendimentos para continuar usando a carteira.</span><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
+        }
+      }, 9000);
+      try{ return await oldDash.apply(this, arguments); }
+      finally{ clearTimeout(watchdog); setTimeout(cp694FixLayout, 80); }
+    };
+    try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
+  }
+
+  document.addEventListener('DOMContentLoaded', cp694FixLayout);
+  window.addEventListener('resize', cp694FixLayout);
+  setTimeout(cp694FixLayout, 250);
+  setTimeout(cp694FixLayout, 1000);
 
   const css = document.createElement('style');
-  css.id = 'cp693MobileScrollFabCSS';
+  css.id = 'cp694HotfixCSS';
   css.textContent = `
-    html,body{overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important;height:auto!important;min-height:100%!important}
-    .main-col,.desktop-layout,.app,.screen,#home,#pipeline,#carteira,#carteiraBody,#pipelineBoard,.ui-priority-list,.cp-virtual-wrap,.cp-virtual-inner,.cp691-att-list,.cp691-att-page{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;will-change:auto!important;transform:none!important}
-    .cp-virtual-inner{position:static!important;min-height:0!important}.cp-virtual-wrap{display:block!important}.cp-virtual-pad{display:none!important}
-    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp691-att-page,#carteira .cp690-att-page,#carteira .cp689-att-page{display:none!important}
-    .cp693-page{max-width:760px;margin:0 auto;padding:0 0 calc(126px + env(safe-area-inset-bottom,0px))}
-    .cp693-head{margin:0 0 14px}.cp693-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.045em}.cp693-head p{margin:7px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
-    .cp693-list{border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.62);overflow:visible!important;margin-bottom:calc(118px + env(safe-area-inset-bottom,0px))}
-    .cp693-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;min-height:72px;padding:11px 11px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer}
-    .cp693-row:last-child{border-bottom:0}.cp693-row::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp693-row.hot::before{background:var(--lime)}.cp693-row.warm::before{background:var(--morno)}.cp693-row:active{background:rgba(255,107,92,.08)}
-    .cp693-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp693-copy b{display:block;color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp693-copy em{display:block;color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp693-copy small{display:block;color:rgba(227,245,249,.76);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp693-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:58px;max-width:66px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp693-row.normal .cp693-status,.cp693-row.low .cp693-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
-    .cp693-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp693-empty b{color:var(--text)}
-    .cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:static!important;left:auto!important;top:auto!important;transform:none!important;width:38px!important;height:38px!important;margin:0 auto 2px!important;border-width:3px!important;font-size:24px!important;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:1!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{overflow:visible!important;justify-content:center!important;padding-top:0!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
-    #btnVoltarTopo{bottom:calc(78px + env(safe-area-inset-bottom,0px))!important;right:14px!important;width:44px!important;height:44px!important;z-index:80!important}
-    @media(max-width:760px){
-      .screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(104px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;max-height:none!important;height:auto!important}
-      #carteiraBody{padding:0 6px!important}.cp693-page{padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}.cp693-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}
-      .ui-priority-card,.ui-pipeline-list{padding:16px!important;overflow:visible!important;max-height:none!important}.ui-priority-list{overflow:visible!important;max-height:none!important;height:auto!important}.ui-priority-row{min-height:62px!important;padding:10px 0!important}.ui-row-copy strong{font-size:16px!important}.ui-row-copy small{font-size:12px!important}.ui-row-copy em{font-size:12px!important}.ui-row-action{font-size:10px!important;padding:6px 8px!important;max-width:70px!important}
-    }
+    html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
+    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.cp-virtual-wrap,.cp-virtual-inner,.ui-priority-list,.ui-pipeline-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;will-change:auto!important;transform:none!important}
+    .cp-virtual-pad{display:none!important}
+    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page{display:none!important}
+    #carteiraBody{padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))!important}
+    .cp694-atendimentos{max-width:760px;margin:0 auto;padding:0 0 calc(132px + env(safe-area-inset-bottom,0px))}
+    .cp694-head{margin:0 0 14px}.cp694-head h2{margin:0;font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.045em;color:var(--text)}.cp694-head p{margin:7px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
+    .cp694-lista{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.62);overflow:visible!important;margin-bottom:calc(120px + env(safe-area-inset-bottom,0px))}
+    .cp694-lead-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-height:72px;padding:11px 11px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}
+    .cp694-lead-row:last-child{border-bottom:0}.cp694-lead-row::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp694-lead-row.hot::before{background:var(--lime)}.cp694-lead-row.warm::before{background:var(--morno)}.cp694-lead-row:active{background:rgba(255,107,92,.08)}
+    .cp694-lead-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp694-lead-copy b{display:block;color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp694-lead-copy em{display:block;color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp694-lead-copy small{display:block;color:rgba(227,245,249,.76);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp694-lead-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:58px;max-width:66px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp694-lead-row.normal .cp694-lead-status,.cp694-lead-row.low .cp694-lead-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
+    .cp694-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp694-empty b{color:var(--text)}
+    .cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:static!important;left:auto!important;top:auto!important;transform:none!important;width:38px!important;height:38px!important;margin:0 auto!important;border-width:3px!important;font-size:24px!important;line-height:1!important;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
+    #btnVoltarTopo{display:none!important}.cp694-loading{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text);text-align:center}.cp694-loading span{color:var(--muted);font-size:14px}.cp694-loading button{margin-top:10px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--text);padding:10px 16px;font-weight:900}.cp694-spinner{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp694spin .8s linear infinite}@keyframes cp694spin{to{transform:rotate(360deg)}}
+    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.cp694-atendimentos{padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}.cp694-lista{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
   `;
   document.head.appendChild(css);
 })();
