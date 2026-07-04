@@ -12286,3 +12286,163 @@ window.renderLeadFoco=renderLeadFoco;
   `;
   document.head.appendChild(css);
 })();
+
+
+/* ============================================================
+   Atualização #692 — Correção definitiva mobile: rolagem e botão +
+   - Remove rolagem interna em listas de leads no mobile.
+   - Usa rolagem natural da página em Atendimentos e Pipeline.
+   - Coloca o botão + dentro da barra inferior, no centro, sem cobrir conteúdo.
+   - Reduz card/lista de leads em todas as listas móveis.
+   ============================================================ */
+(function(){
+  if(window.__cp692MobileScrollFab) return;
+  window.__cp692MobileScrollFab = true;
+  const VERSION = '692';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
+
+  function syncVersion692(){
+    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
+      if(el && /Atualiza[cç][aã]o\s*#\d+/i.test(el.textContent||'')) el.textContent = (el.textContent||'').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #692');
+    });
+  }
+
+  function fixFab692(){
+    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
+      el.style.position = 'static';
+      el.style.left = 'auto';
+      el.style.top = 'auto';
+      el.style.transform = 'none';
+      el.style.width = '38px';
+      el.style.height = '38px';
+      el.style.fontSize = '24px';
+      el.style.borderWidth = '3px';
+      el.style.margin = '0 auto 2px';
+      el.style.boxShadow = '0 6px 14px rgba(0,0,0,.28)';
+      el.style.zIndex = '1';
+    });
+    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
+      el.style.position = 'relative';
+      el.style.overflow = 'visible';
+      el.style.justifyContent = 'center';
+      el.style.paddingTop = '0';
+    });
+  }
+
+  function removeInternalScroll692(root=document){
+    const selectors = [
+      '.cp-virtual-wrap', '.cp-virtual-inner', '.ui-priority-list', '.cp691-att-list', '.cp691-att-page',
+      '.cart-table', '#carteiraBody', '#pipelineBoard', '#carteira', '#pipeline'
+    ];
+    root.querySelectorAll(selectors.join(',')).forEach(el=>{
+      el.style.maxHeight = 'none';
+      el.style.height = 'auto';
+      el.style.overflow = 'visible';
+      el.style.overflowY = 'visible';
+      el.style.contain = 'none';
+      el.style.willChange = 'auto';
+    });
+  }
+
+  // Atendimentos: renderização simples, sem janela virtual e sem barra interna.
+  function esc(v){
+    try{ return escapeHtml(String(v ?? '')); }
+    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function getAtendimentos692(){
+    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads : (Array.isArray(state?.todosLeads) ? state.todosLeads : []);
+    return arr.filter(l=>{
+      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa||'');
+      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    }).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
+      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
+  }
+  function row692(l){
+    const id = JSON.stringify(String(l?.id||''));
+    const nome = l?.name || 'Cliente';
+    const etapa = (typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa||'Atendimento')) || 'Atendimento';
+    const prod = String(l?.product||'').trim();
+    const sub = prod ? `${etapa} · ${prod}` : etapa;
+    const raw = String(l?.nextAction || l?.summary || 'Abrir lead para ver o próximo passo.').replace(/\s+/g,' ').trim();
+    const acao = raw.length > 58 ? raw.slice(0,55).trim() + '...' : raw;
+    const pr = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
+    const titulo = /atender/i.test(pr.titulo||'') ? 'Atender' : /retomar/i.test(pr.titulo||'') ? 'Retomar' : /aguardar/i.test(pr.titulo||'') ? 'Aguardar' : /sem ação/i.test(pr.titulo||'') ? 'Sem ação' : 'Abrir';
+    const cls = pr.grupo === 'acao-hoje' ? 'hot' : pr.grupo === 'retomar-cuidado' ? 'warm' : pr.grupo === 'baixa-prioridade' ? 'low' : 'normal';
+    return `<button type="button" class="cp692-row ${cls}" onclick='abrirLead(${id})'>
+      <span class="cp692-copy"><b>${esc(nome)}</b><em>${esc(sub)}</em><small>${esc(acao)}</small></span>
+      <span class="cp692-status">${esc(titulo)}</span>
+    </button>`;
+  }
+  window.renderCarteiraTabela = function(){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const lista = getAtendimentos692();
+    const rows = lista.length ? lista.map(row692).join('') : '<div class="cp692-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui.</span></div>';
+    box.innerHTML = `<section class="cp692-page">
+      <header class="cp692-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
+      <div class="cp692-list">${rows}</div>
+    </section>`;
+    removeInternalScroll692(box);
+    fixFab692();
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
+
+  // Pipeline/Home: se ainda existir lista virtual, transforma em fluxo normal da página.
+  function flattenVirtualLists692(){
+    document.querySelectorAll('.cp-virtual-wrap').forEach(w=>{
+      const inner = w.querySelector('.cp-virtual-inner');
+      if(inner){
+        inner.style.transform = 'none';
+        inner.style.position = 'static';
+        inner.style.height = 'auto';
+        inner.style.minHeight = '0';
+      }
+      w.style.height = 'auto';
+      w.style.maxHeight = 'none';
+      w.style.overflow = 'visible';
+      w.style.overflowY = 'visible';
+    });
+    document.querySelectorAll('.ui-priority-card,.ui-priority-list,.ui-pipeline-list').forEach(el=>{
+      el.style.maxHeight = 'none';
+      el.style.height = 'auto';
+      el.style.overflow = 'visible';
+      el.style.overflowY = 'visible';
+    });
+  }
+
+  const mo = new MutationObserver(()=>{
+    syncVersion692();
+    fixFab692();
+    flattenVirtualLists692();
+    removeInternalScroll692();
+  });
+  try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(_){ }
+  document.addEventListener('DOMContentLoaded',()=>{syncVersion692();fixFab692();flattenVirtualLists692();removeInternalScroll692();});
+  window.addEventListener('resize',()=>{fixFab692();flattenVirtualLists692();removeInternalScroll692();});
+  setInterval(()=>{fixFab692();flattenVirtualLists692();removeInternalScroll692();},1200);
+
+  const css = document.createElement('style');
+  css.id = 'cp692MobileScrollFabCSS';
+  css.textContent = `
+    html,body{overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important;height:auto!important;min-height:100%!important}
+    .main-col,.desktop-layout,.app,.screen,#home,#pipeline,#carteira,#carteiraBody,#pipelineBoard,.ui-priority-list,.cp-virtual-wrap,.cp-virtual-inner,.cp691-att-list,.cp691-att-page{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;will-change:auto!important;transform:none!important}
+    .cp-virtual-inner{position:static!important;min-height:0!important}.cp-virtual-wrap{display:block!important}.cp-virtual-pad{display:none!important}
+    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp691-att-page,#carteira .cp690-att-page,#carteira .cp689-att-page{display:none!important}
+    .cp692-page{max-width:760px;margin:0 auto;padding:0 0 calc(126px + env(safe-area-inset-bottom,0px))}
+    .cp692-head{margin:0 0 14px}.cp692-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.045em}.cp692-head p{margin:7px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
+    .cp692-list{border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.62);overflow:visible!important;margin-bottom:calc(118px + env(safe-area-inset-bottom,0px))}
+    .cp692-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;min-height:72px;padding:11px 11px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;position:relative;cursor:pointer}
+    .cp692-row:last-child{border-bottom:0}.cp692-row::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp692-row.hot::before{background:var(--lime)}.cp692-row.warm::before{background:var(--morno)}.cp692-row:active{background:rgba(255,107,92,.08)}
+    .cp692-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp692-copy b{display:block;color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp692-copy em{display:block;color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp692-copy small{display:block;color:rgba(227,245,249,.76);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cp692-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:58px;max-width:66px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,107,92,.38);background:rgba(255,107,92,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp692-row.normal .cp692-status,.cp692-row.low .cp692-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
+    .cp692-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp692-empty b{color:var(--text)}
+    .cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:static!important;left:auto!important;top:auto!important;transform:none!important;width:38px!important;height:38px!important;margin:0 auto 2px!important;border-width:3px!important;font-size:24px!important;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:1!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{overflow:visible!important;justify-content:center!important;padding-top:0!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
+    #btnVoltarTopo{bottom:calc(78px + env(safe-area-inset-bottom,0px))!important;right:14px!important;width:44px!important;height:44px!important;z-index:80!important}
+    @media(max-width:760px){
+      .screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(104px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;max-height:none!important;height:auto!important}
+      #carteiraBody{padding:0 6px!important}.cp692-page{padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}.cp692-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+      .ui-priority-card,.ui-pipeline-list{padding:16px!important;overflow:visible!important;max-height:none!important}.ui-priority-list{overflow:visible!important;max-height:none!important;height:auto!important}.ui-priority-row{min-height:62px!important;padding:10px 0!important}.ui-row-copy strong{font-size:16px!important}.ui-row-copy small{font-size:12px!important}.ui-row-copy em{font-size:12px!important}.ui-row-action{font-size:10px!important;padding:6px 8px!important;max-width:70px!important}
+    }
+  `;
+  document.head.appendChild(css);
+})();
