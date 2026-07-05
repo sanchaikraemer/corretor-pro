@@ -251,6 +251,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   if (tem(/caro|alto|n[aã]o cabe|fora do orçamento|parcel(a|as).*pesad|entrada.*alta/)) alertas.push("Objeção de preço ou capacidade de pagamento aparece como trava provável.");
   if (tem(/concorr|outro empreendimento|outra construtora|tamb[eé]m estou vendo|comparando/)) alertas.push("Cliente está comparando alternativas; abordagem precisa defender diferencial, não só preço.");
 
+  const temFinanceiroExpl = tem(/financi|caixa|fgts|entrada|parcela|simula|aprova|cr[eé]dito|banco|renda|juros/);
   const objetivo = normalizarTextoV684(diag.objetivo || ac.produtoPrincipalInteresse || lead?.product || out.product || "produto ainda pouco definido");
   const etapa = normalizarTextoV684(diag.etapa || ac.etapaFunil || lc.etapa || out.stage || "etapa não definida");
   const perfil = (() => {
@@ -286,7 +287,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   );
   const produto = normalizarTextoV684(ac.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || out.product || "produto mais aderente ao perfil demonstrado");
   const estrategia = (() => {
-    if (/financeir|entrada|parcela|fgts|simula/i.test(proximaAcao + " " + txt)) return "conduzir por viabilidade financeira: confirmar entrada, parcela confortável e prazo antes de empurrar produto";
+    if (temFinanceiroExpl && /financeir|entrada|parcela|fgts|simula/i.test(proximaAcao + " " + txt)) return "conduzir por viabilidade financeira: confirmar entrada, parcela confortável e prazo antes de empurrar produto";
     if (/visita|conhecer|café|decorado/i.test(proximaAcao + " " + txt)) return "conduzir para compromisso prático: visita, café ou apresentação objetiva do produto";
     if (/compar|concorr/i.test(txt)) return "comparar com segurança: destacar diferencial real do produto sem desvalorizar concorrente";
     return "retomar com contexto específico da conversa e uma pergunta principal, sem mensagem genérica";
@@ -294,11 +295,11 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
 
   const interesse = Math.max(20, Math.min(100, 45 + sinais.length * 12 - alertas.length * 5));
   const engajamento = Math.max(15, Math.min(100, 40 + (tem(/respondeu|entendi|ok|sim|gostei|quero|vamos/) ? 20 : 0) + sinais.length * 8));
-  const financeiro = Math.max(15, Math.min(100, tem(/financi|fgts|entrada|parcela|simula|cr[eé]dito/) ? 78 : 42));
+  const financeiro = Math.max(15, Math.min(100, temFinanceiroExpl ? 78 : 42));
   const urgencia = Math.max(10, Math.min(100, tem(/hoje|amanh|essa semana|urgente|preciso|quando/) ? 72 : 38));
   const indiceTotal = Math.round((interesse * 0.32) + (engajamento * 0.25) + (financeiro * 0.23) + (urgencia * 0.10) + ((100-riscoPerda.percentual) * 0.10));
   const confianca = Math.max(35, Math.min(98, 45 + Math.min(30, (Array.isArray(timeline)?timeline.length:0) / 4) + sinais.length * 5 + (produto && produto !== "produto mais aderente ao perfil demonstrado" ? 8 : 0)));
-  const motivoProximaAcao = /financeir|entrada|parcela|fgts|simula|par[aâ]metro/i.test(proximaAcao + " " + txt)
+  const motivoProximaAcao = temFinanceiroExpl && /financeir|entrada|parcela|fgts|simula|par[aâ]metro/i.test(proximaAcao + " " + txt)
     ? "a conversa está travada em viabilidade financeira; confirmar parâmetros evita enviar opção fora do perfil"
     : /visita|café|conhecer|decorado/i.test(proximaAcao + " " + txt)
       ? "há sinais suficientes para transformar interesse em compromisso prático"
@@ -321,6 +322,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     indiceComercial: { total: indiceTotal, interesse, engajamento, financeiro, urgencia, risco: riscoPerda.percentual },
     confiancaAnalise: { percentual: Math.round(confianca), motivo: `${Array.isArray(timeline)?timeline.length:0} registros analisados, ${sinais.length} sinais positivos e ${alertas.length} alertas.` },
     raciocinioComercial: `Perfil: ${perfil}. Etapa: ${etapa}. Probabilidade de venda: ${100-riscoPerda.percentual}% (${(100-riscoPerda.percentual) >= 80 ? "muito alta" : (100-riscoPerda.percentual) >= 65 ? "alta" : (100-riscoPerda.percentual) >= 45 ? "média" : "baixa"}). Melhor caminho agora: ${estrategia}. Próxima ação: ${proximaAcao}. Motivo: ${motivoProximaAcao}.`,
+    regraAntiAlucinacao: "Não afirmar financiamento, parcelas, banco, FGTS, renda ou aprovação de crédito sem menção explícita na timeline.",
     geradoEm: new Date().toISOString()
   };
   return out;
