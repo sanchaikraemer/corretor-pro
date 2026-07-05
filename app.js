@@ -12326,3 +12326,225 @@ window.renderLeadFoco=renderLeadFoco;
   setTimeout(applyLayoutFixes,50); setTimeout(applyLayoutFixes,250); setTimeout(applyLayoutFixes,1000);
   if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
 })();
+
+
+/* ============================================================
+   Atualização #697 — Preparação da Carteira
+   - Separa leads sem histórico/análise de leads prontos.
+   - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
+   - Home mostra progresso da preparação.
+   - Atendimentos ganha visão Preparação / Prontos / Todos sem quebrar a rolagem natural.
+   ============================================================ */
+(function(){
+  if(window.__cp697PreparacaoCarteira) return;
+  window.__cp697PreparacaoCarteira = true;
+  const VERSION = '697';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
+
+  function esc(v){
+    try { return escapeHtml(String(v ?? '')); }
+    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  }
+  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function normalEtapa(l){
+    try{ return normalizarEtapa(l?.etapa); }catch(_){ return String(l?.etapa || 'Atendimento'); }
+  }
+  function isAtivo697(l){
+    const e = normalEtapa(l);
+    return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+  }
+  function recentCount(l){
+    const candidates = [l?.recentMessages, l?.timeline, l?.messages, l?.history, l?.mensagens].filter(Array.isArray);
+    const n = candidates.reduce((m,a)=>Math.max(m,a.length),0);
+    const extra = Number(l?.historyCount || l?.messageCount || l?.totalMessages || l?.totalMensagens || 0) || 0;
+    return Math.max(n, extra);
+  }
+  function hasAnalysis697(l){
+    const a = l?.analysis || l?.analise || l?.diagnostico || {};
+    if(!a || typeof a !== 'object') return false;
+    if(a.error) return false;
+    if(a.messages && typeof a.messages === 'object' && (a.messages.a || a.messages.b || a.messages.c)) return true;
+    if(a.analiseComercial && typeof a.analiseComercial === 'object') return true;
+    if(a.probabilidadeVenda || a.probabilidade || a.probabilidadeFechamento) return true;
+    if(a.nextAction || a.proximaAcao || a.resumo) return true;
+    return !!(l?.nextAction && recentCount(l) > 0);
+  }
+  function isReady697(l){
+    return recentCount(l) > 0 && hasAnalysis697(l);
+  }
+  function leadStage697(l){
+    return isReady697(l) ? 'pronto' : 'preparacao';
+  }
+  function sort697(list){
+    const copy = list.slice();
+    if(typeof compararPrioridadeAtendimento === 'function') return copy.sort(compararPrioridadeAtendimento);
+    return copy.sort((a,b)=>String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR'));
+  }
+  function meta697(l){
+    const e = normalEtapa(l);
+    const p = String(l?.product || '').trim();
+    const hist = recentCount(l);
+    if(leadStage697(l) === 'preparacao') return p ? `${p} · histórico pendente` : `histórico pendente`;
+    return p ? `${p} · ${hist || 'histórico'} mensagens` : `${hist || 'histórico'} mensagens`;
+  }
+  function acao697(l){
+    if(leadStage697(l) === 'preparacao') return 'Importar conversa do WhatsApp para análise automática.';
+    const raw = String(l?.nextAction || l?.proximaAcao || '').replace(/\s+/g,' ').trim();
+    if(raw) return raw.length > 84 ? raw.slice(0,81).trim() + '...' : raw;
+    return 'Diagnóstico e respostas prontos para atendimento.';
+  }
+  function badge697(l){ return leadStage697(l) === 'pronto' ? 'Pronto' : 'Preparar'; }
+  function cls697(l){ return leadStage697(l) === 'pronto' ? 'ready' : 'pending'; }
+  function row697(l){
+    return `<button type="button" class="cp697-row ${cls697(l)}" onclick='abrirLead(${idJs(l)})'>
+      <span class="cp697-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta697(l))}</em><small>${esc(acao697(l))}</small></span>
+      <span class="cp697-status">${esc(badge697(l))}</span><span class="cp697-chevron">›</span>
+    </button>`;
+  }
+  function updateVersion697(){
+    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
+      const txt = el.textContent || '';
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #697');
+    });
+  }
+  async function fetchAll697(force){
+    try{
+      if(typeof getLeadsData === 'function'){
+        const data = await getLeadsData(!!force);
+        if(Array.isArray(data?.items) && data.items.length) return data.items;
+      }
+    }catch(_){ }
+    try{
+      const res = await fetch(`./api/leads-recentes?limit=2000${force?'&fresh=1':''}`, { cache:'no-store' });
+      const data = await res.json().catch(()=>null);
+      if(Array.isArray(data?.items)) return data.items;
+    }catch(_){ }
+    return [];
+  }
+  function currentTab697(){ return String(window.cp697Tab || localStorage.getItem('cp697Tab') || 'preparacao'); }
+  function setTab697(tab){ window.cp697Tab = tab; try{ localStorage.setItem('cp697Tab', tab); }catch(_){ } renderCarteiraTabela(); }
+  window.cp697SetTab = setTab697;
+
+  function renderCarteira697(leads){
+    const box = document.querySelector('#carteiraBody');
+    if(!box) return;
+    const ativos = sort697((leads||[]).filter(isAtivo697));
+    const prep = ativos.filter(l=>leadStage697(l)==='preparacao');
+    const ready = ativos.filter(l=>leadStage697(l)==='pronto');
+    let tab = currentTab697();
+    if(tab === 'preparacao' && prep.length === 0 && ready.length) tab = 'prontos';
+    const list = tab === 'prontos' ? ready : (tab === 'todos' ? ativos : prep);
+    const rows = list.length ? list.map(row697).join('') : `<div class="cp697-empty"><b>${tab==='prontos'?'Nenhum lead pronto ainda.':'Nenhum lead nesta lista.'}</b><span>${tab==='prontos'?'Importe conversas do WhatsApp; elas serão analisadas automaticamente.':'Quando importar o histórico, o lead sai da preparação e entra em Prontos.'}</span></div>`;
+    const pct = ativos.length ? Math.round((ready.length / ativos.length) * 100) : 0;
+    try{ state.carteiraLeads = ativos; state.todosLeads = Array.isArray(state.todosLeads)&&state.todosLeads.length?state.todosLeads:ativos; }catch(_){ }
+    box.innerHTML = `<section class="cp697-page">
+      <header class="cp697-head">
+        <h2>Preparação da carteira</h2>
+        <p>Importe os históricos agora. O Corretor Pro analisa sozinho e separa os leads prontos para trabalhar.</p>
+        <div class="cp697-progress"><div><b>${ready.length}</b><span>prontos</span></div><div><b>${prep.length}</b><span>pendentes</span></div><div><b>${pct}%</b><span>preparado</span></div></div>
+      </header>
+      <div class="cp697-tabs">
+        <button class="${tab==='preparacao'?'active':''}" onclick="cp697SetTab('preparacao')">Preparação <span>${prep.length}</span></button>
+        <button class="${tab==='prontos'?'active':''}" onclick="cp697SetTab('prontos')">Prontos <span>${ready.length}</span></button>
+        <button class="${tab==='todos'?'active':''}" onclick="cp697SetTab('todos')">Todos <span>${ativos.length}</span></button>
+      </div>
+      <div class="cp697-list">${rows}</div>
+    </section>`;
+    requestAnimationFrame(applyFix697);
+  }
+  window.cp697RenderCarteira = renderCarteira697;
+  window.carregarCarteira = async function(force){
+    const box = document.querySelector('#carteiraBody');
+    if(box){ box.innerHTML = '<div class="cp697-loading"><i></i><b>Preparando carteira...</b><span>Buscando todos os leads e separando pendentes dos prontos.</span></div>'; }
+    const leads = await fetchAll697(!!force);
+    renderCarteira697(leads);
+  };
+  try{ carregarCarteira = window.carregarCarteira; }catch(_){ }
+  window.renderCarteiraTabela = function(){
+    const sources = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].filter(Array.isArray);
+    const biggest = sources.sort((a,b)=>b.length-a.length)[0] || [];
+    if(biggest.length >= 20) renderCarteira697(biggest); else window.carregarCarteira(false);
+  };
+  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
+
+  function homeProgress697(){
+    if(!(state?.active === 'home')) return;
+    const root = document.querySelector('#home.active, .screen.active#home, #leadFocoArea')?.closest('.screen') || document.querySelector('#home');
+    const leads = (Array.isArray(state?.todosLeads) && state.todosLeads.length ? state.todosLeads : (Array.isArray(state?.itemsAtivos)?state.itemsAtivos:[])).filter(isAtivo697);
+    if(!root || !leads.length) return;
+    let card = document.getElementById('cp697HomeProgress');
+    const ready = leads.filter(isReady697).length;
+    const prep = leads.length - ready;
+    const pct = leads.length ? Math.round((ready/leads.length)*100) : 0;
+    const html = `<div class="cp697-home-title"><b>Preparação da carteira</b><button type="button" onclick="cp697SetTab('preparacao');show('carteira')">Preparar leads</button></div>
+      <div class="cp697-home-bar"><span style="width:${pct}%"></span></div>
+      <div class="cp697-home-meta"><span>${ready} prontos para contato</span><span>${prep} aguardando histórico</span><span>${pct}%</span></div>`;
+    if(!card){
+      card = document.createElement('section'); card.id='cp697HomeProgress'; card.className='cp697-home-progress';
+      const anchor = document.querySelector('#leadFocoArea') || root.querySelector('.card,section');
+      if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor);
+      else root.appendChild(card);
+    }
+    card.innerHTML = html;
+  }
+
+  const oldShow = window.show;
+  if(typeof oldShow === 'function' && !oldShow.__cp697Wrapped){
+    const wrapped = function(name, ...args){
+      const ret = oldShow.apply(this, [name, ...args]);
+      if(name === 'carteira') setTimeout(()=>window.carregarCarteira(false), 0);
+      setTimeout(()=>{ applyFix697(); homeProgress697(); }, 80);
+      return ret;
+    };
+    wrapped.__cp697Wrapped = true;
+    window.show = wrapped; try{ show = window.show; }catch(_){ }
+  }
+
+  const oldRefresh = window.refreshAllSections;
+  if(typeof oldRefresh === 'function' && !oldRefresh.__cp697Wrapped){
+    const wrappedRefresh = function(){
+      const ret = oldRefresh.apply(this, arguments);
+      setTimeout(()=>{ homeProgress697(); if(state?.active==='carteira') window.carregarCarteira(true); }, 250);
+      return ret;
+    };
+    wrappedRefresh.__cp697Wrapped = true;
+    window.refreshAllSections = wrappedRefresh; try{ refreshAllSections = window.refreshAllSections; }catch(_){ }
+  }
+
+  const oldFetch = window.fetch;
+  window.fetch = async function(input, init){
+    const res = await oldFetch.apply(this, arguments);
+    try{
+      const url = String(typeof input === 'string' ? input : (input?.url || ''));
+      const body = init?.body ? String(init.body) : '';
+      if(/lead-update|processar-storage|reanalisar-lead/i.test(url) && /salvar-novo|atualizar-com-evolucao|analisar|reanalisar/i.test(body + ' ' + url)){
+        setTimeout(()=>{ window.carregarCarteira?.(true); homeProgress697(); }, 900);
+      }
+    }catch(_){ }
+    return res;
+  };
+
+  function applyFix697(){
+    updateVersion697();
+    document.querySelectorAll('#carteira,#carteiraBody,.cp697-list,.cp696-list,.cp695-list,.cp694-lista,.cp-virtual-wrap,.cp-virtual-inner').forEach(el=>{
+      el.style.setProperty('height','auto','important');
+      el.style.setProperty('max-height','none','important');
+      el.style.setProperty('overflow','visible','important');
+      el.style.setProperty('overflow-y','visible','important');
+      el.style.setProperty('contain','none','important');
+    });
+  }
+
+  const css = document.createElement('style');
+  css.id = 'cp697PreparacaoCSS';
+  css.textContent = `
+    .cp697-page{max-width:760px;margin:0 auto;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-head{margin:0 0 14px}.cp697-head h2{font-size:30px!important;line-height:1.02;margin:0 0 8px;color:var(--text);font-weight:950;letter-spacing:-.04em}.cp697-head p{font-size:14px!important;line-height:1.35;color:var(--muted);margin:0 0 14px}.cp697-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.cp697-progress>div{padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.025)}.cp697-progress b{display:block;color:var(--text);font-size:22px;line-height:1;font-weight:950}.cp697-progress span{display:block;margin-top:4px;color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.cp697-tabs{display:flex;gap:8px;overflow-x:auto;margin:12px 0 14px;padding-bottom:2px}.cp697-tabs button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--soft);border-radius:999px;padding:9px 12px;font-size:12px;font-weight:950;white-space:nowrap}.cp697-tabs button.active{background:var(--lime);border-color:var(--lime);color:#06262d}.cp697-tabs span{opacity:.75;margin-left:4px}.cp697-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);overflow:visible!important;margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;gap:9px;align-items:center;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative}.cp697-row:last-child{border-bottom:0}.cp697-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0}.cp697-row.ready:before{background:#68ff95}.cp697-row.pending:before{background:rgba(255,155,59,.9)}.cp697-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp697-copy b{font-size:17px!important;line-height:1.08;font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy em{font-style:normal;color:var(--muted);font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy small{color:rgba(227,245,249,.77);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-status{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:10.5px!important;font-weight:950;line-height:1;white-space:nowrap}.cp697-row.ready .cp697-status{border-color:rgba(104,255,149,.42);color:#68ff95;background:rgba(104,255,149,.07)}.cp697-row.pending .cp697-status{border-color:rgba(255,155,59,.45);color:#ffd09b;background:rgba(255,155,59,.07)}.cp697-chevron{color:var(--muted);font-size:18px}.cp697-empty,.cp697-loading{padding:24px;color:var(--muted);text-align:center;display:flex;flex-direction:column;gap:6px}.cp697-empty b,.cp697-loading b{color:var(--text)}.cp697-loading{min-height:240px;align-items:center;justify-content:center}.cp697-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp697spin .8s linear infinite}@keyframes cp697spin{to{transform:rotate(360deg)}}.cp697-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0}.cp697-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp697-home-title b{font-size:16px;color:var(--text)}.cp697-home-title button{border:1px solid rgba(255,107,92,.4);background:rgba(255,107,92,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp697-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp697-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#ff6b5c,#68ff95);border-radius:999px}.cp697-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}.screen#carteira.active,#carteiraBody{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(98px + env(safe-area-inset-bottom,0px))!important}.cp697-head h2{font-size:29px!important}.cp697-progress{grid-template-columns:repeat(3,minmax(0,1fr))}.cp697-progress b{font-size:20px}.cp697-list{margin-bottom:calc(140px + env(safe-area-inset-bottom,0px))}.cp697-page{padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))}}
+  `;
+  document.head.appendChild(css);
+  document.addEventListener('DOMContentLoaded', ()=>{ applyFix697(); setTimeout(homeProgress697, 300); });
+  window.addEventListener('resize', applyFix697);
+  setTimeout(()=>{ applyFix697(); homeProgress697(); }, 250);
+  setTimeout(()=>{ applyFix697(); homeProgress697(); }, 1200);
+  if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
+})();
