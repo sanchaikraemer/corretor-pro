@@ -88,10 +88,42 @@ function agoraBR(now = new Date()) {
   }
 }
 
+function limparParaJson702(value, seen = new WeakSet()) {
+  if (value == null) return value;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value === "function") return undefined;
+  if (typeof value !== "object") return value;
+  if (seen.has(value)) return "[referencia-circular]";
+  seen.add(value);
+  if (Array.isArray(value)) return value.map(v => limparParaJson702(v, seen));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    const safe = limparParaJson702(v, seen);
+    if (safe !== undefined) out[k] = safe;
+  }
+  seen.delete(value);
+  return out;
+}
+
 function json(res, status, payload) {
-  res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(payload));
+  const body = limparParaJson702(payload || {});
+  const code = Number(status) || (body?.ok === false ? 500 : 200);
+  try {
+    if (typeof res.status === "function") res.status(code);
+    else res.statusCode = code;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    return res.end(JSON.stringify(body));
+  } catch (e) {
+    try {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      return res.end(JSON.stringify({ ok:false, error:"Falha ao serializar resposta da API.", detail:String(e?.message || e) }));
+    } catch (_) {
+      return;
+    }
+  }
 }
 
 
@@ -294,7 +326,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   return out;
 }
 
-export default async function handler(req, res) {
+async function reanalisarLeadHandler702(req, res) {
   if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST." });
   const body = await readJsonBody(req).catch(() => ({}));
@@ -769,4 +801,18 @@ export default async function handler(req, res) {
   }
 
   return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 684, apiVersion: "684-final" });
+}
+
+export default async function handler(req, res) {
+  try {
+    return await reanalisarLeadHandler702(req, res);
+  } catch (e) {
+    console.error("[reanalisar-lead][702] erro não tratado", e);
+    return json(res, 500, {
+      ok: false,
+      error: "Não foi possível atualizar a análise comercial.",
+      detail: String(e?.message || e || "Erro interno"),
+      apiVersion: "702"
+    });
+  }
 }
