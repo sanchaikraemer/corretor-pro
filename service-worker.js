@@ -1,5 +1,5 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v698-' + BUILD_ID;
+const STATIC_CACHE = 'corretor-pro-static-v699-' + BUILD_ID;
 // Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
@@ -71,18 +71,18 @@ async function idbDel(id) {
 const CORE_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=697',
-  '/app.js?v=697',
-  '/vendor/jszip.min.js?v=697',
+  '/styles.css?v=699',
+  '/app.js?v=699',
+  '/vendor/jszip.min.js?v=699',
   '/share.html',
   '/manifest.json',
   '/service-worker.js',
-  '/icon-192.png?v=697',
-  '/logo-cp.png?v=697',
-  '/icon-512.png?v=697',
-  '/favicon.png?v=697',
-  '/logo-direciona-light.svg?v=697',
-  '/logo-direciona-dark.svg?v=697'
+  '/icon-192.png?v=699',
+  '/logo-cp.png?v=699',
+  '/icon-512.png?v=699',
+  '/favicon.png?v=699',
+  '/logo-direciona-light.svg?v=699',
+  '/logo-direciona-dark.svg?v=699'
 ];
 
 self.addEventListener('install', event => {
@@ -131,16 +131,12 @@ self.addEventListener('activate', event => {
 
     try { if (self.registration.navigationPreload) await self.registration.navigationPreload.enable(); } catch (_) {}
     await self.clients.claim();
+    try { await self.registration.update(); } catch (_) {}
   })());
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-
-  // Performance/estabilidade: o SW só deve controlar arquivos do próprio app.
-  // Antes ele interceptava recursos externos (ex.: fontes do Google) e, quando falhava,
-  // devolvia index.html. Isso gerava erros de MIME/CSP, repetia tentativas e deixava
-  // a interface pesada/travada em alguns aparelhos.
   if (url.origin !== self.location.origin) return;
 
   if (event.request.method === 'POST' && (
@@ -154,40 +150,41 @@ self.addEventListener('fetch', event => {
   if (url.pathname.includes('/api/')) return;
   if (event.request.method !== 'GET') return;
 
-  const isHtml = url.pathname === '/' ||
-                 url.pathname.endsWith('.html') ||
-                 url.pathname.endsWith('/manifest.json') ||
-                 url.pathname.endsWith('/service-worker.js');
+  const isAppShell = url.pathname === '/' ||
+                     url.pathname.endsWith('/index.html') ||
+                     url.pathname.endsWith('/app.js') ||
+                     url.pathname.endsWith('/styles.css') ||
+                     url.pathname.endsWith('/service-worker.js') ||
+                     url.pathname.endsWith('/manifest.json');
 
-  if (isHtml) {
+  if (isAppShell) {
     event.respondWith((async () => {
       const cache = await caches.open(STATIC_CACHE);
-      const cached = await caches.match(event.request) || await caches.match('/index.html') || await caches.match('/');
-
-      // Navegação deve pintar algo imediatamente. Nunca devolver resposta vazia,
-      // porque isso vira tela branca ao reabrir a aba/PWA.
-      const fallbackShell = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corretor Pro</title><style>html,body{margin:0;height:100%;background:#001E2B;color:#F4F7FB;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.boot{min-height:100%;display:grid;place-items:center;text-align:center}.logo{font-weight:900;font-size:22px}.sub{margin-top:8px;color:#8fb1bf}</style></head><body><div class="boot"><div><div class="logo">Corretor <span style="color:#ff6257">Pro</span></div><div class="sub">Abrindo sua base...</div></div></div><script>setTimeout(function(){location.reload()},1200)</script></body></html>';
-
-      const networkPromise = (event.preloadResponse || fetch(event.request)).then(response => {
-        if(response && response.ok){ cache.put(event.request, response.clone()).catch(() => null); }
+      const requestUrl = new URL(event.request.url);
+      requestUrl.searchParams.set('_cpv', '699');
+      let response = null;
+      try { response = await fetch(new Request(requestUrl.toString(), { cache: 'no-store', credentials: 'same-origin' })); } catch (_) {}
+      if (response && response.ok) {
+        cache.put(event.request, response.clone()).catch(() => null);
         return response;
-      }).catch(() => null);
-
-      if(cached) { networkPromise.catch(() => null); return cached; }
-      return (await networkPromise) || new Response(fallbackShell, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+      const cached = await cache.match(event.request) || await caches.match(event.request) || await caches.match('/index.html') || await caches.match('/');
+      if (cached) return cached;
+      const fallbackShell = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corretor Pro</title><style>html,body{margin:0;height:100%;background:#001E2B;color:#F4F7FB;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.boot{min-height:100%;display:grid;place-items:center;text-align:center}.logo{font-weight:900;font-size:22px}.sub{margin-top:8px;color:#8fb1bf}</style></head><body><div class="boot"><div><div class="logo">Corretor <span style="color:#ff6257">Pro</span></div><div class="sub">Carregando sua carteira...</div></div></div><script>setTimeout(function(){location.reload()},1200)</script></body></html>';
+      return new Response(fallbackShell, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control':'no-store' } });
     })());
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        const copy = response.clone();
-        caches.open(STATIC_CACHE).then(cache => cache.put(event.request, copy)).catch(() => null);
-        return response;
-      }).catch(() => new Response('', { status: 504, statusText: 'offline' }));
-    })
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    const cached = await cache.match(event.request) || await caches.match(event.request);
+    const network = fetch(event.request).then(response => {
+      if(response && response.ok) cache.put(event.request, response.clone()).catch(() => null);
+      return response;
+    }).catch(() => null);
+    return cached || (await network) || new Response('', { status: 504, statusText: 'offline' });
+  })());
 });
 
 async function saveShareDebug(info) {
