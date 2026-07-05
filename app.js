@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #701: instrumentação leve de performance =====
+// ===== Atualização #702: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #701) =====
+// ===== Histórico interno do app (Atualização #702) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #701: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #702: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -9409,7 +9409,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #701: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #702: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -10170,11 +10170,21 @@ window.ui670Reanalisar=async function(btn){
   try{
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:684}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||702)}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
-    const data=await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
-    if(!res.ok||!data?.ok)throw new Error(data?.error||"Não foi possível atualizar a análise.");
+    const textoResposta = await res.text();
+    let data;
+    try {
+      data = textoResposta ? JSON.parse(textoResposta) : {};
+    } catch (_) {
+      console.error("Resposta inválida da API /reanalisar-lead:", textoResposta);
+      throw new Error("O servidor respondeu em formato inválido. A API foi corrigida para retornar JSON; publique a versão 702 completa.");
+    }
+    if(!res.ok||!data?.ok){
+      const erroServidor = data?.detail ? `${data.error || "Não foi possível atualizar a análise."} — ${data.detail}` : (data?.error||"Não foi possível atualizar a análise.");
+      throw new Error(erroServidor);
+    }
     progresso.set(90, "Validando gravação no banco...");
 
     let analysis=(data?.analysis&&typeof data.analysis==="object")?data.analysis:null;
@@ -11382,7 +11392,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — revisão de auditoria
+   Atualização #702 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11534,7 +11544,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — fechamento real da pendência de performance
+   Atualização #702 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11670,7 +11680,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — acabamento profissional estável
+   Atualização #702 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11791,7 +11801,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — Hotfix real mobile
+   Atualização #702 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11800,7 +11810,7 @@ window.renderLeadFoco=renderLeadFoco;
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '701';
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11876,7 +11886,7 @@ window.renderLeadFoco=renderLeadFoco;
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #701');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #702');
     });
   }
   function cp694FixFab(){
@@ -11964,7 +11974,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — Correção real da lista mobile
+   Atualização #702 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -11972,7 +11982,7 @@ window.renderLeadFoco=renderLeadFoco;
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '701';
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -12029,7 +12039,7 @@ window.renderLeadFoco=renderLeadFoco;
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #701');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #702');
     });
   }
   function fixFab(){
@@ -12164,7 +12174,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — Correção definitiva carregamento total Atendimentos
+   Atualização #702 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -12172,7 +12182,7 @@ window.renderLeadFoco=renderLeadFoco;
 (function(){
   if(window.__cp696AtendimentosFullList) return;
   window.__cp696AtendimentosFullList = true;
-  const VERSION = '701';
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -12230,7 +12240,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #701');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #702');
     });
   }
   function applyLayoutFixes(){
@@ -12329,7 +12339,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — Preparação da Carteira
+   Atualização #702 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -12338,7 +12348,7 @@ window.renderLeadFoco=renderLeadFoco;
 (function(){
   if(window.__cp697PreparacaoCarteira) return;
   window.__cp697PreparacaoCarteira = true;
-  const VERSION = '701';
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -12405,7 +12415,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #701');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #702');
     });
   }
   async function fetchAll697(force){
@@ -12551,13 +12561,13 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — correção de versão exibida no topo/mobile
+   Atualização #702 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
   if(window.__cp698VersaoTopo) return;
   window.__cp698VersaoTopo = true;
-  const VERSION = '701';
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fixVersionText(){
     try{
@@ -12568,11 +12578,11 @@ window.renderLeadFoco=renderLeadFoco;
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #701');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #702');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #701');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #702');
       });
     }catch(_){ }
   }
@@ -12587,17 +12597,17 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — estabilidade pós-cache
+   Atualização #702 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
-  const VERSION='701';
+  const VERSION='702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fix(){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #701');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #702');
       });
     }catch(_){ }
   }
@@ -12609,15 +12619,15 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #701 — Preparação da Carteira estável
+   Atualização #702 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
    ============================================================ */
 (function(){
-  if(window.__cp701PreparacaoEstavel) return;
-  window.__cp701PreparacaoEstavel = true;
-  const VERSION = '701';
+  if(window.__cp702PreparacaoEstavel) return;
+  window.__cp702PreparacaoEstavel = true;
+  const VERSION = '702';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   let fullLeadsCache = null;
@@ -12631,7 +12641,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #701');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #702');
       });
     }catch(_){ }
   }
@@ -12682,7 +12692,7 @@ window.renderLeadFoco=renderLeadFoco;
         }
       }catch(_){ }
       try{
-        const res = await fetch('./api/leads-recentes?limit=2000&fresh=1&_v=701&_t=' + Date.now(), {cache:'no-store'});
+        const res = await fetch('./api/leads-recentes?limit=2000&fresh=1&_v=702&_t=' + Date.now(), {cache:'no-store'});
         const data = await res.json().catch(()=>null);
         const items = Array.isArray(data?.items) ? data.items : [];
         if(items.length){
@@ -12702,18 +12712,18 @@ window.renderLeadFoco=renderLeadFoco;
     const pct = ativos.length ? Math.round((ready / ativos.length) * 100) : 0;
     const status = loading ? 'Calculando carteira...' : `${ready} prontos para contato`;
     const pend = loading ? 'buscando base completa' : `${pending} aguardando histórico`;
-    return `<div class="cp701-home-title"><b>Preparação da carteira</b><button type="button" onclick="cp697SetTab&&cp697SetTab('preparacao');show('carteira')">Preparar leads</button></div>
-      <div class="cp701-home-bar"><span style="width:${pct}%"></span></div>
-      <div class="cp701-home-meta"><span>${status}</span><span>${pend}</span><span>${loading ? '...' : pct + '%'}</span></div>`;
+    return `<div class="cp702-home-title"><b>Preparação da carteira</b><button type="button" onclick="cp697SetTab&&cp697SetTab('preparacao');show('carteira')">Preparar leads</button></div>
+      <div class="cp702-home-bar"><span style="width:${pct}%"></span></div>
+      <div class="cp702-home-meta"><span>${status}</span><span>${pend}</span><span>${loading ? '...' : pct + '%'}</span></div>`;
   }
   function ensureCard(){
     const root = qs('#home') || qs('.screen.active');
     if(!root) return null;
-    let card = qs('#cp701HomeProgress');
+    let card = qs('#cp702HomeProgress');
     if(!card){
       card = document.createElement('section');
-      card.id = 'cp701HomeProgress';
-      card.className = 'cp701-home-progress';
+      card.id = 'cp702HomeProgress';
+      card.className = 'cp702-home-progress';
       const old = qs('#cp697HomeProgress');
       if(old && old.parentNode){ old.parentNode.replaceChild(card, old); return card; }
       const anchor = qs('#leadFocoArea') || qs('#home .ui683-card') || qs('#home section:nth-of-type(2)') || null;
@@ -12748,31 +12758,31 @@ window.renderLeadFoco=renderLeadFoco;
   }
 
   const oldShow = window.show;
-  if(typeof oldShow === 'function' && !oldShow.__cp701Wrapped){
+  if(typeof oldShow === 'function' && !oldShow.__cp702Wrapped){
     const wrapped = function(name, ...args){
       const ret = oldShow.apply(this, [name, ...args]);
       if(name === 'home') schedule(false);
       setTimeout(textVersion, 80);
       return ret;
     };
-    wrapped.__cp701Wrapped = true;
+    wrapped.__cp702Wrapped = true;
     window.show = wrapped; try{ show = window.show; }catch(_){ }
   }
   const oldRefresh = window.refreshAllSections;
-  if(typeof oldRefresh === 'function' && !oldRefresh.__cp701Wrapped){
+  if(typeof oldRefresh === 'function' && !oldRefresh.__cp702Wrapped){
     const wrappedRefresh = function(){
       const ret = oldRefresh.apply(this, arguments);
       schedule(true);
       return ret;
     };
-    wrappedRefresh.__cp701Wrapped = true;
+    wrappedRefresh.__cp702Wrapped = true;
     window.refreshAllSections = wrappedRefresh; try{ refreshAllSections = window.refreshAllSections; }catch(_){ }
   }
 
   const css = document.createElement('style');
-  css.id = 'cp701PreparacaoEstavelCSS';
+  css.id = 'cp702PreparacaoEstavelCSS';
   css.textContent = `
-    #cp697HomeProgress{display:none!important}.cp701-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0;display:block!important}.cp701-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp701-home-title b{font-size:16px;color:var(--text);font-weight:950}.cp701-home-title button{border:1px solid rgba(255,107,92,.40);background:rgba(255,107,92,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp701-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp701-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#ff6b5c,#68ff95);border-radius:999px;min-width:3px;transition:width .18s ease}.cp701-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}@media(max-width:760px){.cp701-home-progress{margin:12px 0;padding:15px}.cp701-home-title b{font-size:15px}.cp701-home-title button{font-size:13px;padding:8px 11px}}`;
+    #cp697HomeProgress{display:none!important}.cp702-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0;display:block!important}.cp702-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp702-home-title b{font-size:16px;color:var(--text);font-weight:950}.cp702-home-title button{border:1px solid rgba(255,107,92,.40);background:rgba(255,107,92,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp702-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp702-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#ff6b5c,#68ff95);border-radius:999px;min-width:3px;transition:width .18s ease}.cp702-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}@media(max-width:760px){.cp702-home-progress{margin:12px 0;padding:15px}.cp702-home-title b{font-size:15px}.cp702-home-title button{font-size:13px;padding:8px 11px}}`;
   document.head.appendChild(css);
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>schedule(false)); else schedule(false);
