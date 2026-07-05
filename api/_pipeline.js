@@ -2037,6 +2037,7 @@ async function regenerarMensagensComModelo({ openai, lead, timelineText, parsed,
     tipoContato: parsed?.tipoContato || null,
     diagnostico: parsed?.diagnostico || null,
     leituraComercial: parsed?.leituraComercial || null,
+    analiseComercial: parsed?.analiseComercial || null,
     modeloComercial: parsed?.modeloComercial || null,
     nextAction: parsed?.nextAction || null,
     produtoInteresse: parsed?.produtoInteresse || null,
@@ -2053,6 +2054,7 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     tipoContato: parsed?.tipoContato || null,
     diagnostico: parsed?.diagnostico || null,
     leituraComercial: parsed?.leituraComercial || null,
+    analiseComercial: parsed?.analiseComercial || null,
     modeloComercial: parsed?.modeloComercial || null,
     nextAction: parsed?.nextAction || null,
     produtoInteresse: parsed?.produtoInteresse || null,
@@ -2065,7 +2067,42 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     lembreteSugerido: parsed?.lembreteSugerido || null,
     inteligenciaObservada: parsed?.inteligenciaObservada || null
   };
-  const prompt = `Você é o Cérebro Comercial do Direciona. Com base no diagnóstico da conversa abaixo, gere 3 mensagens de WhatsApp DISTINTAS para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.\n\nREGRAS OBRIGATÓRIAS (violação invalida a mensagem):\n${REGRAS_MSG_PROMPT}\n- Comece pelo primeiro nome ${nome} quando isso melhorar a mensagem.\n\nAS 3 MENSAGENS (cada uma com um propósito diferente):\n- a (direta): vai direto ao ponto e propõe o próximo passo concreto. É a melhor pra mandar agora.\n- b (consultiva): tira uma dúvida do cliente ou traz informação de valor; se perguntar, uma pergunta só.\n- c (retomada): reabre a conversa parada sem soar genérico.\n\nRÓTULOS (aLabel, bLabel, cLabel):\n- 3 a 5 palavras criativas e específicas pra esta conversa (ex.: "Reativação com prazo", "Resposta sobre financiamento").\n- PROIBIDO usar exatamente: "direta", "consultiva", "retomada", "a", "b", "c", "resposta", "alternativa" ou "próximo passo".\n\nDIAGNÓSTICO:\n${JSON.stringify(ctx)}\n\nCONVERSA:\n${timelineText}\n\nResponda SOMENTE JSON válido:\n{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
+  const prompt = `Você é o Cérebro Comercial do Direciona. Gere 3 mensagens de WhatsApp para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.
+
+A mensagem precisa nascer da ANÁLISE COMERCIAL, não do produto isolado. Antes de escrever, observe especialmente:
+- analiseComercial.mudancaDeIntencao;
+- analiseComercial.leituraAlemDoObvio;
+- analiseComercial.lacunaCentral;
+- analiseComercial.estrategiaRecomendada;
+- analiseComercial.oQueEvitar;
+- diagnostico.percepcaoTodaConversa;
+- nextAction.
+
+REGRAS OBRIGATÓRIAS:
+${REGRAS_MSG_PROMPT}
+- A opção A é a melhor para mandar agora.
+- A opção A deve mostrar memória do histórico quando isso ajudar, sem cobrança.
+- Nunca escreva mensagem genérica baseada só no produto atual.
+- Não repita pergunta já respondida.
+- Uma pergunta principal no máximo; duas só se forem essenciais e curtas.
+
+AS 3 MENSAGENS:
+- a: melhor condução comercial agora, alinhada à estratégia.
+- b: variação mais consultiva, ainda alinhada à mesma estratégia.
+- c: variação mais curta/leve para retomada sem pressão.
+
+RÓTULOS:
+- 3 a 5 palavras, específicos do caso.
+- Não use "direta", "consultiva", "retomada", "resposta", "alternativa".
+
+DIAGNÓSTICO E ANÁLISE:
+${JSON.stringify(ctx)}
+
+CONVERSA COMPLETA:
+${timelineText}
+
+Responda SOMENTE JSON válido:
+{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
   const { parsed: resultado, response } = await chamarGPT4Json({ openai, prompt, maxOutputTokens: 1500, timeout: 20000 });
   // Aceita tanto {"messages":{...}} quanto estrutura plana {"a":"...","b":"...",...}
   const msgs = resultado?.messages || (resultado?.a ? resultado : {});
@@ -2161,291 +2198,113 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
+  const prompt = `Você é o Cérebro Comercial do Direciona. Sua função NÃO é resumir o WhatsApp nem contar fatos óbvios. Sua função é ler o histórico inteiro como um gerente comercial experiente e dizer o que aquilo SIGNIFICA para a condução da venda.
 
-REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
+${instrucaoHistorico}
+Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 
-REGRA pro leituraComercial: preencha um objeto curto para o corretor entender a conversa em 10 segundos: { "ondeParou": "último ponto comercial real, sem ruído", "quemDeveProximoPasso": "cliente|corretor|ambos", "temperatura": "quente|morno|frio", "oQueDestravar": "a trava ou lacuna comercial de agora", "mensagemCurtaChance": "qual movimento de mensagem tem mais chance de resposta" }. Seja direto, sem texto longo.
+PRINCÍPIO CENTRAL:
+- O corretor já sabe ler o que o cliente escreveu. Não devolva obviedade como análise.
+- Use os fatos da timeline apenas como base. A entrega principal é interpretação comercial, estratégia e mensagem alinhada.
+- Não invente número, percentual, contagem, prazo, valor, visita, compromisso, produto ou objeção. Se não estiver escrito, trate como lacuna.
+- Reanalise do zero. Não use sugestão antiga da própria IA como verdade.
 
-REGRA pro modeloComercial — ESTE É O ESTADO ÚNICO QUE COMANDA A TELA. Separe obrigatoriamente CONTATO, OPORTUNIDADE, RELACIONAMENTO e AÇÃO. Retorne:
+O QUE É UMA BOA ANÁLISE:
+1. Identifica mudança de intenção ao longo do histórico, não só o produto atual.
+   Exemplo: se antes o cliente falou de Premium Office e agora de Personalité, não basta dizer "mudou de produto". Explique que antes era um produto mais ligado a investimento/comercial e agora é um imóvel pronto/residencial; isso muda a pergunta comercial.
+2. Mostra a lacuna que realmente impede a condução.
+   Exemplo: ainda não sabemos se a busca atual é moradia, investimento, compra para terceiro, comparação ou simples curiosidade.
+3. Recomenda o movimento correto e o que evitar.
+   Exemplo: evitar insistir em visita antes de requalificar objetivo; usar a memória do histórico sem soar cobrança.
+4. A mensagem nasce da estratégia. Ela não pode ser uma frase genérica solta.
+
+ORDEM DE RACIOCÍNIO OBRIGATÓRIA:
+- Leia o começo, o meio e o fim da conversa.
+- Identifique produtos/assuntos que apareceram em momentos diferentes e se eles representam intenções diferentes.
+- Identifique se a conversa anterior esfriou, por que aparentemente esfriou, e o que mudou agora.
+- Identifique o ponto comercial que precisa ser destravado agora.
+- Só depois escreva a recomendação e a mensagem.
+
+REGRAS DE LINGUAGEM DAS MENSAGENS:
+${REGRAS_MSG_PROMPT}
+- A mensagem recomendada deve mostrar memória do histórico quando isso ajudar, sem cobrança.
+- Use uma pergunta principal. No máximo duas se forem realmente necessárias.
+- Proibido pergunta genérica: "ainda tem interesse?", "gostou?" solto, "faz sentido?", "quer que eu mande opções?" sem contexto.
+
+CATÁLOGO/CONTEXTO DE PRODUTOS — use só para entender diferenças de proposta; não cite dado que não esteja seguro:
+${catalogoSenger}${contextoOrquestrado}${conhecimentoCorretor ? "\n\nCONHECIMENTO CONFIRMADO DO CORRETOR:\n" + conhecimentoCorretor + "\n" : ""}
+
+Retorne SOMENTE JSON válido, sem markdown:
 {
-  "contato": { "tipo": "comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro", "papel": "frase curta", "compradorFinal": "nome/descrição ou string vazia" },
-  "oportunidade": { "status": "descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|ganha|perdida|encerrada-sem-decisao", "resultado": "em-andamento|venda-conosco|comprou-outra-opcao|condicoes-incompativeis|desistiu|sem-resposta|oportunidade-futura|outro", "produto": "produto atual", "motivo": "fato curto que justifica" },
-  "relacionamento": { "status": "ativo|aguardando-nova-oportunidade|contato-periodico|pausado|encerrado", "potencial": "alto|medio|baixo|nao-avaliado", "motivo": "frase curta" },
-  "acao": { "status": "responder-agora|aguardando-resposta|compromisso-agendado|retomar|sem-acao-urgente", "responsavel": "corretor|contato|ambos|ninguem", "urgencia": "alta|media|baixa|nenhuma", "descricao": "ação objetiva" },
-  "contexto": { "ultimaPessoaFalar": "corretor|contato|desconhecido", "ultimaMensagem": "resumo literal curto", "ultimoCompromisso": "compromisso real ou nenhum", "impedimentoPrincipal": "principal trava real" }
+  "summary": "síntese estratégica em 2-4 frases dizendo o que a conversa revela além do óbvio",
+  "estrategia": "estratégia recomendada agora, com justificativa comercial",
+  "melhorPergunta": "a pergunta central que destrava a venda agora",
+  "clientProfile": "perfil comercial interpretado; se estiver indefinido, diga o que falta descobrir",
+  "tipoContato": "comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro",
+  "produtoInteresse": "produto principal atual, se houver",
+  "produtosInteresse": ["produtos/assuntos mencionados, em ordem cronológica quando possível"],
+  "etapaSugerida": "descoberta|interesse|comparacao|analise-financeira|negociacao|decisao",
+  "probability": "baixo|medio|alto",
+  "probabilityPercent": null,
+  "confianca": null,
+  "permuta": false,
+  "permutaResumo": "",
+  "bestTime": "orientação curta baseada em combinado real; sem inventar data",
+  "confirmedAppointments": [],
+  "objections": ["objeções reais; não confunda pedido de informação com objeção"],
+  "risk": "risco comercial real se o corretor conduzir errado",
+  "concorrencia": "concorrência real se citada, senão vazio",
+  "diagnostico": {
+    "ultimaPessoaFalar": "cliente/contato|corretor/construtora|corretor parceiro|não identificado",
+    "ultimoCompromissoCliente": "compromisso real do cliente ou 'Nenhum compromisso assumido.'",
+    "ultimaInformacaoPrometida": "informação prometida pelo corretor ou 'Nenhuma informação prometida.'",
+    "produtoPrincipalInteresse": "produto atual",
+    "produtosParalelosApresentados": [],
+    "objecaoPrincipal": "trava real; se não houver objeção, diga a lacuna comercial",
+    "pendenciaFinanceira": "o que falta saber/resolver financeiramente, ou 'Não identificada.'",
+    "proximoPassoDeQuem": "Do corretor/Do cliente/Dos dois + explicação curta",
+    "etapaFunil": "Descoberta|Interesse|Comparação|Análise financeira / viabilidade|Negociação|Decisão",
+    "nivelInteresse": "ALTO|MÉDIO|BAIXO + motivo curto",
+    "percepcaoTodaConversa": "O que a IA percebeu lendo o histórico inteiro. Precisa dizer o que mudou, o que isso significa e qual erro evitar.",
+    "mensagemQueEuEnviariaHoje": "melhor mensagem única para WhatsApp, pronta para enviar",
+    "probabilidadeFechamentoHoje": "qualitativa, sem percentual inventado"
+  },
+  "analiseComercial": {
+    "mudancaDeIntencao": "como a intenção/objeto mudou ao longo do histórico, ou vazio se não mudou",
+    "leituraAlemDoObvio": "interpretação comercial que o corretor não veria só olhando o último produto",
+    "lacunaCentral": "o que falta descobrir para conduzir corretamente",
+    "estrategiaRecomendada": "movimento comercial recomendado agora",
+    "oQueEvitar": "erro de condução a evitar",
+    "porQueEssaMensagem": "por que a mensagem sugerida é a correta para este momento"
+  },
+  "tipoRetomada": "primeiro-contato|morno-confirmar|frio-reaquecer|informacao-enviar|objecao-tratar|stand-by|quente-fechar",
+  "memoriaSugerida": { "preferencias":"", "pessoasDecisao":"", "pontosSensiveis":"", "momentoDeVida":"", "faixaValor":"", "observacoes":"" },
+  "nextAction": "ação concreta do corretor agora, coerente com a estratégia",
+  "inteligenciaObservada": {},
+  "materiais": [],
+  "lembreteSugerido": null,
+  "leituraComercial": {
+    "ondeParou": "último ponto comercial real",
+    "quemDeveProximoPasso": "cliente|corretor|ambos",
+    "temperatura": "quente|morno|frio",
+    "oQueDestravar": "lacuna/trava central",
+    "mensagemCurtaChance": "movimento com maior chance de resposta"
+  },
+  "modeloComercial": {
+    "contato": { "tipo": "comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro", "papel": "frase curta", "compradorFinal": "" },
+    "oportunidade": { "status": "descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|ganha|perdida|encerrada-sem-decisao", "resultado": "em-andamento|venda-conosco|comprou-outra-opcao|condicoes-incompativeis|desistiu|sem-resposta|oportunidade-futura|outro", "produto": "produto atual", "motivo": "fato + interpretação curta" },
+    "relacionamento": { "status": "ativo|aguardando-nova-oportunidade|contato-periodico|pausado|encerrado", "potencial": "alto|medio|baixo|nao-avaliado", "motivo": "frase curta" },
+    "acao": { "status": "responder-agora|aguardando-resposta|compromisso-agendado|retomar|sem-acao-urgente", "responsavel": "corretor|contato|ambos|ninguem", "urgencia": "alta|media|baixa|nenhuma", "descricao": "ação objetiva" },
+    "contexto": { "ultimaPessoaFalar": "corretor|contato|desconhecido", "ultimaMensagem": "resumo literal curto", "ultimoCompromisso": "compromisso real ou nenhum", "impedimentoPrincipal": "principal trava ou lacuna" }
+  },
+  "messages": null
 }
-REGRAS DE COERÊNCIA INEGOCIÁVEIS:
-- Contato e oportunidade NÃO são a mesma coisa. Um corretor parceiro pode continuar ativo mesmo quando a oportunidade do cliente final foi perdida.
-- Se o comprador final comprou outro imóvel: oportunidade.status="perdida", resultado="comprou-outra-opcao". Se o contato é parceiro: relacionamento.status="aguardando-nova-oportunidade" e acao.status="sem-acao-urgente".
-- Só use oportunidade.status="ganha" e resultado="venda-conosco" quando houver venda confirmada conosco.
-- Oportunidade ganha/perdida não pode continuar como negociação.
-- Se a última fala foi uma despedida cordial do contato e não há pergunta/pendência aberta, acao.status="sem-acao-urgente".
-- Se o corretor falou por último e aguarda retorno, acao.status="aguardando-resposta", não "responder-agora".
-- Se acao.status="sem-acao-urgente", não recomende nova mensagem de venda; a descrição deve orientar manter relação, pós-venda ou aguardar nova oportunidade.
-- A última pessoa a falar deve ser conferida na ÚLTIMA mensagem real da timeline, nunca inferida pelo resumo.
 
-REGRA CRÍTICA — PENDÊNCIA ABERTA ANTES DA OBJEÇÃO: antes de decidir nextAction, leituraComercial e messages, identifique a ÚLTIMA PENDÊNCIA COMERCIAL ABERTA. A próxima mensagem deve continuar exatamente desse ponto, não reiniciar descoberta.
-Sequência obrigatória de raciocínio:
-1. Onde a conversa parou comercialmente?
-2. Quem ficou responsável pelo próximo passo?
-3. O que já sabemos com segurança?
-4. O que ainda falta saber AGORA?
-5. O que NÃO deve ser perguntado novamente porque já foi respondido ou negociado?
-Se a última mensagem do OUTRO LADO contiver sentido de "vou informar", "vou validar", "vou falar com ele/ela/o cliente", "vou consultar", "te aviso", "assim que eu tiver retorno", "vou apresentar", "vou tentar a evolução", classifique como AGUARDANDO RETORNO DE TERCEIRO/CLIENTE FINAL. Neste caso, a próxima ação correta é pedir retorno sobre a proposta/condição/material apresentado. É ERRO reiniciar descoberta financeira ou perguntar entrada/parcela de novo se isso já foi tratado no histórico.
-Não use uma frase pronta de outro atendimento. A mensagem deve citar apenas o objeto real desta conversa e nunca voltar a perguntar uma condição já esclarecida.
+Lead:
+${JSON.stringify(lead)}
 
-
-MÉTODO FIXO PARA AS MENSAGENS — HIERARQUIA OBRIGATÓRIA:
-1. Continue do último ponto comercial real; não recomece a descoberta.
-2. Identifique quem deve o próximo passo e a pendência aberta antes de falar de objeção.
-3. Não repita perguntas já respondidas nem crie objeções que o cliente não levantou.
-4. Se o contato é corretor parceiro, escreva B2B e trate o comprador como cliente final dele.
-5. Linguagem natural, direta e profissional; uma pergunta principal no máximo.
-6. Sem emojis. Sem "faz sentido", "fiquei pensando", "estive pensando", "papo", "caso não tenha agradado" ou "se não gostou".
-7. As três opções precisam ser diferentes e a opção A deve ser a melhor para enviar agora.
-8. Antes de devolver o JSON, revise silenciosamente cada mensagem contra o histórico completo.
-
-REGRA 0 — NÃO DEDUZA, CONFIRA NA CONVERSA (revise DUAS VEZES antes de orientar): é PROIBIDO afirmar característica do imóvel (tipologia/nº de suítes, metragem, valor), condição de pagamento, quem decide, ou o que já foi combinado, com base em palpite. Só afirme o que está REALMENTE escrito na conversa/anotações. NÃO invente, NÃO chute, NÃO deduza o que não foi dito. Atenção a um erro clássico: um número ou condição dito sobre UMA opção (ex.: a unidade de entrada mais barata) NÃO vale automaticamente pra OUTRA unidade que o cliente escolheu — confira a qual unidade/assunto cada dado se refere. Antes de fechar o JSON, releia mentalmente os trechos que embasam cada afirmação do summary, clientProfile e das 3 mensagens; se algum dado não tiver respaldo claro na conversa, NÃO o afirme como certo (omita ou trate como dúvida a confirmar). Errar uma orientação atrapalha a venda.
-
-REGRA pro lembreteSugerido (REAGENDAMENTO PELA FALA DO CLIENTE): se o CLIENTE indicar QUANDO quer ser contatado de novo, devolva { "dias": <numero de dias a partir de hoje>, "motivo": <frase curta do porquê> }. Senão, null. Converta:
-- "me chama amanhã" / "amanhã" → dias: 1
-- "semana que vem" / "me chama daqui uns dias" → dias: 7 (uma semana = 7 dias)
-- "daqui 15 dias", "em 2 semanas", "mês que vem", "em 60 dias" → converta pro número de dias certo (2 semanas=14, 1 mês=30, 2 meses=60).
-- CONHECIMENTO REGIONAL (Carazinho/RS é região de plantio de grãos): se o cliente disser que está "COLHENDO", "na SAFRA", "na colheita", "plantando", "no plantio", "na lavoura agora" e pedir pra retomar depois → dias: 30 (a janela típica).
-- "estou viajando, me chama quando voltar" sem prazo claro → dias: 7.
-- DIA DO MÊS: se o cliente citar um DIA pra resolver/retomar (ex.: "recebo dia 20 e aí te falo", "dia 10 eu decido", "quando eu pegar o cheque, dia 20, converso com vocês"), calcule quantos dias de HOJE (${hoje}) até esse dia (se o dia já passou neste mês, vá pro próximo mês) e devolva em "dias". motivo = o que ele vai resolver (ex.: "receber o cheque dia 20").
-- ESPERANDO ALGO/TERCEIRO: se o cliente está ESPERANDO receber dinheiro/cheque/pagamento, ou depende de um terceiro/decisão, pra ENTÃO falar com você, isso É um reagendamento — use a data que ele deu (ou ~15 dias se não houver data). motivo = "aguardando o cheque/pagamento pra avançar".
-Quando houver lembreteSugerido, as MENSAGENS (principalmente a opção recomendada e a retomada contextual) devem ACEITAR o combinado com naturalidade, sem insistir: ex. amanhã → "perfeito, amanhã eu te chamo!"; viagem → "boa viagem! semana que vem eu retomo com você"; safra/colheita → "boa colheita! assim que terminar eu te procuro pra seguirmos"; esperando cheque → "perfeito, Cristiano! fico no aguardo do cheque; assim que entrar a gente acerta tudo". É PROIBIDO, nesses casos, mandar mensagem que EMPURRA ("vamos agilizar a compra?", "vamos confirmar o pagamento agora?") — o cliente PEDIU pra esperar. NUNCA force contato antes do prazo que o cliente pediu.
-
-REGRA pra memoriaSugerida: extraia da conversa INTEIRA os fatos importantes sobre o cliente, pra montar a memória comercial dele. Retorne um objeto: { preferencias: "o que o cliente quer/gosta (andar, sol, metragem, lazer, etc) ou ''", pessoasDecisao: "quem participa da decisão (cônjuge, sócio, pais) ou ''", pontosSensiveis: "o que pesa contra/preocupa (preço, entrada, prazo, financiamento) ou ''", momentoDeVida: "casamento, mudança, investimento, primeiro imóvel, etc ou ''", faixaValor: "faixa de valor citada ou ''", observacoes: "outros fatos úteis pra próximas abordagens ou ''" }. Use SÓ o que está na conversa, não invente. Campo sem informação = string vazia.
-
-REGRA pro concorrencia (string): se o cliente sinalizou que está vendo/avaliando OUTRO imóvel ou opção EM PARALELO (de outra construtora, outro corretor, ou outro empreendimento fora do que você oferece), descreva curto o que ele está olhando (ex.: "está vendo outro apartamento com outro corretor", "comparando com um usado no centro"). Só preencha se o cliente DISSE isso ("estamos vendo outro", "tô olhando uns aqui também", "tenho outra opção", "vou comparar"). Sem sinal de concorrência, retorne "".
-
-REGRA pro diagnostico (objeto) — OBRIGATÓRIO seguir o mesmo modelo do diagnóstico manual aprovado pelo Sanchai. Além dos campos técnicos abaixo, inclua SEMPRE estes campos textuais, preenchidos com base no histórico inteiro e nas observações do corretor, sem inventar:
-- "ultimaPessoaFalar": última pessoa que falou na conversa, identificando se foi cliente/contato, corretor/construtora ou corretor parceiro.
-- "ultimoCompromissoCliente": último compromisso assumido pelo cliente. Se não houve, diga "Nenhum compromisso assumido.".
-- "ultimaInformacaoPrometida": última informação que o corretor/construtora prometeu enviar, explicar ou verificar. Se não houve, diga "Nenhuma informação prometida.".
-- "produtoPrincipalInteresse": produto/empreendimento principal em jogo agora.
-- "produtosParalelosApresentados": array com produtos/opções paralelas apresentados ou discutidos.
-- "objecaoPrincipal": objeção real que segura o avanço. Se não for preço, diga claramente qual é o verdadeiro gargalo, como viabilidade, prazo, decisão, documentação ou falta de orçamento.
-- "pendenciaFinanceira": o que falta saber ou resolver sobre entrada, parcelas, renda, financiamento, parcelamento, FGTS ou orçamento. Se não houver, diga "Não identificada.".
-- "proximoPassoDeQuem": "Do cliente", "Do corretor" ou "Dos dois", explicando em poucas palavras.
-- "etapaFunil": uma destas etapas com linguagem humana: "Descoberta", "Interesse", "Comparação", "Análise financeira / viabilidade", "Negociação" ou "Decisão".
-- "nivelInteresse": "ALTO", "MÉDIO" ou "BAIXO", com base em sinais reais.
-- "percepcaoTodaConversa": bloco curto estilo "O que eu percebo analisando TODA a conversa". Deve dizer o erro que o corretor deve evitar e qual é o verdadeiro ponto para destravar.
-- "mensagemQueEuEnviariaHoje": a melhor mensagem única para enviar hoje, pronta para WhatsApp, seguindo as regras de mensagem curta, continuidade e sem retomada genérica.
-- "probabilidadeFechamentoHoje": nota ou percentual com justificativa curta. Não infle: explique o que ajuda e o que trava.
-
-Depois desses campos, retorne também os campos técnicos de compatibilidade:
-{ "objetivo": um destes EXATOS — "moradia" | "investimento" | "moradia-futura" | "construcao" | "troca" | "renda" | "especulacao" | "indefinido" (a INTENÇÃO principal da compra; só classifique diferente de "indefinido" se a conversa deixar claro — na dúvida "indefinido". NÃO assuma "moradia" só porque o imóvel é apartamento/casa: SEM o comprador dizer que é pra MORAR (ex.: "morar", "pra mim", "minha família", "minha esposa/marido/filhos", "sair do aluguel", "nossa casa"), fica "indefinido". Sinais de INVESTIDOR — "transferência de risco", parcelamento direto sem financiamento, aporte/safra/colheita, comprar pra revender/alugar, ou comprador trazido por OUTRO corretor/imobiliária (negócio B2B) sem intenção de moradia declarada — apontam "investimento" se explícitos, ou "indefinido" se não der pra cravar; NUNCA "moradia" por padrão), "motivo": "o MOTIVO REAL por trás da compra, se apareceu (casamento, filho chegando, sair do aluguel, mudança de cidade, segurança, aposentadoria, renda de aluguel) — é o que gera urgência; se não apareceu, ''", "interesse": "alto" | "medio" | "baixo" (o quanto o cliente demonstra QUERER fechar, pelos sinais reais: escolheu unidade específica, pediu condições/preço, elogiou/se empolgou, marcou ou REMARCOU visita, voltou em vários dias = ALTO; só perguntou genérico e sumiu = BAIXO), "quemDeveProximoPasso": "cliente" | "corretor" | "ambos" (de quem é a bola AGORA: se o CLIENTE disse que ia calcular/definir/avisar/decidir/falar com alguém e ainda não voltou = "cliente"; se o CORRETOR prometeu enviar/montar algo e ainda não enviou = "corretor"; se os dois = "ambos". REGRA: se o corretor JÁ cobrou/retomou depois do cliente sumir, a bola continua com o "cliente"), "bloqueio": "em poucas palavras, o que está REALMENTE segurando o avanço agora (ex.: agenda do casal, decisão de terceiro, percepção de preço, indecisão, esperando dinheiro) — ou '' se não há objeção, só o tempo passando", "etapa": "descoberta" | "interesse" | "comparacao" | "analise-financeira" | "negociacao" | "decisao" (em que ponto da negociação o cliente está), "sabemos": [lista curta do que JÁ está claro], "lacunas": [lista curta do que AINDA FALTA descobrir], "ultimaPendenciaAberta": "última pendência comercial real em uma frase curta; se alguém ficou de falar com cliente/direção/banco/família, diga exatamente isso", "statusPendencia": "sem-pendencia" | "aguardando-corretor" | "aguardando-cliente" | "aguardando-terceiro" | "aguardando-retorno-proposta", "oQueNaoPerguntarNovamente": [lista curta do que já foi respondido/negociado e NÃO deve virar pergunta repetida], "proximaAcaoCorreta": "movimento comercial objetivo para a próxima mensagem", "conversaSuperficial": true SOMENTE quando a conversa já é longa (≈8+ trocas reais de mensagem) E o OBJETIVO da compra (morar/investir) AINDA está DESCONHECIDO. Se o objetivo já está claro, OU houve visita/atendimento presencial registrado pelo corretor, é false (NÃO é superficial). Faltar só orçamento/forma de pagamento, com o objetivo já conhecido, NÃO é conversa superficial. }.
-Pra montar "sabemos" e "lacunas", use SEMPRE esta lista fixa de 6 critérios críticos e jogue cada um num lado só (nunca nos dois), com rótulo de 1-3 palavras: "objetivo" (morar/investir), "motivo/urgência", "orçamento" (faixa de valor), "forma de pagamento" (FGTS/financiamento/recurso próprio/entrada), "prazo de compra", "quem decide". Um critério vai pra "sabemos" só se a conversa REALMENTE traz aquilo; senão vai pra "lacunas". Use SÓ o que está escrito, não invente. (A melhorPergunta deve atacar a PRINCIPAL lacuna desta lista.)
-
-REGRA pro produtoInteresse: retorne só o NOME PRÓPRIO do imóvel/empreendimento em jogo AGORA. Lista oficial atualizada de empreendimentos da Senger (use EXATAMENTE estes nomes quando reconhecer):
-- "Renaissance" (lançamento — Carazinho)
-- "Quality" (pronto — Carazinho)
-- "Prime" (pronto — Carazinho)
-- "Personalité" (pronto — Carazinho)
-- "Boulevard" (entrega 2028 — Ibirubá)
-- "Premium Office" (entrega 2029 — Carazinho)
-- "Nova Vila Rica I" (terrenos pronto — também aceita "NVR I", "NVRI", "Vila Rica I")
-- "Nova Vila Rica II" (terrenos pronto — também "NVR II", "NVRII")
-- "Nova Vila Rica III" (terrenos entrega 2027 — também "NVR III", "NVRIII")
-- "Residencial GABRO" (Santa Maria — pode aparecer só como "Gabro")
-- "Edifício Campos Elísios" (Carazinho — pode aparecer só como "Campos Elísios")
-- "Evolutti" (entrega 2028 / na planta — Carazinho)
-OU qualquer outro imóvel com nome próprio. Olhe MENSAGENS MAIS RECENTES e as OBSERVAÇÕES/atendimentos do corretor. NUNCA retorne uma DESCRIÇÃO de características no lugar do nome — "apartamento de 2 dormitórios", "casa com 2 box de garagem", "ap usado", "cobertura" etc. NÃO são nomes; se o imóvel só foi descrito por características e não tem nome próprio, retorne "Não identificado". Se vários nomes em paralelo, o de maior menção recente. SÓ "Não identificado" se nenhum NOME PRÓPRIO aparecer. EXCEÇÃO QUE PREVALECE: se o CORRETOR DECLARAR explicitamente o produto numa anotação/observação (ex.: "o produto é obra de terceiros", "obra de terceiros", "imóvel de terceiros", "imóvel usado", ou um empreendimento de outra construtora), USE EXATAMENTE o que ele declarou — a declaração do corretor é AUTORITATIVA e prevalece, mesmo não sendo da Senger nem nome próprio clássico. "Obra de terceiros" é um produto VÁLIDO, NUNCA "Não identificado" nesse caso. REGRA DURA: é PROIBIDO ESCOLHER/SUGERIR um empreendimento que o cliente ou o corretor NÃO mencionou na conversa/anotações. NUNCA infira um empreendimento a partir do perfil/objetivo do cliente (ex.: cliente diz que quer "investir" → NÃO escolha um empreendimento por conta própria). Isso vale também pro estrategia, summary, nextAction e as mensagens: não cite nome de empreendimento que não apareceu na conversa.
-
-${catalogoSenger}${contextoOrquestrado}${conhecimentoCorretor ? "\n\nCONHECIMENTO DO CORRETOR (fatos reais aprendidos nas conversas — use sempre que relevante para responder com segurança, sem inventar):\n" + conhecimentoCorretor + "\n" : ""}
-
-${diferenciaisRelevantes(timelineTextFull)}
-
-REGRA — FORMA DE PAGAMENTO PELO STATUS (NÃO ERRE O TERMO): empreendimento PRONTO → o pagamento/simulação é por FINANCIAMENTO BANCÁRIO. Empreendimento NA PLANTA / EM OBRA / LANÇAMENTO / PRÉ-LANÇAMENTO (ex.: Renaissance, Evolutti, Boulevard, Nova Vila Rica III) → o pagamento é PARCELAMENTO DIRETO COM A CONSTRUTORA; é PROIBIDO usar a palavra "financiamento" pra esses. Ao propor simulação num empreendimento na planta, diga "simular o PARCELAMENTO / a condição de pagamento" (NUNCA "simulação de financiamento"). Use sempre o termo correto pelo status do empreendimento em jogo.
-
-REGRA pro produtosInteresse: array com TODOS os imóveis/empreendimentos que ainda estão sendo considerados nesta negociação (da Senger ou não — ex.: ["Prime","Gabro"]). Inclua só os que seguem em jogo, do mais provável pro menos provável. Se só há um, retorne array com esse um. Se nenhum identificado, retorne [].
-
-REGRA pra etapaSugerida: classifique em qual etapa do funil o cliente está, com base na conversa. Use EXATAMENTE um destes valores: "Novo" (primeiro contato, ainda sem real interação), "Atendimento" (já conversando, trocando informações, perguntou preço/condições — está avançando), "Visita/Proposta" (visita marcada/feita ou proposta em jogo), "Negociação" (negociando valores/condições pra fechar), "Standby" (parado/esfriou sem resposta há muito tempo). Olhe o VOLUME e o TEOR da conversa: se há bastante troca e o cliente já pediu preço/condições, NÃO é "Novo" — é no mínimo "Atendimento".
-
-REGRA CRÍTICA pro tipoContato: identifique QUEM é o outro lado da conversa (a pessoa do contato, NÃO o corretor da construtora). Use EXATAMENTE uma destas strings em minúsculas:
-- "cliente-final" → comprador direto, vai morar ou investir no imóvel.
-- "corretora-parceira" → QUALQUER pessoa que INTERMEDIA / INDICA / TRAZ clientes pra construtora e ganharia COMISSÃO: corretor(a) de outra imobiliária, autônomo, OU um parceiro/profissional (arquiteto, engenheiro, projetista, designer, marketing, indicador) que MOSTRA/APRESENTA o empreendimento pra clientes/contatos DELE e coordena com a equipe da construtora. **PISTA DE NOME: contém "Corretor", "Corretora", "Corretagem", "Imóveis", "Imobiliária", "Vendas", "CRECI", ou nome de imobiliária.** **PISTA DE COMPORTAMENTO (vale MESMO quando o nome não indica nada):** diz "estou mostrando/apresentei o projeto pra [fulano]", cita NOMES de prospects/clientes dele, fala "meu cliente"/"meu comprador", pede tabela/material/plantas pra repassar, pergunta sobre comissão/parceria, OU PRODUZ/ENVIA o material do empreendimento pra construtora (plantas, projeto, PDFs, renders, folder) — quem FABRICA a planta/projeto e manda pro corretor da construtora NUNCA é o comprador. Se a pessoa traz clientes e/ou fornece o projeto, é PARCEIRA, não cliente-final.
-- "indicacao" → pessoa que indicou alguém mas não é o comprador nem corretor parceiro.
-- "outro" → não dá pra classificar.
-ANTI-ERRO (CRÍTICO): NUNCA classifique como "cliente-final" quem APRESENTA o empreendimento a clientes/contatos dele, traz NOMES de prospects, ou PRODUZ/ENVIA o material do projeto (plantas, renders, PDFs, folder) pra construtora — isso é PARCEIRO (quer comissão). Pra parceiro, as mensagens e a próxima ação são B2B sobre os CLIENTES DELE (ex.: "teve retorno do seu cliente sobre o Renaissance?", "quer que eu monte a condição pra você fechar com ele?"); é PROIBIDO tratá-lo como comprador ou sugerir "enviar material/simulação" PRA ELE como se ele fosse comprar.
-OVERRIDE: se a Memória do cliente tiver uma observação com formato "[tipo-contato:X]" (ex: "[tipo-contato:corretora-parceira]"), use OBRIGATORIAMENTE esse valor X — é uma marcação manual do corretor da construtora, mais autoritativa que sua inferência.
-
-REGRA DAS 3 MENSAGENS: As mensagens DEVEM se adequar ao tipoContato:
-- Se "cliente-final": tom consultivo, foco no imóvel/sonho/momento de vida, evita jargão técnico.
-- Se "corretora-parceira": tom B2B, foco em disponibilidade de unidades, condições comerciais, material pra ela repassar, comissão/parceria, agilidade. Trate como colega de profissão, NÃO como cliente final. Evita frases como "esse imóvel combina com você" — a corretora não vai morar lá. ATENÇÃO CRÍTICA: cônjuge, família, filhos, "o marido", "a esposa", o casal e a decisão que aparecem na conversa são do CLIENTE FINAL DELA — NUNCA da parceira. É TERMINANTEMENTE PROIBIDO dizer "seu marido", "sua esposa", "sua família", "conversa com seu marido" pra parceira, como se ELA fosse a compradora. As mensagens perguntam sobre o CLIENTE DELA: "teve retorno do seu cliente?", "o que o casal achou?", "quando eles vêm fechar?", "consigo te ajudar a fechar com ele?". E NUNCA encerre com "estou à disposição".
-- Se "indicacao" / "outro": tom neutro, identifique o real interessado antes de propor próximo passo.
-
-REGRA CRÍTICA — A ANOTAÇÃO MAIS RECENTE DO CORRETOR MANDA (estado atual): se houver anotação manual / atendimento registrado pelo corretor (linhas marcadas como "Atendimento presencial (corretor)", "anotação manual", ou no resumo de observações), a MAIS RECENTE é o estado ATUAL e MAIS CONFIÁVEL do lead — vale MAIS que qualquer mensagem antiga de WhatsApp. As sugestões TÊM que refletir exatamente o que essa anotação diz. Ex.: anotação "ele ficou de visitar o prime decorado, ver se conseguiu e o que achou" → a mensagem indicada é "conseguiu visitar o decorado do Prime? O que achou?"; anotação "vai pensar e me retorna semana que vem" → retomada leve aguardando; anotação "pediu pra ligar sexta" → próxima ação é ligar sexta. NUNCA ignore a última anotação nem sugira algo que a contradiga.
-
-REGRA CRÍTICA — CONTINUIDADE COM A ÚLTIMA MENSAGEM (a mais importante pra soar natural): TODAS as mensagens (principalmente RETOMADA e DIRETA) devem DAR SEGUIMENTO ao ponto EXATO onde a conversa parou. Antes de escrever, identifique a ÚLTIMA coisa relevante que aconteceu — primeiro a última ANOTAÇÃO do corretor (acima), e na falta dela a última coisa que o CORRETOR enviou/ofereceu e que ficou SEM resposta do cliente (último produto, material/folder, planta, valor/orçamento, link, lançamento, decorado a visitar). A retomada deve perguntar se o cliente CONSEGUIU VER/ANALISAR aquilo, O QUE ACHOU, se bateu com o ORÇAMENTO e se ficou alguma DÚVIDA — citando o produto/assunto PELO NOME. É TERMINANTEMENTE PROIBIDO fazer retomada genérica que ignora o que foi tratado por último, do tipo "como está a busca pelo apartamento?", "alguma novidade sobre o que estão pensando?", "como vai a procura?". A nextAction deve refletir essa continuidade: retomar especificamente o material, produto, proposta ou dúvida que ficou pendente, nunca propor algo do começo da conversa que já foi superado. Não copie exemplos de outros leads.
-
-As 3 mensagens devem ser distintas entre si.
-
-
-REGRA pro estrategia (campo NOVO — é o raciocínio de ESTRATEGISTA comercial pro CORRETOR ler, NÃO é mensagem pro cliente): em 1-2 linhas curtas e diretas, diga (a) EM QUE PÉ a venda está (temperatura/etapa real e o que segura o avanço), (b) o MOVIMENTO deliberado pra avançar AGORA e (c) a TÉCNICA comercial em jogo (ex.: ancoragem de valor, escassez/oportunidade de lançamento, prova social, fechamento por alternativa, reforço de valor/diferenciais, reciprocidade, redução de atrito). Linguagem de bastidor (gerente de vendas orientando o corretor), objetiva, sem ser mensagem pro cliente. Descreva a situação e o movimento usando somente os dados reais deste lead.
-
-
-REGRA pro objections: objeção quase NUNCA aparece na frase literal (ninguém escreve "tá caro"). Detecte objeções IMPLÍCITAS pelo comportamento: cliente some depois de receber o valor (= preço/percepção de valor), responde "vou pensar"/"depois te falo"/"qualquer coisa te chamo" (= falta de urgência ou objeção não dita), "preciso ver com minha esposa/marido" (= decisão compartilhada/adiamento), faz muitas perguntas sobre financiamento/entrada e não avança (= barreira financeira), demora dias pra responder mensagens que antes respondia rápido (= esfriando/perdendo interesse), pede pra "segurar"/"esperar um pouco" (= momento ruim). Liste as objeções REAIS interpretadas, não frases que não foram ditas. NÃO INVENTE objeção: cliente dizer que vai "analisar no fim de semana", "ver com calma", "dar uma olhada", "depois eu vejo" é PRAZO NATURAL de decisão — NÃO é objeção de "tempo apertado/correria" nem urgência. Só liste objeção de tempo/pressa se o cliente DISSER EXPRESSAMENTE que está sem tempo/correndo. E a mensagem de "objecao" NUNCA pode AFIRMAR um sentimento que o cliente não expressou (ex.: "entendo que o tempo tá apertado") — só aborde objeções realmente ditas ou claramente sinalizadas; se não há objeção clara, a "objecao" deve só remover uma dúvida provável de forma leve, sem inventar pressão.
-
-
-REGRA pro melhorPergunta (string): a ÚNICA melhor pergunta de descoberta pra fazer a ESTE cliente AGORA — a que mais revela a objeção/motivação real e avança a venda, dado o estágio e o que ainda falta entender. Curta, natural, pronta pra mandar no WhatsApp. Se o cliente já está PRONTO/fechando, pode ser a pergunta de avanço/fechamento ("posso reservar a sua unidade?"). Ex.: "O que motivou você a procurar agora?"; "Além do preço, o que é mais importante pra você nessa escolha?"; "O que faria você dizer: é esse?".
-
-
-REGRA — CONTEÚDO FORA DO ASSUNTO (cliente que também é amigo/parceiro): a conversa pode misturar PAPO PESSOAL e assuntos NÃO comerciais (família, saúde, futebol, política, religião, outros negócios não-imobiliários, combinados sociais, piadas). TRATE esse conteúdo como RUÍDO para a venda: NÃO o use no summary, clientProfile, objections, risk, nextAction nem nas mensagens — foque SOMENTE no que diz respeito à compra/venda do imóvel. Exceções de uso permitido: (a) calibrar o TOM das mensagens (com amigo/parceiro pode ser mais informal e próximo); (b) se ficar claro que o contato é amigo ou parceiro, registrar isso curto em memoriaSugerida.observacoes (ex.: "cliente é amigo/parceiro — tom próximo"). Se a conversa NÃO tiver nada comercial sobre imóvel, seja honesto: summary e nextAction devem dizer que não houve assunto comercial relevante, em vez de inventar negociação ou inflar probabilidade.
-
-REGRA CRÍTICA pro probabilityPercent (0-100): é a PROBABILIDADE DE FECHAR A VENDA com esse lead (não é probabilidade de responder). Seja CONSERVADOR e realista — corretor experiente sabe que conversa boa está longe de venda fechada. Pondere os sinais da conversa:
-- Intensidade da interação (responde, puxa assunto, interesse ativo).
-- Perguntas do cliente, volume de mensagens/áudios, e QUANTOS DIAS DIFERENTES conversando (voltar em vários dias = intenção real).
-- SINAIS FORTES DE COMPRA: pergunta forma de pagamento/financiamento, entrada, prazo de entrega, box/garagem, documentação, escritura, "quando posso visitar/assinar".
-- Nível de relacionamento.
-CALIBRAGEM OBRIGATÓRIA (siga estas faixas):
-- 10-25%: "fogo de palha" — poucas mensagens (≤ 4 trocas REAIS no total), conversa toda concentrada em 1 ÚNICO DIA, cliente sumiu sem voltar. Pediu info genérica e nunca mais respondeu. Esses leads passaram, NÃO vão fechar.
-- 20-40%: lead inicial real, demonstrou interesse mas falta MUITA coisa (valor, condições, visita, decisão). Cliente apareceu em 1-2 dias só.
-- 45-60%: engajado de verdade — cliente respondeu em 3+ DIAS DIFERENTES, fez perguntas concretas, com alguns sinais de compra, MAS ainda faltam etapas importantes (proposta, definição de pagamento, visita decisiva).
-- 65-75%: proposta em cima da mesa, condições quase acertadas, cliente sinalizou decisão clara, compromisso marcado.
-- 80%+ : SÓ quando está praticamente fechado (proposta aceita, faltando assinatura/documentação). Raro.
-TETO DURO PRA LEADS RASOS: se o lead tem ≤ 6 mensagens TOTAIS na conversa (cliente + corretor somados) E cliente parou de responder há 7+ dias, probabilityPercent NÃO PODE passar de 35. Isso é "fogo de palha", não cliente em negociação. EXCEÇÃO: se houver uma anotação/atendimento PRESENCIAL registrado pelo corretor (linhas com autor "Atendimento presencial (corretor)" ou observações dele), esse teto NÃO se aplica — o corretor esteve com o cliente e a observação dele é evidência de primeira mão; pondere o que ele relatou (visitou, gostou, pediu proposta, vai decidir) e ajuste a probabilidade de acordo.
-Penalize forte: sumiço após valores, evasivas, esfriamento, objeção não resolvida, decisão dependente de terceiros, conversa concentrada em 1 único dia.
-ATENÇÃO PERMUTA: se o negócio envolve permuta/troca (cliente precisa VENDER um imóvel/carro dele antes de comprar, ou oferece um bem como parte do pagamento), a probabilidade cai bastante (geralmente 30-45% no máximo), porque depende de vender o bem dele primeiro — fora do controle do corretor.
-CALIBRAGEM QUANDO É PARCEIRO (tipoContato corretora-parceira / indicador / arquiteto que traz clientes): aqui a probabilidade mede o quão perto os CLIENTES DELE estão de FECHAR — NUNCA o volume ou a duração da conversa com o parceiro. NÃO conte como calor comercial: produção/troca de material (plantas, PDFs, renders, folder, ajustes de projeto), coordenação operacional, nem o parceiro apenas "mostrando/apresentando" o empreendimento — isso é TRABALHO OPERACIONAL, não venda. Pondere SÓ o avanço real dos clientes dele: tem REUNIÃO marcada na construtora? PROPOSTA na mesa? CONDIÇÃO DE PAGAMENTO conversada? unidade/box escolhidos? RESERVA/sinal? Se os prospects dele estão só "olhando o material", "vendo com calma", sem reunião/proposta/pagamento, a probabilidade é BAIXA (15-30%), POR MAIS longa e ativa que seja a conversa. Prospect que JÁ FECHOU COM OUTRA imobiliária/corretor está PERDIDO — não conta a favor. Só suba a faixa conforme os clientes DELE avançam de verdade (reunião marcada ~40-55%; proposta/condições acertadas ~65-75%).
-
-REGRA pro permuta: retorne permuta=true quando a conversa indicar que o cliente quer dar um imóvel/carro/terreno como parte do pagamento, OU precisa vender um bem dele antes de fechar ("tenho que vender minha casa primeiro", "aceita meu apartamento na troca?", "dou meu carro de entrada", "quando vender o meu eu fecho"). Se sim, preencha permutaResumo com o que ele quer dar/vender (1 frase). Se não houver permuta, permuta=false e permutaResumo="".
-
-REGRA pro bestTime: indica MELHOR MOMENTO FUTURO pro corretor mandar mensagem, NUNCA data passada. Linguagem relativa: "hoje à noite", "amanhã pela manhã", "terça à tarde". Sem pista clara, escreva "hoje".
-
-REGRA pro confirmedAppointments: APENAS compromissos REALMENTE COMBINADOS na conversa. NUNCA invente, NUNCA deduza, NUNCA use bestTime aqui. Só inclua se o cliente OU o corretor escreveu algo explícito ("marcamos café amanhã", "passo aí terça", "te ligo segunda"). Cada item: { quando, data, oQue, combinadoPor: "cliente"|"corretor", trechoLiteral }.
-REGRA CRÍTICA pro campo "oQue" — escolha o tipo pelo que FOI LITERALMENTE DITO, NÃO chute:
-- "café" / "almoço" / "jantar" → SÓ se essa palavra exata aparece no trecho ("vamos tomar um café", "te chamo pra um almoço"). Se ninguém falou em café/almoço/jantar, é PROIBIDO usar esses tipos.
-- "visita" → marcou de ver/conhecer/visitar o imóvel.
-- "ligação" → marcou de ligar/telefonar em horário ("te ligo às 15h").
-- "reunião" → encontro/reunião formal combinado.
-- "retorno" → compromisso MOLE, sem tipo concreto: "te chamo amanhã", "te falo depois", "dou um retorno", "volto a falar", "te aviso". Na dúvida entre os tipos, use "retorno" — NUNCA force pra café/visita.
-O campo "trechoLiteral" tem que ser a frase EXATA copiada da conversa que prova o compromisso (não parafraseie). O campo "data" é OBRIGATÓRIO e deve ser a data ABSOLUTA do compromisso no formato "AAAA-MM-DD", resolvendo expressões relativas ("amanhã", "terça", "dia 12") em relação à DATA DA MENSAGEM em que foi combinado e a hoje (${hoje}). Se não der pra determinar a data, use "". Se nada combinado, retorne [].
-REGRA pro nextAction: reflita a realidade de hoje (${hoje}). Se um compromisso combinado JÁ PASSOU (data anterior a hoje), NÃO mande "confirmar" nem "lembrar" desse compromisso — em vez disso, a próxima ação deve ser um follow-up (ex.: perguntar como foi, retomar a negociação, propor o próximo passo).
-
-REGRA DURA — nextAction TEM QUE SER AÇÃO DO CORRETOR, NUNCA AÇÃO PASSIVA: PROIBIDO sugerir "aguardar retorno", "esperar resposta", "ficar à disposição", "aguardar contato", "esperar decisão", ou qualquer variação passiva. O corretor é quem conduz a venda — toda nextAction tem que descrever uma AÇÃO concreta que ELE precisa fazer (mandar mensagem, ligar, propor visita, sondar perfil, oferecer alternativa, ajustar proposta, etc). Lead parado há mais de 3 dias = corretor precisa REAQUECER ativamente, NÃO esperar.
-
-REGRA pro materiais (array, até 3 itens, pode ser vazio): sugira material de apoio que AJUDA A AVANÇAR ESTE lead AGORA, com base no que o cliente quer, na etapa e nas objeções. Cada item é um objeto { "tipo": <um dos tipos abaixo>, "motivo": <frase curta de por que esse material faz sentido agora pra ESTE cliente>, "quando": <opcional, momento ideal ex: "antes da visita"> }. Tipos PERMITIDOS (use exatamente estes códigos): "planta", "tabela", "video", "folder", "localizacao", "memorial", "simulacao", "comparativo", "convite-visita", "material-valorizacao", "material-wellness". REGRAS: (a) NÃO sugira material que o corretor JÁ enviou na conversa; (b) o motivo tem que ser específico do contexto (ex: "cliente perguntou da metragem dos quartos" → "planta"), não genérico; (c) se nada de material fizer sentido agora, retorne array vazio []. NÃO invente tipos fora da lista.
-
-REGRA — ANOTAÇÕES DO CORRETOR SÃO FATOS (autoridade máxima): entradas da timeline marcadas como atendimento manual/presencial/ligação ou "ANOTAÇÕES DO CORRETOR" são FATOS CONFIRMADOS do que JÁ aconteceu (ex.: "já esteve na construtora pra visita", "já mandei a tabela", "vai analisar no fim de semana"). Considere TODAS as anotações (não só a última) ao decidir nextAction e as 3 mensagens. É PROIBIDO sugerir algo que as anotações dizem que já foi feito: não ofereça "enviar mais informações" se já enviou; não proponha "agendar/fazer visita" se ele já visitou; não repita combinado já feito. O próximo passo tem que ser o passo SEGUINTE ao que já aconteceu (ex.: já visitou e vai analisar → cobrar/apoiar a análise, simular pagamento, ajudar a decidir — não convidar pra visitar de novo).
-
-REGRA — ANOTAÇÃO COMO INSTRUÇÃO INTERNA (NÃO MANDE ISSO PRA CLIENTE): a anotação do corretor pode ser uma INSTRUÇÃO/LEMBRETE pra ELE MESMO, NÃO um texto pra enviar. Ex.: "retomar em 60 dias", "ligar semana que vem", "verificar se a documentação está em dia", "lembrar de X", "cobrar o contrato depois". É PROIBIDO transformar essa instrução em mensagem pro cliente (NUNCA escreva "vamos retomar em 60 dias" ou repita o lembrete na mensagem). O certo: use a instrução pra definir o nextAction e o MOMENTO de retomar (bestTime); e a mensagem ao cliente deve tratar do ASSUNTO REAL da instrução. Ex.: anotação "retomar em 60 dias e ver se a documentação está em dia" → nextAction = "Retomar em ~60 dias pra confirmar a documentação"; e a mensagem (pra quando retomar) = "perguntar se a documentação já está regularizada", e NÃO "vamos nos falar em 60 dias".
-
-REGRA CRÍTICA — QUALIFICAR ANTES DE OFERECER (não chute o produto): quando o OBJETIVO do cliente ainda NÃO está claro/confirmado na conversa, é PROIBIDO empurrar um empreendimento ou pitch específico. O lead está NÃO QUALIFICADO quando falta saber, por exemplo: PRA QUEM é (o próprio cliente, os pais, um filho, terceiro), a FINALIDADE (morar agora, morar no futuro, investir/renda, revenda), a TIPOLOGIA/tamanho necessário, ORÇAMENTO/forma de pagamento, PRAZO e a REGIÃO. Sinais de que precisa qualificar: pergunta de tudo um pouco há muito tempo e não evolui; já pediu vários produtos diferentes; veio de formulário/anúncio sem dizer o que quer; informações contraditórias (ex.: ora apartamento pros pais, ora terreno). Nesses casos: clientProfile e estrategia DEVEM dizer claramente que falta qualificar e O QUE falta descobrir; nextAction = QUALIFICAR (fazer as perguntas certas pra entender o que ela busca e precisa, ANTES de oferecer); e as mensagens devem ACOLHER + fazer 1 ou 2 perguntas de descoberta (pra quem é, morar ou investir, o que procura, prazo). É PROIBIDO afirmar interesse num produto que o cliente não confirmou, empurrar visita/proposta ou "vamos explorar o [empreendimento]" sem qualificação. NÃO finja saber. Só ofereça produto DEPOIS de qualificado.
-
-REGRA CRÍTICA — RESPONDER O QUE FOI PEDIDO (não fique só perguntando): qualificar é pra quando está AMBÍGUO. Quando o cliente FAZ UM PEDIDO CLARO ou diz "SIM/pode mandar/quero ver" a uma oferta sua (ex.: você perguntou "quer que eu envie os valores e as opções?" e ele respondeu "sim"; ou ele pediu "me manda o valor", "tem de 2 quartos?", "quero as opções de terreno"), a próxima ação e as mensagens DEVEM ATENDER/ENTREGAR exatamente o que ele pediu — é PROIBIDO trocar a entrega por mais perguntas de qualificação. Frustra o cliente pedir algo e receber outra pergunta. Se ainda faltar 1 dado pra acertar a entrega, ENTREGUE o que dá agora E faça no MÁXIMO 1 pergunta junto (nunca só a pergunta). Já respondeu/entregou? então o próximo passo avança (não repita o pedido nem re-pergunte o que ele já respondeu).
-
-REGRA — PERGUNTA FÁCIL DE RESPONDER (não jogue trabalho no cliente): quando precisar perguntar, prefira pergunta FECHADA/objetiva — múltipla escolha ou faixa. Ex. BOM: "é mais pra: 1) renda de aluguel, 2) revender no futuro, ou 3) preservar patrimônio?"; "você costuma analisar até R$ 300 mil, até R$ 500 mil, ou acima?". Ex. RUIM (PROIBIDO): pergunta aberta e vaga tipo "o que tornaria o investimento ideal pra você?" — o cliente não sabe responder e esfria. Pergunta de múltipla escolha/faixa avança mais.
-
-REGRA — LEIA O ESTADO/INTENÇÃO REAL (não siga a última frase ao pé da letra): identifique o MODO do cliente. Se ele está em OBSERVAÇÃO/pesquisa, fala como INVESTIDOR ("investir", "algo que valha a pena", "oportunidade"), SEM urgência e/ou os decisores ainda não decidiram → o objetivo NÃO é vender agora: é (a) acolher SEM incomodar, (b) descobrir a FAIXA DE VALOR / perfil de investimento (o "tamanho do cheque") com uma pergunta fechada, e (c) ganhar PERMISSÃO pra voltar quando surgir uma oportunidade alinhada ("posso te avisar quando aparecer algo que faça sentido?"). NUNCA empurre visita/produto nesse caso. Trate como lead de INVESTIDOR, não comprador imediato.
-
-REGRA CRÍTICA — CONTINUIDADE DA NEGOCIAÇÃO (NÃO REPITA O QUE JÁ FOI FEITO): a próxima ação e as 3 mensagens DEVEM ser o PRÓXIMO PASSO LÓGICO da venda, NUNCA repetição do que o corretor já fez. EXEMPLOS NEGATIVOS (PROIBIDOS) — se o corretor JÁ disse na conversa, NÃO sugira repetir:
-- Já explicou condições de pagamento, entrada, parcelas → NÃO sugerir "podemos discutir condições de pagamento" / "te mando as condições".
-- Já mandou material/link do empreendimento → NÃO sugerir "te mando mais info sobre o empreendimento".
-- Já explicou diferenciais (sauna, espaço, etc) → NÃO sugerir "te conto sobre os diferenciais".
-- Já passou tabela/valor → NÃO sugerir "te mando os valores".
-- Já marcou visita → NÃO sugerir "vamos marcar uma visita" (sugira CONFIRMAR ou REAGENDAR).
-Antes de definir nextAction e messages, MAPEIE no estado mais recente da conversa:
-(a) O QUE O CLIENTE PEDIU/PERGUNTOU por último (preço, planta, box, prazo, financiamento, visita, etc).
-(b) O QUE O CORRETOR JÁ RESPONDEU/ENVIOU a esse pedido (informação dada, material enviado, valor passado, etc).
-(c) O QUE AINDA FALTA pra avançar até o próximo marco.
-PROIBIDO sugerir como nextAction algo que o corretor JÁ FEZ na conversa. Ex: se cliente perguntou sobre box e corretor já respondeu, NUNCA sugira "enviar informações sobre box" — isso é repetir. Avance pro próximo marco.
-MARCOS DA VENDA (em ordem) — a próxima ação deve sempre EMPURRAR pro próximo marco ainda não alcançado:
-1. PEDIDO INICIAL respondido → próximo: descobrir se a info chegou ao cliente final, qual foi a reação dele, se o produto cabe no perfil (orçamento/prazo/momento).
-2. INTERESSE CONFIRMADO → próximo: propor visita / mandar tabela de condições completas / iniciar conversa de proposta.
-3. VISITA/PROPOSTA EM CIMA DA MESA → próximo: confirmar data, alinhar valor, tratar objeção concreta.
-4. PROPOSTA ACEITA → próximo: contrato, assinatura, sinal.
-5. ASSINATURA → próximo: pagamento, escritura, comissão.
-Quando a corretora-parceira intermedia, lembre que SEMPRE há 2 etapas implícitas: (i) a info que ela pediu chega a ela e (ii) ela tem que repassar e voltar com a resposta do cliente final. Sua próxima ação após responder algo a ela deve perguntar a REAÇÃO DO CLIENTE FINAL, NÃO oferecer mais info que você já mandou.
-
-REGRA CRÍTICA — COMPROMISSO ASSUMIDO E NÃO ENTREGUE (próximo passo = ENTREGAR, NUNCA re-pedir permissão): se o CORRETOR PROMETEU/SE COMPROMETEU a entregar algo concreto e o cliente JÁ ACEITOU, mas isso AINDA NÃO foi entregue na conversa — ex.: "vou fazer uma simulação pra você" (cliente: "pode ser"), "te mando a tabela", "preparo a proposta", "te envio as plantas" — o nextAction é ENTREGAR EXATAMENTE ISSO (ex.: "Montar e enviar a simulação que você combinou"), e é PROIBIDO voltar a PEDIR autorização ("vamos simular?", "posso simular?", "quer que eu simule?") como se o combinado não existisse. O cliente está ESPERANDO a entrega. A opção A ENTREGA/anuncia a entrega ("preparei sua simulação, segue..."), não pede permissão de novo. ISSO VALE PARA AS TRÊS mensagens (A, B e C) — NENHUMA pode perguntar "conseguiu pensar?", "tudo certo?", "conseguiu analisar?", "posso ajudar com mais alguma informação?", nem tratar o cliente como se ELE devesse a próxima resposta: quem deve a entrega prometida é o CORRETOR. MESMO se o lead estiver parado/frio há dias, a opção de retomada NÃO é genérica neste caso — ela reconhece a demora com leveza e ENTREGA (ou oferece enviar AGORA) o que foi combinado, usando os parâmetros que o cliente já deu (unidade, teto de parcela, entrada). Quando houver entrega prometida, a mensagem deve reconhecer o combinado e entregar ou anunciar a entrega com os parâmetros reais já informados, sem voltar a pedir autorização nem usar check-in genérico.
-
-REGRA CRÍTICA — USE OS PARÂMETROS QUE O CLIENTE JÁ DEFINIU (não fale genérico quando há dado concreto): quando o cliente já especificou condições concretas, o nextAction e as mensagens DEVEM usá-las explicitamente, nunca de forma genérica. Capte e use, quando existirem: UNIDADE/apartamento escolhido, TETO DE PARCELA, VALOR e FORMA de ENTRADA (inclusive se o cliente ofereceu CARRO ou IMÓVEL como entrada/permuta), nº e valor das parcelas, balão/reforço final. Evite frases genéricas quando o histórico já contém números e condições específicos. Registre esses parâmetros também em memoriaSugerida (preferencias / faixaValor / pontosSensiveis).
-
-REGRA — TIPOLOGIA SEGUE A UNIDADE ESCOLHIDA (não confunda com outra opção): a tipologia (nº de suítes/dormitórios) e as características são as da UNIDADE que o cliente escolheu / está negociando, NUNCA as de uma opção DIFERENTE citada antes. Se a construtora/corretor mencionou um nº de suítes se referindo a OUTRA opção — tipicamente a unidade de ENTRADA, mais barata — NÃO aplique esse número à unidade que o cliente de fato escolheu. Mantenha a tipologia que o CLIENTE declarou querer a menos que a construtora diga EXPRESSAMENTE que A UNIDADE ESCOLHIDA tem outra tipologia.
-
-
-REGRA CRÍTICA — UMA CONVERSA PODE TER VÁRIOS CASOS / NEGOCIAÇÕES distintas (acontece muito com corretora-parceira, indicação ou cliente que já comprou e voltou): mesmo empreendimento mas cliente diferente, OU mesmo cliente em empreendimentos diferentes, OU caso antigo encerrado + caso novo começando. Antes de decidir produtoInteresse, etapaSugerida, nextAction e as 3 mensagens, FAÇA:
-(1) Liste mentalmente os assuntos/negociações que aparecem na conversa toda, na ordem cronológica;
-(2) Identifique a NEGOCIAÇÃO MAIS RECENTE (último empreendimento mencionado, último cliente final discutido, ou novo pedido aberto);
-(3) Verifique se as negociações anteriores estão ENCERRADAS — sinais fortes de encerramento: comprovante de pagamento (palavras como "Comprovante", "Santander", "Itaú", "Caixa", "pagou", "TED", "PIX feito"), contrato assinado por todas as partes ("ASSINADO", "_assinado.pdf"), troca de "obrigada"/"vamos pra próxima" depois de um marco, comissão sendo combinada;
-(4) Se a negociação anterior está claramente FECHADA e há sinais de uma NOVA começando (cliente novo perguntando preço/disponibilidade, novo empreendimento mencionado, "tu tem o tal apartamento?"), foque produtoInteresse, etapaSugerida, nextAction e messages no CASO NOVO — NÃO continue propondo ações do caso já fechado;
-(5) No summary, mencione brevemente o caso encerrado apenas para contexto e descreva o caso atual em mais detalhe, sem misturar pessoas ou produtos;
-(6) Se a negociação anterior NÃO está fechada e a nova está só começando, mencione as duas no summary mas priorize a que tem mais ação pendente urgente.
-NUNCA carimbe nextAction pra um cliente/imóvel que já saiu da pauta há vários dias se a conversa mais recente é sobre outro caso.
-
-REGRA CRÍTICA — REDIRECIONAMENTO POR ORÇAMENTO/PERFIL (NÃO desfaça o que o corretor já fez): dispare esta regra se QUALQUER um for verdadeiro: (a) o CORRETOR já redirecionou o cliente na conversa para OUTRAS opções (ex.: "consigo te direcionar para outras oportunidades que fazem mais sentido para o seu perfil", "opções mais alinhadas", "sem distorcer expectativa"); OU (b) a FAIXA DE INVESTIMENTO sinalizada pelo cliente fica ABAIXO — ou colada no limite apertado — da faixa do empreendimento que ele pediu (compare com o CATÁLOGO acima; ex.: cliente "até R$ 800 mil" pedindo um empreendimento cuja referência começa em ~R$ 730k–800k+ é fit ruim). Quando disparar: (1) NÃO escreva NENHUMA das mensagens insistindo nesse empreendimento, e NUNCA prometa "enviar a apresentação/material" dele — isso CONTRARIA o redirecionamento; (2) as 3 mensagens devem ACOMPANHAR o redirecionamento: reconhecer o orçamento/perfil e conduzir para as opções que CABEM (escolha no catálogo empreendimentos de faixa compatível) e/ou dar seguimento à pergunta de qualificação que o corretor fez (ex.: morar logo x esperar na planta); (3) produtoInteresse e nextAction devem refletir o redirecionamento (a busca por opção que encaixa), não o empreendimento que não cabe.
-
-REGRA pra confianca: 0-100 indicando o quanto a análise é confiável baseado em quanto texto útil há (poucos áudios falhados, conversa longa, contexto claro = alta; poucos turnos, áudios não transcritos = baixa). Reflita HONESTAMENTE.
-
-REGRA pro tipoRetomada: classifique a abordagem mais adequada AGORA. Antes de rotular, FAÇA ISSO NESTA ORDEM:
-(1) leia a timeline inteira em ordem cronológica; (2) identifique a ÚLTIMA interação real do cliente (o que ele disse e em que ponto da negociação parou); (3) confira os critérios objetivos abaixo e SÓ rotule se os sinais EXIGIDOS estiverem presentes na conversa; (4) na dúvida, escolha a categoria mais conservadora (primeiro-contato > morno-confirmar > quente-fechar — NUNCA inverta).
-Use EXATAMENTE uma destas strings em minúsculas:
-- "primeiro-contato" → DEFAULT pra leads que mal começaram. SINAIS: cliente está perguntando coisas básicas (preço, localização, planta, disponibilidade, "vocês ainda têm?"), poucas trocas (menos de ~5-8 turnos do cliente), nenhuma visita ou proposta ainda, sem decisão tomada. Se a etapaSugerida for "Novo" ou "Atendimento" inicial, é AQUI.
-- "informacao-enviar" → cliente pediu material/tabela/condições e ESTÁ AGUARDANDO sua resposta. Sinal: última msg dele tem "me manda", "me passa", "tem como mandar", "envia pra mim".
-- "morno-confirmar" → interesse confirmado MAS faltam etapas. Sinais EXIGIDOS: cliente já demonstrou interesse claro num imóvel específico E falta agendar próximo passo (visita, retorno, reunião). NÃO é cliente pronto pra fechar.
-- "objecao-tratar" → cliente tem dúvida ou objeção clara (preço, prazo, financiamento, esposa/sócio, permuta pendente) e isso travou o avanço. Identifique a objeção REAL.
-- "frio-reaquecer" → 7+ dias sem resposta do cliente, ou cliente respondeu evasivo ("depois te falo") e sumiu.
-- "stand-by" → cliente EXPLICITAMENTE avisou que retorna depois ("agora não dá", "te chamo daqui uns dias", "estou viajando").
-- "quente-fechar" → SÓ use quando TODOS estes sinais estiverem presentes na conversa: (a) proposta/valor já discutidos e aceitos OU faltando só detalhe final; (b) cliente já visitou ou demonstrou compromisso forte (assinatura, pagamento de sinal, conversa com banco); (c) última msg do cliente sinaliza decisão tomada ("vamos fechar", "pode reservar", "me manda o contrato", "estou pronto"). Se QUALQUER um dos 3 não estiver presente, NÃO é quente-fechar.
-CROSS-CHECK OBRIGATÓRIO (incoerência reprovada):
-- Se etapaSugerida = "Novo" ou "Atendimento" → tipoRetomada NUNCA pode ser "quente-fechar".
-- Se probabilityPercent < 65 → tipoRetomada NUNCA pode ser "quente-fechar".
-- Se nenhum compromisso confirmado existe E nenhuma proposta foi feita → tipoRetomada NUNCA pode ser "quente-fechar".
-- Se há permuta pendente do lado do cliente (precisa vender bem dele) → tipoRetomada NUNCA pode ser "quente-fechar".
-Antes de fechar o JSON, releia seu tipoRetomada e confira se ele bate com etapa + probability + sinais. Se não bater, corrija para o rótulo mais conservador.
-
-REGRA pra IMITAR O TOM DO CORRETOR: nas 3 mensagens sugeridas (A/B/C), copie o ESTILO que o corretor (perspectiva descrita acima) usa nas mensagens DELE na timeline desta conversa específica. Observe: saudação preferida ("Oi", "Olá", "Bom dia"), comprimento médio das frases, formalidade (você/tu/sr.), uso de emoji ou não, jeito de fechar ("fico no aguardo", "abraço", "fica à vontade"). Se o corretor escreve curto e direto, sugira curto e direto. Se ele detalha, detalhe. Quando o Cérebro tiver "TOM DE VOZ" ou "ESTILO APRENDIDO" definido, combine os dois (Cérebro = preferência geral, estilo desta conversa = adaptação ao cliente). NUNCA invente um tom que o corretor não usou.
-
-REGRA — ESTILO DE TRATAMENTO DO CORRETOR (aprendido de conversas reais — SIGA SEMPRE):
-1. PESSOA ANTES DA VENDA: se o cliente trouxe algo PESSOAL ou está mal/indeciso ("não passei bem", "vou decidir com calma", "preciso ver com a família", "ainda não definimos"), a resposta vem com EMPATIA e cuidado humano PRIMEIRO ("melhoras!", "se cuida", "fico torcendo aí"), curta, SEM empurrar venda nem simulação.
-2. SEM PRESSÃO, respeita o tempo do cliente: aceite "não reservar agora", "decido e te aviso" — responda no estilo "fico à disposição, qualquer dúvida me chama", sem insistir, sem cobrar, sem urgência forçada.
-3. TOM CALOROSO, INFORMAL e REGIONAL (Carazinho/RS): leve e próximo; pode usar carinho/abreviação ("bei/beijo", "abss/abraços", "bom findi") quando combinar com o cliente; espelhe o jeito dele. Curto quando o momento pede.
-4. RECONHEÇA o contexto pessoal que o cliente deu (a mãe que vem, o feriado, a viagem, a safra) na resposta.
-5. IMPORTANTE: nesses momentos de empatia/dar espaço, a regra de "sempre fechar com próximo passo/simulação" NÃO se aplica — aqui o próximo passo é MANTER O RELACIONAMENTO e reaproximar gentilmente DEPOIS. Forçar pergunta de venda na hora errada soa frio e insistente, e contraria o estilo do corretor.
-6. PESO NO TRECHO MAIS RECENTE: o ESTADO ATUAL do lead é definido pelas ÚLTIMAS mensagens da conversa, não pelo começo. Se no fim o cliente (ou o decisor final, ex.: os pais) RECUSOU ou disse que "não quer/não pensa em sair/agora não", OU se o próprio corretor escreveu que "não vai insistir / não quer importunar", então a próxima ação e as mensagens NÃO podem empurrar o produto, simular condições nem criar urgência. Devem ser LEVES, de relacionamento, deixando a porta aberta ("fica o convite", "qualquer coisa me chama"). Tratar como "lead quente" um caso que terminou em recusa é erro grave. Nesses casos, a nextAction deve SUGERIR respeitar o tempo do cliente e colocar o lead na GELADEIRA (parkeado), reaproximando mais pra frente.
-
-REGRA pra USAR A INTELIGÊNCIA COMERCIAL APRENDIDA (importante): nas seções "TÉCNICAS COMERCIAIS APRENDIDAS", "RESPOSTAS A OBJEÇÕES APRENDIDAS", "MATCH PRODUTO × PERFIL APRENDIDO" e "PADRÕES DE FOLLOW-UP APRENDIDOS" (acima, dentro das Orientações do corretor) está o que o corretor já fez em outras conversas reais. Antes de definir nextAction e as 3 mensagens, FAÇA:
-1. Se houver TÉCNICA aprendida pra uma situação parecida com a atual (mesmo tipo de etapa, mesmo perfil, mesma objeção) → use essa técnica adaptada ao caso, NÃO invente nova.
-2. Se o cliente trouxer (explícita ou implicitamente) uma OBJEÇÃO que já está no banco aprendido → prefira a resposta que JÁ FUNCIONOU (funcionou=true) pra esse corretor. Se a anterior NÃO funcionou (funcionou=false), tente um caminho diferente.
-3. Se o perfil do cliente atual bater com um MATCH produtoVsPerfil aprendido → priorize esse produto/argumento que já gerou interesse antes.
-4. Se for follow-up, use o PADRÃO que o corretor costuma usar (timing, abertura, fechamento).
-5. Adapte ao caso atual — não cole frase pronta. Pequenas variações, mantendo a essência do que funciona pra esse corretor.
-
-REGRA pra inteligenciaObservada: este é o campo MAIS IMPORTANTE pro Direciona aprender com o corretor. Leia APENAS as mensagens enviadas pelo corretor (a sua perspectiva) nesta conversa, observe o que ele FEZ que funcionou (ou não funcionou), e retorne um objeto com estes campos:
-{
-  "tom": "1-2 frases descrevendo o estilo de escrita do corretor (saudação, comprimento, formalidade, fechamento). Ex: 'Oi [Nome], tudo bem?, msgs curtas, informal (você), sem emoji, fecha com qualquer coisa me chama'.",
-  "tecnicas": [/* até 4 strings curtas: técnicas comerciais ESPECÍFICAS que o corretor usou aqui, com OBJETO concreto da ação + reação do cliente quando visível. Padrão obrigatório: "fez X específico → cliente reagiu Y" ou "fez X específico (motivo)". PROIBIDO usar como técnica os chavões: "ofereceu ajuda", "explicou vantagens", "fez perguntas abertas", "mostrou interesse/disposição", "demonstrou atenção", "focou nas preferências", "destacou flexibilidade", "apresentou opções variadas", "verificou situação". Esses são CHAVÕES sem ação concreta — serão DESCARTADOS. EXEMPLOS VÁLIDOS: "Mandou vídeo de drone da vista do 12º andar → cliente disse uau e marcou visita", "Comparou parcela com aluguel que o cliente paga (R$ 11.660 × R$ 8.000)", "Quebrou entrada em 100k + 70k pro final pra reduzir parcela", "Citou sauna e espaço Care que não estão no material pra criar urgência da visita", "Confirmou disponibilidade do ap 1203 antes de mandar tabela". Se não conseguir identificar técnica específica observável, retorne array vazio em vez de inventar chavão. */],
-  "objecoes": [/* SÓ objeções REAIS — RESISTÊNCIA explícita do cliente a avançar com a compra. Cada item: { "objecao": "frase curta da resistência (preço, prazo, financiamento, esposa, momento, dúvida sobre produto, etc)", "respostaUsada": "como o corretor respondeu de fato", "funcionou": true/false/null }.
-  PROIBIDO marcar como OBJEÇÃO (rejeita ESTRITAMENTE):
-  - Pedido normal do cliente ("quero saber valores", "me manda mais info", "preciso saber valores") — é INTERESSE, não objeção
-  - Comentário/relato do PRÓPRIO corretor sobre dificuldade operacional: "cliente não atende", "dificuldade de contato", "não conseguiu contato com o cliente", "Julia mencionou que..." — isso é o CORRETOR falando, não o cliente. NUNCA registre como objeção.
-  - Frases vagas como "vou pensar" SEM contexto de resistência clara
-  - Status passageiro tipo "preciso pensar na contraproposta", "não consegui analisar ainda", "estou com bastante coisa pra fazer", "tempo para decidir", "aguardando aumento da folha" — são processos/timing, NÃO objeções. Cliente ocupado ou esperando algo NÃO É objeção.
-  - "Valor da folha de pagamento", "valor da renda" sem contexto de resistência — é só dado, não objeção.
-  Só conta como objeção: RESISTÊNCIA explícita do cliente a fechar (ex: "tá caro", "não posso essa entrada", "tenho dívida", "preciso falar com esposa", "quero ver outras opções primeiro", "tá fora do meu orçamento").
-  Critério pra funcionou=true (RIGOROSO): após sua resposta, o cliente EFETIVAMENTE avançou — fez nova pergunta concreta, marcou compromisso, aceitou simulação, engajou ativamente. Resposta tipo "ficamos no aguardo", "fico à disposição", "ok" do corretor SEM avanço do cliente depois = funcionou=false (não destrancou).
-  Critério pra funcionou=false: cliente sumiu 7+ dias OU repetiu a objeção OU continuou hesitante OU sua resposta foi passiva ("certo, fico no aguardo").
-  null SÓ se literalmente não há mensagem do cliente após sua resposta. */],
-  "produtoVsPerfil": [/* até 2 itens: { "produto": "nome do empreendimento oferecido", "perfilCliente": "1 frase descrevendo o perfil curto do cliente — idade, estado civil, momento de vida, faixa de valor, uso (moradia/investimento)", "reacao": "como o cliente reagiu a esse produto: 'demonstrou interesse', 'achou caro', 'preferiu outro', 'pediu mais info', etc" } */],
-  "movimentosQueAvancaram": [/* até 3 strings curtas: ações específicas do corretor que destrancaram avanço (ex: "Mandou áudio explicando localização → cliente marcou visita", "Confirmou disponibilidade da unidade do 8º andar → cliente engajou", "Mandou planta + simulação juntos → cliente pediu mais info"). Só inclua se for visível na conversa. */],
-  "movimentosQueTravaram": [/* até 3 strings curtas: tentativas do corretor que esfriaram o lead (ex: "Mandou link genérico → cliente sumiu", "Cobrou retorno duas vezes em 24h → cliente reduziu respostas"). Só se visível. */],
-  "padroesFollowup": [/* até 3 strings curtas: padrão de como o corretor puxa retorno. SÓ REGISTRE se for OBSERVÁVEL NA TIMELINE — ou seja, o corretor mandou mensagem após N dias de silêncio do cliente E essa mensagem efetivamente reaqueceu (cliente respondeu). NUNCA registre intenções declaradas ("fico à disposição", "te aviso") como padrão; só registra o que ACONTECEU. Ex: "Após 5 dias de silêncio, mandou áudio com vídeo do andar → cliente respondeu na hora". */]
-}
-REGRAS DURAS:
-- Use SÓ o que está LITERALMENTE na conversa. Não invente técnicas que o corretor não usou.
-- Se o corretor tem menos de 3 mensagens, retorne {} (objeto vazio).
-- Frases CURTAS, acionáveis, no padrão "fez X → cliente reagiu Y".
-- Não copie a chave NEM o exemplo entre /* */ — esses são só guias.
-- Avalie funcionou pela mudança REAL do cliente: engajou mais/avançou etapa/marcou compromisso = true; SUMIU 7+ DIAS após a resposta / repetiu objeção / esfriou = false. NÃO use null por cautela — só use null se literalmente não há nenhuma mensagem do cliente após a resposta do corretor.
-- "fico à disposição", "te aviso", "qualquer coisa me chama" NÃO são padrões de follow-up — são frases de fechamento educadas. Padrão de follow-up = o corretor REAQUECEU concretamente após silêncio e o cliente RESPONDEU.
-- PROIBIDO usar a palavra "fechou", "fechei" ou "fechado" em qualquer campo (clientProfile, summary, risk, reacao do produtoVsPerfil, etc) — exceto quando há VENDA confirmada (contrato assinado + comprovante de pagamento na timeline). Em vendas imobiliárias "fechou" significa "vendeu" e não pode ser usado pra descrever interesse, engajamento ou conversa avançada. Use no lugar: "demonstrou interesse", "engajou", "avançou pra negociação", "está em proposta", etc.
-
-IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de análise — NÃO gere o campo "messages". Retorne "messages": null no JSON. As mensagens serão geradas em etapa separada com base neste diagnóstico. clientProfile DEVE ser texto, nunca objeto.${orientacoes}${contextoLead}${blocoComparacao}\n\nLead:\n${JSON.stringify(lead)}\n\nTimeline:\n${timelineText}`;
+Timeline:
+${timelineText}`;
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
       openai,
