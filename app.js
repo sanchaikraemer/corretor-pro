@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #709: instrumentação leve de performance =====
+// ===== Atualização #710: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #709) =====
+// ===== Histórico interno do app (Atualização #710) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #709: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #710: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -4587,714 +4587,300 @@ function finalizarSequencia(){
 }
 window.finalizarSequencia = finalizarSequencia;
 
+
+/* ============================================================
+   Atualização #710 — Tela do lead consolidada
+   - Uma única função renderLeadFoco ativa.
+   - Sem chamar renderizações antigas antes ou depois.
+   - Mantém IA por fatos, 3 mensagens, observações, histórico e ferramentas.
+   ============================================================ */
+function cp704Css(){
+    if(document.getElementById('cp704LeadUxCSS')) return;
+    const css=document.createElement('style'); css.id='cp704LeadUxCSS';
+    css.textContent=`
+      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;max-width:760px;margin:0 auto;color:var(--text)}
+      .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
+      .cp704-back{border:0;background:transparent;color:var(--muted);font-weight:900;font-size:14px;padding:4px 0;cursor:pointer}
+      .cp704-attended{border:1px solid rgba(104,255,149,.55);background:rgba(104,255,149,.10);color:#68ff95;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
+      .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:.96}
+      .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
+      .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
+      .cp704-tags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cp704-tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);padding:5px 8px;border-radius:999px;font-weight:850}
+      .cp704-mainrow{display:grid;grid-template-columns:1fr 96px;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(255,201,107,.45);background:rgba(255,201,107,.10);color:#ffd28a}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}
+      .cp704-prob{width:88px;height:88px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--lime) calc(var(--p)*1%),rgba(255,255,255,.08) 0);position:relative}.cp704-prob:after{content:"";position:absolute;inset:9px;border-radius:50%;background:#082d38}.cp704-prob b,.cp704-prob span{position:relative;z-index:1}.cp704-prob b{font-size:25px;line-height:1;font-weight:950}.cp704-prob span{font-size:10px;color:var(--lime);font-weight:950;margin-top:4px}
+      .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(237,246,248,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
+      .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
+      .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+      .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
+      .cp704-step{display:grid;grid-template-columns:30px 1fr 22px;gap:10px;align-items:center}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}
+      .cp704-msg-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}.cp704-msg-tabs button{border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:var(--muted);border-radius:10px;padding:9px 6px;font-size:12px;font-weight:950;cursor:pointer}.cp704-msg-tabs button.active{background:rgba(255,107,92,.95);border-color:rgba(255,107,92,.95);color:white}.cp704-msg-list{display:flex;flex-direction:column;gap:9px}.cp704-msg-item{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:11px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:end;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 9px;font-size:11px;font-weight:900;cursor:pointer}.cp704-wa{width:100%;margin-top:12px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--lime),#ff4f45);color:white;padding:14px 16px;font-size:15px;font-weight:950;cursor:pointer}.cp704-wa small{display:block;font-size:11px;opacity:.86;margin-top:2px}.cp704-empty-analysis{border:1px solid rgba(255,201,107,.35);background:rgba(255,201,107,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:#ffd28a}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(255,201,107,.45);background:rgba(255,255,255,.04);color:#ffd28a;border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
+      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted)}.cp704-details[open] summary:after{content:"⌃"}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
+      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,107,92,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,107,92,.55)!important;color:#ff7f74!important;background:rgba(255,107,92,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
+      .cp704-stale{border-color:rgba(255,201,107,.45);background:rgba(255,201,107,.08)}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.50);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:12px;font-weight:950}
+      @media(max-width:560px){.cp704-lead{gap:12px}.cp704-top{align-items:flex-start}.cp704-top-actions{max-width:72%;gap:6px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr 86px}.cp704-prob{width:82px;height:82px}.cp704-msg-item{grid-template-columns:24px 1fr;position:relative}.cp704-copy{grid-column:2;justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-msg-tabs button{font-size:11px}}
+    `;
+    document.head.appendChild(css);
+  }
+  function cp704Text(v, fallback='') { return String(v == null ? fallback : v).trim(); }
+
+  function cp705FormatDateTime(v){
+    const raw=String(v||'').trim();
+    if(!raw) return '';
+    const d=new Date(raw);
+    if(!Number.isNaN(d.getTime())){
+      return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
+    }
+    return raw.replace(/T/, ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
+  }
+  function cp705PlainText(v){ return String(v||'').replace(/\s+/g,' ').trim(); }
+  function cp705HasEvidence(lead,re){
+    // Evidência só vem de mensagens/histórico do lead, nunca de resumo gerado pela IA.
+    const arrays = [lead?.recentMessages, lead?.timeline, lead?.messages, lead?.history, lead?.mensagens].filter(Array.isArray);
+    const txt = arrays.flat().map(m => {
+      if(!m) return '';
+      if(typeof m === 'string') return m;
+      return String(m.text || m.body || m.message || m.mensagem || '');
+    }).join(' ').toLowerCase();
+    return re.test(txt);
+  }
+  function cp705SanitizeFactText(text, lead){
+    let out=cp705PlainText(text);
+    const hasFin=cp705HasEvidence(lead,/\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|cr[eé]dito|aprova|juros|simula)\b/i);
+    if(!hasFin){
+      out=out
+        .replace(/,?\s*com dúvidas sobre financiamento e parcelas/ig,'')
+        .replace(/\s*e pediu esclarecimentos sobre valor, financiamento e parcelas/ig,'')
+        .replace(/\s*com ponto financeiro citado no histórico/ig,'')
+        .replace(/\b(viabilidade financeira|trava financeira|encaixe financeiro|financeiro|financeira|financiamento|financiamentos|parcelamento|parcelas|parcela|FGTS|Caixa|banco|aprovação de crédito|crédito)\b/ig,'perfil de compra')
+        .replace(/\b(dúvidas?|dúvida)\s+sobre\s+perfil de compra/ig,'perfil de compra ainda não confirmado')
+        .replace(/perfil de compra\s+e\s+perfil de compra/ig,'perfil de compra')
+        .replace(/perfil de compra\s*,\s*perfil de compra/ig,'perfil de compra');
+    }
+    return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
+  }
+  function cp705Short(v, n=150){
+    const t=cp705PlainText(v);
+    return t.length>n ? t.slice(0,n-3).trim()+'...' : t;
+  }
+
+  function cp707ObservationFacts(lead){
+    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+    const textos=[mem.observacoes,a.summary,a.nextAction,a.risk,a.clientProfile]
+      .concat(msgs.slice(-20).map(m=>m?.text||m?.body||m?.message||''))
+      .map(cp705PlainText).filter(Boolean);
+    const joined=textos.join(' \n ');
+    const norm=joined.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const mulher=/\b(mulher|esposa)\b/.test(norm);
+    const negou=/(nao|não|sem)\s.{0,28}\b(quis|quer|aprovou|aprova|aprovacao|aceitou|aceita|gostou|autorizou|topou)\b|\b(nao quis|nao aprovou|nao gostou|nao topou)\b/.test(norm);
+    if(mulher && negou){
+      const pessoa=/\besposa\b/.test(norm)?'esposa':'mulher';
+      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || 'Renaissance');
+      const primeiro=cp704Text(lead?.name,'').split(/\s+/)[0]||'';
+      return {
+        tipo:'decisor_negou',
+        situacao:'Em decisão',
+        motivo:`A ${pessoa} não aprovou a compra neste momento.`,
+        insight1:`Fato: a decisão depende da ${pessoa}.`,
+        insight2:`Inferência: ainda não é perda confirmada.`,
+        insight3:`Ação: retomada leve e objetiva.`,
+        next:`Retomar com leveza para confirmar se houve mudança na decisão da ${pessoa}, sem criar nova objeção.`,
+        msgA:`${primeiro}, entendi o ponto sobre a decisão de vocês. Como ficou em aberto, queria saber se houve alguma mudança nesse cenário ou se prefere que eu deixe o ${produto} em acompanhamento por enquanto.`.trim(),
+        msgB:`${primeiro}, obrigado por me atualizar. Vou respeitar esse momento e deixar a oportunidade em aberto. Se ajudar, depois posso organizar uma comparação simples com opções do mesmo perfil.`.trim(),
+        msgC:`${primeiro}, para eu conduzir do jeito certo: quer que eu mantenha contato mais adiante sobre o ${produto} ou prefere que eu aguarde você me chamar quando tiver uma posição melhor?`.trim()
+      };
+    }
+    return null;
+  }
+
+  function cp705MessagesReady(msgs){
+    const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
+    if(vals.some(v=>!v)) return false;
+    return !vals.some(v=>/atualize a an[aá]lise comercial|gerar a resposta|resposta recomendada|resposta mais suave|resposta mais direta/i.test(v));
+  }
+
+  function cp704Prob(lead){
+    const ref = (typeof probabilidadeRefinada==='function') ? probabilidadeRefinada(lead) : null;
+    const n = ref != null ? Number(ref) : (Number(lead?.probabilityPercent)||Number(lead?.analysis?.probabilityPercent)||0);
+    return Math.max(0, Math.min(100, Math.round(n||0)));
+  }
+  function cp704NivelProb(n){ return n>=70?'Alta':(n>=45?'Média':'Baixa'); }
+  function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
+  function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
+  function cp704Situacao(mc, lead){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.situacao) return obsFact.situacao;
+    const st=cp704Text(mc?.oportunidade?.status || lead?.etapa || 'em análise').toLowerCase();
+    if(/decis/.test(st)) return 'Em decisão';
+    if(/negocia/.test(st)) return 'Em negociação';
+    if(/analise|finance/.test(st)) return 'Análise financeira';
+    if(/compar/.test(st)) return 'Em comparação';
+    if(/interesse/.test(st)) return 'Com interesse';
+    if(/perdid|encerr/.test(st)) return 'Perdido';
+    if(/ganh|vend/.test(st)) return 'Vendido';
+    if(/geladeira/.test(st)) return 'Na geladeira';
+    return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
+  }
+  function cp704Impedimento(lead, mc){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.motivo) return obsFact.motivo;
+    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    return cp705SanitizeFactText(cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.'), lead);
+  }
+  function cp704Next(lead, mc){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.next) return obsFact.next;
+    const a=lead?.analysis||{};
+    return cp705SanitizeFactText(cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.'), lead);
+  }
+  function cp704DataHora(m){
+    return cp705FormatDateTime([m?.date,m?.time].filter(Boolean).join(' ') || cp704Text(m?.displayTime || m?.createdAt || m?.iso || ''));
+  }
+  function cp704RecentMessages(lead, max=4){
+    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+    return msgs.filter(m=>cp704Text(m?.text)).slice(-max).reverse();
+  }
+  function cp704TimelineHtml(lead){
+    const msgs=cp704RecentMessages(lead,4);
+    const pn=cp704Text(lead?.name).toLowerCase().split(/\s+/)[0]||'';
+    if(!msgs.length) return '<div class="empty">Sem mensagens recentes.</div>';
+    return msgs.map((m,i)=>{
+      const cliente=(typeof ehMsgDoCliente==='function') ? ehMsgDoCliente(m,pn) : false;
+      const who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
+      return `<div class="cp704-tmsg"><span class="cp704-dot ${cliente?'':'you'}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,260))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
+    }).join('');
+  }
+  function cp704DetailRows(lead,mc){
+    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    const rows=[
+      ['Papel do contato',mc?.contato?.papel || a.tipoContato],
+      ['Comprador final',mc?.oportunidade?.compradorFinal || mc?.contato?.compradorFinal],
+      ['Produto',cp704Produto(lead,mc)],
+      ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
+      ['Motivo da oportunidade',mc?.oportunidade?.motivo],
+      ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
+      ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
+      ['Preferências',mem.preferencias],
+      ['Observações',mem.observacoes || a.summary]
+    ].filter(r=>cp704Text(r[1]));
+    return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
+  }
+  function cp704Insights(lead,mc){
+    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    const arr=[];
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact) return [obsFact.insight1,obsFact.insight2,obsFact.insight3].filter(Boolean);
+    const facts=Array.isArray(a.fatosConfirmados)?a.fatosConfirmados.filter(Boolean).slice(0,2):[];
+    const infs=Array.isArray(a.inferenciasIA)?a.inferenciasIA.filter(Boolean).slice(0,1):[];
+    if(facts.length || infs.length) return facts.concat(infs).map(x=>cp705Short(cp705SanitizeFactText(x,lead),96)).slice(0,3);
+    const imp=cp704Impedimento(lead,mc);
+    if(imp && !/não identificado/i.test(imp)) arr.push(imp.length>90 ? imp.slice(0,87)+'...' : imp);
+    const rel=cp704Text(mc?.relacionamento?.motivo || mem.pessoasDecisao);
+    if(rel) arr.push(rel.length>90 ? rel.slice(0,87)+'...' : rel);
+    const next=cp704Next(lead,mc);
+    if(next) arr.push(next.length>96 ? next.slice(0,93)+'...' : next);
+    const fallback=['A IA ainda precisa consolidar os sinais deste lead.','Atualize a análise quando houver novas mensagens.','Mantenha a próxima ação ligada ao último compromisso.'];
+    return [...arr, ...fallback].filter(Boolean).slice(0,3);
+  }
+  function cp704Msgs(lead){
+    const a=lead?.analysis||{};
+    const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
+    const obsFact=cp707ObservationFacts(lead);
+    const mc=cp704Modelo(lead);
+    const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
+    const out={
+      a:cp705SanitizeFactText(cp704Text(m.a || a.recommendedMessage || fb.a || ''), lead),
+      b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
+      c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
+      aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
+    };
+    if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
+      out.a=cp705SanitizeFactText(fb.a,lead); out.b=cp705SanitizeFactText(fb.b,lead); out.c=cp705SanitizeFactText(fb.c,lead);
+    }
+    return out;
+  }
+  window.cp704SelectedMsg='a';
+  window.cp704SelectMsg=function(k){
+    window.cp704SelectedMsg = ['a','b','c'].includes(k)?k:'a';
+    document.querySelectorAll('.cp704-msg-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.key===window.cp704SelectedMsg));
+    document.querySelectorAll('.cp704-msg-item').forEach(el=>el.style.borderColor = el.dataset.key===window.cp704SelectedMsg ? 'rgba(255,107,92,.65)' : 'rgba(255,255,255,.075)');
+  };
+  function cp704GetMessage(k){ const el=document.querySelector(`.cp704-msg-item[data-key="${k||window.cp704SelectedMsg}"] p`); return cp704Text(el?.innerText || el?.textContent); }
+  window.cp704CopyMsg=async function(k){
+    const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
+    try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
+    catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
+  };
+  window.cp704OpenWhats=function(){
+    const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
+    if(!lead.phone){ cp704CopyMsg(window.cp704SelectedMsg); toast('Telefone não identificado. Mensagem copiada.'); return; }
+    const url=(typeof whatsappLink==='function') ? whatsappLink(lead.phone,msg) : `https://wa.me/${String(lead.phone).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
+    window.open(url,'_blank');
+  };
+  window.cp704HistoryToggle=function(){
+    try{
+      const legacy=document.querySelector('.ui670-legacy-hidden') || document.querySelector('.lead-ui670');
+      const hist=[...document.querySelectorAll('details')].find(d=>/histórico de conversa/i.test(d.textContent||''));
+      if(hist){ hist.open=true; hist.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+    }catch(_){ }
+    toast('Histórico completo indisponível nesta tela.');
+  };
+  function cp704QuickActions(lead,mc){
+    const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
+    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button onclick="abrirEditarLead&&abrirEditarLead(${id},${name},${JSON.stringify(String(lead?.phone||''))})">Editar lead</button><button onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
+    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button class="good" onclick='(typeof marcarVendido==='function')?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
+    <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
+  }
+
 function renderLeadFoco(lead){
-  const area = qs("#leadFocoArea");
-  if(!area || !lead) return;
-  document.body.classList.add("lead-foco-aberto"); // esconde "Reanalisar todos" do topo enquanto vê um lead
-  state.focoLeadId = lead?.id || null; // marca o lead em foco — o auto-refresh não pode derrubá-lo
-  const saud = qs("#saudacao");
-  if(saud) saud.style.display = "none";
-  const a = lead.analysis || {};
-  const memManual = a.memoria || {};
-  const memIA = a.memoriaSugerida || {};
-  // Memória mostrada: manual tem prioridade; quando vazio, usa o que a IA extraiu da conversa
-  const memoria = {
-    pessoasDecisao: memManual.pessoasDecisao || memIA.pessoasDecisao || "",
-    pontosSensiveis: memManual.pontosSensiveis || memIA.pontosSensiveis || "",
-    preferencias: memManual.preferencias || memIA.preferencias || "",
-    observacoes: memManual.observacoes || [memIA.momentoDeVida, memIA.faixaValor, memIA.observacoes].filter(Boolean).join(" · ") || ""
-  };
-  const cerebroResumo = (a.cerebro_aplicado || a.cerebro || "").toString().slice(0,160);
-  const objecoes = Array.isArray(a.objections) ? a.objections.slice(0,3).join(" · ") : "";
-  // "O que pesa contra": junta objeções (o que trava agora) + pontos sensíveis (histórico), sem repetir.
-  const pesaContraSet = [];
-  const pushUnico = (txt) => {
-    const t = String(txt||"").trim();
-    if(!t) return;
-    const norm = t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
-    if(!pesaContraSet.some(x => x.norm === norm)) pesaContraSet.push({ txt: t, norm });
-  };
-  (Array.isArray(a.objections) ? a.objections.slice(0,3) : []).forEach(pushUnico);
-  String(memoria.pontosSensiveis||"").split(/[·\n;]+/).forEach(pushUnico);
-  const pesaContra = pesaContraSet.map(x => x.txt).join(" · ");
-  const phone = lead.phone || "";
-  const nome0 = String(lead.name||"").trim().split(/\s+/)[0]||"";
-  const _msgsSalvas = mensagensDaAnalise(a);
-  const _msgA = _msgsSalvas.a;
-  const _msgB = _msgsSalvas.b;
-  const _msgC = _msgsSalvas.c;
-  const _labelA = _msgsSalvas.aLabel;
-  const _labelB = _msgsSalvas.bLabel;
-  const _labelC = _msgsSalvas.cLabel;
-  const _rec = _msgsSalvas.recomendada;
-  // Desativado: as "Outras sugestões por objetivo" vinham do motor antigo de sugestões e podiam
-  // exibir rótulos/mensagens genéricas mesmo quando as 3 respostas principais estavam boas.
-  // O foco agora é: 3 respostas geradas pela IA, sem camada paralela.
-  const _objetivos = [];
-  const _objetivosHtml = "";
-  let msgInicial = mensagemAprovadaSemAlteracao(_msgA);
-  let linkWA = whatsappLink(phone, msgInicial);
-  const badgeConf = badgeConfianca(a.confianca);
-  const badgeRet = badgeTipoRetomada(a.tipoRetomada);
-  const probRefLead = probabilidadeRefinada(lead);
-  const probLeadN = probRefLead != null ? probRefLead : (Number(lead.probabilityPercent) || 0);
-  const tipoContatoEfetivo = tipoContatoEfetivoLead(lead, a);
-  const contatoEhParceiro = /parceir|corretor/i.test(tipoContatoEfetivo);
-  const metaTipoContato = lead.id ? tipoContatoTextoMeta(tipoContatoEfetivo) : ""; // só pra leads salvos (precisa de id pra clicar)
-  const blocoHistorico = renderHistoricoContatos(lead);
-  const blocoEvolucao = renderEvolucao(lead);
-  const blocoParecidos = renderLeadsParecidos(lead);
-  // FICHA COMPLETA DO CLIENTE — toda a informação de referência (perfil, por quê, preferências,
-  // pessoas, o que pesa contra, observações, materiais, histórico) recolhida atrás de um toque,
-  // pra tela não virar muro de texto. Mesmos cards de antes; abre só quando se quer aprofundar.
-  const _fichaCss = "padding:11px 13px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.5";
-  const _fichaLbl = "display:block;font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:950;margin-bottom:4px;color:var(--muted)";
-  const _fichaCard = (lbl, val) => val ? `<div style="${_fichaCss}"><b style="${_fichaLbl}">${lbl}</b>${val}</div>` : "";
-  const _fichaCards = [
-    (a.clientProfile && typeof a.clientProfile === "string" && a.clientProfile !== "—") ? _fichaCard("Perfil do cliente", escapeHtml(a.clientProfile).slice(0,180)) : "",
-    a.summary ? _fichaCard("Por quê este lead", escapeHtml(a.summary).slice(0,200)) : "",
-    memoria.preferencias ? _fichaCard("Preferências", escapeHtml(memoria.preferencias)) : "",
-    memoria.pessoasDecisao ? _fichaCard("Pessoas decisão", escapeHtml(memoria.pessoasDecisao)) : "",
-    a.permuta ? `<div style="${_fichaCss};background:rgba(196,92,255,.06);border-color:var(--cerebro)"><b style="${_fichaLbl};color:var(--cerebro)">Permuta</b>${escapeHtml(a.permutaResumo || "Cliente quer dar/vender um bem como parte do negócio — depende de vender antes de fechar.")}</div>` : "",
-    pesaContra ? _fichaCard("O que pesa contra", escapeHtml(pesaContra)) : "",
-    memoria.observacoes ? _fichaCard("Observações", escapeHtml(memoria.observacoes)) : "",
-    blocoHistorico
-  ].filter(Boolean).join("");
-  const conteudoFichaCliente = _fichaCards.trim()
-    ? `<div style="display:flex;flex-direction:column;gap:8px">${_fichaCards}</div>`
-    : "";
-  const blocoFichaCliente = conteudoFichaCliente
-    ? `<details class="ficha-cliente"><summary>Ficha completa do cliente</summary><div style="margin-top:10px">${conteudoFichaCliente}</div></details>`
-    : "";
-  const barraTopo = state.sequencia
-    ? `<div style="display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--lime);border-radius:12px;background:linear-gradient(135deg,rgba(255,107,92,.08),rgba(0,212,255,.05));flex-wrap:wrap">
-         <span style="font-weight:950;font-size:13px;color:var(--lime)">▶ Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</span>
-         <div style="flex:1;min-width:8px"></div>
-         <button type="button" onclick="proximoDaSequencia()" style="border:0;border-radius:999px;padding:7px 18px;color:var(--on-accent);background:linear-gradient(135deg,var(--lime),var(--cyan));font-size:13px;font-weight:950;cursor:pointer">${state.sequencia.idx >= state.sequencia.ids.length-1 ? "Finalizar ✓" : "Próximo →"}</button>
-         <button type="button" onclick="sairDaSequencia()" title="Sair do modo sequência" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px;color:var(--muted);font-size:12px;font-weight:950;cursor:pointer">Sair</button>
-       </div>`
-    : "";
-  const diagObj = (a.diagnostico && typeof a.diagnostico === "object") ? a.diagnostico : {};
-  const leituraComercial = (a.leituraComercial && typeof a.leituraComercial === "object") ? a.leituraComercial : {};
-  const OBJ_TOP = { moradia:"Moradia", investimento:"Investimento", "moradia-futura":"Moradia futura", construcao:"Construção", troca:"Troca", renda:"Renda", especulacao:"Valorização" };
-  const ETP_TOP = { descoberta:"Descoberta", interesse:"Interesse", comparacao:"Comparação", "analise-financeira":"Análise financeira", negociacao:"Negociação", decisao:"Decisão" };
-  const objetivoTopo = contatoEhParceiro ? "Intermediação" : (OBJ_TOP[String(diagObj.objetivo||"").toLowerCase()] || "");
-  const etapaTopo = ETP_TOP[String(diagObj.etapa||"").toLowerCase()] || normalizarEtapa(lead.etapa||"");
-  const interesseTopo = String(diagObj.interesse||"").toLowerCase();
-  const interesseTxt = interesseTopo ? `Interesse ${interesseTopo}` : "";
-  const interesseCor = interesseTopo === "alto" ? "var(--acao)" : (interesseTopo === "medio" ? "var(--morno)" : "var(--soft)");
-  const temperaturaTopo = leituraComercial.temperatura || (interesseTopo === "alto" ? "quente" : (interesseTopo === "medio" ? "morno" : "frio"));
-  // O card do lead também deve mostrar PRIORIDADE DE ATENDIMENTO, não probabilidade de venda.
-  // Antes isso podia contradizer a fila: um lead com contraproposta aguardando retorno podia
-  // aparecer como "Prioridade baixa" só porque a probabilidade refinada estava baixa.
-  const prioridadeAtendTopo = prioridadeAtendimento(lead) || {};
-  const prioridadeTopo = prioridadeAtendTopo.titulo || (probLeadN >= 70 ? "Alta" : (probLeadN >= 45 ? "Média" : "Baixa"));
-  const _grupoPrioridadeTopo = String(prioridadeAtendTopo.grupo || "");
-  const prioridadeCor = _grupoPrioridadeTopo === "acao-hoje" ? "var(--acao)" : (_grupoPrioridadeTopo === "retomar-cuidado" ? "var(--lime)" : (_grupoPrioridadeTopo === "pode-aguardar" || _grupoPrioridadeTopo === "tratado-hoje" ? "var(--morno)" : "var(--soft)"));
-  let respostaTopo = lead.daysSinceClientReply; if(respostaTopo==null) respostaTopo = _diasDesdeMsg(lead, true);
-  const fmtDiasTopo = n => n==null ? "—" : n<=0 ? "hoje" : n===1 ? "há 1 dia" : `há ${n} dias`;
-  const _nextActionSafe = (a.mode === 'erro_api') ? null : a.nextAction;
-  const proximaAcaoTxt = String(_nextActionSafe || leituraComercial.oQueDestravar || a.melhorPergunta || "Reanalise este lead para gerar a próxima ação.").trim();
-  const subtituloLead = [String(produtosLabel(lead)||"").trim(), metaTipoContato ? metaTipoContato.replace(/^\s*•\s*/,"") : ""].filter(Boolean).join(" • ") || "Lead";
-  const _erroApi = a.mode === 'erro_api';
-  const _msgNaoGerada = "Toque em Reanalisar para gerar uma resposta com o histórico completo.";
-  const _mensagensAprovadas = _msgsSalvas.aprovada === true;
-  let cardsMensagens = _mensagensAprovadas
-    ? [
-        { key:"a", label:_labelA, icon:"✧", color:"var(--lime)", msg:_msgA },
-        { key:"b", label:_labelB, icon:"◇", color:"var(--lime)", msg:_msgB },
-        { key:"c", label:_labelC, icon:"▣", color:"var(--lime)", msg:_msgC }
-      ]
-    : [];
-  const cardsMensagensHtml = cardsMensagens.map((item, idx)=>`<button type="button" class="msg-card-foco${idx===0?' active':''}" data-style="${item.key}" title="Usar esta sugestão" style="text-align:left;padding:9px 10px;background:${idx===0?'rgba(255,107,92,.08)':'rgba(255,255,255,.03)'};border:1px solid ${idx===0?'var(--lime)':'var(--line)'};border-radius:12px;color:var(--text);cursor:pointer;display:flex;align-items:flex-start;gap:9px;min-height:72px">
-      <span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:8px;color:var(--lime);background:rgba(255,107,92,.08);font-size:14px">${item.icon}</span>
-      <span style="display:block;min-width:0;flex:1">
-        <b style="display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;font-weight:950;margin-bottom:3px;line-height:1.15">${escapeHtml(item.label)}${_rec===item.key && _mensagensAprovadas ? '<em style="font-style:normal;color:var(--lime);font-size:9px;border:1px solid rgba(255,107,92,.35);border-radius:999px;padding:1px 5px">recomendada</em>' : ''}</b>
-        <span style="display:block;color:var(--soft);font-size:11px;line-height:1.25">${escapeHtml(_cortarFrase(item.msg, 95))}</span>
-      </span>
-      <span style="flex:none;color:var(--muted);font-size:16px;line-height:1">›</span>
-    </button>`).join('');
-  msgInicial = _mensagensAprovadas ? cardsMensagens[0].msg : _msgNaoGerada;
-  const _mensagemValidaParaEnvio = _mensagensAprovadas;
-  linkWA = _mensagemValidaParaEnvio ? whatsappLink(phone, msgInicial) : "#";
-  const analiseComercialVisivelHtml = analiseComercialPrincipalHTML(a);
-  const diagnosticoDetalheHtml = diagnosticoClienteHTML(a) || `<div class="small" style="color:var(--muted);padding:12px 4px 0">Ainda não há uma leitura complementar salva para este lead.</div>`;
-  const sugestoesObjetivoDetalheHtml = "";
-  const _histTodas = Array.isArray(lead.recentMessages) ? lead.recentMessages : [];
-  const _histTotal = totalMensagensLead(lead);
-  const _histLimite = Math.max(TIMELINE_PAGE_SIZE, Number(state.timelineVisibleCount || TIMELINE_PAGE_SIZE));
-  const _histVisiveis = _histTodas.slice(-_histLimite);
-  const _histRestantes = Math.max(0, _histTodas.length - _histVisiveis.length);
-  const historicoConversaHtml = _histTodas.length ? `
-        <details style="margin-top:12px">
-          <summary style="cursor:pointer;list-style:none;color:var(--soft);font-size:13px;font-weight:950;display:flex;align-items:center;gap:8px">
-            <span style="display:inline-flex;width:22px;height:22px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;font-size:12px">»</span>
-            Ver histórico de conversa <span style="color:var(--muted);font-weight:600;font-size:11px">(${_histTotal} mensagens)</span>
-          </summary>
-          <div style="margin-top:10px;display:flex;justify-content:flex-end">
-            <button type="button" onclick='copiarHistoricoLead()' style="padding:5px 12px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Copiar todas as mensagens</button>
-          </div>
-          <div class="small" style="margin:8px 0 2px;color:var(--muted);font-size:10px;display:flex;gap:14px;flex-wrap:wrap">
-            <span>● <span style="color:var(--muted)">WhatsApp (importado)</span></span>
-            <span style="color:var(--lime)">▍ ✍ anotação manual</span>
-          </div>
-          <div style="margin-top:6px;max-height:280px;overflow-y:auto;padding-right:4px">
-            ${(()=>{ window._tlProp = []; return ""; })()}
-            ${[..._histVisiveis].reverse().map(m => {
-              const _pnome = String(lead.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
-              const manual = m.source === "manual" || m.source === "crm" || ["atendimento","nota","ligacao","visita","presencial"].includes(String(m.type||""));
-              let btnProp = "";
-              if(m.proposta){
-                const idx = window._tlProp.push(m.proposta)-1;
-                const lidJs = JSON.stringify(String(lead.id||"")), nmJs = JSON.stringify(lead.name||"");
-                const btnExcluir = m.iso ? `<button type="button" onclick='excluirPropostaTimeline(${lidJs}, ${JSON.stringify(m.iso)})' style="padding:5px 12px;background:rgba(255,90,90,.08);color:#ff8a8a;border:1px solid rgba(255,90,90,.5);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">🗑 Excluir</button>` : "";
-                btnProp = `<div style="margin-top:7px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" onclick='abrirPropostaSalva(${lidJs}, ${nmJs}, window._tlProp[${idx}])' style="padding:5px 12px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">📄 Abrir e editar proposta</button>${btnExcluir}</div>`;
-              }
-              const hdr = escapeHtml((m.date||"")+" "+(m.time||"")+" — "+limparAutorAtend(m.author||""));
-              if(manual){
-                return `<div style="padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--lime);background:rgba(255,107,92,.06);border-radius:8px;font-size:11px;line-height:1.35"><b style="color:var(--lime);font-size:10px;letter-spacing:.05em">${hdr} · ✍ anotação manual</b><div style="color:var(--white);margin-top:3px">${escapeHtml(m.text||"")}</div>${btnProp}</div>`;
-              }
-              const doCliente = ehMsgDoCliente(m, _pnome);
-              const lado = doCliente ? "flex-start" : "flex-end";
-              const bolha = doCliente ? "background:rgba(255,255,255,.05);border:1px solid var(--line)" : "background:rgba(255,107,92,.08);border:1px solid rgba(255,107,92,.22)";
-              const corHdr = doCliente ? "var(--muted)" : "var(--lime)";
-              return `<div style="display:flex;justify-content:${lado};margin-bottom:8px"><div style="max-width:82%;${bolha};border-radius:14px;padding:9px 13px;font-size:13px;line-height:1.45"><b style="color:${corHdr};font-size:10px;letter-spacing:.04em;display:block;margin-bottom:3px">${hdr}</b><div style="color:var(--white)">${escapeHtml(m.text||"")}</div>${btnProp}</div></div>`;
-            }).join("")}
-            ${_histRestantes > 0 ? `<button type="button" onclick="carregarMaisHistoricoLead()" style="width:100%;margin:8px 0 2px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.04);color:var(--soft);font-weight:900;cursor:pointer">Carregar mais ${Math.min(TIMELINE_PAGE_SIZE, _histRestantes)} mensagens anteriores</button>` : ""}
-            ${!lead.historyLoaded ? `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Carregando o histórico completo…</div>` : ""}
-          </div>
-        </details>` : "";
-  area.innerHTML = `
-    ${barraTopo}
-    <div class="lead-foco">
-      <div class="card hero-foco lead590" style="background:var(--panel);border:1px solid var(--line);border-top:2px solid var(--lime);border-radius:16px;padding:12px;box-shadow:none;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          ${lead.id ? `<div id="focoAvatarWrap" style="position:relative;flex:none;cursor:pointer" onclick="document.getElementById('editAvatarInput')?.click()" title="Editar foto do avatar">${avatarLead(lead, "lg")}</div><input type="file" id="editAvatarInput" accept="image/*" style="display:none" onchange="editarAvatarLead(event, '${String(lead.id)}')">` : avatarLead(lead, "lg")}
-          <div style="flex:1;min-width:220px">
-            <div style="font-size:20px;font-weight:950;color:#fff;line-height:1.12;word-break:break-word">${escapeHtml(lead.name||"Cliente")}</div>
-            <div class="small" style="color:var(--muted);margin-top:2px;font-size:12px">${escapeHtml(subtituloLead)}</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-            ${interesseTxt ? `<span style="display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;border:1px solid ${interesseCor};color:${interesseCor};font-size:11px;font-weight:900">✦ ${escapeHtml(interesseTxt)}</span>` : ``}
-            ${objetivoTopo ? `<span style="display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--soft);font-size:11px;font-weight:900">⌂ ${escapeHtml(objetivoTopo)}</span>` : ``}
-            ${etapaTopo ? `<span style="display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--soft);font-size:11px;font-weight:900">🤝 ${escapeHtml(etapaTopo)}</span>` : ``}
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px">
-          <div style="padding:7px 10px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03)"><div class="small" style="color:var(--muted);font-size:10px">Temperatura</div><div style="margin-top:4px;font-size:15px;font-weight:900;color:#fff">${escapeHtml(String(temperaturaTopo).charAt(0).toUpperCase()+String(temperaturaTopo).slice(1))}</div></div>
-          <div style="padding:7px 10px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03)"><div class="small" style="color:var(--muted);font-size:10px">Prioridade</div><div style="margin-top:4px;font-size:15px;font-weight:900;color:${prioridadeCor}">${escapeHtml(prioridadeTopo)}</div></div>
-          <div style="padding:7px 10px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03)"><div class="small" style="color:var(--muted);font-size:10px">Última resposta</div><div style="margin-top:4px;font-size:15px;font-weight:900;color:#fff">${escapeHtml(fmtDiasTopo(respostaTopo))}</div></div>
-        </div>
-        ${analiseComercialVisivelHtml}
-        <div style="border:1px solid rgba(255,107,92,.22);border-radius:14px;padding:11px;background:linear-gradient(180deg,rgba(255,107,92,.05),rgba(255,255,255,.02))">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-            <div>
-              <div style="font-size:16px;font-weight:950;color:#fff;line-height:1.15">Próxima ação recomendada</div>
-              <div style="margin-top:3px;color:var(--soft);font-size:11px;line-height:1.25">${escapeHtml(proximaAcaoTxt)}</div>
-            </div>
-            ${lead.id ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" onclick='abrirEditarLead(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")}, ${safeJson(lead.phone||"")})' title="Editar nome e telefone" style="background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:10px;font-weight:900;cursor:pointer">✎ Editar</button></div>` : ``}
-          </div>
-          <div id="msgFocoText" contenteditable="true" style="margin-top:8px;background:var(--input);border:1px solid rgba(255,107,92,.45);border-radius:11px;padding:10px 12px;font-size:13px;line-height:1.38;color:#fff;min-height:42px;max-height:76px;overflow:auto;white-space:pre-wrap;outline:none" spellcheck="true">${escapeHtml(msgInicial)}</div>
-          <div class="small" style="margin-top:3px;color:var(--muted);font-size:10px">Pode editar antes de enviar.</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-top:8px">
-            <a class="btn" href="${escapeHtml(linkWA)}" target="_blank" id="btnFocoWA" ${_mensagemValidaParaEnvio ? "" : 'aria-disabled="true" onclick="return false"'} style="text-align:center;padding:9px;text-decoration:none;${_mensagemValidaParaEnvio ? "" : "opacity:.45;pointer-events:none"}">Abrir WhatsApp</a>
-            <button class="btn secondary" type="button" id="btnFocoCopiar" style="padding:9px">Copiar mensagem</button>
-            ${lead.id ? `<button type="button" id="btnReanalisarSemTexto" title="Roda a análise de novo, sem registrar atendimento" style="padding:9px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line);border-radius:11px;font-size:12px;font-weight:900;cursor:pointer">↻ Reanalisar</button>` : ``}
-          </div>
-        </div>
-        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:0;flex-wrap:wrap">
-          <div style="font-size:12px;font-weight:950;color:#fff">3 sugestões de resposta</div>
-          ${_mensagensAprovadas ? `<div class="small" style="color:var(--muted);font-size:10px">Clique em uma opção para trocar a mensagem acima.</div>` : ''}
-        </div>
-        ${_mensagensAprovadas
-          ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px">${cardsMensagensHtml}</div>`
-          : `<div style="padding:12px 14px;color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:12px;line-height:1.5">${escapeHtml(_msgNaoGerada)}${_erroApi ? '<br><span style="color:var(--muted);font-size:11px;opacity:.7">Análise anterior encontrou erro. Toque em Reanalisar para tentar com o saldo atual.</span>' : ''}</div>`
-        }
-        <details class="bloco-recolhe">
-          <summary>Ver leitura complementar</summary>
-          <div style="margin-top:12px">${diagnosticoDetalheHtml}</div>
-        </details>
-        ${lead.id ? `<details class="bloco-recolhe">
-          <summary>Registrar atendimento</summary>
-          <div id="novoAtendimentoPanel" style="margin-top:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03)">
-            <textarea id="novoAtendimentoTexto" rows="4" placeholder="Toque em Gravar áudio e fale — o texto vai aparecendo aqui na hora. Ou digite direto." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
-            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
-              <button type="button" id="btnGravarAtendimento" style="background:transparent;border:1px solid var(--line);color:var(--text);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:950;cursor:pointer">Gravar áudio</button>
-              <button type="button" id="btnAnexarPrints" style="background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--soft);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:950;cursor:pointer">📎 Anexar prints</button>
-              <input type="file" id="anexarPrintsInput" accept="image/*" multiple style="display:none">
-              <span class="small" id="atendimentoStatus" style="color:var(--muted);flex:1;min-width:140px"></span>
-            </div>
-            <button type="button" id="btnSalvarAtendimento" class="btn" style="margin-top:10px;width:100%" disabled>Salvar atendimento</button>
-          </div>
-        </details>` : ``}
-        <details class="bloco-recolhe">
-          <summary>Histórico e ficha</summary>
-          <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
-            ${conteudoFichaCliente || `<div class="small" style="color:var(--muted)">Sem ficha complementar registrada neste lead.</div>`}
-            ${blocoParecidos || ``}
-            ${blocoEvolucao || ``}
-            ${historicoConversaHtml || ``}
-          </div>
-        </details>
-        <details class="bloco-recolhe">
-          <summary>Ações do lead</summary>
-          <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
-            ${ehContatadoHoje(lead) ? `<div><span style="display:inline-flex;align-items:center;white-space:nowrap;padding:7px 14px;border-radius:999px;font-size:11px;font-weight:950;color:var(--acao);background:rgba(104,255,149,.12);border:1px solid var(--acao)">✓ Contato hoje</span></div>` : ``}
-            <div class="lead-acts">
-              <button type="button" onclick='abrirPropostaComLead(${safeJson(lead.name||"")}, ${safeJson(lead.product||"")}, ${JSON.stringify(String(lead.id||""))})' style="white-space:nowrap;padding:8px 14px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;letter-spacing:.04em">📄 Gerar proposta</button>
-              ${lead.id ? `<button type="button" onclick='toggleAgendar(${JSON.stringify(String(lead.id))})' style="white-space:nowrap;padding:8px 14px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;letter-spacing:.04em">📅 Agendar</button>` : ``}
-              ${lead.id && normalizarEtapa(lead.etapa) !== "Vendido" && normalizarEtapa(lead.etapa) !== "Perdido" && normalizarEtapa(lead.etapa) !== "Geladeira" ? `<button type="button" onclick='arquivarLead(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="white-space:nowrap;padding:8px 14px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;letter-spacing:.04em">❄ Pra geladeira</button>` : ``}
-              ${lead.id && normalizarEtapa(lead.etapa) !== "Vendido" && normalizarEtapa(lead.etapa) !== "Perdido" ? `<button type="button" onclick='marcarPerdido(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="white-space:nowrap;padding:8px 14px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;letter-spacing:.04em">🗑 Arquivar</button>` : ``}
-            </div>
-            ${lead.id ? `<div id="agendarbox_${lead.id}" style="display:none;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:11px;flex-direction:column;gap:8px">
-              <div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:10px">📅 Agendar lembrete</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button type="button" onclick='reagendarDias(${JSON.stringify(String(lead.id))},0)' style="padding:5px 11px;font-size:11px;background:rgba(255,45,155,.18);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950">Hoje</button>
-                <button type="button" onclick='reagendarDias(${JSON.stringify(String(lead.id))},1)' style="padding:5px 11px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950">Amanhã</button>
-                <button type="button" onclick='reagendarDias(${JSON.stringify(String(lead.id))},7)' style="padding:5px 11px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950">+7 dias</button>
-                <button type="button" onclick='reagendarDias(${JSON.stringify(String(lead.id))},15)' style="padding:5px 11px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950">+15 dias</button>
-                <button type="button" onclick='reagendarDias(${JSON.stringify(String(lead.id))},30)' style="padding:5px 11px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950">+30 dias</button>
-              </div>
-              <label style="font-size:10px;color:var(--muted)">ou escolha a data:</label>
-              <input type="date" onchange='reagendarLembrete(${JSON.stringify(String(lead.id))}, this.value)' style="background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px;max-width:180px">
-            </div>` : ``}
-            ${a.lembrete && a.lembrete.quando ? `<div><span style="display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;font-size:12px;color:var(--timing);background:rgba(255,45,155,.10);border:1px solid var(--timing);font-weight:700">🔔 Lembrar em ${escapeHtml(new Date(a.lembrete.quando).toLocaleDateString("pt-BR"))} <a href="#" id="btnLimparLembrete" style="margin-left:8px;color:var(--muted);text-decoration:underline;font-size:10px">limpar</a></span>${reagendarControlHTML(lead.id)}</div>` : ``}
-          </div>
-        </details>
+  cp704Css();
+  if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(true);
+  const area=document.querySelector('#leadFocoArea');
+  if(!area||!lead) return;
+  document.body.classList.add('lead-foco-aberto');
+  state.focoLeadId=lead?.id||null;
+  const saud=document.querySelector('#saudacao');
+  if(saud) saud.style.display='none';
+    const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
+    const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
+    const messagesReady=cp705MessagesReady(msgs);
+    const needsAnalysis=stale; // v708: mensagens de fallback confiáveis aparecem mesmo quando a API não devolve 3 textos
+    const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
+    const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
+    const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
+    const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
+    const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
+    const insights=cp704Insights(lead,mc).map(x=>`<li><i>✓</i><span>${escapeHtml(x)}</span></li>`).join('');
+    area.innerHTML=`<div class="cp704-lead">
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">⟳ Reanalisar agora</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'✓ Atendido hoje':'✓ Marcar atendimento'}</button></div></div>
+      <section class="cp704-hero">
+        <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
+        <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),150))}</p></div><div class="cp704-prob" style="--p:${prob}"><b>${prob}%</b><span>${escapeHtml(cp704NivelProb(prob))}</span></div></div>
+        <div class="cp704-metrics"><div class="cp704-metric"><span>🤝</span><div><small>Relacionamento</small>${escapeHtml(rel)}</div></div><div class="cp704-metric"><span>⏱</span><div><small>Urgência</small>${escapeHtml(urg)}</div></div></div>
+      </section>
+      ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
+      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
+      <section class="cp704-card cp704-ai"><div class="cp704-card-title"><h2>O que a IA percebeu</h2></div><ul>${insights}</ul></section>
+      <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
+      <section class="cp704-card"><div class="cp704-card-title"><h2>Mensagem recomendada</h2></div>
+        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagens ainda não geradas.</b><span>Atualize a análise comercial para criar as 3 sugestões corretas.</span><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button><button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button><button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button></div>
+        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><span class="cp704-num">1</span><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div><div class="cp704-msg-item" data-key="b"><span class="cp704-num">2</span><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div><div class="cp704-msg-item" data-key="c"><span class="cp704-num">3</span><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div></div>
+        <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>`}
+      </section>
+      <div class="cp704-accordions">
+        <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
+        <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
+        <details class="cp704-details"><summary>Observações importantes</summary><div class="cp704-body">${escapeHtml(cp705SanitizeFactText(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem observações consolidadas.'),lead))}</div></details>
+        <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
       </div>
-    </div>
-    ${lead.id ? `<div class="legacy-delete-definitivo" style="margin-top:18px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center"><button type="button" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))}, ${safeJson(lead.name||"")})' style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;opacity:.5;letter-spacing:.03em">Excluir lead definitivo</button></div>` : ""}`;
-
-  // Liga troca de mensagem principal (cards de abordagem)
-  const msgs = { a: cardsMensagens[0]?.msg || msgInicial, b: cardsMensagens[1]?.msg || msgInicial, c: cardsMensagens[2]?.msg || msgInicial };
-  const aplicarMsgFoco = (k) => {
-    qsa(".msg-card-foco").forEach(card => {
-      const on = (card.dataset.style || "a") === k;
-      card.classList.toggle("active", on);
-      card.style.borderColor = on ? "var(--lime)" : "var(--line)";
-      card.style.background = on ? "rgba(255,107,92,.09)" : "rgba(255,255,255,.03)";
-    });
-    qsa(".msg-tab-foco").forEach(b => {
-      const on = (b.dataset.style || "a") === k;
-      b.classList.toggle("active", on);
-      b.style.fontWeight = on ? "950" : "600";
-      b.style.borderColor = on ? "var(--lime)" : "var(--line)";
-      b.style.background = on ? "rgba(255,107,92,.10)" : "transparent";
-      b.style.color = on ? "var(--lime)" : "var(--text)";
-    });
-    const novoMsg = msgs[k] || msgs.a || msgInicial;
-    const el = qs("#msgFocoText");
-    if(el) el.textContent = novoMsg;
-    const wa = qs("#btnFocoWA");
-    if(wa) wa.href = whatsappLink(phone, novoMsg);
-  };
-  qsa(".msg-card-foco").forEach(btn => btn.addEventListener("click", () => aplicarMsgFoco(btn.dataset.style || "a")));
-  qsa(".msg-tab-foco").forEach(btn => btn.addEventListener("click", () => aplicarMsgFoco(btn.dataset.style || "a")));
-  qsa(".msg-objetivo-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const idx = Number(btn.dataset.idx);
-      const novoMsg = (window._objetivoMsgsFoco || [])[idx] || "";
-      if(!novoMsg) return;
-      qsa(".msg-tab-foco").forEach(b => { b.classList.remove("active"); b.style.fontWeight="600"; b.style.borderColor="var(--line)"; b.style.background="transparent"; b.style.color="var(--text)"; });
-      qsa(".msg-card-foco").forEach(card => { card.classList.remove("active"); card.style.borderColor="var(--line)"; card.style.background="rgba(255,255,255,.03)"; });
-      const el = qs("#msgFocoText");
-      if(el) el.textContent = novoMsg;
-      const wa = qs("#btnFocoWA");
-      if(wa) wa.href = whatsappLink(phone, novoMsg);
-      toast("Mensagem por objetivo carregada.");
-    });
-  });
-  // Atualiza o link do WhatsApp em tempo real conforme o usuário edita a mensagem
-  const msgEl = qs("#msgFocoText");
-  if(msgEl){
-    msgEl.addEventListener("input", () => {
-      const wa = qs("#btnFocoWA");
-      if(wa) wa.href = whatsappLink(phone, msgEl.textContent || "");
-    });
-  }
-  // Trocar tipo de contato manualmente (cliente final / corretora parceira / indicação / outro)
-  const badgeTC = qs("#badgeTipoContato");
-  if(badgeTC) badgeTC.addEventListener("click", async () => {
-    const atual = tipoContatoEfetivoLead(lead, lead.analysis || {}) || "outro";
-    const escolha = prompt(`Tipo de contato com ${lead.name||"este lead"}:\n\n1 = Cliente final (vai morar/investir)\n2 = Corretora parceira (B2B — vende pra cliente dela)\n3 = Indicação\n4 = Não sei / Outro\n\nAtual: ${TIPO_CONTATO_LABEL[atual]?.txt||atual}`, "1");
-    if(!escolha) return;
-    const map = { "1":"cliente-final", "2":"corretora-parceira", "3":"indicacao", "4":"outro" };
-    const novo = map[escolha.trim()];
-    if(!novo) return;
-    if(novo === atual){ toast("Tipo não mudou."); return; }
-    // Salva como observação na memória (porque é override do usuário, mais autoritativo que IA)
-    const obsAtual = qs("#memoriaObservacoes")?.value || "";
-    const tag = "[tipo-contato:"+novo+"]";
-    const obsNovo = obsAtual.replace(/\[tipo-contato:[a-z-]+\]/g, "").trim();
-    const obsFinal = (tag + " " + obsNovo).trim();
-    try{
-      await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: lead.id, action: "memoria-set", preferencias: qs("#memoriaPreferencias")?.value||"", pessoasDecisao: qs("#memoriaPessoasDecisao")?.value||"", pontosSensiveis: qs("#memoriaPontosSensiveis")?.value||"", observacoes: obsFinal }) });
-      if(lead.analysis) lead.analysis.tipoContato = novo;
-      // Mudou o tipo (cliente ↔ parceiro) → as 3 mensagens precisam se adequar (B2B x cliente).
-      // Reanalisa pra regerar, senão ficavam as mensagens do tipo antigo.
-      toast("Tipo salvo. Atualizando as mensagens…");
-      const r = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: lead.id }) });
-      const dr = await r.json().catch(() => ({ ok:false }));
-      if(dr?.ok){ if(typeof invalidarLeadsCache === "function") invalidarLeadsCache(); await abrirLead(lead.id); toast("Mensagens atualizadas pro tipo de contato."); }
-      else { renderLeadFoco(lead); toast("Tipo salvo, mas a reanálise falhou: " + (dr?.error||"erro")); }
-    }catch(err){ toast("Erro ao salvar: "+(err?.message||err)); }
-  });
-
-  // Registrar atendimento (presencial/ligação): painel já aberto. Digita ou grava áudio -> transcreve -> guarda no resumo e reanalisa
-  // Ditado em tempo real (reconhecimento de voz do navegador): vai escrevendo enquanto você fala.
-  const btnGravar = qs("#btnGravarAtendimento");
-  let recog = null, ditando = false, ditadoBase = "", sessaoFinais = "";
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  function pararDitado(){
-    ditando = false;
-    try{ recog && recog.stop(); }catch(_){}
-    if(btnGravar){ btnGravar.textContent = "Gravar áudio"; btnGravar.style.background = "transparent"; }
-    const st = qs("#atendimentoStatus"); if(st) st.innerHTML = '<span style="color:var(--acao)">Pronto. Revise e toque em Salvar.</span>';
-  }
-  function iniciarDitado(){
-    const ta = qs("#novoAtendimentoTexto"); const st = qs("#atendimentoStatus");
-    // Texto que já estava no campo antes do ditado começar. Nunca é alterado.
-    const textoOriginal = ta.value ? ta.value.trim() + " " : "";
-    // ditadoBase = TODOS os finais já confirmados nesta sessão de ditado.
-    // Persiste através dos reinícios (Chrome encerra sozinho após silêncio).
-    // Padrão MDN: começa do e.resultIndex e soma cada final UMA vez só — sem isso,
-    // o Android Chrome repete os parciais e sai um "gago" ("a / a Grazi / a Grazi tá...").
-    ditadoBase = ""; sessaoFinais = "";
-    // Segunda trava (à prova de Android): se o texto ficou no padrão "prefixo crescente"
-    // ("a", "a b", "a b c"...) — repetições do mesmo começo que vão crescendo — devolve só
-    // a maior frase. Só age quando os segmentos REALMENTE são prefixos um do outro (assinatura
-    // do bug); em fala normal não mexe.
-    function colapsarRepeticaoCrescente(txt){
-      const t = String(txt || "").trim().split(/\s+/).filter(Boolean);
-      if(t.length < 4) return String(txt || "").trim();
-      const low = t.map(w => w.toLowerCase());
-      const first = low[0];
-      const starts = [];
-      for(let i = 0; i < t.length; i++) if(low[i] === first) starts.push(i);
-      if(starts.length < 2) return t.join(" ");
-      starts.push(t.length);
-      const segs = [];
-      for(let s = 0; s < starts.length - 1; s++) segs.push(t.slice(starts[s], starts[s+1]).join(" "));
-      for(let s = 0; s < segs.length - 1; s++){
-        if(!segs[s+1].toLowerCase().startsWith(segs[s].toLowerCase())) return t.join(" "); // fala normal → preserva
-      }
-      return segs[segs.length - 1]; // é o bug → só a maior frase
-    }
-    function montarRecog(){
-      const r = new SR();
-      r.lang = "pt-BR";
-      r.continuous = true;
-      r.interimResults = true;
-      // Reconstrói o texto desta sessão DO ZERO a cada evento (sem += incremental, que no
-      // Android duplica). ditadoBase = finais das sessões anteriores; sessaoFinais = finais
-      // desta sessão (recalculado). Consolida no onend.
-      r.onresult = (e) => {
-        const partes = []; let interim = "";
-        for(let i = 0; i < e.results.length; i++){
-          const txt = String(e.results[i][0].transcript || "").trim();
-          if(!txt) continue;
-          if(e.results[i].isFinal){
-            // Android repete os finais como prefixos que crescem ("a", "a b", "a b c").
-            // Se o atual contém o anterior (ou vice-versa) como início, SUBSTITUI em vez de somar.
-            const ult = partes.length ? partes[partes.length-1] : "";
-            if(ult && (txt.startsWith(ult) || ult.startsWith(txt))) partes[partes.length-1] = txt.length >= ult.length ? txt : ult;
-            else partes.push(txt);
-          } else {
-            interim = txt; // só o último parcial (não acumula)
-          }
-        }
-        const finais = partes.join(" ");
-        sessaoFinais = finais ? finais + " " : "";
-        const ditado = colapsarRepeticaoCrescente((ditadoBase + sessaoFinais + interim).replace(/\s+/g, " ").trim());
-        ta.value = (textoOriginal + ditado).replace(/\s+/g, " ").trim();
-        refreshSalvarEnabled();
-      };
-      r.onerror = (ev) => {
-        if(ev.error === "not-allowed" || ev.error === "service-not-allowed"){
-          if(st) st.innerHTML = '<span style="color:var(--risco)">Microfone bloqueado. Permita o microfone no navegador.</span>';
-          pararDitado();
-        }
-      };
-      // Chrome encerra sozinho após silêncio — reinicia preservando ditadoBase.
-      r.onend = () => {
-        if(!ditando) return;
-        // Consolida os finais desta sessão antes de reiniciar (e zera o acumulador da sessão).
-        ditadoBase += sessaoFinais; sessaoFinais = "";
-        try{ r.onresult = null; r.onend = null; r.onerror = null; }catch(_){}
-        recog = montarRecog();
-        try{ recog.start(); }catch(_){}
-      };
-      return r;
-    }
-    recog = montarRecog();
-    try{ recog.start(); }
-    catch(_){ if(st) st.innerHTML = '<span style="color:var(--risco)">Não consegui ligar o microfone.</span>'; return; }
-    ditando = true;
-    btnGravar.textContent = "Parar áudio";
-    btnGravar.style.background = "rgba(255,91,122,.18)";
-    if(st) st.textContent = "Ouvindo... pode falar que eu vou escrevendo. Toque em Parar quando terminar.";
-  }
-  if(btnGravar) btnGravar.addEventListener("click", () => {
-    const st = qs("#atendimentoStatus");
-    if(!SR){ if(st) st.innerHTML = '<span style="color:var(--risco)">Esse navegador não tem ditado por voz. Use o Chrome, ou digite o atendimento.</span>'; return; }
-    if(ditando) pararDitado(); else iniciarDitado();
-  });
-  const btnSalvarAt = qs("#btnSalvarAtendimento");
-  const taAtend = qs("#novoAtendimentoTexto");
-  // Quando o texto veio de "Anexar prints", guarda que é histórico de WhatsApp (não atendimento
-  // presencial de hoje) + a data do último contato lido no print — pra não zerar o "dias parado".
-  let printMetaPendente = null;
-  // Habilita "Salvar e reanalisar" só quando há texto. "Reanalisar" sem texto fica sempre ativo.
-  const refreshSalvarEnabled = () => {
-    if(btnSalvarAt) btnSalvarAt.disabled = !(taAtend?.value||"").trim();
-    // Se o corretor apagou/reescreveu o texto do print, deixa de tratar como print.
-    if(printMetaPendente && !(taAtend?.value||"").includes(printMetaPendente.textoBase)) printMetaPendente = null;
-  };
-  if(taAtend){ taAtend.addEventListener("input", refreshSalvarEnabled); refreshSalvarEnabled(); }
-  // Anexar prints: lê várias imagens da conversa com a IA e joga o registro no campo de atendimento.
-  const btnAnexarPrints = qs("#btnAnexarPrints");
-  const anexarPrintsInput = qs("#anexarPrintsInput");
-  if(btnAnexarPrints && anexarPrintsInput){
-    btnAnexarPrints.addEventListener("click", () => anexarPrintsInput.click());
-    anexarPrintsInput.addEventListener("change", async (ev) => {
-      const files = [...(ev.target.files||[])].slice(0, 5);
-      if(!files.length) return;
-      const st = qs("#atendimentoStatus");
-      const origTxt = btnAnexarPrints.textContent;
-      btnAnexarPrints.disabled = true; btnAnexarPrints.textContent = "⏳ Lendo...";
-      if(st) st.textContent = `Lendo ${files.length} print(s)...`;
-      try{
-        const imagens = await Promise.all(files.map(f => fileParaDataUrlRedim(f, 1900, 0.88)));
-        const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"ler-prints-conversa", imagens }) });
-        const d = await res.json().catch(() => ({ ok:false }));
-        if(d?.ok && d.texto){
-          const ta = qs("#novoAtendimentoTexto");
-          if(ta) ta.value = ta.value.trim() ? (ta.value.trim() + "\n\n" + d.texto) : d.texto;
-          // Marca como histórico de WhatsApp lido por print, com a data do último contato (se a IA achou).
-          printMetaPendente = { textoBase: d.texto, isoEvento: d.dataUltimaISO || null };
-          refreshSalvarEnabled();
-          if(st) st.innerHTML = '<span style="color:var(--acao)">Prints lidos. Revise e toque em Salvar atendimento.</span>';
-          toast("✓ Prints lidos.");
-          // Lead SEM foto + a IA achou a foto do cliente no print → recorta e salva no avatar (num processo só).
-          const semFoto = state.lead && !(state.lead.analysis?.avatarFoto || state.lead.avatarFoto);
-          if(semFoto && d.avatarBox && files.length){
-            try{
-              // A fotinha de perfil só aparece no print que mostra o CABEÇALHO da conversa (topo).
-              // Com vários prints anexados, esse pode não ser o files[0] — então tenta cada um pela
-              // posição padrão e, se não achar, pede pra IA localizar o rosto naquele print.
-              let foto = null;
-              const idxAvatar = Number.isInteger(Number(d.avatarImagem)) && Number(d.avatarImagem) >= 0 && Number(d.avatarImagem) < files.length ? Number(d.avatarImagem) : 0;
-              foto = await recortarAvatar(files[idxAvatar], d.avatarBox);
-              // Fallback: tenta detectar rosto nos demais prints somente se o recorte indicado não serviu.
-              for(let i = 0; i < files.length && !foto; i++){
-                if(!imagens[i]) continue;
-                try{
-                  const rr = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"detectar-rosto", imagemBase64: imagens[i] }) });
-                  const rd = await rr.json().catch(() => ({}));
-                  if(rd?.faceBox) foto = await recortarAvatar(files[i], rd.faceBox);
-                }catch(_){ /* fallback é bônus */ }
-              }
-              if(foto && state.lead?.id){
-                const sv = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"editar-dados", id: state.lead.id, avatarFoto: foto }) });
-                const svd = await sv.json().catch(()=>({ok:false}));
-                if(svd?.ok){
-                  state.lead.avatarFoto = foto;
-                  if(state.lead.analysis) state.lead.analysis.avatarFoto = foto;
-                  // Atualiza só o avatar na tela, sem re-render (preserva o texto do print no campo).
-                  const wrap = qs("#focoAvatarWrap");
-                  if(wrap) wrap.innerHTML = avatarLead(state.lead, "lg");
-                  invalidarLeadsCache?.();
-                  toast("✓ Foto do cliente salva no avatar.");
-                }
-              }
-            }catch(_){ /* foto é bônus: se falhar, o print já foi lido */ }
-          }
-        } else {
-          if(st) st.textContent = "";
-          toast("Não consegui ler os prints: " + (d?.error || "tenta de novo"));
-        }
-      }catch(err){
-        if(st) st.textContent = "";
-        toast("Erro ao ler prints: " + (err?.message || err));
-      }finally{
-        btnAnexarPrints.disabled = false; btnAnexarPrints.textContent = origTxt;
-        if(ev.target) ev.target.value = "";
-      }
-    });
-  }
-  if(btnSalvarAt) btnSalvarAt.addEventListener("click", async () => {
-    if(ditando) pararDitado();
-    const ta = qs("#novoAtendimentoTexto");
-    const texto = (ta?.value||"").trim();
-    if(!texto){ toast("Escreva ou grave o atendimento antes de salvar."); return; }
-    btnSalvarAt.disabled = true;
-    btnSalvarAt.textContent = "Salvando...";
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 30000);
-    // Texto vindo de print = histórico de WhatsApp (não atendimento presencial de hoje).
-    // Rotula certo e usa a data do último contato lido no print, pra não zerar o "dias parado".
-    const ehPrint = printMetaPendente && texto.includes(printMetaPendente.textoBase);
-    const corpo = { id: lead.id, novoAtendimento: texto, apenasSalvar: true };
-    if(ehPrint){
-      corpo.autorManual = "Lido de print (WhatsApp)";
-      corpo.tipoManual = "print-whatsapp";
-      if(printMetaPendente.isoEvento) corpo.isoEvento = printMetaPendente.isoEvento;
-    }
-    try{
-      const res = await fetch("./api/reanalisar-lead", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        // Só SALVA (rápido). A reanálise é separada (botão "Reanalisar") pra não demorar.
-        // O lembrete da anotação ("agendar hoje" etc.) continua sendo aplicado no salvar.
-        body: JSON.stringify(corpo),
-        signal: ctrl.signal
-      });
-      clearTimeout(to);
-      const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
-      if(data?.ok){
-        // Print = histórico antigo do WhatsApp, NÃO é um contato feito hoje — não marca "contatado hoje"
-        // (senão o lead saía da fila como se você já tivesse falado com ele hoje).
-        if(!ehPrint){ try{ await registrarAprendizado("contato_manual", null, { tipo: "atendimento registrado", de: "novoAtendimento" }); }catch(_){} }
-        // ATENDEU hoje → o lead SAI dos compromissos de hoje e reagenda SOZINHO pro 5º dia, pra você
-        // só voltar nele quando for hora de ver o retorno (pedido do dono). Só em atendimento REAL
-        // (não em print de histórico antigo). Roda antes do reload pra já aparecer remarcado.
-        if(!ehPrint){
-          try{
-            const d5 = new Date(); d5.setDate(d5.getDate() + 5);
-            const dataReag = `${d5.getFullYear()}-${String(d5.getMonth()+1).padStart(2,"0")}-${String(d5.getDate()).padStart(2,"0")}`;
-            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: lead.id, action:"reagendar-lembrete", data: dataReag }) });
-          }catch(_){}
-        }
-        toast(ehPrint ? "✓ Histórico do print salvo." : "✓ Atendido — volto a te lembrar dele em 5 dias.");
-        if(ta) ta.value = "";
-        printMetaPendente = null;
-        invalidarLeadsCache();
-        // FICA no lead (não volta pra Home). Recarrega os dados e re-renderiza o mesmo lead
-        // pra já mostrar a anotação salva. Se quiser sair, o usuário clica em "Voltar pra Hoje".
-        try{
-          const fresh = await getLeadsData(true);
-          const itens = (fresh?.items || []).map(limparLead);
-          state.leads = itens;
-          if(typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
-          // Reconstrói a lista de "Atender hoje" — o lead atendido (contato hoje) sai dela na hora,
-          // sem precisar dar refresh. Como estamos no lead, renderListasHome só atualiza os grupos.
-          const ativos = itens.filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; });
-          state.itemsAtivos = ativos;
-          if(ativos.length){ const ordenados = ativos.map(l => ({ ...l, _score: scoreLead(l) })).sort((a,b) => b._score - a._score); renderListasHome(ordenados); }
-          const atualizado = itens.find(l => String(l.id) === String(lead.id)) || lead;
-          state.lead = atualizado; state.analysis = atualizado.analysis || null;
-          renderLeadFoco(atualizado);
-          // Depois de salvar, volta o scroll pro topo do lead automaticamente.
-          setTimeout(() => { (qs("#leadFocoArea") || qs("#topo"))?.scrollIntoView({ behavior:"smooth", block:"start" }); }, 60);
-          // Reanálise em SEGUNDO PLANO: salva rápido e, em seguida, atualiza as sugestões
-          // considerando a nova observação (sem travar você esperando os ~30s).
-          reanalisarEmSegundoPlano(lead.id);
-        }catch(_){
-          btnSalvarAt.disabled = false; btnSalvarAt.textContent = "Salvar atendimento";
-        }
-      } else {
-        toast("Não deu pra salvar: " + (data?.error||"erro"));
-        btnSalvarAt.disabled = false; btnSalvarAt.textContent = "Salvar atendimento";
-      }
-    }catch(err){
-      clearTimeout(to);
-      const ehTimeout = err?.name === "AbortError";
-      toast(ehTimeout ? "Demorou demais — tente de novo." : "Erro ao salvar atendimento.");
-      btnSalvarAt.disabled = false; btnSalvarAt.textContent = "Salvar atendimento";
-    }
-  });
-  // Ctrl+V cola imagem direto no avatar deste lead.
-  if(lead.id) ligarColarAvatarGlobal(String(lead.id));
-  // Botão "Reanalisar (sem registrar atendimento)" — roda a análise de novo, sem alterar nada.
-  const btnReanalisar = qs("#btnReanalisarSemTexto");
-  if(btnReanalisar) btnReanalisar.addEventListener("click", async () => {
-    btnReanalisar.disabled = true;
-    const txtOriginal = btnReanalisar.textContent;
-    btnReanalisar.textContent = "Reanalisando...";
-    const pararBarra = iniciarBarraProgresso(btnReanalisar, "Reanalisando... pode levar até 30s");
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 90000);
-    try{
-      const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: lead.id }), signal: ctrl.signal });
-      clearTimeout(to);
-      const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
-      pararBarra();
-      if(data?.ok){
-        toast("✓ Análise atualizada com regras novas.");
-        btnReanalisar.textContent = "✓ Reanalisado!";
-        btnReanalisar.style.color = "var(--acao)";
-        btnReanalisar.style.borderColor = "var(--acao)";
-        await loadRecentLeads();
-        await carregarDashboard();
-        if(state.lead?.id === lead.id){
-          await abrirLead(lead.id);
-          // Scroll suave pro topo do lead pra ver o resultado novo
-          setTimeout(() => {
-            qs("#leadFocoArea")?.scrollIntoView({ behavior:"smooth", block:"start" });
-            // Flash visual no hero do lead
-            const hero = qs(".hero-foco");
-            if(hero){
-              hero.style.transition = "box-shadow .4s";
-              hero.style.boxShadow = "0 0 0 3px var(--acao), 0 0 40px rgba(104,255,149,.35)";
-              setTimeout(() => { hero.style.boxShadow = ""; }, 1400);
-            }
-          }, 100);
-        }
-      } else {
-        toast("Não deu pra reanalisar: " + (data?.error||"erro"));
-        btnReanalisar.disabled = false; btnReanalisar.textContent = txtOriginal;
-      }
-    }catch(err){
-      clearTimeout(to);
-      pararBarra();
-      const ehTimeout = err?.name === "AbortError";
-      toast(ehTimeout ? "Demorou demais — tente de novo." : "Erro ao reanalisar.");
-      btnReanalisar.disabled = false; btnReanalisar.textContent = txtOriginal;
-    }
-  });
-  // Quem define etapa é a análise da IA — corretor não toca.
-  // Copiar
-  const btnCopiar = qs("#btnFocoCopiar");
-  if(btnCopiar) btnCopiar.addEventListener("click", () => {
-    const txt = qs("#msgFocoText")?.textContent || "";
-    navigator.clipboard.writeText(txt)
-      .then(() => {
-        toast("Mensagem copiada — registrei o contato de hoje.");
-        registrarAprendizado && registrarAprendizado("mensagem_copiada", null, { de: "leadFoco" });
-        // Copiar = vai enviar: marca contato de hoje + grava nas observações (data/hora + msg).
-        registrarMensagemEnviada(lead, txt);
-      })
-      .catch(() => toast("Não consegui copiar a mensagem — copie manualmente."));
-  });
-  // WhatsApp click: registra aprendizado
-  const btnWA = qs("#btnFocoWA");
-  if(btnWA) btnWA.addEventListener("click", () => {
-    registrarAprendizado && registrarAprendizado("whatsapp_aberto", null, { de: "leadFoco" });
-  });
-  const btnLimparLembrete = qs("#btnLimparLembrete");
-  if(btnLimparLembrete) btnLimparLembrete.addEventListener("click", async (e) => {
-    e.preventDefault();
-    if(!confirm("Limpar o lembrete deste lead?")) return;
-    try{
-      const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: lead.id, action: "lembrete-clear" }) });
-      const data = await res.json();
-      if(data?.ok){
-        if(lead.analysis) delete lead.analysis.lembrete;
-        renderLeadFoco(lead);
-        toast("Lembrete removido.");
-        invalidarLeadsCache();
-        atualizarSinoAgenda(); // sino do topo na hora (sem F5)
-      }
-    }catch(_){}
-  });
-
-  // Sugestões ainda "cruas" (a importação não gera mais as 3 respostas, pra ser rápida). Ao ABRIR
-  // o lead, gera agora em segundo plano com qualidade Sonnet, mostrando "carregando" no lugar da
-  // mensagem. Quando termina, reanalisarEmSegundoPlano re-renderiza com as sugestões prontas.
-  if(lead.id && lead.analysis && lead.analysis.sugestoesPendentes && !_reanaliseBgEmAndamento){
-    // Mantém a mensagem-base (Direta) já visível e refina calado por trás — sem "Gerando…" travando.
-    reanalisarEmSegundoPlano(lead.id);
-  }
+      <div class="cp704-quickbar"><button class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button onclick="abrirEditarLead&&abrirEditarLead(${JSON.stringify(String(lead.id||''))},${JSON.stringify(String(lead.name||''))},${JSON.stringify(String(lead.phone||''))})">Editar lead</button></div>
+      ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
+    </div>`;
+    window.cp704SelectMsg(window.cp704SelectedMsg||'a');
+  return null;
 }
+
 window.renderLeadFoco = renderLeadFoco;
 
 async function abrirVenda(id, nome){
@@ -9393,7 +8979,6 @@ carregarPipeline = async function(){
   }
 };
 
-const __renderLeadFoco631Base = renderLeadFoco;
 function ui631UltimoFalante(lead){
   const msgs=Array.isArray(lead.recentMessages)?lead.recentMessages:[];
   const pn=String(lead.name||"").toLowerCase().split(/\s+/)[0]||"";
@@ -9409,7 +8994,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #709: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #710: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -9459,54 +9044,7 @@ window.ui667MarcarAtendido=async function(btn){
     toast("Não consegui marcar: "+(err?.message||err));
   }
 };
-renderLeadFoco = function(lead){
-  ui667ModoDetalheLead(true);
-  __renderLeadFoco631Base(lead);
-  const wrap=qs("#leadFocoArea .lead-foco"); const legacy=wrap?.querySelector(".lead590"); if(!wrap||!legacy)return;
-  const a=lead.analysis||{},diag=(a.diagnostico&&typeof a.diagnostico==="object")?a.diagnostico:{};
-  const msgs=mensagensDaAnalise(a);
-  const map={direta:mensagemAprovadaSemAlteracao(msgs.a)||"",consultiva:mensagemAprovadaSemAlteracao(msgs.b)||mensagemAprovadaSemAlteracao(msgs.a)||"",retomada:mensagemAprovadaSemAlteracao(msgs.c)||mensagemAprovadaSemAlteracao(msgs.a)||""};
-  state._ui631Responses=map; state._ui631ResponseKey=msgs.recomendada==="c"?"retomada":msgs.recomendada==="b"?"consultiva":"direta"; state._ui631LeadPhone=lead.phone||"";
-  const chosen=map[state._ui631ResponseKey]||Object.values(map).find(Boolean)||"Toque em Reanalisar para gerar uma resposta.";
-  const prioridade=prioridadeAtendimento(lead)||{};
-  const interesse=String(diag.interesse||a.leituraComercial?.temperatura||"—");
-  const etapa=String(diag.etapa||normalizarEtapa(lead.etapa)||"—").replace(/-/g," ");
-  const pendencia=String(diag.pendenciaFinanceira||diag.pendencia||a.leituraComercial?.oQueTrava||"Não identificada");
-  const proximo=String(a.nextAction||a.leituraComercial?.oQueDestravar||"Reanalisar para definir o próximo passo.");
-  const recentes=(Array.isArray(lead.recentMessages)?lead.recentMessages:[]).slice(-3).reverse();
-  const timeline=recentes.length?recentes.map((m,i)=>`<div class="ui-timeline-item"><i class="${i===0?'active':''}"></i><span><b>${escapeHtml(m.author|| (ehMsgDoCliente(m,String(lead.name||'').split(/\s+/)[0])?lead.name:'Você'))}:</b> ${escapeHtml(String(m.text||'').slice(0,180))}</span><em>${escapeHtml([m.date,m.time].filter(Boolean).join(' ')||'')}</em></div>`).join(''):'<div class="empty">Sem mensagens recentes.</div>';
-  const shell=document.createElement("div"); shell.className="lead-ui631";
-  const hasPhone=!!(lead.phone);
-  const voltarLabel = state.grupoAtivo ? "Voltar pra "+escapeHtml((GRUPOS_HOME[state.grupoAtivo]||{}).titulo||"lista") : "Voltar pra Hoje";
-  shell.innerHTML=`
-    <div class="ui-lead-head">
-      <div class="ui-lead-title-row">
-        <h2 class="ui-lead-name">${escapeHtml(lead.name||"Cliente")}</h2>
-        <button type="button" id="ui667AtendidoBtn" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>
-      </div>
-      <div class="ui-lead-sub">
-        <p>${escapeHtml(produtosLabel(lead)||"Produto não identificado")}</p>
-        ${!state.sequencia ? `<button type="button" class="ui-lead-back" onclick="voltarDoLead()">‹ ${voltarLabel}</button>` : ''}
-      </div>
-    </div>
-    <div class="ui-lead-main">
-      <section class="ui-diagnostic-card"><h3>Diagnóstico</h3>
-        <div><b>Última pessoa a falar:</b><span>${escapeHtml(ui631UltimoFalante(lead))}</span></div>
-        <div><b>Etapa:</b><span>${escapeHtml(etapa)}</span></div>
-        <div><b>Interesse:</b><span class="accent">${escapeHtml(interesse)}</span></div>
-        <div><b>Pendência:</b><span>${escapeHtml(pendencia)}</span></div>
-        <div><b>Próximo passo:</b><span>${escapeHtml(proximo)}</span></div>
-      </section>
-      <section class="ui-response-card"><h3>Resposta pronta pra enviar</h3><div class="ui-response-tabs"><button class="ui-response-tab ${state._ui631ResponseKey==='direta'?'active':''}" data-response="direta" onclick="ui631SelectResponse('direta')">Direta</button><button class="ui-response-tab ${state._ui631ResponseKey==='consultiva'?'active':''}" data-response="consultiva" onclick="ui631SelectResponse('consultiva')">Consultiva</button><button class="ui-response-tab ${state._ui631ResponseKey==='retomada'?'active':''}" data-response="retomada" onclick="ui631SelectResponse('retomada')">Retomada</button></div><div id="ui631ResponseText" class="ui-response-text">${escapeHtml(chosen)}</div><div class="ui-response-actions"><button type="button" class="ui-copy-main" onclick="ui631CopyResponse()">Copiar mensagem</button>${hasPhone?`<button type="button" class="ui-whats-main" onclick="ui631OpenWhats()">Abrir WhatsApp</button>`:''}</div></section>
-    </div>
-    <section class="ui-timeline-card"><h3>Linha do tempo da conversa</h3>${timeline}</section>`;
-  wrap.insertBefore(shell,legacy);
-  // O formulário completo de anotações continua disponível, mas fica em "Mais detalhes".
-  // O fluxo normal agora usa o botão de um clique "Atendido" no topo do lead.
-  const advanced=document.createElement("details"); advanced.className="ui631-advanced"; advanced.innerHTML='<summary>Mais detalhes e ferramentas</summary>';
-  wrap.insertBefore(advanced,legacy); advanced.appendChild(legacy);
-};
-window.renderLeadFoco=renderLeadFoco;
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 
 /* ============================================================
    ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
@@ -10341,57 +9879,7 @@ function ui670DetailRows(lead,mc){
   return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
 }
 
-renderLeadFoco=function(lead){
-  ui667ModoDetalheLead(true);
-  __renderLeadFoco631Base(lead);
-  const wrap=qs("#leadFocoArea .lead-foco"),legacy=wrap?.querySelector(".lead590");
-  if(!wrap||!legacy)return;
-  const a=lead.analysis||{},mc=ui670ModeloComercial(lead);
-  let msgs=ui670Messages(a);
-  msgs=ui682MesclarMensagens(msgs, lead, mc);
-  const stale=Number(mc.versao||a._schemaComercial||0)<684;
-  const noAction=mc?.acao?.status==="sem-acao-urgente";
-  const preferred=noAction?"a":msgs.recomendada;
-  state._ui670Messages={a:msgs.a,b:msgs.b,c:msgs.c};state._ui670MessageKey=preferred;state._ui670LeadPhone=lead.phone||"";
-  const last=ui670UltimaMensagemReal(lead);
-  const recent=(Array.isArray(lead.recentMessages)?lead.recentMessages:[]).filter(m=>String(m?.text||"").trim()).slice(-4).reverse();
-  const timeline=recent.length?recent.map((m,i)=>{const pn=String(lead.name||"").toLowerCase().split(/\s+/)[0]||"";const cli=ehMsgDoCliente(m,pn);return `<div class="ui670-timeline-row"><i class="${i===0?'active':''}"></i><div><b>${escapeHtml(cli?String(lead.name||"Contato").split(/\s+/)[0]:"Você")}</b><p>${escapeHtml(String(m.text||"").slice(0,240))}</p><small>${escapeHtml([m.date,m.time].filter(Boolean).join(" "))}</small></div></div>`}).join(""):'<div class="empty">Sem mensagens recentes.</div>';
-  const opp=UI670_OPP_LABEL[mc?.oportunidade?.status]||["Situação não definida","neutral"];
-  const rel=UI670_REL_LABEL[mc?.relacionamento?.status]||["Relacionamento não definido","neutral"];
-  const act=UI670_ACTION_LABEL[mc?.acao?.status]||["Ação não definida","neutral"];
-  const type=ui670TipoContatoLabel(mc?.contato?.tipo);
-  const compradorFinal=String(mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal||"").trim();
-  const ultimaAnaliseTxt = ui682FormatarDataHora(a.reanalisadoEm || a.updatedAt || a.atualizadoEm);
-  const ultimaAnaliseHtml = ultimaAnaliseTxt ? `<div class="ui682-last-analysis">Última análise: ${escapeHtml(ultimaAnaliseTxt)}</div>` : `<div class="ui682-last-analysis muted">Última análise: ainda não registrada</div>`;
-  const oportunidadeEncerrada=["perdida","ganha"].includes(String(mc?.oportunidade?.status||""));
-  const statusTopo=oportunidadeEncerrada
-    ? `<span class="ui677-closed-badge">${mc?.oportunidade?.status==="ganha"?"✓ Vendida":"Encerrada"}</span>`
-    : `<button type="button" class="ui-attended-main${ehContatadoHoje(lead)?' is-done':''}" onclick="ui667MarcarAtendido(this)" ${ehContatadoHoje(lead)?'disabled':''}>${ehContatadoHoje(lead)?'✓ Atendido hoje':'✓ Atendido'}</button>`;
-  const seq=state.sequencia?`<div class="ui670-sequence"><b>Atendendo ${state.sequencia.idx+1} de ${state.sequencia.ids.length}</b><span></span><button onclick="proximoDaSequencia()">${state.sequencia.idx>=state.sequencia.ids.length-1?'Finalizar':'Próximo'}</button><button class="secondary" onclick="sairDaSequencia()">Sair</button></div>`:"";
-  const messageBlock=stale
-    ? `<section class="ui670-card ui670-no-message ui672-awaiting"><div class="ui670-section-title"><span>Mensagem</span><span class="ui670-badge neutral">Aguardando atualização</span></div><h3>Mensagem temporariamente oculta</h3><p>A análise anterior não será usada como orientação ativa. Atualize a análise comercial para gerar uma mensagem coerente com as últimas falas.</p></section>`
-    : noAction
-      ? `<section class="ui670-card ui670-no-message"><div class="ui670-section-title"><span>Mensagem</span>${ui670Badge(act)}</div><h3>Nenhuma mensagem necessária agora</h3><p>A conversa está concluída neste momento. Enviar outra abordagem agora criaria pressão sem uma pendência comercial aberta.</p>${lead.phone?'<button class="ui670-secondary-btn" onclick="ui670OpenWhatsLivre()">Abrir WhatsApp sem texto</button>':''}</section>`
-      : `<section class="ui670-card ui670-message-card"><div class="ui670-section-title"><span>Mensagem recomendada</span>${ui670Badge(act)}</div><div class="ui670-msg-options"><button class="ui670-msg-option ${preferred==='a'?'active':''}" data-key="a" onclick="ui670SelectMessage('a')">${escapeHtml(msgs.aLabel)}</button><button class="ui670-msg-option ${preferred==='b'?'active':''}" data-key="b" onclick="ui670SelectMessage('b')">${escapeHtml(msgs.bLabel)}</button><button class="ui670-msg-option ${preferred==='c'?'active':''}" data-key="c" onclick="ui670SelectMessage('c')">${escapeHtml(msgs.cLabel)}</button></div><div id="ui670MessageText" class="ui670-message-text" contenteditable="true">${escapeHtml(msgs[preferred]||"Atualize a análise comercial para gerar uma resposta.")}</div><small>Você pode editar antes de copiar ou abrir o WhatsApp.</small><div class="ui670-message-actions"><button onclick="ui670CopyMessage()">Copiar mensagem</button>${lead.phone?'<button class="primary" onclick="ui670OpenWhats()">Abrir WhatsApp</button>':''}</div></section>`;
-  const shell=document.createElement("div");shell.className="lead-ui670";
-  shell.innerHTML=`${seq}<div class="ui670-head"><div><button class="ui670-back" onclick="voltarDoLead()">‹ Voltar</button><h2>${escapeHtml(lead.name||"Contato")}</h2><div class="ui670-subline"><span>${escapeHtml(type)}</span>${compradorFinal?`<span>Comprador: ${escapeHtml(compradorFinal)}</span>`:""}<span>${escapeHtml(mc?.oportunidade?.produto||produtosLabel(lead)||"Produto não identificado")}</span><span>Última fala: ${escapeHtml(ui670FalanteLabel(lead,mc))}</span></div>${ultimaAnaliseHtml}</div>${statusTopo}</div>
-  ${stale?`<div class="ui670-stale"><div><b>Análise comercial antiga</b><span>As informações antigas não serão usadas como orientação ativa. Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</span></div><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:""}
-  <div class="ui670-status-grid"><article class="ui670-status-card"><small>Oportunidade</small>${ui670Badge(opp)}<p>${escapeHtml(mc?.oportunidade?.motivo||"Situação não consolidada.")}</p></article><article class="ui670-status-card"><small>Relacionamento</small>${ui670Badge(rel)}<p>${escapeHtml(mc?.relacionamento?.motivo||"Relacionamento ainda não avaliado.")}</p></article></div>
-  <section class="ui670-card ui670-action-card"><div class="ui670-section-title"><span>Próxima ação</span>${stale?'<span class="ui670-badge neutral">Aguardando atualização</span>':ui670Badge(act)}</div><h3>${escapeHtml(stale?"Atualize a análise comercial antes de usar uma orientação de ação.":(mc?.acao?.descricao||"Ação ainda não definida."))}</h3><div class="ui670-action-buttons">${!stale&&lead.phone?`<button onclick="${noAction?'ui670OpenWhatsLivre()':'ui670OpenWhats()'}">Abrir WhatsApp</button>`:''}<button onclick="ui670Toggle('ui670SchedulePanel')">Agendar</button><button onclick="ui670Toggle('ui670NotePanel')">Adicionar observação</button>${ui670Parceiro(lead)?'<button onclick="ui670NovaOportunidade()">Nova oportunidade</button>':''}</div>${ui670ScheduleHtml(lead)}</section>
-  ${messageBlock}
-  <section class="ui670-card"><div class="ui670-section-title"><span>Últimas mensagens</span><em>${totalMensagensLead(lead)} no histórico</em></div><div class="ui670-timeline">${timeline}</div><div id="ui670HistorySlot"></div></section>
-  <details class="ui670-details"><summary>Detalhes comerciais</summary><div class="ui670-details-body">${ui670DetailRows(lead,mc)}</div></details>
-  <details class="ui670-details" id="ui670NotePanel" hidden><summary>Registrar observação ou atendimento detalhado</summary><div id="ui670NoteSlot" class="ui670-details-body"></div></details>
-  <details class="ui670-details"><summary>Ferramentas e ações administrativas</summary><div class="ui670-admin-actions">${!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='abrirPropostaComLead(${safeJson(lead.name||"")},${safeJson(lead.product||"")},${JSON.stringify(String(lead.id||""))})'>Gerar proposta</button>`:""}${lead.id&&normalizarEtapa(lead.etapa)!=="Geladeira"?`<button onclick='arquivarLead(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Colocar na geladeira</button>`:""}${lead.id&&!ui670Parceiro(lead)&&!["ganha","perdida"].includes(mc?.oportunidade?.status)?`<button onclick='marcarPerdido(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Encerrar oportunidade</button>`:""}${lead.id?`<button class="danger" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead.id))},${safeJson(lead.name||"")})'>Excluir definitivamente</button>`:""}</div></details>`;
-  wrap.insertBefore(shell,legacy);
-
-  // Reaproveita só os controles úteis do motor antigo; todo o conteúdo duplicado fica oculto.
-  const note=legacy.querySelector("#novoAtendimentoPanel");if(note)qs("#ui670NoteSlot")?.appendChild(note);
-  const hist=[...legacy.querySelectorAll("details")].find(d=>/ver histórico de conversa/i.test(d.querySelector("summary")?.textContent||""));
-  if(hist)qs("#ui670HistorySlot")?.appendChild(hist);
-  legacy.classList.add("ui670-legacy-hidden");
-};
-window.renderLeadFoco=renderLeadFoco;
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 
 
 /* ============================================================
@@ -10531,15 +10019,7 @@ window.renderLeadFoco=renderLeadFoco;
       if(typeof carregarDashboard==='function') carregarDashboard();
     }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
   };
-
-  const __ui683RenderLeadFoco = typeof renderLeadFoco==='function' ? renderLeadFoco : null;
-  if(__ui683RenderLeadFoco){
-    renderLeadFoco = function(lead){
-      __ui683RenderLeadFoco(lead);
-      try{ ui683EnhanceLead(lead); }catch(e){ console.warn('ui683EnhanceLead',e); }
-    };
-    window.renderLeadFoco = renderLeadFoco;
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
@@ -10697,14 +10177,7 @@ window.renderLeadFoco=renderLeadFoco;
       .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
       .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
   }
-  const antigoRender = window.renderLeadFoco;
-  if(typeof antigoRender === 'function'){
-    window.renderLeadFoco = function(lead){
-      antigoRender(lead);
-      setTimeout(ui683CorrigirBotoesRapidos, 30);
-    };
-    renderLeadFoco = window.renderLeadFoco;
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 })();
 
 
@@ -10823,29 +10296,7 @@ window.renderLeadFoco=renderLeadFoco;
     const h3=action.querySelector('h3');
     if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
-  const anterior=window.renderLeadFoco;
-  if(typeof anterior==='function'){
-    window.renderLeadFoco=function(lead){
-      anterior(lead);
-      try{
-        ui684InjectStyles();
-        const wrap=document.querySelector('#leadFocoArea .lead-foco')||document.querySelector('#leadFocoArea');
-        if(!wrap) return;
-        document.getElementById('ui684IAComercial')?.remove();
-        const tmp=document.createElement('div'); tmp.innerHTML=ui684RenderCard(lead);
-        const card=tmp.firstElementChild;
-        const actionCard=document.querySelector('.ui670-action-card');
-        const msgCard=document.querySelector('.ui670-message-card');
-        const details=document.querySelector('.ui670-details');
-        if(actionCard && actionCard.parentNode) actionCard.parentNode.insertBefore(card, actionCard.nextSibling);
-        else if(msgCard && msgCard.parentNode) msgCard.parentNode.insertBefore(card, msgCard);
-        else if(details && details.parentNode) details.parentNode.insertBefore(card, details);
-        else wrap.prepend(card);
-        ui684EnhanceActionCard(lead);
-      }catch(e){ console.warn('ui684',e); }
-    };
-    renderLeadFoco=window.renderLeadFoco;
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
   window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
 
@@ -11082,25 +10533,7 @@ window.renderLeadFoco=renderLeadFoco;
       @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
     `; document.head.appendChild(st);
   }
-  if(typeof renderLeadFoco === 'function' && !window.__ui685FinalWrapped){
-    window.__ui685FinalWrapped = true;
-    const prev = renderLeadFoco;
-    window.renderLeadFoco = function(lead){
-      const out = prev.apply(this, arguments);
-      try{
-        injectStyles();
-        document.querySelector('.ui685-final-card')?.remove();
-        const html = cardAprendizado(lead);
-        if(html){
-          const tmp=document.createElement('div'); tmp.innerHTML=html;
-          const ref=document.querySelector('.ui670-details') || document.querySelector('.ui684-card') || document.querySelector('#leadFocoArea .lead-foco');
-          if(ref && ref.parentNode) ref.parentNode.insertBefore(tmp.firstElementChild, ref.nextSibling);
-        }
-      }catch(e){ console.warn('ui685-final-card', e); }
-      return out;
-    };
-    renderLeadFoco = window.renderLeadFoco;
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
   function abrirModalDesfechoFinal(id, tipo){
     const lead = (state && state.lead) || {};
     const vendido = tipo === 'vendido';
@@ -11339,17 +10772,7 @@ window.renderLeadFoco=renderLeadFoco;
     `;
     document.head.appendChild(st);
   }
-
-  if(typeof renderLeadFoco === 'function' && !window.__cp685AjustesRenderWrapped){
-    window.__cp685AjustesRenderWrapped = true;
-    const prev = renderLeadFoco;
-    window.renderLeadFoco = function(lead){
-      const out = prev.apply(this, arguments);
-      try{ injetarEstiloAjustes(); injetarAjustesLead(lead); }catch(e){ console.warn('v685-ajustes', e); }
-      return out;
-    };
-    renderLeadFoco = window.renderLeadFoco;
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
 })();
@@ -11402,18 +10825,7 @@ window.renderLeadFoco=renderLeadFoco;
       });
     }catch(_){}
   }
-
-  const prevRender = window.renderLeadFoco;
-  if(typeof prevRender === 'function' && !window.__cp685Ajustes2RenderWrapped){
-    window.__cp685Ajustes2RenderWrapped = true;
-    window.renderLeadFoco = function(lead){
-      const out = prevRender.apply(this, arguments);
-      setTimeout(reforcarBotaoEditar, 0);
-      setTimeout(reforcarBotaoEditar, 80);
-      return out;
-    };
-    try { renderLeadFoco = window.renderLeadFoco; } catch(_) {}
-  }
+// Atualização #710: wrapper antigo de renderLeadFoco removido.
 
   setTimeout(reforcarBotaoEditar, 0);
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
@@ -11421,7 +10833,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — revisão de auditoria
+   Atualização #710 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11573,7 +10985,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — fechamento real da pendência de performance
+   Atualização #710 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11709,7 +11121,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — acabamento profissional estável
+   Atualização #710 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11830,7 +11242,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — Hotfix real mobile
+   Atualização #710 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11915,7 +11327,7 @@ window.renderLeadFoco=renderLeadFoco;
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #709');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #710');
     });
   }
   function cp694FixFab(){
@@ -12003,7 +11415,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — Correção real da lista mobile
+   Atualização #710 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -12068,7 +11480,7 @@ window.renderLeadFoco=renderLeadFoco;
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #709');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #710');
     });
   }
   function fixFab(){
@@ -12203,7 +11615,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — Correção definitiva carregamento total Atendimentos
+   Atualização #710 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -12269,7 +11681,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #709');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #710');
     });
   }
   function applyLayoutFixes(){
@@ -12368,7 +11780,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — Preparação da Carteira
+   Atualização #710 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -12444,7 +11856,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #709');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #710');
     });
   }
   async function fetchAll697(force){
@@ -12590,7 +12002,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — correção de versão exibida no topo/mobile
+   Atualização #710 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
@@ -12607,11 +12019,11 @@ window.renderLeadFoco=renderLeadFoco;
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #709');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #710');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #709');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #710');
       });
     }catch(_){ }
   }
@@ -12626,7 +12038,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — estabilidade pós-cache
+   Atualização #710 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
@@ -12636,7 +12048,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #709');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #710');
       });
     }catch(_){ }
   }
@@ -12648,7 +12060,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #709 — Preparação da Carteira estável
+   Atualização #710 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12670,7 +12082,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #709');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #710');
       });
     }catch(_){ }
   }
@@ -12828,302 +12240,5 @@ window.renderLeadFoco=renderLeadFoco;
 })();
 
 
-/* ============================================================
-   Atualização #709 — Tela do lead orientada à ação
-   - Baseada na terceira prévia aprovada pelo usuário.
-   - Mantém as 3 sugestões de resposta.
-   - Reduz duplicidade visual e recolhe informações secundárias.
-   - Não altera banco, IA, importação nem funções existentes.
-   ============================================================ */
-(function(){
-  if(window.__cp704LeadUx) return;
-  window.__cp704LeadUx = true;
-  window.CORRETOR_PRO_VERSION = 709;
 
-  function cp704Css(){
-    if(document.getElementById('cp704LeadUxCSS')) return;
-    const css=document.createElement('style'); css.id='cp704LeadUxCSS';
-    css.textContent=`
-      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;max-width:760px;margin:0 auto;color:var(--text)}
-      .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
-      .cp704-back{border:0;background:transparent;color:var(--muted);font-weight:900;font-size:14px;padding:4px 0;cursor:pointer}
-      .cp704-attended{border:1px solid rgba(104,255,149,.55);background:rgba(104,255,149,.10);color:#68ff95;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
-      .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:.96}
-      .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
-      .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
-      .cp704-tags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cp704-tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);padding:5px 8px;border-radius:999px;font-weight:850}
-      .cp704-mainrow{display:grid;grid-template-columns:1fr 96px;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(255,201,107,.45);background:rgba(255,201,107,.10);color:#ffd28a}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}
-      .cp704-prob{width:88px;height:88px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:conic-gradient(var(--lime) calc(var(--p)*1%),rgba(255,255,255,.08) 0);position:relative}.cp704-prob:after{content:"";position:absolute;inset:9px;border-radius:50%;background:#082d38}.cp704-prob b,.cp704-prob span{position:relative;z-index:1}.cp704-prob b{font-size:25px;line-height:1;font-weight:950}.cp704-prob span{font-size:10px;color:var(--lime);font-weight:950;margin-top:4px}
-      .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(237,246,248,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
-      .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
-      .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
-      .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
-      .cp704-step{display:grid;grid-template-columns:30px 1fr 22px;gap:10px;align-items:center}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}
-      .cp704-msg-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}.cp704-msg-tabs button{border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:var(--muted);border-radius:10px;padding:9px 6px;font-size:12px;font-weight:950;cursor:pointer}.cp704-msg-tabs button.active{background:rgba(255,107,92,.95);border-color:rgba(255,107,92,.95);color:white}.cp704-msg-list{display:flex;flex-direction:column;gap:9px}.cp704-msg-item{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:11px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:end;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 9px;font-size:11px;font-weight:900;cursor:pointer}.cp704-wa{width:100%;margin-top:12px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--lime),#ff4f45);color:white;padding:14px 16px;font-size:15px;font-weight:950;cursor:pointer}.cp704-wa small{display:block;font-size:11px;opacity:.86;margin-top:2px}.cp704-empty-analysis{border:1px solid rgba(255,201,107,.35);background:rgba(255,201,107,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:#ffd28a}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(255,201,107,.45);background:rgba(255,255,255,.04);color:#ffd28a;border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
-      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted)}.cp704-details[open] summary:after{content:"⌃"}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
-      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,107,92,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,107,92,.55)!important;color:#ff7f74!important;background:rgba(255,107,92,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
-      .cp704-stale{border-color:rgba(255,201,107,.45);background:rgba(255,201,107,.08)}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.50);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:12px;font-weight:950}
-      @media(max-width:560px){.cp704-lead{gap:12px}.cp704-top{align-items:flex-start}.cp704-top-actions{max-width:72%;gap:6px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr 86px}.cp704-prob{width:82px;height:82px}.cp704-msg-item{grid-template-columns:24px 1fr;position:relative}.cp704-copy{grid-column:2;justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-msg-tabs button{font-size:11px}}
-    `;
-    document.head.appendChild(css);
-  }
-  function cp704Text(v, fallback='') { return String(v == null ? fallback : v).trim(); }
-
-  function cp705FormatDateTime(v){
-    const raw=String(v||'').trim();
-    if(!raw) return '';
-    const d=new Date(raw);
-    if(!Number.isNaN(d.getTime())){
-      return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
-    }
-    return raw.replace(/T/, ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
-  }
-  function cp705PlainText(v){ return String(v||'').replace(/\s+/g,' ').trim(); }
-  function cp705HasEvidence(lead,re){
-    // Evidência só vem de mensagens/histórico do lead, nunca de resumo gerado pela IA.
-    const arrays = [lead?.recentMessages, lead?.timeline, lead?.messages, lead?.history, lead?.mensagens].filter(Array.isArray);
-    const txt = arrays.flat().map(m => {
-      if(!m) return '';
-      if(typeof m === 'string') return m;
-      return String(m.text || m.body || m.message || m.mensagem || '');
-    }).join(' ').toLowerCase();
-    return re.test(txt);
-  }
-  function cp705SanitizeFactText(text, lead){
-    let out=cp705PlainText(text);
-    const hasFin=cp705HasEvidence(lead,/\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|cr[eé]dito|aprova|juros|simula)\b/i);
-    if(!hasFin){
-      out=out
-        .replace(/,?\s*com dúvidas sobre financiamento e parcelas/ig,'')
-        .replace(/\s*e pediu esclarecimentos sobre valor, financiamento e parcelas/ig,'')
-        .replace(/\s*com ponto financeiro citado no histórico/ig,'')
-        .replace(/\b(viabilidade financeira|trava financeira|encaixe financeiro|financeiro|financeira|financiamento|financiamentos|parcelamento|parcelas|parcela|FGTS|Caixa|banco|aprovação de crédito|crédito)\b/ig,'perfil de compra')
-        .replace(/\b(dúvidas?|dúvida)\s+sobre\s+perfil de compra/ig,'perfil de compra ainda não confirmado')
-        .replace(/perfil de compra\s+e\s+perfil de compra/ig,'perfil de compra')
-        .replace(/perfil de compra\s*,\s*perfil de compra/ig,'perfil de compra');
-    }
-    return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
-  }
-  function cp705Short(v, n=150){
-    const t=cp705PlainText(v);
-    return t.length>n ? t.slice(0,n-3).trim()+'...' : t;
-  }
-
-  function cp707ObservationFacts(lead){
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-    const textos=[mem.observacoes,a.summary,a.nextAction,a.risk,a.clientProfile]
-      .concat(msgs.slice(-20).map(m=>m?.text||m?.body||m?.message||''))
-      .map(cp705PlainText).filter(Boolean);
-    const joined=textos.join(' \n ');
-    const norm=joined.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const mulher=/\b(mulher|esposa)\b/.test(norm);
-    const negou=/(nao|não|sem)\s.{0,28}\b(quis|quer|aprovou|aprova|aprovacao|aceitou|aceita|gostou|autorizou|topou)\b|\b(nao quis|nao aprovou|nao gostou|nao topou)\b/.test(norm);
-    if(mulher && negou){
-      const pessoa=/\besposa\b/.test(norm)?'esposa':'mulher';
-      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || 'Renaissance');
-      const primeiro=cp704Text(lead?.name,'').split(/\s+/)[0]||'';
-      return {
-        tipo:'decisor_negou',
-        situacao:'Em decisão',
-        motivo:`A ${pessoa} não aprovou a compra neste momento.`,
-        insight1:`Fato: a decisão depende da ${pessoa}.`,
-        insight2:`Inferência: ainda não é perda confirmada.`,
-        insight3:`Ação: retomada leve e objetiva.`,
-        next:`Retomar com leveza para confirmar se houve mudança na decisão da ${pessoa}, sem criar nova objeção.`,
-        msgA:`${primeiro}, entendi o ponto sobre a decisão de vocês. Como ficou em aberto, queria saber se houve alguma mudança nesse cenário ou se prefere que eu deixe o ${produto} em acompanhamento por enquanto.`.trim(),
-        msgB:`${primeiro}, obrigado por me atualizar. Vou respeitar esse momento e deixar a oportunidade em aberto. Se ajudar, depois posso organizar uma comparação simples com opções do mesmo perfil.`.trim(),
-        msgC:`${primeiro}, para eu conduzir do jeito certo: quer que eu mantenha contato mais adiante sobre o ${produto} ou prefere que eu aguarde você me chamar quando tiver uma posição melhor?`.trim()
-      };
-    }
-    return null;
-  }
-
-  function cp705MessagesReady(msgs){
-    const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
-    if(vals.some(v=>!v)) return false;
-    return !vals.some(v=>/atualize a an[aá]lise comercial|gerar a resposta|resposta recomendada|resposta mais suave|resposta mais direta/i.test(v));
-  }
-
-  function cp704Prob(lead){
-    const ref = (typeof probabilidadeRefinada==='function') ? probabilidadeRefinada(lead) : null;
-    const n = ref != null ? Number(ref) : (Number(lead?.probabilityPercent)||Number(lead?.analysis?.probabilityPercent)||0);
-    return Math.max(0, Math.min(100, Math.round(n||0)));
-  }
-  function cp704NivelProb(n){ return n>=70?'Alta':(n>=45?'Média':'Baixa'); }
-  function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
-  function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
-  function cp704Situacao(mc, lead){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.situacao) return obsFact.situacao;
-    const st=cp704Text(mc?.oportunidade?.status || lead?.etapa || 'em análise').toLowerCase();
-    if(/decis/.test(st)) return 'Em decisão';
-    if(/negocia/.test(st)) return 'Em negociação';
-    if(/analise|finance/.test(st)) return 'Análise financeira';
-    if(/compar/.test(st)) return 'Em comparação';
-    if(/interesse/.test(st)) return 'Com interesse';
-    if(/perdid|encerr/.test(st)) return 'Perdido';
-    if(/ganh|vend/.test(st)) return 'Vendido';
-    if(/geladeira/.test(st)) return 'Na geladeira';
-    return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
-  }
-  function cp704Impedimento(lead, mc){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.motivo) return obsFact.motivo;
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    return cp705SanitizeFactText(cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.'), lead);
-  }
-  function cp704Next(lead, mc){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.next) return obsFact.next;
-    const a=lead?.analysis||{};
-    return cp705SanitizeFactText(cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.'), lead);
-  }
-  function cp704DataHora(m){
-    return cp705FormatDateTime([m?.date,m?.time].filter(Boolean).join(' ') || cp704Text(m?.displayTime || m?.createdAt || m?.iso || ''));
-  }
-  function cp704RecentMessages(lead, max=4){
-    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-    return msgs.filter(m=>cp704Text(m?.text)).slice(-max).reverse();
-  }
-  function cp704TimelineHtml(lead){
-    const msgs=cp704RecentMessages(lead,4);
-    const pn=cp704Text(lead?.name).toLowerCase().split(/\s+/)[0]||'';
-    if(!msgs.length) return '<div class="empty">Sem mensagens recentes.</div>';
-    return msgs.map((m,i)=>{
-      const cliente=(typeof ehMsgDoCliente==='function') ? ehMsgDoCliente(m,pn) : false;
-      const who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
-      return `<div class="cp704-tmsg"><span class="cp704-dot ${cliente?'':'you'}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,260))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
-    }).join('');
-  }
-  function cp704DetailRows(lead,mc){
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    const rows=[
-      ['Papel do contato',mc?.contato?.papel || a.tipoContato],
-      ['Comprador final',mc?.oportunidade?.compradorFinal || mc?.contato?.compradorFinal],
-      ['Produto',cp704Produto(lead,mc)],
-      ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
-      ['Motivo da oportunidade',mc?.oportunidade?.motivo],
-      ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
-      ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
-      ['Preferências',mem.preferencias],
-      ['Observações',mem.observacoes || a.summary]
-    ].filter(r=>cp704Text(r[1]));
-    return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
-  }
-  function cp704Insights(lead,mc){
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    const arr=[];
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact) return [obsFact.insight1,obsFact.insight2,obsFact.insight3].filter(Boolean);
-    const facts=Array.isArray(a.fatosConfirmados)?a.fatosConfirmados.filter(Boolean).slice(0,2):[];
-    const infs=Array.isArray(a.inferenciasIA)?a.inferenciasIA.filter(Boolean).slice(0,1):[];
-    if(facts.length || infs.length) return facts.concat(infs).map(x=>cp705Short(cp705SanitizeFactText(x,lead),96)).slice(0,3);
-    const imp=cp704Impedimento(lead,mc);
-    if(imp && !/não identificado/i.test(imp)) arr.push(imp.length>90 ? imp.slice(0,87)+'...' : imp);
-    const rel=cp704Text(mc?.relacionamento?.motivo || mem.pessoasDecisao);
-    if(rel) arr.push(rel.length>90 ? rel.slice(0,87)+'...' : rel);
-    const next=cp704Next(lead,mc);
-    if(next) arr.push(next.length>96 ? next.slice(0,93)+'...' : next);
-    const fallback=['A IA ainda precisa consolidar os sinais deste lead.','Atualize a análise quando houver novas mensagens.','Mantenha a próxima ação ligada ao último compromisso.'];
-    return [...arr, ...fallback].filter(Boolean).slice(0,3);
-  }
-  function cp704Msgs(lead){
-    const a=lead?.analysis||{};
-    const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
-    const obsFact=cp707ObservationFacts(lead);
-    const mc=cp704Modelo(lead);
-    const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
-    const out={
-      a:cp705SanitizeFactText(cp704Text(m.a || a.recommendedMessage || fb.a || ''), lead),
-      b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
-      c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
-      aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
-    };
-    if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
-      out.a=cp705SanitizeFactText(fb.a,lead); out.b=cp705SanitizeFactText(fb.b,lead); out.c=cp705SanitizeFactText(fb.c,lead);
-    }
-    return out;
-  }
-  window.cp704SelectedMsg='a';
-  window.cp704SelectMsg=function(k){
-    window.cp704SelectedMsg = ['a','b','c'].includes(k)?k:'a';
-    document.querySelectorAll('.cp704-msg-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.key===window.cp704SelectedMsg));
-    document.querySelectorAll('.cp704-msg-item').forEach(el=>el.style.borderColor = el.dataset.key===window.cp704SelectedMsg ? 'rgba(255,107,92,.65)' : 'rgba(255,255,255,.075)');
-  };
-  function cp704GetMessage(k){ const el=document.querySelector(`.cp704-msg-item[data-key="${k||window.cp704SelectedMsg}"] p`); return cp704Text(el?.innerText || el?.textContent); }
-  window.cp704CopyMsg=async function(k){
-    const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
-    try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
-    catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
-  };
-  window.cp704OpenWhats=function(){
-    const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
-    if(!lead.phone){ cp704CopyMsg(window.cp704SelectedMsg); toast('Telefone não identificado. Mensagem copiada.'); return; }
-    const url=(typeof whatsappLink==='function') ? whatsappLink(lead.phone,msg) : `https://wa.me/${String(lead.phone).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
-    window.open(url,'_blank');
-  };
-  window.cp704HistoryToggle=function(){
-    try{
-      const legacy=document.querySelector('.ui670-legacy-hidden') || document.querySelector('.lead-ui670');
-      const hist=[...document.querySelectorAll('details')].find(d=>/histórico de conversa/i.test(d.textContent||''));
-      if(hist){ hist.open=true; hist.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-    }catch(_){ }
-    toast('Histórico completo indisponível nesta tela.');
-  };
-  function cp704QuickActions(lead,mc){
-    const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button onclick="abrirEditarLead&&abrirEditarLead(${id},${name},${JSON.stringify(String(lead?.phone||''))})">Editar lead</button><button onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
-    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button class="good" onclick='(typeof marcarVendido==='function')?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
-    <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
-  }
-  const prev=window.renderLeadFoco || renderLeadFoco;
-  window.renderLeadFoco=function(lead){
-    cp704Css();
-    try{ prev.apply(this,arguments); }catch(err){ console.warn('Render legado falhou antes da UX 704:',err); }
-    const area=document.querySelector('#leadFocoArea'); if(!area||!lead) return;
-    document.body.classList.add('lead-foco-aberto'); state.focoLeadId=lead?.id||null;
-    const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
-    const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
-    const messagesReady=cp705MessagesReady(msgs);
-    const needsAnalysis=stale; // v708: mensagens de fallback confiáveis aparecem mesmo quando a API não devolve 3 textos
-    const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
-    const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
-    const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
-    const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
-    const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
-    const insights=cp704Insights(lead,mc).map(x=>`<li><i>✓</i><span>${escapeHtml(x)}</span></li>`).join('');
-    area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">⟳ Reanalisar agora</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'✓ Atendido hoje':'✓ Marcar atendimento'}</button></div></div>
-      <section class="cp704-hero">
-        <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
-        <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),150))}</p></div><div class="cp704-prob" style="--p:${prob}"><b>${prob}%</b><span>${escapeHtml(cp704NivelProb(prob))}</span></div></div>
-        <div class="cp704-metrics"><div class="cp704-metric"><span>🤝</span><div><small>Relacionamento</small>${escapeHtml(rel)}</div></div><div class="cp704-metric"><span>⏱</span><div><small>Urgência</small>${escapeHtml(urg)}</div></div></div>
-      </section>
-      ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
-      <section class="cp704-card cp704-ai"><div class="cp704-card-title"><h2>O que a IA percebeu</h2></div><ul>${insights}</ul></section>
-      <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
-      <section class="cp704-card"><div class="cp704-card-title"><h2>Mensagem recomendada</h2></div>
-        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagens ainda não geradas.</b><span>Atualize a análise comercial para criar as 3 sugestões corretas.</span><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button><button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button><button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button></div>
-        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><span class="cp704-num">1</span><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div><div class="cp704-msg-item" data-key="b"><span class="cp704-num">2</span><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div><div class="cp704-msg-item" data-key="c"><span class="cp704-num">3</span><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div></div>
-        <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>`}
-      </section>
-      <div class="cp704-accordions">
-        <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
-        <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
-        <details class="cp704-details"><summary>Observações importantes</summary><div class="cp704-body">${escapeHtml(cp705SanitizeFactText(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem observações consolidadas.'),lead))}</div></details>
-        <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
-      </div>
-      <div class="cp704-quickbar"><button class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button onclick="abrirEditarLead&&abrirEditarLead(${JSON.stringify(String(lead.id||''))},${JSON.stringify(String(lead.name||''))},${JSON.stringify(String(lead.phone||''))})">Editar lead</button></div>
-      ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
-    </div>`;
-    window.cp704SelectMsg(window.cp704SelectedMsg||'a');
-    return null;
-  };
-  try{ renderLeadFoco=window.renderLeadFoco; }catch(_){ }
-  setTimeout(()=>{
-    document.querySelectorAll('.sb-ver-top,.cp-mobile-version').forEach(el=>{ if(/Atualiza/i.test(el.textContent||'')) el.textContent='Atualização #709'; });
-  },0);
-})();
+// Atualização #710: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
