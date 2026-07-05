@@ -161,10 +161,7 @@ EXEMPLO DE PADRÃO BOM (adapte aos fatos reais; não copie se não houver esses 
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
 const REGRAS_MSG_PROMPT = [
   "- Use exclusivamente a conversa e o diagnóstico abaixo.",
-  "- PROTOCOLO DE CONFIANÇA: separe mentalmente FATO (escrito no histórico/anotação) de INFERÊNCIA (conclusão sua). Mensagem ao cliente só pode citar FATO confirmado ou perguntar de forma neutra.",
   "- Não invente fato, proposta, valor, visita, produto ou objeção que não esteja na conversa.",
-  "- É PROIBIDO citar financiamento, banco, FGTS, crédito, renda, entrada, parcelas, preço ou valor se esses termos não aparecerem no histórico real.",
-  "- É PROIBIDO sugerir que o produto não agradou/não encaixou se isso não foi dito; nesse caso use 'se houve mudança no cenário' ou 'como você prefere seguir'.",
   "- Continue do ponto onde a conversa parou (pendência aberta e próxima ação do diagnóstico).",
   "- A mensagem precisa conter uma âncora concreta do histórico quando existir: último combinado, material enviado, produto, perfil declarado, decisor, objeção ou valor.",
   "- Se o cliente ficou de conversar com esposo/esposa/família após receber vídeo, fotos ou proposta, retome exatamente isso antes de oferecer alternativa.",
@@ -242,7 +239,6 @@ function validarMensagensComerciais({ mensagens, labels, lead, timelineText, par
     outMsgs[k] = msg;
     outLabels[k] = label;
   }
-  issues.push(...cp708MessagesIssues({ mensagens: outMsgs, timelineText }));
   return {
     ok: issues.length === 0,
     corrigido: false,
@@ -255,116 +251,6 @@ function validarMensagensComerciais({ mensagens, labels, lead, timelineText, par
 
 export function __testarValidacaoMensagensComerciais(input = {}) {
   return validarMensagensComerciais(input);
-}
-
-
-// Atualização #708 — IA Comercial 3.0: separa fato de inferência e bloqueia
-// afirmações sem evidência no histórico. O modelo pode inferir estratégia, mas
-// não pode inventar motivo, condição financeira, preço, banco, parcelas, visita,
-// FGTS, renda ou rejeição de produto quando isso não está na conversa/anotação.
-function cp708Norm(txt) {
-  return String(txt || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-function cp708TextoHistorico(timelineText, timeline) {
-  const a = String(timelineText || "");
-  const b = (Array.isArray(timeline) ? timeline : [])
-    .map(m => [m?.author || "", m?.text || m?.body || m?.message || m?.mensagem || ""].join(": "))
-    .join("\n");
-  return `${a}\n${b}`;
-}
-function cp708Evidencias(texto) {
-  const h = cp708Norm(texto);
-  return {
-    financeiro: /\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|credito|aprovacao|juros|simula|financiar|financiado)\b/.test(h),
-    preco: /\b(preco|valor|caro|barato|or[cç]amento|investir|milhao|milhoes|r\$|\d+[\.,]?\d*\s*(mil|mi|milhao|milhoes))\b/.test(h),
-    produtoNegado: /\b(nao gostei|nao gostou|nao agradou|nao encaixou|produto nao|imovel nao|renaissance nao|opcao nao)\b/.test(h),
-    familia: /\b(esposa|mulher|marido|esposo|familia|familiar|socio|socia)\b/.test(h),
-    decisorNegou: /\b(esposa|mulher|marido|esposo|familia|familiar|socio|socia)\b.{0,48}\b(nao|sem)\b.{0,30}\b(aprov|quis|quer|aceit|topou|gostou|autoriz)\b|\b(nao|sem)\b.{0,30}\b(aprov|quis|quer|aceit|topou|gostou|autoriz)\b.{0,48}\b(esposa|mulher|marido|esposo|familia|familiar|socio|socia)\b/.test(h),
-    visita: /\b(visita|visitou|construtora|decorado|plantao|cafe|reuniao presencial)\b/.test(h),
-    proposta: /\b(proposta|contraproposta|reserva|sinal|contrato|assinatura)\b/.test(h)
-  };
-}
-function cp708SanitizeUnsupported(txt, evid) {
-  let out = String(txt || "").replace(/\s+/g, " ").trim();
-  if (!out) return out;
-  if (!evid.financeiro) {
-    out = out
-      .replace(/,?\s*(com|por|sobre)?\s*d[uú]vidas?\s+(sobre\s+)?(financiamento|parcelas?|parcelamento|fgts|banco|cr[eé]dito)[^,.]*/ig, "")
-      .replace(/\b(viabilidade financeira|trava financeira|encaixe financeiro|obje[cç][aã]o financeira|quest[aã]o financeira|financiamento|financiamentos|parcelamento|parcelas?|fgts|caixa|banco|aprova[cç][aã]o de cr[eé]dito|cr[eé]dito|renda|juros)\b/ig, "perfil de compra")
-      .replace(/\b(financeiro|financeira)\b/ig, "comercial");
-  }
-  if (!evid.preco) {
-    out = out
-      .replace(/\b(valor|pre[cç]o|caro|barato|or[cç]amento)\b/ig, "ponto")
-      .replace(/\bou\s+ao\s+ponto\b/ig, "")
-      .replace(/\bproduto,\s*ponto\s*ou\s*momento\b/ig, "ponto ainda não esclarecido");
-  }
-  if (!evid.produtoNegado) {
-    out = out
-      .replace(/\bou\s+o\s+produto\s+n[aã]o\s+(agradou|encaixou)[^?.!,]*/ig, "")
-      .replace(/\bou\s+o\s+Renaissance\s+(em si\s+)?n[aã]o\s+(agradou|encaixou)[^?.!,]*/ig, "")
-      .replace(/\balgum detalhe espec[ií]fico que n[aã]o agradou\b/ig, "algum ponto ainda ficou em aberto")
-      .replace(/\bse\s+(n[aã]o gostou|n[aã]o agradou)\b/ig, "se quiser avaliar outro caminho");
-  }
-  return out.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").replace(/\s*,\s*(\.|\?|!)/g, "$1").trim();
-}
-function cp708MessagesIssues({ mensagens, timelineText }) {
-  const evid = cp708Evidencias(timelineText);
-  const issues = [];
-  for (const k of ["a", "b", "c"]) {
-    const msg = cp708Norm(mensagens?.[k] || "");
-    if (!evid.financeiro && /\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|credito|juros|simula)\b/.test(msg)) issues.push(`${k}: menciona tema financeiro sem evidência no histórico`);
-    if (!evid.preco && /\b(preco|valor|caro|barato|orcamento)\b/.test(msg)) issues.push(`${k}: menciona preço/valor sem evidência no histórico`);
-    if (!evid.produtoNegado && /\b(nao agradou|nao gostou|nao encaixou|produto nao|renaissance em si nao)\b/.test(msg)) issues.push(`${k}: sugere rejeição ao produto sem evidência`);
-    if (/\b(produto,\s*valor\s*ou\s*momento|produto,\s*ponto\s*ou\s*momento)\b/.test(msg)) issues.push(`${k}: lista hipóteses como se fossem objeções`);
-  }
-  return issues;
-}
-function cp708AplicarProtocoloConfiavel(parsed, lead, timelineText, timeline) {
-  const out = (parsed && typeof parsed === "object") ? parsed : {};
-  const hist = cp708TextoHistorico(timelineText, timeline);
-  const evid = cp708Evidencias(hist);
-  const fatos = [];
-  const inferencias = [];
-  const produto = String(out.produtoInteresse || lead?.product || out?.modeloComercial?.oportunidade?.produto || "imóvel").trim();
-  if (produto) fatos.push(`Produto de interesse identificado: ${produto}.`);
-  if (evid.decisorNegou) fatos.push("Há registro de que a decisão não avançou por aprovação familiar/conjugal.");
-  if (!evid.financeiro) fatos.push("Não há fala identificada sobre financiamento, banco, FGTS, crédito, renda ou parcelas.");
-  if (!evid.preco) fatos.push("Não há fala identificada sobre preço/valor como objeção.");
-  if (!evid.produtoNegado) fatos.push("Não há fala identificada rejeitando o produto ou empreendimento.");
-  if (evid.decisorNegou) {
-    inferencias.push("A oportunidade deve ser tratada como decisão familiar em aberto, não como perda definitiva.");
-    inferencias.push("A retomada deve ser leve, preservando relacionamento e confirmando se houve mudança no cenário.");
-  }
-  out.fatosConfirmados = Array.isArray(out.fatosConfirmados) ? out.fatosConfirmados.concat(fatos) : fatos;
-  out.inferenciasIA = Array.isArray(out.inferenciasIA) ? out.inferenciasIA.concat(inferencias) : inferencias;
-  for (const key of ["summary", "clientProfile", "nextAction", "risk", "melhorPergunta", "estrategia"]) out[key] = cp708SanitizeUnsupported(out[key], evid);
-  if (out.diagnostico && typeof out.diagnostico === "object") {
-    for (const key of Object.keys(out.diagnostico)) if (typeof out.diagnostico[key] === "string") out.diagnostico[key] = cp708SanitizeUnsupported(out.diagnostico[key], evid);
-  }
-  if (out.memoriaSugerida && typeof out.memoriaSugerida === "object") {
-    for (const key of Object.keys(out.memoriaSugerida)) if (typeof out.memoriaSugerida[key] === "string") out.memoriaSugerida[key] = cp708SanitizeUnsupported(out.memoriaSugerida[key], evid);
-  }
-  if (out.modeloComercial && typeof out.modeloComercial === "object") {
-    const opp = out.modeloComercial.oportunidade || {};
-    const acao = out.modeloComercial.acao || {};
-    for (const obj of [opp, acao]) for (const key of Object.keys(obj)) if (typeof obj[key] === "string") obj[key] = cp708SanitizeUnsupported(obj[key], evid);
-    if (evid.decisorNegou) {
-      opp.status = "em-decisao";
-      opp.motivo = "Decisão familiar/conjugal ainda não avançou.";
-      acao.status = "retomar";
-      acao.descricao = "Retomar com leveza para confirmar se houve mudança na decisão familiar.";
-      acao.motivo = "Há registro de aprovação familiar/conjugal pendente.";
-    }
-  }
-  if (evid.decisorNegou) {
-    out.nextAction = "Retomar com leveza para confirmar se houve mudança na decisão familiar, sem tratar como perda e sem criar nova objeção.";
-    out.summary = "A oportunidade segue em decisão. O fato confirmado é que a compra não avançou por aprovação familiar/conjugal; não há evidência de objeção financeira ou rejeição ao produto.";
-    out.risk = "Aprovação familiar/conjugal pendente.";
-  }
-  return out;
 }
 
 
@@ -2275,7 +2161,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} REGRA DE CONFIABILIDADE 708: primeiro extraia fatosConfirmados apenas do histórico/anotações. Depois escreva inferenciasIA separadas. Nunca transforme hipótese em fato. Se uma informação não aparece, escreva que não há evidência em vez de completar a lacuna. Não cite financiamento/parcelas/preço/valor/banco/FGTS/renda/crédito se esses temas não aparecerem literalmente. Não diga que o produto não agradou/não encaixou se o cliente não disse isso. Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: fatosConfirmados (array de frases curtas, só fatos escritos), inferenciasIA (array de frases curtas, conclusões separadas dos fatos), summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
+  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
 
 REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
 
@@ -2658,9 +2544,7 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
       }
     }
     normalizarDiagnosticoJessica(parsed);
-    cp708AplicarProtocoloConfiavel(parsed, lead, timelineTextFull, timeline);
     finalizarAnaliseComercialV674(parsed, lead, timeline, corretorNome);
-    cp708AplicarProtocoloConfiavel(parsed, lead, timelineTextFull, timeline);
     // Quando não há ação urgente, não existe motivo comercial para gerar três novas mensagens.
     // Isso evita pressão indevida, elimina contradição na tela e economiza uma chamada de IA.
     const semAcaoUrgente = parsed?.modeloComercial?.acao?.status === "sem-acao-urgente";
@@ -2675,9 +2559,9 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico e todos os campos de anális
     if (!m.b && m.consultiva) m.b = m.consultiva;
     if (!m.c && m.retomada) m.c = m.retomada;
     // Limpeza determinística (emoji/espaços) — não altera as palavras.
-    m.a = cp708SanitizeUnsupported(limparMensagemComercial(m.a), cp708Evidencias(timelineTextFull));
-    m.b = cp708SanitizeUnsupported(limparMensagemComercial(m.b), cp708Evidencias(timelineTextFull));
-    m.c = cp708SanitizeUnsupported(limparMensagemComercial(m.c), cp708Evidencias(timelineTextFull));
+    m.a = limparMensagemComercial(m.a);
+    m.b = limparMensagemComercial(m.b);
+    m.c = limparMensagemComercial(m.c);
     if (parsed.diagnostico && typeof parsed.diagnostico === "object" && !String(parsed.diagnostico.mensagemQueEuEnviariaHoje || "").trim() && m.a) {
       parsed.diagnostico.mensagemQueEuEnviariaHoje = m.a;
     }
