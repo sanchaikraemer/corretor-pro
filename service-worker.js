@@ -1,148 +1,38 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v699-' + BUILD_ID;
-// Cache de nome ESTÁVEL para o ZIP compartilhado. Nunca é apagado em activate.
+const STATIC_CACHE = 'corretor-pro-static-v700-' + BUILD_ID;
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
-const DEBUG_KEY = '/__direciona_share_debug__';
-
-// IndexedDB pra storage redundante do ZIP. Cache API tem comportamento erratico
-// no Chrome Android (put returna sucesso mas dados nao persistem). IndexedDB e
-// mais previsivel: writes sao transacionais e duraveis.
-const IDB_NAME = 'direciona-share';
-const IDB_VERSION = 1;
-const IDB_STORE = 'zips';
-
-function idbOpen() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbPut(record) {
-  const db = await idbOpen();
-  try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(record);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error || new Error('idb tx aborted'));
-    });
-  } finally { db.close(); }
-}
-
-async function idbGet(id) {
-  const db = await idbOpen();
-  try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const store = tx.objectStore(IDB_STORE);
-      const req = store.get(id);
-      let result = null;
-      req.onsuccess = () => { result = req.result || null; };
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => resolve(result);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error || new Error('idb get aborted'));
-    });
-  } finally { db.close(); }
-}
-
-async function idbDel(id) {
-  const db = await idbOpen();
-  try {
-    return await new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).delete(id);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
-    });
-  } finally { db.close(); }
-}
-
 const CORE_ASSETS = [
-  '/',
-  '/index.html',
-  '/styles.css?v=699',
-  '/app.js?v=699',
-  '/vendor/jszip.min.js?v=699',
-  '/share.html',
-  '/manifest.json',
-  '/service-worker.js',
-  '/icon-192.png?v=699',
-  '/logo-cp.png?v=699',
-  '/icon-512.png?v=699',
-  '/favicon.png?v=699',
-  '/logo-direciona-light.svg?v=699',
-  '/logo-direciona-dark.svg?v=699'
+  '/', '/index.html', '/styles.css?v=700', '/app.js?v=700', '/vendor/jszip.min.js?v=700',
+  '/share.html', '/manifest.json', '/service-worker.js', '/icon-192.png?v=700', '/logo-cp.png?v=700',
+  '/icon-512.png?v=700', '/favicon.png?v=700', '/logo-direciona-light.svg?v=700', '/logo-direciona-dark.svg?v=700'
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(CORE_ASSETS).catch(() => null))
-      .then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    await Promise.allSettled(CORE_ASSETS.map(url => cache.add(url)));
+  })());
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    const names = await caches.keys();
-
-    // Resgata qualquer ZIP/debug que o SW anterior tenha deixado em cache
-    // antes de apagarmos o cache antigo. Mantém o histórico de share intacto.
-    const legacyCaches = names.filter(n =>
-      n !== STATIC_CACHE &&
-      n !== SHARE_CACHE &&
-      (n.startsWith('direciona-sharetarget-') || n.startsWith('direciona-static-'))
-    );
-
-    if (legacyCaches.length) {
-      try {
-        const target = await caches.open(SHARE_CACHE);
-        for (const oldName of legacyCaches) {
-          try {
-            const old = await caches.open(oldName);
-            for (const key of ZIP_KEYS) {
-              const match = await old.match(key);
-              if (match) await target.put(key, match).catch(() => null);
-            }
-            const debug = await old.match(DEBUG_KEY);
-            if (debug) await target.put(DEBUG_KEY, debug).catch(() => null);
-          } catch (_) { /* ignore */ }
-        }
-      } catch (_) { /* ignore */ }
-    }
-
-    // Apaga só caches obsoletos. SHARE_CACHE e STATIC_CACHE atual ficam.
-    await Promise.all(
-      names
-        .filter(n => n !== STATIC_CACHE && n !== SHARE_CACHE)
-        .map(n => caches.delete(n).catch(() => false))
-    );
-
-    try { if (self.registration.navigationPreload) await self.registration.navigationPreload.enable(); } catch (_) {}
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => (k === STATIC_CACHE || k === SHARE_CACHE) ? null : caches.delete(k)));
     await self.clients.claim();
-    try { await self.registration.update(); } catch (_) {}
   })());
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (event.request.method === 'POST' && (
-    url.pathname.endsWith('/share.html') ||
-    url.pathname.endsWith('/share-target')
-  )) {
+  if (event.request.method === 'POST' && (url.pathname === '/share-target' || url.pathname === '/share.html')) {
     event.respondWith(handleShare(event.request));
     return;
   }
@@ -150,147 +40,44 @@ self.addEventListener('fetch', event => {
   if (url.pathname.includes('/api/')) return;
   if (event.request.method !== 'GET') return;
 
-  const isAppShell = url.pathname === '/' ||
-                     url.pathname.endsWith('/index.html') ||
-                     url.pathname.endsWith('/app.js') ||
-                     url.pathname.endsWith('/styles.css') ||
-                     url.pathname.endsWith('/service-worker.js') ||
-                     url.pathname.endsWith('/manifest.json');
-
-  if (isAppShell) {
-    event.respondWith((async () => {
-      const cache = await caches.open(STATIC_CACHE);
-      const requestUrl = new URL(event.request.url);
-      requestUrl.searchParams.set('_cpv', '699');
-      let response = null;
-      try { response = await fetch(new Request(requestUrl.toString(), { cache: 'no-store', credentials: 'same-origin' })); } catch (_) {}
-      if (response && response.ok) {
-        cache.put(event.request, response.clone()).catch(() => null);
-        return response;
-      }
-      const cached = await cache.match(event.request) || await caches.match(event.request) || await caches.match('/index.html') || await caches.match('/');
-      if (cached) return cached;
-      const fallbackShell = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corretor Pro</title><style>html,body{margin:0;height:100%;background:#001E2B;color:#F4F7FB;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.boot{min-height:100%;display:grid;place-items:center;text-align:center}.logo{font-weight:900;font-size:22px}.sub{margin-top:8px;color:#8fb1bf}</style></head><body><div class="boot"><div><div class="logo">Corretor <span style="color:#ff6257">Pro</span></div><div class="sub">Carregando sua carteira...</div></div></div><script>setTimeout(function(){location.reload()},1200)</script></body></html>';
-      return new Response(fallbackShell, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control':'no-store' } });
-    })());
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(networkFirst(event.request, '/index.html'));
     return;
   }
 
-  event.respondWith((async () => {
-    const cache = await caches.open(STATIC_CACHE);
-    const cached = await cache.match(event.request) || await caches.match(event.request);
-    const network = fetch(event.request).then(response => {
-      if(response && response.ok) cache.put(event.request, response.clone()).catch(() => null);
-      return response;
-    }).catch(() => null);
-    return cached || (await network) || new Response('', { status: 504, statusText: 'offline' });
-  })());
+  event.respondWith(networkFirst(event.request, null));
 });
 
-async function saveShareDebug(info) {
+async function networkFirst(request, fallbackUrl) {
+  const cache = await caches.open(STATIC_CACHE);
   try {
-    const cache = await caches.open(SHARE_CACHE);
-    await cache.put(DEBUG_KEY, new Response(JSON.stringify(info), {
-      headers: { 'Content-Type': 'application/json' }
-    }));
-  } catch (_) { /* ignore */ }
+    const response = await fetch(request, { cache: 'no-store' });
+    if (response && response.ok) cache.put(request, response.clone()).catch(() => null);
+    return response;
+  } catch (_) {
+    const cached = await cache.match(request) || (fallbackUrl ? await cache.match(fallbackUrl) : null) || await caches.match(request) || (fallbackUrl ? await caches.match(fallbackUrl) : null);
+    if (cached) return cached;
+    if (fallbackUrl) return new Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Corretor Pro</title><style>html,body{margin:0;height:100%;background:#001E2B;color:#F4F7FB;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.boot{min-height:100%;display:grid;place-items:center;text-align:center}.logo{font-weight:900;font-size:22px}.sub{margin-top:8px;color:#8fb1bf}.btn{margin-top:16px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:#ff6257;color:white;padding:10px 16px;font-weight:900}</style></head><body><div class="boot"><div><div class="logo">Corretor <span style="color:#ff6257">Pro</span></div><div class="sub">Sem conexão para atualizar.</div><button class="btn" onclick="location.reload()">Tentar novamente</button></div></div></body></html>', {status:200, headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+    return new Response('', { status: 504, statusText: 'offline' });
+  }
 }
 
 async function handleShare(request) {
-  const debug = { ts: new Date().toISOString(), buildId: BUILD_ID, step: 'start', formKeys: [], files: [], note: null };
-
   try {
-    const formData = await request.formData();
-
-    for (const [key, value] of formData.entries()) {
-      debug.formKeys.push(key);
-      if (value && typeof value === 'object' && 'name' in value) {
-        debug.files.push({
-          key,
-          name: value.name || '(sem nome)',
-          type: value.type || '(sem tipo)',
-          size: typeof value.size === 'number' ? value.size : null
-        });
-      }
-    }
-
-    // Preferência: campo "zip" do manifest. Depois qualquer File com nome.
-    let file =
-      formData.get('zip') ||
-      formData.get('file') ||
-      formData.get('files') ||
-      formData.get('arquivo');
-
-    if (!file || !file.name) {
-      for (const value of formData.values()) {
-        if (value && value.name) { file = value; break; }
-      }
-    }
-
-    if (!file || !file.name) {
-      debug.step = 'no_file_in_form';
-      await saveShareDebug(debug);
-      return Response.redirect('/index.html?shared=0&source=share-target&erro=sem_arquivo', 303);
-    }
-
-    debug.chosenFile = { name: file.name, type: file.type, size: file.size };
-    const maxSharedBytes = 750 * 1024 * 1024;
-    if (!/\.zip$/i.test(String(file.name || '')) || file.size <= 0 || file.size > maxSharedBytes) {
-      debug.step = 'invalid_file';
-      debug.note = file.size > maxSharedBytes ? 'arquivo acima de 750 MB' : 'arquivo não é ZIP';
-      await saveShareDebug(debug);
-      return Response.redirect('/index.html?shared=0&source=share-target&erro=arquivo_invalido', 303);
-    }
-    debug.step = 'saving';
-
-    // Dupla persistencia: IndexedDB (primario, mais confiavel no Android)
-    // + Cache API (fallback, compat com codigo legado).
-    let idbError = null;
-    let cacheError = null;
-    let verifiedSize = null;
-
-    try {
-      const blob = file.slice(0, file.size, file.type || 'application/zip');
-      await idbPut({
-        id: 'latest',
-        name: file.name,
-        type: file.type || 'application/zip',
-        blob,
-        receivedAt: new Date().toISOString()
-      });
-      const back = await idbGet('latest');
-      verifiedSize = back?.blob?.size ?? null;
-      if (!verifiedSize) idbError = 'idb roundtrip retornou blob sem tamanho';
-    } catch (e) {
-      idbError = e?.message || String(e);
-    }
-
-    try {
+    const form = await request.formData();
+    const files = form.getAll('zip');
+    const file = files && files[0];
+    if (file && typeof file.arrayBuffer === 'function') {
       const cache = await caches.open(SHARE_CACHE);
-      const headers = {
+      const body = await file.arrayBuffer();
+      const headers = new Headers({
         'Content-Type': file.type || 'application/zip',
-        'X-File-Name': encodeURIComponent(file.name),
-        'X-Received-At': new Date().toISOString()
-      };
-      await cache.put(ZIP_KEYS[0], new Response(file, { headers }));
-    } catch (e) {
-      cacheError = e?.message || String(e);
+        'X-File-Name': encodeURIComponent(file.name || 'whatsapp.zip'),
+        'X-Shared-At': new Date().toISOString(),
+        'Cache-Control': 'no-store'
+      });
+      await Promise.all(ZIP_KEYS.map(k => cache.put(k, new Response(body.slice(0), { headers }))));
     }
-
-    debug.idbError = idbError;
-    debug.cacheError = cacheError;
-    debug.idbVerifiedSize = verifiedSize;
-    debug.step = (!idbError || !cacheError) ? 'saved' : 'save_failed';
-    await saveShareDebug(debug);
-
-    if (idbError && cacheError) {
-      return Response.redirect('/index.html?shared=0&source=share-target&erro=storage_falhou', 303);
-    }
-    return Response.redirect('/index.html?shared=1&source=share-target', 303);
-  } catch (error) {
-    debug.step = 'exception';
-    debug.error = error?.message || String(error);
-    await saveShareDebug(debug);
-    return Response.redirect('/index.html?shared=0&source=share-target&erro=excecao', 303);
-  }
+  } catch (_) {}
+  return Response.redirect('/?shared=1', 303);
 }
