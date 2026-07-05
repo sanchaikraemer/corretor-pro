@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #706: instrumentação leve de performance =====
+// ===== Atualização #707: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #706) =====
+// ===== Histórico interno do app (Atualização #707) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #706: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #707: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -9409,7 +9409,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #706: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #707: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -10023,7 +10023,7 @@ function ui682FallbackMessages(lead, mc){
   const produto = ui682ProdutoLead(lead, mc);
   const acao = String(mc?.acao?.descricao || lead?.analysis?.nextAction || lead?.nextAction || "").trim();
   const status = String(mc?.acao?.status || "");
-  const assunto = /perfil|faixa|valor|pronto|planta|financiamento|parcel/i.test(acao)
+  const assunto = /perfil|faixa|valor|pronto|planta/i.test(acao)
     ? "sobre perfil, faixa de valor e se você busca algo pronto ou na planta"
     : `sobre ${produto}`;
   const prefixo = nome ? `${nome}, ` : "";
@@ -10126,6 +10126,21 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
     out.diagnostico.proximaAcao=out.nextAction;
     out.diagnostico.ultimaInfoPrometida=mc?.contexto?.ultimoCompromisso||"Nenhum compromisso pendente.";
   }
+  const obsFact = (typeof cp707ObservationFacts==='function') ? cp707ObservationFacts({...lead,analysis:out}) : null;
+  if(obsFact){
+    out.summary=obsFact.motivo;
+    out.nextAction=obsFact.next;
+    out.clientProfile=out.clientProfile || "Lead em decisão, com influência familiar na compra.";
+    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==='object')?{...out.diagnostico}:{};
+    out.diagnostico.etapa="decisão";
+    out.diagnostico.objecaoPrincipal=obsFact.motivo;
+    out.diagnostico.proximaAcao=obsFact.next;
+    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Mais suave",cLabel:"Mais direta",recomendada:"a"};
+    out.sugestoesPendentes=false;out.aprovada=true;out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
+    out.modeloComercial=out.modeloComercial||{};
+    out.modeloComercial.oportunidade={...(out.modeloComercial.oportunidade||{}),status:"decisao",motivo:obsFact.motivo};
+    out.modeloComercial.acao={...(out.modeloComercial.acao||{}),status:"retomar",descricao:obsFact.next,urgencia:"media"};
+  }
   if(mc?.oportunidade?.status==="perdida"){
     out.probabilityPercent=0;out.probability="0%";out.etapaSugerida=ui670Parceiro(lead)?"Standby":(out.etapaSugerida||"Perdido");
   }
@@ -10170,9 +10185,11 @@ window.ui670Reanalisar=async function(btn){
   const ctrl=new AbortController();
   const timeout=setTimeout(()=>ctrl.abort(),90000);
   try{
+    let leadBaseAtualizado = lead;
+    try{ leadBaseAtualizado = (await ui675BuscarDetalhe(lead.id)) || lead; }catch(_){}
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||704)}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||707)}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const textoResposta = await res.text();
@@ -10208,16 +10225,29 @@ window.ui670Reanalisar=async function(btn){
     // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
     // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
     if(!analysis||schema<682){
-      const local=ui675AnaliseDeterministica(lead,analysis||lead.analysis||{});
+      const local=ui675AnaliseDeterministica(leadBaseAtualizado,analysis||leadBaseAtualizado.analysis||lead.analysis||{});
       analysis=await ui675PersistirFallback(lead.id,local);
       schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
       usouFallback=true;
     }
+    // v707: se a API gravou schema atual mas voltou sem 3 mensagens válidas,
+    // gera e salva mensagens locais usando a observação/histórico mais recente.
+    try{
+      const tmpLead={...leadBaseAtualizado,analysis};
+      const tmpMc=ui670ModeloComercial(tmpLead);
+      const tmpMsgs=cp704Msgs(tmpLead);
+      if(!cp705MessagesReady(tmpMsgs)){
+        const local=ui675AnaliseDeterministica(leadBaseAtualizado,analysis||leadBaseAtualizado.analysis||{});
+        analysis=await ui675PersistirFallback(lead.id,local);
+        schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
+        usouFallback=true;
+      }
+    }catch(e){ console.warn('Fallback v707 de mensagens não persistiu:', e); }
     if(!analysis||schema<682)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
     clearInterval(progressoTimer);
     progresso.done("Análise concluída e salva.");
 
-    const atualizado=limparLead({...lead,analysis,summary:analysis.summary||lead.summary,nextAction:analysis.nextAction||lead.nextAction});
+    const atualizado=limparLead({...leadBaseAtualizado,analysis,summary:analysis.summary||leadBaseAtualizado.summary||lead.summary,nextAction:analysis.nextAction||leadBaseAtualizado.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
     for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
       if(!Array.isArray(lista))continue;
@@ -11394,7 +11424,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — revisão de auditoria
+   Atualização #707 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11546,7 +11576,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — fechamento real da pendência de performance
+   Atualização #707 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11682,7 +11712,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — acabamento profissional estável
+   Atualização #707 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11803,7 +11833,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Hotfix real mobile
+   Atualização #707 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11888,7 +11918,7 @@ window.renderLeadFoco=renderLeadFoco;
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #707');
     });
   }
   function cp694FixFab(){
@@ -11976,7 +12006,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Correção real da lista mobile
+   Atualização #707 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -12041,7 +12071,7 @@ window.renderLeadFoco=renderLeadFoco;
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #707');
     });
   }
   function fixFab(){
@@ -12176,7 +12206,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Correção definitiva carregamento total Atendimentos
+   Atualização #707 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -12242,7 +12272,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #707');
     });
   }
   function applyLayoutFixes(){
@@ -12341,7 +12371,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Preparação da Carteira
+   Atualização #707 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -12417,7 +12447,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #707');
     });
   }
   async function fetchAll697(force){
@@ -12563,7 +12593,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — correção de versão exibida no topo/mobile
+   Atualização #707 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
@@ -12580,11 +12610,11 @@ window.renderLeadFoco=renderLeadFoco;
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #706');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #707');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #706');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #707');
       });
     }catch(_){ }
   }
@@ -12599,7 +12629,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — estabilidade pós-cache
+   Atualização #707 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
@@ -12609,7 +12639,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #707');
       });
     }catch(_){ }
   }
@@ -12621,7 +12651,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Preparação da Carteira estável
+   Atualização #707 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12643,7 +12673,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #706');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #707');
       });
     }catch(_){ }
   }
@@ -12802,7 +12832,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #706 — Tela do lead orientada à ação
+   Atualização #707 — Tela do lead orientada à ação
    - Baseada na terceira prévia aprovada pelo usuário.
    - Mantém as 3 sugestões de resposta.
    - Reduz duplicidade visual e recolhe informações secundárias.
@@ -12881,6 +12911,37 @@ window.renderLeadFoco=renderLeadFoco;
     const t=cp705PlainText(v);
     return t.length>n ? t.slice(0,n-3).trim()+'...' : t;
   }
+
+  function cp707ObservationFacts(lead){
+    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
+    const textos=[mem.observacoes,a.summary,a.nextAction,a.risk,a.clientProfile]
+      .concat(msgs.slice(-20).map(m=>m?.text||m?.body||m?.message||''))
+      .map(cp705PlainText).filter(Boolean);
+    const joined=textos.join(' \n ');
+    const norm=joined.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const mulher=/\b(mulher|esposa)\b/.test(norm);
+    const negou=/(nao|não|sem)\s.{0,28}\b(quis|quer|aprovou|aprova|aprovacao|aceitou|aceita|gostou|autorizou|topou)\b|\b(nao quis|nao aprovou|nao gostou|nao topou)\b/.test(norm);
+    if(mulher && negou){
+      const pessoa=/\besposa\b/.test(norm)?'esposa':'mulher';
+      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || 'Renaissance');
+      const primeiro=cp704Text(lead?.name,'').split(/\s+/)[0]||'';
+      return {
+        tipo:'decisor_negou',
+        situacao:'Em decisão',
+        motivo:`A ${pessoa} não aprovou a compra neste momento.`,
+        insight1:`A decisão depende da ${pessoa}.`,
+        insight2:`O interesse não deve ser tratado como perdido sem confirmar se a objeção é produto, valor ou momento.`,
+        insight3:`A melhor retomada é leve, sem pressionar, abrindo alternativa de comparação.`,
+        next:`Manter relacionamento leve e confirmar se a objeção foi ao ${produto}, ao momento da compra ou a outro ponto específico.`,
+        msgA:`${primeiro}, entendi esse ponto sobre a decisão aí de vocês. Sem pressionar: você acha que a questão foi mais o ${produto}, o momento da compra, ou algum detalhe específico que não agradou?`.trim(),
+        msgB:`${primeiro}, obrigado por me atualizar. Posso deixar esse assunto em aberto e, se ajudar, te mostro depois uma comparação mais simples com outras opções dentro do mesmo perfil.`.trim(),
+        msgC:`${primeiro}, para eu não insistir no caminho errado: a compra ficou travada por decisão familiar ou o Renaissance em si não encaixou para vocês?`.trim()
+      };
+    }
+    return null;
+  }
+
   function cp705MessagesReady(msgs){
     const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
     if(vals.some(v=>!v)) return false;
@@ -12896,6 +12957,8 @@ window.renderLeadFoco=renderLeadFoco;
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
   function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
   function cp704Situacao(mc, lead){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.situacao) return obsFact.situacao;
     const st=cp704Text(mc?.oportunidade?.status || lead?.etapa || 'em análise').toLowerCase();
     if(/decis/.test(st)) return 'Em decisão';
     if(/negocia/.test(st)) return 'Em negociação';
@@ -12908,10 +12971,14 @@ window.renderLeadFoco=renderLeadFoco;
     return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
   }
   function cp704Impedimento(lead, mc){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.motivo) return obsFact.motivo;
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
     return cp705SanitizeFactText(cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.'), lead);
   }
   function cp704Next(lead, mc){
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact?.next) return obsFact.next;
     const a=lead?.analysis||{};
     return cp705SanitizeFactText(cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.'), lead);
   }
@@ -12950,6 +13017,8 @@ window.renderLeadFoco=renderLeadFoco;
   function cp704Insights(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
     const arr=[];
+    const obsFact=cp707ObservationFacts(lead);
+    if(obsFact) return [obsFact.insight1,obsFact.insight2,obsFact.insight3].filter(Boolean);
     const imp=cp704Impedimento(lead,mc);
     if(imp && !/não identificado/i.test(imp)) arr.push(imp.length>90 ? imp.slice(0,87)+'...' : imp);
     const rel=cp704Text(mc?.relacionamento?.motivo || mem.pessoasDecisao);
@@ -12962,12 +13031,19 @@ window.renderLeadFoco=renderLeadFoco;
   function cp704Msgs(lead){
     const a=lead?.analysis||{};
     const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
-    return {
-      a:cp705SanitizeFactText(cp704Text(m.a || a.recommendedMessage || 'Atualize a análise comercial para gerar a resposta recomendada.'), lead),
-      b:cp705SanitizeFactText(cp704Text(m.b || 'Atualize a análise comercial para gerar a resposta mais suave.'), lead),
-      c:cp705SanitizeFactText(cp704Text(m.c || 'Atualize a análise comercial para gerar a resposta mais direta.'), lead),
+    const obsFact=cp707ObservationFacts(lead);
+    const mc=cp704Modelo(lead);
+    const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
+    const out={
+      a:cp705SanitizeFactText(cp704Text(m.a || a.recommendedMessage || fb.a || ''), lead),
+      b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
+      c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
       aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
     };
+    if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
+      out.a=cp705SanitizeFactText(fb.a,lead); out.b=cp705SanitizeFactText(fb.b,lead); out.c=cp705SanitizeFactText(fb.c,lead);
+    }
+    return out;
   }
   window.cp704SelectedMsg='a';
   window.cp704SelectMsg=function(k){
@@ -13011,7 +13087,7 @@ window.renderLeadFoco=renderLeadFoco;
     const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
     const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
     const messagesReady=cp705MessagesReady(msgs);
-    const needsAnalysis=stale || !messagesReady;
+    const needsAnalysis=stale; // v707: mensagens de fallback confiáveis aparecem mesmo quando a API não devolve 3 textos
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
     const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
@@ -13049,6 +13125,6 @@ window.renderLeadFoco=renderLeadFoco;
   };
   try{ renderLeadFoco=window.renderLeadFoco; }catch(_){ }
   setTimeout(()=>{
-    document.querySelectorAll('.sb-ver-top,.cp-mobile-version').forEach(el=>{ if(/Atualiza/i.test(el.textContent||'')) el.textContent='Atualização #706'; });
+    document.querySelectorAll('.sb-ver-top,.cp-mobile-version').forEach(el=>{ if(/Atualiza/i.test(el.textContent||'')) el.textContent='Atualização #707'; });
   },0);
 })();
