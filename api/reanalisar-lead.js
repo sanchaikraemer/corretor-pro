@@ -490,6 +490,7 @@ async function reanalisarLeadHandler702(req, res) {
   const openai = getOpenAI();
 
   const previous = row.resultado_analise || {};
+  let timelineFinal = timeline;
   const sigAtual6863 = assinaturaTimeline6863(timelineFinal || timeline);
   const sigAnterior6863 = previous?._iaIncremental?.timelineHash;
   const podeReusar6863 = !body?.force && !body?.forcarVariacao && !novoAtendimento && !["corrigir-observacao"].includes(String(body?.action || ""));
@@ -518,7 +519,6 @@ async function reanalisarLeadHandler702(req, res) {
   const ajusteScorePrev = Number(previous.scoreAjuste) || 0;
   const deltaScore = novoAtendimento ? ajusteScoreDoTexto(novoAtendimento) : 0;
   const ajusteScoreNovo = Math.max(-50, Math.min(50, ajusteScorePrev + deltaScore));
-  let timelineFinal = timeline;
   const observacoesBase = previous.memoria?.observacoes || "";
   let observacoesFinais = observacoesBase;
   let stampAtend = ""; // "[data hora] " do atendimento novo (pra trocar a nota crua pelo resumo da IA depois)
