@@ -12548,3 +12548,38 @@ window.renderLeadFoco=renderLeadFoco;
   setTimeout(()=>{ applyFix697(); homeProgress697(); }, 1200);
   if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
 })();
+
+
+/* ============================================================
+   Atualização #698 — correção de versão exibida no topo/mobile
+   - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
+   ============================================================ */
+(function(){
+  if(window.__cp698VersaoTopo) return;
+  window.__cp698VersaoTopo = true;
+  const VERSION = '698';
+  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
+  function fixVersionText(){
+    try{
+      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while(walker.nextNode()){
+        const n = walker.currentNode;
+        if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
+      }
+      nodes.forEach(n=>{
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #698');
+      });
+      document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
+        const txt = el.textContent || '';
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #698');
+      });
+    }catch(_){ }
+  }
+  document.addEventListener('DOMContentLoaded', fixVersionText);
+  window.addEventListener('load', fixVersionText);
+  setTimeout(fixVersionText, 50);
+  setTimeout(fixVersionText, 250);
+  setTimeout(fixVersionText, 1000);
+  setInterval(fixVersionText, 2000);
+})();
