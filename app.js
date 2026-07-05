@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #704: instrumentação leve de performance =====
+// ===== Atualização #706: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #704) =====
+// ===== Histórico interno do app (Atualização #706) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #704: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #706: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -9409,7 +9409,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #704: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #706: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -9853,10 +9853,12 @@ function ui678ContextoMudouParaImovel(lead){
   const ultimoRelevante=usados.length?usados[usados.length-1]:null;
   const aguardandoResposta=!!(ultimoRelevante && !ultimoRelevante.cliente && lastPergQualif>=0 && lastPergQualif===ultimoRelevante.i && (lastClienteImovel<0 || lastPergQualif>lastClienteImovel));
   const produtoBase=(String(lead?.product||"").trim() && !/não identificad/i.test(String(lead?.product||""))) ? String(lead.product).trim() : "Apartamento pronto";
-  const resumo=`Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, com dúvidas sobre financiamento e parcelas, mas ainda sem perfil de compra confirmado.`;
+  const resumo = temFinanciamento
+    ? `Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, com ponto financeiro citado no histórico, mas ainda sem perfil de compra confirmado.`
+    : `Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, mas ainda sem perfil de compra confirmado.`;
   const ultimoCompromisso=aguardandoResposta
     ? `Você pediu para alinhar se ele busca algo pronto ou na planta, qual faixa faz sentido e quantos dormitórios seriam ideais.`
-    : `O cliente demonstrou interesse no imóvel e pediu esclarecimentos sobre valor, financiamento e parcelas.`;
+    : (temFinanciamento ? `O cliente demonstrou interesse no imóvel e pediu esclarecimentos comerciais ligados a valor ou condições.` : `O cliente demonstrou interesse no imóvel, mas ainda precisa confirmar perfil e próximos passos.`);
   const impedimento=`Perfil de compra ainda não qualificado: falta confirmar objetivo, faixa de valor e tipologia ideal.`;
   const nextAction=aguardandoResposta
     ? `Aguardar a resposta do contato sobre perfil, faixa de valor e se busca imóvel pronto ou na planta antes de uma nova abordagem.`
@@ -11392,7 +11394,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — revisão de auditoria
+   Atualização #706 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11544,7 +11546,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — fechamento real da pendência de performance
+   Atualização #706 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11680,7 +11682,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — acabamento profissional estável
+   Atualização #706 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11801,7 +11803,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Hotfix real mobile
+   Atualização #706 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11886,7 +11888,7 @@ window.renderLeadFoco=renderLeadFoco;
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #704');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
     });
   }
   function cp694FixFab(){
@@ -11974,7 +11976,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Correção real da lista mobile
+   Atualização #706 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -12039,7 +12041,7 @@ window.renderLeadFoco=renderLeadFoco;
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #704');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
     });
   }
   function fixFab(){
@@ -12174,7 +12176,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Correção definitiva carregamento total Atendimentos
+   Atualização #706 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -12240,7 +12242,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #704');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
     });
   }
   function applyLayoutFixes(){
@@ -12339,7 +12341,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Preparação da Carteira
+   Atualização #706 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -12415,7 +12417,7 @@ window.renderLeadFoco=renderLeadFoco;
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #704');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
     });
   }
   async function fetchAll697(force){
@@ -12561,7 +12563,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — correção de versão exibida no topo/mobile
+   Atualização #706 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
@@ -12578,11 +12580,11 @@ window.renderLeadFoco=renderLeadFoco;
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #704');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #706');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #704');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #706');
       });
     }catch(_){ }
   }
@@ -12597,7 +12599,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — estabilidade pós-cache
+   Atualização #706 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
@@ -12607,7 +12609,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #704');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #706');
       });
     }catch(_){ }
   }
@@ -12619,7 +12621,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Preparação da Carteira estável
+   Atualização #706 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12641,7 +12643,7 @@ window.renderLeadFoco=renderLeadFoco;
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #704');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #706');
       });
     }catch(_){ }
   }
@@ -12800,7 +12802,7 @@ window.renderLeadFoco=renderLeadFoco;
 
 
 /* ============================================================
-   Atualização #704 — Tela do lead orientada à ação
+   Atualização #706 — Tela do lead orientada à ação
    - Baseada na terceira prévia aprovada pelo usuário.
    - Mantém as 3 sugestões de resposta.
    - Reduz duplicidade visual e recolhe informações secundárias.
@@ -12809,7 +12811,7 @@ window.renderLeadFoco=renderLeadFoco;
 (function(){
   if(window.__cp704LeadUx) return;
   window.__cp704LeadUx = true;
-  window.CORRETOR_PRO_VERSION = 704;
+  window.CORRETOR_PRO_VERSION = 706;
 
   function cp704Css(){
     if(document.getElementById('cp704LeadUxCSS')) return;
@@ -12830,7 +12832,7 @@ window.renderLeadFoco=renderLeadFoco;
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
       .cp704-step{display:grid;grid-template-columns:30px 1fr 22px;gap:10px;align-items:center}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}
-      .cp704-msg-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}.cp704-msg-tabs button{border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:var(--muted);border-radius:10px;padding:9px 6px;font-size:12px;font-weight:950;cursor:pointer}.cp704-msg-tabs button.active{background:rgba(255,107,92,.95);border-color:rgba(255,107,92,.95);color:white}.cp704-msg-list{display:flex;flex-direction:column;gap:9px}.cp704-msg-item{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:11px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:end;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 9px;font-size:11px;font-weight:900;cursor:pointer}.cp704-wa{width:100%;margin-top:12px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--lime),#ff4f45);color:white;padding:14px 16px;font-size:15px;font-weight:950;cursor:pointer}.cp704-wa small{display:block;font-size:11px;opacity:.86;margin-top:2px}
+      .cp704-msg-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}.cp704-msg-tabs button{border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:var(--muted);border-radius:10px;padding:9px 6px;font-size:12px;font-weight:950;cursor:pointer}.cp704-msg-tabs button.active{background:rgba(255,107,92,.95);border-color:rgba(255,107,92,.95);color:white}.cp704-msg-list{display:flex;flex-direction:column;gap:9px}.cp704-msg-item{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:11px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:end;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 9px;font-size:11px;font-weight:900;cursor:pointer}.cp704-wa{width:100%;margin-top:12px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--lime),#ff4f45);color:white;padding:14px 16px;font-size:15px;font-weight:950;cursor:pointer}.cp704-wa small{display:block;font-size:11px;opacity:.86;margin-top:2px}.cp704-empty-analysis{border:1px solid rgba(255,201,107,.35);background:rgba(255,201,107,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:#ffd28a}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(255,201,107,.45);background:rgba(255,255,255,.04);color:#ffd28a;border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted)}.cp704-details[open] summary:after{content:"⌃"}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,107,92,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,107,92,.55)!important;color:#ff7f74!important;background:rgba(255,107,92,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
       .cp704-stale{border-color:rgba(255,201,107,.45);background:rgba(255,201,107,.08)}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.50);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:12px;font-weight:950}
@@ -12839,6 +12841,52 @@ window.renderLeadFoco=renderLeadFoco;
     document.head.appendChild(css);
   }
   function cp704Text(v, fallback='') { return String(v == null ? fallback : v).trim(); }
+
+  function cp705FormatDateTime(v){
+    const raw=String(v||'').trim();
+    if(!raw) return '';
+    const d=new Date(raw);
+    if(!Number.isNaN(d.getTime())){
+      return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
+    }
+    return raw.replace(/T/, ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
+  }
+  function cp705PlainText(v){ return String(v||'').replace(/\s+/g,' ').trim(); }
+  function cp705HasEvidence(lead,re){
+    // Evidência só vem de mensagens/histórico do lead, nunca de resumo gerado pela IA.
+    const arrays = [lead?.recentMessages, lead?.timeline, lead?.messages, lead?.history, lead?.mensagens].filter(Array.isArray);
+    const txt = arrays.flat().map(m => {
+      if(!m) return '';
+      if(typeof m === 'string') return m;
+      return String(m.text || m.body || m.message || m.mensagem || '');
+    }).join(' ').toLowerCase();
+    return re.test(txt);
+  }
+  function cp705SanitizeFactText(text, lead){
+    let out=cp705PlainText(text);
+    const hasFin=cp705HasEvidence(lead,/\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|cr[eé]dito|aprova|juros|simula)\b/i);
+    if(!hasFin){
+      out=out
+        .replace(/,?\s*com dúvidas sobre financiamento e parcelas/ig,'')
+        .replace(/\s*e pediu esclarecimentos sobre valor, financiamento e parcelas/ig,'')
+        .replace(/\s*com ponto financeiro citado no histórico/ig,'')
+        .replace(/\b(viabilidade financeira|trava financeira|encaixe financeiro|financeiro|financeira|financiamento|financiamentos|parcelamento|parcelas|parcela|FGTS|Caixa|banco|aprovação de crédito|crédito)\b/ig,'perfil de compra')
+        .replace(/\b(dúvidas?|dúvida)\s+sobre\s+perfil de compra/ig,'perfil de compra ainda não confirmado')
+        .replace(/perfil de compra\s+e\s+perfil de compra/ig,'perfil de compra')
+        .replace(/perfil de compra\s*,\s*perfil de compra/ig,'perfil de compra');
+    }
+    return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
+  }
+  function cp705Short(v, n=150){
+    const t=cp705PlainText(v);
+    return t.length>n ? t.slice(0,n-3).trim()+'...' : t;
+  }
+  function cp705MessagesReady(msgs){
+    const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
+    if(vals.some(v=>!v)) return false;
+    return !vals.some(v=>/atualize a an[aá]lise comercial|gerar a resposta|resposta recomendada|resposta mais suave|resposta mais direta/i.test(v));
+  }
+
   function cp704Prob(lead){
     const ref = (typeof probabilidadeRefinada==='function') ? probabilidadeRefinada(lead) : null;
     const n = ref != null ? Number(ref) : (Number(lead?.probabilityPercent)||Number(lead?.analysis?.probabilityPercent)||0);
@@ -12861,14 +12909,14 @@ window.renderLeadFoco=renderLeadFoco;
   }
   function cp704Impedimento(lead, mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    return cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.');
+    return cp705SanitizeFactText(cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.'), lead);
   }
   function cp704Next(lead, mc){
     const a=lead?.analysis||{};
-    return cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.');
+    return cp705SanitizeFactText(cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.'), lead);
   }
   function cp704DataHora(m){
-    return [m?.date,m?.time].filter(Boolean).join(' ') || cp704Text(m?.displayTime || m?.createdAt || '');
+    return cp705FormatDateTime([m?.date,m?.time].filter(Boolean).join(' ') || cp704Text(m?.displayTime || m?.createdAt || m?.iso || ''));
   }
   function cp704RecentMessages(lead, max=4){
     const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
@@ -12915,9 +12963,9 @@ window.renderLeadFoco=renderLeadFoco;
     const a=lead?.analysis||{};
     const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
     return {
-      a:cp704Text(m.a || a.recommendedMessage || 'Atualize a análise comercial para gerar a resposta recomendada.'),
-      b:cp704Text(m.b || 'Atualize a análise comercial para gerar a resposta mais suave.'),
-      c:cp704Text(m.c || 'Atualize a análise comercial para gerar a resposta mais direta.'),
+      a:cp705SanitizeFactText(cp704Text(m.a || a.recommendedMessage || 'Atualize a análise comercial para gerar a resposta recomendada.'), lead),
+      b:cp705SanitizeFactText(cp704Text(m.b || 'Atualize a análise comercial para gerar a resposta mais suave.'), lead),
+      c:cp705SanitizeFactText(cp704Text(m.c || 'Atualize a análise comercial para gerar a resposta mais direta.'), lead),
       aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
     };
   }
@@ -12962,8 +13010,10 @@ window.renderLeadFoco=renderLeadFoco;
     document.body.classList.add('lead-foco-aberto'); state.focoLeadId=lead?.id||null;
     const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
     const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
+    const messagesReady=cp705MessagesReady(msgs);
+    const needsAnalysis=stale || !messagesReady;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
-    const last=lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '';
+    const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
     const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -12972,17 +13022,17 @@ window.renderLeadFoco=renderLeadFoco;
       <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'✓ Atendido hoje':'✓ Marcar atendimento'}</button></div>
       <section class="cp704-hero">
         <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
-        <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(imped)}</p><p>${escapeHtml(cp704Text(a.clientProfile||mc?.oportunidade?.perfil||'', 'Lead em acompanhamento comercial.')).slice(0,150)}</p></div><div class="cp704-prob" style="--p:${prob}"><b>${prob}%</b><span>${escapeHtml(cp704NivelProb(prob))}</span></div></div>
+        <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),120))}</p><p>${escapeHtml(cp705Short(cp705SanitizeFactText(cp704Text(a.clientProfile||mc?.oportunidade?.perfil||'', 'Lead em acompanhamento comercial.'),lead),120))}</p></div><div class="cp704-prob" style="--p:${prob}"><b>${prob}%</b><span>${escapeHtml(cp704NivelProb(prob))}</span></div></div>
         <div class="cp704-metrics"><div class="cp704-metric"><span>🤝</span><div><small>Relacionamento</small>${escapeHtml(rel)}</div></div><div class="cp704-metric"><span>⏱</span><div><small>Urgência</small>${escapeHtml(urg)}</div></div></div>
       </section>
-      ${stale?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>Análise comercial antiga</h2></div><p>Atualize para recalcular oportunidade, responsável pela próxima ação e mensagem.</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'04/07/2026 às 22:31'))} · ${escapeHtml(atendimento)}</span></div></div></section>
+      ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
+      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
       <section class="cp704-card cp704-ai"><div class="cp704-card-title"><h2>O que a IA percebeu</h2></div><ul>${insights}</ul></section>
       <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2><span class="cp704-pill">${escapeHtml(cp704Text(mc?.acao?.status||'Aguardando resposta'))}</span></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
       <section class="cp704-card"><div class="cp704-card-title"><h2>Mensagem recomendada</h2><span class="cp704-pill">${escapeHtml(cp704Text(mc?.acao?.status||'Aguardando resposta'))}</span></div>
-        <div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button><button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button><button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button></div>
+        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagens ainda não geradas.</b><span>Atualize a análise comercial para criar as 3 sugestões corretas.</span><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button><button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button><button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button></div>
         <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><span class="cp704-num">1</span><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div><div class="cp704-msg-item" data-key="b"><span class="cp704-num">2</span><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div><div class="cp704-msg-item" data-key="c"><span class="cp704-num">3</span><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div></div>
-        <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>
+        <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>`}
       </section>
       <div class="cp704-accordions">
         <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
@@ -12990,7 +13040,7 @@ window.renderLeadFoco=renderLeadFoco;
         <details class="cp704-details"><summary>Observações importantes</summary><div class="cp704-body">${escapeHtml(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem observações consolidadas.'))}</div></details>
         <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
       </div>
-      <section class="cp704-card"><div class="cp704-last"><span>✓</span><div><b>Último atendimento:</b><span>${escapeHtml(cp704Text(last,'04/07/2026, 22:31'))} · ${escapeHtml(atendimento)}</span></div></div></section>
+      <section class="cp704-card"><div class="cp704-last"><span>✓</span><div><b>Último atendimento:</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
       <div class="cp704-quickbar"><button class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button onclick="abrirEditarLead&&abrirEditarLead(${JSON.stringify(String(lead.id||''))},${JSON.stringify(String(lead.name||''))},${JSON.stringify(String(lead.phone||''))})">Editar lead</button><button onclick="cp704CopyMsg(window.cp704SelectedMsg)">Copiar resposta</button><button onclick="cp704OpenWhats()">Ver mensagem</button></div>
       ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
     </div>`;
@@ -12999,6 +13049,6 @@ window.renderLeadFoco=renderLeadFoco;
   };
   try{ renderLeadFoco=window.renderLeadFoco; }catch(_){ }
   setTimeout(()=>{
-    document.querySelectorAll('.sb-ver-top,.cp-mobile-version').forEach(el=>{ if(/Atualiza/i.test(el.textContent||'')) el.textContent='Atualização #704'; });
+    document.querySelectorAll('.sb-ver-top,.cp-mobile-version').forEach(el=>{ if(/Atualiza/i.test(el.textContent||'')) el.textContent='Atualização #706'; });
   },0);
 })();
