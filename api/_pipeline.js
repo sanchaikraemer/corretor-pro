@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v723-1-reset-total-analise-pura";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-analise-pura-chatgpt-3-msgs";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -180,7 +180,12 @@ Não pressione.
 
 Se houver pouca informação, diga isso.
 
-Se não houver evidência para uma conclusão, não afirme como fato.`;
+Se não houver evidência para uma conclusão, não afirme como fato.
+
+Além da mensagem principal, gere também duas variações derivadas da mesma análise:
+- uma versão mais suave;
+- uma versão mais direta.
+As três mensagens devem seguir a mesma estratégia e não podem contradizer o diagnóstico.`;
 
 const REGRA_TESE_COMERCIAL = ``;
 
@@ -1897,7 +1902,7 @@ Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 
 IMPORTANTE PARA O SISTEMA:
 Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
-Não use estrutura antiga do Direciona. Não gere cards auxiliares. Não gere três mensagens.
+Não use estrutura antiga do Direciona. Não gere cards auxiliares. Gere 3 mensagens: recomendada, maisSuave e maisDireta.
 
 Use este formato de compatibilidade:
 {
@@ -1945,7 +1950,10 @@ ${timelineText}`;
     const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
     const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
-    const msg = txt(d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || raw.nextAction);
+    const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
+    const msg = txt(mensagensRaw.recomendada || d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || raw.nextAction);
+    const msgSuave = txt(mensagensRaw.maisSuave || mensagensRaw.suave || raw.mensagemMaisSuave || "");
+    const msgDireta = txt(mensagensRaw.maisDireta || mensagensRaw.direta || raw.mensagemMaisDireta || "");
     const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
 
@@ -1987,11 +1995,11 @@ ${timelineText}`;
       nextAction: txt(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
       messages: {
         a: limparMensagemComercial(msg),
-        b: "",
-        c: "",
-        aLabel: "Próxima mensagem sugerida",
-        bLabel: "",
-        cLabel: "",
+        b: limparMensagemComercial(msgSuave),
+        c: limparMensagemComercial(msgDireta),
+        aLabel: "Recomendada",
+        bLabel: "Mais suave",
+        cLabel: "Mais direta",
         recomendada: "a"
       },
       tipoContato: null,

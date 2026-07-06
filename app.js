@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #723-1: instrumentação leve de performance =====
+// ===== Atualização #724: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #723-1) =====
+// ===== Histórico interno do app (Atualização #724) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #723-1: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #724: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v723-1-reset-total-analise-pura";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-analise-pura-chatgpt-3-msgs";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4594,7 +4594,7 @@ window.finalizarSequencia = finalizarSequencia;
 
 
 /* ============================================================
-   Atualização #723-1 — Tela do lead consolidada
+   Atualização #724 — Tela do lead consolidada
    - Uma única função renderLeadFoco ativa.
    - Sem chamar renderizações antigas antes ou depois.
    - Mantém IA por fatos, 3 mensagens, observações, histórico e ferramentas.
@@ -4859,7 +4859,7 @@ function cp704Css(){
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
 
-// Atualização #723-1: card "O que mudou" — antes → agora + por que importa.
+// Atualização #724: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
 
 function cp718LeituraComercialHtml(a,lead){
@@ -9047,7 +9047,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #723-1: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #724: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -9097,7 +9097,7 @@ window.ui667MarcarAtendido=async function(btn){
     toast("Não consegui marcar: "+(err?.message||err));
   }
 };
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 
 /* ============================================================
    ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
@@ -9946,7 +9946,7 @@ function ui670DetailRows(lead,mc){
   return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
 }
 
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 
 
 /* ============================================================
@@ -10086,7 +10086,7 @@ function ui670DetailRows(lead,mc){
       if(typeof carregarDashboard==='function') carregarDashboard();
     }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
   };
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
@@ -10244,7 +10244,7 @@ function ui670DetailRows(lead,mc){
       .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
       .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
   }
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 })();
 
 
@@ -10363,7 +10363,7 @@ function ui670DetailRows(lead,mc){
     const h3=action.querySelector('h3');
     if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
   window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
 
@@ -10600,7 +10600,7 @@ function ui670DetailRows(lead,mc){
       @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
     `; document.head.appendChild(st);
   }
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
   function abrirModalDesfechoFinal(id, tipo){
     const lead = (state && state.lead) || {};
     const vendido = tipo === 'vendido';
@@ -10839,7 +10839,7 @@ function ui670DetailRows(lead,mc){
     `;
     document.head.appendChild(st);
   }
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
 })();
@@ -10892,7 +10892,7 @@ function ui670DetailRows(lead,mc){
       });
     }catch(_){}
   }
-// Atualização #723-1: wrapper antigo de renderLeadFoco removido.
+// Atualização #724: wrapper antigo de renderLeadFoco removido.
 
   setTimeout(reforcarBotaoEditar, 0);
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
@@ -10900,7 +10900,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — revisão de auditoria
+   Atualização #724 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11052,7 +11052,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — fechamento real da pendência de performance
+   Atualização #724 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11188,7 +11188,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — acabamento profissional estável
+   Atualização #724 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11309,7 +11309,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — Hotfix real mobile
+   Atualização #724 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11318,7 +11318,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11394,7 +11394,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #723-1');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724');
     });
   }
   function cp694FixFab(){
@@ -11482,7 +11482,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — Correção real da lista mobile
+   Atualização #724 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -11490,7 +11490,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11547,7 +11547,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #723-1');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724');
     });
   }
   function fixFab(){
@@ -11682,7 +11682,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — Correção definitiva carregamento total Atendimentos
+   Atualização #724 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -11690,7 +11690,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp696AtendimentosFullList) return;
   window.__cp696AtendimentosFullList = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11748,7 +11748,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #723-1');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724');
     });
   }
   function applyLayoutFixes(){
@@ -11847,7 +11847,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — Preparação da Carteira
+   Atualização #724 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -11856,7 +11856,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp697PreparacaoCarteira) return;
   window.__cp697PreparacaoCarteira = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11923,7 +11923,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #723-1');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724');
     });
   }
   async function fetchAll697(force){
@@ -12069,13 +12069,13 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — correção de versão exibida no topo/mobile
+   Atualização #724 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
   if(window.__cp698VersaoTopo) return;
   window.__cp698VersaoTopo = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fixVersionText(){
     try{
@@ -12086,11 +12086,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #723-1');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #723-1');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724');
       });
     }catch(_){ }
   }
@@ -12105,17 +12105,17 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — estabilidade pós-cache
+   Atualização #724 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
-  const VERSION='723-1';
+  const VERSION='724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fix(){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #723-1');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724');
       });
     }catch(_){ }
   }
@@ -12127,7 +12127,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #723-1 — Preparação da Carteira estável
+   Atualização #724 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12135,7 +12135,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp703PreparacaoEstavel) return;
   window.__cp703PreparacaoEstavel = true;
-  const VERSION = '723-1';
+  const VERSION = '724';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   let fullLeadsCache = null;
@@ -12149,7 +12149,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #723-1');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724');
       });
     }catch(_){ }
   }
@@ -12308,4 +12308,4 @@ function ui670DetailRows(lead,mc){
 
 
 
-// Atualização #723-1: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
+// Atualização #724: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
