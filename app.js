@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v718-leitura-comercial-estrategica";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v719-analista-comercial-sem-resumo";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4625,7 +4625,7 @@ function cp704Css(){
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
-      .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:82px 1fr;align-items:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:7px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px;width:100%;min-width:0}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-prob{width:76px;height:76px;justify-self:start}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:24px 1fr;position:relative}.cp704-copy{grid-column:2;justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-msg-tabs{gap:7px}.cp704-msg-tabs button{font-size:11px;min-width:0;padding:9px 4px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
@@ -4858,7 +4858,7 @@ function cp704Css(){
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
 
-// Atualização #718: card "O que mudou" — antes → agora + por que importa.
+// Atualização #719: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
 
 function cp718LeituraComercialHtml(a,lead){
@@ -9616,10 +9616,10 @@ function ui682FallbackMessages(lead, mc){
   const temPremium = /premium\s+office|premium/.test(hist);
   const temPersonalite = /personali[tée]/.test(hist) || /personalit/.test(hist);
   if(temPremium && temPersonalite){
-    const a = `${prefixo}conseguiu dar uma olhada no Personalité? Ele está dentro do que você busca neste momento? Pergunto porque há um tempo conversamos sobre o Premium Office, que tinha uma proposta mais voltada para investimento/comercial, e agora o Personalité já é um imóvel pronto, com um perfil diferente. Hoje você está buscando algo para morar ou avaliando investimento?`;
-    const b = `${prefixo}vi que agora você olhou o Personalité. Como antes nossa conversa tinha sido sobre o Premium Office, queria entender melhor o momento: hoje você procura algo para morar ou está avaliando investimento?`;
-    const c = `${prefixo}para eu te direcionar melhor: o Personalité entrou no que você procura agora? Te pergunto porque ele tem um perfil bem diferente do Premium Office que havíamos conversado antes. A ideia hoje é moradia ou investimento?`;
-    return { a, b, c, aLabel:"Memória do histórico", bLabel:"Qualificar objetivo", cLabel:"Direcionamento claro", recomendada:"a", fallback:true };
+    const a = `${prefixo}vi o Personalité aqui. Como da outra vez a conversa era sobre um perfil mais de investimento, quero te direcionar certo: hoje você está olhando mais para morar ou ainda avaliando investimento?`;
+    const b = `${prefixo}sobre o Personalité: ele muda bastante o perfil daquela conversa do Premium Office. Antes de eu te indicar algo, hoje tua busca é mais para moradia ou investimento?`;
+    const c = `${prefixo}para eu não te mandar opção fora do momento: seguimos olhando algo pronto para morar, como o Personalité, ou tua ideia continua mais voltada a investimento?`;
+    return { a, b, c, aLabel:"Requalificar objetivo", bLabel:"Memória natural", cLabel:"Direcionar sem erro", recomendada:"a", fallback:true };
   }
   const baseProduto = produto && !/não identificado|produto/i.test(produto) ? `o ${produto}` : "o imóvel";
   const a = `${prefixo}conseguiu avaliar ${baseProduto}? Queria entender se ele está dentro do que você busca hoje e se a ideia é moradia ou investimento, para eu te direcionar sem te mandar opção fora do perfil.`;
@@ -9640,13 +9640,16 @@ function ui682FormatarDataHora(iso){
 }
 function ui682ProgressReanalise(btn){
   if(!btn) return { set(){}, done(){}, fail(){} };
-  const old = btn.parentElement?.querySelector?.(".ui682-analysis-progress");
+  const container = btn.closest?.(".cp704-lead") || document;
+  const old = container.querySelector?.(".ui682-analysis-progress");
   if(old) old.remove();
   const box = document.createElement("div");
   box.className = "ui682-analysis-progress";
-  box.style.cssText = "margin-top:10px;padding:10px 12px;border:1px solid rgba(255,194,102,.35);border-radius:12px;background:rgba(255,194,102,.08);color:var(--soft);font-size:12px;min-width:240px";
-  box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;font-weight:950;color:#fff"><span id="ui682ProgressText">Preparando análise...</span><span id="ui682ProgressPct">5%</span></div><div style="height:6px;background:rgba(255,255,255,.10);border-radius:999px;overflow:hidden;margin-top:8px"><i id="ui682ProgressBar" style="display:block;height:100%;width:5%;background:linear-gradient(90deg,var(--morno),var(--lime));transition:width .35s ease"></i></div>`;
-  btn.parentElement?.insertAdjacentElement("afterend", box);
+  box.style.cssText = "margin:10px 0 0 0;padding:10px 12px;border:1px solid rgba(255,194,102,.35);border-radius:12px;background:rgba(255,194,102,.08);color:var(--soft);font-size:12px;width:100%;min-width:0;box-sizing:border-box";
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;font-weight:950;color:#fff;min-width:0"><span id="ui682ProgressText" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Preparando análise...</span><span id="ui682ProgressPct" style="flex:0 0 auto">5%</span></div><div style="height:6px;background:rgba(255,255,255,.10);border-radius:999px;overflow:hidden;margin-top:8px"><i id="ui682ProgressBar" style="display:block;height:100%;width:5%;background:linear-gradient(90deg,var(--morno),var(--lime));transition:width .35s ease"></i></div>`;
+  const top = btn.closest?.(".cp704-top");
+  if(top) top.insertAdjacentElement("afterend", box);
+  else btn.parentElement?.insertAdjacentElement("afterend", box);
   const set = (pct, txt) => {
     const p = Math.max(0, Math.min(100, Number(pct)||0));
     const bar = box.querySelector("#ui682ProgressBar");
@@ -11314,7 +11317,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11390,7 +11393,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #718');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #719');
     });
   }
   function cp694FixFab(){
@@ -11486,7 +11489,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11543,7 +11546,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #718');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #719');
     });
   }
   function fixFab(){
@@ -11686,7 +11689,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp696AtendimentosFullList) return;
   window.__cp696AtendimentosFullList = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11744,7 +11747,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #718');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #719');
     });
   }
   function applyLayoutFixes(){
@@ -11852,7 +11855,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp697PreparacaoCarteira) return;
   window.__cp697PreparacaoCarteira = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11919,7 +11922,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #718');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #719');
     });
   }
   async function fetchAll697(force){
@@ -12071,7 +12074,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp698VersaoTopo) return;
   window.__cp698VersaoTopo = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fixVersionText(){
     try{
@@ -12082,11 +12085,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #718');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #719');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #718');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #719');
       });
     }catch(_){ }
   }
@@ -12105,13 +12108,13 @@ function ui670DetailRows(lead,mc){
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
-  const VERSION='709';
+  const VERSION='719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fix(){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #718');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #719');
       });
     }catch(_){ }
   }
@@ -12131,7 +12134,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp703PreparacaoEstavel) return;
   window.__cp703PreparacaoEstavel = true;
-  const VERSION = '709';
+  const VERSION = '719';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   let fullLeadsCache = null;
@@ -12145,7 +12148,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #718');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #719');
       });
     }catch(_){ }
   }
