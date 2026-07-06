@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v715-motor-comercial-v2-layout-mobile";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v718-leitura-comercial-estrategica";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -203,6 +203,27 @@ function normalizarRaciocinioComercial(parsed = {}, lead = {}, timeline = []) {
     perguntaChave: txt(rc0.perguntaChave, txt(parsed.melhorPergunta, "Qual é o objetivo atual do cliente neste momento?")),
     naoFazer: arr(rc0.naoFazer).length ? arr(rc0.naoFazer).slice(0,3) : ["Não mandar resposta genérica", "Não empurrar visita antes de requalificar", "Não oferecer comparação aleatória sem reação do cliente"],
     evidencias: arr(rc0.evidencias)
+  };
+  return parsed;
+}
+
+
+function normalizarLeituraComercialV718(parsed = {}) {
+  if (!parsed || typeof parsed !== "object") return parsed;
+  const base = parsed.leituraComercial && typeof parsed.leituraComercial === "object" ? parsed.leituraComercial : {};
+  const rc = parsed.raciocinioComercial && typeof parsed.raciocinioComercial === "object" ? parsed.raciocinioComercial : {};
+  const txt = (v, fb = "") => String(v || fb || "").replace(/\s+/g, " ").trim();
+  parsed.leituraComercial = {
+    ...base,
+    ondeParou: txt(base.ondeParou, txt(parsed.nextAction || parsed.summary)),
+    quemDeveProximoPasso: txt(base.quemDeveProximoPasso || base.proximoPassoDeQuem || parsed?.diagnostico?.proximoPassoDeQuem || "corretor"),
+    temperatura: txt(base.temperatura || parsed.probability || "morno"),
+    interpretacao: txt(base.interpretacao, txt(rc.interpretacao || parsed.estrategia || parsed.summary)),
+    porQueImporta: txt(base.porQueImporta, txt(rc.lacunaCentral ? `Porque a venda só avança quando a lacuna central for destravada: ${rc.lacunaCentral}` : "A condução precisa sair do resumo do produto e entender o objetivo real do cliente.")),
+    oQueDestravar: txt(base.oQueDestravar, txt(rc.lacunaCentral || parsed.melhorPergunta)),
+    movimentoRecomendado: txt(base.movimentoRecomendado, txt(rc.estrategiaAntesDaMensagem || parsed.estrategia || parsed.nextAction)),
+    erroEvitar: txt(base.erroEvitar, txt(rc.riscoDaAbordagemErrada || parsed.risk)),
+    mensagemCurtaChance: txt(base.mensagemCurtaChance, txt(parsed.melhorPergunta || parsed.nextAction))
   };
   return parsed;
 }
@@ -2238,7 +2259,25 @@ O corretor já sabe ler o WhatsApp. Não entregue obviedades como “tem interes
 - qual pergunta destrava a próxima etapa.
 Se houver troca de produto (ex.: Premium Office antes e Personalité agora), isso é o centro da análise: produto comercial/investimento antes, produto pronto/residencial agora. A resposta deve usar essa memória para qualificar moradia vs investimento.
 
-REGRA pro leituraComercial: preencha um objeto curto para o corretor entender a conversa em 10 segundos: { "ondeParou": "último ponto comercial real, sem ruído", "quemDeveProximoPasso": "cliente|corretor|ambos", "temperatura": "quente|morno|frio", "oQueDestravar": "a trava ou lacuna comercial de agora", "mensagemCurtaChance": "qual movimento de mensagem tem mais chance de resposta" }. Seja direto, sem texto longo.
+REGRA v718 pro leituraComercial — ESTA É A INTERPRETAÇÃO DE GERENTE COMERCIAL, NÃO RESUMO:
+Preencha um objeto para o corretor entender a SITUAÇÃO e a DECISÃO em até 10 segundos. Use somente fatos reais do histórico, mas explique o significado comercial além do óbvio.
+Formato obrigatório:
+{
+  "ondeParou": "último ponto comercial real, sem ruído e sem repetir o summary",
+  "quemDeveProximoPasso": "cliente|corretor|ambos",
+  "temperatura": "quente|morno|frio",
+  "interpretacao": "o que esse histórico significa comercialmente; não conte a história, explique a leitura",
+  "porQueImporta": "por que essa leitura muda a condução da venda agora",
+  "oQueDestravar": "a trava/lacuna central que precisa ser resolvida agora",
+  "movimentoRecomendado": "o movimento comercial recomendado antes de qualquer oferta/visita/proposta",
+  "erroEvitar": "o erro específico que o corretor deve evitar neste lead",
+  "mensagemCurtaChance": "qual movimento de mensagem tem mais chance de resposta"
+}
+Regras duras:
+- PROIBIDO usar leituraComercial para repetir: produto, etapa, summary ou mudancas.
+- PROIBIDO escrever só 'cliente tem interesse' ou 'objetivo indefinido'. Isso é raso.
+- Se houver mudança Premium Office → Personalité, a interpretação deve explicar a possível mudança comercial: investimento/comercial → moradia/residencial/pronto, e a necessidade de requalificar objetivo antes de vender.
+- A leitura deve ensinar o corretor a conduzir, não apenas informar o que aconteceu.
 
 REGRA pro mudancas (card "O que mudou"): compare o começo e o fim do histórico (e o CONTEXTO ANTERIOR CONSOLIDADO, quando existir) e liste APENAS mudanças com significado comercial: produto, finalidade (moradia↔investimento, comercial↔residencial), faixa de preço, urgência, momento de vida ou comportamento (ex.: silêncio longo → retorno espontâneo; parou de perguntar preço → passou a perguntar financiamento). Máximo 3 itens, da mais importante para a menos. Cada item: { "dimensao": "Produto|Finalidade|Faixa de preço|Urgência|Comportamento|Momento de vida", "antes": "fato curto do histórico", "agora": "fato curto atual", "porQueImporta": "1 frase com o significado comercial da mudança" }. Use SÓ fatos literais da conversa. NÃO repita texto do summary nem da leituraComercial: aqui entra a MUDANÇA (antes → agora), não resumo. Se não houver mudança comercial relevante, retorne [] (lista vazia) — nunca invente mudança.
 
@@ -2538,6 +2577,7 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raciocini
     );
     // Garante que a análise tenha tese comercial antes da geração das mensagens.
     normalizarRaciocinioComercial(parsed, lead, timeline);
+    normalizarLeituraComercialV718(parsed);
     // Registra o modelo real usado no único raciocínio principal.
     parsed._modelo = completion?.model || modeloAnalise();
     // Calcula o horário de hábito do cliente a partir dos horários reais das mensagens dele
@@ -2627,6 +2667,7 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raciocini
     normalizarDiagnostico(parsed);
     finalizarAnaliseComercial(parsed, lead, timeline, corretorNome);
     normalizarRaciocinioComercial(parsed, lead, timeline);
+    normalizarLeituraComercialV718(parsed);
     // Quando não há ação urgente, não existe motivo comercial para gerar três novas mensagens.
     // Isso evita pressão indevida, elimina contradição na tela e economiza uma chamada de IA.
     const semAcaoUrgente = parsed?.modeloComercial?.acao?.status === "sem-acao-urgente";
