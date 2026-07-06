@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-2-analise-pura-3-mensagens";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-3-analise-pura-3-mensagens";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -1857,7 +1857,8 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       messages: {
         a: "", b: "", c: "",
         aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
-      }
+      },
+      mensagens: { recomendada: "", maisSuave: "", maisDireta: "" }
     };
   }
   // Texto completo da conversa — usado nas verificações que precisam do histórico inteiro.
@@ -1901,8 +1902,8 @@ Não use estrutura antiga do Direciona. Não gere cards auxiliares. Gere exatame
 
 Use este formato de compatibilidade:
 {
-  "summary":"Resumo da conversa em 2 a 5 parágrafos, no estilo de uma análise pura do ChatGPT.",
-  "diagnostico":{
+  "resumoConversa":"Resumo da conversa em 2 a 5 parágrafos, no estilo de uma análise pura do ChatGPT.",
+  "diagnosticoComercial":{
     "ultimaPessoaFalar":"Você|Cliente|desconhecido",
     "ultimoCompromissoCliente":"texto curto ou Nenhum",
     "ultimaInformacaoEnviada":"texto curto",
@@ -1912,8 +1913,8 @@ Use este formato de compatibilidade:
     "pendenciaPrincipal":"o que falta descobrir",
     "proximoPasso":"Você|Cliente|ambos",
     "etapaFunil":"Interesse / Descoberta de necessidade|descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
-    "probabilidadeComentada":"nota/10 ou percentual com justificativa",
-    "mensagemQueEuEnviariaHoje":"Próxima mensagem sugerida, pronta para copiar"
+    "probabilidadeVenda":"nota/10 ou percentual",
+    "justificativaProbabilidade":"por que essa probabilidade, com base em fatos da conversa"
   },
   "oQueFaltaDescobrir":["..."],
   "estrategiaMensagem":"por que a mensagem recomendada foi escolhida",
@@ -1946,14 +1947,14 @@ ${timelineText}`;
     });
 
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
-    const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
+    const d = (raw.diagnosticoComercial && typeof raw.diagnosticoComercial === "object") ? raw.diagnosticoComercial : {};
     const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
     const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = limparMensagemComercial(txt(mensagensRaw.recomendada || mensagensRaw.a || d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida));
-    const msgB = limparMensagemComercial(txt(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b));
-    const msgC = limparMensagemComercial(txt(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c));
+    const msgA = limparMensagemComercial(txt(mensagensRaw.recomendada));
+    const msgB = limparMensagemComercial(txt(mensagensRaw.maisSuave));
+    const msgC = limparMensagemComercial(txt(mensagensRaw.maisDireta));
     const msg = msgA;
     const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
@@ -1963,26 +1964,26 @@ ${timelineText}`;
     // NÃO monta tese, NÃO aplica bloqueios comerciais e NÃO chama uma segunda IA.
     const parsed = {
       mode: "openai",
-      summary: txt(raw.summary),
+      summary: txt(raw.resumoConversa),
       diagnostico: {
         ultimaPessoaFalar: txt(d.ultimaPessoaFalar, "Não identificado"),
         ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Nenhum"),
-        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
-        ultimaInformacaoPrometida: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
+        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada, "Não identificada"),
+        ultimaInformacaoPrometida: txt(d.ultimaInformacaoEnviada, "Não identificada"),
         produtoAtual,
         produtoPrincipalInteresse: produtoAtual,
         interesseAnterior: txt(d.interesseAnterior, "Nenhum"),
-        objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
-        objecaoPrincipal: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
+        objecaoIdentificada: txt(d.objecaoIdentificada, "Não identificada"),
+        objecaoPrincipal: txt(d.objecaoIdentificada, "Não identificada"),
         pendenciaPrincipal: txt(d.pendenciaPrincipal, "Não identificada"),
         pendenciaFinanceira: txt(d.pendenciaPrincipal, "Não identificada"),
         proximoPasso: txt(d.proximoPasso, "Você"),
         proximoPassoDeQuem: txt(d.proximoPasso, "Você"),
         etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
-        probabilidadeComentada: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
-        probabilidadeFechamentoHoje: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        probabilidadeComentada: txt(d.probabilidadeVenda, "Não identificada"),
+        probabilidadeFechamentoHoje: txt(d.justificativaProbabilidade || d.probabilidadeVenda, "Não identificada"),
         mensagemQueEuEnviariaHoje: msg,
-        percepcaoTodaConversa: txt(raw.summary)
+        percepcaoTodaConversa: txt(raw.resumoConversa)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
       estrategiaMensagem: txt(raw.estrategiaMensagem),
@@ -2002,6 +2003,11 @@ ${timelineText}`;
         bLabel: "Mais suave",
         cLabel: "Mais direta",
         recomendada: "a"
+      },
+      mensagens: {
+        recomendada: msgA,
+        maisSuave: msgB,
+        maisDireta: msgC
       },
       tipoContato: null,
       confianca: 0,
@@ -2067,7 +2073,8 @@ ${timelineText}`;
       messages: {
         a: "", b: "", c: "",
         aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
-      }
+      },
+      mensagens: { recomendada: "", maisSuave: "", maisDireta: "" }
     };
   }
 }

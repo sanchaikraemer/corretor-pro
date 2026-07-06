@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
@@ -12,38 +12,47 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
   const mc = out.modeloComercial || {};
   const semAcao = mc?.acao?.status === "sem-acao-urgente";
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
-  const temTresMensagens = textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c);
+  const mensagensAlt = (out.mensagens && typeof out.mensagens === "object") ? out.mensagens : {};
+  // Aceita tanto messages.a/b/c quanto mensagens.recomendada/maisSuave/maisDireta como fonte —
+  // o cérebro novo (v724) grava os dois; leads antigos podem só ter um dos dois.
+  const msgA = textoLimpo(m.a) || textoLimpo(mensagensAlt.recomendada);
+  const msgB = textoLimpo(m.b) || textoLimpo(mensagensAlt.maisSuave);
+  const msgC = textoLimpo(m.c) || textoLimpo(mensagensAlt.maisDireta);
+  const temTresMensagens = !!(msgA && msgB && msgC);
 
-  // v715: esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens
-  // boas, a tela deve mostrar pendência/reanálise, não um fallback velho da v682.
+  // Esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens boas,
+  // a tela deve mostrar pendência/reanálise, não um fallback antigo.
   if (semAcao) {
     out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
+    out.mensagens = { recomendada:"", maisSuave:"", maisDireta:"" };
     out.sugestoesPendentes = false;
     out.aprovada = true;
-    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
     return out;
   }
 
   if (temTresMensagens) {
     out.messages = {
-      ...m,
+      a: msgA, b: msgB, c: msgC,
       aLabel: textoLimpo(m.aLabel) || "Recomendada",
       bLabel: textoLimpo(m.bLabel) || "Mais suave",
       cLabel: textoLimpo(m.cLabel) || "Mais direta",
       recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
     };
-    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+    out.mensagens = { recomendada: msgA, maisSuave: msgB, maisDireta: msgC };
+    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
     out.sugestoesPendentes = false;
     out.aprovada = true;
     return out;
   }
 
   out.messages = { a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"", cLabel:"", recomendada:"a" };
-  out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+  out.mensagens = { recomendada:"", maisSuave:"", maisDireta:"" };
+  out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
   out.sugestoesPendentes = true;
   out.aprovada = false;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
-  out.validacaoSugestoes.push("Motor v715: mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
+  out.validacaoSugestoes.push("Mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
@@ -245,7 +254,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   const produto = normalizarTextoV684(diag.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || "");
 
   out.iaComercialV2 = {
-    versao: "715-motor-comercial-v2-layout-mobile",
+    versao: "724-3-analise-pura-3-mensagens",
     perfilCliente: normalizarTextoV684(out.clientProfile || ""),
     etapaComercial: normalizarTextoV684(diag.etapaFunil || out.etapaSugerida || ""),
     mudancaComportamento: normalizarTextoV684(ac.mudancaDeIntencao || ""),
@@ -621,9 +630,9 @@ async function reanalisarLeadHandler702(req, res) {
   novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
-  novoAnalysis._schemaComercial = 715;
-  novoAnalysis._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 715;
+  novoAnalysis._schemaComercial = 724;
+  novoAnalysis._schemaComercialMinor = "724-3-analise-pura-3-mensagens";
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 724;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -652,9 +661,9 @@ async function reanalisarLeadHandler702(req, res) {
   merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
-  merged._schemaComercial = 715;
-  merged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-  if (merged.modeloComercial) merged.modeloComercial.versao = 715;
+  merged._schemaComercial = 724;
+  merged._schemaComercialMinor = "724-3-analise-pura-3-mensagens";
+  if (merged.modeloComercial) merged.modeloComercial.versao = 724;
   const sigFinal6863 = assinaturaTimeline6863(timelineFinal);
   merged._iaIncremental = {
     ...(freshPrevious._iaIncremental || {}),
@@ -706,9 +715,9 @@ async function reanalisarLeadHandler702(req, res) {
     retryMerged = finalizarAnaliseComercial(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
-    retryMerged._schemaComercial = 715;
-    retryMerged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 715;
+    retryMerged._schemaComercial = 724;
+    retryMerged._schemaComercialMinor = "724-3-analise-pura-3-mensagens";
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 724;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -728,9 +737,9 @@ async function reanalisarLeadHandler702(req, res) {
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 715) {
-    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 715, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 715;
+  if (!persisted || persistedSchema < 724) {
+    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 724, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
+    if (forced.modeloComercial) forced.modeloComercial.versao = 724;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -739,10 +748,10 @@ async function reanalisarLeadHandler702(req, res) {
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
     persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 715) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 715." });
+    if (persistedSchema < 724) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 724." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 715, apiVersion: "715-motor-comercial-v2-layout-mobile" });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 724, apiVersion: "724-3-analise-pura-3-mensagens" });
 }
 
 export default async function handler(req, res) {

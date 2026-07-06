@@ -542,7 +542,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   function hasAnalysis(analysis) {
     if (!analysis || typeof analysis !== "object") return false;
-    return Boolean(analysis.summary || analysis.nextAction || analysis.probability || analysis.probabilityPercent || analysis.messages);
+    return Boolean(analysis.summary || analysis.nextAction || analysis.probability || analysis.probabilityPercent || analysis.messages || analysis.mensagens);
   }
 
   function compactAnalysisForList(analysis = {}) {
@@ -551,7 +551,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // anteriores. A carteira precisa só dos sinais abaixo. O objeto integral é devolvido
     // exclusivamente no detalhe do lead.
     const keys = [
-      "summary", "nextAction", "messages", "probability", "probabilityPercent", "bestTime",
+      "summary", "nextAction", "messages", "mensagens", "probability", "probabilityPercent", "bestTime",
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
       "tipoRetomada", "tipoContato", "avatarFoto", "venda", "motivoPerda", "motivo_perda",
       "permuta", "risk", "scoreAjuste", "produtoInteresse", "produtosInteresse", "mode",

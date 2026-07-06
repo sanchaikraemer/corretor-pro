@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #724-2: instrumentação leve de performance =====
+// ===== Atualização #724-3: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #724-2) =====
+// ===== Histórico interno do app (Atualização #724-3) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #724-2: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #724-3: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -950,8 +950,10 @@ function limparAutorAtend(autor){
   return String(autor || "").replace(/Atendimento\s+(presencial|liga[çc][ãa]o)\s*\(corretor\)/gi, "Atendimento (corretor)");
 }
 
-// Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-2-analise-pura-3-mensagens";
+// Identificador informativo da arquitetura atual de mensagens (diagnóstico/telemetria).
+// A checagem de mensagens abaixo NÃO depende mais deste valor bater exatamente —
+// isso causava mensagens válidas serem descartadas quando a API gravava uma tag antiga.
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-3-analise-pura-3-mensagens";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -959,16 +961,8 @@ function mensagemAprovadaSemAlteracao(texto){
 
 function mensagensDaAnalise(a){
   a = a || {};
-  const arquiteturaOk = String(a.arquiteturaMensagens || "") === ARQUITETURA_MENSAGENS_ATUAL;
-  const pendente = a.sugestoesPendentes === true;
   const m = (a.messages && typeof a.messages === "object") ? a.messages : {};
-  if(!arquiteturaOk || pendente){
-    return {
-      direta:"", consultiva:"", retomada:"",
-      a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"Reanalisar", cLabel:"Reanalisar", recomendada:"a",
-      aprovada:false
-    };
-  }
+  const alt = (a.mensagens && typeof a.mensagens === "object") ? a.mensagens : {};
   const pick = (key) => {
     const v = m[key];
     if(v == null) return "";
@@ -976,16 +970,25 @@ function mensagensDaAnalise(a){
       ? String(v.msg || v.mensagem || v.texto || "").trim()
       : String(v).trim();
   };
-  const aMsg = pick("a") || pick("direta");
-  const bMsg = pick("b") || pick("consultiva");
-  const cMsg = pick("c") || pick("retomada");
+  // Aceita tanto messages.a/b/c quanto mensagens.recomendada/maisSuave/maisDireta —
+  // qualquer um dos dois caminhos que a API/lead tenha preenchido.
+  const aMsg = pick("a") || pick("direta") || String(alt.recomendada || "").trim();
+  const bMsg = pick("b") || pick("consultiva") || String(alt.maisSuave || "").trim();
+  const cMsg = pick("c") || pick("retomada") || String(alt.maisDireta || "").trim();
   const aprovada = !!(aMsg && bMsg && cMsg);
+  if(!aprovada){
+    return {
+      direta:"", consultiva:"", retomada:"",
+      a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"Reanalisar", cLabel:"Reanalisar", recomendada:"a",
+      aprovada:false
+    };
+  }
   return {
     direta:aMsg, consultiva:bMsg, retomada:cMsg,
     a:aMsg, b:bMsg, c:cMsg,
-    aLabel:String(m.aLabel || "").trim(),
-    bLabel:String(m.bLabel || "").trim(),
-    cLabel:String(m.cLabel || "").trim(),
+    aLabel:String(m.aLabel || "").trim() || "Recomendada",
+    bLabel:String(m.bLabel || "").trim() || "Mais suave",
+    cLabel:String(m.cLabel || "").trim() || "Mais direta",
     recomendada:["a","b","c"].includes(String(m.recomendada || "")) ? String(m.recomendada) : "a",
     aprovada
   };
@@ -4594,7 +4597,7 @@ window.finalizarSequencia = finalizarSequencia;
 
 
 /* ============================================================
-   Atualização #724-2 — Tela do lead consolidada
+   Atualização #724-3 — Tela do lead consolidada
    - Uma única função renderLeadFoco ativa.
    - Sem chamar renderizações antigas antes ou depois.
    - Mantém IA por fatos, 3 mensagens, observações, histórico e ferramentas.
@@ -4802,7 +4805,13 @@ function cp704Css(){
   }
   function cp704Msgs(lead){
     const a=lead?.analysis||{};
-    const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
+    let m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
+    if(!(m.a && m.b && m.c) && (lead?.messages || lead?.mensagens)){
+      // Aceita também lead.messages.a/b/c e lead.mensagens.recomendada/maisSuave/maisDireta
+      // gravados direto no lead, fora de lead.analysis.
+      const doLead = (typeof mensagensDaAnalise==='function') ? mensagensDaAnalise({ messages: lead.messages, mensagens: lead.mensagens }) : {};
+      if(doLead.a && doLead.b && doLead.c) m = doLead;
+    }
     const obsFact=cp707ObservationFacts(lead);
     const mc=cp704Modelo(lead);
     const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
@@ -4859,7 +4868,7 @@ function cp704Css(){
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
 
-// Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
+// Atualização #724-3: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
 
 function cp718LeituraComercialHtml(a,lead){
@@ -9047,7 +9056,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #724-2: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #724-3: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -9097,7 +9106,7 @@ window.ui667MarcarAtendido=async function(btn){
     toast("Não consegui marcar: "+(err?.message||err));
   }
 };
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 
 /* ============================================================
    ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
@@ -9863,7 +9872,8 @@ window.ui670Reanalisar=async function(btn){
     const semAcao=mc?.acao?.status==="sem-acao-urgente";
     const aviso=data?.warning||"";
     toast(usouFallback?"✓ Análise corrigida e salva.":(aviso?"✓ Análise comercial atualizada com reconciliação factual.":(semAcao?"✓ Análise atualizada: nenhuma ação urgente.":"✓ Análise comercial atualizada.")));
-    setTimeout(()=>qs("#leadFocoArea")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+    // Sem scrollIntoView aqui: o corretor já está olhando pra esta tela; rolar de volta
+    // pro topo dava a impressão de que o app "voltava" sozinho depois de reanalisar.
 
     setTimeout(async()=>{
       try{
@@ -9946,7 +9956,7 @@ function ui670DetailRows(lead,mc){
   return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
 }
 
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 
 
 /* ============================================================
@@ -10086,7 +10096,7 @@ function ui670DetailRows(lead,mc){
       if(typeof carregarDashboard==='function') carregarDashboard();
     }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
   };
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
@@ -10244,7 +10254,7 @@ function ui670DetailRows(lead,mc){
       .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
       .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
   }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 })();
 
 
@@ -10363,7 +10373,7 @@ function ui670DetailRows(lead,mc){
     const h3=action.querySelector('h3');
     if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
   window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
 
@@ -10600,7 +10610,7 @@ function ui670DetailRows(lead,mc){
       @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
     `; document.head.appendChild(st);
   }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
   function abrirModalDesfechoFinal(id, tipo){
     const lead = (state && state.lead) || {};
     const vendido = tipo === 'vendido';
@@ -10839,7 +10849,7 @@ function ui670DetailRows(lead,mc){
     `;
     document.head.appendChild(st);
   }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
 })();
@@ -10892,7 +10902,7 @@ function ui670DetailRows(lead,mc){
       });
     }catch(_){}
   }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
+// Atualização #724-3: wrapper antigo de renderLeadFoco removido.
 
   setTimeout(reforcarBotaoEditar, 0);
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
@@ -10900,7 +10910,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — revisão de auditoria
+   Atualização #724-3 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -11052,7 +11062,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — fechamento real da pendência de performance
+   Atualização #724-3 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11188,7 +11198,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — acabamento profissional estável
+   Atualização #724-3 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11309,7 +11319,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Hotfix real mobile
+   Atualização #724-3 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11318,7 +11328,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11394,7 +11404,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-2');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-3');
     });
   }
   function cp694FixFab(){
@@ -11482,7 +11492,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Correção real da lista mobile
+   Atualização #724-3 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -11490,7 +11500,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11547,7 +11557,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-2');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-3');
     });
   }
   function fixFab(){
@@ -11682,7 +11692,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Correção definitiva carregamento total Atendimentos
+   Atualização #724-3 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -11690,7 +11700,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp696AtendimentosFullList) return;
   window.__cp696AtendimentosFullList = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11748,7 +11758,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-2');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-3');
     });
   }
   function applyLayoutFixes(){
@@ -11847,7 +11857,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Preparação da Carteira
+   Atualização #724-3 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -11856,7 +11866,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp697PreparacaoCarteira) return;
   window.__cp697PreparacaoCarteira = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11923,7 +11933,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-2');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-3');
     });
   }
   async function fetchAll697(force){
@@ -12069,13 +12079,13 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — correção de versão exibida no topo/mobile
+   Atualização #724-3 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
   if(window.__cp698VersaoTopo) return;
   window.__cp698VersaoTopo = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fixVersionText(){
     try{
@@ -12086,11 +12096,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724-2');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724-3');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-2');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-3');
       });
     }catch(_){ }
   }
@@ -12105,17 +12115,17 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — estabilidade pós-cache
+   Atualização #724-3 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
-  const VERSION='724-2';
+  const VERSION='724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fix(){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-2');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-3');
       });
     }catch(_){ }
   }
@@ -12127,7 +12137,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Preparação da Carteira estável
+   Atualização #724-3 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12135,7 +12145,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp703PreparacaoEstavel) return;
   window.__cp703PreparacaoEstavel = true;
-  const VERSION = '724-2';
+  const VERSION = '724-3';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   let fullLeadsCache = null;
@@ -12149,7 +12159,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-2');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-3');
       });
     }catch(_){ }
   }
@@ -12308,4 +12318,4 @@ function ui670DetailRows(lead,mc){
 
 
 
-// Atualização #724-2: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
+// Atualização #724-3: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
