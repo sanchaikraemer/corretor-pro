@@ -1,11 +1,11 @@
 const BUILD_ID = '__BUILD_ID__';
-const STATIC_CACHE = 'corretor-pro-static-v717-' + BUILD_ID;
+const STATIC_CACHE = 'corretor-pro-static-v718-' + BUILD_ID;
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
 const CORE_ASSETS = [
-  '/', '/index.html', '/styles.css?v=717', '/app.js?v=717', '/vendor/jszip.min.js?v=717',
-  '/share.html', '/manifest.json', '/service-worker.js', '/icon-192.png?v=717', '/logo-cp.png?v=717',
-  '/icon-512.png?v=717', '/favicon.png?v=717', '/logo-direciona-light.svg?v=717', '/logo-direciona-dark.svg?v=717'
+  '/', '/index.html', '/styles.css?v=718', '/app.js?v=718', '/vendor/jszip.min.js?v=718',
+  '/share.html', '/manifest.json', '/service-worker.js', '/icon-192.png?v=718', '/logo-cp.png?v=718',
+  '/icon-512.png?v=718', '/favicon.png?v=718', '/logo-direciona-light.svg?v=718', '/logo-direciona-dark.svg?v=718'
 ];
 
 self.addEventListener('install', event => {
