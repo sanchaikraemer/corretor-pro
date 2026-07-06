@@ -831,6 +831,23 @@ export function sanitizarMateriais(materiais) {
   return out;
 }
 
+// v717: valida o campo "mudancas" (card "O que mudou"). Formato rígido: no máximo 3 itens,
+// cada um com antes/agora obrigatórios e textos curtos. Sem item válido => [] e o card não aparece.
+function sanitizarMudancas(mudancas) {
+  if (!Array.isArray(mudancas)) return [];
+  const corta = (v, n) => String(v || "").trim().slice(0, n);
+  return mudancas
+    .filter(m => m && typeof m === "object")
+    .map(m => ({
+      dimensao: corta(m.dimensao, 30) || "Mudança",
+      antes: corta(m.antes, 120),
+      agora: corta(m.agora, 120),
+      porQueImporta: corta(m.porQueImporta, 180)
+    }))
+    .filter(m => m.antes && m.agora)
+    .slice(0, 3);
+}
+
 export function filtrarCompromissosReais(appointments, conversaText) {
   if (!Array.isArray(appointments) || !appointments.length) return [];
   const tl = normalizeComparable(conversaText || "").split(/\s+/).filter(Boolean);
@@ -2208,7 +2225,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, raciocinioComercial (objeto — ver regra da tese comercial), estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages (retorne sempre null nesta chamada — as 3 mensagens são geradas em etapa separada a partir deste diagnóstico).
+  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, raciocinioComercial (objeto — ver regra da tese comercial), estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), mudancas (array — ver regra), modeloComercial (objeto — ver regra), messages (retorne sempre null nesta chamada — as 3 mensagens são geradas em etapa separada a partir deste diagnóstico).
 
 REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
 
@@ -2222,6 +2239,8 @@ O corretor já sabe ler o WhatsApp. Não entregue obviedades como “tem interes
 Se houver troca de produto (ex.: Premium Office antes e Personalité agora), isso é o centro da análise: produto comercial/investimento antes, produto pronto/residencial agora. A resposta deve usar essa memória para qualificar moradia vs investimento.
 
 REGRA pro leituraComercial: preencha um objeto curto para o corretor entender a conversa em 10 segundos: { "ondeParou": "último ponto comercial real, sem ruído", "quemDeveProximoPasso": "cliente|corretor|ambos", "temperatura": "quente|morno|frio", "oQueDestravar": "a trava ou lacuna comercial de agora", "mensagemCurtaChance": "qual movimento de mensagem tem mais chance de resposta" }. Seja direto, sem texto longo.
+
+REGRA pro mudancas (card "O que mudou"): compare o começo e o fim do histórico (e o CONTEXTO ANTERIOR CONSOLIDADO, quando existir) e liste APENAS mudanças com significado comercial: produto, finalidade (moradia↔investimento, comercial↔residencial), faixa de preço, urgência, momento de vida ou comportamento (ex.: silêncio longo → retorno espontâneo; parou de perguntar preço → passou a perguntar financiamento). Máximo 3 itens, da mais importante para a menos. Cada item: { "dimensao": "Produto|Finalidade|Faixa de preço|Urgência|Comportamento|Momento de vida", "antes": "fato curto do histórico", "agora": "fato curto atual", "porQueImporta": "1 frase com o significado comercial da mudança" }. Use SÓ fatos literais da conversa. NÃO repita texto do summary nem da leituraComercial: aqui entra a MUDANÇA (antes → agora), não resumo. Se não houver mudança comercial relevante, retorne [] (lista vazia) — nunca invente mudança.
 
 REGRA pro modeloComercial — ESTE É O ESTADO ÚNICO QUE COMANDA A TELA. Separe obrigatoriamente CONTATO, OPORTUNIDADE, RELACIONAMENTO e AÇÃO. Retorne:
 {
@@ -2525,6 +2544,8 @@ IMPORTANTE: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raciocini
     parsed.melhorHorarioContato = calcularMelhorHorario(timeline, lead?.clientName);
     // Sanitiza materiais sugeridos: só tipos válidos, no máx 3, com motivo curto.
     parsed.materiais = sanitizarMateriais(parsed.materiais);
+    // v717: valida o card "O que mudou" — formato rígido, máx. 3, vazio quando não há mudança real.
+    parsed.mudancas = sanitizarMudancas(parsed.mudancas);
     // Descarta compromissos inventados: só fica o que tem prova literal na conversa.
     parsed.confirmedAppointments = filtrarCompromissosReais(parsed.confirmedAppointments, timelineTextFull);
     // Teto duro pra leads rasos ("fogo de palha"): conversa curta (≤6 msgs) QUE JÁ ESFRIOU
