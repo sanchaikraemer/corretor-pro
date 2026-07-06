@@ -7,48 +7,43 @@ function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/
 function produtoLeadLocal(lead, analysis) {
   return textoLimpo(analysis?.modeloComercial?.oportunidade?.produto || lead?.product || analysis?.product || "o imóvel") || "o imóvel";
 }
-function garantirMensagensV682(analysis, lead) {
+function garantirMensagensMotorComercialV714(analysis, lead) {
   const out = (analysis && typeof analysis === "object") ? analysis : {};
   const mc = out.modeloComercial || {};
   const semAcao = mc?.acao?.status === "sem-acao-urgente";
-  if (semAcao) return out;
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
-  const tem = textoLimpo(m.a || m.direta || m.melhor || m.mensagem || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje);
-  if (tem && textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c)) {
-    out.arquiteturaMensagens = out.arquiteturaMensagens || "gpt55-unificado-v2";
+  const temTresMensagens = textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c);
+
+  // v714: esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens
+  // boas, a tela deve mostrar pendência/reanálise, não um fallback velho da v682.
+  if (semAcao) {
+    out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
+    out.sugestoesPendentes = false;
+    out.aprovada = true;
+    out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
+    return out;
+  }
+
+  if (temTresMensagens) {
+    out.messages = {
+      ...m,
+      aLabel: textoLimpo(m.aLabel) || "Recomendada",
+      bLabel: textoLimpo(m.bLabel) || "Mais suave",
+      cLabel: textoLimpo(m.cLabel) || "Mais direta",
+      recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
+    };
+    out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
     out.sugestoesPendentes = false;
     out.aprovada = true;
     return out;
   }
-  const nome = primeiroNomeLeadLocal(lead);
-  const produto = produtoLeadLocal(lead, out);
-  const acao = textoLimpo(mc?.acao?.descricao || out.nextAction || out?.diagnostico?.proximaAcao);
-  const prefixo = nome ? `${nome}, ` : "";
-  const diag = out?.diagnostico || {};
-  const memoria = out?.memoriaSugerida || {};
-  const perfil = textoLimpo(memoria?.perfil || diag?.percepcaoTodaConversa || (Array.isArray(diag?.sabemos) ? diag.sabemos.join(", ") : ""));
-  const compromisso = textoLimpo(diag?.ultimoCompromissoCliente);
-  const entregue = textoLimpo(diag?.ultimaInformacaoPrometida);
-  const temVideoFotos = /v[ií]deo|foto|imagem|material|proposta|simula[cç][aã]o/i.test(`${entregue} ${acao}`);
-  const temDecisor = /espos|marid|fam[ií]lia|filh|s[oó]ci|dire[cç][aã]o/i.test(`${compromisso} ${perfil}`);
-  const perfilCurto = /100|110|ampl|pronto|su[ií]te|financi|parcel|entrada|moradia|invest/i.test(perfil) ? perfil : "o perfil que você comentou";
-  const gancho = temVideoFotos ? `Conseguiu ver o material que te enviei${temDecisor ? " e conversar com quem decide junto com você" : ""}?` : `Conseguiu avaliar essa opção com calma?`;
-  const encaixe = produto && produto !== "o imóvel" ? `Como o ${produto} entra bem nesse perfil, queria entender se ele ficou dentro do que vocês procuram` : `Queria entender se essa opção ficou dentro do que vocês procuram`;
-  const fallbackA = textoLimpo(m.a || m.direta || out?.diagnostico?.mensagemQueEuEnviariaHoje || out?.mensagemIdealHoje) || `${prefixo}tudo bem? ${gancho} ${encaixe} ou se vale eu separar outras opções compatíveis para compararmos melhor.`;
-  out.messages = {
-    ...m,
-    a: fallbackA,
-    b: textoLimpo(m.b || m.consultiva) || `${prefixo}tudo bem? Olhei novamente para ${perfilCurto} e o ${produto} continua sendo uma opção forte para comparar. Vocês conseguiram avaliar o material que enviei?`,
-    c: textoLimpo(m.c || m.retomada) || `${prefixo}tudo bem? Antes de eu separar novas opções, queria só confirmar a reação de vocês ao ${produto}. Se ele não encaixou, eu já busco alternativas no mesmo padrão.`,
-    aLabel: textoLimpo(m.aLabel) || "Retomar pelo combinado",
-    bLabel: textoLimpo(m.bLabel) || "Confirmar reação",
-    cLabel: textoLimpo(m.cLabel) || "Comparar sem perder",
-    recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
-  };
-  out.arquiteturaMensagens = "gpt55-unificado-v2";
-  out.sugestoesPendentes = false;
-  out.aprovada = true;
+
+  out.messages = { a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"", cLabel:"", recomendada:"a" };
+  out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
+  out.sugestoesPendentes = true;
+  out.aprovada = false;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
+  out.validacaoSugestoes.push("Motor v714: mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
@@ -250,7 +245,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   const produto = normalizarTextoV684(diag.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || "");
 
   out.iaComercialV2 = {
-    versao: "711-inteligencia-comercial",
+    versao: "714-motor-comercial-v2",
     perfilCliente: normalizarTextoV684(out.clientProfile || ""),
     etapaComercial: normalizarTextoV684(diag.etapaFunil || out.etapaSugerida || ""),
     mudancaComportamento: normalizarTextoV684(ac.mudancaDeIntencao || ""),
@@ -624,11 +619,11 @@ async function reanalisarLeadHandler702(req, res) {
     novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
   }
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
-  novoAnalysis = garantirMensagensV682(novoAnalysis, leadModelo);
+  novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
-  novoAnalysis._schemaComercial = 685;
-  novoAnalysis._schemaComercialMinor = "711-inteligencia-comercial";
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 685;
+  novoAnalysis._schemaComercial = 714;
+  novoAnalysis._schemaComercialMinor = "714-motor-comercial-v2";
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 714;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -655,11 +650,11 @@ async function reanalisarLeadHandler702(req, res) {
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
-  merged = garantirMensagensV682(merged, leadModelo);
+  merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
-  merged._schemaComercial = 685;
-  merged._schemaComercialMinor = "711-inteligencia-comercial";
-  if (merged.modeloComercial) merged.modeloComercial.versao = 685;
+  merged._schemaComercial = 714;
+  merged._schemaComercialMinor = "714-motor-comercial-v2";
+  if (merged.modeloComercial) merged.modeloComercial.versao = 714;
   const sigFinal6863 = assinaturaTimeline6863(timelineFinal);
   merged._iaIncremental = {
     ...(freshPrevious._iaIncremental || {}),
@@ -709,11 +704,11 @@ async function reanalisarLeadHandler702(req, res) {
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
-    retryMerged = garantirMensagensV682(retryMerged, leadModelo);
+    retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
-    retryMerged._schemaComercial = 685;
-    retryMerged._schemaComercialMinor = "711-inteligencia-comercial";
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 685;
+    retryMerged._schemaComercial = 714;
+    retryMerged._schemaComercialMinor = "714-motor-comercial-v2";
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 714;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -733,9 +728,9 @@ async function reanalisarLeadHandler702(req, res) {
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 685) {
-    const forced = enriquecerIAComercialV684(garantirMensagensV682({ ...merged, _schemaComercial: 711, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 685;
+  if (!persisted || persistedSchema < 714) {
+    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 714, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
+    if (forced.modeloComercial) forced.modeloComercial.versao = 714;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -744,10 +739,10 @@ async function reanalisarLeadHandler702(req, res) {
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
     persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 685) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 685." });
+    if (persistedSchema < 714) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 714." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 711, apiVersion: "711-inteligencia-comercial" });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 714, apiVersion: "714-motor-comercial-v2" });
 }
 
 export default async function handler(req, res) {

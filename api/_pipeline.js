@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v713-tese-comercial";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v714-motor-comercial-v2";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -160,7 +160,7 @@ EXEMPLO DE PADRÃO BOM (só copie a lógica se os fatos baterem): “Bom dia, Ed
 `;
 
 const REGRA_TESE_COMERCIAL_V713 = `
-MOTOR DE INTELIGÊNCIA COMERCIAL v713 — OBRIGATÓRIO:
+MOTOR DE INTELIGÊNCIA COMERCIAL v714 — OBRIGATÓRIO:
 Antes de qualquer mensagem, crie uma TESE COMERCIAL explícita em raciocinioComercial. Este bloco não é enfeite: ele manda na estratégia e nas mensagens.
 
 Retorne obrigatoriamente o objeto raciocinioComercial com estes campos:
@@ -179,8 +179,11 @@ REGRAS DURAS DA TESE:
 - Não escreva raciocinioComercial genérico.
 - Não diga só 'cliente tem interesse no produto'. Isso é óbvio e inútil.
 - Não crie fatos. Use somente o histórico.
+- A tese deve explicar o que o corretor talvez ainda não tenha percebido. Se ela só repetir a conversa, está errada.
 - Se houve produto anterior que não evoluiu e produto atual diferente, isso deve aparecer em viradaDoLead, interpretacao, lacunaCentral e estrategiaAntesDaMensagem.
+- A estrategiaAntesDaMensagem precisa dizer COMO conduzir: memória do histórico + motivo da pergunta + lacuna a destravar + tom sem cobrança.
 - A mensagem recomendada precisa ser consequência direta de raciocinioComercial. Se a mensagem não resolver a lacunaCentral, ela está errada.
+- A resposta deve parecer escrita por um corretor experiente, nunca por um sistema.
 `;
 
 function normalizarRaciocinioComercial(parsed = {}, lead = {}, timeline = []) {
@@ -669,7 +672,7 @@ export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) 
     parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
     if (parceiro) parsed.etapaSugerida = "Standby";
   }
-  parsed._schemaComercial = 676;
+  parsed._schemaComercial = 714;
   return parsed;
 }
 
@@ -694,7 +697,7 @@ export function finalizarAnaliseComercialV674(parsed = {}, lead = {}, timeline =
       out.lembreteSugerido = null;
     }
   }
-  out._schemaComercial = 676;
+  out._schemaComercial = 714;
   if (out.modeloComercial) out.modeloComercial.versao = 676;
   return out;
 }
@@ -2116,7 +2119,7 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     lembreteSugerido: parsed?.lembreteSugerido || null,
     inteligenciaObservada: parsed?.inteligenciaObservada || null
   };
-  const prompt = `Você é o Cérebro Comercial do Direciona. Com base no diagnóstico da conversa abaixo, gere 3 mensagens de WhatsApp DISTINTAS para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.\n\nREGRAS OBRIGATÓRIAS (violação invalida a mensagem):\n${REGRAS_MSG_PROMPT}\n- Comece pelo primeiro nome ${nome} quando isso melhorar a mensagem.\n\nAS 3 MENSAGENS (cada uma com um propósito diferente):\n- a (direta): vai direto ao ponto e propõe o próximo passo concreto. É a melhor pra mandar agora.\n- b (consultiva): tira uma dúvida do cliente ou traz informação de valor; se perguntar, uma pergunta só.\n- c (retomada): reabre a conversa parada sem soar genérico.\n\nRÓTULOS (aLabel, bLabel, cLabel):\n- 3 a 5 palavras criativas e específicas pra esta conversa (ex.: "Reativação com prazo", "Resposta sobre financiamento").\n- PROIBIDO usar exatamente: "direta", "consultiva", "retomada", "a", "b", "c", "resposta", "alternativa" ou "próximo passo".\n\nTESE COMERCIAL OBRIGATÓRIA (raciocinioComercial):\n${JSON.stringify(ctx?.raciocinioComercial || null)}\n\nREGRA v713: escreva as 3 mensagens como consequência direta dessa tese comercial. A mensagem recomendada precisa resolver a lacunaCentral e usar a estrategiaAntesDaMensagem. Se não existir raciocinioComercial, reconstrua a tese a partir do diagnóstico antes de escrever.\n\nDIAGNÓSTICO COMPLETO:\n${JSON.stringify(ctx)}\n\nCONVERSA:\n${timelineText}\n\nResponda SOMENTE JSON válido:\n{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
+  const prompt = `Você é o Cérebro Comercial do Direciona. Com base no diagnóstico da conversa abaixo, gere 3 mensagens de WhatsApp DISTINTAS para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.\n\nREGRAS OBRIGATÓRIAS (violação invalida a mensagem):\n${REGRAS_MSG_PROMPT}\n- Comece pelo primeiro nome ${nome} quando isso melhorar a mensagem.\n\nAS 3 MENSAGENS (cada uma com um propósito diferente):\n- a (direta): vai direto ao ponto e propõe o próximo passo concreto. É a melhor pra mandar agora.\n- b (consultiva): tira uma dúvida do cliente ou traz informação de valor; se perguntar, uma pergunta só.\n- c (retomada): reabre a conversa parada sem soar genérico.\n\nRÓTULOS (aLabel, bLabel, cLabel):\n- 3 a 5 palavras criativas e específicas pra esta conversa (ex.: "Reativação com prazo", "Resposta sobre financiamento").\n- PROIBIDO usar exatamente: "direta", "consultiva", "retomada", "a", "b", "c", "resposta", "alternativa" ou "próximo passo".\n\nTESE COMERCIAL OBRIGATÓRIA (raciocinioComercial):\n${JSON.stringify(ctx?.raciocinioComercial || null)}\n\nREGRA v714: escreva as 3 mensagens como consequência direta dessa tese comercial. A mensagem recomendada precisa resolver a lacunaCentral e aplicar a estrategiaAntesDaMensagem. Antes de escrever, use a tese para decidir qual informação precisa ser descoberta primeiro. Se não existir raciocinioComercial, reconstrua a tese a partir do diagnóstico antes de escrever. Não gere mensagem que apenas cite produto; gere mensagem que conduza a decisão comercial.\n\nDIAGNÓSTICO COMPLETO:\n${JSON.stringify(ctx)}\n\nCONVERSA:\n${timelineText}\n\nResponda SOMENTE JSON válido:\n{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
   const { parsed: resultado, response } = await chamarGPT4Json({ openai, prompt, maxOutputTokens: 1500, timeout: 20000 });
   // Aceita tanto {"messages":{...}} quanto estrutura plana {"a":"...","b":"...",...}
   const msgs = resultado?.messages || (resultado?.a ? resultado : {});
@@ -2212,11 +2215,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, raciocinioComercial (objeto — ver regra v713), estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
+  const prompt = `Você é o Cérebro Comercial do Direciona, um app pra corretores que trabalham na CONSTRUTORA (vendem apartamentos novos da Senger em Carazinho/RS). A timeline abaixo combina textos e áudios transcritos do WhatsApp. Imagens, emojis, vídeos e documentos foram ignorados. ${instrucaoHistorico} ${METODO_RESPOSTA_CONTEXTUAL} PESO DA ATENÇÃO: ~40% em RESPONDER a ÚLTIMA mensagem do contato, ~30% no estado de HOJE (etapa atual, o que está pendente/combinado), ~30% no HISTÓRICO inteiro (perfil, finalidade, o que já foi dito e feito). A última mensagem manda na resposta, mas sempre ancorada no histórico e no momento atual. REGRA DE PAPÉIS: quando o outro lado for corretor parceiro/intermediador (ex.: nome contém Corretor/Imóveis/Imobiliária, fala em comissão, "meu cliente", "cliente comprador", visita com corretora, etc.), ele NÃO é o comprador. Não classifique a intenção dele como moradia/investimento pessoal; avalie o CLIENTE FINAL dele. Mensagens devem ser B2B para o parceiro: "teu cliente", "cliente final", "como ele recebeu a proposta". Hoje é ${hoje}.${perspectiva}${blocoIncremental} Não use "estava retomando as conversas" nem retomada genérica. Não copie nem preserve sugestões antigas geradas pelo próprio sistema: reavalie do zero usando apenas os fatos do histórico e as regras confirmadas. Retorne apenas JSON válido com as chaves: summary, raciocinioComercial (objeto — ver regra v714), estrategia (string — ver regra), melhorPergunta (string — ver regra), clientProfile (string), tipoContato (string — ver regra), produtoInteresse (string — ver regra), produtosInteresse (array — ver regra), etapaSugerida (string — ver regra), probability, probabilityPercent (numero 0-100), confianca (numero 0-100), permuta (boolean — ver regra), permutaResumo (string — ver regra), bestTime, confirmedAppointments (array — ver regra), objections (array de strings curtas), risk, concorrencia (string — ver regra), diagnostico (objeto — ver regra), tipoRetomada (string — ver regra), memoriaSugerida (objeto — ver regra), nextAction (frase acionavel), inteligenciaObservada (objeto — ver regra), materiais (array — ver regra), lembreteSugerido (objeto ou null — ver regra), leituraComercial (objeto — ver regra), modeloComercial (objeto — ver regra), messages {a, b, c, aLabel, bLabel, cLabel, recomendada}.
 
 REGRA pros campos aLabel/bLabel/cLabel/recomendada dentro de messages: crie um rótulo curto (3-5 palavras) que descreva a ABORDAGEM de cada mensagem no contexto desta conversa específica. Exemplos: "Reativação leve", "Com urgência real", "Âncora emocional", "Facilitar a conta", "Retomada após silêncio". O campo recomendada deve ser "a", "b" ou "c" indicando a opção mais estratégica para este momento da negociação.
 
-REGRA CENTRAL v713 — O DIRECIONA NÃO RESPONDE ANTES DE FORMAR TESE COMERCIAL:
+REGRA CENTRAL v714 — O DIRECIONA NÃO RESPONDE ANTES DE FORMAR TESE COMERCIAL:
 O corretor já sabe ler o WhatsApp. Não entregue obviedades como “tem interesse no produto X”. Entregue a leitura que um gerente comercial faria:
 - o que mudou na intenção do cliente ao longo do tempo;
 - por que a conversa anterior não evoluiu;
@@ -2507,7 +2510,7 @@ REGRAS DURAS:
 - "fico à disposição", "te aviso", "qualquer coisa me chama" NÃO são padrões de follow-up — são frases de fechamento educadas. Padrão de follow-up = o corretor REAQUECEU concretamente após silêncio e o cliente RESPONDEU.
 - PROIBIDO usar a palavra "fechou", "fechei" ou "fechado" em qualquer campo (clientProfile, summary, risk, reacao do produtoVsPerfil, etc) — exceto quando há VENDA confirmada (contrato assinado + comprovante de pagamento na timeline). Em vendas imobiliárias "fechou" significa "vendeu" e não pode ser usado pra descrever interesse, engajamento ou conversa avançada. Use no lugar: "demonstrou interesse", "engajou", "avançou pra negociação", "está em proposta", etc.
 
-IMPORTANTE v713: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raciocinioComercial) e todos os campos de análise — NÃO gere o campo "messages". Retorne "messages": null no JSON. As mensagens serão geradas em etapa separada com base neste diagnóstico. clientProfile DEVE ser texto, nunca objeto.${orientacoes}${contextoLead}${blocoComparacao}\n\nLead:\n${JSON.stringify(lead)}\n\nTimeline:\n${timelineText}`;
+IMPORTANTE v714: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raciocinioComercial) e todos os campos de análise — NÃO gere o campo "messages". Retorne "messages": null no JSON. As mensagens serão geradas em etapa separada com base neste diagnóstico. clientProfile DEVE ser texto, nunca objeto.${orientacoes}${contextoLead}${blocoComparacao}\n\nLead:\n${JSON.stringify(lead)}\n\nTimeline:\n${timelineText}`;
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
       openai,
@@ -2521,7 +2524,7 @@ IMPORTANTE v713: Esta chamada gera APENAS o diagnóstico, a TESE COMERCIAL (raci
       timeline,
       corretorNome
     );
-    // v713: garante que a análise tenha tese comercial antes da geração das mensagens.
+    // v714: garante que a análise tenha tese comercial antes da geração das mensagens.
     normalizarRaciocinioComercial(parsed, lead, timeline);
     // Registra o modelo real usado no único raciocínio principal.
     parsed._modelo = completion?.model || modeloAnalise();
