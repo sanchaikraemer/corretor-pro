@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v718-leitura-comercial-estrategica";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v719-analista-comercial-sem-resumo";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -111,7 +111,10 @@ const TERMOS_PROIBIDOS = [
   "retomando nossa conversa", "ainda conversa com o que",
   "te mandar algo desalinhado", "opção fora do que você procura",
   "seguir por esse caminho", "comparar outras possibilidades",
-  "caso não tenha agradado", "se não gostou"
+  "caso não tenha agradado", "se não gostou",
+  "pergunto porque", "te pergunto porque", "como antes nossa conversa tinha sido",
+  "ele está dentro do que você busca neste momento", "a ideia hoje é",
+  "vi que agora você olhou", "olhei nosso histórico aqui"
 ];
 const RE_TERMOS_PROIBIDOS = new RegExp(
   "\\b(" + TERMOS_PROIBIDOS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b",
@@ -146,17 +149,17 @@ const REGRAS_MSG = {
 };
 
 const METODO_RESPOSTA_CONTEXTUAL = `
-MÉTODO OBRIGATÓRIO PARA ESCREVER A MENSAGEM — INTELIGÊNCIA COMERCIAL REAL:
-A mensagem NÃO pode nascer de status, contador ou frase padrão. Ela precisa nascer de uma tese comercial sobre o histórico. Antes de escrever, faça silenciosamente esta investigação:
-1) Qual era a intenção/produto no começo da conversa? Ex.: Premium Office = comercial/investimento.
-2) Qual é a intenção/produto AGORA? Ex.: Personalité = pronto/residencial/moradia possível.
-3) A conversa evoluiu, esfriou ou mudou de direção? Explique a mudança no diagnóstico e use isso na condução.
-4) Qual lacuna comercial impede avanço AGORA: moradia vs investimento, orçamento, forma de pagamento, decisor, timing ou reação ao produto enviado?
-5) A mensagem deve mostrar memória do histórico sem cobrança. Use frases como “há um tempo conversamos sobre...” só quando isso for verdadeiro no histórico.
-6) PROIBIDO escrever mensagens de status genérico: “manter em análise”, “comparação objetiva”, “ponto de decisão em aberto”, “organizar o próximo passo”, “oportunidade em aberto”. Ninguém fala assim no WhatsApp.
-7) A resposta ideal precisa fazer o cliente pensar: “ele lembra do meu caso e está tentando me direcionar melhor”.
-8) Se houver mudança de produto com proposta diferente, a pergunta central deve qualificar o OBJETIVO atual, não empurrar visita nem oferecer comparação aleatória.
-EXEMPLO DE PADRÃO BOM (só copie a lógica se os fatos baterem): “Bom dia, Eder! Conseguiu dar uma olhada no Personalité? Ele está dentro do que você busca neste momento? Pergunto porque há um tempo conversamos sobre o Premium Office, que tinha uma proposta mais voltada para investimento/comercial, e agora o Personalité já é um imóvel pronto, com um perfil diferente. Hoje você está buscando algo para morar ou avaliando uma opção de investimento?”
+MÉTODO OBRIGATÓRIO — IA COMO GERENTE COMERCIAL, NÃO COMO RESUMIDOR:
+Antes de escrever qualquer mensagem, descubra a TESE comercial. O corretor já sabe o que o cliente perguntou; entregue o que aquilo significa e qual movimento destrava a venda.
+1) Identifique a virada real do histórico: produto, finalidade, padrão, preço, urgência, comportamento ou silêncio/retorno.
+2) Explique o significado comercial dessa virada. Não diga apenas “mudou de produto”; diga o que pode estar por trás disso e como isso altera a condução.
+3) Levante a hipótese mais provável e a lacuna que precisa ser confirmada agora.
+4) Defina a estratégia antes da mensagem: qualificar, validar reação, avançar para visita, tratar objeção, pedir decisão, ou aguardar.
+5) A mensagem deve soar como corretor experiente no WhatsApp: curta, humana, específica, sem explicar demais o próprio raciocínio.
+6) Use memória do histórico com naturalidade. Não escreva relatório para o cliente.
+7) PROIBIDO linguagem de sistema ou texto com cara de IA: “manter em análise”, “comparação objetiva”, “ponto de decisão em aberto”, “organizar o próximo passo”, “oportunidade em aberto”, “pergunto porque”, “te pergunto porque”, “como antes nossa conversa tinha sido”.
+8) Se houver virada Premium Office → Personalité, a análise deve perceber investimento/comercial → residencial/pronto, mas a mensagem deve validar o objetivo atual de forma natural, não como aula.
+BOM PADRÃO DE TOM (não copie literalmente): “Eder, vi o Personalité aqui. Como da outra vez a conversa era sobre um perfil mais de investimento, quero te direcionar certo: hoje você está olhando mais para moradia ou ainda avaliando investimento?”
 `;
 
 const REGRA_TESE_COMERCIAL = `
@@ -236,6 +239,8 @@ const REGRAS_MSG_PROMPT = [
   "- Continue do ponto onde a conversa parou (pendência aberta e próxima ação do diagnóstico).",
   "- A mensagem precisa conter uma âncora concreta do histórico quando existir: último combinado, material enviado, produto, perfil declarado, decisor, objeção ou valor.",
   "- Se aparecerem dois produtos com propostas diferentes em momentos diferentes, use essa virada como inteligência comercial: mostre memória do produto anterior e qualifique o objetivo atual.",
+  "- A mensagem NÃO deve explicar demais o raciocínio. Use uma frase curta de contexto e uma pergunta principal.",
+  "- PROIBIDO texto com cara de relatório: 'Pergunto porque...', 'Te pergunto porque...', 'Como antes nossa conversa tinha sido...', 'Ele está dentro do que você busca neste momento?'.",
   "- PROIBIDO linguagem de sistema/robô: 'manter em análise', 'comparação objetiva', 'ponto de decisão em aberto', 'organizar o próximo passo', 'oportunidade em aberto'.",
   "- Se o cliente ficou de conversar com esposo/esposa/família após receber vídeo, fotos ou proposta, retome exatamente isso antes de oferecer alternativa.",
   "- Abra comparação qualificada somente depois de testar a reação ao produto principal; não abandone o imóvel que encaixa no perfil.",
@@ -2150,7 +2155,7 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     lembreteSugerido: parsed?.lembreteSugerido || null,
     inteligenciaObservada: parsed?.inteligenciaObservada || null
   };
-  const prompt = `Você é o Cérebro Comercial do Direciona. Com base no diagnóstico da conversa abaixo, gere 3 mensagens de WhatsApp DISTINTAS para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.\n\nREGRAS OBRIGATÓRIAS (violação invalida a mensagem):\n${REGRAS_MSG_PROMPT}\n- Comece pelo primeiro nome ${nome} quando isso melhorar a mensagem.\n\nAS 3 MENSAGENS (cada uma com um propósito diferente):\n- a (direta): vai direto ao ponto e propõe o próximo passo concreto. É a melhor pra mandar agora.\n- b (consultiva): tira uma dúvida do cliente ou traz informação de valor; se perguntar, uma pergunta só.\n- c (retomada): reabre a conversa parada sem soar genérico.\n\nRÓTULOS (aLabel, bLabel, cLabel):\n- 3 a 5 palavras criativas e específicas pra esta conversa (ex.: "Reativação com prazo", "Resposta sobre financiamento").\n- PROIBIDO usar exatamente: "direta", "consultiva", "retomada", "a", "b", "c", "resposta", "alternativa" ou "próximo passo".\n\nTESE COMERCIAL OBRIGATÓRIA (raciocinioComercial):\n${JSON.stringify(ctx?.raciocinioComercial || null)}\n\nREGRA DA TESE COMERCIAL: escreva as 3 mensagens como consequência direta dessa tese comercial. A mensagem recomendada precisa resolver a lacunaCentral e aplicar a estrategiaAntesDaMensagem. Antes de escrever, use a tese para decidir qual informação precisa ser descoberta primeiro. Se não existir raciocinioComercial, reconstrua a tese a partir do diagnóstico antes de escrever. Não gere mensagem que apenas cite produto; gere mensagem que conduza a decisão comercial.\n\nDIAGNÓSTICO COMPLETO:\n${JSON.stringify(ctx)}\n\nCONVERSA:\n${timelineText}\n\nResponda SOMENTE JSON válido:\n{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
+  const prompt = `Você é o Cérebro Comercial do Direciona. Com base no diagnóstico da conversa abaixo, gere 3 mensagens de WhatsApp DISTINTAS para o corretor ${corretorNome || "Sanchai"} enviar ao contato ${nome}.\n\nREGRAS OBRIGATÓRIAS (violação invalida a mensagem):\n${REGRAS_MSG_PROMPT}\n- Comece pelo primeiro nome ${nome} quando isso melhorar a mensagem.\n\nAS 3 MENSAGENS (cada uma com um propósito diferente):\n- a (direta): vai direto ao ponto e propõe o próximo passo concreto. É a melhor pra mandar agora.\n- b (consultiva): tira uma dúvida do cliente ou traz informação de valor; se perguntar, uma pergunta só.\n- c (retomada): reabre a conversa parada sem soar genérico.\n\nRÓTULOS (aLabel, bLabel, cLabel):\n- 3 a 5 palavras criativas e específicas pra esta conversa (ex.: "Reativação com prazo", "Resposta sobre financiamento").\n- PROIBIDO usar exatamente: "direta", "consultiva", "retomada", "a", "b", "c", "resposta", "alternativa" ou "próximo passo".\n\nTESE COMERCIAL OBRIGATÓRIA (raciocinioComercial):\n${JSON.stringify(ctx?.raciocinioComercial || null)}\n\nREGRA DA TESE COMERCIAL: escreva as 3 mensagens como consequência direta dessa tese comercial. A mensagem recomendada precisa resolver a lacunaCentral e aplicar a estrategiaAntesDaMensagem. Antes de escrever, use a tese para decidir qual informação precisa ser descoberta primeiro. Se não existir raciocinioComercial, reconstrua a tese a partir do diagnóstico antes de escrever. Não gere mensagem que apenas cite produto; gere mensagem que conduza a decisão comercial. Evite justificar demais no WhatsApp: uma âncora do histórico + uma pergunta principal é melhor que um parágrafo explicativo.\n\nDIAGNÓSTICO COMPLETO:\n${JSON.stringify(ctx)}\n\nCONVERSA:\n${timelineText}\n\nResponda SOMENTE JSON válido:\n{"messages":{"a":"...","b":"...","c":"...","aLabel":"...","bLabel":"...","cLabel":"...","recomendada":"a"}}`;
   const { parsed: resultado, response } = await chamarGPT4Json({ openai, prompt, maxOutputTokens: 1500, timeout: 20000 });
   // Aceita tanto {"messages":{...}} quanto estrutura plana {"a":"...","b":"...",...}
   const msgs = resultado?.messages || (resultado?.a ? resultado : {});
