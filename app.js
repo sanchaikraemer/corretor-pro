@@ -47,7 +47,7 @@ const state={
   dataRevision:0, viewRendered:{}, carteiraVisibleCount:80, pipelineVisibleCount:60, performance:{}
 };
 
-// ===== Atualização #714: instrumentação leve de performance =====
+// ===== Atualização #715: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
 function cpPerfMark(nome, inicio, extra={}){
@@ -424,7 +424,7 @@ function carregarTelaAtiva(t, force=false){
 }
 window.carregarTelaAtiva = carregarTelaAtiva;
 
-// ===== Histórico interno do app (Atualização #714) =====
+// ===== Histórico interno do app (Atualização #715) =====
 // O Android só consegue voltar dentro do app quando cada navegação cria uma entrada real
 // no histórico do navegador. A URL não muda; apenas o estado interno é registrado.
 let cpApplyingHistory = false;
@@ -552,7 +552,7 @@ function arqTab(which){
 }
 window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
-// Atualização #714: a seta física fecha a gaveta antes de sair da tela atual.
+// Atualização #715: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
   if(document.body.classList.contains("menu-aberto")) return;
   document.body.classList.add("menu-aberto");
@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v714-motor-comercial-v2";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v715-motor-comercial-v2-layout-mobile";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -3708,6 +3708,11 @@ function abrirEditarLead(id, nome, telefone){
           <datalist id="editLeadProdutoLista">${EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Escolha da lista ou digite. Deixe em branco se ainda não souber.</div>
         </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação interna</label>
+          <textarea id="editLeadObsAnexar" rows="4" placeholder="Anote algo importante sem apagar o histórico." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box;resize:vertical;line-height:1.35"></textarea>
+          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Essa observação entra como memória comercial do lead.</div>
+        </div>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
         <div style="border-top:1px solid var(--line);padding-top:12px">
           <div style="color:var(--risco);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:6px">Zona perigosa</div>
@@ -4589,7 +4594,7 @@ window.finalizarSequencia = finalizarSequencia;
 
 
 /* ============================================================
-   Atualização #714 — Tela do lead consolidada
+   Atualização #715 — Tela do lead consolidada
    - Uma única função renderLeadFoco ativa.
    - Sem chamar renderizações antigas antes ou depois.
    - Mantém IA por fatos, 3 mensagens, observações, histórico e ferramentas.
@@ -4617,7 +4622,11 @@ function cp704Css(){
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted)}.cp704-details[open] summary:after{content:"⌃"}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,107,92,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,107,92,.55)!important;color:#ff7f74!important;background:rgba(255,107,92,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
       .cp704-stale{border-color:rgba(255,201,107,.45);background:rgba(255,201,107,.08)}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.50);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:12px;font-weight:950}
-      @media(max-width:560px){.cp704-lead{gap:12px}.cp704-top{align-items:flex-start}.cp704-top-actions{max-width:72%;gap:6px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr 86px}.cp704-prob{width:82px;height:82px}.cp704-msg-item{grid-template-columns:24px 1fr;position:relative}.cp704-copy{grid-column:2;justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-msg-tabs button{font-size:11px}}
+      .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
+      .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
+      .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
+      .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:82px 1fr;align-items:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:7px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px;width:100%;min-width:0}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-prob{width:76px;height:76px;justify-self:start}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:24px 1fr;position:relative}.cp704-copy{grid-column:2;justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-msg-tabs{gap:7px}.cp704-msg-tabs button{font-size:11px;min-width:0;padding:9px 4px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -4701,8 +4710,18 @@ function cp704Css(){
 
   function cp704Prob(lead){
     const ref = (typeof probabilidadeRefinada==='function') ? probabilidadeRefinada(lead) : null;
-    const n = ref != null ? Number(ref) : (Number(lead?.probabilityPercent)||Number(lead?.analysis?.probabilityPercent)||0);
-    return Math.max(0, Math.min(100, Math.round(n||0)));
+    const bruto = ref != null ? Number(ref) : (Number(lead?.probabilityPercent)||Number(lead?.analysis?.probabilityPercent)||0);
+    const n = Math.max(0, Math.min(100, Math.round(bruto||0)));
+    const etapa = String(lead?.etapa || lead?.analysis?.etapaSugerida || '').toLowerCase();
+    const status = String(lead?.analysis?.modeloComercial?.oportunidade?.status || '').toLowerCase();
+    const perdido = /perdid|encerr/.test(etapa) || /perdid|encerr/.test(status);
+    const temSinalAtivo = !!(
+      cp704Text(lead?.analysis?.summary || lead?.summary || lead?.analysis?.nextAction || lead?.nextAction) ||
+      (Array.isArray(lead?.recentMessages) && lead.recentMessages.length)
+    );
+    // v715: nunca mostrar 0% para lead ativo/em descoberta. 0% fica só para perdido/encerrado.
+    if(!perdido && n <= 0 && temSinalAtivo) return 35;
+    return n;
   }
   function cp704NivelProb(n){ return n>=70?'Alta':(n>=45?'Média':'Baixa'); }
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
@@ -4760,8 +4779,7 @@ function cp704Css(){
       ['Motivo da oportunidade',mc?.oportunidade?.motivo],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
-      ['Preferências',mem.preferencias],
-      ['Observações',mem.observacoes || a.summary]
+      ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
   }
@@ -4825,12 +4843,19 @@ function cp704Css(){
     }catch(_){ }
     toast('Histórico completo indisponível nesta tela.');
   };
+  window.cp715EditarLead = function(id){
+    const leadAtual = (state?.lead && String(state.lead.id) === String(id)) ? state.lead : null;
+    const listas = [state?.carteiraLeads, state?.itemsAtivos, state?.todosLeads, state?.leadsRecentes].filter(Array.isArray);
+    const lead = leadAtual || listas.flat().find(l => String(l?.id||'') === String(id)) || { id };
+    if(typeof abrirEditarLead === 'function') abrirEditarLead(String(id), String(lead?.name||''), String(lead?.phone||lead?.telefone||''));
+    else toast('Editor de lead indisponível nesta versão.');
+  };
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button onclick="abrirEditarLead&&abrirEditarLead(${id},${name},${JSON.stringify(String(lead?.phone||''))})">Editar lead</button><button onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
-    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button class="good" onclick='(typeof marcarVendido==='function')?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
-    <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
+    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
+    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button type="button" class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
+    <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
 
 function renderLeadFoco(lead){
@@ -4871,10 +4896,10 @@ function renderLeadFoco(lead){
       <div class="cp704-accordions">
         <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
         <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
-        <details class="cp704-details"><summary>Observações importantes</summary><div class="cp704-body">${escapeHtml(cp705SanitizeFactText(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem observações consolidadas.'),lead))}</div></details>
+        <details class="cp704-details"><summary>Leitura comercial</summary><div class="cp704-body">${escapeHtml(cp705SanitizeFactText(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem leitura comercial consolidada.'),lead))}</div></details>
         <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
       </div>
-      <div class="cp704-quickbar"><button class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button onclick="abrirEditarLead&&abrirEditarLead(${JSON.stringify(String(lead.id||''))},${JSON.stringify(String(lead.name||''))},${JSON.stringify(String(lead.phone||''))})">Editar lead</button></div>
+      <div class="cp704-quickbar"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
       ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
     </div>`;
     window.cp704SelectMsg(window.cp704SelectedMsg||'a');
@@ -8994,7 +9019,7 @@ window.ui631SelectResponse=function(k){
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
-// Atualização #714: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
+// Atualização #715: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
 function ui667ModoDetalheLead(ativo){
   document.body.classList.toggle("lead-foco-aberto", !!ativo);
@@ -9044,7 +9069,7 @@ window.ui667MarcarAtendido=async function(btn){
     toast("Não consegui marcar: "+(err?.message||err));
   }
 };
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 
 /* ============================================================
    ATUALIZAÇÃO #668 — NAVEGAÇÃO ANDROID + CONTADORES CONSISTENTES
@@ -9635,7 +9660,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const leadBase={...lead,analysis:base};
   const mc=ui670ModeloComercial(leadBase);
   mc.versao=678;
-  const out={...base,modeloComercial:mc,_schemaComercial:714,reanalisadoEm:new Date().toISOString()};
+  const out={...base,modeloComercial:mc,_schemaComercial:715,reanalisadoEm:new Date().toISOString()};
   const ctx678=ui678ContextoMudouParaImovel(lead);
   if(ctx678 && ctx678.mudouParaImovel && !["ganha","perdida"].includes(String(mc?.oportunidade?.status||""))){
     out.summary=ctx678.resumo;
@@ -9653,14 +9678,14 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   if(!semAcao){
     const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
     if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
-      // v714: não inventa mensagens locais da arquitetura antiga.
+      // v715: não inventa mensagens locais da arquitetura antiga.
       // Se a API não entregar mensagens completas, a tela deve pedir reanálise
       // em vez de preencher com fallback genérico da v682.
       out.messages = { ...atuais, a:"", b:"", c:"", aLabel:"Reanálise necessária", bLabel:"", cLabel:"", recomendada:"a" };
       out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
       out.sugestoesPendentes = true;
       out.aprovada = false;
-      out.validacaoSugestoes = ["Motor v714: fallback local antigo bloqueado; reanalise para gerar mensagens com tese comercial."];
+      out.validacaoSugestoes = ["Motor v715: fallback local antigo bloqueado; reanalise para gerar mensagens com tese comercial."];
     }
   }
   if(semAcao){
@@ -9890,7 +9915,7 @@ function ui670DetailRows(lead,mc){
   return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
 }
 
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 
 
 /* ============================================================
@@ -10030,7 +10055,7 @@ function ui670DetailRows(lead,mc){
       if(typeof carregarDashboard==='function') carregarDashboard();
     }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
   };
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 
   function ui683EnhanceLead(lead){
     ui683InjectStyles();
@@ -10188,7 +10213,7 @@ function ui670DetailRows(lead,mc){
       .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
       .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
   }
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 })();
 
 
@@ -10307,7 +10332,7 @@ function ui670DetailRows(lead,mc){
     const h3=action.querySelector('h3');
     if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
   window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
 })();
 
@@ -10544,7 +10569,7 @@ function ui670DetailRows(lead,mc){
       @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
     `; document.head.appendChild(st);
   }
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
   function abrirModalDesfechoFinal(id, tipo){
     const lead = (state && state.lead) || {};
     const vendido = tipo === 'vendido';
@@ -10783,7 +10808,7 @@ function ui670DetailRows(lead,mc){
     `;
     document.head.appendChild(st);
   }
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
 })();
@@ -10836,7 +10861,7 @@ function ui670DetailRows(lead,mc){
       });
     }catch(_){}
   }
-// Atualização #714: wrapper antigo de renderLeadFoco removido.
+// Atualização #715: wrapper antigo de renderLeadFoco removido.
 
   setTimeout(reforcarBotaoEditar, 0);
   window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
@@ -10844,7 +10869,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — revisão de auditoria
+   Atualização #715 — revisão de auditoria
    Objetivo: completar a camada segura de performance sem alterar
    a identidade visual nem remover funcionalidades.
    - listas longas em blocos: vendidos, perdidos e geladeira
@@ -10996,7 +11021,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — fechamento real da pendência de performance
+   Atualização #715 — fechamento real da pendência de performance
    - Virtualização real das listas mais pesadas: Atendimentos e Pipeline.
    - Renderiza somente a janela visível + margem; não empilha milhares de cards no DOM.
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
@@ -11132,7 +11157,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — acabamento profissional estável
+   Atualização #715 — acabamento profissional estável
    ============================================================ */
 (function(){
   if(window.__cp687Polish) return;
@@ -11253,7 +11278,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — Hotfix real mobile
+   Atualização #715 — Hotfix real mobile
    - Remove as correções conflitantes anteriores de Atendimentos.
    - Atendimentos: lista simples, página com rolagem natural, sem container interno.
    - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
@@ -11338,7 +11363,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #714');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
     });
   }
   function cp694FixFab(){
@@ -11426,7 +11451,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — Correção real da lista mobile
+   Atualização #715 — Correção real da lista mobile
    - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
    - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
    - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
@@ -11491,7 +11516,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #714');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
     });
   }
   function fixFab(){
@@ -11626,7 +11651,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — Correção definitiva carregamento total Atendimentos
+   Atualização #715 — Correção definitiva carregamento total Atendimentos
    - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
    - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
    - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
@@ -11692,7 +11717,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #714');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
     });
   }
   function applyLayoutFixes(){
@@ -11791,7 +11816,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — Preparação da Carteira
+   Atualização #715 — Preparação da Carteira
    - Separa leads sem histórico/análise de leads prontos.
    - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
    - Home mostra progresso da preparação.
@@ -11867,7 +11892,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #714');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
     });
   }
   async function fetchAll697(force){
@@ -12013,7 +12038,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — correção de versão exibida no topo/mobile
+   Atualização #715 — correção de versão exibida no topo/mobile
    - Garante que qualquer área do app que mostre "Atualização #" use o número atual.
    ============================================================ */
 (function(){
@@ -12030,11 +12055,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #714');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #715');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #714');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #715');
       });
     }catch(_){ }
   }
@@ -12049,7 +12074,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — estabilidade pós-cache
+   Atualização #715 — estabilidade pós-cache
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
@@ -12059,7 +12084,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #714');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
       });
     }catch(_){ }
   }
@@ -12071,7 +12096,7 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #714 — Preparação da Carteira estável
+   Atualização #715 — Preparação da Carteira estável
    - O bloco Preparação da carteira não depende mais de cache parcial.
    - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
    - Evita alternância/sumiço durante redesenhos da Home.
@@ -12093,7 +12118,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #714');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #715');
       });
     }catch(_){ }
   }
@@ -12252,4 +12277,4 @@ function ui670DetailRows(lead,mc){
 
 
 
-// Atualização #714: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
+// Atualização #715: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
