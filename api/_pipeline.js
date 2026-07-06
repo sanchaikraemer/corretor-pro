@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-1-analise-pura-chatgpt-3-msgs";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-2-analise-pura-3-mensagens";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -180,20 +180,15 @@ Não pressione.
 
 Se houver pouca informação, diga isso.
 
-Se não houver evidência para uma conclusão, não afirme como fato.
-
-Além da mensagem principal, gere também duas variações derivadas da mesma análise:
-- uma versão mais suave;
-- uma versão mais direta.
-As três mensagens devem seguir a mesma estratégia e não podem contradizer o diagnóstico.`;
+Se não houver evidência para uma conclusão, não afirme como fato.`;
 
 const REGRA_TESE_COMERCIAL = ``;
 
-// v723-1: bloco antigo de raciocínio comercial removido.
+// v724-2: bloco antigo de raciocínio comercial removido.
 
 
 
-// v723-1: bloco antigo de leitura comercial removido.
+// v724-2: bloco antigo de leitura comercial removido.
 
 
 
@@ -238,7 +233,7 @@ function mensagemFormatoRuim(txt) {
   return false;
 }
 
-// v723-1: bloco antigo de análise/mensagem removido.
+// v724-2: bloco antigo de análise/mensagem removido.
 
 
 export function __testarValidacaoMensagensComerciais(input = {}) {
@@ -252,7 +247,7 @@ function textoCurto(valor, fallback = "") {
   return s || fallback;
 }
 
-// v723-1: bloco antigo de análise/mensagem removido.
+// v724-2: bloco antigo de análise/mensagem removido.
 
 
 function normalizarParceiroB2B(parsed, lead, timelineText) {
@@ -441,12 +436,12 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
 }
 
 export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
-  // v723-1: reset total. Mantida apenas por compatibilidade com APIs antigas; não altera análise.
+  // v724-2: reset total. Mantida apenas por compatibilidade com APIs antigas; não altera análise.
   return parsed;
 }
 
 export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai") {
-  // v723-1: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
+  // v724-2: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
   return parsed;
 }
 
@@ -579,7 +574,7 @@ export function sanitizarMateriais(materiais) {
   return out;
 }
 
-// v723-1: bloco antigo de análise/mensagem removido.
+// v724-2: bloco antigo de análise/mensagem removido.
 
 
 export function filtrarCompromissosReais(appointments, conversaText) {
@@ -1827,10 +1822,10 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
   }
 }
 
-// v723-1: regeneração antiga por segunda IA removida.
+// v724-2: regeneração antiga por segunda IA removida.
 
 
-// v723-1: geração antiga de três mensagens removida.
+// v724-2: geração antiga de três mensagens removida.
 
 
 export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null }) {
@@ -1889,7 +1884,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = prefixo + recentes.join("\n")
       + (linhasManuais.length ? "\n\nANOTAÇÕES DO CORRETOR (fatos confirmados — sempre considere TODAS):\n" + linhasManuais.join("\n") : "");
   }
-  // v723-1: reset total do cérebro de análise.
+  // v724-2: reset total do cérebro de análise.
   // Nada de Cérebro, catálogo, aprendizado, prompts auxiliares ou regras antigas no prompt.
   // A IA recebe somente o histórico completo, o lead e o prompt puro definido acima.
   const hoje = new Date().toISOString().slice(0, 10);
@@ -1902,9 +1897,7 @@ Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 
 IMPORTANTE PARA O SISTEMA:
 Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
-Não use estrutura antiga do Direciona. Não gere cards auxiliares.
-OBRIGATÓRIO: preencha o objeto "mensagens" com 3 textos não vazios: "recomendada", "maisSuave" e "maisDireta".
-Não deixe as mensagens apenas dentro de diagnostico.mensagemQueEuEnviariaHoje.
+Não use estrutura antiga do Direciona. Não gere cards auxiliares. Gere exatamente 3 mensagens comerciais, no mesmo JSON, sem segunda IA.
 
 Use este formato de compatibilidade:
 {
@@ -1920,16 +1913,16 @@ Use este formato de compatibilidade:
     "proximoPasso":"Você|Cliente|ambos",
     "etapaFunil":"Interesse / Descoberta de necessidade|descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
     "probabilidadeComentada":"nota/10 ou percentual com justificativa",
-    "mensagemQueEuEnviariaHoje":"Próxima mensagem recomendada, pronta para copiar"
-  },
-  "mensagens":{
-    "recomendada":"mensagem principal, pronta para copiar",
-    "maisSuave":"variação mais leve, pronta para copiar",
-    "maisDireta":"variação mais objetiva, pronta para copiar"
+    "mensagemQueEuEnviariaHoje":"Próxima mensagem sugerida, pronta para copiar"
   },
   "oQueFaltaDescobrir":["..."],
-  "estrategiaMensagem":"por que essa mensagem foi escolhida",
+  "estrategiaMensagem":"por que a mensagem recomendada foi escolhida",
   "prioridadeLead":"baixa|média|alta com justificativa",
+  "mensagens":{
+    "recomendada":"mensagem principal pronta para copiar",
+    "maisSuave":"mensagem mais leve, pronta para copiar",
+    "maisDireta":"mensagem mais objetiva, pronta para copiar"
+  },
   "produtoInteresse":"produto atual",
   "produtosInteresse":["produtos citados"],
   "etapaSugerida":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
@@ -1958,13 +1951,14 @@ ${timelineText}`;
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
     const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msg = txt(mensagensRaw.recomendada || d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || raw.nextAction);
-    const msgSuave = txt(mensagensRaw.maisSuave || mensagensRaw.suave || raw.mensagemMaisSuave || "");
-    const msgDireta = txt(mensagensRaw.maisDireta || mensagensRaw.direta || raw.mensagemMaisDireta || "");
+    const msgA = limparMensagemComercial(txt(mensagensRaw.recomendada || mensagensRaw.a || d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida));
+    const msgB = limparMensagemComercial(txt(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b));
+    const msgC = limparMensagemComercial(txt(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c));
+    const msg = msgA;
     const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
 
-    // v723-1: objeto final deliberadamente simples.
+    // v724-2: objeto final deliberadamente simples.
     // O código NÃO reescreve análise, NÃO regenera mensagens, NÃO injeta leitura comercial,
     // NÃO monta tese, NÃO aplica bloqueios comerciais e NÃO chama uma segunda IA.
     const parsed = {
@@ -2001,9 +1995,9 @@ ${timelineText}`;
       clientProfile: txt(raw.clientProfile),
       nextAction: txt(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
       messages: {
-        a: limparMensagemComercial(msg),
-        b: limparMensagemComercial(msgSuave),
-        c: limparMensagemComercial(msgDireta),
+        a: msgA,
+        b: msgB,
+        c: msgC,
         aLabel: "Recomendada",
         bLabel: "Mais suave",
         cLabel: "Mais direta",
@@ -2032,9 +2026,9 @@ ${timelineText}`;
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
-      sugestoesPendentes: !msg,
+      sugestoesPendentes: !(msgA && msgB && msgC),
       validacaoSugestoes: [],
-      mensagensValidadasEm: msg ? new Date().toISOString() : null,
+      mensagensValidadasEm: (msgA && msgB && msgC) ? new Date().toISOString() : null,
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
 
