@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercialV674 } from "./_pipeline.js";
+import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -123,7 +123,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     venda: anterior.venda || analysis.venda,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercialV674(merged, lead, timeline, "Sanchai");
+  merged = finalizarAnaliseComercial(merged, lead, timeline, "Sanchai");
   merged._schemaComercial = 684;
   if (merged.modeloComercial) merged.modeloComercial.versao = 684;
 

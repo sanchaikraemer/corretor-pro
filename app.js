@@ -11363,7 +11363,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #716');
     });
   }
   function cp694FixFab(){
@@ -11516,7 +11516,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #716');
     });
   }
   function fixFab(){
@@ -11717,7 +11717,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #716');
     });
   }
   function applyLayoutFixes(){
@@ -11892,7 +11892,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #716');
     });
   }
   async function fetchAll697(force){
@@ -12055,11 +12055,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #715');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #716');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #715');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #716');
       });
     }catch(_){ }
   }
@@ -12084,7 +12084,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #715');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #716');
       });
     }catch(_){ }
   }
@@ -12118,7 +12118,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #715');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #716');
       });
     }catch(_){ }
   }

@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercialV674 } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
@@ -618,7 +618,7 @@ async function reanalisarLeadHandler702(req, res) {
     avisoReanalise = avisoReanalise || novoAnalysis?.error || "O provedor de análise não respondeu.";
     novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
   }
-  novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
+  novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
   novoAnalysis._schemaComercial = 715;
@@ -649,7 +649,7 @@ async function reanalisarLeadHandler702(req, res) {
     scoreAjuste: ajusteScoreNovo,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
+  merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
   merged._schemaComercial = 715;
@@ -703,7 +703,7 @@ async function reanalisarLeadHandler702(req, res) {
       .single();
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
-    retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
+    retryMerged = finalizarAnaliseComercial(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
     retryMerged._schemaComercial = 715;
