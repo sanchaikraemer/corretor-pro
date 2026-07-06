@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-analise-pura-chatgpt-3-msgs";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-1-analise-pura-chatgpt-3-msgs";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -1902,7 +1902,9 @@ Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 
 IMPORTANTE PARA O SISTEMA:
 Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
-Não use estrutura antiga do Direciona. Não gere cards auxiliares. Gere 3 mensagens: recomendada, maisSuave e maisDireta.
+Não use estrutura antiga do Direciona. Não gere cards auxiliares.
+OBRIGATÓRIO: preencha o objeto "mensagens" com 3 textos não vazios: "recomendada", "maisSuave" e "maisDireta".
+Não deixe as mensagens apenas dentro de diagnostico.mensagemQueEuEnviariaHoje.
 
 Use este formato de compatibilidade:
 {
@@ -1918,7 +1920,12 @@ Use este formato de compatibilidade:
     "proximoPasso":"Você|Cliente|ambos",
     "etapaFunil":"Interesse / Descoberta de necessidade|descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
     "probabilidadeComentada":"nota/10 ou percentual com justificativa",
-    "mensagemQueEuEnviariaHoje":"Próxima mensagem sugerida, pronta para copiar"
+    "mensagemQueEuEnviariaHoje":"Próxima mensagem recomendada, pronta para copiar"
+  },
+  "mensagens":{
+    "recomendada":"mensagem principal, pronta para copiar",
+    "maisSuave":"variação mais leve, pronta para copiar",
+    "maisDireta":"variação mais objetiva, pronta para copiar"
   },
   "oQueFaltaDescobrir":["..."],
   "estrategiaMensagem":"por que essa mensagem foi escolhida",

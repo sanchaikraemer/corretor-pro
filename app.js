@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-analise-pura-chatgpt-3-msgs";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-1-analise-pura-chatgpt-3-msgs";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
