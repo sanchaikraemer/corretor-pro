@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v721-analise-pura-chatgpt";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v722-chatgpt-puro-sem-lixo";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -106,8 +106,8 @@ function mensagemSoSaudacao(txt) {
 const TERMOS_PROIBIDOS = [
   "faz sentido", "fez sentido",
   "manter em análise", "comparação objetiva", "ponto de decisão em aberto",
-  "organizar o próximo passo", "oportunidade em aberto",
-  "passando para saber", "caso não tenha agradado", "se não gostou"
+  "organizar o próximo passo", "passando para saber",
+  "caso não tenha agradado", "se não gostou"
 ];
 const RE_TERMOS_PROIBIDOS = new RegExp(
   "\\b(" + TERMOS_PROIBIDOS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b",
@@ -142,43 +142,44 @@ const REGRAS_MSG = {
 };
 
 const METODO_RESPOSTA_CONTEXTUAL = `
-MÉTODO v721 — ANÁLISE PURA, COMO CHATGPT SEM PROMPT PESADO:
-Analise a conversa como um gerente comercial experiente. O objetivo não é resumir; é dizer o que a conversa significa para a venda.
+MÉTODO v722 — ANÁLISE PURA COMO CHATGPT:
+Leia o histórico inteiro e responda como o ChatGPT puro quando recebe a conversa completa.
+Não tente preencher modelo engessado. Não escreva análise para impressionar. Faça uma leitura comercial útil.
 
-Ordem natural:
-1) O que aconteceu e o que mudou.
-2) Diagnóstico comercial objetivo.
-3) O que falta descobrir.
-4) Melhor estratégia.
-5) Mensagem sugerida.
+Ordem obrigatória do raciocínio:
+1) O que aconteceu no histórico, em poucas linhas.
+2) Diagnóstico comercial com fatos objetivos.
+3) O que é hipótese e qual evidência sustenta.
+4) O que falta descobrir para avançar.
+5) Próximo passo do corretor.
+6) Mensagem que eu enviaria hoje.
 
-Separe fato de hipótese. Use somente evidências do histórico. Se houver dúvida, diga que é hipótese e faça a pergunta que confirma.
+A regra mais importante: se não houver prova no histórico, não afirme. Diga que é hipótese ou transforme em pergunta.
 `;
 
 const REGRA_TESE_COMERCIAL = `
-RACIOCÍNIO COMERCIAL v721 — FATOS, HIPÓTESES E PRÓXIMA AÇÃO:
-Preencha raciocinioComercial de forma simples e útil.
-
-Campos obrigatórios:
+RACIOCÍNIO COMERCIAL v722 — SIMPLES, SEM PROMPT PESADO:
+Preencha raciocinioComercial como se fosse a explicação curta de um gerente comercial.
+Campos:
 {
   "fatoPrincipal": "fato mais importante do histórico",
-  "mudancaDoCliente": "o que mudou no comportamento/interesse do lead, se mudou",
-  "hipoteseMaisProvavel": "melhor hipótese comercial, deixando claro quando for hipótese",
-  "evidencias": ["fatos reais que sustentam a leitura"],
-  "oQueFaltaDescobrir": ["lacunas comerciais objetivas"],
-  "oportunidade": "por que ainda vale trabalhar este lead",
+  "linhaDoTempoComercial": ["até 5 fatos cronológicos relevantes"],
+  "hipoteseMaisProvavel": "hipótese principal, sem tratar como fato",
+  "evidencias": ["fatos do histórico que sustentam a hipótese"],
+  "oQueFaltaDescobrir": ["lacunas que travam a venda"],
+  "oportunidade": "por que vale trabalhar esse lead",
   "risco": "erro comercial a evitar",
-  "estrategiaAntesDaMensagem": "o que a próxima mensagem precisa fazer",
-  "perguntaValidacao": "pergunta que destrava a conversa",
+  "estrategiaAntesDaMensagem": "como conduzir a próxima mensagem",
+  "perguntaValidacao": "pergunta central que destrava a conversa",
   "naoFazer": ["até 3 atitudes a evitar"],
-  "viradaDoLead": "compatibilidade: resumo da virada ou continuidade",
-  "interpretacao": "compatibilidade: leitura comercial em linguagem simples",
+  "viradaDoLead": "compatibilidade: mudança ou continuidade percebida",
+  "interpretacao": "compatibilidade: leitura comercial simples",
   "riscoDaAbordagemErrada": "compatibilidade: risco principal",
-  "lacunaCentral": "compatibilidade: principal lacuna",
+  "lacunaCentral": "compatibilidade: lacuna principal",
   "perguntaChave": "compatibilidade: pergunta principal"
 }
 
-Não transforme hipótese em fato. Não invente. Não repita a conversa inteira. Se houver preço anterior, silêncio, retorno espontâneo ou troca de produto, use como evidência comercial.
+Não use blocos genéricos. Não transforme sala comercial em investimento como fato absoluto; se for inferência, escreva como hipótese.
 `;
 
 function normalizarRaciocinioComercial(parsed = {}, lead = {}, timeline = []) {
@@ -233,26 +234,15 @@ function normalizarLeituraComercialV718(parsed = {}) {
 
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
 const REGRAS_MSG_PROMPT = [
-  "- Use exclusivamente a conversa e o diagnóstico abaixo.",
-  "- Não invente fato, proposta, valor, visita, produto ou objeção que não esteja na conversa.",
-  "- Continue do ponto onde a conversa parou (pendência aberta e próxima ação do diagnóstico).",
-  "- A mensagem precisa conter uma âncora concreta do histórico quando existir: último combinado, material enviado, produto, perfil declarado, decisor, objeção ou valor.",
-  "- Se aparecerem dois produtos com propostas diferentes em momentos diferentes, use essa virada como inteligência comercial: mostre memória do produto anterior e qualifique o objetivo atual.",
-  "- A mensagem NÃO deve explicar demais o raciocínio. Use uma frase curta de contexto e uma pergunta principal.",
-  "- PROIBIDO texto com cara de relatório: 'Pergunto porque...', 'Te pergunto porque...', 'Como antes nossa conversa tinha sido...', 'Ele está dentro do que você busca neste momento?', 'Quero te direcionar certo', 'Antes de eu te indicar algo', 'Vi o Personalité aqui'.",
-  "- Antes de escrever, responda internamente: o que mudou no cliente, qual hipótese explica a mudança, qual risco de abordar errado e qual pergunta valida a hipótese.",
-  "- A mensagem deve começar pela mudança percebida no cliente ou pelo motivo da retomada, não pela descrição do imóvel.",
-  "- PROIBIDO linguagem de sistema/robô: 'manter em análise', 'comparação objetiva', 'ponto de decisão em aberto', 'organizar o próximo passo', 'oportunidade em aberto'.",
-  "- Se o cliente ficou de conversar com esposo/esposa/família após receber vídeo, fotos ou proposta, retome exatamente isso antes de oferecer alternativa.",
-  "- Abra comparação qualificada somente depois de testar a reação ao produto principal; não abandone o imóvel que encaixa no perfil.",
-  '- Se o contato for corretor parceiro, fale com ele como intermediador ("teu cliente", "cliente final"), nunca como comprador.',
-  "- Não repita pergunta já respondida na conversa.",
-  `- No máximo ${REGRAS_MSG.maxPerguntas} interrogações por mensagem (de preferência uma pergunta só).`,
-  "- Não escreva só uma saudação.",
-  `- PROIBIDO usar qualquer um destes termos batidos de vendedor (a presença de um já invalida a mensagem): ${TERMOS_PROIBIDOS.map(t => `"${t}"`).join(", ")}.`,
-  "- PROIBIDO emoji ou símbolo especial (texto puro).",
+  "- Use somente fatos do histórico e hipóteses marcadas como hipótese.",
+  "- Não escreva relatório para o cliente; escreva WhatsApp natural.",
+  "- A mensagem deve abrir conversa e descobrir a lacuna principal.",
+  "- Não explique todo o histórico; use só uma âncora curta quando ajudar.",
+  "- Não afirme que o cliente mudou de objetivo sem prova; pergunte.",
+  "- Evite frases prontas de IA ou vendedor.",
+  `- No máximo ${REGRAS_MSG.maxPerguntas} interrogações por mensagem.`,
   `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
-  "- Mensagens distintas entre si (sem copiar trecho de uma pra outra)."
+  "- As 3 mensagens devem ter abordagens realmente diferentes."
 ].join("\n");
 
 // Limpeza determinística e SEGURA aplicada antes da validação: NÃO reescreve
@@ -2174,7 +2164,7 @@ async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corr
     lembreteSugerido: parsed?.lembreteSugerido || null,
     inteligenciaObservada: parsed?.inteligenciaObservada || null
   };
-  const prompt = `Você é um corretor experiente escrevendo WhatsApp para o lead ${nome}. Use o diagnóstico abaixo como base, mas escreva como gente, não como sistema.
+  const prompt = `Você é um corretor experiente escrevendo WhatsApp para ${nome}. Use a análise como base, mas escreva como uma pessoa real.
 
 DIAGNÓSTICO E RACIOCÍNIO COMERCIAL:
 ${JSON.stringify(ctx)}
@@ -2182,22 +2172,21 @@ ${JSON.stringify(ctx)}
 CONVERSA COMPLETA:
 ${timelineText}
 
-Objetivo das mensagens:
-- A: melhor mensagem para mandar agora, abrindo conversa e destravando a principal lacuna.
-- B: versão mais suave, com menos fricção.
-- C: versão mais direta, sem pressão.
+TAREFA:
+Gere 3 mensagens. A mensagem A deve seguir o padrão da análise pura do ChatGPT: primeiro reconhece o contexto de forma curta, depois faz a pergunta que destrava a venda.
 
-Regras simples:
+Regras:
 - Não invente fato, valor, visita, proposta ou objeção.
-- Use uma âncora curta do histórico quando ela ajudar.
-- Não explique o histórico inteiro para o cliente.
-- Se houver incerteza, faça a pergunta que confirma a hipótese.
-- A mensagem deve parecer escrita por um corretor experiente no WhatsApp.
-- Evite linguagem de sistema, relatório ou frase pronta.
-- Máximo ${REGRAS_MSG.maxPerguntas} perguntas por mensagem.
-- Tamanho ideal: 1 ou 2 parágrafos curtos.
+- Não diga que o objetivo mudou como certeza se isso é hipótese.
+- Use o histórico apenas para justificar a pergunta, sem parecer cobrança.
+- A mensagem deve fazer o cliente falar.
+- Não mencione o mesmo produto várias vezes.
+- Não use frase de sistema, relatório ou vendedor.
+- A: melhor mensagem para mandar agora.
+- B: versão mais leve.
+- C: versão mais objetiva.
 
-Inspiração de condução no caso Eder, se os fatos baterem: reconhecer que ele voltou por outro perfil de imóvel, não afirmar mudança de objetivo, perguntar se é para morar/investir ou se apenas o anúncio chamou atenção.
+Exemplo de lógica para Eder, se os fatos baterem: ele falou antes sobre Premium Office e agora perguntou sobre Personalité; a mensagem deve perguntar se é moradia/investimento ou se apenas o anúncio chamou atenção, sem afirmar que ele mudou de objetivo.
 
 Responda SOMENTE JSON válido:
 {"messages":{"a":"...","b":"...","c":"...","aLabel":"Recomendada","bLabel":"Mais suave","cLabel":"Mais direta","recomendada":"a"}}`;
@@ -2296,27 +2285,20 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const instrucaoHistorico = contextoIncremental
     ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
     : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é um analista comercial sênior para corretores da Construtora Senger. Leia a conversa inteira de WhatsApp em ordem cronológica, como se o corretor tivesse exportado o histórico direto para o ChatGPT e pedido uma análise pura, objetiva e útil.
+  const prompt = `Você é um analista comercial sênior para corretores da Construtora Senger. Analise a conversa como o ChatGPT puro analisaria: com clareza, sem prompt pesado, separando fatos, hipóteses, lacunas e próxima ação.
 
 ${instrucaoHistorico}
+Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 ${METODO_RESPOSTA_CONTEXTUAL}
 ${REGRA_TESE_COMERCIAL}
-Hoje é ${hoje}.${perspectiva}${blocoIncremental}
 
-PRINCÍPIO CENTRAL:
-O corretor já sabe ler a conversa. Não entregue obviedades. Entregue diagnóstico comercial, lacunas e condução.
-
-ESTILO:
-- Direto, humano e comercial.
-- Sem linguagem de sistema.
-- Sem excesso de regras.
-- Separe fatos de hipóteses.
-- Use somente o que estiver no histórico.
+REFERÊNCIA DE QUALIDADE:
+A análise boa não diz apenas “o lead quer tal produto”. Ela explica o que isso significa para a venda. Exemplo de raciocínio esperado: se o lead falou antes sobre um produto comercial e meses depois voltou perguntando sobre apartamento, isso mostra que ele continua interessado em imóveis, mas ainda falta descobrir se o objetivo atual é moradia, investimento ou apenas curiosidade por um anúncio. Não trate essa hipótese como fato.
 
 Retorne SOMENTE JSON válido com estas chaves:
 summary, raciocinioComercial, estrategia, melhorPergunta, clientProfile, tipoContato, produtoInteresse, produtosInteresse, etapaSugerida, probability, probabilityPercent, confianca, permuta, permutaResumo, bestTime, confirmedAppointments, objections, risk, concorrencia, diagnostico, tipoRetomada, memoriaSugerida, nextAction, inteligenciaObservada, materiais, lembreteSugerido, leituraComercial, mudancas, modeloComercial, messages.
 
-Formato obrigatório de diagnostico:
+Formato de diagnostico:
 {
   "ultimaPessoaFalar":"corretor|contato|desconhecido",
   "ultimoCompromissoCliente":"texto curto ou Nenhum",
@@ -2331,22 +2313,22 @@ Formato obrigatório de diagnostico:
   "mensagemQueEuEnviariaHoje":"deixe vazio nesta chamada"
 }
 
-Formato obrigatório de leituraComercial:
+Formato de leituraComercial:
 {
   "ondeParou":"último ponto comercial real",
   "quemDeveProximoPasso":"cliente|corretor|ambos",
   "temperatura":"quente|morno|frio",
-  "interpretacao":"o que o histórico significa comercialmente além do óbvio",
-  "porQueImporta":"por que isso muda a condução agora",
+  "interpretacao":"significado comercial, não resumo",
+  "porQueImporta":"por que isso muda a condução",
   "oQueDestravar":"principal lacuna",
   "movimentoRecomendado":"próxima condução recomendada",
   "erroEvitar":"erro comercial a evitar",
-  "mensagemCurtaChance":"qual abordagem tem mais chance de resposta"
+  "mensagemCurtaChance":"abordagem com mais chance de resposta"
 }
 
-Formato obrigatório de mudancas: máximo 3 itens {"dimensao":"Produto|Finalidade|Faixa de preço|Urgência|Comportamento|Momento de vida", "antes":"fato curto", "agora":"fato curto", "porQueImporta":"significado comercial"}. Se não houver mudança relevante, [] .
+Formato de mudancas: máximo 3 itens {"dimensao":"Produto|Finalidade|Faixa de preço|Urgência|Comportamento|Momento de vida", "antes":"fato curto", "agora":"fato curto", "porQueImporta":"significado comercial"}. Se não houver mudança relevante, [] .
 
-Formato obrigatório de modeloComercial:
+Formato de modeloComercial:
 {
   "contato":{"tipo":"comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro","papel":"frase curta","compradorFinal":""},
   "oportunidade":{"status":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|ganha|perdida|encerrada-sem-decisao","resultado":"em-andamento|venda-conosco|comprou-outra-opcao|condicoes-incompativeis|desistiu|sem-resposta|oportunidade-futura|outro","produto":"produto atual","motivo":"fato curto"},
@@ -2356,8 +2338,9 @@ Formato obrigatório de modeloComercial:
 }
 
 Regras mínimas:
-- produtoInteresse deve ser produto mencionado no histórico; não chute.
-- probabilityPercent deve ser coerente com diagnostico.probabilidadeComentada.
+- Não invente produto, objeção, intenção, preço ou compromisso.
+- Se for hipótese, escreva como hipótese.
+- probabilityPercent precisa ser justificado em diagnostico.probabilidadeComentada.
 - messages deve ser null nesta chamada.
 - clientProfile deve ser texto, nunca objeto.
 ${orientacoes}${contextoLead}${blocoComparacao}
