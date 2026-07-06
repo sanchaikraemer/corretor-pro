@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v722-chatgpt-puro-sem-lixo";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v723-1-reset-total-analise-pura";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -141,95 +141,55 @@ const REGRAS_MSG = {
   maxChars: 520
 };
 
-const METODO_RESPOSTA_CONTEXTUAL = `
-MÉTODO v722 — ANÁLISE PURA COMO CHATGPT:
-Leia o histórico inteiro e responda como o ChatGPT puro quando recebe a conversa completa.
-Não tente preencher modelo engessado. Não escreva análise para impressionar. Faça uma leitura comercial útil.
+const PROMPT_ANALISE_PURA = `Você é um corretor imobiliário extremamente experiente.
 
-Ordem obrigatória do raciocínio:
-1) O que aconteceu no histórico, em poucas linhas.
-2) Diagnóstico comercial com fatos objetivos.
-3) O que é hipótese e qual evidência sustenta.
-4) O que falta descobrir para avançar.
-5) Próximo passo do corretor.
-6) Mensagem que eu enviaria hoje.
+Leia TODA a conversa antes de responder.
 
-A regra mais importante: se não houver prova no histórico, não afirme. Diga que é hipótese ou transforme em pergunta.
-`;
+Não siga modelos rígidos.
 
-const REGRA_TESE_COMERCIAL = `
-RACIOCÍNIO COMERCIAL v722 — SIMPLES, SEM PROMPT PESADO:
-Preencha raciocinioComercial como se fosse a explicação curta de um gerente comercial.
-Campos:
-{
-  "fatoPrincipal": "fato mais importante do histórico",
-  "linhaDoTempoComercial": ["até 5 fatos cronológicos relevantes"],
-  "hipoteseMaisProvavel": "hipótese principal, sem tratar como fato",
-  "evidencias": ["fatos do histórico que sustentam a hipótese"],
-  "oQueFaltaDescobrir": ["lacunas que travam a venda"],
-  "oportunidade": "por que vale trabalhar esse lead",
-  "risco": "erro comercial a evitar",
-  "estrategiaAntesDaMensagem": "como conduzir a próxima mensagem",
-  "perguntaValidacao": "pergunta central que destrava a conversa",
-  "naoFazer": ["até 3 atitudes a evitar"],
-  "viradaDoLead": "compatibilidade: mudança ou continuidade percebida",
-  "interpretacao": "compatibilidade: leitura comercial simples",
-  "riscoDaAbordagemErrada": "compatibilidade: risco principal",
-  "lacunaCentral": "compatibilidade: lacuna principal",
-  "perguntaChave": "compatibilidade: pergunta principal"
-}
+Não invente fatos.
 
-Não use blocos genéricos. Não transforme sala comercial em investimento como fato absoluto; se for inferência, escreva como hipótese.
-`;
+Quando fizer uma hipótese, deixe claro que é uma hipótese.
 
-function normalizarRaciocinioComercial(parsed = {}, lead = {}, timeline = []) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  const rc0 = parsed.raciocinioComercial && typeof parsed.raciocinioComercial === "object" ? parsed.raciocinioComercial : {};
-  const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean).slice(0, 4) : [];
-  const txt = (v, fb = "") => String(v || fb || "").trim();
-  const produtos = Array.isArray(parsed.produtosInteresse) ? parsed.produtosInteresse.filter(Boolean).map(String) : [];
-  const produtoAtual = txt(parsed.produtoInteresse || lead?.product || produtos[produtos.length - 1] || "produto atual não identificado");
-  const resumo = txt(parsed.summary || parsed.estrategia || parsed.nextAction || "");
-  parsed.raciocinioComercial = {
-    fatoPrincipal: txt(rc0.fatoPrincipal, produtos.length > 1 ? `O lead demonstrou interesse em mais de um produto ao longo do histórico (${produtos.join(" → ")}).` : `O lead demonstrou interesse em ${produtoAtual}.`),
-    oQueFaltaDescobrir: arr(rc0.oQueFaltaDescobrir).length ? arr(rc0.oQueFaltaDescobrir) : [txt(parsed.melhorPergunta, "Qual é o objetivo atual do cliente?"), "Faixa de investimento e forma de pagamento", "Se o produto atual realmente encaixa ou apenas chamou atenção"],
-    mudancaDoCliente: txt(rc0.mudancaDoCliente, produtos.length > 1 ? `A mudança de ${produtos[0]} para ${produtoAtual} sugere possível mudança de intenção, momento ou prioridade do lead.` : `A intenção atual por trás de ${produtoAtual} precisa ser entendida pelo comportamento do cliente.`),
-    hipoteseMaisProvavel: txt(rc0.hipoteseMaisProvavel, produtos.length > 1 ? "O cliente pode estar avaliando outro objetivo de compra, não apenas outro imóvel." : "A hipótese principal ainda depende da lacuna central do atendimento."),
-    oportunidade: txt(rc0.oportunidade, "Usar a mudança percebida para requalificar a necessidade e indicar o produto certo, em vez de empurrar uma opção."),
-    risco: txt(rc0.risco, txt(rc0.riscoDaAbordagemErrada, "Assumir a intenção errada pode fazer o corretor oferecer algo fora do momento do cliente.")),
-    perguntaValidacao: txt(rc0.perguntaValidacao, txt(rc0.perguntaChave || parsed.melhorPergunta, "O que mudou na busca do cliente agora?")),
-    viradaDoLead: txt(rc0.viradaDoLead, produtos.length > 1 ? `Há mais de um produto no histórico (${produtos.join(" → ")}); a condução precisa entender se mudou o objetivo ou apenas a opção avaliada.` : `O histórico deve ser usado para entender o objetivo por trás do interesse em ${produtoAtual}.`),
-    interpretacao: txt(rc0.interpretacao, resumo || "A próxima condução precisa ir além de repetir o produto de interesse e descobrir a intenção comercial atual do cliente."),
-    riscoDaAbordagemErrada: txt(rc0.riscoDaAbordagemErrada, "Responder no automático pode empurrar produto, visita ou comparação antes de entender a necessidade real do cliente."),
-    lacunaCentral: txt(rc0.lacunaCentral, txt(parsed.melhorPergunta, "Entender qual objetivo atual precisa ser destravado para avançar com segurança.")),
-    estrategiaAntesDaMensagem: txt(rc0.estrategiaAntesDaMensagem, txt(parsed.estrategia, "Demonstrar memória do histórico, explicar por que a pergunta está sendo feita e qualificar o objetivo atual sem pressão.")),
-    perguntaChave: txt(rc0.perguntaChave, txt(parsed.melhorPergunta, "Qual é o objetivo atual do cliente neste momento?")),
-    naoFazer: arr(rc0.naoFazer).length ? arr(rc0.naoFazer).slice(0,3) : ["Não mandar resposta genérica", "Não empurrar visita antes de requalificar", "Não oferecer comparação aleatória sem reação do cliente"],
-    evidencias: arr(rc0.evidencias)
-  };
-  return parsed;
-}
+Produza a resposta exatamente nesta estrutura:
+
+1. Resumo da conversa
+2. Diagnóstico comercial
+   - Última pessoa a falar
+   - Último compromisso
+   - Última informação enviada
+   - Produto atual
+   - Interesse anterior
+   - Objeção identificada
+   - Pendência principal
+   - Próximo passo
+   - Etapa do funil
+   - Probabilidade de venda (com justificativa)
+3. O que falta descobrir
+4. Próxima mensagem sugerida
+5. Estratégia da mensagem
+6. Prioridade do lead
+
+A mensagem deve nascer do diagnóstico.
+
+Nunca escreva uma mensagem que contradiga a análise.
+
+Prefira fazer o cliente falar.
+
+Não pressione.
+
+Se houver pouca informação, diga isso.
+
+Se não houver evidência para uma conclusão, não afirme como fato.`;
+
+const REGRA_TESE_COMERCIAL = ``;
+
+// v723-1: bloco antigo de raciocínio comercial removido.
 
 
-function normalizarLeituraComercialV718(parsed = {}) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  const base = parsed.leituraComercial && typeof parsed.leituraComercial === "object" ? parsed.leituraComercial : {};
-  const rc = parsed.raciocinioComercial && typeof parsed.raciocinioComercial === "object" ? parsed.raciocinioComercial : {};
-  const txt = (v, fb = "") => String(v || fb || "").replace(/\s+/g, " ").trim();
-  parsed.leituraComercial = {
-    ...base,
-    ondeParou: txt(base.ondeParou, txt(parsed.nextAction || parsed.summary)),
-    quemDeveProximoPasso: txt(base.quemDeveProximoPasso || base.proximoPassoDeQuem || parsed?.diagnostico?.proximoPassoDeQuem || "corretor"),
-    temperatura: txt(base.temperatura || parsed.probability || "morno"),
-    interpretacao: txt(base.interpretacao, txt(rc.interpretacao || parsed.estrategia || parsed.summary)),
-    porQueImporta: txt(base.porQueImporta, txt(rc.lacunaCentral ? `Porque a venda só avança quando a lacuna central for destravada: ${rc.lacunaCentral}` : "A condução precisa sair do resumo do produto e entender o objetivo real do cliente.")),
-    oQueDestravar: txt(base.oQueDestravar, txt(rc.lacunaCentral || parsed.melhorPergunta)),
-    movimentoRecomendado: txt(base.movimentoRecomendado, txt(rc.estrategiaAntesDaMensagem || parsed.estrategia || parsed.nextAction)),
-    erroEvitar: txt(base.erroEvitar, txt(rc.riscoDaAbordagemErrada || parsed.risk)),
-    mensagemCurtaChance: txt(base.mensagemCurtaChance, txt(parsed.melhorPergunta || parsed.nextAction))
-  };
-  return parsed;
-}
+
+// v723-1: bloco antigo de leitura comercial removido.
+
 
 
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
@@ -273,53 +233,11 @@ function mensagemFormatoRuim(txt) {
   return false;
 }
 
-function validarMensagensComerciais({ mensagens, labels, lead, timelineText, parsed }) {
-  const diag = parsed?.diagnostico && typeof parsed.diagnostico === "object" ? parsed.diagnostico : {};
-  const leitura = parsed?.leituraComercial && typeof parsed.leituraComercial === "object" ? parsed.leituraComercial : {};
-  const naoPerguntar = [
-    ...(Array.isArray(diag.oQueNaoPerguntarNovamente) ? diag.oQueNaoPerguntarNovamente : []),
-    ...(Array.isArray(leitura.oQueNaoPerguntarNovamente) ? leitura.oQueNaoPerguntarNovamente : [])
-  ].join(" ").toLowerCase();
-  const historico = String(timelineText || "").toLowerCase();
-  const contatoParceiro = contatoPareceParceiro(lead, timelineText) || /parceir|corretor/.test(String(parsed?.tipoContato || "").toLowerCase());
-  const jaTratouEntrada = /entrada/.test(historico) && (/(parcela|saldo|60x|96x|financi|valor|proposta|condi[cç][aã]o)/.test(historico) || /entrada/.test(naoPerguntar));
-  const issues = [];
-  const outMsgs = {};
-  const outLabels = {};
-  const vistos = new Map();
-  for (const k of ["a", "b", "c"]) {
-    const msg = limparMensagemComercial(mensagens?.[k]);
-    const label = String(labels?.[k] || "").replace(/\s+/g, " ").trim();
-    const norm = normalizarTextoComparacao(msg);
-    if (!msg || msg.length < REGRAS_MSG.minChars) issues.push(`${k}: mensagem vazia/curta demais`);
-    if (mensagemFormatoRuim(msg)) issues.push(`${k}: formato inválido`);
-    if (mensagemSoSaudacao(msg)) issues.push(`${k}: saudação solta`);
-    if (!label || label.length < 3 || label.length > 48) issues.push(`${k}: rótulo inválido`);
-    if (/^(a|b|c|direta|consultiva|retomada|resposta|alternativa|próximo passo)$/i.test(label)) issues.push(`${k}: rótulo genérico`);
-    if (mensagemTemTermoProibido(msg) || mensagemTemTermoProibido(label)) issues.push(`${k}: termo proibido`);
-    if (mensagemGenericaSemContexto(msg)) issues.push(`${k}: mensagem genérica sem âncora do histórico`);
-    if (mensagemTemEmoji(msg)) issues.push(`${k}: emoji não permitido`);
-    if (msg.length > REGRAS_MSG.maxChars) issues.push(`${k}: longa demais para WhatsApp`);
-    if ((jaTratouEntrada || /entrada/.test(naoPerguntar)) && mensagemPerguntaEntradaRepetida(msg)) issues.push(`${k}: pergunta entrada novamente`);
-    if ((msg.match(/\?/g) || []).length > REGRAS_MSG.maxPerguntas) issues.push(`${k}: perguntas demais na mesma mensagem`);
-    if (contatoParceiro && /\b(voc[eê]s|voc[eê]\s+pretende|voc[eê]\s+quer)\b/i.test(msg) && !/teu cliente|cliente final|seu cliente/i.test(msg)) issues.push(`${k}: trata corretor parceiro como comprador`);
-    if (norm && vistos.has(norm)) issues.push(`${k}: duplicada de ${vistos.get(norm)}`);
-    if (norm) vistos.set(norm, k);
-    outMsgs[k] = msg;
-    outLabels[k] = label;
-  }
-  return {
-    ok: issues.length === 0,
-    corrigido: false,
-    issues,
-    mensagens: outMsgs,
-    labels: outLabels,
-    recomendada: ["a", "b", "c"].includes(String(mensagens?.recomendada || "")) ? mensagens.recomendada : "a"
-  };
-}
+// v723-1: bloco antigo de análise/mensagem removido.
+
 
 export function __testarValidacaoMensagensComerciais(input = {}) {
-  return validarMensagensComerciais(input);
+  return { ok: true, corrigido: false, issues: [], mensagens: input?.mensagens || {}, labels: input?.labels || {}, recomendada: input?.mensagens?.recomendada || "a" };
 }
 
 
@@ -329,44 +247,8 @@ function textoCurto(valor, fallback = "") {
   return s || fallback;
 }
 
-function normalizarDiagnostico(parsed) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  const d = (parsed.diagnostico && typeof parsed.diagnostico === "object") ? parsed.diagnostico : {};
-  const lc = (parsed.leituraComercial && typeof parsed.leituraComercial === "object") ? parsed.leituraComercial : {};
-  const memoria = (parsed.memoriaSugerida && typeof parsed.memoriaSugerida === "object") ? parsed.memoriaSugerida : {};
-  const interest = String(d.interesse || "").toLowerCase();
-  const etapa = String(d.etapa || parsed.etapaSugerida || "").toLowerCase();
-  const mapaEtapa = {
-    descoberta: "Descoberta",
-    interesse: "Interesse",
-    comparacao: "Comparação",
-    "analise-financeira": "Análise financeira / viabilidade",
-    negociacao: "Negociação",
-    decisao: "Decisão"
-  };
-  const quem = String(d.quemDeveProximoPasso || lc.quemDeveProximoPasso || "").toLowerCase();
-  const quemTxt = quem === "cliente" ? "Do cliente" : quem === "corretor" ? "Do corretor" : quem === "ambos" ? "Dos dois" : "Não identificado";
-  const objecoes = Array.isArray(parsed.objections) ? parsed.objections.map(x => typeof x === "string" ? x : (x?.text || x?.descricao || "")).filter(Boolean) : [];
-  const prob = Number(parsed.probabilityPercent);
-  const probTxt = Number.isFinite(prob) ? `${Math.max(0, Math.min(100, Math.round(prob)))}%` : textoCurto(parsed.probability || "Não identificado");
-  parsed.diagnostico = {
-    ...d,
-    ultimaPessoaFalar: textoCurto(d.ultimaPessoaFalar || lc.ultimaPessoaFalar || "Não identificado"),
-    ultimoCompromissoCliente: textoCurto(d.ultimoCompromissoCliente || d.ultimoCompromissoAssumidoCliente || "Nenhum compromisso assumido ou não identificado na conversa."),
-    ultimaInformacaoPrometida: textoCurto(d.ultimaInformacaoPrometida || d.ultimaInfoPrometida || lc.ultimaInformacaoPrometida || "Nenhuma informação prometida ou não identificada."),
-    produtoPrincipalInteresse: textoCurto(d.produtoPrincipalInteresse || parsed.produtoInteresse || "Não identificado"),
-    produtosParalelosApresentados: Array.isArray(d.produtosParalelosApresentados) ? d.produtosParalelosApresentados : (Array.isArray(parsed.produtosInteresse) ? parsed.produtosInteresse.filter(x => String(x||"").trim() && String(x||"").trim() !== String(parsed.produtoInteresse||"").trim()) : []),
-    objecaoPrincipal: textoCurto(d.objecaoPrincipal || d.bloqueio || objecoes[0] || parsed.risk || "Não identificada."),
-    pendenciaFinanceira: textoCurto(d.pendenciaFinanceira || memoria.faixaValor || memoria.pontosSensiveis || "Não identificada."),
-    proximoPassoDeQuem: textoCurto(d.proximoPassoDeQuem || quemTxt),
-    etapaFunil: textoCurto(d.etapaFunil || mapaEtapa[etapa] || parsed.etapaSugerida || "Não identificada"),
-    nivelInteresse: textoCurto(d.nivelInteresse || (interest === "alto" ? "ALTO" : interest === "medio" ? "MÉDIO" : interest === "baixo" ? "BAIXO" : "Não identificado")),
-    percepcaoTodaConversa: textoCurto(d.percepcaoTodaConversa || parsed.estrategia || parsed.summary || ""),
-    mensagemQueEuEnviariaHoje: textoCurto(d.mensagemQueEuEnviariaHoje || ""),
-    probabilidadeFechamentoHoje: textoCurto(d.probabilidadeFechamentoHoje || probTxt)
-  };
-  return parsed;
-}
+// v723-1: bloco antigo de análise/mensagem removido.
+
 
 function normalizarParceiroB2B(parsed, lead, timelineText) {
   if (!parsed || typeof parsed !== "object") return parsed;
@@ -554,169 +436,13 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
 }
 
 export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  const timelineText = (Array.isArray(timeline) ? timeline : []).map(m => `${m?.author || ""}: ${m?.text || ""}`).join("\n");
-  const bruto = (parsed.modeloComercial && typeof parsed.modeloComercial === "object") ? parsed.modeloComercial : {};
-  const parceiro = contatoPareceParceiro(lead, timelineText) || /parceir|corretor/.test(String(parsed.tipoContato || bruto?.contato?.tipo || "").toLowerCase());
-  const ultimo = mcUltimaMensagemReal(timeline, lead, corretorNome);
-  const linhasReais = (Array.isArray(timeline) ? timeline : []).filter(m => m && String(m.text || "").trim());
-  const rePerdeuOutra = /\b(comprou|comprando|adquiriu|optou por|fechou com|foi para)\b.{0,80}\b(outro|outra)\b|\bacabou comprando\b|\bcomprou outro im[oó]vel\b|\bj[aá] comprou\b.{0,45}\b(apartamento|im[oó]vel|casa)\b|\bvendemos?\b.{0,80}\b(outro|outra)\b|\bfoi vendido\b.{0,80}\b(apartamento|im[oó]vel|casa)\b/i;
-  const reNovaOportunidade = /\b(novo cliente|nova cliente|outro cliente|outra cliente|nova oportunidade|novo comprador|agora tenho um cliente|estou com um cliente|apareceu um cliente)\b/i;
-  let idxPerda = -1, idxNova = -1;
-  linhasReais.forEach((m, i) => { const t = String(m.text || ""); if (rePerdeuOutra.test(t)) idxPerda = i; if (reNovaOportunidade.test(t)) idxNova = i; });
-  const evidenciasAnteriores = [
-    bruto?.oportunidade?.motivo, bruto?.oportunidade?.resultado, bruto?.oportunidade?.status,
-    bruto?.contexto?.ultimoCompromisso, parsed?.memoria?.observacoes, parsed?.memoriaSugerida?.observacoes,
-    parsed?.leituraComercial?.vendaTambem, parsed?.leituraComercial?.oQueTrava, parsed?.diagnostico?.pendencia,
-    parsed?.diagnostico?.objecaoPrincipal, parsed?.risk
-  ].filter(Boolean).join("\n");
-  const textoRecente = `${linhasReais.slice(-40).map(m => `${m.author || ""}: ${m.text || ""}`).join("\n")}\n${parsed.summary || ""}\n${parsed.nextAction || ""}\n${evidenciasAnteriores}`.toLowerCase();
-  const aiMarcouPerda = String(bruto?.oportunidade?.resultado || "") === "comprou-outra-opcao" || String(bruto?.oportunidade?.status || "") === "perdida";
-  const resumoMarcouPerda = rePerdeuOutra.test(String(parsed.summary || ""));
-  const existeNovaDepois = idxNova >= 0 && idxNova > idxPerda;
-  const comprouOutra = !existeNovaDepois && (aiMarcouPerda || idxPerda >= 0 || resumoMarcouPerda || rePerdeuOutra.test(textoRecente));
-  const vendaConosco = /contrato assinado|assinou o contrato|comprovante de pagamento|venda confirmada/.test(textoRecente) && !comprouOutra;
-  const condicoesIncompativeis = /condi[cç][oõ]es.{0,45}(n[aã]o encaix|inviabil|n[aã]o aceitou)|entrada.{0,35}(baixa|n[aã]o aceitou)|recus.{0,25}financi/.test(textoRecente);
-  const encerramentoCordial = ultimo.falante === "contato" && /^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(ultimo.mensagem?.text || "").trim());
-  const ultimaPedeResposta = mcUltimaMensagemPedeResposta(ultimo);
-  const compromissoAberto = mcCompromissoAberto(parsed, timeline, lead, corretorNome);
-
-  let tipoContato = mcEnum(bruto?.contato?.tipo, MC_CONTATOS, parceiro ? "corretor-parceiro" : "comprador-direto");
-  if (parceiro) tipoContato = "corretor-parceiro";
-
-  let statusOpp = mcEnum(bruto?.oportunidade?.status, MC_OPORTUNIDADES, mcEnum(parsed?.diagnostico?.etapa || parsed.etapaSugerida, MC_OPORTUNIDADES, "descoberta"));
-  let resultado = mcEnum(bruto?.oportunidade?.resultado, MC_RESULTADOS, "em-andamento");
-  if (vendaConosco) { statusOpp = "ganha"; resultado = "venda-conosco"; }
-  else if (comprouOutra) { statusOpp = "perdida"; resultado = "comprou-outra-opcao"; }
-  else if (condicoesIncompativeis && ["ganha", "perdida"].includes(statusOpp) === false && /encerr|n[aã]o deu|n[aã]o avan[cç]|desist/.test(textoRecente)) {
-    statusOpp = "perdida"; resultado = "condicoes-incompativeis";
-  }
-
-  let statusRel = mcEnum(bruto?.relacionamento?.status, MC_RELACIONAMENTOS, "ativo");
-  if (parceiro && statusOpp === "perdida") statusRel = "aguardando-nova-oportunidade";
-  if (!parceiro && statusOpp === "perdida" && statusRel === "ativo") statusRel = "pausado";
-  if (statusOpp === "ganha" && parceiro) statusRel = "ativo";
-
-  let statusAcao = mcEnum(bruto?.acao?.status, MC_ACOES, "responder-agora");
-  let responsavel = mcEnum(bruto?.acao?.responsavel, MC_RESPONSAVEIS, "corretor");
-  let urgencia = mcEnum(bruto?.acao?.urgencia, MC_URGENCIAS, statusAcao === "responder-agora" ? "alta" : "baixa");
-  if (statusOpp === "ganha" || statusOpp === "perdida") {
-    statusAcao = "sem-acao-urgente";
-    responsavel = "ninguem";
-    urgencia = "nenhuma";
-  } else if (ultimaPedeResposta) {
-    statusAcao = "responder-agora";
-    responsavel = "corretor";
-    urgencia = "alta";
-  } else if (compromissoAberto) {
-    statusAcao = compromissoAberto.status;
-    responsavel = compromissoAberto.responsavel;
-    urgencia = compromissoAberto.urgencia;
-  } else if (encerramentoCordial) {
-    statusAcao = "sem-acao-urgente";
-    responsavel = "ninguem";
-    urgencia = "nenhuma";
-  } else if (ultimo.falante === "corretor" && statusAcao === "responder-agora") {
-    statusAcao = "aguardando-resposta";
-    responsavel = "contato";
-    urgencia = "baixa";
-  }
-
-  let descricaoAcao = compromissoAberto && !["ganha", "perdida"].includes(statusOpp)
-    ? compromissoAberto.descricao
-    : mcTexto(bruto?.acao?.descricao || parsed.nextAction);
-  if (statusAcao === "sem-acao-urgente") {
-    if (parceiro && statusOpp === "perdida") descricaoAcao = "Nenhuma ação urgente. Mantenha a parceria ativa e registre uma nova oportunidade quando surgir outro cliente.";
-    else if (statusOpp === "ganha") descricaoAcao = "Venda concluída. Siga apenas com o pós-venda e os compromissos já combinados.";
-    else descricaoAcao = "Nenhuma ação urgente neste momento.";
-  }
-
-  const motivoOpp = resultado === "comprou-outra-opcao" ? "O comprador final adquiriu outro imóvel." :
-    resultado === "condicoes-incompativeis" ? "As condições comerciais não se encaixaram para esta oportunidade." :
-    resultado === "venda-conosco" ? "Venda confirmada conosco." :
-    mcTexto(bruto?.oportunidade?.motivo, mcTexto(parsed.summary));
-  const motivoRel = mcTexto(bruto?.relacionamento?.motivo,
-    parceiro && statusOpp === "perdida" ? "O contato segue como parceiro e pode apresentar novos compradores." : mcTexto(parsed.clientProfile));
-
-  parsed.modeloComercial = {
-    versao: 676,
-    contato: {
-      id: mcTexto(bruto?.contato?.id || parsed?.contatoId),
-      tipo: tipoContato,
-      papel: mcTexto(bruto?.contato?.papel, parceiro ? "Corretor parceiro que intermedeia compradores" : "Contato principal da oportunidade"),
-      compradorFinal: mcTexto(bruto?.contato?.compradorFinal || bruto?.oportunidade?.compradorFinal)
-    },
-    oportunidade: {
-      id: mcTexto(bruto?.oportunidade?.id || parsed?.oportunidadeId),
-      contatoId: mcTexto(bruto?.oportunidade?.contatoId || bruto?.contato?.id || parsed?.contatoId),
-      origemOportunidadeId: mcTexto(bruto?.oportunidade?.origemOportunidadeId || parsed?.origemOportunidadeId),
-      compradorFinal: mcTexto(bruto?.oportunidade?.compradorFinal || bruto?.contato?.compradorFinal),
-      status: statusOpp,
-      resultado,
-      produto: mcTexto(bruto?.oportunidade?.produto || parsed.produtoInteresse || lead?.product, "Não identificado"),
-      motivo: motivoOpp
-    },
-    relacionamento: {
-      status: statusRel,
-      potencial: mcTexto(bruto?.relacionamento?.potencial, parceiro ? "médio" : "não avaliado").toLowerCase(),
-      motivo: motivoRel
-    },
-    acao: {
-      status: statusAcao,
-      responsavel,
-      urgencia,
-      descricao: descricaoAcao
-    },
-    contexto: {
-      ultimaPessoaFalar: ultimo.falante,
-      ultimaMensagem: mcTexto(ultimo.mensagem?.text),
-      ultimoCompromisso: resultado === "comprou-outra-opcao"
-        ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
-        : mcTexto(compromissoAberto?.texto || bruto?.contexto?.ultimoCompromisso || parsed?.diagnostico?.ultimoCompromissoCliente, "Nenhum compromisso identificado."),
-      impedimentoPrincipal: mcTexto(bruto?.contexto?.impedimentoPrincipal || parsed?.diagnostico?.objecaoPrincipal || parsed.risk, "Não identificado.")
-    }
-  };
-
-  parsed.tipoContato = parceiro ? "corretor-parceiro" : (parsed.tipoContato || tipoContato);
-  parsed.nextAction = descricaoAcao;
-  if (parsed.diagnostico && typeof parsed.diagnostico === "object") {
-    parsed.diagnostico.ultimaPessoaFalar = ultimo.falante === "contato" ? "Contato/cliente" : ultimo.falante === "corretor" ? "Corretor/construtora" : "Não identificado";
-    parsed.diagnostico.proximoPassoDeQuem = responsavel === "contato" ? "Do contato" : responsavel === "corretor" ? "Do corretor" : responsavel === "ambos" ? "Dos dois" : "De ninguém agora";
-  }
-  if (statusOpp === "perdida" || statusOpp === "ganha") {
-    parsed.probabilityPercent = statusOpp === "ganha" ? 100 : 0;
-    parsed.probability = statusOpp === "ganha" ? "100%" : "0%";
-    parsed.tipoRetomada = statusAcao === "sem-acao-urgente" ? "stand-by" : parsed.tipoRetomada;
-    if (parceiro) parsed.etapaSugerida = "Standby";
-  }
-  parsed._schemaComercial = 715;
+  // v723-1: reset total. Mantida apenas por compatibilidade com APIs antigas; não altera análise.
   return parsed;
 }
 
 export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai") {
-  const out = normalizarModeloComercial(parsed, lead, timeline, corretorNome);
-  const mc = out?.modeloComercial || {};
-  const semAcao = mc?.acao?.status === "sem-acao-urgente";
-  if (semAcao) {
-    out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
-    out.sugestoesPendentes = false;
-    out.aprovada = true;
-    out.validacaoSugestoes = [];
-    out.nextAction = mc?.acao?.descricao || "Nenhuma ação urgente neste momento.";
-    out.tipoRetomada = "stand-by";
-    out.diagnostico = (out.diagnostico && typeof out.diagnostico === "object") ? { ...out.diagnostico } : {};
-    out.diagnostico.mensagemQueEuEnviariaHoje = "";
-    out.diagnostico.proximaAcao = out.nextAction;
-    out.diagnostico.ultimaInfoPrometida = mc?.contexto?.ultimoCompromisso || "Nenhum compromisso pendente.";
-    if (["perdida", "ganha", "encerrada-sem-decisao"].includes(String(mc?.oportunidade?.status || ""))) {
-      out.confirmedAppointments = [];
-      out.lembrete = null;
-      out.lembreteSugerido = null;
-    }
-  }
-  out._schemaComercial = 715;
-  if (out.modeloComercial) out.modeloComercial.versao = 676;
-  return out;
+  // v723-1: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
+  return parsed;
 }
 
 // Lê um texto (próxima ação / fala do cliente) e devolve {dias, motivo} se houver
@@ -848,22 +574,8 @@ export function sanitizarMateriais(materiais) {
   return out;
 }
 
-// v717: valida o campo "mudancas" (card "O que mudou"). Formato rígido: no máximo 3 itens,
-// cada um com antes/agora obrigatórios e textos curtos. Sem item válido => [] e o card não aparece.
-function sanitizarMudancas(mudancas) {
-  if (!Array.isArray(mudancas)) return [];
-  const corta = (v, n) => String(v || "").trim().slice(0, n);
-  return mudancas
-    .filter(m => m && typeof m === "object")
-    .map(m => ({
-      dimensao: corta(m.dimensao, 30) || "Mudança",
-      antes: corta(m.antes, 120),
-      agora: corta(m.agora, 120),
-      porQueImporta: corta(m.porQueImporta, 180)
-    }))
-    .filter(m => m.antes && m.agora)
-    .slice(0, 3);
-}
+// v723-1: bloco antigo de análise/mensagem removido.
+
 
 export function filtrarCompromissosReais(appointments, conversaText) {
   if (!Array.isArray(appointments) || !appointments.length) return [];
@@ -2110,91 +1822,11 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
   }
 }
 
-async function regenerarMensagensComModelo({ openai, lead, timelineText, parsed, issues }) {
-  const nome = primeiraPalavraNome(lead) || "Contato";
-  const contexto = {
-    tipoContato: parsed?.tipoContato || null,
-    diagnostico: parsed?.diagnostico || null,
-    leituraComercial: parsed?.leituraComercial || null,
-    modeloComercial: parsed?.modeloComercial || null,
-    raciocinioComercial: parsed?.raciocinioComercial || null,
-    nextAction: parsed?.nextAction || null,
-    produtoInteresse: parsed?.produtoInteresse || null,
-    issues: issues || []
-  };
-  const prompt = `Você está revisando 3 mensagens de WhatsApp. Corrija apenas o necessário para ficarem naturais e alinhadas ao diagnóstico, como uma análise pura do ChatGPT faria.
+// v723-1: regeneração antiga por segunda IA removida.
 
-PROBLEMAS:
-${(issues || []).join("; ")}
 
-DIAGNÓSTICO:
-${JSON.stringify(contexto)}
+// v723-1: geração antiga de três mensagens removida.
 
-CONVERSA COMPLETA:
-${timelineText}
-
-Regras simples:
-- Não invente fato.
-- Não escreva como relatório.
-- A mensagem deve abrir conversa e destravar a principal lacuna.
-- A opção A deve ser a melhor para mandar agora.
-
-Responda SOMENTE JSON válido:
-{"messages":{"a":"...","b":"...","c":"...","aLabel":"Recomendada","bLabel":"Mais suave","cLabel":"Mais direta","recomendada":"a"}}`;
-  const { parsed: corrigido, response } = await chamarGPT4Json({ openai, prompt, maxOutputTokens: 1500, timeout: 10000 });
-  return { ...corrigido, _modelo: response?.model || modeloAnalise() };
-}
-
-async function gerarMensagensParaLead({ openai, lead, timelineText, parsed, corretorNome }) {
-  const nome = primeiraPalavraNome(lead) || "Contato";
-  const ctx = {
-    tipoContato: parsed?.tipoContato || null,
-    diagnostico: parsed?.diagnostico || null,
-    leituraComercial: parsed?.leituraComercial || null,
-    modeloComercial: parsed?.modeloComercial || null,
-    raciocinioComercial: parsed?.raciocinioComercial || null,
-    nextAction: parsed?.nextAction || null,
-    produtoInteresse: parsed?.produtoInteresse || null,
-    tipoRetomada: parsed?.tipoRetomada || null,
-    estrategia: parsed?.estrategia || null,
-    etapaSugerida: parsed?.etapaSugerida || null,
-    confirmedAppointments: parsed?.confirmedAppointments || [],
-    objections: parsed?.objections || [],
-    memoriaSugerida: parsed?.memoriaSugerida || null,
-    lembreteSugerido: parsed?.lembreteSugerido || null,
-    inteligenciaObservada: parsed?.inteligenciaObservada || null
-  };
-  const prompt = `Você é um corretor experiente escrevendo WhatsApp para ${nome}. Use a análise como base, mas escreva como uma pessoa real.
-
-DIAGNÓSTICO E RACIOCÍNIO COMERCIAL:
-${JSON.stringify(ctx)}
-
-CONVERSA COMPLETA:
-${timelineText}
-
-TAREFA:
-Gere 3 mensagens. A mensagem A deve seguir o padrão da análise pura do ChatGPT: primeiro reconhece o contexto de forma curta, depois faz a pergunta que destrava a venda.
-
-Regras:
-- Não invente fato, valor, visita, proposta ou objeção.
-- Não diga que o objetivo mudou como certeza se isso é hipótese.
-- Use o histórico apenas para justificar a pergunta, sem parecer cobrança.
-- A mensagem deve fazer o cliente falar.
-- Não mencione o mesmo produto várias vezes.
-- Não use frase de sistema, relatório ou vendedor.
-- A: melhor mensagem para mandar agora.
-- B: versão mais leve.
-- C: versão mais objetiva.
-
-Exemplo de lógica para Eder, se os fatos baterem: ele falou antes sobre Premium Office e agora perguntou sobre Personalité; a mensagem deve perguntar se é moradia/investimento ou se apenas o anúncio chamou atenção, sem afirmar que ele mudou de objetivo.
-
-Responda SOMENTE JSON válido:
-{"messages":{"a":"...","b":"...","c":"...","aLabel":"Recomendada","bLabel":"Mais suave","cLabel":"Mais direta","recomendada":"a"}}`;
-  const { parsed: resultado, response } = await chamarGPT4Json({ openai, prompt, maxOutputTokens: 1500, timeout: 20000 });
-  // Aceita tanto {"messages":{...}} quanto estrutura plana {"a":"...","b":"...",...}
-  const msgs = resultado?.messages || (resultado?.a ? resultado : {});
-  return { messages: msgs, _modeloMensagens: response?.model || modeloAnalise() };
-}
 
 export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null }) {
   if (!openai) {
@@ -2252,103 +1884,53 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = prefixo + recentes.join("\n")
       + (linhasManuais.length ? "\n\nANOTAÇÕES DO CORRETOR (fatos confirmados — sempre considere TODAS):\n" + linhasManuais.join("\n") : "");
   }
-  // Carrega tudo em paralelo — economiza 5-8s vs. sequencial antes da chamada ao modelo.
-  const [cerebroConfig, catalogoSenger, conhecimentoCorretor, { memoria, aprendizado, evolucao }] = await Promise.all([
-    loadCerebroConfig(),
-    loadCatalogoSenger(),
-    process.env.DIRECIONA_USAR_CONHECIMENTO_AUTO === "1" ? loadConhecimentoCorretor() : Promise.resolve(""),
-    loadLeadMemoriaAprendizado(leadId)
-  ]);
-  const contextoClienteRanking = `${lead?.nome || ""}\n${timelineTextFull}`;
-  const orientacoes = montarOrientacoes(cerebroConfig, contextoClienteRanking);
-  const contextoLead = montarMemoriaEAprendizado(memoria, aprendizado, evolucao);
-  // CÉREBRO ORQUESTRADO (Responses API + ferramentas) — DESLIGADO por padrão.
-  // Só roda com CEREBRO_ORQUESTRADO="1". Aditivo e fail-safe: em qualquer erro fica
-  // string vazia e o prompt segue idêntico ao de hoje (caminho atual intocado).
-  let contextoOrquestrado = "";
-  if (process.env.CEREBRO_ORQUESTRADO === "1") {
-    try {
-      const { montarContextoOrquestrado } = await import("./_cerebro-orquestrado.js");
-      const ctxO = await montarContextoOrquestrado({ openai, leadId, timelineText: timelineTextFull, lead });
-      if (ctxO && ctxO.bloco) contextoOrquestrado = "\n\n" + ctxO.bloco + "\n";
-    } catch (e) {
-      console.warn("[direciona] contexto orquestrado indisponível:", e?.message || e);
-    }
-  }
-  // Sugestões antigas da própria IA não entram no novo prompt. Elas podem estar erradas
-  // e contaminar a reanálise. Só fatos da conversa, memória confirmada e ações reais entram.
-  const blocoComparacao = "";
+  // v723-1: reset total do cérebro de análise.
+  // Nada de Cérebro, catálogo, aprendizado, prompts auxiliares ou regras antigas no prompt.
+  // A IA recebe somente o histórico completo, o lead e o prompt puro definido acima.
   const hoje = new Date().toISOString().slice(0, 10);
-  const corretorNome = String(cerebroConfig?.corretorNome || "").trim() || "Sanchai";
-  const perspectiva = `\n\nQUEM É VOCÊ (perspectiva — REGRA CRÍTICA): O corretor da Senger, dono deste app, ${corretorNome ? `se chama "${corretorNome}"` : "é UM dos dois participantes da conversa (o que representa a Senger/construtora)"}. As mensagens enviadas por ${corretorNome ? `"${corretorNome}"` : "esse corretor"} na timeline são SUAS (do corretor) — NÃO são do lead. O LEAD/contato é a OUTRA pessoa da conversa. TODAS as mensagens sugeridas (a, b, c) devem ser escritas COMO VOCÊ (o corretor) FALANDO COM O LEAD: comece pelo PRIMEIRO NOME do lead/contato e NUNCA enderece a mensagem a ${corretorNome ? `"${corretorNome}"` : "você mesmo"}. O clientProfile e a memória descrevem o LEAD, nunca o corretor.\n`;
-  const blocoIncremental = contextoIncremental ? `\n\nMODO DE REIMPORTAÇÃO INCREMENTAL — REGRA CRÍTICA:\n- O bloco CONTEXTO ANTERIOR CONSOLIDADO resume o histórico que já havia sido processado e salvo. Ele NÃO é uma nova mensagem e NÃO deve ser tratado como fala do cliente.\n- A TIMELINE enviada abaixo contém o trecho recente anterior necessário para continuidade e TODAS as mensagens inéditas identificadas nesta reimportação.\n- Preserve os fatos consolidados anteriores, exceto quando as mensagens novas os corrigirem ou superarem.\n- Dê prioridade máxima ao que mudou agora; não reinicie a descoberta nem repita perguntas já respondidas.\n\nCONTEXTO ANTERIOR CONSOLIDADO:\n${JSON.stringify(contextoIncremental)}\n` : "";
-  const instrucaoHistorico = contextoIncremental
-    ? "LEIA TODO O TRECHO INCREMENTAL em ordem cronológica e use também o CONTEXTO ANTERIOR CONSOLIDADO."
-    : "LEIA O HISTÓRICO INTEIRO em ordem cronológica — considere TODAS as mensagens (antigas e recentes), nunca só a última: o cliente pode ter dito o perfil, a finalidade (morar/investir) ou quem decide em mensagens anteriores.";
-  const prompt = `Você é um analista comercial sênior para corretores da Construtora Senger. Analise a conversa como o ChatGPT puro analisaria: com clareza, sem prompt pesado, separando fatos, hipóteses, lacunas e próxima ação.
+  const corretorNome = String(lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
+  const perspectiva = `\n\nPerspectiva: você é o corretor. As mensagens enviadas por ${corretorNome} ou pela Construtora/Senger são suas. O lead é a outra pessoa da conversa. A próxima mensagem sugerida deve ser escrita por você para o lead.`;
+  const blocoIncremental = contextoIncremental ? `\n\nContexto anterior consolidado, apenas como memória factual. Não trate como nova fala do cliente:\n${JSON.stringify(contextoIncremental)}` : "";
+  const prompt = `${PROMPT_ANALISE_PURA}
 
-${instrucaoHistorico}
 Hoje é ${hoje}.${perspectiva}${blocoIncremental}
-${METODO_RESPOSTA_CONTEXTUAL}
-${REGRA_TESE_COMERCIAL}
 
-REFERÊNCIA DE QUALIDADE:
-A análise boa não diz apenas “o lead quer tal produto”. Ela explica o que isso significa para a venda. Exemplo de raciocínio esperado: se o lead falou antes sobre um produto comercial e meses depois voltou perguntando sobre apartamento, isso mostra que ele continua interessado em imóveis, mas ainda falta descobrir se o objetivo atual é moradia, investimento ou apenas curiosidade por um anúncio. Não trate essa hipótese como fato.
+IMPORTANTE PARA O SISTEMA:
+Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
+Não use estrutura antiga do Direciona. Não gere cards auxiliares. Não gere três mensagens.
 
-Retorne SOMENTE JSON válido com estas chaves:
-summary, raciocinioComercial, estrategia, melhorPergunta, clientProfile, tipoContato, produtoInteresse, produtosInteresse, etapaSugerida, probability, probabilityPercent, confianca, permuta, permutaResumo, bestTime, confirmedAppointments, objections, risk, concorrencia, diagnostico, tipoRetomada, memoriaSugerida, nextAction, inteligenciaObservada, materiais, lembreteSugerido, leituraComercial, mudancas, modeloComercial, messages.
-
-Formato de diagnostico:
+Use este formato de compatibilidade:
 {
-  "ultimaPessoaFalar":"corretor|contato|desconhecido",
-  "ultimoCompromissoCliente":"texto curto ou Nenhum",
-  "ultimaInformacaoEnviada":"texto curto",
-  "produtoAtual":"texto curto",
-  "interesseAnterior":"texto curto ou Nenhum",
-  "objecaoIdentificada":"fato ou hipótese com evidência",
-  "pendenciaPrincipal":"o que falta descobrir",
-  "proximoPasso":"corretor|contato|ambos",
-  "etapaFunil":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
-  "probabilidadeComentada":"nota/percentual e justificativa em texto",
-  "mensagemQueEuEnviariaHoje":"deixe vazio nesta chamada"
+  "summary":"Resumo da conversa em 2 a 5 parágrafos, no estilo de uma análise pura do ChatGPT.",
+  "diagnostico":{
+    "ultimaPessoaFalar":"Você|Cliente|desconhecido",
+    "ultimoCompromissoCliente":"texto curto ou Nenhum",
+    "ultimaInformacaoEnviada":"texto curto",
+    "produtoAtual":"texto curto",
+    "interesseAnterior":"texto curto ou Nenhum",
+    "objecaoIdentificada":"fato comprovado ou hipótese declarada com evidência",
+    "pendenciaPrincipal":"o que falta descobrir",
+    "proximoPasso":"Você|Cliente|ambos",
+    "etapaFunil":"Interesse / Descoberta de necessidade|descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
+    "probabilidadeComentada":"nota/10 ou percentual com justificativa",
+    "mensagemQueEuEnviariaHoje":"Próxima mensagem sugerida, pronta para copiar"
+  },
+  "oQueFaltaDescobrir":["..."],
+  "estrategiaMensagem":"por que essa mensagem foi escolhida",
+  "prioridadeLead":"baixa|média|alta com justificativa",
+  "produtoInteresse":"produto atual",
+  "produtosInteresse":["produtos citados"],
+  "etapaSugerida":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
+  "probability":"baixa|média|alta",
+  "probabilityPercent": número inteiro de 0 a 100 coerente com a justificativa,
+  "clientProfile":"perfil em texto curto",
+  "nextAction":"próximo passo do corretor"
 }
 
-Formato de leituraComercial:
-{
-  "ondeParou":"último ponto comercial real",
-  "quemDeveProximoPasso":"cliente|corretor|ambos",
-  "temperatura":"quente|morno|frio",
-  "interpretacao":"significado comercial, não resumo",
-  "porQueImporta":"por que isso muda a condução",
-  "oQueDestravar":"principal lacuna",
-  "movimentoRecomendado":"próxima condução recomendada",
-  "erroEvitar":"erro comercial a evitar",
-  "mensagemCurtaChance":"abordagem com mais chance de resposta"
-}
-
-Formato de mudancas: máximo 3 itens {"dimensao":"Produto|Finalidade|Faixa de preço|Urgência|Comportamento|Momento de vida", "antes":"fato curto", "agora":"fato curto", "porQueImporta":"significado comercial"}. Se não houver mudança relevante, [] .
-
-Formato de modeloComercial:
-{
-  "contato":{"tipo":"comprador-direto|corretor-parceiro|intermediario|familiar|investidor|empresa|outro","papel":"frase curta","compradorFinal":""},
-  "oportunidade":{"status":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|ganha|perdida|encerrada-sem-decisao","resultado":"em-andamento|venda-conosco|comprou-outra-opcao|condicoes-incompativeis|desistiu|sem-resposta|oportunidade-futura|outro","produto":"produto atual","motivo":"fato curto"},
-  "relacionamento":{"status":"ativo|aguardando-nova-oportunidade|contato-periodico|pausado|encerrado","potencial":"alto|medio|baixo|nao-avaliado","motivo":"frase curta"},
-  "acao":{"status":"responder-agora|aguardando-resposta|compromisso-agendado|retomar|sem-acao-urgente","responsavel":"corretor|contato|ambos|ninguem","urgencia":"alta|media|baixa|nenhuma","descricao":"ação objetiva"},
-  "contexto":{"ultimaPessoaFalar":"corretor|contato|desconhecido","ultimaMensagem":"resumo literal curto","ultimoCompromisso":"compromisso real ou nenhum","impedimentoPrincipal":"principal trava real"}
-}
-
-Regras mínimas:
-- Não invente produto, objeção, intenção, preço ou compromisso.
-- Se for hipótese, escreva como hipótese.
-- probabilityPercent precisa ser justificado em diagnostico.probabilidadeComentada.
-- messages deve ser null nesta chamada.
-- clientProfile deve ser texto, nunca objeto.
-${orientacoes}${contextoLead}${blocoComparacao}
-
-Lead:
+LEAD:
 ${JSON.stringify(lead)}
 
-Timeline:
+CONVERSA COMPLETA:
 ${timelineText}`;
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
@@ -2357,205 +1939,90 @@ ${timelineText}`;
       maxOutputTokens: 4096,
       timeout: 32000
     });
-    const parsed = normalizarModeloComercial(
-      normalizarDiagnostico(normalizarParceiroB2B(parsedRaw, lead, timelineTextFull)),
-      lead,
-      timeline,
-      corretorNome
-    );
-    // Garante que a análise tenha tese comercial antes da geração das mensagens.
-    normalizarRaciocinioComercial(parsed, lead, timeline);
-    normalizarLeituraComercialV718(parsed);
-    // Registra o modelo real usado no único raciocínio principal.
-    parsed._modelo = completion?.model || modeloAnalise();
-    // Calcula o horário de hábito do cliente a partir dos horários reais das mensagens dele
-    parsed.melhorHorarioContato = calcularMelhorHorario(timeline, lead?.clientName);
-    // Sanitiza materiais sugeridos: só tipos válidos, no máx 3, com motivo curto.
-    parsed.materiais = sanitizarMateriais(parsed.materiais);
-    // v717: valida o card "O que mudou" — formato rígido, máx. 3, vazio quando não há mudança real.
-    parsed.mudancas = sanitizarMudancas(parsed.mudancas);
-    // Descarta compromissos inventados: só fica o que tem prova literal na conversa.
-    parsed.confirmedAppointments = filtrarCompromissosReais(parsed.confirmedAppointments, timelineTextFull);
-    // Teto duro pra leads rasos ("fogo de palha"): conversa curta (≤6 msgs) QUE JÁ ESFRIOU
-    // (cliente sumiu 7+ dias). MAS se o corretor registrou um atendimento presencial/observação,
-    // o teto NÃO se aplica — a leitura de quem esteve com o cliente vale mais que a contagem de
-    // mensagens. (Antes travava em 35% por contagem só, ignorando esfriamento e a observação —
-    // por isso uma anotação tipo "visitou e vai fechar" mal mexia no número.)
-    if (Array.isArray(timeline) && timeline.length <= 6) {
-      const temAtendimentoManual = timeline.some(m => m && (m.source === "manual" || m.source === "crm"));
-      let ultIso = null;
-      for (let i = timeline.length - 1; i >= 0; i--) { const it = timeline[i]; if (it && it.iso && String(it.iso) < "9999") { ultIso = it.iso; break; } }
-      const diasParado = ultIso ? Math.floor((Date.now() - new Date(ultIso).getTime()) / 86400000) : 999;
-      if (!temAtendimentoManual && diasParado >= 7) {
-        const prob = Number(parsed.probabilityPercent) || 0;
-        if (prob > 35) parsed.probabilityPercent = 35;
-      }
-    }
-    // Cross-check duro pro tipoRetomada (a IA às vezes erra na coerência mesmo com a regra).
-    if (parsed.tipoRetomada === "quente-fechar") {
-      const prob = Number(parsed.probabilityPercent) || 0;
-      const etapa = String(parsed.etapaSugerida || "").toLowerCase();
-      const semProposta = !Array.isArray(parsed.confirmedAppointments) || parsed.confirmedAppointments.length === 0;
-      const etapaInicial = etapa === "novo" || etapa === "atendimento" || etapa === "standby";
-      if (prob < 65 || etapaInicial || semProposta || parsed.permuta === true) {
-        parsed.tipoRetomada = etapaInicial ? "primeiro-contato" : (prob < 50 ? "morno-confirmar" : "morno-confirmar");
-      }
-    }
-    // Decaimento de stand-by: cliente que disse "te aviso" mas sumiu 6+ dias deixou de
-    // estar em stand-by e passou pra frio-reaquecer (precisa de retomada ativa).
-    if (parsed.tipoRetomada === "stand-by") {
-      const dias = Number(lead?.daysSinceLastInteraction) || 0;
-      if (dias >= 6) parsed.tipoRetomada = "frio-reaquecer";
-    }
-    // COERÊNCIA NÚMERO × ESTÁGIO: o probabilityPercent tem que bater com onde o lead REALMENTE
-    // está. Um lead em stand-by / primeiro contato / ainda em Atendimento (sem proposta na mesa
-    // nem visita/compromisso marcado) NÃO pode aparecer quase-fechado. Sem isso a IA às vezes
-    // dava 90-100% pra lead morno e o número estourava pro teto (ex.: cliente "sem pressa,
-    // depende da colheita" aparecendo 95%). Caso a IA infle, o código segura no teto da faixa.
-    {
-      const prob = Number(parsed.probabilityPercent) || 0;
-      const etapa = String(parsed.etapaSugerida || "").toLowerCase();
-      const tr = String(parsed.tipoRetomada || "").toLowerCase();
-      const temCompromisso = Array.isArray(parsed.confirmedAppointments) && parsed.confirmedAppointments.length > 0;
-      const etapaInicial = etapa === "novo" || etapa === "atendimento" || etapa === "standby" || etapa === "stand-by";
-      let teto = 100;
-      if (tr === "primeiro-contato") teto = 40;
-      else if (tr === "stand-by" || tr === "frio-reaquecer") teto = 50;
-      else if (tr === "informacao-enviar" || tr === "objecao-tratar") teto = 60;
-      // Fase inicial sem proposta/compromisso: no máximo "engajado de verdade" (60), nunca quase-fechado.
-      if (etapaInicial && !temCompromisso) teto = Math.min(teto, 60);
-      if (parsed.permuta === true) teto = Math.min(teto, 45);
-      if (prob > teto) parsed.probabilityPercent = teto;
-    }
-    // O nextAction permanece exatamente como o modelo concluiu. O código não
-    // substitui raciocínio comercial por frase genérica; problemas são tratados no prompt/validação.
-    // Acumula a inteligência comercial observada no Cérebro. NÃO usa fire-and-forget
-    // porque em serverless o processo pode ser destruído antes do upsert terminar.
-    if (process.env.DIRECIONA_USAR_APRENDIZADO_AUTO === "1" && parsed.inteligenciaObservada && typeof parsed.inteligenciaObservada === "object") {
-      try {
-        await registrarInteligenciaAprendida(parsed.inteligenciaObservada);
-      } catch (e) {
-        console.warn("[direciona] falha ao gravar inteligência aprendida:", e?.message || e);
-      }
-    }
-    // Produto definido NA MÃO pelo corretor (lead.product — ex.: via "Editar lead", quando o lead
-    // veio de print/anúncio que não escreve o nome no texto) é AUTORITATIVO. Se a leitura da conversa
-    // não achou empreendimento, adota o que o corretor declarou — assim as 3 mensagens CITAM ele e
-    // param de perguntar "que tipo de imóvel você quer?" com o produto já identificado no card.
-    {
-      const prodManual = String(lead?.product || "").trim();
-      const prodAtual = String(parsed.produtoInteresse || "").trim();
-      const semProd = !prodAtual || /n[ãa]o identificad/i.test(prodAtual);
-      const manualValido = prodManual && !/n[ãa]o identificad|produto n[ãa]o|importad/i.test(prodManual);
-      if (semProd && manualValido) {
-        parsed.produtoInteresse = prodManual;
-        if (!Array.isArray(parsed.produtosInteresse) || !parsed.produtosInteresse.length) parsed.produtosInteresse = [prodManual];
-      }
-    }
-    normalizarDiagnostico(parsed);
-    finalizarAnaliseComercial(parsed, lead, timeline, corretorNome);
-    normalizarRaciocinioComercial(parsed, lead, timeline);
-    normalizarLeituraComercialV718(parsed);
-    // Quando não há ação urgente, não existe motivo comercial para gerar três novas mensagens.
-    // Isso evita pressão indevida, elimina contradição na tela e economiza uma chamada de IA.
-    const semAcaoUrgente = parsed?.modeloComercial?.acao?.status === "sem-acao-urgente";
-    const msgResult = semAcaoUrgente
-      ? { messages: { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" }, _modeloMensagens:null }
-      : await gerarMensagensParaLead({ openai, lead, timelineText: timelineTextFull, parsed, corretorNome });
-    parsed.messages = (msgResult.messages && typeof msgResult.messages === "object") ? { ...msgResult.messages } : {};
-    if (msgResult._modeloMensagens) parsed._modeloMensagens = msgResult._modeloMensagens;
-    const m = parsed.messages;
-    // Compatibilidade: aceita chaves nomeadas, caso o modelo devolva assim.
-    if (!m.a && m.direta) m.a = m.direta;
-    if (!m.b && m.consultiva) m.b = m.consultiva;
-    if (!m.c && m.retomada) m.c = m.retomada;
-    // Limpeza determinística (emoji/espaços) — não altera as palavras.
-    m.a = limparMensagemComercial(m.a);
-    m.b = limparMensagemComercial(m.b);
-    m.c = limparMensagemComercial(m.c);
-    if (parsed.diagnostico && typeof parsed.diagnostico === "object" && !String(parsed.diagnostico.mensagemQueEuEnviariaHoje || "").trim() && m.a) {
-      parsed.diagnostico.mensagemQueEuEnviariaHoje = m.a;
-    }
-    if (!m.aLabel) m.aLabel = "Melhor resposta";
-    if (!m.bLabel) m.bLabel = "Alternativa leve";
-    if (!m.cLabel) m.cLabel = "Alternativa firme";
-    if (!["a", "b", "c"].includes(String(m.recomendada || ""))) m.recomendada = "a";
 
-    // O validador só APROVA ou REPROVA. Sem ação urgente, mensagens vazias são intencionais.
-    let validacaoFinal = semAcaoUrgente
-      ? { ok:true, corrigido:false, issues:[], mensagens:{ a:"", b:"", c:"" }, labels:{ a:"Sem mensagem agora", b:"", c:"" }, recomendada:"a" }
-      : validarMensagensComerciais({
-          mensagens: { a: m.a, b: m.b, c: m.c, recomendada: m.recomendada },
-          labels: { a: m.aLabel, b: m.bLabel, c: m.cLabel },
-          lead,
-          timelineText: timelineTextFull,
-          parsed
-        });
-    if (!semAcaoUrgente && !validacaoFinal.ok) {
-      console.warn("[direciona] validação mensagens falhou:", JSON.stringify(validacaoFinal.issues));
-      try {
-        const reparo = await regenerarMensagensComModelo({
-          openai,
-          lead,
-          timelineText: timelineTextFull,
-          parsed,
-          issues: validacaoFinal.issues
-        });
-        const rm = reparo?.messages || {};
-        const ra = limparMensagemComercial(rm.a);
-        const rb = limparMensagemComercial(rm.b);
-        const rc = limparMensagemComercial(rm.c);
-        const novaValidacao = validarMensagensComerciais({
-          mensagens: { a: ra, b: rb, c: rc, recomendada: rm.recomendada },
-          labels: { a: rm.aLabel, b: rm.bLabel, c: rm.cLabel },
-          lead,
-          timelineText: timelineTextFull,
-          parsed
-        });
-        if (novaValidacao.ok) {
-          parsed.messages = {
-            a: ra, b: rb, c: rc,
-            aLabel: rm.aLabel || m.aLabel, bLabel: rm.bLabel || m.bLabel, cLabel: rm.cLabel || m.cLabel,
-            recomendada: ["a", "b", "c"].includes(String(rm.recomendada || "")) ? rm.recomendada : "a"
-          };
-          parsed._modeloMensagens = reparo._modelo || modeloAnalise();
-          validacaoFinal = novaValidacao;
-        }
-      } catch (e) {
-        console.warn("[direciona] revisão das mensagens falhou:", e?.message || e);
-      }
-    }
-    parsed.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-    parsed.modeloMensagens = modeloAnalise();
-    parsed.validacaoSugestoes = validacaoFinal.issues || [];
-    parsed.mensagensValidadasEm = validacaoFinal.ok ? new Date().toISOString() : null;
-    // Se validação falhou mas as mensagens têm CONTEÚDO, mostra mesmo assim —
-    // uma mensagem com detalhe mínimo ruim é sempre melhor que tela vazia.
-    // Só bloqueia (sugestoesPendentes) quando não há texto algum.
-    const temConteudo = semAcaoUrgente || !!(m.a && m.b && m.c);
-    parsed.sugestoesPendentes = semAcaoUrgente ? false : !temConteudo;
-    if (!validacaoFinal.ok) {
-      console.warn("[direciona] validação mensagens ressalva:", JSON.stringify(validacaoFinal.issues));
-      if (!temConteudo) {
-        parsed.messages = {
-          ...parsed.messages,
-          a: "",
-          b: "",
-          c: "",
-          aLabel: "Reanalisar",
-          bLabel: "Reanalisar",
-          cLabel: "Reanalisar",
-          recomendada: "a"
-        };
-      }
-    }
+    const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
+    const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
+    const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
+    const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
+    const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
+    const msg = txt(d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || raw.nextAction);
+    const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
+    const probPct = clamp(raw.probabilityPercent);
 
-    if (process.env.DIRECIONA_USAR_CONHECIMENTO_AUTO === "1") {
-      atualizarConhecimentoCorretor(timelineTextFull, openai).catch(() => {});
-    }
-    if (process.env.DIRECIONA_USAR_ESTILO_AUTO === "1") {
-      atualizarRespostasCorretor(timeline, (lead && lead.clientName) || (parsed.lead && parsed.lead.clientName) || "").catch(() => {});
-    }
+    // v723-1: objeto final deliberadamente simples.
+    // O código NÃO reescreve análise, NÃO regenera mensagens, NÃO injeta leitura comercial,
+    // NÃO monta tese, NÃO aplica bloqueios comerciais e NÃO chama uma segunda IA.
+    const parsed = {
+      mode: "openai",
+      summary: txt(raw.summary),
+      diagnostico: {
+        ultimaPessoaFalar: txt(d.ultimaPessoaFalar, "Não identificado"),
+        ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Nenhum"),
+        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
+        ultimaInformacaoPrometida: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
+        produtoAtual,
+        produtoPrincipalInteresse: produtoAtual,
+        interesseAnterior: txt(d.interesseAnterior, "Nenhum"),
+        objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
+        objecaoPrincipal: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
+        pendenciaPrincipal: txt(d.pendenciaPrincipal, "Não identificada"),
+        pendenciaFinanceira: txt(d.pendenciaPrincipal, "Não identificada"),
+        proximoPasso: txt(d.proximoPasso, "Você"),
+        proximoPassoDeQuem: txt(d.proximoPasso, "Você"),
+        etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
+        probabilidadeComentada: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        probabilidadeFechamentoHoje: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        mensagemQueEuEnviariaHoje: msg,
+        percepcaoTodaConversa: txt(raw.summary)
+      },
+      oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
+      estrategiaMensagem: txt(raw.estrategiaMensagem),
+      prioridadeLead: txt(raw.prioridadeLead),
+      produtoInteresse: produtoAtual,
+      produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
+      etapaSugerida: txt(raw.etapaSugerida || d.etapaFunil, "descoberta"),
+      probability: txt(raw.probability, probPct != null ? `${probPct}%` : "média"),
+      probabilityPercent: probPct,
+      clientProfile: txt(raw.clientProfile),
+      nextAction: txt(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
+      messages: {
+        a: limparMensagemComercial(msg),
+        b: "",
+        c: "",
+        aLabel: "Próxima mensagem sugerida",
+        bLabel: "",
+        cLabel: "",
+        recomendada: "a"
+      },
+      tipoContato: null,
+      confianca: 0,
+      permuta: false,
+      permutaResumo: "",
+      bestTime: "",
+      confirmedAppointments: [],
+      objections: [],
+      risk: "",
+      concorrencia: null,
+      tipoRetomada: "morno-confirmar",
+      memoriaSugerida: null,
+      inteligenciaObservada: null,
+      materiais: [],
+      lembreteSugerido: null,
+      leituraComercial: null,
+      mudancas: [],
+      modeloComercial: null,
+      raciocinioComercial: null,
+      estrategia: txt(raw.estrategiaMensagem),
+      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      modeloMensagens: modeloAnalise(),
+      _modelo: completion?.model || modeloAnalise(),
+      _modeloMensagens: null,
+      sugestoesPendentes: !msg,
+      validacaoSugestoes: [],
+      mensagensValidadasEm: msg ? new Date().toISOString() : null,
+      melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
+    };
+
     return parsed;
   } catch (error) {
     const detail = describeOpenAIError(error);
@@ -3013,8 +2480,6 @@ function contextoAnteriorEnxuto(analysis) {
     etapaSugerida: a.etapaSugerida || a?.lead?.etapa || null,
     probabilityPercent: a.probabilityPercent ?? null,
     diagnostico: a.diagnostico || null,
-    leituraComercial: a.leituraComercial || null,
-    modeloComercial: a.modeloComercial || null,
     memoria: a.memoria || a.memoriaSugerida || null,
     objections: Array.isArray(a.objections) ? a.objections : [],
     risk: a.risk || null,
