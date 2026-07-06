@@ -14,13 +14,13 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
   const temTresMensagens = textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c);
 
-  // v714: esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens
+  // v715: esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens
   // boas, a tela deve mostrar pendência/reanálise, não um fallback velho da v682.
   if (semAcao) {
     out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
     out.sugestoesPendentes = false;
     out.aprovada = true;
-    out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
+    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
     return out;
   }
 
@@ -32,18 +32,18 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
       cLabel: textoLimpo(m.cLabel) || "Mais direta",
       recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
     };
-    out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
+    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
     out.sugestoesPendentes = false;
     out.aprovada = true;
     return out;
   }
 
   out.messages = { a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"", cLabel:"", recomendada:"a" };
-  out.arquiteturaMensagens = "gpt55-v714-motor-comercial-v2";
+  out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
   out.sugestoesPendentes = true;
   out.aprovada = false;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
-  out.validacaoSugestoes.push("Motor v714: mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
+  out.validacaoSugestoes.push("Motor v715: mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
@@ -245,7 +245,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   const produto = normalizarTextoV684(diag.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || "");
 
   out.iaComercialV2 = {
-    versao: "714-motor-comercial-v2",
+    versao: "715-motor-comercial-v2-layout-mobile",
     perfilCliente: normalizarTextoV684(out.clientProfile || ""),
     etapaComercial: normalizarTextoV684(diag.etapaFunil || out.etapaSugerida || ""),
     mudancaComportamento: normalizarTextoV684(ac.mudancaDeIntencao || ""),
@@ -621,9 +621,9 @@ async function reanalisarLeadHandler702(req, res) {
   novoAnalysis = finalizarAnaliseComercialV674(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
-  novoAnalysis._schemaComercial = 714;
-  novoAnalysis._schemaComercialMinor = "714-motor-comercial-v2";
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 714;
+  novoAnalysis._schemaComercial = 715;
+  novoAnalysis._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
+  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 715;
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -652,9 +652,9 @@ async function reanalisarLeadHandler702(req, res) {
   merged = finalizarAnaliseComercialV674(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
-  merged._schemaComercial = 714;
-  merged._schemaComercialMinor = "714-motor-comercial-v2";
-  if (merged.modeloComercial) merged.modeloComercial.versao = 714;
+  merged._schemaComercial = 715;
+  merged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
+  if (merged.modeloComercial) merged.modeloComercial.versao = 715;
   const sigFinal6863 = assinaturaTimeline6863(timelineFinal);
   merged._iaIncremental = {
     ...(freshPrevious._iaIncremental || {}),
@@ -706,9 +706,9 @@ async function reanalisarLeadHandler702(req, res) {
     retryMerged = finalizarAnaliseComercialV674(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
-    retryMerged._schemaComercial = 714;
-    retryMerged._schemaComercialMinor = "714-motor-comercial-v2";
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 714;
+    retryMerged._schemaComercial = 715;
+    retryMerged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
+    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 715;
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -728,9 +728,9 @@ async function reanalisarLeadHandler702(req, res) {
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
   let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 714) {
-    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 714, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 714;
+  if (!persisted || persistedSchema < 715) {
+    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 715, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
+    if (forced.modeloComercial) forced.modeloComercial.versao = 715;
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -739,10 +739,10 @@ async function reanalisarLeadHandler702(req, res) {
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
     persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 714) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 714." });
+    if (persistedSchema < 715) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 715." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 714, apiVersion: "714-motor-comercial-v2" });
+  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 715, apiVersion: "715-motor-comercial-v2-layout-mobile" });
 }
 
 export default async function handler(req, res) {
