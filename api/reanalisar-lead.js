@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
@@ -20,7 +20,7 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
     out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
     out.sugestoesPendentes = false;
     out.aprovada = true;
-    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
     return out;
   }
 
@@ -32,14 +32,14 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
       cLabel: textoLimpo(m.cLabel) || "Mais direta",
       recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
     };
-    out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
     out.sugestoesPendentes = false;
     out.aprovada = true;
     return out;
   }
 
   out.messages = { a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"", cLabel:"", recomendada:"a" };
-  out.arquiteturaMensagens = "gpt55-v715-motor-comercial-v2-layout-mobile";
+  out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
   out.sugestoesPendentes = true;
   out.aprovada = false;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
