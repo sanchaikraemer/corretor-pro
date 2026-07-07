@@ -1941,7 +1941,14 @@ ${timelineText}`;
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
       openai,
       prompt,
-      maxOutputTokens: 4096,
+      // v724-4: a v724-2 uniu diagnóstico + as 3 mensagens numa única chamada
+      // ("sem segunda IA"), mas manteve o teto de tokens que só bastava pro
+      // diagnóstico sozinho. Num lead com histórico real, o JSON (resumo +
+      // diagnóstico inteiro + 3 mensagens completas de WhatsApp) passava de
+      // 4096 tokens, cortava no meio, o JSON.parse falhava e a análise caía
+      // em modo de erro — reaproveitando pra sempre a análise antiga (sem
+      // mensagens), não importava quantas vezes reanalisasse.
+      maxOutputTokens: 8192,
       timeout: 32000
     });
 
