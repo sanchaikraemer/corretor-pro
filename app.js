@@ -4818,6 +4818,27 @@ function cp704Css(){
     }
     return out;
   }
+  // v724-6: mostra o motivo real de a mensagem não ter sido gerada, direto na
+  // tela — sem precisar abrir o DevTools. Só aparece quando há algo pra dizer.
+  function cp724DiagRecusaHtml(a,msgsFront){
+    a=a||{};
+    const linhas=[];
+    const mode=cp704Text(a.mode);
+    if(mode==='erro_api'||mode==='reconciliacao_local') linhas.push('Modo: '+mode+(a.error?(' — '+cp704Text(a.error)):''));
+    if(cp704Text(a.avisoReanalise)) linhas.push('Aviso do servidor: '+cp704Text(a.avisoReanalise));
+    const vsug=Array.isArray(a.validacaoSugestoes)?a.validacaoSugestoes.filter(Boolean):[];
+    if(vsug.length) linhas.push('Validação: '+cp704Text(vsug[vsug.length-1]));
+    const bruto=(a.messages&&typeof a.messages==='object')?a.messages:{};
+    const brutoA=cp704Text(bruto.a), brutoB=cp704Text(bruto.b), brutoC=cp704Text(bruto.c);
+    const diagMsg=cp704Text(a?.diagnostico?.mensagemQueEuEnviariaHoje);
+    if(!brutoA&&!brutoB&&!brutoC&&!diagMsg) linhas.push('A IA não devolveu nenhuma das 3 mensagens nesta reanálise.');
+    else if(brutoA||diagMsg){
+      const faltando=[!brutoB&&'B (mais suave)',!brutoC&&'C (mais direta)'].filter(Boolean);
+      if(faltando.length) linhas.push('A IA gerou a mensagem A, mas faltou: '+faltando.join(' e ')+'.');
+    }
+    if(!linhas.length) return '';
+    return `<div style="margin-top:8px;padding:8px 10px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5">${linhas.map(l=>escapeHtml(l)).join('<br>')}</div>`;
+  }
   window.cp704SelectedMsg='a';
   window.cp704SelectMsg=function(k){
     window.cp704SelectedMsg = ['a','b','c'].includes(k)?k:'a';
@@ -4917,7 +4938,7 @@ function renderLeadFoco(lead){
       <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
       ${cp717MudancasHtml(a)}
       <section class="cp704-card"><div class="cp704-card-title"><h2>Mensagem recomendada</h2></div>
-        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`${(msgs.b||msgs.c)?`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button>${msgs.b?`<button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button>`:''}${msgs.c?`<button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button>`:''}</div>`:''}
+        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span>${cp724DiagRecusaHtml(a,msgs)}<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`${(msgs.b||msgs.c)?`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button>${msgs.b?`<button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button>`:''}${msgs.c?`<button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button>`:''}</div>`:''}
         <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><span class="cp704-num">1</span><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><span class="cp704-num">2</span><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><span class="cp704-num">3</span><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>
         <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>`}
       </section>
@@ -11394,7 +11415,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-5');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
     });
   }
   function cp694FixFab(){
@@ -11547,7 +11568,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-5');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
     });
   }
   function fixFab(){
@@ -11748,7 +11769,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-5');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
     });
   }
   function applyLayoutFixes(){
@@ -11923,7 +11944,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-5');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
     });
   }
   async function fetchAll697(force){
@@ -12086,11 +12107,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724-5');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724-6');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-5');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-6');
       });
     }catch(_){ }
   }
@@ -12115,7 +12136,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-5');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
       });
     }catch(_){ }
   }
@@ -12149,7 +12170,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-5');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-6');
       });
     }catch(_){ }
   }
