@@ -1988,7 +1988,14 @@ ${timelineText}`;
         etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
         probabilidadeComentada: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
         probabilidadeFechamentoHoje: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
-        mensagemQueEuEnviariaHoje: msg,
+        // v724-5: só preenche quando as 3 mensagens existem. Deixar isto com a
+        // mensagem A sozinha (quando B/C vieram vazias) engana o front: ele usa
+        // este campo pra decidir se "já existe mensagem real da IA" e, achando
+        // que sim, desliga o fallback de B/C — só que messages.a/b/c são
+        // zerados logo abaixo (garantirMensagensMotorComercialV714) quando o
+        // trio não está completo. Resultado: a seção inteira fica escondida
+        // ("Mensagem ainda não gerada") apesar da mensagem A existir aqui.
+        mensagemQueEuEnviariaHoje: (msgA && msgB && msgC) ? msg : "",
         percepcaoTodaConversa: txt(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
