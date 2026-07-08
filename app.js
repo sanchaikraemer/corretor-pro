@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v726-trio-blindado";
+const ARQUITETURA_MENSAGENS_ATUAL = "v730-prompt-retomada-contextual";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -969,7 +969,7 @@ function mensagensDaAnalise(a){
       ? String(v.msg || v.mensagem || v.texto || "").trim()
       : String(v).trim();
   };
-  // v726: a tela não pode apagar mensagens reais só porque a arquitetura do JSON
+  // v731: a tela não pode apagar mensagens reais só porque a arquitetura do JSON
   // antigo divergiu ou porque veio apenas A. Ela aceita o que existir e o
   // renderizador completa B/C com fallback local seguro.
   const aMsg = pick("a") || pick("direta") || String(a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || a.proximaMensagemSugerida || "").trim();
@@ -4815,7 +4815,7 @@ function cp704Css(){
       c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
       aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
     };
-    // v726: se veio só a recomendada, a interface completa as outras duas
+    // v731: se veio só a recomendada, a interface completa as outras duas
     // imediatamente, sem esconder tudo atrás de "Mensagem ainda não gerada".
     if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
       out.a=cp705SanitizeFactText(out.a || fb.a,lead);
@@ -9785,7 +9785,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   if(!semAcao){
     const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
     if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
-      // v726: fallback local seguro. Não é ideal como IA, mas é melhor do que
+      // v731: fallback local seguro. Não é ideal como IA, mas é melhor do que
       // deixar o lead sem as 3 opções por causa de um JSON incompleto.
       const fb = (typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(leadBase, mc) : {};
       out.messages = {
@@ -9798,7 +9798,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
       out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
       out.sugestoesPendentes = false;
       out.aprovada = !!(out.messages.a && out.messages.b && out.messages.c);
-      out.validacaoSugestoes = ["Fallback v726 completou as 3 sugestões na interface."];
+      out.validacaoSugestoes = ["Fallback v731 completou as 3 sugestões na interface."];
     }
   }
   if(semAcao){

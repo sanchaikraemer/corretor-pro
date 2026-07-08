@@ -1,0 +1,6 @@
+Depois de subir a v731, estes arquivos podem ser apagados da raiz do GitHub porque não são mais usados:
+
+- logo-direciona-dark.svg
+- logo-direciona-light.svg
+
+Não apague a pasta api nem os arquivos de funcionamento do sistema.
