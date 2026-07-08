@@ -6653,6 +6653,12 @@ function formatShareDebug(debug){
   let out = "<b>Quando:</b> "+escapeHtml(debug.ts||"?")+"<br>";
   out += "<b>Build do SW:</b> "+escapeHtml(debug.buildId||"?")+"<br>";
   out += "<b>Etapa final:</b> "+escapeHtml(debug.step||"?")+"<br>";
+  if(Object.prototype.hasOwnProperty.call(debug, "idbSaved")){
+    out += "<b>Salvo no IndexedDB:</b> "+(debug.idbSaved ? "sim" : "não")+"<br>";
+  }
+  if(Object.prototype.hasOwnProperty.call(debug, "cacheSaved")){
+    out += "<b>Salvo no Cache:</b> "+(debug.cacheSaved ? "sim" : "não")+"<br>";
+  }
   out += "<b>Campos do form:</b> "+escapeHtml(JSON.stringify(debug.formKeys||[]))+"<br>";
   if((debug.files||[]).length){
     out += "<b>Arquivos recebidos:</b><br>";

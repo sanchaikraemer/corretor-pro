@@ -62,22 +62,145 @@ async function networkFirst(request, fallbackUrl) {
   }
 }
 
+const SHARE_IDB_NAME = 'direciona-share';
+const SHARE_IDB_VERSION = 1;
+const SHARE_IDB_STORE = 'zips';
+
+function openShareDb() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in self)) { reject(new Error('indexedDB indisponível')); return; }
+    const req = indexedDB.open(SHARE_IDB_NAME, SHARE_IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(SHARE_IDB_STORE)) {
+        db.createObjectStore(SHARE_IDB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('falha ao abrir IndexedDB'));
+  });
+}
+
+async function saveSharedZipInIdb(file, body) {
+  let db;
+  try {
+    db = await openShareDb();
+    const blob = new Blob([body.slice(0)], { type: file.type || 'application/zip' });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SHARE_IDB_STORE, 'readwrite');
+      tx.objectStore(SHARE_IDB_STORE).put({
+        id: 'latest',
+        name: file.name || 'whatsapp.zip',
+        type: file.type || 'application/zip',
+        size: file.size || blob.size || body.byteLength || 0,
+        ts: new Date().toISOString(),
+        blob
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('falha ao gravar IndexedDB'));
+      tx.onabort = () => reject(tx.error || new Error('gravação IndexedDB abortada'));
+    });
+    return true;
+  } finally {
+    try { if (db) db.close(); } catch (_) {}
+  }
+}
+
+async function saveShareDebug(debug) {
+  try {
+    const cache = await caches.open(SHARE_CACHE);
+    await cache.put('/__direciona_share_debug__', new Response(JSON.stringify(debug), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store'
+      }
+    }));
+  } catch (_) {}
+}
+
+function pickSharedZip(form) {
+  const candidates = [];
+  for (const [key, value] of form.entries()) {
+    if (value && typeof value.arrayBuffer === 'function') {
+      candidates.push({ key, file: value });
+    }
+  }
+  candidates.sort((a, b) => {
+    const az = String(a.file.name || '').toLowerCase().endsWith('.zip') ? 1 : 0;
+    const bz = String(b.file.name || '').toLowerCase().endsWith('.zip') ? 1 : 0;
+    if (az !== bz) return bz - az;
+    return Number(b.file.size || 0) - Number(a.file.size || 0);
+  });
+  return candidates[0] || null;
+}
+
 async function handleShare(request) {
+  const debug = {
+    ts: new Date().toISOString(),
+    buildId: BUILD_ID,
+    step: 'started',
+    formKeys: [],
+    files: [],
+    chosenFile: null,
+    cacheSaved: false,
+    idbSaved: false,
+    putError: '',
+    error: ''
+  };
+
   try {
     const form = await request.formData();
-    const files = form.getAll('zip');
-    const file = files && files[0];
-    if (file && typeof file.arrayBuffer === 'function') {
+    debug.formKeys = Array.from(form.keys());
+    for (const [key, value] of form.entries()) {
+      if (value && typeof value.arrayBuffer === 'function') {
+        debug.files.push({ key, name: value.name || '', type: value.type || '', size: value.size || 0 });
+      }
+    }
+
+    const picked = pickSharedZip(form);
+    const file = picked && picked.file;
+    if (!file || typeof file.arrayBuffer !== 'function') {
+      debug.step = 'no-file';
+      await saveShareDebug(debug);
+      return Response.redirect('/?shared=1&erro=sem-arquivo', 303);
+    }
+
+    debug.chosenFile = { key: picked.key, name: file.name || 'whatsapp.zip', type: file.type || '', size: file.size || 0 };
+    const body = await file.arrayBuffer();
+
+    // Principal: IndexedDB. É o caminho que o app lê primeiro e é mais estável no Android/PWA.
+    try {
+      debug.idbSaved = await saveSharedZipInIdb(file, body);
+    } catch (e) {
+      debug.putError = 'IndexedDB: ' + (e && e.message ? e.message : String(e));
+    }
+
+    // Fallback: Cache Storage com chaves compatíveis com o leitor atual do app.
+    try {
       const cache = await caches.open(SHARE_CACHE);
-      const body = await file.arrayBuffer();
       const headers = new Headers({
         'Content-Type': file.type || 'application/zip',
         'X-File-Name': encodeURIComponent(file.name || 'whatsapp.zip'),
         'X-Shared-At': new Date().toISOString(),
         'Cache-Control': 'no-store'
       });
-      await Promise.all(ZIP_KEYS.map(k => cache.put(k, new Response(body.slice(0), { headers }))));
+      for (const k of ZIP_KEYS) {
+        const requestUrl = new URL(k, self.location.origin).href;
+        await cache.put(new Request(requestUrl, { method: 'GET' }), new Response(body.slice(0), { headers }));
+      }
+      debug.cacheSaved = true;
+    } catch (e) {
+      debug.putError = (debug.putError ? debug.putError + ' | ' : '') + 'Cache: ' + (e && e.message ? e.message : String(e));
     }
-  } catch (_) {}
+
+    debug.step = (debug.idbSaved || debug.cacheSaved) ? 'saved' : 'not-saved';
+    await saveShareDebug(debug);
+  } catch (e) {
+    debug.step = 'exception';
+    debug.error = e && e.message ? e.message : String(e);
+    await saveShareDebug(debug);
+    return Response.redirect('/?shared=1&erro=excecao', 303);
+  }
+
   return Response.redirect('/?shared=1', 303);
 }
