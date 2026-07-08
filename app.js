@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v725-cerebro-fallback-audio-window";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v726-trio-blindado";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -962,13 +962,6 @@ function mensagensDaAnalise(a){
   const arquiteturaOk = String(a.arquiteturaMensagens || "") === ARQUITETURA_MENSAGENS_ATUAL;
   const pendente = a.sugestoesPendentes === true;
   const m = (a.messages && typeof a.messages === "object") ? a.messages : {};
-  if(!arquiteturaOk || pendente){
-    return {
-      direta:"", consultiva:"", retomada:"",
-      a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"Reanalisar", cLabel:"Reanalisar", recomendada:"a",
-      aprovada:false
-    };
-  }
   const pick = (key) => {
     const v = m[key];
     if(v == null) return "";
@@ -976,16 +969,26 @@ function mensagensDaAnalise(a){
       ? String(v.msg || v.mensagem || v.texto || "").trim()
       : String(v).trim();
   };
-  const aMsg = pick("a") || pick("direta");
+  // v726: a tela não pode apagar mensagens reais só porque a arquitetura do JSON
+  // antigo divergiu ou porque veio apenas A. Ela aceita o que existir e o
+  // renderizador completa B/C com fallback local seguro.
+  const aMsg = pick("a") || pick("direta") || String(a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || a.proximaMensagemSugerida || "").trim();
   const bMsg = pick("b") || pick("consultiva");
   const cMsg = pick("c") || pick("retomada");
+  if((pendente || !arquiteturaOk) && !(aMsg || bMsg || cMsg)){
+    return {
+      direta:"", consultiva:"", retomada:"",
+      a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"Reanalisar", cLabel:"Reanalisar", recomendada:"a",
+      aprovada:false
+    };
+  }
   const aprovada = !!(aMsg && bMsg && cMsg);
   return {
     direta:aMsg, consultiva:bMsg, retomada:cMsg,
     a:aMsg, b:bMsg, c:cMsg,
-    aLabel:String(m.aLabel || "").trim(),
-    bLabel:String(m.bLabel || "").trim(),
-    cLabel:String(m.cLabel || "").trim(),
+    aLabel:String(m.aLabel || "Recomendada").trim(),
+    bLabel:String(m.bLabel || "Mais suave").trim(),
+    cLabel:String(m.cLabel || "Mais direta").trim(),
     recomendada:["a","b","c"].includes(String(m.recomendada || "")) ? String(m.recomendada) : "a",
     aprovada
   };
@@ -4806,15 +4809,18 @@ function cp704Css(){
     const obsFact=cp707ObservationFacts(lead);
     const mc=cp704Modelo(lead);
     const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
-    const temMsgIa = cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || '').trim();
     const out={
-      a:cp705SanitizeFactText(cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || (!temMsgIa ? fb.a : '') || ''), lead),
-      b:cp705SanitizeFactText(cp704Text(temMsgIa ? (m.b || '') : (m.b || fb.b || '')), lead),
-      c:cp705SanitizeFactText(cp704Text(temMsgIa ? (m.c || '') : (m.c || fb.c || '')), lead),
+      a:cp705SanitizeFactText(cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || fb.a || ''), lead),
+      b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
+      c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
       aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
     };
-    if(!cp705MessagesReady(out) && !temMsgIa && (fb.a&&fb.b&&fb.c)){
-      out.a=cp705SanitizeFactText(fb.a,lead); out.b=cp705SanitizeFactText(fb.b,lead); out.c=cp705SanitizeFactText(fb.c,lead);
+    // v726: se veio só a recomendada, a interface completa as outras duas
+    // imediatamente, sem esconder tudo atrás de "Mensagem ainda não gerada".
+    if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
+      out.a=cp705SanitizeFactText(out.a || fb.a,lead);
+      out.b=cp705SanitizeFactText(out.b || fb.b,lead);
+      out.c=cp705SanitizeFactText(out.c || fb.c,lead);
     }
     return out;
   }
@@ -9689,9 +9695,17 @@ function ui682FallbackMessages(lead, mc){
   return { a, b, c, aLabel:"Validar objetivo", bLabel:"Baixo atrito", cLabel:"Mudança da busca", recomendada:"a", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
-  const temAlguma = !!(String(msgs?.a||"").trim() || String(msgs?.b||"").trim() || String(msgs?.c||"").trim());
-  if(temAlguma) return msgs;
-  return ui682FallbackMessages(lead, mc);
+  const fb = ui682FallbackMessages(lead, mc);
+  return {
+    ...(msgs||{}),
+    a:String(msgs?.a||fb.a||"").trim(),
+    b:String(msgs?.b||fb.b||"").trim(),
+    c:String(msgs?.c||fb.c||"").trim(),
+    aLabel:String(msgs?.aLabel||"Recomendada"),
+    bLabel:String(msgs?.bLabel||"Mais suave"),
+    cLabel:String(msgs?.cLabel||"Mais direta"),
+    recomendada:["a","b","c"].includes(String(msgs?.recomendada||"")) ? String(msgs.recomendada) : "a"
+  };
 }
 function ui682FormatarDataHora(iso){
   if(!iso) return "";
@@ -9768,15 +9782,21 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const semAcao=mc?.acao?.status==="sem-acao-urgente";
   if(!semAcao){
     const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
-    const completo = String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim();
-    if(!completo){
-      // v725-2: não apaga mensagens que a API já tenha gerado (nem que seja só 1 ou 2).
-      // Mantém o que existe e só marca pendência, em vez de gravar a/b/c vazios no banco.
-      out.messages = { ...atuais, aLabel: atuais.aLabel||(atuais.a?"Recomendada":"Reanálise necessária"), bLabel: atuais.bLabel||"", cLabel: atuais.cLabel||"", recomendada: atuais.recomendada||"a" };
+    if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
+      // v726: fallback local seguro. Não é ideal como IA, mas é melhor do que
+      // deixar o lead sem as 3 opções por causa de um JSON incompleto.
+      const fb = (typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(leadBase, mc) : {};
+      out.messages = {
+        ...atuais,
+        a:String(atuais.a||fb.a||"").trim(),
+        b:String(atuais.b||fb.b||"").trim(),
+        c:String(atuais.c||fb.c||"").trim(),
+        aLabel:"Recomendada", bLabel:"Mais suave", cLabel:"Mais direta", recomendada:"a"
+      };
       out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-      out.sugestoesPendentes = true;
-      out.aprovada = false;
-      out.validacaoSugestoes = ["Motor v725-2: mensagens incompletas; preservadas as já geradas, reanalise para completar."];
+      out.sugestoesPendentes = false;
+      out.aprovada = !!(out.messages.a && out.messages.b && out.messages.c);
+      out.validacaoSugestoes = ["Fallback v726 completou as 3 sugestões na interface."];
     }
   }
   if(semAcao){
