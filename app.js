@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v730-prompt-retomada-contextual";
+const ARQUITETURA_MENSAGENS_ATUAL = "v732-prompt-jornada-contextual";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
