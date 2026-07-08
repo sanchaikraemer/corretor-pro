@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v732-prompt-jornada-contextual";
+const ARQUITETURA_MENSAGENS_ATUAL = "v733-retomada-jornada-combinada";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -9685,16 +9685,16 @@ function ui682FallbackMessages(lead, mc){
   const temPremium = /premium\s+office|premium/.test(hist);
   const temPersonalite = /personali[tée]/.test(hist) || /personalit/.test(hist);
   if(temPremium && temPersonalite){
-    const a = `${prefixo}olhando tua retomada, parece que tua busca mudou bastante desde a nossa última conversa. Antes fazia mais sentido investimento; agora apareceu um imóvel pronto. Hoje tua prioridade é morar ou continua avaliando investimento?`;
-    const b = `${prefixo}vi que tua busca voltou por outro perfil de imóvel. Quero entender se mudou o objetivo da compra ou se tu ainda está comparando possibilidades: hoje é mais moradia ou investimento?`;
-    const c = `${prefixo}antes de seguir te mandando opção, preciso entender uma coisa: desde aquela conversa sobre investimento, tua ideia mudou para morar ou continua buscando retorno?`;
-    return { a, b, c, aLabel:"Validar mudança", bLabel:"Abrir contexto", cLabel:"Pergunta direta", recomendada:"a", fallback:true };
+    const a = `${prefixo}retomando nosso contato: antes falávamos sobre a Premium Office, e agora você me chamou sobre o Personalité. Queria entender melhor o que te chamou atenção nesse apartamento: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`;
+    const b = `${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos de sala comercial, e agora você olhou um apartamento pronto no Personalité. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
+    const c = `${prefixo}como teu interesse saiu das salas comerciais e veio para um apartamento pronto de alto padrão, prefiro entender teu objetivo atual antes de te passar coisa solta. Você está buscando algo para uso próprio ou pensando em investimento?`;
+    return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
   }
   const baseProduto = produto && !/não identificado|produto/i.test(produto) ? `o ${produto}` : "o imóvel";
-  const a = `${prefixo}quero entender melhor tua busca agora: o foco segue no mesmo perfil que conversamos antes ou mudou alguma coisa no objetivo da compra?`;
-  const b = `${prefixo}antes de te mandar outra opção, me ajuda a ajustar o rumo: hoje tu está olhando mais para morar, investir ou ainda comparando possibilidades?`;
-  const c = `${prefixo}o que mudou na tua busca desde a última vez que conversamos? Com isso eu consigo filtrar melhor e não te mandar imóvel fora do momento.`;
-  return { a, b, c, aLabel:"Validar objetivo", bLabel:"Baixo atrito", cLabel:"Mudança da busca", recomendada:"a", fallback:true };
+  const a = `${prefixo}retomando nosso contato: percebi que a busca mudou de rumo em relação ao que falamos antes. Para eu te direcionar melhor, o que chamou tua atenção agora em ${baseProduto}?`;
+  const b = `${prefixo}para eu ajustar melhor essa retomada, vale entender teu objetivo atual. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
+  const c = `${prefixo}antes de te mandar opção solta, prefiro entender o momento da tua busca. Você está avaliando algo para uso próprio ou pensando em investimento?`;
+  return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
   const fb = ui682FallbackMessages(lead, mc);
@@ -9704,8 +9704,8 @@ function ui682MesclarMensagens(msgs, lead, mc){
     b:String(msgs?.b||fb.b||"").trim(),
     c:String(msgs?.c||fb.c||"").trim(),
     aLabel:String(msgs?.aLabel||"Recomendada"),
-    bLabel:String(msgs?.bLabel||"Mais suave"),
-    cLabel:String(msgs?.cLabel||"Mais direta"),
+    bLabel:String(msgs?.bLabel||"Descobrir objetivo"),
+    cLabel:String(msgs?.cLabel||"Direta ao ponto"),
     recomendada:["a","b","c"].includes(String(msgs?.recomendada||"")) ? String(msgs.recomendada) : "a"
   };
 }
@@ -9819,7 +9819,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
     out.diagnostico.etapa="decisão";
     out.diagnostico.objecaoPrincipal=obsFact.motivo;
     out.diagnostico.proximaAcao=obsFact.next;
-    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Mais suave",cLabel:"Mais direta",recomendada:"a"};
+    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Descobrir objetivo",cLabel:"Direta ao ponto",recomendada:"a"};
     out.sugestoesPendentes=false;out.aprovada=true;out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
     out.modeloComercial=out.modeloComercial||{};
     out.modeloComercial.oportunidade={...(out.modeloComercial.oportunidade||{}),status:"decisao",motivo:obsFact.motivo};
