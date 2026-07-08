@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v726-trio-blindado";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v730-prompt-retomada-contextual";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -101,18 +101,21 @@ function mensagemSoSaudacao(txt) {
 // Fonte ÚNICA dos termos proibidos nas mensagens. O validador (regex) E o aviso
 // do prompt são montados a partir desta MESMA lista — se divergirem, o modelo
 // usa uma palavra que o prompt nunca avisou, cai em "termo proibido" e a revisão
-// repete o erro (a mensagem nunca gera). Mantemos só crutch de vendedor; palavras
-// neutras e comuns ("papo", "trava"/"travando") saíram pra não reprovar msg boa.
+// repete o erro (a mensagem nunca gera). A lista abaixo concentra frases que deixam a
+// sugestão genérica, artificial ou contrária ao padrão comercial aprovado.
 const TERMOS_PROIBIDOS = [
   "faz sentido", "fez sentido",
-  "manter em análise", "comparação objetiva", "ponto de decisão em aberto",
-  "organizar o próximo passo", "passando para saber",
-  "caso não tenha agradado", "se não gostou"
+  "lembrei de você", "lembrei da nossa conversa", "estive pensando", "fiquei pensando",
+  "ainda tem interesse", "segue interessado", "passando para saber", "passando para retomar",
+  "caso não tenha agradado", "se não gostou", "qualquer dúvida", "fico à disposição",
+  "conforme conversamos", "analisando aqui", "vi aqui", "quer saber mais",
+  "posso te ajudar", "ficou alguma dúvida", "o que achou", "quer que eu te mande mais informações",
+  "papo", "manter em análise", "comparação objetiva", "ponto de decisão em aberto",
+  "organizar o próximo passo"
 ];
-const RE_TERMOS_PROIBIDOS = new RegExp(
-  "\\b(" + TERMOS_PROIBIDOS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b",
-  "i"
-);
+const TERMOS_PROIBIDOS_PATTERN = "\\b(" + TERMOS_PROIBIDOS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b";
+const RE_TERMOS_PROIBIDOS = new RegExp(TERMOS_PROIBIDOS_PATTERN, "i");
+const RE_TERMOS_PROIBIDOS_GLOBAL = new RegExp(TERMOS_PROIBIDOS_PATTERN, "gi");
 
 function mensagemTemTermoProibido(txt) {
   return RE_TERMOS_PROIBIDOS.test(String(txt || ""));
@@ -136,51 +139,200 @@ function mensagemPerguntaEntradaRepetida(txt) {
 // pela validação, pra nunca divergirem. (Antes a regra de nº de perguntas estava
 // escrita em 3 lugares com valores diferentes: prompt dizia 1, validador aceitava 2.)
 const REGRAS_MSG = {
-  maxPerguntas: 2,
-  minChars: 35,
-  maxChars: 520
+  maxPerguntas: 1,
+  minChars: 80,
+  maxChars: 450
 };
 
-const PROMPT_ANALISE_PURA = `Você é um corretor imobiliário extremamente experiente.
+const PROMPT_ANALISE_PURA = `Você é um especialista comercial em vendas imobiliárias e atua como gerente comercial experiente de construtora.
 
-Leia TODA a conversa antes de responder.
+Sua função NÃO é resumir conversas.
+Sua função é entender o contexto comercial completo de uma conversa de WhatsApp entre corretor e cliente e decidir qual é a melhor próxima ação para aumentar a chance de venda.
 
-Não siga modelos rígidos.
+Leia TODA a conversa, desde a primeira até a última mensagem, considerando textos, áudios transcritos, documentos enviados, links, formulários e anotações manuais.
+Nunca analise apenas as últimas mensagens.
 
-Não invente fatos.
+==========================================
+REGRAS ABSOLUTAS
+==========================================
 
-Quando fizer uma hipótese, deixe claro que é uma hipótese.
+- Não invente informações, valores, prazos, produtos, condições, descontos, financiamento, troca, intenção, visita ou objeção.
+- Nunca suponha objeções que o cliente não demonstrou.
+- Pedido de informação, pedido de valor, pedido de mapa ou pedido de material NÃO é objeção.
+- Se não existir objeção explícita, escreva exatamente: "Sem objeção explícita."
+- Nunca faça perguntas que já foram respondidas durante a conversa.
+- Considere todo o histórico antes de responder.
+- Descubra quem ficou responsável pelo próximo passo.
+- Entenda exatamente em qual etapa da venda o cliente está.
+- Continue do ponto real onde a conversa parou, sem reiniciar atendimento.
+- Não mude o foco do produto principal sem motivo claro no histórico.
+- Não ofereça produto, condição de pagamento, desconto, financiamento, troca ou alternativa sem base na conversa, no catálogo ou em regra ensinada pelo corretor.
+- Se o cliente já informou orçamento, cidade, objetivo, forma de pagamento, prazo, produto desejado, motivo da compra ou qualquer dado relevante, use esse dado como contexto e não pergunte novamente.
+- Se o cliente está aguardando retorno do corretor, o corretor deve entregar ou encaminhar esse retorno; não jogar a responsabilidade de volta para o cliente.
+- A mensagem sugerida deve nascer do diagnóstico e jamais contradizer a análise.
 
-Produza a resposta exatamente nesta estrutura:
+==========================================
+DIAGNÓSTICO OBRIGATÓRIO
+==========================================
 
-1. Resumo da conversa
-2. Diagnóstico comercial
-   - Última pessoa a falar
-   - Último compromisso
-   - Última informação enviada
-   - Produto atual
-   - Interesse anterior
-   - Objeção identificada
-   - Pendência principal
-   - Próximo passo
-   - Etapa do funil
-   - Probabilidade de venda (com justificativa)
-3. O que falta descobrir
-4. Próxima mensagem sugerida
-5. Estratégia da mensagem
-6. Prioridade do lead
+Sempre identifique:
 
-A mensagem deve nascer do diagnóstico.
+1. Quem foi a última pessoa que falou.
 
-Nunca escreva uma mensagem que contradiga a análise.
+2. Qual foi o último compromisso assumido pelo cliente.
+Se não houve compromisso, escreva: "Não houve compromisso claro do cliente."
 
-Prefira fazer o cliente falar.
+3. Qual foi a última informação prometida pelo corretor.
+Se não houve promessa, escreva: "Não houve informação prometida pelo corretor."
 
-Não pressione.
+4. Produto principal de interesse.
 
-Se houver pouca informação, diga isso.
+5. Produtos secundários citados.
+Se não houver, escreva: "Não houve produtos paralelos relevantes."
 
-Se não houver evidência para uma conclusão, não afirme como fato.`;
+6. Principal objeção existente.
+Caso não exista objeção explícita, escreva: "Sem objeção explícita."
+Nunca invente objeção.
+
+7. Pendência financeira.
+Exemplos: entrada, parcelas, financiamento, avaliação, venda de outro imóvel, forma de pagamento, capacidade de pagamento ou proposta.
+Se não existir, escreva: "Não há pendência financeira."
+
+8. Quem deve tomar o próximo passo: Cliente ou Corretor.
+Explique por quê.
+
+9. Classifique a etapa do funil:
+Descoberta, Interesse, Comparação, Visita, Análise financeira, Negociação, Decisão ou Pós-venda.
+
+10. Classifique a probabilidade de venda:
+Muito baixa, Baixa, Média, Alta ou Muito alta.
+Justifique com base em fatos da conversa, não em suposição.
+
+==========================================
+LEITURA TEMPORAL OBRIGATÓRIA
+==========================================
+
+Antes de gerar as sugestões, identifique há quanto tempo a conversa está parada.
+Use a data atual informada no prompt e a data da última mensagem da conversa.
+
+Se a conversa estiver parada há mais de 7 dias:
+- trate as mensagens como retomadas contextuais;
+- não continue como se a última conversa tivesse sido ontem;
+- lembre o ponto exato onde a conversa parou;
+- não cobre resposta;
+- não pergunte se ainda há interesse;
+- não pergunte se o plano continua de pé;
+- não dê saída fácil para o cliente encerrar;
+- não reinicie a venda;
+- conduza suavemente para o próximo passo comercial mais natural.
+
+Se o cliente ficou de retornar, retome esse compromisso com naturalidade, sem pressão.
+
+==========================================
+SUGESTÕES DE RESPOSTAS
+==========================================
+
+Depois do diagnóstico, gere exatamente 3 sugestões de mensagem.
+As mensagens devem parecer escritas por um corretor experiente, natural e objetivo.
+Jamais parecer um robô.
+
+Frases proibidas nas mensagens:
+"lembrei de você"
+"lembrei da nossa conversa"
+"estive pensando"
+"fiquei pensando"
+"faz sentido"
+"ainda tem interesse?"
+"segue interessado?"
+"passando para saber"
+"passando para retomar"
+"caso não tenha agradado"
+"se não gostou"
+"qualquer dúvida"
+"fico à disposição"
+"conforme conversamos"
+"analisando aqui"
+"vi aqui"
+"quer saber mais?"
+"posso te ajudar?"
+"ficou alguma dúvida?"
+"o que achou?"
+"quer que eu te mande mais informações?"
+"papo"
+
+Regras das mensagens:
+
+- Continue do ponto real onde a conversa parou.
+- Use a pendência existente como gancho.
+- Se houver pendência financeira, retome exatamente esse assunto.
+- Se o próximo passo for visita, conduza naturalmente para agendamento.
+- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual.
+- Não reinicie a conversa.
+- Não pergunte o que o cliente já respondeu.
+- Não pressione.
+- Não dê saída fácil para o cliente encerrar.
+- Não use emoji.
+- Não use linguagem formal demais.
+- Não use linguagem de robô.
+- Cada mensagem deve ter entre 220 e 420 caracteres.
+- Cada mensagem pode ter no máximo uma pergunta.
+- Se não for necessário perguntar, não pergunte.
+- A pergunta, quando existir, deve mover a venda para frente.
+
+Perguntas válidas são perguntas de avanço comercial, por exemplo:
+- Para vocês fica melhor durante a semana ou no sábado?
+- Qual horário fica mais tranquilo para vocês?
+- Prefere que eu mostre primeiro as opções com melhor posição ou melhor condição?
+- Quer que eu organize uma simulação em cima dessa forma de pagamento?
+
+Perguntas proibidas:
+- Tem interesse?
+- Ainda tem interesse?
+- Quer saber mais?
+- Posso te ajudar?
+- Ficou alguma dúvida?
+- O que achou?
+- Quer que eu te mande mais informações?
+
+==========================================
+DIFERENÇA ENTRE AS 3 SUGESTÕES
+==========================================
+
+As 3 sugestões devem ter estratégias comerciais realmente diferentes, não apenas palavras diferentes.
+Não gere três mensagens com a mesma estrutura.
+Não comece as três mensagens do mesmo jeito.
+Não termine as três mensagens com o mesmo tipo de pergunta.
+
+Se a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes:
+
+Sugestão 1 — Retomar o compromisso:
+Use exatamente o ponto em que o cliente parou e conduza para o próximo passo.
+
+Sugestão 2 — Facilitar a decisão:
+Reduza o esforço do cliente. Ofereça uma forma simples de avançar, como separar opções, horários, lotes disponíveis, condições ou organizar a visita.
+
+Sugestão 3 — Reativar com objetividade:
+Mensagem curta, humana e comercial, sem cobrança, trazendo a conversa de volta para a ação principal.
+
+Se a conversa NÃO estiver parada há mais de 7 dias:
+
+Sugestão 1 — Avanço direto:
+Conduza para o próximo passo mais provável da venda, como visita, proposta, simulação, escolha de unidade, envio de condição ou definição de horário.
+
+Sugestão 2 — Consultiva:
+Use o contexto do cliente para reforçar o motivo do próximo passo. Mostre por que aquele avanço ajuda na decisão, sem parecer explicação longa.
+
+Sugestão 3 — Natural/leve:
+Escreva como uma mensagem humana de WhatsApp, simples e próxima, mantendo o objetivo comercial.
+
+==========================================
+SAÍDA
+==========================================
+
+Retorne diagnóstico e sugestões dentro do JSON solicitado pelo sistema.
+O conteúdo deve respeitar exatamente os campos pedidos no formato de compatibilidade.
+Não use markdown fora do JSON.
+Se algum dado não existir, diga isso claramente no campo correspondente.`;
 
 const REGRA_TESE_COMERCIAL = ``;
 
@@ -194,15 +346,17 @@ const REGRA_TESE_COMERCIAL = ``;
 
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
 const REGRAS_MSG_PROMPT = [
-  "- Use somente fatos do histórico e hipóteses marcadas como hipótese.",
-  "- Não escreva relatório para o cliente; escreva WhatsApp natural.",
-  "- A mensagem deve abrir conversa e descobrir a lacuna principal.",
-  "- Não explique todo o histórico; use só uma âncora curta quando ajudar.",
-  "- Não afirme que o cliente mudou de objetivo sem prova; pergunte.",
-  "- Evite frases prontas de IA ou vendedor.",
-  `- No máximo ${REGRAS_MSG.maxPerguntas} interrogações por mensagem.`,
+  "- Use somente fatos do histórico; hipóteses precisam ser marcadas como hipótese.",
+  "- Não escreva relatório para o cliente; escreva WhatsApp natural de corretor experiente.",
+  "- Continue do ponto real onde a conversa parou.",
+  "- Não pergunte o que o cliente já respondeu.",
+  "- Não invente objeção: se não existe objeção explícita, registre Sem objeção explícita.",
+  "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
+  "- Se houver pendência financeira, use essa pendência como gancho principal.",
+  "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
+  `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
   `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
-  "- As 3 mensagens devem ter abordagens realmente diferentes."
+  "- As 3 mensagens devem ter estratégias realmente diferentes."
 ].join("\n");
 
 // Limpeza determinística e SEGURA aplicada antes da validação: NÃO reescreve
@@ -219,7 +373,7 @@ function limparMensagemComercial(txt) {
 
 function limitarMensagemWhatsApp(txt) {
   let s = limparMensagemComercial(txt);
-  s = s.replace(RE_TERMOS_PROIBIDOS, "").replace(/\s{2,}/g, " ").trim();
+  s = s.replace(RE_TERMOS_PROIBIDOS_GLOBAL, "").replace(/\s{2,}/g, " ").trim();
   if (s.length <= REGRAS_MSG.maxChars) return s;
   return s.slice(0, REGRAS_MSG.maxChars - 1).replace(/[\s,.;:!?-]+$/g, "").trim() + ".";
 }
@@ -227,7 +381,7 @@ function limitarMensagemWhatsApp(txt) {
 function sanitizarMensagemFallback(txt) {
   let s = limitarMensagemWhatsApp(txt);
   if (mensagemTemEmoji(s)) s = limparMensagemComercial(s);
-  if (mensagemTemTermoProibido(s)) s = s.replace(RE_TERMOS_PROIBIDOS, "").replace(/\s{2,}/g, " ").trim();
+  if (mensagemTemTermoProibido(s)) s = s.replace(RE_TERMOS_PROIBIDOS_GLOBAL, "").replace(/\s{2,}/g, " ").trim();
   if ((s.match(/\?/g) || []).length > REGRAS_MSG.maxPerguntas) {
     let count = 0;
     s = s.replace(/\?/g, () => (++count <= REGRAS_MSG.maxPerguntas ? "?" : "."));
@@ -243,9 +397,9 @@ function textoFallbackCurto(valor, fallback) {
 
 function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
   const nome = primeiraPalavraNome(lead);
-  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || lead?.product, "essa opção");
-  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "entender melhor o que pesa mais pra você agora");
-  return sanitizarMensagemFallback(`Oi, ${nome}. Revendo nossa conversa sobre ${produto}, o ponto principal agora é ${pendencia}. Pra eu te orientar sem mandar opção errada, você prefere seguir nessa linha ou comparar uma alternativa mais alinhada ao que busca hoje?`);
+  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
+  const pendencia = textoFallbackCurto(diagnostico.pendenciaFinanceira || diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o ponto que ficou em aberto");
+  return sanitizarMensagemFallback(`Oi, ${nome}. Retomando nossa conversa sobre ${produto}: o ponto em aberto ficou em ${pendencia}. Para avançarmos sem recomeçar do zero, posso te passar um caminho objetivo em cima disso?`);
 }
 
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
@@ -254,13 +408,13 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   if (!a || mensagemFormatoRuim(a) || a.length < REGRAS_MSG.minChars) a = base;
 
   const nome = primeiraPalavraNome(lead);
-  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || lead?.product, "essa opção");
-  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o próximo passo");
+  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
+  const pendencia = textoFallbackCurto(diagnostico.pendenciaFinanceira || diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o ponto que ficou em aberto");
 
   let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b ||
-    `Oi, ${nome}. Vi aqui a nossa conversa sobre ${produto}. Antes de te mandar qualquer coisa, queria confirmar contigo: o que ficou mais importante agora é ${pendencia} ou mudou algo na tua busca?`);
+    `Oi, ${nome}. Para facilitar, posso separar as opções mais alinhadas com ${pendencia} e te mostrar primeiro o que vale mais atenção em ${produto}. Assim a conversa não volta do zero. Quer que eu prepare isso para esta semana?`);
   let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c ||
-    `${nome}, pra eu avançar certo no atendimento: você quer que eu siga com ${produto} considerando ${pendencia}, ou prefere que eu te mostre uma alternativa mais objetiva dentro do teu perfil?`);
+    `${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto em ${pendencia} e te passar uma condução objetiva, sem te encher de opções soltas.`);
 
   const mensagens = [a, b, c].map((m, i) => {
     let x = sanitizarMensagemFallback(m || a || base);
@@ -269,10 +423,10 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   });
 
   if (normalizarTextoComparacao(mensagens[1]) === normalizarTextoComparacao(mensagens[0])) {
-    mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Antes de eu te mandar nova opção, quero alinhar contigo o ponto que ficou em aberto: ${pendencia}. Isso ainda é o principal pra você hoje?`);
+    mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Para facilitar, posso separar as opções que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
   }
   if (normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[0]) || normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[1])) {
-    mensagens[2] = sanitizarMensagemFallback(`${nome}, pra eu ser direto: sigo trabalhando ${produto} pra você ou ajusto a busca considerando ${pendencia}?`);
+    mensagens[2] = sanitizarMensagemFallback(`${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva, sem te encher de opções soltas.`);
   }
 
   return {
@@ -1992,24 +2146,32 @@ Use este formato de compatibilidade:
   "summary":"Resumo da conversa em 2 a 5 parágrafos, no estilo de uma análise pura do ChatGPT.",
   "diagnostico":{
     "ultimaPessoaFalar":"Você|Cliente|desconhecido",
-    "ultimoCompromissoCliente":"texto curto ou Nenhum",
+    "ultimoCompromissoCliente":"texto curto ou Não houve compromisso claro do cliente.",
+    "ultimaInformacaoPrometida":"texto curto ou Não houve informação prometida pelo corretor.",
     "ultimaInformacaoEnviada":"texto curto",
-    "produtoAtual":"texto curto",
+    "produtoPrincipal":"produto principal de interesse",
+    "produtoAtual":"produto principal de interesse",
+    "produtosParalelos":"produtos secundários citados ou Não houve produtos paralelos relevantes.",
     "interesseAnterior":"texto curto ou Nenhum",
-    "objecaoIdentificada":"fato comprovado ou hipótese declarada com evidência",
-    "pendenciaPrincipal":"o que falta descobrir",
-    "proximoPasso":"Você|Cliente|ambos",
-    "etapaFunil":"Interesse / Descoberta de necessidade|descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
+    "objecaoPrincipal":"Sem objeção explícita. ou objeção explícita com evidência",
+    "objecaoIdentificada":"Sem objeção explícita. ou objeção explícita com evidência",
+    "pendenciaFinanceira":"Não há pendência financeira. ou pendência financeira específica",
+    "pendenciaPrincipal":"principal pendência comercial concreta",
+    "quemDeveAgirAgora":"Cliente|Corretor com motivo",
+    "proximoPasso":"Cliente|Corretor|ambos com motivo",
+    "etapaFunil":"Descoberta|Interesse|Comparação|Visita|Análise financeira|Negociação|Decisão|Pós-venda|outro",
+    "probabilidadeVenda":"Muito baixa|Baixa|Média|Alta|Muito alta com justificativa",
     "probabilidadeComentada":"nota/10 ou percentual com justificativa",
-    "mensagemQueEuEnviariaHoje":"Próxima mensagem sugerida, pronta para copiar"
+    "tempoParado":"quantos dias a conversa ficou parada e como isso afeta a abordagem",
+    "mensagemQueEuEnviariaHoje":"Sugestão 1 pronta para copiar"
   },
   "oQueFaltaDescobrir":["..."],
   "estrategiaMensagem":"por que a mensagem recomendada foi escolhida",
   "prioridadeLead":"baixa|média|alta com justificativa",
   "mensagens":{
-    "recomendada":"mensagem principal pronta para copiar",
-    "maisSuave":"mensagem mais leve, pronta para copiar",
-    "maisDireta":"mensagem mais objetiva, pronta para copiar"
+    "recomendada":"Sugestão 1 — retomar compromisso ou avanço direto, pronta para copiar",
+    "maisSuave":"Sugestão 2 — facilitar decisão ou consultiva, pronta para copiar",
+    "maisDireta":"Sugestão 3 — reativar com objetividade ou natural/leve, pronta para copiar"
   },
   "produtoInteresse":"produto atual",
   "produtosInteresse":["produtos citados"],
@@ -2051,7 +2213,7 @@ ${timelineText}`;
     const msgB = trioMensagens.b;
     const msgC = trioMensagens.c;
     const msg = msgA;
-    const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
+    const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
 
     // v724-2: objeto final deliberadamente simples.
@@ -2062,21 +2224,24 @@ ${timelineText}`;
       summary: txt(raw.summary),
       diagnostico: {
         ultimaPessoaFalar: txt(d.ultimaPessoaFalar, "Não identificado"),
-        ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Nenhum"),
-        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
-        ultimaInformacaoPrometida: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificada"),
+        ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Não houve compromisso claro do cliente."),
+        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não houve informação prometida pelo corretor."),
+        ultimaInformacaoPrometida: txt(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não houve informação prometida pelo corretor."),
         produtoAtual,
         produtoPrincipalInteresse: produtoAtual,
         interesseAnterior: txt(d.interesseAnterior, "Nenhum"),
-        objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
-        objecaoPrincipal: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificada"),
-        pendenciaPrincipal: txt(d.pendenciaPrincipal, "Não identificada"),
-        pendenciaFinanceira: txt(d.pendenciaPrincipal, "Não identificada"),
-        proximoPasso: txt(d.proximoPasso, "Você"),
-        proximoPassoDeQuem: txt(d.proximoPasso, "Você"),
+        produtosParalelos: txt(d.produtosParalelos, "Não houve produtos paralelos relevantes."),
+        objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Sem objeção explícita."),
+        objecaoPrincipal: txt(d.objecaoPrincipal || d.objecaoIdentificada, "Sem objeção explícita."),
+        pendenciaPrincipal: txt(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificada"),
+        pendenciaFinanceira: txt(d.pendenciaFinanceira, "Não há pendência financeira."),
+        quemDeveAgirAgora: txt(d.quemDeveAgirAgora || d.proximoPasso, "Corretor"),
+        proximoPasso: txt(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
+        proximoPassoDeQuem: txt(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
         etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
-        probabilidadeComentada: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
-        probabilidadeFechamentoHoje: txt(d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        probabilidadeComentada: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        probabilidadeFechamentoHoje: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
+        tempoParado: txt(d.tempoParado, "Não identificado"),
         // v724-5: só preenche quando as 3 mensagens existem. Deixar isto com a
         // mensagem A sozinha (quando B/C vieram vazias) engana o front: ele usa
         // este campo pra decidir se "já existe mensagem real da IA" e, achando
@@ -2101,9 +2266,9 @@ ${timelineText}`;
         a: msgA,
         b: msgB,
         c: msgC,
-        aLabel: "Recomendada",
-        bLabel: "Mais suave",
-        cLabel: "Mais direta",
+        aLabel: "Retomar compromisso",
+        bLabel: "Facilitar decisão",
+        cLabel: "Retomada objetiva",
         recomendada: "a"
       },
       tipoContato: null,
@@ -2130,7 +2295,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v725 completou mensagens ausentes sem apagar a análise."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v730 completou mensagens ausentes sem apagar a análise."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };

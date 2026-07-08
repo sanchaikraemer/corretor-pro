@@ -15,9 +15,9 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
   if (temTresMensagens) {
     out.messages = {
       ...m,
-      aLabel: textoLimpo(m.aLabel) || "Recomendada",
-      bLabel: textoLimpo(m.bLabel) || "Mais suave",
-      cLabel: textoLimpo(m.cLabel) || "Mais direta",
+      aLabel: textoLimpo(m.aLabel) || "Retomar compromisso",
+      bLabel: textoLimpo(m.bLabel) || "Facilitar decisão",
+      cLabel: textoLimpo(m.cLabel) || "Retomada objetiva",
       recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
     };
     out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
@@ -39,16 +39,16 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
     a: trio.a,
     b: trio.b,
     c: trio.c,
-    aLabel: textoLimpo(m.aLabel) || "Recomendada",
-    bLabel: textoLimpo(m.bLabel) || "Mais suave",
-    cLabel: textoLimpo(m.cLabel) || "Mais direta",
+    aLabel: textoLimpo(m.aLabel) || "Retomar compromisso",
+    bLabel: textoLimpo(m.bLabel) || "Facilitar decisão",
+    cLabel: textoLimpo(m.cLabel) || "Retomada objetiva",
     recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
   };
   out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
   out.sugestoesPendentes = false;
   out.aprovada = true;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
-  out.validacaoSugestoes.push("Fallback v726 completou as 3 sugestões antes de salvar.");
+  out.validacaoSugestoes.push("Fallback v730 completou as 3 sugestões antes de salvar.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
