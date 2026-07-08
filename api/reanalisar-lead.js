@@ -140,7 +140,12 @@ function assinaturaTimeline6863(timeline) {
   return { hash: hashTexto6863(base), total: arr.length };
 }
 function analiseEstaUtil6863(a) {
-  return !!(a && typeof a === "object" && a.messages && (a.messages.a || a.messages.b || a.messages.c) && a.iaComercialV2);
+  return !!(
+    a && typeof a === "object" &&
+    a.messages && (a.messages.a || a.messages.b || a.messages.c) &&
+    a.iaComercialV2 &&
+    a.arquiteturaMensagens === ARQUITETURA_MENSAGENS_ATUAL
+  );
 }
 function compactarTimelineParaIA6863(timeline, previous, novoAtendimento) {
   const arr = Array.isArray(timeline) ? timeline : [];

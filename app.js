@@ -4918,6 +4918,7 @@ function renderLeadFoco(lead){
     const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
     const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
     const messagesReady=cp705MessagesReady(msgs);
+    const semAcaoUrgente=String(mc?.acao?.status||'')==='sem-acao-urgente';
     const needsAnalysis=stale; // v708: mensagens de fallback confiáveis aparecem mesmo quando a API não devolve 3 textos
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
@@ -4938,7 +4939,7 @@ function renderLeadFoco(lead){
       <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
       ${cp717MudancasHtml(a)}
       <section class="cp704-card"><div class="cp704-card-title"><h2>Mensagem recomendada</h2></div>
-        ${!messagesReady?`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span>${cp724DiagRecusaHtml(a,msgs)}<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`:`${(msgs.b||msgs.c)?`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button>${msgs.b?`<button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button>`:''}${msgs.c?`<button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button>`:''}</div>`:''}
+        ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span>${cp724DiagRecusaHtml(a,msgs)}<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`):`${(msgs.b||msgs.c)?`<div class="cp704-msg-tabs"><button class="active" data-key="a" onclick="cp704SelectMsg('a')">Recomendada</button>${msgs.b?`<button data-key="b" onclick="cp704SelectMsg('b')">Mais suave</button>`:''}${msgs.c?`<button data-key="c" onclick="cp704SelectMsg('c')">Mais direta</button>`:''}</div>`:''}
         <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><span class="cp704-num">1</span><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><span class="cp704-num">2</span><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><span class="cp704-num">3</span><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>
         <button class="cp704-wa" onclick="cp704OpenWhats()">Enviar pelo WhatsApp<small>Usar resposta selecionada</small></button>`}
       </section>
@@ -9767,15 +9768,15 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   const semAcao=mc?.acao?.status==="sem-acao-urgente";
   if(!semAcao){
     const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
-    if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
-      // v715: não inventa mensagens locais da arquitetura antiga.
-      // Se a API não entregar mensagens completas, a tela deve pedir reanálise
-      // em vez de preencher com fallback genérico da v682.
-      out.messages = { ...atuais, a:"", b:"", c:"", aLabel:"Reanálise necessária", bLabel:"", cLabel:"", recomendada:"a" };
+    const completo = String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim();
+    if(!completo){
+      // v725-2: não apaga mensagens que a API já tenha gerado (nem que seja só 1 ou 2).
+      // Mantém o que existe e só marca pendência, em vez de gravar a/b/c vazios no banco.
+      out.messages = { ...atuais, aLabel: atuais.aLabel||(atuais.a?"Recomendada":"Reanálise necessária"), bLabel: atuais.bLabel||"", cLabel: atuais.cLabel||"", recomendada: atuais.recomendada||"a" };
       out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
       out.sugestoesPendentes = true;
       out.aprovada = false;
-      out.validacaoSugestoes = ["Motor v715: fallback local antigo bloqueado; reanalise para gerar mensagens com tese comercial."];
+      out.validacaoSugestoes = ["Motor v725-2: mensagens incompletas; preservadas as já geradas, reanalise para completar."];
     }
   }
   if(semAcao){
