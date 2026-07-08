@@ -4629,7 +4629,7 @@ function cp704Css(){
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:82px 1fr;align-items:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:7px}.cp704-reanalyse,.cp704-attended{font-size:11px;padding:8px 10px;width:100%;min-width:0}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-prob{width:76px;height:76px;justify-self:start}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:15px;padding:2px 0 0}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:12px 14px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-prob{width:76px;height:76px;justify-self:start}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -4930,6 +4930,9 @@ function renderLeadFoco(lead){
   if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(true);
   const area=document.querySelector('#leadFocoArea');
   if(!area||!lead) return;
+  // v735: o card "Atendidos hoje" pertence apenas à tela Hoje.
+  // Ao abrir um lead, removemos qualquer sobra desse card antes de montar o detalhe.
+  document.querySelector('#ui683AtendidosHojeCard')?.remove();
   document.body.classList.add('lead-foco-aberto');
   state.focoLeadId=lead?.id||null;
   const saud=document.querySelector('#saudacao');
@@ -10110,10 +10113,17 @@ function ui670DetailRows(lead,mc){
 
   function ui683RenderAtendidosHojeHome(){
     ui683InjectStyles();
-    const area=qs('#leadFocoArea'); if(!area || state.active!=='home') return;
+    const area=qs('#leadFocoArea');
+    const antigo=qs('#ui683AtendidosHojeCard');
+    // v735: nunca exibir "Atendidos hoje" dentro do detalhe do lead.
+    // Em alguns fluxos mobile, state.active continuava como home enquanto o lead estava aberto.
+    if(!area || state.active!=='home' || state.focoLeadId || document.body.classList.contains('lead-foco-aberto')){
+      if(antigo) antigo.remove();
+      return;
+    }
     const all=state.todosLeads?.length ? state.todosLeads : state.itemsAtivos || [];
     const lista=ui683AtendidosHoje(all);
-    const antigo=qs('#ui683AtendidosHojeCard'); if(antigo) antigo.remove();
+    if(antigo) antigo.remove();
     const card=document.createElement('section'); card.id='ui683AtendidosHojeCard'; card.className='ui683-card';
     const preview=lista.slice(0,4).map(x=>`<div class="ui683-row" onclick='abrirLead(${JSON.stringify(String(x.lead.id||''))})'><div class="ui683-time">${escapeHtml(ui683HoraBR(x.ev.quando))}</div><div style="min-width:0"><div class="ui683-name">${escapeHtml(x.lead.name||'Cliente')}</div><div class="ui683-sub">${escapeHtml(ui683Origem(x.ev))}${x.lead.product?` · ${escapeHtml(x.lead.product)}`:''}</div></div><div class="ui683-open">›</div></div>`).join('');
     card.innerHTML=`<div class="ui683-head"><div><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div>${lista.length>4?`<div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os ${lista.length} atendidos de hoje</button></div>`:''}`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
