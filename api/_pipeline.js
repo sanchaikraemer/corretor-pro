@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v730-prompt-retomada-contextual";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v732-prompt-jornada-contextual";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -228,6 +228,41 @@ Se a conversa estiver parada há mais de 7 dias:
 
 Se o cliente ficou de retornar, retome esse compromisso com naturalidade, sem pressão.
 
+Se a conversa ficou parada por muito tempo, mas o cliente voltou depois por outro anúncio, produto ou pergunta nova, não trate como simples retomada antiga. Use o histórico antigo como contexto, mas considere a nova entrada do cliente como o fato comercial mais importante.
+
+==========================================
+MUDANÇA DE JORNADA DO CLIENTE
+==========================================
+
+Antes de gerar as sugestões, verifique se houve mudança relevante na jornada do cliente.
+
+Considere mudança relevante quando o cliente:
+- muda de produto principal;
+- sai de imóvel comercial para residencial, ou o contrário;
+- muda de cidade, padrão, faixa de valor ou finalidade;
+- volta depois de muito tempo por outro anúncio;
+- demonstra interesse em algo diferente do assunto anterior;
+- pergunta apenas o valor ou detalhes de um novo produto sem explicar o motivo.
+
+Quando houver mudança de jornada:
+- não trate a conversa como simples continuidade;
+- não force retomada do produto anterior;
+- identifique claramente o produto anterior e o produto atual;
+- use a mudança como gancho comercial;
+- não conduza direto para visita, proposta ou negociação sem entender o motivo da mudança, salvo se o cliente já pediu isso explicitamente;
+- faça uma pergunta de descoberta para entender o novo objetivo do cliente.
+
+A pergunta deve descobrir se o interesse atual é:
+- moradia;
+- investimento;
+- comparação de oportunidades;
+- compra para familiar;
+- troca de imóvel;
+- curiosidade inicial;
+- ou outro motivo.
+
+Quando houver mudança de jornada, as sugestões devem priorizar diagnóstico comercial antes de avanço para visita ou proposta.
+
 ==========================================
 SUGESTÕES DE RESPOSTAS
 ==========================================
@@ -263,10 +298,10 @@ Frases proibidas nas mensagens:
 Regras das mensagens:
 
 - Continue do ponto real onde a conversa parou.
-- Use a pendência existente como gancho.
-- Se houver pendência financeira, retome exatamente esse assunto.
-- Se o próximo passo for visita, conduza naturalmente para agendamento.
-- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual.
+- Use a pendência existente como gancho, exceto quando houver mudança de jornada mais importante.
+- Se houver pendência financeira, retome exatamente esse assunto, salvo quando o cliente mudou de produto/objetivo e ainda é preciso entender o motivo.
+- Se o próximo passo for visita, conduza naturalmente para agendamento, exceto quando a mudança de jornada exigir primeiro uma pergunta de descoberta.
+- Se a conversa estiver parada há mais de 7 dias e não houver nova entrada recente do cliente por outro produto/anúncio, faça retomada contextual.
 - Não reinicie a conversa.
 - Não pergunte o que o cliente já respondeu.
 - Não pressione.
@@ -279,11 +314,14 @@ Regras das mensagens:
 - Se não for necessário perguntar, não pergunte.
 - A pergunta, quando existir, deve mover a venda para frente.
 
-Perguntas válidas são perguntas de avanço comercial, por exemplo:
+Perguntas válidas são perguntas que destravam a venda, seja por avanço comercial ou descoberta do novo objetivo, por exemplo:
 - Para vocês fica melhor durante a semana ou no sábado?
 - Qual horário fica mais tranquilo para vocês?
 - Prefere que eu mostre primeiro as opções com melhor posição ou melhor condição?
 - Quer que eu organize uma simulação em cima dessa forma de pagamento?
+- O que chamou tua atenção nesse imóvel: padrão, localização ou uma possibilidade diferente agora?
+- Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?
+- Você está buscando algo para uso próprio ou pensando em investimento?
 
 Perguntas proibidas:
 - Tem interesse?
@@ -303,7 +341,18 @@ Não gere três mensagens com a mesma estrutura.
 Não comece as três mensagens do mesmo jeito.
 Não termine as três mensagens com o mesmo tipo de pergunta.
 
-Se a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes:
+Se houver mudança de jornada, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
+
+Sugestão 1 — Entender o motivo da mudança:
+Retome com naturalidade o produto anterior e o produto atual, perguntando o que chamou atenção no novo produto.
+
+Sugestão 2 — Redefinir o objetivo:
+Descubra se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
+
+Sugestão 3 — Direcionar a venda:
+Mostre que, entendendo o objetivo atual, o corretor consegue indicar a melhor oportunidade, sem empurrar visita, proposta ou condição antes da hora.
+
+Se NÃO houver mudança de jornada e a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes:
 
 Sugestão 1 — Retomar o compromisso:
 Use exatamente o ponto em que o cliente parou e conduza para o próximo passo.
@@ -314,7 +363,7 @@ Reduza o esforço do cliente. Ofereça uma forma simples de avançar, como separ
 Sugestão 3 — Reativar com objetividade:
 Mensagem curta, humana e comercial, sem cobrança, trazendo a conversa de volta para a ação principal.
 
-Se a conversa NÃO estiver parada há mais de 7 dias:
+Se NÃO houver mudança de jornada e a conversa NÃO estiver parada há mais de 7 dias:
 
 Sugestão 1 — Avanço direto:
 Conduza para o próximo passo mais provável da venda, como visita, proposta, simulação, escolha de unidade, envio de condição ou definição de horário.
@@ -351,8 +400,10 @@ const REGRAS_MSG_PROMPT = [
   "- Continue do ponto real onde a conversa parou.",
   "- Não pergunte o que o cliente já respondeu.",
   "- Não invente objeção: se não existe objeção explícita, registre Sem objeção explícita.",
-  "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
-  "- Se houver pendência financeira, use essa pendência como gancho principal.",
+  "- Se houver mudança de jornada/produto, investigue o novo objetivo antes de conduzir para visita, proposta ou condição.",
+  "- Se o cliente voltou por outro anúncio depois de tempo parado, use o histórico anterior como contexto, mas priorize o novo interesse.",
+  "- Se a conversa estiver parada há mais de 7 dias e não houver mudança de jornada recente, faça retomada contextual usando o último ponto concreto.",
+  "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada mais importante.",
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
   `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
@@ -2149,10 +2200,14 @@ Use este formato de compatibilidade:
     "ultimoCompromissoCliente":"texto curto ou Não houve compromisso claro do cliente.",
     "ultimaInformacaoPrometida":"texto curto ou Não houve informação prometida pelo corretor.",
     "ultimaInformacaoEnviada":"texto curto",
-    "produtoPrincipal":"produto principal de interesse",
-    "produtoAtual":"produto principal de interesse",
+    "produtoPrincipal":"produto principal de interesse atual",
+    "produtoAtual":"produto principal de interesse atual",
+    "produtoAnterior":"produto anterior relevante ou Nenhum",
     "produtosParalelos":"produtos secundários citados ou Não houve produtos paralelos relevantes.",
     "interesseAnterior":"texto curto ou Nenhum",
+    "houveMudancaJornada":"sim|não, com explicação curta",
+    "mudancaJornada":"se houve, explique a mudança de produto/objetivo; se não houve, escreva Não houve mudança relevante de jornada.",
+    "perguntaDescobertaNecessaria":"se houver mudança de jornada, qual pergunta precisa destravar o objetivo atual; se não, escreva Não necessária.",
     "objecaoPrincipal":"Sem objeção explícita. ou objeção explícita com evidência",
     "objecaoIdentificada":"Sem objeção explícita. ou objeção explícita com evidência",
     "pendenciaFinanceira":"Não há pendência financeira. ou pendência financeira específica",
