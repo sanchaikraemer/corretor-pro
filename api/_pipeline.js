@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v732-prompt-jornada-contextual";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v733-retomada-jornada-combinada";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -228,7 +228,10 @@ Se a conversa estiver parada há mais de 7 dias:
 
 Se o cliente ficou de retornar, retome esse compromisso com naturalidade, sem pressão.
 
-Se a conversa ficou parada por muito tempo, mas o cliente voltou depois por outro anúncio, produto ou pergunta nova, não trate como simples retomada antiga. Use o histórico antigo como contexto, mas considere a nova entrada do cliente como o fato comercial mais importante.
+Se a conversa ficou parada por muito tempo e o cliente voltou depois por outro anúncio, produto ou pergunta nova, combine obrigatoriamente as duas leituras:
+- é uma retomada contextual, porque já existe histórico anterior;
+- é mudança de jornada, porque o novo contato pode indicar outro objetivo.
+Nunca deixe a regra de mudança de jornada apagar a retomada. Use o histórico antigo como gancho, sem forçar o produto anterior.
 
 ==========================================
 MUDANÇA DE JORNADA DO CLIENTE
@@ -246,11 +249,24 @@ Considere mudança relevante quando o cliente:
 
 Quando houver mudança de jornada:
 - não trate a conversa como simples continuidade;
-- não force retomada do produto anterior;
+- não force a venda do produto anterior;
 - identifique claramente o produto anterior e o produto atual;
 - use a mudança como gancho comercial;
+- se houver histórico antigo, retome esse histórico de forma natural antes de perguntar;
 - não conduza direto para visita, proposta ou negociação sem entender o motivo da mudança, salvo se o cliente já pediu isso explicitamente;
 - faça uma pergunta de descoberta para entender o novo objetivo do cliente.
+
+Se também houver conversa parada, retorno depois de vários dias ou novo contato após uma conversa antiga, combine obrigatoriamente as duas regras:
+- primeiro retome o histórico anterior;
+- depois mencione a mudança de produto, padrão, finalidade ou objetivo;
+- por fim faça uma pergunta de descoberta para entender o momento atual do cliente.
+
+A mudança de jornada nunca pode substituir a retomada contextual.
+Estrutura correta nesse caso:
+"Retomando nosso contato: antes falávamos sobre [produto anterior], e agora você me chamou sobre [produto atual]. Queria entender melhor [pergunta de descoberta]."
+
+Nunca escreva como se fosse uma conversa nova.
+Nunca use apenas "vi que agora você está olhando".
 
 A pergunta deve descobrir se o interesse atual é:
 - moradia;
@@ -262,6 +278,14 @@ A pergunta deve descobrir se o interesse atual é:
 - ou outro motivo.
 
 Quando houver mudança de jornada, as sugestões devem priorizar diagnóstico comercial antes de avanço para visita ou proposta.
+
+Quando houver mudança de jornada, não comece exaltando o imóvel com frases genéricas como:
+"é diferenciado"
+"um dos melhores"
+"excelente oportunidade"
+"alto padrão"
+"empreendimento único"
+Nessa situação, a prioridade é entender o motivo da mudança de interesse, não vender o produto imediatamente.
 
 ==========================================
 SUGESTÕES DE RESPOSTAS
@@ -301,7 +325,8 @@ Regras das mensagens:
 - Use a pendência existente como gancho, exceto quando houver mudança de jornada mais importante.
 - Se houver pendência financeira, retome exatamente esse assunto, salvo quando o cliente mudou de produto/objetivo e ainda é preciso entender o motivo.
 - Se o próximo passo for visita, conduza naturalmente para agendamento, exceto quando a mudança de jornada exigir primeiro uma pergunta de descoberta.
-- Se a conversa estiver parada há mais de 7 dias e não houver nova entrada recente do cliente por outro produto/anúncio, faça retomada contextual.
+- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual.
+- Se a conversa estiver parada e também houver mudança de jornada, combine as duas regras: retome o histórico anterior, mencione a mudança e faça pergunta de descoberta.
 - Não reinicie a conversa.
 - Não pergunte o que o cliente já respondeu.
 - Não pressione.
@@ -341,10 +366,21 @@ Não gere três mensagens com a mesma estrutura.
 Não comece as três mensagens do mesmo jeito.
 Não termine as três mensagens com o mesmo tipo de pergunta.
 
-Se houver mudança de jornada, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
+Se houver mudança de jornada E também houver conversa parada, retorno depois de tempo ou novo contato após uma conversa antiga, as 3 sugestões devem ser retomadas contextuais de mudança de jornada:
+
+Sugestão 1 — Retomada + motivo da mudança:
+Retome o contato anterior, cite o produto/assunto anterior e o produto atual, perguntando o que chamou atenção no novo produto.
+
+Sugestão 2 — Retomada + redefinição do objetivo:
+Mostre que, para direcionar melhor essa retomada, é preciso entender se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
+
+Sugestão 3 — Retomada curta + objetivo atual:
+Mensagem mais curta e direta, deixando claro que antes de mandar opções soltas ou conduzir para visita, o corretor precisa entender o objetivo atual do cliente.
+
+Se houver mudança de jornada, mas NÃO houver retomada/conversa antiga relevante, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
 
 Sugestão 1 — Entender o motivo da mudança:
-Retome com naturalidade o produto anterior e o produto atual, perguntando o que chamou atenção no novo produto.
+Pergunte o que chamou atenção no novo produto.
 
 Sugestão 2 — Redefinir o objetivo:
 Descubra se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
@@ -401,8 +437,9 @@ const REGRAS_MSG_PROMPT = [
   "- Não pergunte o que o cliente já respondeu.",
   "- Não invente objeção: se não existe objeção explícita, registre Sem objeção explícita.",
   "- Se houver mudança de jornada/produto, investigue o novo objetivo antes de conduzir para visita, proposta ou condição.",
-  "- Se o cliente voltou por outro anúncio depois de tempo parado, use o histórico anterior como contexto, mas priorize o novo interesse.",
-  "- Se a conversa estiver parada há mais de 7 dias e não houver mudança de jornada recente, faça retomada contextual usando o último ponto concreto.",
+  "- Se o cliente voltou por outro anúncio depois de tempo parado, combine retomada contextual + mudança de jornada: histórico anterior, produto atual e pergunta de descoberta.",
+  "- Nunca deixe a mudança de jornada apagar a retomada quando existe histórico anterior.",
+  "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
   "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada mais importante.",
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
@@ -453,6 +490,44 @@ function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
   return sanitizarMensagemFallback(`Oi, ${nome}. Retomando nossa conversa sobre ${produto}: o ponto em aberto ficou em ${pendencia}. Para avançarmos sem recomeçar do zero, posso te passar um caminho objetivo em cima disso?`);
 }
 
+function diagnosticoIndicaMudancaComRetomada({ diagnostico = {}, raw = {}, lead = {} }) {
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const houveMudanca = /houvemudancajornada"\s*:\s*"?sim|mudan[cç]a de jornada|mudou de produto|produto anterior|interesse anterior|outro an[uú]ncio|premium office.*personali|personali.*premium office/.test(blob);
+  const temRetomada = /tempo parado|conversa parada|retomada|retomando|voltou depois|voltou por|conversa antiga|depois de tempo|três meses|tres meses|meses parado|h[aá]\s+mais\s+de\s+7\s+dias|\b[89]|[1-9][0-9]\s+dias/.test(blob);
+  return houveMudanca && temRetomada;
+}
+
+function produtoSeguroParaMsg(valor, fallback) {
+  const s = String(valor || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (!s || /^(nenhum|nenhuma|não identificad[ao]|nao identificad[ao]|—|-)$/i.test(s)) return fallback;
+  return s;
+}
+
+function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {} }) {
+  const nome = primeiraPalavraNome(lead);
+  const blob = JSON.stringify({ lead, diagnostico, raw }).toLowerCase();
+  const anterior = produtoSeguroParaMsg(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
+  const atual = produtoSeguroParaMsg(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
+  const anteriorSemArtigo = anterior.replace(/^(a|o|as|os)\s+/i, "");
+  const prefixo = nome ? `${nome}, ` : "";
+  return [
+    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
+    sanitizarMensagemFallback(`${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre ${anterior}, e agora você olhou ${atual}. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`),
+    sanitizarMensagemFallback(`${prefixo}como teu interesse mudou de ${anteriorSemArtigo} para ${atual}, prefiro entender teu objetivo atual antes de te passar coisa solta. Você está buscando algo para uso próprio ou pensando em investimento?`)
+  ];
+}
+
+function mensagemQueApagouRetomadaOuVirouPropaganda(txt) {
+  const s = String(txt || "").toLowerCase();
+  if (/vi\s+que\s+agora\s+voc[eê]\s+est[aá]\s+olhando/.test(s)) return true;
+  if (/esse\s+(apartamento|im[oó]vel).*realmente\s+diferenciado|um\s+dos\s+melhores\s+empreendimentos|excelente\s+oportunidade|empreendimento\s+único|empreendimento\s+unico/.test(s)) return true;
+  return false;
+}
+
+function mensagemTemRetomadaOuMudancaComHistorico(txt) {
+  return /retomando|nosso contato|nossa conversa|antes\s+(fal[aá]vamos|voc[eê]\s+tinha|conversamos)|saiu\s+de|mudou\s+de|voltou\s+por|agora\s+voc[eê]\s+me\s+chamou/i.test(String(txt || ""));
+}
+
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
   const base = gerarMensagemBaseFallback({ lead, diagnostico, raw });
   let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
@@ -472,6 +547,15 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     if (!x || x.length < REGRAS_MSG.minChars || mensagemFormatoRuim(x)) x = i === 0 ? base : a;
     return x;
   });
+
+  if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
+    const fallbackJornada = mensagensFallbackMudancaRetomada({ lead, diagnostico, raw });
+    for (let i = 0; i < mensagens.length; i++) {
+      if (mensagemQueApagouRetomadaOuVirouPropaganda(mensagens[i]) || !mensagemTemRetomadaOuMudancaComHistorico(mensagens[i])) {
+        mensagens[i] = fallbackJornada[i];
+      }
+    }
+  }
 
   if (normalizarTextoComparacao(mensagens[1]) === normalizarTextoComparacao(mensagens[0])) {
     mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Para facilitar, posso separar as opções que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
@@ -2321,9 +2405,9 @@ ${timelineText}`;
         a: msgA,
         b: msgB,
         c: msgC,
-        aLabel: "Retomar compromisso",
-        bLabel: "Facilitar decisão",
-        cLabel: "Retomada objetiva",
+        aLabel: "Recomendada",
+        bLabel: "Descobrir objetivo",
+        cLabel: "Direta ao ponto",
         recomendada: "a"
       },
       tipoContato: null,
