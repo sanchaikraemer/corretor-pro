@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-2-analise-pura-3-mensagens";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v725-cerebro-fallback-audio-window";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -214,6 +214,73 @@ function limparMensagemComercial(txt) {
     .replace(/\s*\n\s*/g, " ")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+
+function limitarMensagemWhatsApp(txt) {
+  let s = limparMensagemComercial(txt);
+  s = s.replace(RE_TERMOS_PROIBIDOS, "").replace(/\s{2,}/g, " ").trim();
+  if (s.length <= REGRAS_MSG.maxChars) return s;
+  return s.slice(0, REGRAS_MSG.maxChars - 1).replace(/[\s,.;:!?-]+$/g, "").trim() + ".";
+}
+
+function sanitizarMensagemFallback(txt) {
+  let s = limitarMensagemWhatsApp(txt);
+  if (mensagemTemEmoji(s)) s = limparMensagemComercial(s);
+  if (mensagemTemTermoProibido(s)) s = s.replace(RE_TERMOS_PROIBIDOS, "").replace(/\s{2,}/g, " ").trim();
+  if ((s.match(/\?/g) || []).length > REGRAS_MSG.maxPerguntas) {
+    let count = 0;
+    s = s.replace(/\?/g, () => (++count <= REGRAS_MSG.maxPerguntas ? "?" : "."));
+  }
+  return limitarMensagemWhatsApp(s);
+}
+
+function textoFallbackCurto(valor, fallback) {
+  const s = String(valor || "").replace(/\s+/g, " ").trim();
+  if (!s || /^(nenhum|nenhuma|não identificad[ao]|nao identificad[ao]|—|-)$/i.test(s)) return fallback;
+  return s;
+}
+
+function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
+  const nome = primeiraPalavraNome(lead);
+  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || lead?.product, "essa opção");
+  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "entender melhor o que pesa mais pra você agora");
+  return sanitizarMensagemFallback(`Oi, ${nome}. Revendo nossa conversa sobre ${produto}, o ponto principal agora é ${pendencia}. Pra eu te orientar sem mandar opção errada, você prefere seguir nessa linha ou comparar uma alternativa mais alinhada ao que busca hoje?`);
+}
+
+function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
+  const base = gerarMensagemBaseFallback({ lead, diagnostico, raw });
+  let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
+  if (!a || mensagemFormatoRuim(a) || a.length < REGRAS_MSG.minChars) a = base;
+
+  const nome = primeiraPalavraNome(lead);
+  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || lead?.product, "essa opção");
+  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o próximo passo");
+
+  let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b ||
+    `Oi, ${nome}. Vi aqui a nossa conversa sobre ${produto}. Antes de te mandar qualquer coisa, queria confirmar contigo: o que ficou mais importante agora é ${pendencia} ou mudou algo na tua busca?`);
+  let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c ||
+    `${nome}, pra eu avançar certo no atendimento: você quer que eu siga com ${produto} considerando ${pendencia}, ou prefere que eu te mostre uma alternativa mais objetiva dentro do teu perfil?`);
+
+  const mensagens = [a, b, c].map((m, i) => {
+    let x = sanitizarMensagemFallback(m || a || base);
+    if (!x || x.length < REGRAS_MSG.minChars || mensagemFormatoRuim(x)) x = i === 0 ? base : a;
+    return x;
+  });
+
+  if (normalizarTextoComparacao(mensagens[1]) === normalizarTextoComparacao(mensagens[0])) {
+    mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Antes de eu te mandar nova opção, quero alinhar contigo o ponto que ficou em aberto: ${pendencia}. Isso ainda é o principal pra você hoje?`);
+  }
+  if (normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[0]) || normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[1])) {
+    mensagens[2] = sanitizarMensagemFallback(`${nome}, pra eu ser direto: sigo trabalhando ${produto} pra você ou ajusto a busca considerando ${pendencia}?`);
+  }
+
+  return {
+    a: mensagens[0],
+    b: mensagens[1],
+    c: mensagens[2],
+    fallbackUsado: !(mensagensRaw.recomendada && mensagensRaw.maisSuave && mensagensRaw.maisDireta)
+  };
 }
 
 
@@ -795,9 +862,11 @@ async function transcribeAudioOnce({ zip, audioName, openai, cache }) {
   return cache[base];
 }
 
-export async function buildTimeline({ zip, messages, audioFiles, openai }) {
+export async function buildTimeline({ zip, messages, audioFiles, audioFilesParaTranscrever = null, audioFilesForaDaJanela = [], openai }) {
   const maxAudioTranscriptions = Number(process.env.MAX_AUDIO_TRANSCRIPTIONS || 40);
   const audioNames = audioFiles.map(normalizeName);
+  const permitidosTranscrever = Array.isArray(audioFilesParaTranscrever) ? new Set(audioFilesParaTranscrever.map(normalizeName)) : null;
+  const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
   const audioTranscriptions = {};
   const timeline = [];
 
@@ -808,6 +877,7 @@ export async function buildTimeline({ zip, messages, audioFiles, openai }) {
   for (const msg of messages) {
     const audioRef = findReferencedAudio(msg.text, audioNames);
     if (audioRef) {
+      if (permitidosTranscrever && !permitidosTranscrever.has(audioRef)) continue;
       const fullAudioName = audioFiles.find(a => normalizeName(a) === audioRef);
       if (fullAudioName) audiosReferenciados.push({ msg, audioRef, fullAudioName });
     }
@@ -843,13 +913,21 @@ export async function buildTimeline({ zip, messages, audioFiles, openai }) {
     const audioRef = findReferencedAudio(msg.text, audioNames);
     if (audioRef) {
       usedAudio.add(audioRef);
-      const transcription = audioTranscriptions[audioRef] || { status: openai ? "limite_transcricao" : "api_nao_configurada", text: "" };
+      const transcription = audioTranscriptions[audioRef] || {
+        status: foraDaJanela.has(audioRef) ? "nao_transcrito_fora_do_periodo" : (openai ? "limite_transcricao" : "api_nao_configurada"),
+        text: ""
+      };
+      const textoAudio = transcription.text
+        ? `[Áudio transcrito] ${transcription.text}`
+        : (transcription.status === "nao_transcrito_fora_do_periodo"
+          ? `[Áudio: ${audioRef} — não transcrito por estar fora do período escolhido]`
+          : `[Áudio: ${audioRef} — ${transcription.status}]`);
       timeline.push({
         ...msg,
         type: "audio",
         mediaFile: audioRef,
         audioStatus: transcription.status,
-        text: transcription.text ? `[Áudio transcrito] ${transcription.text}` : `[Áudio: ${audioRef} — ${transcription.status}]`,
+        text: textoAudio,
         source: "audio"
       });
       continue;
@@ -860,7 +938,8 @@ export async function buildTimeline({ zip, messages, audioFiles, openai }) {
   // 3) Áudios soltos no ZIP que não estavam referenciados no TXT, transcreve também em paralelo
   const audiosSoltos = audioFiles.filter(a => !usedAudio.has(normalizeName(a)));
   const restanteOrcamento = Math.max(0, maxAudioTranscriptions - limitados.length);
-  const soltosParaTranscrever = audiosSoltos.slice(0, restanteOrcamento);
+  const soltosElegiveis = permitidosTranscrever ? audiosSoltos.filter(a => permitidosTranscrever.has(normalizeName(a))) : audiosSoltos;
+  const soltosParaTranscrever = soltosElegiveis.slice(0, restanteOrcamento);
   if (openai && soltosParaTranscrever.length) {
     for (let i = 0; i < soltosParaTranscrever.length; i += BATCH) {
       const batch = soltosParaTranscrever.slice(i, i + BATCH);
@@ -1598,7 +1677,7 @@ function jeitoAprendidoCompacto(config, contexto) {
 }
 
 // Extrai a INTELIGÊNCIA OBSERVADA de UMA conversa já salva (timeline em texto), pra ensinar o
-// Cérebro com os leads que JÁ estão no Direciona — sem reanalisar o lead inteiro. Prompt curto e
+// Cérebro com os leads que JÁ estão no Corretor Pro — sem reanalisar o lead inteiro. Prompt curto e
 // focado, mesma forma que o campo inteligenciaObservada da análise. Retorna {} se não der pra extrair.
 export async function extrairInteligenciaObservada(timelineText, openai) {
   if (!timelineText || timelineText.trim().length < 40) return {};
@@ -1607,7 +1686,7 @@ export async function extrairInteligenciaObservada(timelineText, openai) {
   const textoConversa = String(timelineText).split(/\s+/).slice(0, 1800).join(" ");
   const prompt = `Você vai LER E ENTENDER uma conversa INTEIRA de WhatsApp entre um CORRETOR da Construtora Senger (Carazinho/RS) e um cliente — TUDO que aconteceu: as PERGUNTAS, dúvidas e situações do CLIENTE e as RESPOSTAS e a condução do CORRETOR. Leia os dois lados, do começo ao fim, e entenda o que rolou.
 
-Seu objetivo: aprender COMO O CORRETOR AGE em cada situação — qual era a situação/pergunta do cliente, o que o corretor respondeu/fez, e qual foi o resultado — pra o Direciona saber repetir isso em situações SEMELHANTES no futuro. Pense sempre em PARES: "quando o cliente faz/pergunta/objeta X → o corretor responde/conduz Y → deu resultado Z".
+Seu objetivo: aprender COMO O CORRETOR AGE em cada situação — qual era a situação/pergunta do cliente, o que o corretor respondeu/fez, e qual foi o resultado — pra o Corretor Pro saber repetir isso em situações SEMELHANTES no futuro. Pense sempre em PARES: "quando o cliente faz/pergunta/objeta X → o corretor responde/conduz Y → deu resultado Z".
 
 Use SÓ o que está LITERALMENTE na conversa (perguntas e respostas reais dos dois lados) — NÃO invente. Se houver QUALQUER troca real (cliente perguntou/disse algo e o corretor respondeu), capture pelo menos o "tom" e o que dá pra observar. Só retorne {} (vazio) se a conversa for SÓ um formulário automático / saudação solta, sem nenhum diálogo real.
 
@@ -1850,7 +1929,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       permutaResumo: "",
       melhorHorarioContato: "",
       materiais: [],
-      nextAction: "A análise ainda não foi configurada no servidor. Sem ela, o Direciona não consegue analisar a conversa nem gerar mensagens.",
+      nextAction: "A análise ainda não foi configurada no servidor. Sem ela, o Corretor Pro não consegue analisar a conversa nem gerar mensagens.",
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
       sugestoesPendentes: true,
       validacaoSugestoes: ["OpenAI não configurada"],
@@ -1884,20 +1963,29 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = prefixo + recentes.join("\n")
       + (linhasManuais.length ? "\n\nANOTAÇÕES DO CORRETOR (fatos confirmados — sempre considere TODAS):\n" + linhasManuais.join("\n") : "");
   }
-  // v724-2: reset total do cérebro de análise.
-  // Nada de Cérebro, catálogo, aprendizado, prompts auxiliares ou regras antigas no prompt.
-  // A IA recebe somente o histórico completo, o lead e o prompt puro definido acima.
+  // v725: a análise continua simples, mas volta a receber o Cérebro Comercial como orientação controlada.
+  // O histórico da conversa segue sendo a fonte principal. Cérebro/catálogo entram como regras do corretor
+  // e fatos de produto, sem substituir o que o cliente realmente disse.
   const hoje = new Date().toISOString().slice(0, 10);
-  const corretorNome = String(lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
+  const configCerebro = await loadCerebroConfig().catch(() => null);
+  const corretorNome = String(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
   const perspectiva = `\n\nPerspectiva: você é o corretor. As mensagens enviadas por ${corretorNome} ou pela Construtora/Senger são suas. O lead é a outra pessoa da conversa. A próxima mensagem sugerida deve ser escrita por você para o lead.`;
+  const orientacoesCerebro = montarOrientacoes(configCerebro || {}, timelineText.slice(-18000));
+  const conhecimentoCorretor = await loadConhecimentoCorretor().catch(() => "");
+  const catalogoSenger = await loadCatalogoSenger().catch(() => CATALOGO_SENGER_FALLBACK);
+  const diferenciaisDoCaso = diferenciaisRelevantes(timelineText);
+  const exemplosVoz = exemplosDoCorretor(timeline);
+  const blocoConhecimento = conhecimentoCorretor ? `\n\nCONHECIMENTO ENSINADO PELO CORRETOR (fatos e regras persistentes):\n${conhecimentoCorretor.slice(0, 12000)}` : "";
+  const blocoCatalogo = `\n\n${catalogoSenger}\n${diferenciaisDoCaso ? "\n" + diferenciaisDoCaso : ""}`;
+  const blocoVoz = exemplosVoz ? `\n\nEXEMPLOS REAIS DO JEITO DO CORRETOR NESTA CONVERSA (use como tom, não copie literal):\n${exemplosVoz}` : "";
   const blocoIncremental = contextoIncremental ? `\n\nContexto anterior consolidado, apenas como memória factual. Não trate como nova fala do cliente:\n${JSON.stringify(contextoIncremental)}` : "";
   const prompt = `${PROMPT_ANALISE_PURA}
 
-Hoje é ${hoje}.${perspectiva}${blocoIncremental}
+Hoje é ${hoje}.${perspectiva}${orientacoesCerebro}${blocoConhecimento}${blocoCatalogo}${blocoVoz}${blocoIncremental}
 
 IMPORTANTE PARA O SISTEMA:
 Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
-Não use estrutura antiga do Direciona. Não gere cards auxiliares. Gere exatamente 3 mensagens comerciais, no mesmo JSON, sem segunda IA.
+Não use estrutura antiga do sistema. Não gere cards auxiliares. Gere exatamente 3 mensagens comerciais, no mesmo JSON, sem segunda IA.
 
 Use este formato de compatibilidade:
 {
@@ -1958,9 +2046,10 @@ ${timelineText}`;
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
     const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = limparMensagemComercial(txt(mensagensRaw.recomendada || mensagensRaw.a || d.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida));
-    const msgB = limparMensagemComercial(txt(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b));
-    const msgC = limparMensagemComercial(txt(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c));
+    const trioMensagens = completarMensagensComFallback({ mensagensRaw, diagnostico: d, raw, lead });
+    const msgA = trioMensagens.a;
+    const msgB = trioMensagens.b;
+    const msgC = trioMensagens.c;
     const msg = msgA;
     const produtoAtual = txt(raw.produtoInteresse || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
@@ -1995,7 +2084,7 @@ ${timelineText}`;
         // zerados logo abaixo (garantirMensagensMotorComercialV714) quando o
         // trio não está completo. Resultado: a seção inteira fica escondida
         // ("Mensagem ainda não gerada") apesar da mensagem A existir aqui.
-        mensagemQueEuEnviariaHoje: (msgA && msgB && msgC) ? msg : "",
+        mensagemQueEuEnviariaHoje: msg,
         percepcaoTodaConversa: txt(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
@@ -2040,9 +2129,9 @@ ${timelineText}`;
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
-      sugestoesPendentes: !(msgA && msgB && msgC),
-      validacaoSugestoes: [],
-      mensagensValidadasEm: (msgA && msgB && msgC) ? new Date().toISOString() : null,
+      sugestoesPendentes: false,
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v725 completou mensagens ausentes sem apagar a análise."] : [],
+      mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
 
@@ -2052,7 +2141,7 @@ ${timelineText}`;
     const isQuota = /quota|insufficient|429|billing/i.test(detail);
     const motivo = isQuota
       ? "O provedor de análise está sem saldo/limite agora. Tente reanalisar novamente; se persistir, confira o Diagnóstico."
-      : "O Direciona não conseguiu analisar agora. Toque em Reanalisar daqui a alguns minutos.";
+      : "O Corretor Pro não conseguiu analisar agora. Toque em Reanalisar daqui a alguns minutos.";
     return {
       mode: "erro_api",
       error: detail,
@@ -2142,7 +2231,7 @@ export async function compararEvolucao({ anterior, atual, novasMensagens, openai
       trechoNovas = resumos.join("\n\n");
     }
   }
-  const prompt = `Você é o Agente Aprendizado do Direciona. O corretor reimportou a conversa deste lead ao fim de um novo atendimento. Compare a análise ANTERIOR com a situação ATUAL e diga, de forma honesta e baseada SÓ no que está escrito, o que aconteceu desde a última vez.
+  const prompt = `Você é o Agente Aprendizado do Corretor Pro. O corretor reimportou a conversa deste lead ao fim de um novo atendimento. Compare a análise ANTERIOR com a situação ATUAL e diga, de forma honesta e baseada SÓ no que está escrito, o que aconteceu desde a última vez.
 
 ANÁLISE ANTERIOR:
 ${JSON.stringify(resumoAnterior)}
@@ -2268,7 +2357,59 @@ function filtrarMensagensRecentes(messages, dias) {
   };
 }
 
-export async function processZipBuffer(buffer) {
+
+function normalizarDiasJanelaAudio(valor) {
+  const raw = String(valor ?? "").trim().toLowerCase();
+  if (!raw) return 90;
+  if (/^(all|todo|tudo|todos|inteiro|completo|0|null)$/i.test(raw)) return null;
+  const n = Number(raw);
+  if ([30, 60, 90].includes(n)) return n;
+  if (Number.isFinite(n) && n > 0 && n <= 3650) return Math.round(n);
+  return 90;
+}
+
+function coletarAudiosReferenciados(messages, audioFiles) {
+  const audioNamesNorm = audioFiles.map(normalizeName);
+  const encontrados = new Set();
+  for (const m of (messages || [])) {
+    const ref = findReferencedAudio(m.text, audioNamesNorm);
+    if (ref) encontrados.add(ref);
+  }
+  return encontrados;
+}
+
+function montarPlanoJanelaAudios(messagesAll, audioFiles, audioWindowDays) {
+  const diasAudio = normalizarDiasJanelaAudio(audioWindowDays);
+  const recorteAudio = diasAudio == null
+    ? { filtered: messagesAll, info: { aplicado: false, tipo: "audio", todoPeriodo: true, historicoTextoCompleto: true, totalOriginal: messagesAll.length, totalFiltrado: messagesAll.length } }
+    : filtrarMensagensRecentes(messagesAll, diasAudio);
+  const mensagensAudio = Array.isArray(recorteAudio.filtered) ? recorteAudio.filtered : messagesAll;
+  const refsTodas = coletarAudiosReferenciados(messagesAll, audioFiles);
+  const refsJanela = coletarAudiosReferenciados(mensagensAudio, audioFiles);
+  const foraDaJanela = [...refsTodas].filter(ref => !refsJanela.has(ref));
+  const audioFilesTimeline = audioFiles.filter(audio => refsTodas.has(normalizeName(audio)));
+  const audiosParaTranscrever = audioFiles.filter(audio => refsJanela.has(normalizeName(audio)));
+  const info = recorteAudio.info || { aplicado: false };
+  return {
+    messages: messagesAll,
+    audioFilesTimeline,
+    audiosParaTranscrever,
+    audioFilesForaDaJanela: foraDaJanela,
+    janelaInfo: {
+      ...info,
+      tipo: "audio",
+      dias: diasAudio,
+      todoPeriodo: diasAudio == null,
+      historicoTextoCompleto: true,
+      totalMensagensAnalise: messagesAll.length,
+      totalAudiosReferenciados: refsTodas.size,
+      totalAudiosNoPeriodo: refsJanela.size,
+      totalAudiosForaDoPeriodo: foraDaJanela.length
+    }
+  };
+}
+
+export async function processZipBuffer(buffer, options = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const allNames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
   const txtName = allNames.find(name => name.toLowerCase().endsWith(".txt"));
@@ -2284,29 +2425,23 @@ export async function processZipBuffer(buffer) {
   const txt = await zip.files[txtName].async("string");
   const messagesAll = parseWhatsappTxt(txt);
 
-  // Por padrão, a análise recebe TODO o histórico do ZIP. O recorte antigo de N dias
-  // fazia o Direciona perder conversas antigas importantes (ex.: retomadas após 1 ano),
-  // mesmo quando o usuário enviava o mesmo arquivo completo ao ChatGPT.
-  // O limite só volta se DIRECIONA_LIMITAR_HISTORICO=1 for configurado explicitamente.
-  const limitarHistorico = process.env.DIRECIONA_LIMITAR_HISTORICO === "1";
-  const diasJanela = limitarHistorico ? await getDiasJanelaConfig() : null;
-  const recorte = limitarHistorico
-    ? filtrarMensagensRecentes(messagesAll, diasJanela)
-    : { filtered: messagesAll, info: { aplicado: false, historicoCompleto: true, totalOriginal: messagesAll.length, totalFiltrado: messagesAll.length } };
-  const { filtered: messages, info: filtroInfo } = recorte;
-
-  // Só transcreve áudios que ainda estão referenciados nas mensagens filtradas
-  const audioNamesNorm = audioFiles.map(normalizeName);
-  const audioFilesRelevantes = audioFiles.filter(audio => {
-    const baseNorm = normalizeName(audio);
-    return messages.some(m => {
-      const ref = findReferencedAudio(m.text, audioNamesNorm);
-      return ref && ref === baseNorm;
-    });
-  });
+  // v725: o texto SEMPRE entra completo na análise. A janela limita somente quais áudios serão transcritos.
+  const planoAudio = montarPlanoJanelaAudios(messagesAll, audioFiles, options.audioWindowDays ?? await getDiasJanelaConfig());
+  const messages = planoAudio.messages;
+  const audioFilesRelevantes = planoAudio.audioFilesTimeline;
+  const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
+  const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
+  const filtroInfo = planoAudio.janelaInfo;
 
   const openai = getOpenAI();
-  const { timeline, audioTranscriptions, transcriptionEnabled } = await buildTimeline({ zip, messages, audioFiles: audioFilesRelevantes, openai });
+  const { timeline, audioTranscriptions, transcriptionEnabled } = await buildTimeline({
+    zip,
+    messages,
+    audioFiles: audioFilesRelevantes,
+    audioFilesParaTranscrever: audiosParaTranscrever,
+    audioFilesForaDaJanela,
+    openai
+  });
   const lead = guessLeadData(timeline);
   const analysis = await analyzeWithBrain({ lead, timeline, openai });
   const audioValues = Object.values(audioTranscriptions || {});
@@ -2319,11 +2454,11 @@ export async function processZipBuffer(buffer) {
     rawText: txt,
     ignoredFilesCount: ignoredFiles.length,
     ignoredFiles: ignoredFiles.slice(0, 120).map(normalizeName),
-    ignoredRule: "Imagens, vídeos, documentos, emojis e figurinhas não alimentam a análise. O Direciona usa texto e áudios transcritos.",
+    ignoredRule: "Imagens, vídeos, documentos, emojis e figurinhas não alimentam a análise. O Corretor Pro usa texto e áudios transcritos.",
     audioFiles: audioFilesRelevantes.map(normalizeName),
     audiosEncontrados: audioFilesRelevantes.length,
     audiosTotalNoZip: audioFiles.length,
-    audiosDescartadosPorJanela: audioFiles.length - audioFilesRelevantes.length,
+    audiosDescartadosPorJanela: audioFilesForaDaJanela.length,
     audiosTranscritos,
     audiosComErro,
     primeiroErroAudio,
@@ -2339,6 +2474,8 @@ export async function processZipBuffer(buffer) {
       totalMensagensOriginais: messagesAll.length,
       timelineItems: timeline.length,
       audioFiles: audioFilesRelevantes.length,
+      audiosParaTranscrever: audiosParaTranscrever.length,
+      audiosForaDoPeriodo: audioFilesForaDaJanela.length,
       audiosTranscritos,
       audiosComErro,
       ignoredFiles: ignoredFiles.length
@@ -2354,7 +2491,7 @@ export async function processZipBuffer(buffer) {
 // ETAPA 1 — Prepara: lê o ZIP, separa o TXT, preserva o histórico completo e lista
 // os áudios que precisam de transcrição. Um recorte por dias só existe se ativado por env. Rápido,
 // não chama OpenAI.
-export async function prepararConversaDoZip(buffer) {
+export async function prepararConversaDoZip(buffer, options = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const allNames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
   const txtName = allNames.find(name => name.toLowerCase().endsWith(".txt"));
@@ -2369,12 +2506,10 @@ export async function prepararConversaDoZip(buffer) {
 
   const txt = await zip.files[txtName].async("string");
   const messagesAll = parseWhatsappTxt(txt);
-  const limitarHistorico = process.env.DIRECIONA_LIMITAR_HISTORICO === "1";
-  const diasJanela = limitarHistorico ? await getDiasJanelaConfig() : null;
-  const recorte = limitarHistorico
-    ? filtrarMensagensRecentes(messagesAll, diasJanela)
-    : { filtered: messagesAll, info: { aplicado: false, historicoCompleto: true, totalOriginal: messagesAll.length, totalFiltrado: messagesAll.length } };
-  const { filtered: messages, info: filtroInfo } = recorte;
+  // v725: todas as mensagens escritas ficam na análise. A janela escolhida limita só transcrição de áudio.
+  const planoAudio = montarPlanoJanelaAudios(messagesAll, audioFiles, options.audioWindowDays ?? await getDiasJanelaConfig());
+  const messages = planoAudio.messages;
+  const filtroInfo = planoAudio.janelaInfo;
 
   // "Sem mídia": quando o WhatsApp exporta SEM mídia, os áudios/imagens viram "<Mídia oculta>"
   // e NÃO vêm no zip. Contamos pra AVISAR o corretor — senão os áudios somem calados e a análise
@@ -2382,33 +2517,30 @@ export async function prepararConversaDoZip(buffer) {
   const midiasOcultas = (txt.match(/<[^>]*(oculta|omitida|omitido|ocultado|omitted|hidden)[^>]*>/gi) || []).length;
   const exportadoSemMidia = midiasOcultas > 0 && audioFiles.length === 0;
 
-  // Áudios referenciados nas mensagens preservadas
-  const audioNamesNorm = audioFiles.map(normalizeName);
-  const audioFilesRelevantes = audioFiles.filter(audio => {
-    const baseNorm = normalizeName(audio);
-    return messages.some(m => {
-      const ref = findReferencedAudio(m.text, audioNamesNorm);
-      return ref && ref === baseNorm;
-    });
-  });
+  const audioFilesRelevantes = planoAudio.audioFilesTimeline;
+  const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
+  const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
 
   return {
     txtFile: txtName,
     messages,
     leadPreliminar: guessLeadData(messages),
     audioFilesRelevantes: audioFilesRelevantes.map(normalizeName),
-    audiosParaTranscrever: audioFilesRelevantes.map(normalizeName),
+    audiosParaTranscrever: audiosParaTranscrever.map(normalizeName),
+    audioFilesForaDaJanela: audioFilesForaDaJanela.map(normalizeName),
     janelaConversa: filtroInfo,
     ignoredFilesCount: ignoredFiles.length,
     ignoredFiles: ignoredFiles.slice(0, 120).map(normalizeName),
     audiosTotalNoZip: audioFiles.length,
-    audiosDescartadosPorJanela: audioFiles.length - audioFilesRelevantes.length,
+    audiosDescartadosPorJanela: audioFilesForaDaJanela.length,
     midiasOcultas,
     exportadoSemMidia,
     metricsBase: {
       totalFiles: allNames.length,
       totalMensagensOriginais: messagesAll.length,
       totalMessagesParsed: messages.length,
+      audiosParaTranscrever: audiosParaTranscrever.length,
+      audiosForaDoPeriodo: audioFilesForaDaJanela.length,
       midiasOcultas,
       exportadoSemMidia
     }
@@ -2443,21 +2575,30 @@ export async function transcreverLoteDoZip(buffer, audioNames) {
 
 // Monta a timeline a partir de mensagens já filtradas + transcrições já prontas
 // (não chama OpenAI). transcriptionMap: { nomeBaseDoAudio: {status, text} }
-function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap) {
+function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = []) {
   const audioNames = (audioFilesRelevantes || []).map(normalizeName);
+  const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
   const timeline = [];
   const usedAudio = new Set();
   for (const msg of messages) {
     const audioRef = findReferencedAudio(msg.text, audioNames);
     if (audioRef) {
       usedAudio.add(audioRef);
-      const t = transcriptionMap[audioRef] || { status: "sem_transcricao", text: "" };
+      const t = transcriptionMap[audioRef] || {
+        status: foraDaJanela.has(audioRef) ? "nao_transcrito_fora_do_periodo" : "sem_transcricao",
+        text: ""
+      };
+      const textoAudio = t.text
+        ? `[Áudio transcrito] ${t.text}`
+        : (t.status === "nao_transcrito_fora_do_periodo"
+          ? `[Áudio: ${audioRef} — não transcrito por estar fora do período escolhido]`
+          : `[Áudio: ${audioRef} — ${t.status}]`);
       timeline.push({
         ...msg,
         type: "audio",
         mediaFile: audioRef,
         audioStatus: t.status,
-        text: t.text ? `[Áudio transcrito] ${t.text}` : `[Áudio: ${audioRef} — ${t.status}]`,
+        text: textoAudio,
         source: "audio"
       });
       continue;
@@ -2524,13 +2665,13 @@ function ehAnotacaoManualIncremental(m) {
 // quando é reimportação, usa só as novidades + contexto consolidado anterior.
 export async function finalizarAnaliseDaConversa(payload) {
   const {
-    txtFile, messages, audioFilesRelevantes, transcriptionMap, janelaConversa,
+    txtFile, messages, audioFilesRelevantes, audioFilesForaDaJanela, transcriptionMap, janelaConversa,
     ignoredFilesCount, ignoredFiles, audiosTotalNoZip, audiosDescartadosPorJanela,
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
     audiosReaproveitados = 0, audiosNovosSolicitados = 0
   } = payload;
 
-  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {});
+  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || []);
   const timelineAntiga = Array.isArray(existingTimeline) ? existingTimeline : [];
   const reimportacao = !!(existingLeadId && timelineAntiga.length);
   const chavesAntigas = new Set(timelineAntiga.map(assinaturaTimelineIncremental).filter(Boolean));
@@ -2593,7 +2734,7 @@ export async function finalizarAnaliseDaConversa(payload) {
     audioFiles: (audioFilesRelevantes || []),
     audiosEncontrados: timeline.filter(m => m?.mediaFile).length,
     audiosTotalNoZip: audiosTotalNoZip || 0,
-    audiosDescartadosPorJanela: audiosDescartadosPorJanela || 0,
+    audiosDescartadosPorJanela: audiosDescartadosPorJanela || (Array.isArray(audioFilesForaDaJanela) ? audioFilesForaDaJanela.length : 0),
     audiosTranscritos: audiosTranscritosTotal || audiosTranscritosNoArquivo,
     audiosComErro,
     primeiroErroAudio,

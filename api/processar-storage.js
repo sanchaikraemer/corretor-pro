@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     // ===== ETAPA 1: PREPARAR (lê TXT, aplica janela, lista áudios) =====
     if (action === "preparar") {
       const buffer = await baixarZip();
-      const prep = await prepararConversaDoZip(buffer);
+      const prep = await prepararConversaDoZip(buffer, { audioWindowDays: body?.audioWindowDays });
       return json(res, 200, { ok: true, bucket, path: storagePath, sizeBytes: buffer.length, ...prep });
     }
 
@@ -115,6 +115,7 @@ export default async function handler(req, res) {
         rawText: body?.rawText,
         messages: body?.messages,
         audioFilesRelevantes: body?.audioFilesRelevantes,
+        audioFilesForaDaJanela: body?.audioFilesForaDaJanela,
         transcriptionMap: body?.transcriptionMap,
         janelaConversa: body?.janelaConversa,
         ignoredFilesCount: body?.ignoredFilesCount,
@@ -133,7 +134,7 @@ export default async function handler(req, res) {
 
     // ===== MODO COMPLETO (single-shot, legado — pra ZIPs pequenos) =====
     const buffer = await baixarZip();
-    const result = await processZipBuffer(buffer);
+    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays });
     return json(res, 200, { ok: true, bucket, path: storagePath, sizeBytes: buffer.length, autoSaved: false, ...result });
   } catch (error) {
     if (error?._download) {

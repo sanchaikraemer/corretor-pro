@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v724-2-analise-pura-3-mensagens";
+const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v725-cerebro-fallback-audio-window";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -1524,7 +1524,7 @@ function whatsappLink(phone, msg){
   return p ? `https://wa.me/${p}?text=${text}` : `https://wa.me/?text=${text}`;
 }
 // Link de WhatsApp do lead JÁ com a mensagem sugerida (a "direta", com saudação) preenchida.
-// Assim o corretor abre a conversa pronta pra enviar, sem perder a sugestão do Direciona.
+// Assim o corretor abre a conversa pronta pra enviar, sem perder a sugestão do Corretor Pro.
 function linkWhatsAppDireta(l){
   if(!l || !l.phone) return "";
   let msg = "";
@@ -5661,7 +5661,7 @@ function kpiMini(label, value, cor){
   </div>`;
 }
 
-// Mostra na tela do Cérebro o estado do aprendizado do Direciona — quantas observações
+// Mostra na tela do Cérebro o estado do aprendizado do Corretor Pro — quantas observações
 // foram acumuladas em cada categoria pelo uso real (importação de ZIPs).
 async function carregarEstadoIA(){
   const box = qs("#estadoIABox");
@@ -6002,7 +6002,41 @@ Tamanho: ${file?((file.size/1024/1024).toFixed(1)+" MB"):""}`;
   return raw || "Não foi possível processar este ZIP agora.";
 }
 
-async function uploadLargeZipToSupabase(file){
+
+function normalizarJanelaAudioCliente(valor){
+  const raw = String(valor ?? "").trim().toLowerCase();
+  if(/^(all|todo|tudo|todos|inteiro|completo|0)$/i.test(raw)) return "all";
+  const n = Number(raw);
+  if([30,60,90].includes(n)) return String(n);
+  return "90";
+}
+
+function rotuloJanelaAudio(valor){
+  const v = normalizarJanelaAudioCliente(valor);
+  return v === "all" ? "todo o período" : `últimos ${v} dias`;
+}
+
+function escolherPeriodoAudiosImportacao(){
+  let salvo = "90";
+  try{ salvo = localStorage.getItem("corretor_pro_audio_window_days_v725") || "90"; }catch(_){}
+  const texto = [
+    "Escolha o período dos ÁUDIOS para transcrição:",
+    "",
+    "30 = últimos 30 dias",
+    "60 = últimos 60 dias",
+    "90 = últimos 90 dias (padrão)",
+    "todo = todo o período",
+    "",
+    "As mensagens escritas serão importadas completas em qualquer opção."
+  ].join("\n");
+  const resposta = prompt(texto, salvo === "all" ? "todo" : salvo);
+  const final = resposta == null ? normalizarJanelaAudioCliente(salvo) : normalizarJanelaAudioCliente(resposta);
+  try{ localStorage.setItem("corretor_pro_audio_window_days_v725", final); }catch(_){}
+  state.ultimaJanelaAudio = final;
+  return final;
+}
+
+async function uploadLargeZipToSupabase(file, options = {}){
   state.ultimoArquivo = file;
   qs("#processingText").textContent="Preparando upload seguro para ZIP grande...";
   qs("#progressBar").style.width="18%";
@@ -6072,7 +6106,7 @@ async function uploadLargeZipToSupabase(file){
   // 1) preparar → 2) transcrever em lotes → 3) analisar
   let analysisData;
   try{
-    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name);
+    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90" });
   }catch(err){
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
@@ -6087,7 +6121,7 @@ async function uploadLargeZipToSupabase(file){
       if(stored?.bucket && stored?.path){
         qs("#processingText").textContent = "Tentando de novo (sem reenviar o ZIP)...";
         try{
-          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name);
+          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90" });
           qs("#progressBar").style.width="100%";
           qs("#processingText").textContent="Conversa processada.";
           renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path });
@@ -6110,7 +6144,7 @@ async function uploadLargeZipToSupabase(file){
 // Orquestra o processamento em 3 etapas, cada chamada curta o suficiente pro servidor.
 // Na reimportação, reconhece o lead ANTES das APIs: reaproveita transcrições já salvas
 // e envia ao Cérebro somente as mensagens inéditas + contexto consolidado anterior.
-async function processarStorageEmEtapas(bucket, path, fileName){
+async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   async function chamar(payload, timeoutMs){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
@@ -6136,7 +6170,7 @@ async function processarStorageEmEtapas(bucket, path, fileName){
   // ETAPA 1 — preparar
   renderEtapas(2, "lendo conversa e identificando novidades");
   qs("#progressBar").style.width="35%";
-  const prep = await chamar({ action: "preparar" }, 58000);
+  const prep = await chamar({ action: "preparar", audioWindowDays: options.audioWindowDays || "90" }, 58000);
   const janela = prep.janelaConversa;
 
   // Reconhece o lead antes de transcrever/analisar. Só reaproveita automaticamente
@@ -6210,7 +6244,7 @@ async function processarStorageEmEtapas(bucket, path, fileName){
   } else if(audiosReaproveitados){
     renderEtapas(5, `${audiosReaproveitados} áudio(s) já transcrito(s) — sem nova cobrança`);
   } else {
-    renderEtapas(5, "sem áudios na janela");
+    renderEtapas(5, "sem áudios no período escolhido");
   }
 
   // ETAPA 3 — o servidor busca o histórico anterior pelo ID e analisa somente as novidades.
@@ -6221,6 +6255,7 @@ async function processarStorageEmEtapas(bucket, path, fileName){
     txtFile: prep.txtFile,
     messages: prep.messages,
     audioFilesRelevantes: prep.audioFilesRelevantes,
+    audioFilesForaDaJanela: prep.audioFilesForaDaJanela,
     transcriptionMap,
     janelaConversa: janela,
     ignoredFilesCount: prep.ignoredFilesCount,
@@ -6263,8 +6298,8 @@ async function renderProcessedResult(data, meta){
   renderAnalysis(analysis, state.lead);
 
   const j = data.janelaConversa;
-  const janelaHtml = (j && j.aplicado) ?
-    `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Janela aplicada:</b> últimos ${j.dias} dias da conversa (${escapeHtml(j.janelaDe)} → ${escapeHtml(j.janelaAte)}). Considerei ${j.totalFiltrado} de ${j.totalOriginal} mensagens · ignorei ${Number(data.audiosDescartadosPorJanela||0)} áudio(s) fora da janela. <a href="#" onclick="show('cerebro');return false" style="color:var(--lime);text-decoration:underline">mudar janela</a></div>` : "";
+  const janelaHtml = (j && (j.tipo === "audio" || j.aplicado || j.todoPeriodo)) ?
+    `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}. <a href="#" onclick="show('cerebro');return false" style="color:var(--lime);text-decoration:underline">ajustar padrão</a></div>` : "";
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:#ffd9ad"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
@@ -6326,7 +6361,7 @@ async function renderProcessedResult(data, meta){
     acoesHtml +
     `<div style="margin-top:14px">` +
     `<b>TXT:</b> ${escapeHtml(data.txtFile || meta.fileName)}<br>` +
-    `<b>Áudios encontrados na janela:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
+    `<b>Áudios no histórico:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
     `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
     janelaHtml + semMidiaHtml + incrementalHtml +
@@ -6546,6 +6581,9 @@ async function processFile(file){
     state.processing=false;return;
   }
 
+  const audioWindowDays = escolherPeriodoAudiosImportacao();
+  qs("#processingText").textContent = "Áudios: transcrição limitada a " + rotuloJanelaAudio(audioWindowDays) + ". Mensagens escritas entram completas.";
+
   // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
   let slimInfo = null;
   let working = file;
@@ -6568,7 +6606,7 @@ async function processFile(file){
 
   // Tudo passa pelo Storage — o processar-storage dá conta de qualquer tamanho.
   try{
-    await uploadLargeZipToSupabase(working);
+    await uploadLargeZipToSupabase(working, { audioWindowDays });
   }catch(err){
     qs("#progressBar").style.width="100%";
     qs("#processingText").textContent="Falha no processamento.";
@@ -6857,7 +6895,7 @@ qs("#cerebroLinkBtn")?.addEventListener("click", async () => {
     st.innerHTML = '<span style="color:var(--risco)">' + (ehTimeout ? "Demorou demais. Tente um vídeo mais curto ou cole o texto como regra." : "Erro: " + escapeHtml(String(err?.message||err))) + '</span>';
   }
 });
-// Aprender de TODA a carteira (leads já no Direciona) — roda em lotes até concluir, com progresso.
+// Aprender de TODA a carteira (leads já no Corretor Pro) — roda em lotes até concluir, com progresso.
 qs("#cerebroCarteiraBtn")?.addEventListener("click", async () => {
   const btn = qs("#cerebroCarteiraBtn");
   const st = qs("#cerebroCarteiraStatus");
@@ -7923,7 +7961,7 @@ async function exportarLeadsCSV(btn){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `leads-direciona-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `leads-corretor-pro-${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
@@ -8059,7 +8097,7 @@ async function baixarRelatorioCarteira(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `carteira-direciona-${new Date().toISOString().slice(0,10)}.txt`;
+  a.download = `carteira-corretor-pro-${new Date().toISOString().slice(0,10)}.txt`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
@@ -11339,7 +11377,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11415,7 +11453,7 @@ function ui670DetailRows(lead,mc){
   function cp694FixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #725');
     });
   }
   function cp694FixFab(){
@@ -11511,7 +11549,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11568,7 +11606,7 @@ function ui670DetailRows(lead,mc){
   function fixVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #725');
     });
   }
   function fixFab(){
@@ -11711,7 +11749,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp696AtendimentosFullList) return;
   window.__cp696AtendimentosFullList = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
 
   function esc(v){
@@ -11769,7 +11807,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #725');
     });
   }
   function applyLayoutFixes(){
@@ -11877,7 +11915,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp697PreparacaoCarteira) return;
   window.__cp697PreparacaoCarteira = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   function esc(v){
@@ -11944,7 +11982,7 @@ function ui670DetailRows(lead,mc){
   function updateVersion697(){
     document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
       const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
+      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #725');
     });
   }
   async function fetchAll697(force){
@@ -12096,7 +12134,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp698VersaoTopo) return;
   window.__cp698VersaoTopo = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fixVersionText(){
     try{
@@ -12107,11 +12145,11 @@ function ui670DetailRows(lead,mc){
         if(n && /Atualiza[cç][aã]o\s*#/i.test(n.nodeValue || '')) nodes.push(n);
       }
       nodes.forEach(n=>{
-        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #724-6');
+        n.nodeValue = String(n.nodeValue || '').replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/ig, 'Atualização #725');
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-6');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #725');
       });
     }catch(_){ }
   }
@@ -12130,13 +12168,13 @@ function ui670DetailRows(lead,mc){
    - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
    ============================================================ */
 (function(){
-  const VERSION='724-2';
+  const VERSION='725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
   function fix(){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #724-6');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #725');
       });
     }catch(_){ }
   }
@@ -12156,7 +12194,7 @@ function ui670DetailRows(lead,mc){
 (function(){
   if(window.__cp703PreparacaoEstavel) return;
   window.__cp703PreparacaoEstavel = true;
-  const VERSION = '724-2';
+  const VERSION = '725';
   try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
 
   let fullLeadsCache = null;
@@ -12170,7 +12208,7 @@ function ui670DetailRows(lead,mc){
     try{
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #724-6');
+        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #725');
       });
     }catch(_){ }
   }

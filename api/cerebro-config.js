@@ -20,7 +20,7 @@ const CONFIG_KEY = "direciona-cerebro";
 
 const DEFAULTS = {
   corretorNome: "",
-  metodo: `Método Direciona:
+  metodo: `Método Corretor Pro:
 1. Identifique a fase do cliente (descoberta, comparando, decidindo, indeciso).
 2. Mostre que entendeu o contexto antes de propor solução.
 3. Cite o produto específico que mais combina com o que ele disse.
@@ -340,7 +340,7 @@ async function extrairTextoDeUrl(url) {
 
 // Usa a IA pra transformar o conteúdo em regras de venda aplicáveis ao corretor
 async function extrairLicoesComIA(texto, openai) {
-  const prompt = `Você é o Cérebro Comercial do Direciona, app pra corretores de imóveis da Construtora Senger. Abaixo está o conteúdo de um material de vendas (vídeo/artigo). Extraia de 1 a 6 LIÇÕES/REGRAS práticas e acionáveis que ajudem o corretor a conduzir melhor o atendimento e gerar melhores mensagens no WhatsApp. Cada regra deve ser uma frase curta, no formato "situação → como agir" quando possível. Ignore enrolação, motivação genérica e propaganda. Retorne APENAS JSON: { "resumo": "1 frase do que o material ensina", "regras": ["regra 1", "regra 2", ...] }.
+  const prompt = `Você é o Cérebro Comercial do Corretor Pro, app pra corretores de imóveis da Construtora Senger. Abaixo está o conteúdo de um material de vendas (vídeo/artigo). Extraia de 1 a 6 LIÇÕES/REGRAS práticas e acionáveis que ajudem o corretor a conduzir melhor o atendimento e gerar melhores mensagens no WhatsApp. Cada regra deve ser uma frase curta, no formato "situação → como agir" quando possível. Ignore enrolação, motivação genérica e propaganda. Retorne APENAS JSON: { "resumo": "1 frase do que o material ensina", "regras": ["regra 1", "regra 2", ...] }.
 
 CONTEÚDO:
 ${texto}`;
@@ -356,7 +356,7 @@ ${texto}`;
 
 // Lê uma imagem/print com a visão da IA e extrai lições de venda
 async function extrairLicoesDeImagem(dataUrl, openai) {
-  const instrucao = `Você é o Cérebro Comercial do Direciona, app pra corretores de imóveis da Construtora Senger. Leia o conteúdo desta imagem (pode ser um print de post, slide, mensagem de um mentor, anúncio). Extraia de 1 a 6 LIÇÕES/REGRAS práticas e acionáveis pra conduzir melhor o atendimento e gerar melhores mensagens no WhatsApp. Cada regra: frase curta, formato "situação → como agir" quando der. Ignore enrolação e motivação genérica. Se a imagem não tiver conteúdo útil de vendas, retorne regras vazias. Retorne APENAS JSON: { "resumo": "1 frase do que a imagem ensina", "regras": ["regra 1", ...] }.`;
+  const instrucao = `Você é o Cérebro Comercial do Corretor Pro, app pra corretores de imóveis da Construtora Senger. Leia o conteúdo desta imagem (pode ser um print de post, slide, mensagem de um mentor, anúncio). Extraia de 1 a 6 LIÇÕES/REGRAS práticas e acionáveis pra conduzir melhor o atendimento e gerar melhores mensagens no WhatsApp. Cada regra: frase curta, formato "situação → como agir" quando der. Ignore enrolação e motivação genérica. Se a imagem não tiver conteúdo útil de vendas, retorne regras vazias. Retorne APENAS JSON: { "resumo": "1 frase do que a imagem ensina", "regras": ["regra 1", ...] }.`;
   const completion = await openai.chat.completions.create({
     model: modeloVisao(),
     messages: [{

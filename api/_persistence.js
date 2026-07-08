@@ -21,16 +21,15 @@ export function requireApiKey(req, res) {
   const expected = process.env.CORRETOR_PRO_API_KEY || process.env.API_SECRET || process.env.CP_API_SECRET || "";
   const allowUnprotected = String(process.env.ALLOW_UNPROTECTED_API || "").toLowerCase() === "true";
   if (!expected) {
-    // Correção v679: não quebrar o app quando a variável ainda não foi criada na Vercel.
-    // Enquanto CORRETOR_PRO_API_KEY não existir, a API continua funcionando para preservar os leads.
-    // Assim que a variável for configurada, todas as rotas passam a exigir a chave automaticamente.
-    // Para forçar bloqueio mesmo sem variável, use ALLOW_UNPROTECTED_API=false.
-    const forceProtected = String(process.env.ALLOW_UNPROTECTED_API || "").toLowerCase() === "false";
-    if (!forceProtected || allowUnprotected) {
+    const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+    // v725: em produção, rota pública sem chave é risco real. Só libera sem chave se for escolha explícita.
+    // Para ambiente local/teste continua flexível; para Vercel produção configure CORRETOR_PRO_API_KEY
+    // ou defina ALLOW_UNPROTECTED_API=true conscientemente.
+    if (!isProduction || allowUnprotected) {
       try { res.setHeader("X-Corretor-Pro-Security", "api-key-not-configured"); } catch(_) {}
       return true;
     }
-    authJson(res, 500, { ok: false, error: "API bloqueada: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel ou remova ALLOW_UNPROTECTED_API=false." });
+    authJson(res, 500, { ok: false, error: "API bloqueada por segurança: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel ou defina ALLOW_UNPROTECTED_API=true conscientemente." });
     return false;
   }
   const received = req.headers?.["x-corretor-pro-key"] || req.headers?.["x-api-key"] || req.query?.apiKey || "";
@@ -367,7 +366,7 @@ export async function persistProcessingResult({ result, source = "api", bucket =
       const legacyPayload = {
         arquivo_nome: nomeArquivo,
         status: "pronto",
-        etapa: "Conversa processada pelo Motor Real do Direciona.",
+        etapa: "Conversa processada pelo Motor Real do Corretor Pro.",
         progresso: 100,
         erro: null,
         texto_extraido: result?.rawText || null,
