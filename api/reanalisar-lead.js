@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL, completarMensagensComFallback } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
@@ -9,20 +9,8 @@ function produtoLeadLocal(lead, analysis) {
 }
 function garantirMensagensMotorComercialV714(analysis, lead) {
   const out = (analysis && typeof analysis === "object") ? analysis : {};
-  const mc = out.modeloComercial || {};
-  const semAcao = mc?.acao?.status === "sem-acao-urgente";
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
   const temTresMensagens = textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c);
-
-  // v715: esta função NÃO inventa mensagens. Se a IA não gerou 3 mensagens
-  // boas, a tela deve mostrar pendência/reanálise, não um fallback velho da v682.
-  if (semAcao) {
-    out.messages = { a:"", b:"", c:"", aLabel:"Sem mensagem agora", bLabel:"", cLabel:"", recomendada:"a" };
-    out.sugestoesPendentes = false;
-    out.aprovada = true;
-    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-    return out;
-  }
 
   if (temTresMensagens) {
     out.messages = {
@@ -38,12 +26,29 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
     return out;
   }
 
-  out.messages = { a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"", cLabel:"", recomendada:"a" };
+  // v726: blindagem final. Se a IA, uma reanálise antiga ou o reconciliador
+  // local entregar só A ou nenhuma, o servidor completa B/C antes de salvar.
+  const trio = completarMensagensComFallback({
+    mensagensRaw: m,
+    diagnostico: out.diagnostico || {},
+    raw: out,
+    lead
+  });
+  out.messages = {
+    ...m,
+    a: trio.a,
+    b: trio.b,
+    c: trio.c,
+    aLabel: textoLimpo(m.aLabel) || "Recomendada",
+    bLabel: textoLimpo(m.bLabel) || "Mais suave",
+    cLabel: textoLimpo(m.cLabel) || "Mais direta",
+    recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
+  };
   out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-  out.sugestoesPendentes = true;
-  out.aprovada = false;
+  out.sugestoesPendentes = false;
+  out.aprovada = true;
   out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
-  out.validacaoSugestoes.push("Motor v715: mensagens ausentes; fallback antigo bloqueado para não gerar resposta genérica.");
+  out.validacaoSugestoes.push("Fallback v726 completou as 3 sugestões antes de salvar.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.

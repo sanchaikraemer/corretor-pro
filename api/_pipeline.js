@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v725-cerebro-fallback-audio-window";
+export const ARQUITETURA_MENSAGENS_ATUAL = "gpt55-v726-trio-blindado";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -248,7 +248,7 @@ function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
   return sanitizarMensagemFallback(`Oi, ${nome}. Revendo nossa conversa sobre ${produto}, o ponto principal agora é ${pendencia}. Pra eu te orientar sem mandar opção errada, você prefere seguir nessa linha ou comparar uma alternativa mais alinhada ao que busca hoje?`);
 }
 
-function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
+export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
   const base = gerarMensagemBaseFallback({ lead, diagnostico, raw });
   let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
   if (!a || mensagemFormatoRuim(a) || a.length < REGRAS_MSG.minChars) a = base;
