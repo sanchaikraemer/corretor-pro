@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v733-retomada-jornada-combinada";
+const ARQUITETURA_MENSAGENS_ATUAL = "v734-retomada-jornada-linguagem-limpa";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4657,6 +4657,10 @@ function cp704Css(){
   }
   function cp705SanitizeFactText(text, lead){
     let out=cp705PlainText(text);
+    try{
+      const pn = (typeof ui682PrimeiroNomeLead==='function') ? ui682PrimeiroNomeLead(lead) : '';
+      if(pn && /^retomando nosso contato/i.test(out)) out = `${pn}, ${out.charAt(0).toLowerCase()}${out.slice(1)}`;
+    }catch(_){}
     const hasFin=cp705HasEvidence(lead,/\b(financi|fgts|caixa|banco|entrada|parcela|parcelamento|renda|cr[eé]dito|aprova|juros|simula)\b/i);
     if(!hasFin){
       out=out
@@ -4668,6 +4672,17 @@ function cp704Css(){
         .replace(/perfil de compra\s+e\s+perfil de compra/ig,'perfil de compra')
         .replace(/perfil de compra\s*,\s*perfil de compra/ig,'perfil de compra');
     }
+    out = out
+      .replace(/^\s*(Conversa|WhatsApp|Cliente|Lead|Contato|Arquivo|Zip)\s*,\s*/i, '')
+      .replace(/\bSala comercial no Premium Office\b/gi, 'a Premium Office')
+      .replace(/\bApartamento no Edifício Personalit[eé]\b/gi, 'o Personalité')
+      .replace(/\bApartamento no Personalit[eé]\b/gi, 'o Personalité')
+      .replace(/\bEdifício Personalit[eé]\b/gi, 'o Personalité')
+      .replace(/\bte passar coisa solta\b/gi, 'sugerir o próximo passo')
+      .replace(/\bte mandar opção solta\b/gi, 'sugerir o próximo passo')
+      .replace(/\bopções soltas\b/gi, 'opções sem relação com teu objetivo')
+      .replace(/\bde a Premium Office\b/gi, 'da Premium Office')
+      .replace(/\bde o Personalit[eé]\b/gi, 'do Personalité');
     return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
   }
   function cp705Short(v, n=150){
@@ -4813,7 +4828,7 @@ function cp704Css(){
       a:cp705SanitizeFactText(cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || fb.a || ''), lead),
       b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
       c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
-      aLabel:'Recomendada', bLabel:'Mais suave', cLabel:'Mais direta'
+      aLabel:cp704Text(m.aLabel || fb.aLabel || 'Recomendada'), bLabel:cp704Text(m.bLabel || fb.bLabel || 'Descobrir objetivo'), cLabel:cp704Text(m.cLabel || fb.cLabel || 'Direta ao ponto')
     };
     // v731: se veio só a recomendada, a interface completa as outras duas
     // imediatamente, sem esconder tudo atrás de "Mensagem ainda não gerada".
@@ -4944,7 +4959,7 @@ function renderLeadFoco(lead){
       ${cp717MudancasHtml(a)}
       <section class="cp704-card"><div class="cp704-card-title"><h2>Sugestões de mensagem</h2><small>copie a melhor opção</small></div>
         ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span>${cp724DiagRecusaHtml(a,msgs)}<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`):`
-        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>Recomendada</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>Mais suave</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>Mais direta</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
+        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Descobrir objetivo')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
       </section>
       <div class="cp704-accordions">
         <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
@@ -9672,7 +9687,19 @@ function ui670Messages(analysis){
   };
 }
 function ui682PrimeiroNomeLead(lead){
-  return String(lead?.name||"").trim().split(/\s+/)[0] || "";
+  const fontes = [lead?.clientName, lead?.nomeCliente, lead?.contactName, lead?.name, lead?.title]
+    .filter(Boolean)
+    .map(v => String(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  let bruto = fontes.find(v => v && !/^conversa\s+do\s+whatsapp\b/i.test(v) && !/^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(v)) || fontes[0] || "";
+  const extraido = fontes.map(v => { const m = v.match(/conversa\s+do\s+whatsapp\s+com\s+(.+?)(?:\.(zip|txt)|$)/i); return m ? m[1].trim() : ""; }).find(Boolean);
+  if(extraido) bruto = extraido;
+  const limpo = bruto
+    .replace(/\.(zip|txt)$/i, "")
+    .replace(/\b(renaissance|premium\s+office|personalit[eé]|nvr\s*iii|nova\s+vila\s+rica\s*iii|evolutti|quality|boulevard)\b.*$/i, "")
+    .replace(/\b(corretor|corretora|imobili[áa]ria|im[oó]veis|creci|cliente|lead)\b.*$/i, "")
+    .trim();
+  const primeiro = (limpo.split(/\s+/)[0] || "").trim();
+  return /^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(primeiro) ? "" : primeiro;
 }
 function ui682ProdutoLead(lead, mc){
   return String(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel").trim() || "o imóvel";
@@ -9685,15 +9712,15 @@ function ui682FallbackMessages(lead, mc){
   const temPremium = /premium\s+office|premium/.test(hist);
   const temPersonalite = /personali[tée]/.test(hist) || /personalit/.test(hist);
   if(temPremium && temPersonalite){
-    const a = `${prefixo}retomando nosso contato: antes falávamos sobre a Premium Office, e agora você me chamou sobre o Personalité. Queria entender melhor o que te chamou atenção nesse apartamento: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`;
-    const b = `${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos de sala comercial, e agora você olhou um apartamento pronto no Personalité. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
-    const c = `${prefixo}como teu interesse saiu das salas comerciais e veio para um apartamento pronto de alto padrão, prefiro entender teu objetivo atual antes de te passar coisa solta. Você está buscando algo para uso próprio ou pensando em investimento?`;
+    const a = `${prefixo}retomando nosso contato: antes falávamos sobre a Premium Office, e agora você me chamou sobre o Personalité. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`;
+    const b = `${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre a Premium Office, e agora você olhou o Personalité. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
+    const c = `${prefixo}como teu interesse saiu da Premium Office e veio para o Personalité, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`;
     return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
   }
   const baseProduto = produto && !/não identificado|produto/i.test(produto) ? `o ${produto}` : "o imóvel";
   const a = `${prefixo}retomando nosso contato: percebi que a busca mudou de rumo em relação ao que falamos antes. Para eu te direcionar melhor, o que chamou tua atenção agora em ${baseProduto}?`;
   const b = `${prefixo}para eu ajustar melhor essa retomada, vale entender teu objetivo atual. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
-  const c = `${prefixo}antes de te mandar opção solta, prefiro entender o momento da tua busca. Você está avaliando algo para uso próprio ou pensando em investimento?`;
+  const c = `${prefixo}antes de sugerir o próximo passo, prefiro entender o momento da tua busca. Você está avaliando algo para uso próprio ou pensando em investimento?`;
   return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
