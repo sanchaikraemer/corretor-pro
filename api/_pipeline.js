@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v733-retomada-jornada-combinada";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v734-retomada-jornada-linguagem-limpa";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -287,6 +287,14 @@ Quando houver mudança de jornada, não comece exaltando o imóvel com frases ge
 "empreendimento único"
 Nessa situação, a prioridade é entender o motivo da mudança de interesse, não vender o produto imediatamente.
 
+Quando houver mudança de jornada com retomada:
+- use o primeiro nome real do cliente quando ele estiver disponível;
+- nunca use palavras do arquivo ou do tipo de conversa como vocativo, como "Conversa", "WhatsApp", "Cliente", "Lead" ou nome do produto;
+- não escreva "Conversa," no início da mensagem;
+- não use frases como "coisa solta", "opção solta" ou "mandar qualquer coisa";
+- prefira linguagem limpa, como "antes de sugerir o próximo passo" ou "para te direcionar melhor";
+- não transforme a mensagem em propaganda do imóvel.
+
 ==========================================
 SUGESTÕES DE RESPOSTAS
 ==========================================
@@ -375,7 +383,7 @@ Sugestão 2 — Retomada + redefinição do objetivo:
 Mostre que, para direcionar melhor essa retomada, é preciso entender se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
 
 Sugestão 3 — Retomada curta + objetivo atual:
-Mensagem mais curta e direta, deixando claro que antes de mandar opções soltas ou conduzir para visita, o corretor precisa entender o objetivo atual do cliente.
+Mensagem mais curta e direta, deixando claro que antes de sugerir o próximo passo, o corretor precisa entender o objetivo atual do cliente.
 
 Se houver mudança de jornada, mas NÃO houver retomada/conversa antiga relevante, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
 
@@ -503,24 +511,79 @@ function produtoSeguroParaMsg(valor, fallback) {
   return s;
 }
 
+
+function limparProdutoParaMensagem(valor, fallback) {
+  let s = produtoSeguroParaMsg(valor, fallback);
+  s = s
+    .replace(/^sala comercial no premium office$/i, "a Premium Office")
+    .replace(/^apartamento no edifício personalit[eé]$/i, "o Personalité")
+    .replace(/^apartamento no personalit[eé]$/i, "o Personalité")
+    .replace(/^edifício personalit[eé]$/i, "o Personalité")
+    .replace(/^premium office$/i, "a Premium Office")
+    .replace(/^personalit[eé]$/i, "o Personalité")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s || fallback;
+}
+
+function produtoComDe(produto) {
+  const s = String(produto || "").trim();
+  if (/^a\s+/i.test(s)) return s.replace(/^a\s+/i, "da ");
+  if (/^o\s+/i.test(s)) return s.replace(/^o\s+/i, "do ");
+  if (/^as\s+/i.test(s)) return s.replace(/^as\s+/i, "das ");
+  if (/^os\s+/i.test(s)) return s.replace(/^os\s+/i, "dos ");
+  return `de ${s}`;
+}
+
+function mensagemComVocativoInvalido(txt) {
+  return /^\s*(conversa|whatsapp|cliente|lead|contato|arquivo|zip)\s*,/i.test(String(txt || ""));
+}
+
+function limparVocativoInvalido(txt, lead = {}) {
+  const nome = primeiraPalavraNome(lead);
+  const nomeValido = nome && !/^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(nome);
+  let s = String(txt || "").trim();
+  if (/^\s*(conversa|whatsapp|cliente|lead|contato|arquivo|zip)\s*,/i.test(s)) {
+    s = s.replace(/^\s*(conversa|whatsapp|cliente|lead|contato|arquivo|zip)\s*,\s*/i, nomeValido ? `${nome}, ` : "");
+  }
+  if (nomeValido && /^retomando nosso contato/i.test(s)) {
+    s = `${nome}, ${s.charAt(0).toLowerCase()}${s.slice(1)}`;
+  }
+  s = s
+    .replace(/\bSala comercial no Premium Office\b/gi, "a Premium Office")
+    .replace(/\bApartamento no Edifício Personalit[eé]\b/gi, "o Personalité")
+    .replace(/\bApartamento no Personalit[eé]\b/gi, "o Personalité")
+    .replace(/\bEdifício Personalit[eé]\b/gi, "o Personalité")
+    .replace(/\bde a Premium Office\b/gi, "da Premium Office")
+    .replace(/\bde o Personalit[eé]\b/gi, "do Personalité")
+    .replace(/\bte passar coisa solta\b/gi, "sugerir o próximo passo")
+    .replace(/\bte mandar opção solta\b/gi, "sugerir o próximo passo")
+    .replace(/\bopções soltas\b/gi, "opções sem relação com teu objetivo")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s;
+}
+
 function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {} }) {
   const nome = primeiraPalavraNome(lead);
   const blob = JSON.stringify({ lead, diagnostico, raw }).toLowerCase();
-  const anterior = produtoSeguroParaMsg(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
-  const atual = produtoSeguroParaMsg(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
-  const anteriorSemArtigo = anterior.replace(/^(a|o|as|os)\s+/i, "");
+  const anterior = limparProdutoParaMensagem(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
+  const atual = limparProdutoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
   const prefixo = nome ? `${nome}, ` : "";
   return [
-    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
+    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
     sanitizarMensagemFallback(`${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre ${anterior}, e agora você olhou ${atual}. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`),
-    sanitizarMensagemFallback(`${prefixo}como teu interesse mudou de ${anteriorSemArtigo} para ${atual}, prefiro entender teu objetivo atual antes de te passar coisa solta. Você está buscando algo para uso próprio ou pensando em investimento?`)
+    sanitizarMensagemFallback(`${prefixo}como teu interesse saiu ${produtoComDe(anterior)} e veio para ${atual}, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`)
   ];
 }
 
 function mensagemQueApagouRetomadaOuVirouPropaganda(txt) {
   const s = String(txt || "").toLowerCase();
+  if (mensagemComVocativoInvalido(txt)) return true;
   if (/vi\s+que\s+agora\s+voc[eê]\s+est[aá]\s+olhando/.test(s)) return true;
   if (/esse\s+(apartamento|im[oó]vel).*realmente\s+diferenciado|um\s+dos\s+melhores\s+empreendimentos|excelente\s+oportunidade|empreendimento\s+único|empreendimento\s+unico/.test(s)) return true;
+  if (/\b(coisa|op[cç][aã]o)\s+solta\b|mandar\s+qualquer\s+coisa/.test(s)) return true;
+  if (/sala comercial no premium office|apartamento no edif[ií]cio personalit/.test(s)) return true;
   return false;
 }
 
@@ -540,7 +603,11 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b ||
     `Oi, ${nome}. Para facilitar, posso separar as opções mais alinhadas com ${pendencia} e te mostrar primeiro o que vale mais atenção em ${produto}. Assim a conversa não volta do zero. Quer que eu prepare isso para esta semana?`);
   let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c ||
-    `${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto em ${pendencia} e te passar uma condução objetiva, sem te encher de opções soltas.`);
+    `${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto em ${pendencia} e te passar uma condução objetiva para o próximo passo.`);
+
+  a = sanitizarMensagemFallback(limparVocativoInvalido(a, lead));
+  b = sanitizarMensagemFallback(limparVocativoInvalido(b, lead));
+  c = sanitizarMensagemFallback(limparVocativoInvalido(c, lead));
 
   const mensagens = [a, b, c].map((m, i) => {
     let x = sanitizarMensagemFallback(m || a || base);
@@ -561,7 +628,7 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Para facilitar, posso separar as opções que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
   }
   if (normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[0]) || normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[1])) {
-    mensagens[2] = sanitizarMensagemFallback(`${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva, sem te encher de opções soltas.`);
+    mensagens[2] = sanitizarMensagemFallback(`${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva para o próximo passo.`);
   }
 
   return {
@@ -574,11 +641,23 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
 
 
 function primeiraPalavraNome(lead) {
-  const bruto = String(lead?.clientName || lead?.name || "").replace(/<[^>]+>/g, " ").trim();
+  const fontes = [lead?.clientName, lead?.nomeCliente, lead?.contactName, lead?.name, lead?.title]
+    .filter(Boolean)
+    .map(v => String(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  let bruto = fontes.find(v => v && !/^conversa\s+do\s+whatsapp\b/i.test(v) && !/^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(v)) || fontes[0] || "";
+  const extraido = fontes.map(v => {
+    const m = v.match(/conversa\s+do\s+whatsapp\s+com\s+(.+?)(?:\.(zip|txt)|$)/i);
+    return m ? m[1].trim() : "";
+  }).find(Boolean);
+  if (extraido) bruto = extraido;
   const limpo = bruto
+    .replace(/\.(zip|txt)$/i, "")
+    .replace(/\b(renaissance|premium\s+office|personalit[eé]|nvr\s*iii|nova\s+vila\s+rica\s*iii|evolutti|quality|boulevard)\b.*$/i, "")
     .replace(/\b(corretor|corretora|imobili[áa]ria|im[oó]veis|creci|cliente|lead)\b.*$/i, "")
     .trim();
-  return (limpo.split(/\s+/)[0] || "Contato").trim();
+  const primeiro = (limpo.split(/\s+/)[0] || "").trim();
+  if (!primeiro || /^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(primeiro)) return "";
+  return primeiro;
 }
 
 function mensagemFormatoRuim(txt) {
@@ -2434,7 +2513,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v730 completou mensagens ausentes sem apagar a análise."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v734 validou retomada + mudança de jornada sem linguagem de template."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
