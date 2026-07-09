@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v737-linguagem-natural-sugestoes";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v739-ia-pensante-contexto-real";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -323,7 +323,14 @@ Exemplo de leitura correta:
 - Cliente informa limite de dormitórios/metragem.
 - Corretor apresenta Personalité como opção compatível.
 - Cliente diz que vai ver com o esposo à noite e retornar, pede fotos ou pergunta se pode ver.
-Nesse caso NÃO pergunte novamente se é moradia, investimento ou comparação. A mensagem deve retomar o compromisso de avaliar com o esposo e conduzir para fotos/visita.
+Nesse caso NÃO pergunte novamente se é moradia, investimento ou comparação. A mensagem deve retomar o compromisso de avaliar com o esposo e conduzir para fotos/visita, apresentação, condição ou próximo passo compatível com o status real do produto.
+
+Status do produto é obrigatório:
+- Renaissance é pré-lançamento/na planta, entrega futura. Nunca diga que está pronto, nunca fale em visita no apartamento pronto e nunca cite móveis/acabamento como se a unidade estivesse pronta. Para Renaissance, conduza para apresentação, plantas, opções, posição, condição ou conversa na construtora.
+- Premium Office é sala comercial em obra/entrega futura. Nunca trate como apartamento pronto.
+- Nova Vila Rica III é loteamento/terreno. Nunca trate como apartamento.
+- Personalité, Quality e Prime podem ser tratados como prontos quando o histórico confirmar imóvel pronto/semimobiliado.
+- Se houver conflito entre produto e texto gerado, o status do produto vence.
 
 Estrutura correta:
 "Retomando nosso contato: você tinha ficado de avaliar [produto atual] com [pessoa/critério] e me retornar. Como ele encaixa no que vocês comentaram, posso [organizar visita / separar fotos / passar horários]?"
@@ -340,6 +347,36 @@ As sugestões precisam soar como WhatsApp real de corretor experiente.
 - Não use frases negativas como "opções que não tenham relação". Prefira "antes de sugerir o próximo passo" ou "para te direcionar melhor".
 - Evite começar as três sugestões com a mesma estrutura.
 - A mensagem deve ser clara, humana e comercial, sem parecer template.
+
+==========================================
+IA PENSANTE E CONTEXTO REAL
+==========================================
+
+As regras acima são travas de segurança, não modelos prontos para copiar.
+Nunca gere sugestões iguais para leads diferentes apenas porque o produto ou a etapa parecem parecidos.
+
+Antes de escrever as 3 sugestões, pense no caso específico:
+- qual foi a última frase real do cliente;
+- qual foi a última frase real do corretor;
+- qual compromisso concreto ficou pendente;
+- qual informação o cliente pediu;
+- qual informação o corretor já entregou;
+- se existe esposa, esposo, filho, sócio ou outra pessoa participando da decisão;
+- se houve pedido de fotos, plantas, valores, metragem, localização, condição, visita ou prazo;
+- se o produto está pronto, em obra, na planta, é sala comercial ou terreno;
+- se a melhor ação é perguntar, enviar material, separar opções, agendar visita, simular condição ou apenas retomar o combinado.
+
+Cada sugestão deve usar pelo menos UM fato concreto da conversa, além do nome do produto.
+Exemplos de fatos concretos: "ver com o esposo", "pediu fotos", "queria acima de 100m²", "não precisava ser novo", "perguntou o valor", "queria ir olhar o loteamento", "pediu plantas", "questionou se havia opção menor".
+
+Não use apenas fórmulas como:
+"você tinha comentado que iria avaliar..."
+"como encaixa no que vocês comentaram..."
+"posso separar as opções..."
+Essas frases só podem aparecer se estiverem conectadas a um fato real e específico da conversa.
+
+Se dois leads tiverem contextos diferentes, as sugestões precisam ficar diferentes na estratégia e nos detalhes.
+A IA deve raciocinar antes de escrever, não aplicar template fixo.
 
 ==========================================
 SUGESTÕES DE RESPOSTAS
@@ -550,9 +587,58 @@ function textoFallbackCurto(valor, fallback) {
 
 function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
   const nome = primeiraPalavraNome(lead);
-  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
-  const pendencia = textoFallbackCurto(diagnostico.pendenciaFinanceira || diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o ponto que ficou em aberto");
-  return sanitizarMensagemFallback(`Oi, ${nome}. Retomando nossa conversa sobre ${produto}: o ponto em aberto ficou em ${pendencia}. Para avançarmos sem recomeçar do zero, posso te passar um caminho objetivo em cima disso?`);
+  const produto = produtoCurtoParaMensagem(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const compromisso = compromissoDirecionamentoTexto({ diagnostico, raw, produto });
+  const prefixo = nome ? `${nome}, ` : "";
+  if (/esposa|mulher/.test(blob)) {
+    return sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Antes de sugerir o próximo passo, vale entender como ficou essa avaliação com sua esposa. Posso organizar as opções em cima do que ficou mais importante para vocês?`);
+  }
+  if (/esposo|marido/.test(blob)) {
+    return sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Antes de sugerir o próximo passo, vale entender como ficou essa avaliação com seu esposo. Posso organizar as opções em cima do que ficou mais importante para vocês?`);
+  }
+  if (/foto|fotos|imagem|imagens/.test(blob)) {
+    return sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Posso separar as fotos principais e os pontos que ajudam a avaliar ${produto} com mais clareza?`);
+  }
+  if (/planta|plantas/.test(blob)) {
+    return sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Posso separar as plantas e opções ${produtoComDe(produto)} para vocês avaliarem com mais clareza?`);
+  }
+  return sanitizarMensagemFallback(`${prefixo}retomando nosso contato sobre ${produto}: ${compromisso}. Posso organizar o próximo passo em cima do que ficou pendente na conversa?`);
+}
+
+function gerarTrioFallbackContextual({ lead, diagnostico = {}, raw = {} }) {
+  const nome = primeiraPalavraNome(lead);
+  const produto = produtoCurtoParaMensagem(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const prefixo = nome ? `${nome}, ` : "";
+  const a = gerarMensagemBaseFallback({ lead, diagnostico, raw });
+
+  if (/esposa|mulher/.test(blob)) {
+    return [
+      a,
+      sanitizarMensagemFallback(`${prefixo}para facilitar essa retomada, posso organizar uma visão ${produtoComDe(produto)} em cima dos pontos que podem pesar para vocês dois. Assim fica mais simples avaliar junto com sua esposa. Quer que eu prepare isso?`),
+      sanitizarMensagemFallback(`${prefixo}ficou em aberto como sua esposa avaliou ${produto}. Antes de avançar, qual ponto pesou mais para vocês: planta, condição, localização ou prazo?`)
+    ];
+  }
+  if (/esposo|marido/.test(blob)) {
+    return [
+      a,
+      sanitizarMensagemFallback(`${prefixo}para facilitar essa retomada, posso organizar uma visão ${produtoComDe(produto)} em cima dos pontos que podem pesar para vocês dois. Assim fica mais simples avaliar junto com seu esposo. Quer que eu prepare isso?`),
+      sanitizarMensagemFallback(`${prefixo}ficou em aberto como seu esposo avaliou ${produto}. Antes de avançar, qual ponto pesou mais para vocês: planta, condição, localização ou prazo?`)
+    ];
+  }
+  if (/planta|plantas|renaissance|lan[cç]amento|na planta/.test(blob)) {
+    return [
+      a,
+      sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação, posso organizar as plantas, posições e condições ${produtoComDe(produto)} em uma visão mais objetiva. Prefere olhar primeiro planta ou condição?`),
+      sanitizarMensagemFallback(`${prefixo}ficou esse ponto ${produtoComDe(produto)} em aberto. Posso retomar pelo que pesa mais agora: planta, prazo, posição ou condição?`)
+    ];
+  }
+  return [
+    a,
+    sanitizarMensagemFallback(`${prefixo}para facilitar a retomada, posso separar os pontos principais ${produtoComDe(produto)} de acordo com o que apareceu na conversa. Quer que eu organize isso para vocês?`),
+    sanitizarMensagemFallback(`${prefixo}ficou esse ponto ${produtoComDe(produto)} em aberto. Posso te passar o próximo passo mais objetivo em cima do que vocês estavam avaliando?`)
+  ];
 }
 
 function diagnosticoIndicaDirecionamentoCorretor({ diagnostico = {}, raw = {}, lead = {} }) {
@@ -659,7 +745,62 @@ function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {
 
 function contemCompromissoComConjuge({ diagnostico = {}, raw = {} }) {
   const blob = JSON.stringify({ diagnostico, raw }).toLowerCase();
-  return /(esposo|esposa|marido|mulher|companheir[oa]|à noite|a noite|retorno|retornar|vou ver|vamos ver|avaliar)/.test(blob);
+  return /(esposo|esposa|marido|mulher|companheir[oa])/.test(blob);
+}
+
+function compromissoDirecionamentoTexto({ diagnostico = {}, raw = {}, produto = "essa opção" }) {
+  const blob = JSON.stringify({ diagnostico, raw }).toLowerCase();
+  const ultimo = String(diagnostico.ultimoCompromissoCliente || diagnostico.pendenciaPrincipal || raw.nextAction || "").replace(/\s+/g, " ").trim();
+  if (/(esposo|marido)/i.test(ultimo) || (/(esposo|marido)/.test(blob) && /(avaliar|ver|retorno|retornar)/.test(blob))) {
+    return `você tinha ficado de avaliar ${produto} com seu esposo e me retornar`;
+  }
+  if (/(esposa|mulher)/i.test(ultimo) || (/(esposa|mulher)/.test(blob) && /(avaliar|ver|retorno|retornar)/.test(blob))) {
+    return `você tinha ficado de avaliar ${produto} com sua esposa e me retornar`;
+  }
+  if (/(foto|fotos|imagem|imagens)/.test(blob)) return `ficou em aberto o envio ou a avaliação das fotos ${produtoComDe(produto)}`;
+  if (/(planta|plantas)/.test(blob)) return `ficou em aberto a avaliação das plantas ${produtoComDe(produto)}`;
+  if (/(valor|pre[cç]o|condi[cç][aã]o|parcel|entrada|financi)/.test(blob)) return `ficou em aberto a análise de valores e condição ${produtoComDe(produto)}`;
+  if (/(visita|conhecer|olhar|ver no local)/.test(blob)) return `ficou em aberto a possibilidade de conhecer ${produto}`;
+  if (/(retorno|retornar|me dar um retorno|dar retorno)/.test(blob)) return `você tinha ficado de me dar um retorno sobre ${produto}`;
+  return ultimo && !/^não houve/i.test(ultimo) ? ultimo : `ficou em aberto a avaliação de vocês sobre ${produto}`;
+}
+
+function ganchoDirecionamento({ blob = "", produto = "essa opção", tipo = "pronto" }) {
+  const b = String(blob || "").toLowerCase();
+  if (/100|110|132|m²|m2|metros|metragem|tamanho|amplo/.test(b)) return "Pelo tamanho que vocês comentaram";
+  if (/foto|fotos|imagem|imagens/.test(b)) return "Pelas fotos e detalhes que ficaram de avaliar";
+  if (/planta|plantas/.test(b)) return "Pelas plantas e opções que vocês ficaram de avaliar";
+  if (/valor|pre[cç]o|condi[cç][aã]o|parcel|entrada|financi/.test(b)) return "Pela condição e valores que ficaram para analisar";
+  if (/localiza[cç][aã]o|posição|posi[cç][aã]o|andar|vista/.test(b)) return "Pela localização e posição que pesam na decisão";
+  if (tipo === "terreno") return "Pela posição, acesso e tamanho dos lotes";
+  if (tipo === "comercial") return "Pela metragem, posição e fluxo da região";
+  if (tipo === "planta") return "Por ser uma decisão de planta, prazo e condição";
+  return "Pelo que vocês comentaram na conversa";
+}
+
+
+function produtoEhProntoParaMorar(produto, blob = "") {
+  const p = String(produto || "").toLowerCase();
+  const b = String(blob || "").toLowerCase();
+  // O status explícito do produto vence qualquer texto confuso que a IA tenha escrito.
+  if (/renaissance|premium\s+office|nova\s+vila\s+rica|nvr|loteamento|terreno|evolutti|boulevard/.test(p)) return false;
+  if (/personalit[eé]|quality|prime/.test(p)) return true;
+  return /pronto\s+para\s+morar|semimobiliad|m[oó]veis\s+planejados|financiado\s+em\s+qualquer\s+banco/.test(b)
+    && !/renaissance|premium\s+office|nova\s+vila\s+rica|nvr|loteamento|terreno|evolutti|boulevard/.test(b);
+}
+
+function produtoEhNaPlantaOuLancamento(produto, blob = "") {
+  const p = String(produto || "").toLowerCase();
+  const b = String(blob || "").toLowerCase();
+  return /renaissance|premium\s+office|evolutti|boulevard|lan[cç]amento|pr[eé][ -]?lan[cç]amento|na\s+planta|em\s+obra|entrega\s+futura|entrega\s+202/.test(`${p} ${b}`);
+}
+
+function produtoEhTerrenoOuLoteamento(produto, blob = "") {
+  return /nova\s+vila\s+rica|nvr|loteamento|terreno|\blote\b/.test(`${String(produto || "")} ${String(blob || "")}`.toLowerCase());
+}
+
+function produtoEhComercial(produto, blob = "") {
+  return /premium\s+office|sala\s+comercial|comercial/.test(`${String(produto || "")} ${String(blob || "")}`.toLowerCase());
 }
 
 function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, raw = {} }) {
@@ -667,20 +808,45 @@ function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, 
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
   const produto = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
   const prefixo = nome ? `${nome}, ` : "";
-  const comConjuge = contemCompromissoComConjuge({ diagnostico, raw });
-  const compromisso = comConjuge
-    ? `você tinha comentado que iria avaliar ${produto} com seu esposo e me dar um retorno`
-    : `ficou em aberto a avaliação de vocês sobre ${produto}`;
-  const encaixe = /(100|110|132|m²|m2|metros|metragem|pronto para morar|semimobiliad)/.test(blob)
-    ? "Como vocês procuram algo com bom tamanho e pronto para morar, essa opção encaixa bem no que comentaram"
-    : "Como essa opção foi apresentada em cima do que vocês comentaram, vale avaliar com calma o tamanho, padrão e posição";
+  const compromisso = compromissoDirecionamentoTexto({ diagnostico, raw, produto });
+
+  const pronto = produtoEhProntoParaMorar(produto, blob);
+  const terreno = produtoEhTerrenoOuLoteamento(produto, blob);
+  const comercial = produtoEhComercial(produto, blob);
+  const naPlanta = produtoEhNaPlantaOuLancamento(produto, blob);
+
+  if (terreno) {
+    return [
+      sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. ${ganchoDirecionamento({ blob, produto, tipo: "terreno" })}, posso separar as opções disponíveis para vocês avaliarem com calma. Para vocês fica melhor ver isso durante a semana ou no sábado?`),
+      sanitizarMensagemFallback(`${prefixo}para facilitar, posso destacar os lotes disponíveis conforme o que ficou mais importante para vocês: posição, acesso ou condição. Quer que eu organize essa visão antes da visita?`),
+      sanitizarMensagemFallback(`${prefixo}ficou esse ponto do loteamento em aberto desde a última conversa. Posso te passar as opções disponíveis e alguns horários para vocês conhecerem o local?`)
+    ];
+  }
+
+  if (comercial) {
+    return [
+      sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. ${ganchoDirecionamento({ blob, produto, tipo: "comercial" })}, posso te passar as opções disponíveis e organizar uma conversa rápida sobre isso?`),
+      sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação, posso separar as salas por metragem, posição e valor. Assim fica mais simples comparar sem voltar a conversa do zero. Quer que eu organize isso?`),
+      sanitizarMensagemFallback(`${prefixo}ficou esse ponto comercial em aberto. Posso te enviar um resumo com as salas disponíveis e os melhores caminhos de condição para avaliar?`)
+    ];
+  }
+
+  if (naPlanta && !pronto) {
+    return [
+      sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. ${ganchoDirecionamento({ blob, produto, tipo: "planta" })}, posso separar uma visão objetiva com plantas, posição, prazo e condição. Quer que eu organize isso para vocês?`),
+      sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação, posso montar um comparativo mais direto ${produtoComDe(produto)} com as opções que melhor encaixam no que vocês pediram. Prefere olhar primeiro plantas ou condição?`),
+      sanitizarMensagemFallback(`${prefixo}ficou esse ponto ${produtoComDe(produto)} em aberto. Posso retomar pelo que pesa mais para vocês agora: planta, prazo, posição ou condição?`)
+    ];
+  }
+
+  const encaixe = ganchoDirecionamento({ blob, produto, tipo: "pronto" });
+
   return [
-    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Como ele já está pronto e encaixa no que vocês comentaram, a visita ajuda a avaliar acabamento, tamanho e posição. Para vocês fica melhor durante a semana ou no sábado?`),
-    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação de vocês, posso separar as fotos principais ${produtoComDe(produto)} e organizar uma visita rápida no apartamento. Assim vocês conseguem ver melhor tamanho, móveis e posição. Quer que eu organize um horário para vocês?`),
-    sanitizarMensagemFallback(`${prefixo}ficou aquele ponto ${produtoComDe(produto)} em aberto desde a última conversa. ${encaixe}. Posso te passar alguns horários para visita?`)
+    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. ${encaixe}, a visita ajuda a avaliar o imóvel com mais segurança. Para vocês fica melhor durante a semana ou no sábado?`),
+    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação, posso separar as fotos principais ${produtoComDe(produto)} e também alguns pontos de tamanho, posição e condição. Quer que eu organize isso para vocês antes da visita?`),
+    sanitizarMensagemFallback(`${prefixo}ficou esse ponto ${produtoComDe(produto)} em aberto desde a última conversa. Posso te passar alguns horários para vocês conhecerem e avaliarem com calma?`)
   ];
 }
-
 
 function mensagemPareceMudancaJornadaIndevida(txt) {
   const s = String(txt || "").toLowerCase();
@@ -698,23 +864,50 @@ function mensagemQueApagouRetomadaOuVirouPropaganda(txt) {
   return false;
 }
 
+function mensagemPrecisaFallbackDirecionamento(txt, { diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const s = String(txt || "").toLowerCase();
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  if (!s.trim()) return true;
+  if (mensagemComVocativoInvalido(txt) || mensagemFormatoRuim(txt)) return true;
+  if (mensagemPareceMudancaJornadaIndevida(txt)) return true;
+  if (/ainda tem interesse|segue interessado|faz sentido|qualquer dúvida|fico à disposição|passando para saber|passando para retomar/.test(s)) return true;
+
+  const falaPronto = /já está pronto|ja está pronto|pronto para morar|visita rápida no apartamento|ver melhor tamanho, móveis|m[oó]veis e posição|acabamento, tamanho e posição/.test(s);
+  if (/renaissance/.test(blob) && falaPronto) return true;
+  if (/premium\s+office|sala\s+comercial/.test(blob) && /apartamento|pronto para morar|m[oó]veis/.test(s)) return true;
+  if (/nova\s+vila\s+rica|loteamento|terreno|\blote\b/.test(blob) && /apartamento|m[oó]veis|acabamento interno/.test(s)) return true;
+
+  // Não derruba mensagens boas só por serem diferentes do fallback.
+  // O fallback agora é rede de segurança, não motor principal das sugestões.
+  return false;
+}
+
 function mensagemTemRetomadaOuMudancaComHistorico(txt) {
   return /retomando|nosso contato|nossa conversa|antes\s+(fal[aá]vamos|voc[eê]\s+tinha|conversamos)|saiu\s+de|mudou\s+de|voltou\s+por|agora\s+voc[eê]\s+me\s+chamou/i.test(String(txt || ""));
 }
 
+function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) {
+  if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
+    return { aLabel: "Recomendada", bLabel: "Descobrir objetivo", cLabel: "Direta ao ponto" };
+  }
+  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
+    return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
+  }
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  if (/tempo parado|conversa parada|retomada|retomando|dias|semanas|meses/.test(blob)) {
+    return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Retomada curta" };
+  }
+  return { aLabel: "Recomendada", bLabel: "Consultiva", cLabel: "Natural" };
+}
+
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
-  const base = gerarMensagemBaseFallback({ lead, diagnostico, raw });
+  const trioBase = gerarTrioFallbackContextual({ lead, diagnostico, raw });
+  const base = trioBase[0];
   let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
   if (!a || mensagemFormatoRuim(a) || a.length < REGRAS_MSG.minChars) a = base;
 
-  const nome = primeiraPalavraNome(lead);
-  const produto = textoFallbackCurto(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
-  const pendencia = textoFallbackCurto(diagnostico.pendenciaFinanceira || diagnostico.pendenciaPrincipal || raw.nextAction || raw.estrategiaMensagem, "o ponto que ficou em aberto");
-
-  let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b ||
-    `Oi, ${nome}. Para facilitar, posso separar as opções mais alinhadas com ${pendencia} e te mostrar primeiro o que vale mais atenção em ${produto}. Assim a conversa não volta do zero. Quer que eu prepare isso para esta semana?`);
-  let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c ||
-    `${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto em ${pendencia} e te passar uma condução objetiva para o próximo passo.`);
+  let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b || trioBase[1]);
+  let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c || trioBase[2]);
 
   a = sanitizarMensagemFallback(limparVocativoInvalido(a, lead));
   b = sanitizarMensagemFallback(limparVocativoInvalido(b, lead));
@@ -729,7 +922,9 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
     const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
-      mensagens[i] = fallbackDirecionamento[i];
+      if (mensagemPrecisaFallbackDirecionamento(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
+        mensagens[i] = fallbackDirecionamento[i];
+      }
     }
   } else if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
     const fallbackJornada = mensagensFallbackMudancaRetomada({ lead, diagnostico, raw });
@@ -2548,6 +2743,7 @@ ${timelineText}`;
     const msgB = trioMensagens.b;
     const msgC = trioMensagens.c;
     const msg = msgA;
+    const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead });
     const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
     const probPct = clamp(raw.probabilityPercent);
 
@@ -2601,9 +2797,9 @@ ${timelineText}`;
         a: msgA,
         b: msgB,
         c: msgC,
-        aLabel: "Recomendada",
-        bLabel: "Descobrir objetivo",
-        cLabel: "Direta ao ponto",
+        aLabel: labelsMensagens.aLabel,
+        bLabel: labelsMensagens.bLabel,
+        cLabel: labelsMensagens.cLabel,
         recomendada: "a"
       },
       tipoContato: null,
@@ -2630,7 +2826,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v737 validou retomada, direcionamento e linguagem natural das sugestões."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v739 usado apenas quando a mensagem veio inválida, genérica proibida ou incompatível com o status real do produto."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
