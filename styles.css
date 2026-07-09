@@ -1878,3 +1878,158 @@ html[data-theme="light"] [style*="color:#fff"],
 html[data-theme="light"] [style*="color: #fff"]{
   color:#102631!important;
 }
+
+
+/* ============================================================
+   ATUALIZAÇÃO #753 — TEMA CLARO: CONTRASTE REAL E HOVER VISÍVEL
+   Corrige blocos remanescentes do tema escuro que eram injetados via JS.
+   ============================================================ */
+html[data-theme="light"]{
+  --cp-hover:#e6eef2;
+  --cp-hover-strong:#dbe8ed;
+}
+html[data-theme="light"] #cp702HomeProgress,
+html[data-theme="light"] .cp702-home-progress,
+html[data-theme="light"] #cp697HomeProgress,
+html[data-theme="light"] .cp697-home-progress{
+  background:#ffffff!important;
+  border:1px solid #cfdde3!important;
+  color:#102631!important;
+  box-shadow:0 10px 26px rgba(15,45,60,.07)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp702-home-title b,
+html[data-theme="light"] .cp697-home-title b{
+  color:#102631!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp702-home-title button,
+html[data-theme="light"] .cp697-home-title button,
+html[data-theme="light"] #cp702HomeProgress button,
+html[data-theme="light"] #cp697HomeProgress button{
+  background:#fff3f1!important;
+  border:1px solid rgba(255,91,80,.42)!important;
+  color:#d83e36!important;
+  box-shadow:none!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp702-home-bar,
+html[data-theme="light"] .cp697-home-bar{
+  background:#dbe7ec!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp702-home-bar span,
+html[data-theme="light"] .cp697-home-bar span{
+  background:linear-gradient(90deg,#ff5b50,#24b66a)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp702-home-meta,
+html[data-theme="light"] .cp702-home-meta span,
+html[data-theme="light"] .cp697-home-meta,
+html[data-theme="light"] .cp697-home-meta span{
+  color:#526b76!important;
+  opacity:1!important;
+}
+
+/* Linha/lista no claro: destaque visível no mouse, sem virar bloco escuro. */
+html[data-theme="light"] .ui-priority-row:hover,
+html[data-theme="light"] .cp-running-row:hover,
+html[data-theme="light"] .cp-appointment:hover,
+html[data-theme="light"] .cp697-row:hover,
+html[data-theme="light"] .cp694-lead-row:hover,
+html[data-theme="light"] .cp695-lead-row:hover,
+html[data-theme="light"] .cp696-row:hover,
+html[data-theme="light"] .lead:hover,
+html[data-theme="light"] .fila-row:hover,
+html[data-theme="light"] .top3-mini:hover{
+  background:var(--cp-hover)!important;
+  border-color:#b7cad2!important;
+  color:#102631!important;
+}
+html[data-theme="light"] .ui-priority-row:hover *,
+html[data-theme="light"] .cp-running-row:hover *,
+html[data-theme="light"] .cp-appointment:hover *,
+html[data-theme="light"] .cp697-row:hover *,
+html[data-theme="light"] .cp694-lead-row:hover *,
+html[data-theme="light"] .cp695-lead-row:hover *,
+html[data-theme="light"] .cp696-row:hover *,
+html[data-theme="light"] .lead:hover *,
+html[data-theme="light"] .fila-row:hover *,
+html[data-theme="light"] .top3-mini:hover *{
+  opacity:1!important;
+}
+html[data-theme="light"] .ui-priority-row:hover strong,
+html[data-theme="light"] .cp-running-row:hover strong,
+html[data-theme="light"] .cp-appointment:hover strong,
+html[data-theme="light"] .cp697-row:hover b,
+html[data-theme="light"] .cp694-lead-row:hover b,
+html[data-theme="light"] .cp695-lead-row:hover b,
+html[data-theme="light"] .cp696-row:hover b,
+html[data-theme="light"] .lead:hover strong,
+html[data-theme="light"] .fila-row:hover strong,
+html[data-theme="light"] .top3-mini:hover strong{
+  color:#102631!important;
+}
+html[data-theme="light"] .ui-priority-row:hover small,
+html[data-theme="light"] .ui-priority-row:hover em,
+html[data-theme="light"] .cp-running-row:hover small,
+html[data-theme="light"] .cp-appointment:hover small,
+html[data-theme="light"] .cp697-row:hover small,
+html[data-theme="light"] .cp697-row:hover em,
+html[data-theme="light"] .cp694-lead-row:hover small,
+html[data-theme="light"] .cp695-lead-row:hover small,
+html[data-theme="light"] .cp696-row:hover small,
+html[data-theme="light"] .lead:hover .small,
+html[data-theme="light"] .fila-row:hover .small,
+html[data-theme="light"] .top3-mini:hover .small{
+  color:#314a55!important;
+}
+
+/* Reanálise e mensagens vazias no claro: sempre legível. */
+html[data-theme="light"] .cp704-reanalyse,
+html[data-theme="light"] .cp704-empty-analysis button,
+html[data-theme="light"] button[onclick*="reanalis"],
+html[data-theme="light"] button[onclick*="Reanalis"],
+html[data-theme="light"] button[onclick*="ui670Reanalisar"],
+html[data-theme="light"] .btn-reanalisar,
+html[data-theme="light"] .reanalise-btn{
+  background:#ffffff!important;
+  color:#102631!important;
+  border:1px solid #b7cad2!important;
+  box-shadow:0 4px 14px rgba(15,45,60,.06)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp704-reanalyse:hover,
+html[data-theme="light"] .cp704-empty-analysis button:hover,
+html[data-theme="light"] button[onclick*="reanalis"]:hover,
+html[data-theme="light"] button[onclick*="Reanalis"]:hover,
+html[data-theme="light"] button[onclick*="ui670Reanalisar"]:hover,
+html[data-theme="light"] .btn-reanalisar:hover,
+html[data-theme="light"] .reanalise-btn:hover{
+  background:#fff3f1!important;
+  color:#d83e36!important;
+  border-color:rgba(255,91,80,.42)!important;
+}
+html[data-theme="light"] .cp704-empty-analysis,
+html[data-theme="light"] .cp704-empty-analysis *{
+  color:#102631!important;
+  opacity:1!important;
+}
+html[data-theme="light"] .cp704-empty-analysis small,
+html[data-theme="light"] .cp704-empty-analysis span,
+html[data-theme="light"] .cp704-empty-analysis p{
+  color:#526b76!important;
+}
+
+/* Notas/avisos inline que estavam rosa claro e ilegíveis. */
+html[data-theme="light"] .config-note,
+html[data-theme="light"] .notice,
+html[data-theme="light"] [style*="color:pink"],
+html[data-theme="light"] [style*="color: pink"],
+html[data-theme="light"] [style*="color:#ffc"],
+html[data-theme="light"] [style*="color: #ffc"]{
+  color:#526b76!important;
+  background:#ffffff!important;
+  border-color:#d9e4e8!important;
+  opacity:1!important;
+}
