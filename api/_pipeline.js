@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v748-sem-prompt-sem-regras";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v750-contexto-limpo-sem-legado";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -2707,7 +2707,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback técnico sem regra comercial."] : [],
+      validacaoSugestoes: [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };

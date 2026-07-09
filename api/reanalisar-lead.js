@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL, completarMensagensComFallback } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
@@ -10,45 +10,34 @@ function produtoLeadLocal(lead, analysis) {
 function garantirMensagensMotorComercialV714(analysis, lead) {
   const out = (analysis && typeof analysis === "object") ? analysis : {};
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
-  const temTresMensagens = textoLimpo(m.a) && textoLimpo(m.b) && textoLimpo(m.c);
+  const a = textoLimpo(m.a);
+  const b = textoLimpo(m.b);
+  const c = textoLimpo(m.c);
+  out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
 
-  if (temTresMensagens) {
+  // v750: sem fallback comercial e sem reaproveitar mensagem antiga.
+  // Se a IA não devolver 3 mensagens novas, a análise fica pendente e a tela pede reanálise.
+  if (!(a && b && c)) {
     out.messages = {
-      ...m,
-      aLabel: textoLimpo(m.aLabel) || "Retomar compromisso",
-      bLabel: textoLimpo(m.bLabel) || "Facilitar decisão",
-      cLabel: textoLimpo(m.cLabel) || "Retomada objetiva",
-      recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
+      a: "", b: "", c: "",
+      aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
     };
-    out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-    out.sugestoesPendentes = false;
-    out.aprovada = true;
+    out.sugestoesPendentes = true;
+    out.aprovada = false;
+    out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
+    out.validacaoSugestoes.push("v750: IA não retornou 3 mensagens novas; não foi usado fallback antigo.");
     return out;
   }
 
-  // v726: blindagem final. Se a IA, uma reanálise antiga ou o reconciliador
-  // local entregar só A ou nenhuma, o servidor completa B/C antes de salvar.
-  const trio = completarMensagensComFallback({
-    mensagensRaw: m,
-    diagnostico: out.diagnostico || {},
-    raw: out,
-    lead
-  });
   out.messages = {
-    ...m,
-    a: trio.a,
-    b: trio.b,
-    c: trio.c,
-    aLabel: textoLimpo(m.aLabel) || "Retomar compromisso",
-    bLabel: textoLimpo(m.bLabel) || "Facilitar decisão",
-    cLabel: textoLimpo(m.cLabel) || "Retomada objetiva",
+    a, b, c,
+    aLabel: textoLimpo(m.aLabel) || "Recomendada",
+    bLabel: textoLimpo(m.bLabel) || "Alternativa",
+    cLabel: textoLimpo(m.cLabel) || "Direta ao ponto",
     recomendada: ["a", "b", "c"].includes(textoLimpo(m.recomendada)) ? m.recomendada : "a"
   };
-  out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
   out.sugestoesPendentes = false;
   out.aprovada = true;
-  out.validacaoSugestoes = Array.isArray(out.validacaoSugestoes) ? out.validacaoSugestoes : [];
-  out.validacaoSugestoes.push("Fallback v730 completou as 3 sugestões antes de salvar.");
   return out;
 }
 // Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
@@ -612,7 +601,7 @@ async function reanalisarLeadHandler702(req, res) {
   let avisoReanalise = "";
   if (openai) {
     try {
-      const timelineParaIA6863 = compactarTimelineParaIA6863(timelineFinal, previous, novoAtendimento);
+      const timelineParaIA6863 = timelineFinal;
       novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true });
       novoAnalysis._iaEntrada6863 = { totalOriginal: timelineFinal.length, totalEnviado: timelineParaIA6863.length, compactado: timelineParaIA6863.length < timelineFinal.length };
     } catch (e) {
@@ -622,15 +611,23 @@ async function reanalisarLeadHandler702(req, res) {
     avisoReanalise = "Análise por IA não configurada no servidor.";
   }
 
-  // Uma falha do provedor não pode fazer o botão fingir sucesso nem restaurar mensagem antiga.
-  // Reconciliamos os fatos já salvos + a timeline sem custo de API e avisamos o front.
+  // v750: se a IA falhar, NÃO restaurar análise/mensagem antiga.
+  // Antigo era exatamente o que contaminava produto, unidade e próximo passo.
   if (!novoAnalysis || typeof novoAnalysis !== "object" || novoAnalysis.mode === "erro_api") {
     avisoReanalise = avisoReanalise || novoAnalysis?.error || "O provedor de análise não respondeu.";
-    novoAnalysis = { ...previous, mode: "reconciliacao_local", avisoReanalise };
+    novoAnalysis = {
+      mode: "erro_api",
+      avisoReanalise,
+      summary: "Reanálise não gerada. Tente novamente.",
+      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      sugestoesPendentes: true,
+      aprovada: false,
+      messages: { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" }
+    };
   }
   novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
-  novoAnalysis = enriquecerIAComercialV684(novoAnalysis, leadModelo, timelineFinal);
+  // v750: sem enriquecimento/fallback determinístico antigo.
   novoAnalysis._schemaComercial = 715;
   novoAnalysis._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
   if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 715;
@@ -647,21 +644,19 @@ async function reanalisarLeadHandler702(req, res) {
     .single();
   const freshPrevious = freshRow?.resultado_analise || previous;
 
-  // Preserva venda/aprendizado; memória recebe o novo atendimento no resumo de observações.
-  const msgAntigasValidas = !freshPrevious.sugestoesPendentes &&
-    freshPrevious.messages && (freshPrevious.messages.a || freshPrevious.messages.b || freshPrevious.messages.c);
+  // v750: análise nova não herda diagnóstico, mensagens, produto, unidade ou nextAction antigos.
+  // Preserva apenas dados não comerciais/operacionais que não contaminam a IA.
   let merged = {
-    ...freshPrevious,
     ...novoAnalysis,
     venda: freshPrevious.venda || undefined,
-    memoria: { ...(freshPrevious.memoria || {}), observacoes: observacoesFinais },
+    memoria: { observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,
     scoreAjuste: ajusteScoreNovo,
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
-  merged = enriquecerIAComercialV684(merged, leadModelo, timelineFinal);
+  // v750: sem enriquecimento/fallback determinístico antigo.
   merged._schemaComercial = 715;
   merged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
   if (merged.modeloComercial) merged.modeloComercial.versao = 715;
@@ -676,13 +671,7 @@ async function reanalisarLeadHandler702(req, res) {
     totalEnviadoIA: novoAnalysis?._iaEntrada6863?.totalEnviado || sigFinal6863.total
   };
   const semAcaoUrgente = merged?.modeloComercial?.acao?.status === "sem-acao-urgente";
-  // Só preserva mensagens antigas quando ainda existe uma ação comercial real.
-  if (!semAcaoUrgente && novoAnalysis.sugestoesPendentes === true && msgAntigasValidas) {
-    merged.messages = freshPrevious.messages;
-    merged.sugestoesPendentes = false;
-    merged.aprovada = freshPrevious.aprovada;
-    merged.arquiteturaMensagens = freshPrevious.arquiteturaMensagens;
-  }
+  // v750: nunca preservar mensagens antigas quando a reanálise falhar ou vier incompleta.
   const m = merged.messages || {};
   if (semAcaoUrgente || (!merged.sugestoesPendentes && m.a && m.b && m.c)) merged.aprovada = true;
   aplicarLembrete(merged);

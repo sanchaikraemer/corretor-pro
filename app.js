@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v749-sem-prompt-historico-completo";
+const ARQUITETURA_MENSAGENS_ATUAL = "v750-contexto-limpo-sem-legado";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -969,19 +969,19 @@ function mensagensDaAnalise(a){
       ? String(v.msg || v.mensagem || v.texto || "").trim()
       : String(v).trim();
   };
-  // v731: a tela não pode apagar mensagens reais só porque a arquitetura do JSON
-  // antigo divergiu ou porque veio apenas A. Ela aceita o que existir e o
-  // renderizador completa B/C com fallback local seguro.
-  const aMsg = pick("a") || pick("direta") || String(a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || a.proximaMensagemSugerida || "").trim();
-  const bMsg = pick("b") || pick("consultiva");
-  const cMsg = pick("c") || pick("retomada");
-  if((pendente || !arquiteturaOk) && !(aMsg || bMsg || cMsg)){
+  // v750: NUNCA exibir mensagens de arquitetura antiga.
+  // Se o lead ainda tem análise salva por versões anteriores, a tela deve pedir reanálise,
+  // em vez de mostrar sugestão contaminada por prompt/fallback velho.
+  if (pendente || !arquiteturaOk) {
     return {
       direta:"", consultiva:"", retomada:"",
       a:"", b:"", c:"", aLabel:"Reanalisar", bLabel:"Reanalisar", cLabel:"Reanalisar", recomendada:"a",
       aprovada:false
     };
   }
+  const aMsg = pick("a");
+  const bMsg = pick("b");
+  const cMsg = pick("c");
   const aprovada = !!(aMsg && bMsg && cMsg);
   return {
     direta:aMsg, consultiva:bMsg, retomada:cMsg,
