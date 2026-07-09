@@ -95,18 +95,16 @@ export default async function handler(req, res) {
       // Na reimportação, o front envia só o ID. O servidor busca o histórico anterior
       // diretamente no Supabase: evita trafegar uma conversa enorme de volta pelo celular.
       let existingTimeline = Array.isArray(body?.existingTimeline) ? body.existingTimeline : [];
-      let previousAnalysis = body?.previousAnalysis && typeof body.previousAnalysis === "object" ? body.previousAnalysis : null;
       const existingLeadId = body?.existingLeadId ? String(body.existingLeadId) : "";
-      if (existingLeadId && (!existingTimeline.length || !previousAnalysis)) {
+      if (existingLeadId && !existingTimeline.length) {
         const { data: anterior, error: anteriorError } = await supabase
           .from("whatsapp_processamentos")
-          .select("timeline_json, resultado_analise")
+          .select("timeline_json")
           .eq("id", existingLeadId)
           .maybeSingle();
         if (anteriorError) throw new Error(`Não consegui recuperar o histórico anterior: ${anteriorError.message}`);
         if (anterior) {
           existingTimeline = Array.isArray(anterior.timeline_json) ? anterior.timeline_json : existingTimeline;
-          previousAnalysis = anterior.resultado_analise || previousAnalysis;
         }
       }
 
@@ -124,11 +122,24 @@ export default async function handler(req, res) {
         audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
         metricsBase: body?.metricsBase,
         existingTimeline,
-        previousAnalysis,
+        previousAnalysis: null,
         existingLeadId,
         audiosReaproveitados: body?.audiosReaproveitados,
         audiosNovosSolicitados: body?.audiosNovosSolicitados
       });
+      const analysis = result?.analysis || null;
+      const mensagens = analysis?.messages || {};
+      const temTrio = [mensagens.a, mensagens.b, mensagens.c].every(v => String(v || "").trim().length >= 10);
+      const analiseFalhou = !analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !temTrio;
+      if (analiseFalhou) {
+        return json(res, 502, {
+          ok: false,
+          error: "A conversa foi lida, mas a análise comercial não foi concluída.",
+          details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as 3 mensagens.",
+          bucket,
+          path: storagePath
+        });
+      }
       return json(res, 200, { ok: true, bucket, path: storagePath, autoSaved: false, ...result });
     }
 

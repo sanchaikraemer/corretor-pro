@@ -3271,27 +3271,11 @@ export async function finalizarAnaliseDaConversa(payload) {
   let analysis;
   let analiseReutilizada = false;
   let itensContextoAnterior = 0;
-  if (reimportacao && mensagensNovas.length === 0 && previousAnalysis && typeof previousAnalysis === "object") {
-    // Reexportou o mesmo arquivo sem nenhuma novidade: não chama IA de texto.
-    analysis = previousAnalysis;
-    analiseReutilizada = true;
-  } else if (reimportacao) {
-    // Não manda outra vez anos de conversa. Leva todas as novidades, as anotações manuais
-    // relevantes e apenas o trecho recente anterior; o estado consolidado vai em bloco próprio.
-    const manuais = timelineAntiga.filter(ehAnotacaoManualIncremental).slice(-20);
-    const recentes = timelineAntiga.filter(m => !ehAnotacaoManualIncremental(m)).slice(-24);
-    const timelineAnalise = mesclarTimelineIncremental([...manuais, ...recentes], mensagensNovas);
-    itensContextoAnterior = timelineAnalise.length - mensagensNovas.length;
-    analysis = await analyzeWithBrain({
-      lead,
-      timeline: timelineAnalise,
-      openai,
-      leadId: existingLeadId,
-      contextoIncremental: contextoAnteriorEnxuto(previousAnalysis)
-    });
-  } else {
-    analysis = await analyzeWithBrain({ lead, timeline, openai });
-  }
+  // v754: reimportação também é analisada a partir da conversa mesclada completa.
+  // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
+  // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
+  if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId });
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
