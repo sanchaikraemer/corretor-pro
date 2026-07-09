@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v736-direcionamento-vs-mudanca-jornada";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v737-linguagem-natural-sugestoes";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -329,6 +329,19 @@ Estrutura correta:
 "Retomando nosso contato: você tinha ficado de avaliar [produto atual] com [pessoa/critério] e me retornar. Como ele encaixa no que vocês comentaram, posso [organizar visita / separar fotos / passar horários]?"
 
 ==========================================
+LAPIDAÇÃO DE LINGUAGEM DAS SUGESTÕES
+==========================================
+
+As sugestões precisam soar como WhatsApp real de corretor experiente.
+
+- Não repita o nome completo do produto com metragem e características em todas as mensagens.
+- Depois de identificar o produto, use uma forma curta e natural, como "o Personalité", "a Premium Office", "o Renaissance" ou "o Nova Vila Rica III".
+- Não transforme a sugestão em texto institucional ou propaganda.
+- Não use frases negativas como "opções que não tenham relação". Prefira "antes de sugerir o próximo passo" ou "para te direcionar melhor".
+- Evite começar as três sugestões com a mesma estrutura.
+- A mensagem deve ser clara, humana e comercial, sem parecer template.
+
+==========================================
 SUGESTÕES DE RESPOSTAS
 ==========================================
 
@@ -494,7 +507,9 @@ const REGRAS_MSG_PROMPT = [
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
   `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
-  "- As 3 mensagens devem ter estratégias realmente diferentes."
+  "- As 3 mensagens devem ter estratégias realmente diferentes.",
+  "- Use nomes curtos dos produtos depois da primeira menção; não repita metragem/características em todas as sugestões.",
+  "- Evite frases negativas como opções que não tenham relação; prefira antes de sugerir o próximo passo ou para te direcionar melhor."
 ].join("\n");
 
 // Limpeza determinística e SEGURA aplicada antes da validação: NÃO reescreve
@@ -572,9 +587,22 @@ function limparProdutoParaMensagem(valor, fallback) {
     .replace(/^edifício personalit[eé]$/i, "o Personalité")
     .replace(/^premium office$/i, "a Premium Office")
     .replace(/^personalit[eé]$/i, "o Personalité")
+    .replace(/^renaissance$/i, "o Renaissance")
     .replace(/\s+/g, " ")
     .trim();
   return s || fallback;
+}
+
+function produtoCurtoParaMensagem(valor, fallback) {
+  const s = limparProdutoParaMensagem(valor, fallback);
+  if (/premium\s+office/i.test(s)) return "a Premium Office";
+  if (/personalit[eé]/i.test(s)) return "o Personalité";
+  if (/renaissance/i.test(s)) return "o Renaissance";
+  if (/nova\s+vila\s+rica/i.test(s)) return "o Nova Vila Rica III";
+  if (/evolutti/i.test(s)) return "o Evolutti";
+  if (/quality/i.test(s)) return "o Quality";
+  if (/boulevard/i.test(s)) return "o Boulevard";
+  return s;
 }
 
 function produtoComDe(produto) {
@@ -609,7 +637,7 @@ function limparVocativoInvalido(txt, lead = {}) {
     .replace(/\bde o Personalit[eé]\b/gi, "do Personalité")
     .replace(/\bte passar coisa solta\b/gi, "sugerir o próximo passo")
     .replace(/\bte mandar opção solta\b/gi, "sugerir o próximo passo")
-    .replace(/\bopções soltas\b/gi, "opções sem relação com teu objetivo")
+    .replace(/\bopções soltas\b/gi, "sugestões desalinhadas ao teu objetivo")
     .replace(/\s+/g, " ")
     .trim();
   return s;
@@ -618,15 +646,16 @@ function limparVocativoInvalido(txt, lead = {}) {
 function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {} }) {
   const nome = primeiraPalavraNome(lead);
   const blob = JSON.stringify({ lead, diagnostico, raw }).toLowerCase();
-  const anterior = limparProdutoParaMensagem(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
-  const atual = limparProdutoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
+  const anterior = produtoCurtoParaMensagem(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
+  const atual = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
   const prefixo = nome ? `${nome}, ` : "";
   return [
     sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
     sanitizarMensagemFallback(`${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre ${anterior}, e agora você olhou ${atual}. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`),
-    sanitizarMensagemFallback(`${prefixo}como teu interesse saiu ${produtoComDe(anterior)} e veio para ${atual}, prefiro entender teu objetivo atual antes de sugerir o próximo passo ou te mostrar opções que não tenham relação. Você está buscando algo para uso próprio ou pensando em investimento?`)
+    sanitizarMensagemFallback(`${prefixo}como teu interesse saiu ${produtoComDe(anterior)} e veio para ${atual}, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`)
   ];
 }
+
 
 function contemCompromissoComConjuge({ diagnostico = {}, raw = {} }) {
   const blob = JSON.stringify({ diagnostico, raw }).toLowerCase();
@@ -636,7 +665,7 @@ function contemCompromissoComConjuge({ diagnostico = {}, raw = {} }) {
 function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, raw = {} }) {
   const nome = primeiraPalavraNome(lead);
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
-  const produto = limparProdutoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
+  const produto = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
   const prefixo = nome ? `${nome}, ` : "";
   const comConjuge = contemCompromissoComConjuge({ diagnostico, raw });
   const compromisso = comConjuge
@@ -647,10 +676,11 @@ function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, 
     : "Como essa opção foi apresentada em cima do que vocês comentaram, vale avaliar com calma o tamanho, padrão e posição";
   return [
     sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Como ele já está pronto e encaixa no que vocês comentaram, a visita ajuda a avaliar acabamento, tamanho e posição. Para vocês fica melhor durante a semana ou no sábado?`),
-    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação de vocês sobre ${produto}, posso separar as fotos principais e também organizar uma visita rápida no imóvel. Assim vocês conseguem ver melhor tamanho, móveis e posição. Quer que eu organize um horário para vocês?`),
+    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação de vocês, posso separar as fotos principais ${produtoComDe(produto)} e organizar uma visita rápida no apartamento. Assim vocês conseguem ver melhor tamanho, móveis e posição. Quer que eu organize um horário para vocês?`),
     sanitizarMensagemFallback(`${prefixo}ficou aquele ponto ${produtoComDe(produto)} em aberto desde a última conversa. ${encaixe}. Posso te passar alguns horários para visita?`)
   ];
 }
+
 
 function mensagemPareceMudancaJornadaIndevida(txt) {
   const s = String(txt || "").toLowerCase();
@@ -2600,7 +2630,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v736 validou retomada, direcionamento do corretor e mudança de jornada."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v737 validou retomada, direcionamento e linguagem natural das sugestões."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
