@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v734-retomada-jornada-linguagem-limpa";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v736-direcionamento-vs-mudanca-jornada";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -228,10 +228,12 @@ Se a conversa estiver parada há mais de 7 dias:
 
 Se o cliente ficou de retornar, retome esse compromisso com naturalidade, sem pressão.
 
-Se a conversa ficou parada por muito tempo e o cliente voltou depois por outro anúncio, produto ou pergunta nova, combine obrigatoriamente as duas leituras:
+Se a conversa ficou parada por muito tempo e o cliente voltou depois por outro anúncio, produto ou pergunta nova, combine obrigatoriamente as duas leituras SOMENTE quando o novo interesse partiu do cliente:
 - é uma retomada contextual, porque já existe histórico anterior;
 - é mudança de jornada, porque o novo contato pode indicar outro objetivo.
 Nunca deixe a regra de mudança de jornada apagar a retomada. Use o histórico antigo como gancho, sem forçar o produto anterior.
+
+Atenção: se o corretor apresentou outro imóvel como alternativa dentro da mesma necessidade do cliente, isso NÃO é mudança de jornada. É direcionamento comercial do corretor. Nesse caso, retome a última pendência concreta da conversa, sem perguntar de novo o objetivo do cliente.
 
 ==========================================
 MUDANÇA DE JORNADA DO CLIENTE
@@ -239,15 +241,23 @@ MUDANÇA DE JORNADA DO CLIENTE
 
 Antes de gerar as sugestões, verifique se houve mudança relevante na jornada do cliente.
 
-Considere mudança relevante quando o cliente:
-- muda de produto principal;
-- sai de imóvel comercial para residencial, ou o contrário;
-- muda de cidade, padrão, faixa de valor ou finalidade;
-- volta depois de muito tempo por outro anúncio;
-- demonstra interesse em algo diferente do assunto anterior;
-- pergunta apenas o valor ou detalhes de um novo produto sem explicar o motivo.
+Nem toda troca de produto é mudança de jornada.
 
-Quando houver mudança de jornada:
+Considere mudança relevante quando o CLIENTE, por iniciativa própria:
+- volta depois de tempo parado por outro anúncio, produto ou pergunta nova;
+- muda de imóvel comercial para residencial, ou o contrário;
+- muda finalidade, cidade, padrão, faixa de valor ou objetivo;
+- pergunta valor ou detalhes de um novo produto sem que o corretor tenha conduzido essa alternativa.
+
+NÃO considere mudança de jornada quando:
+- o corretor apresentou outro imóvel como alternativa compatível com a mesma necessidade do cliente;
+- a troca aconteceu dentro da mesma conversa por condução comercial do corretor;
+- o cliente apenas aceitou avaliar uma opção que o corretor indicou;
+- o objetivo do cliente continua o mesmo, por exemplo buscar apartamento para morar, e o corretor troca de Renaissance para Personalité para encaixar metragem, pronto para morar, valor ou disponibilidade.
+
+Quando a troca foi conduzida pelo corretor, classifique como "direcionamento comercial do corretor", não como mudança de jornada.
+
+Quando houver mudança de jornada real causada pelo cliente:
 - não trate a conversa como simples continuidade;
 - não force a venda do produto anterior;
 - identifique claramente o produto anterior e o produto atual;
@@ -256,7 +266,14 @@ Quando houver mudança de jornada:
 - não conduza direto para visita, proposta ou negociação sem entender o motivo da mudança, salvo se o cliente já pediu isso explicitamente;
 - faça uma pergunta de descoberta para entender o novo objetivo do cliente.
 
-Se também houver conversa parada, retorno depois de vários dias ou novo contato após uma conversa antiga, combine obrigatoriamente as duas regras:
+Quando houver direcionamento comercial do corretor:
+- não diga que o cliente "mudou de interesse";
+- não diga que "agora ele chamou sobre" o produto, se foi o corretor quem apresentou;
+- não pergunte novamente se é moradia ou investimento quando isso já ficou claro;
+- retome a última pendência real, como ver com esposo/esposa, avaliar fotos, confirmar visita, condição, metragem ou retorno prometido;
+- conduza para o próximo passo natural da opção apresentada.
+
+Se também houver conversa parada, retorno depois de vários dias ou novo contato após uma conversa antiga, combine obrigatoriamente as duas regras quando a mudança de jornada for real e causada pelo cliente:
 - primeiro retome o histórico anterior;
 - depois mencione a mudança de produto, padrão, finalidade ou objetivo;
 - por fim faça uma pergunta de descoberta para entender o momento atual do cliente.
@@ -277,9 +294,9 @@ A pergunta deve descobrir se o interesse atual é:
 - curiosidade inicial;
 - ou outro motivo.
 
-Quando houver mudança de jornada, as sugestões devem priorizar diagnóstico comercial antes de avanço para visita ou proposta.
+Quando houver mudança de jornada real causada pelo cliente, as sugestões devem priorizar diagnóstico comercial antes de avanço para visita ou proposta.
 
-Quando houver mudança de jornada, não comece exaltando o imóvel com frases genéricas como:
+Quando houver mudança de jornada real causada pelo cliente, não comece exaltando o imóvel com frases genéricas como:
 "é diferenciado"
 "um dos melhores"
 "excelente oportunidade"
@@ -294,6 +311,22 @@ Quando houver mudança de jornada com retomada:
 - não use frases como "coisa solta", "opção solta" ou "mandar qualquer coisa";
 - prefira linguagem limpa, como "antes de sugerir o próximo passo" ou "para te direcionar melhor";
 - não transforme a mensagem em propaganda do imóvel.
+
+==========================================
+DIRECIONAMENTO COMERCIAL DO CORRETOR
+==========================================
+
+Quando o corretor apresentou um segundo imóvel para encaixar melhor no que o cliente pediu, a próxima mensagem deve retomar a pendência desse segundo imóvel.
+
+Exemplo de leitura correta:
+- Cliente procura apartamento, não precisa ser novo.
+- Cliente informa limite de dormitórios/metragem.
+- Corretor apresenta Personalité como opção compatível.
+- Cliente diz que vai ver com o esposo à noite e retornar, pede fotos ou pergunta se pode ver.
+Nesse caso NÃO pergunte novamente se é moradia, investimento ou comparação. A mensagem deve retomar o compromisso de avaliar com o esposo e conduzir para fotos/visita.
+
+Estrutura correta:
+"Retomando nosso contato: você tinha ficado de avaliar [produto atual] com [pessoa/critério] e me retornar. Como ele encaixa no que vocês comentaram, posso [organizar visita / separar fotos / passar horários]?"
 
 ==========================================
 SUGESTÕES DE RESPOSTAS
@@ -330,9 +363,10 @@ Frases proibidas nas mensagens:
 Regras das mensagens:
 
 - Continue do ponto real onde a conversa parou.
-- Use a pendência existente como gancho, exceto quando houver mudança de jornada mais importante.
-- Se houver pendência financeira, retome exatamente esse assunto, salvo quando o cliente mudou de produto/objetivo e ainda é preciso entender o motivo.
-- Se o próximo passo for visita, conduza naturalmente para agendamento, exceto quando a mudança de jornada exigir primeiro uma pergunta de descoberta.
+- Use a pendência existente como gancho, exceto quando houver mudança de jornada real causada pelo cliente.
+- Se houver direcionamento comercial do corretor para outro imóvel compatível, use a última pendência desse imóvel como gancho principal.
+- Se houver pendência financeira, retome exatamente esse assunto, salvo quando o cliente mudou de produto/objetivo por iniciativa própria e ainda é preciso entender o motivo.
+- Se o próximo passo for visita, conduza naturalmente para agendamento, exceto quando a mudança de jornada real exigir primeiro uma pergunta de descoberta.
 - Se a conversa estiver parada há mais de 7 dias, faça retomada contextual.
 - Se a conversa estiver parada e também houver mudança de jornada, combine as duas regras: retome o histórico anterior, mencione a mudança e faça pergunta de descoberta.
 - Não reinicie a conversa.
@@ -374,7 +408,7 @@ Não gere três mensagens com a mesma estrutura.
 Não comece as três mensagens do mesmo jeito.
 Não termine as três mensagens com o mesmo tipo de pergunta.
 
-Se houver mudança de jornada E também houver conversa parada, retorno depois de tempo ou novo contato após uma conversa antiga, as 3 sugestões devem ser retomadas contextuais de mudança de jornada:
+Se houver mudança de jornada real causada pelo cliente E também houver conversa parada, retorno depois de tempo ou novo contato após uma conversa antiga, as 3 sugestões devem ser retomadas contextuais de mudança de jornada:
 
 Sugestão 1 — Retomada + motivo da mudança:
 Retome o contato anterior, cite o produto/assunto anterior e o produto atual, perguntando o que chamou atenção no novo produto.
@@ -385,7 +419,7 @@ Mostre que, para direcionar melhor essa retomada, é preciso entender se o clien
 Sugestão 3 — Retomada curta + objetivo atual:
 Mensagem mais curta e direta, deixando claro que antes de sugerir o próximo passo, o corretor precisa entender o objetivo atual do cliente.
 
-Se houver mudança de jornada, mas NÃO houver retomada/conversa antiga relevante, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
+Se houver mudança de jornada real causada pelo cliente, mas NÃO houver retomada/conversa antiga relevante, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
 
 Sugestão 1 — Entender o motivo da mudança:
 Pergunte o que chamou atenção no novo produto.
@@ -396,7 +430,14 @@ Descubra se o cliente está buscando moradia, investimento, comparação de opor
 Sugestão 3 — Direcionar a venda:
 Mostre que, entendendo o objetivo atual, o corretor consegue indicar a melhor oportunidade, sem empurrar visita, proposta ou condição antes da hora.
 
-Se NÃO houver mudança de jornada e a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes:
+Se NÃO houver mudança de jornada real e a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes.
+
+Se houve direcionamento comercial do corretor para outro imóvel compatível, as 3 sugestões devem retomar a última pendência desse imóvel:
+- Sugestão 1 — Retomar compromisso: retome exatamente o que o cliente ficou de avaliar e conduza para visita/retorno.
+- Sugestão 2 — Facilitar decisão: reduza o esforço do cliente, oferecendo fotos, horários, comparação de opções ou organização da visita.
+- Sugestão 3 — Reativar com objetividade: curta, humana e comercial, conectando a opção apresentada ao que o cliente pediu.
+
+Quando for apenas retomada contextual sem mudança real nem direcionamento comercial:
 
 Sugestão 1 — Retomar o compromisso:
 Use exatamente o ponto em que o cliente parou e conduza para o próximo passo.
@@ -407,7 +448,7 @@ Reduza o esforço do cliente. Ofereça uma forma simples de avançar, como separ
 Sugestão 3 — Reativar com objetividade:
 Mensagem curta, humana e comercial, sem cobrança, trazendo a conversa de volta para a ação principal.
 
-Se NÃO houver mudança de jornada e a conversa NÃO estiver parada há mais de 7 dias:
+Se NÃO houver mudança de jornada real e a conversa NÃO estiver parada há mais de 7 dias:
 
 Sugestão 1 — Avanço direto:
 Conduza para o próximo passo mais provável da venda, como visita, proposta, simulação, escolha de unidade, envio de condição ou definição de horário.
@@ -444,11 +485,12 @@ const REGRAS_MSG_PROMPT = [
   "- Continue do ponto real onde a conversa parou.",
   "- Não pergunte o que o cliente já respondeu.",
   "- Não invente objeção: se não existe objeção explícita, registre Sem objeção explícita.",
-  "- Se houver mudança de jornada/produto, investigue o novo objetivo antes de conduzir para visita, proposta ou condição.",
+  "- Se houver mudança de jornada real causada pelo cliente, investigue o novo objetivo antes de conduzir para visita, proposta ou condição.",
   "- Se o cliente voltou por outro anúncio depois de tempo parado, combine retomada contextual + mudança de jornada: histórico anterior, produto atual e pergunta de descoberta.",
+  "- Se o corretor apresentou outro imóvel como alternativa compatível, isso é direcionamento comercial: retome a última pendência desse imóvel e não pergunte novamente o objetivo.",
   "- Nunca deixe a mudança de jornada apagar a retomada quando existe histórico anterior.",
   "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
-  "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada mais importante.",
+  "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada real mais importante.",
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
   `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
@@ -498,9 +540,18 @@ function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
   return sanitizarMensagemFallback(`Oi, ${nome}. Retomando nossa conversa sobre ${produto}: o ponto em aberto ficou em ${pendencia}. Para avançarmos sem recomeçar do zero, posso te passar um caminho objetivo em cima disso?`);
 }
 
-function diagnosticoIndicaMudancaComRetomada({ diagnostico = {}, raw = {}, lead = {} }) {
+function diagnosticoIndicaDirecionamentoCorretor({ diagnostico = {}, raw = {}, lead = {} }) {
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
-  const houveMudanca = /houvemudancajornada"\s*:\s*"?sim|mudan[cç]a de jornada|mudou de produto|produto anterior|interesse anterior|outro an[uú]ncio|premium office.*personali|personali.*premium office/.test(blob);
+  const direcionamentoDeclarado = /trocaprodutofoidirecionamentocorretor"\s*:\s*"?sim|direcionamento comercial do corretor|corretor\s+(apresentou|sugeriu|indicou|ofereceu|conduziu)|foi apresentado como alternativa|op[cç][aã]o compat[ií]vel|alternativa compat[ií]vel|dentro da mesma necessidade/.test(blob);
+  const clienteMudouSozinho = /voltou\s+(depois|por).*outro an[uú]ncio|por outro an[uú]ncio|novo an[uú]ncio|clicou.*an[uú]ncio|premium office.*personali|personali.*premium office|sala comercial.*apartamento|apartamento.*sala comercial/.test(blob);
+  const trocaResidencialMesmoObjetivo = /renaissance/.test(blob) && /personali/.test(blob) && !/premium\s*office|sala\s+comercial|terreno|nova\s+vila\s+rica/.test(blob);
+  return (direcionamentoDeclarado && !clienteMudouSozinho) || trocaResidencialMesmoObjetivo;
+}
+
+function diagnosticoIndicaMudancaComRetomada({ diagnostico = {}, raw = {}, lead = {} }) {
+  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) return false;
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const houveMudanca = /houvemudancajornada"\s*:\s*"?sim|mudan[cç]a de jornada|mudou de produto|produto anterior|interesse anterior|outro an[uú]ncio|premium office.*personali|personali.*premium office|sala comercial.*apartamento|apartamento.*sala comercial/.test(blob);
   const temRetomada = /tempo parado|conversa parada|retomada|retomando|voltou depois|voltou por|conversa antiga|depois de tempo|três meses|tres meses|meses parado|h[aá]\s+mais\s+de\s+7\s+dias|\b[89]|[1-9][0-9]\s+dias/.test(blob);
   return houveMudanca && temRetomada;
 }
@@ -573,8 +624,38 @@ function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {
   return [
     sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
     sanitizarMensagemFallback(`${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre ${anterior}, e agora você olhou ${atual}. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`),
-    sanitizarMensagemFallback(`${prefixo}como teu interesse saiu ${produtoComDe(anterior)} e veio para ${atual}, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`)
+    sanitizarMensagemFallback(`${prefixo}como teu interesse saiu ${produtoComDe(anterior)} e veio para ${atual}, prefiro entender teu objetivo atual antes de sugerir o próximo passo ou te mostrar opções que não tenham relação. Você está buscando algo para uso próprio ou pensando em investimento?`)
   ];
+}
+
+function contemCompromissoComConjuge({ diagnostico = {}, raw = {} }) {
+  const blob = JSON.stringify({ diagnostico, raw }).toLowerCase();
+  return /(esposo|esposa|marido|mulher|companheir[oa]|à noite|a noite|retorno|retornar|vou ver|vamos ver|avaliar)/.test(blob);
+}
+
+function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, raw = {} }) {
+  const nome = primeiraPalavraNome(lead);
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const produto = limparProdutoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
+  const prefixo = nome ? `${nome}, ` : "";
+  const comConjuge = contemCompromissoComConjuge({ diagnostico, raw });
+  const compromisso = comConjuge
+    ? `você tinha comentado que iria avaliar ${produto} com seu esposo e me dar um retorno`
+    : `ficou em aberto a avaliação de vocês sobre ${produto}`;
+  const encaixe = /(100|110|132|m²|m2|metros|metragem|pronto para morar|semimobiliad)/.test(blob)
+    ? "Como vocês procuram algo com bom tamanho e pronto para morar, essa opção encaixa bem no que comentaram"
+    : "Como essa opção foi apresentada em cima do que vocês comentaram, vale avaliar com calma o tamanho, padrão e posição";
+  return [
+    sanitizarMensagemFallback(`${prefixo}retomando nosso contato: ${compromisso}. Como ele já está pronto e encaixa no que vocês comentaram, a visita ajuda a avaliar acabamento, tamanho e posição. Para vocês fica melhor durante a semana ou no sábado?`),
+    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação de vocês sobre ${produto}, posso separar as fotos principais e também organizar uma visita rápida no imóvel. Assim vocês conseguem ver melhor tamanho, móveis e posição. Quer que eu organize um horário para vocês?`),
+    sanitizarMensagemFallback(`${prefixo}ficou aquele ponto ${produtoComDe(produto)} em aberto desde a última conversa. ${encaixe}. Posso te passar alguns horários para visita?`)
+  ];
+}
+
+function mensagemPareceMudancaJornadaIndevida(txt) {
+  const s = String(txt || "").toLowerCase();
+  return /agora\s+voc[eê]\s+(me chamou|pediu|olhou)|saiu\s+(da|do|de)|mudou\s+de\s+interesse|antes\s+fal[aá]vamos.*agora/.test(s)
+    && /renaissance/.test(s) && /personali/.test(s);
 }
 
 function mensagemQueApagouRetomadaOuVirouPropaganda(txt) {
@@ -615,7 +696,12 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     return x;
   });
 
-  if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
+  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
+    const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
+    for (let i = 0; i < mensagens.length; i++) {
+      mensagens[i] = fallbackDirecionamento[i];
+    }
+  } else if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
     const fallbackJornada = mensagensFallbackMudancaRetomada({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemQueApagouRetomadaOuVirouPropaganda(mensagens[i]) || !mensagemTemRetomadaOuMudancaComHistorico(mensagens[i])) {
@@ -2369,8 +2455,9 @@ Use este formato de compatibilidade:
     "produtosParalelos":"produtos secundários citados ou Não houve produtos paralelos relevantes.",
     "interesseAnterior":"texto curto ou Nenhum",
     "houveMudancaJornada":"sim|não, com explicação curta",
-    "mudancaJornada":"se houve, explique a mudança de produto/objetivo; se não houve, escreva Não houve mudança relevante de jornada.",
-    "perguntaDescobertaNecessaria":"se houver mudança de jornada, qual pergunta precisa destravar o objetivo atual; se não, escreva Não necessária.",
+      "mudancaJornada":"se houve mudança real causada pelo cliente, explique a mudança de produto/objetivo; se não houve, escreva Não houve mudança relevante de jornada.",
+    "trocaProdutoFoiDirecionamentoCorretor":"sim|não, explique se o corretor apresentou outro imóvel como alternativa compatível dentro da mesma necessidade do cliente",
+    "perguntaDescobertaNecessaria":"se houver mudança de jornada real causada pelo cliente, qual pergunta precisa destravar o objetivo atual; se não, escreva Não necessária.",
     "objecaoPrincipal":"Sem objeção explícita. ou objeção explícita com evidência",
     "objecaoIdentificada":"Sem objeção explícita. ou objeção explícita com evidência",
     "pendenciaFinanceira":"Não há pendência financeira. ou pendência financeira específica",
@@ -2513,7 +2600,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v734 validou retomada + mudança de jornada sem linguagem de template."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v736 validou retomada, direcionamento do corretor e mudança de jornada."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
