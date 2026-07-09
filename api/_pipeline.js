@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v743-unidade-escolhida-pelo-contexto";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v744-unidade-escolhida-sem-alternativa";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -476,6 +476,8 @@ Analise no contexto:
 - qual unidade ficou vinculada ao próximo passo;
 - qual unidade o corretor e cliente estavam considerando no momento da simulação.
 Use a unidade escolhida pelo contexto como base da mensagem.
+Se uma unidade ficou escolhida/consolidada, não escreva "1302 ou 1402", "unidade A ou B" nem volte a tratar a unidade como alternativa aberta. Cite somente a unidade consolidada.
+Se o contexto não permitir identificar uma unidade consolidada com segurança, não invente número: diga "a unidade que vocês ficaram de avaliar".
 
 Se o cliente decidiu simular sem box, não volte a oferecer ou incluir o box na mensagem seguinte.
 
@@ -706,19 +708,25 @@ function contextoSimulacaoSemBox({ diagnostico = {}, raw = {}, lead = {} } = {})
 }
 
 function extrairUnidadesPreferidas({ diagnostico = {}, raw = {}, lead = {} } = {}) {
-  const textoBase = [
+  // v744: a unidade deve ser lida primeiro do histórico real da conversa.
+  // Campos gerados pela própria IA, como nextAction/pendência, podem vir contaminados
+  // com alternativas abertas (ex.: "1302 ou 1402") e não podem mandar na escolha.
+  const fontesConversa = [
+    raw?._timelineText,
     raw?.conversationText,
     raw?.textoConversa,
     raw?.transcript,
     raw?.historico,
     raw?.messages,
-    raw?.mensagens,
-    diagnostico?.unidadePrincipal,
+    raw?.mensagens
+  ].filter(Boolean).join("\n");
+
+  const textoBase = fontesConversa || [
     diagnostico?.unidadeEscolhida,
+    diagnostico?.unidadePrincipal,
     diagnostico?.produtoPrincipal,
     diagnostico?.ultimoCompromissoCliente,
     diagnostico?.ultimoCompromissoCorretor,
-    diagnostico?.pendenciaPrincipal,
     diagnostico?.justificativa,
     lead?.title,
     lead?.name,
@@ -736,7 +744,15 @@ function extrairUnidadesPreferidas({ diagnostico = {}, raw = {}, lead = {} } = {
     const antes = blob.slice(Math.max(0, idx - 180), idx).toLowerCase();
     const depois = blob.slice(idx + unidade.length, Math.min(blob.length, idx + unidade.length + 180)).toLowerCase();
     const trecho = `${antes} ${unidade} ${depois}`;
+    const antesCurto = blob.slice(Math.max(0, idx - 90), idx).toLowerCase();
     let score = 1;
+
+    // Quando o cliente diz algo como "gostamos bastante do projeto do 1302",
+    // isso vale mais que uma unidade citada depois como possibilidade lateral
+    // (ex.: "ou talvez o 1402"). A escolha precisa vir do sentido da frase,
+    // não da última unidade que apareceu no texto.
+    if (/(gostamos|gostei|preferimos|preferi).{0,80}(projeto|planta|unidade|apto|apartamento).{0,14}$/.test(antesCurto)) score += 260;
+    if (/(talvez|ou\s+talvez|quem\s+sabe).{0,24}$/.test(antesCurto)) score -= 260;
 
     if (/\b(escolh(eu|emos|eram|ida|ido)|defini(u|mos|ram)|ficou\s+(como|no|na)|base\s+(da|do|para)|considerando|usar\s+como\s+base|seguir\s+(com|no|na)|vamos\s+simular|simular\s+(o|a)?|simula[cç][aã]o)\b/.test(trecho)) score += 80;
     if (/\b(gostei|gostamos|gostou|gostaram|preferi|preferimos|preferiu|preferiram|prefer[eê]ncia|favorit[ao]|melhor\s+op[cç][aã]o|mais\s+gostou|mais\s+gostamos)\b/.test(trecho)) score += 55;
@@ -767,6 +783,42 @@ function extrairUnidadesPreferidas({ diagnostico = {}, raw = {}, lead = {} } = {
   return { principal: escolhida, alternativo: "", texto: `o ${escolhida}` };
 }
 
+
+function unidadeEscolhidaNumerica(ctx = {}) {
+  const u = extrairUnidadesPreferidas(ctx)?.principal;
+  return /^\d{3,4}$/.test(String(u || "")) ? String(u) : "";
+}
+
+function unidadesNumericasNoTexto(txt) {
+  return [...new Set([...String(txt || "").matchAll(/\b(?:ap(?:to|artamento|unidade)?\s*)?(\d{3,4})\b/gi)]
+    .map(m => m[1])
+    .filter(n => /^(10|11|12|13|14|15|16|17|18)\d{2}$/.test(n)))];
+}
+
+function mensagemMisturaUnidadeEscolhidaComAlternativa(txt, ctx = {}) {
+  const escolhida = unidadeEscolhidaNumerica(ctx);
+  if (!escolhida) return false;
+  const unidades = unidadesNumericasNoTexto(txt);
+  if (unidades.length <= 1 || !unidades.includes(escolhida)) return false;
+  const s = String(txt || "").toLowerCase();
+  // O problema comercial aqui é citar a unidade escolhida como alternativa aberta,
+  // ex.: "1302 ou 1402". Se o contexto já consolidou uma unidade, a mensagem
+  // deve usar somente ela, não voltar a comparar.
+  return /\b\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b|\bunidade\s+\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b/.test(s);
+}
+
+function corrigirAlternativaUnidadeEscolhidaTexto(txt, ctx = {}) {
+  let s = String(txt || "").replace(/\s+/g, " ").trim();
+  const escolhida = unidadeEscolhidaNumerica(ctx);
+  if (!s || !escolhida) return s;
+  const unidades = unidadesNumericasNoTexto(s);
+  if (unidades.length <= 1 || !unidades.includes(escolhida)) return s;
+  if (!/\b\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b|\bunidade\s+\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b/i.test(s)) return s;
+  s = s.replace(/\bunidade\s+\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b/gi, `unidade ${escolhida}`);
+  s = s.replace(/\b\d{3,4}\s*(?:ou|\/)\s*\d{3,4}\b/g, escolhida);
+  return s.replace(/\s+/g, " ").trim();
+}
+
 function referenciaParcela({ diagnostico = {}, raw = {}, lead = {} } = {}) {
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
   if (/r\$\s*4\.?000|4\.?000|4000|4\s*mil/.test(blob)) return "parcelas próximas dos R$ 4 mil";
@@ -784,7 +836,8 @@ function mensagemPrecisaFallbackCompromissoCorretor(txt, { diagnostico = {}, raw
   const s = String(txt || "").toLowerCase();
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
   if (!s.trim() || mensagemFormatoRuim(txt) || mensagemComVocativoInvalido(txt) || mensagemPareceCortada(txt)) return true;
-  if (/ainda tem interesse|segue interessado|faz sentido|qualquer dúvida|fico à disposição|passando para saber|passando para retomar|sem compromisso|se quiser|se acharem interessante|me avisa como preferem|tudo bem\?|pode ser\?|continua fazendo sentido|continua nos planos/.test(s)) return true;
+  if (/ainda tem interesse|segue interessado|faz sentido|qualquer dúvida|fico à disposição|passando para saber|passando para retomar|sem compromisso|se quiser|se acharem interessante|me avisa como preferem|tudo bem\?|tudo certo\?|pode ser\?|continua fazendo sentido|continua nos planos|ok[.!?]*$/.test(s)) return true;
+  if (mensagemMisturaUnidadeEscolhidaComAlternativa(txt, { diagnostico, raw, lead })) return true;
   if (/simula[cç][aã]o|simular|parcela|entrada|refor[cç]o|saldo|condi[cç][aã]o|proposta/.test(blob)) {
     if (!/simula[cç][aã]o|simular|valores|condi[cç][aã]o|parcela|entrada|refor[cç]o|saldo|composi[cç][aã]o|atualizar/.test(s)) return true;
     if (/\b(quer que eu|posso)\b.*\?/.test(s) && !/confirmar|comparar/.test(s)) return true;
@@ -1196,6 +1249,7 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
 
   const mensagens = [a, b, c].map((m, i) => {
     let x = sanitizarMensagemFallback(m || a || base);
+    x = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(x, { diagnostico, raw, lead }));
     if (!x || x.length < REGRAS_MSG.minChars || mensagemFormatoRuim(x)) x = i === 0 ? base : a;
     return x;
   });
@@ -1231,6 +1285,13 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
       if (mensagemQueApagouRetomadaOuVirouPropaganda(mensagens[i]) || !mensagemTemRetomadaOuMudancaComHistorico(mensagens[i])) {
         mensagens[i] = fallbackJornada[i];
       }
+    }
+  }
+
+  for (let i = 0; i < mensagens.length; i++) {
+    mensagens[i] = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(mensagens[i], { diagnostico, raw, lead }));
+    if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead }) && mensagemMisturaUnidadeEscolhidaComAlternativa(mensagens[i], { diagnostico, raw, lead })) {
+      mensagens[i] = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw })[i];
     }
   }
 
@@ -3037,7 +3098,7 @@ ${timelineText}`;
     });
 
     const rawBase = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
-    const raw = { ...rawBase, _ordemMaterial: contextoOrdemMaterial };
+    const raw = { ...rawBase, _ordemMaterial: contextoOrdemMaterial, _timelineText: timelineText };
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
@@ -3050,6 +3111,7 @@ ${timelineText}`;
     const msg = msgA;
     const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead });
     const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
+    const corrigirUnidade = (v, fb = "") => corrigirAlternativaUnidadeEscolhidaTexto(txt(v, fb), { diagnostico: d, raw, lead });
     const probPct = clamp(raw.probabilityPercent);
 
     // v724-2: objeto final deliberadamente simples.
@@ -3072,11 +3134,11 @@ ${timelineText}`;
         produtosParalelos: txt(d.produtosParalelos, "Não houve produtos paralelos relevantes."),
         objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Sem objeção explícita."),
         objecaoPrincipal: txt(d.objecaoPrincipal || d.objecaoIdentificada, "Sem objeção explícita."),
-        pendenciaPrincipal: txt(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificada"),
+        pendenciaPrincipal: corrigirUnidade(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificada"),
         pendenciaFinanceira: txt(d.pendenciaFinanceira, "Não há pendência financeira."),
         quemDeveAgirAgora: txt(d.quemDeveAgirAgora || d.proximoPasso, "Corretor"),
-        proximoPasso: txt(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
-        proximoPassoDeQuem: txt(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
+        proximoPasso: corrigirUnidade(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
+        proximoPassoDeQuem: corrigirUnidade(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
         etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
         probabilidadeComentada: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
         probabilidadeFechamentoHoje: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
@@ -3092,7 +3154,7 @@ ${timelineText}`;
         percepcaoTodaConversa: txt(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
-      estrategiaMensagem: txt(raw.estrategiaMensagem),
+      estrategiaMensagem: corrigirUnidade(raw.estrategiaMensagem),
       prioridadeLead: txt(raw.prioridadeLead),
       produtoInteresse: produtoAtual,
       produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
@@ -3100,7 +3162,7 @@ ${timelineText}`;
       probability: txt(raw.probability, probPct != null ? `${probPct}%` : "média"),
       probabilityPercent: probPct,
       clientProfile: txt(raw.clientProfile),
-      nextAction: txt(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
+      nextAction: corrigirUnidade(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
       messages: {
         a: msgA,
         b: msgB,
@@ -3128,13 +3190,13 @@ ${timelineText}`;
       mudancas: [],
       modeloComercial: null,
       raciocinioComercial: null,
-      estrategia: txt(raw.estrategiaMensagem),
+      estrategia: corrigirUnidade(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v743 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o produto, ordem dos acontecimentos, compromisso pendente do corretor ou troca indevida da unidade escolhida pelo contexto."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v744 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o produto, ordem dos acontecimentos, compromisso pendente do corretor ou alternativa indevida contra a unidade escolhida pelo contexto."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
