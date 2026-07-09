@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v743-unidade-escolhida-pelo-contexto";
+const ARQUITETURA_MENSAGENS_ATUAL = "v744-unidade-escolhida-sem-alternativa";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
