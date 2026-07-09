@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v744-unidade-escolhida-sem-alternativa";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v746-hierarquia-raciocinio-comercial";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -225,6 +225,41 @@ REGRAS ABSOLUTAS
 - A mensagem sugerida deve nascer do diagnóstico e jamais contradizer a análise.
 
 ==========================================
+HIERARQUIA DO RACIOCÍNIO COMERCIAL
+==========================================
+
+Antes de escrever qualquer sugestão, resolva a conversa nesta ordem. A primeira regra aplicável manda na estratégia; as regras abaixo dela apenas ajustam o tom, nunca apagam a prioridade acima.
+
+1. COMPROMISSO PENDENTE DO CORRETOR
+Se o corretor ficou devendo simulação, proposta, valor, planta, material, condição ou retorno, e isso ainda não foi entregue depois, esse é o centro da mensagem. O corretor deve assumir a ação. Não pergunte de novo se pode fazer, não conduza para visita e não transfira a responsabilidade para o cliente.
+
+2. CLIENTE AUTORIZOU UMA AÇÃO
+Se o cliente autorizou simulação, proposta, visita, envio de material ou análise, a próxima mensagem deve executar/confirmar essa ação usando os dados já informados. Não faça nova descoberta, salvo se faltar um dado indispensável.
+
+3. MATERIAL OU INFORMAÇÃO JÁ ENVIADOS
+Se o cliente pediu fotos, vídeo, link, plantas, mapa, valores ou material e o corretor já enviou depois disso, não escreva como se ainda fosse enviar. Retome o material já enviado e o compromisso do cliente após receber.
+
+4. PERGUNTAS JÁ RESPONDIDAS
+Se objetivo, finalidade, pessoa beneficiária, especialidade, orçamento, metragem, unidade, forma de pagamento ou produto já foram respondidos, esses dados ficam consolidados. Use-os como gancho e nunca pergunte de novo.
+
+5. PENDÊNCIA FINANCEIRA OU DE ESCOLHA
+Se o ponto aberto é entrada, parcela, reforço, saldo, financiamento, proposta, unidade, sala, lote, metragem ou faixa de valor, a mensagem deve destravar essa pendência específica.
+
+6. DIRECIONAMENTO COMERCIAL DO CORRETOR
+Se o corretor apresentou outro produto como alternativa compatível com a mesma necessidade do cliente, isso não é mudança de jornada. Retome a última pendência desse produto e continue a condução.
+
+7. MUDANÇA REAL DE JORNADA DO CLIENTE
+Só aplique mudança de jornada quando o cliente, por iniciativa própria, voltar por outro anúncio/produto, mudar finalidade, cidade, padrão, faixa ou tipo de imóvel. Aí a mensagem deve combinar retomada do histórico + novo produto + pergunta de descoberta.
+
+8. TEMPO PARADO
+Se a conversa está parada há mais de 7 dias, a mensagem ganha tom de retomada contextual. Tempo parado não substitui uma pendência concreta acima; apenas muda a forma de retomar.
+
+9. AVANÇO NATURAL
+Se nada acima se aplica, conduza para o próximo passo mais provável do funil: visita, simulação, proposta, escolha de unidade, envio de condição ou conversa objetiva.
+
+Nunca deixe uma regra mais genérica, como tempo parado ou mudança de jornada, apagar uma pendência concreta de simulação, valores, material enviado ou pergunta já respondida.
+
+==========================================
 DIAGNÓSTICO OBRIGATÓRIO
 ==========================================
 
@@ -387,6 +422,33 @@ Status do produto é obrigatório:
 
 Estrutura correta:
 "Retomando nosso contato: você tinha ficado de avaliar [produto atual] com [pessoa/critério] e me retornar. Como ele encaixa no que vocês comentaram, posso [organizar visita / separar fotos / passar horários]?"
+
+==========================================
+PERGUNTAS JÁ RESPONDIDAS
+==========================================
+
+Antes de sugerir qualquer mensagem, identifique quais perguntas já foram respondidas na conversa.
+
+Se o cliente já informou objetivo, finalidade, uso do imóvel, pessoa envolvida na decisão, especialidade, faixa de valor, metragem, unidade, produto ou condição de pagamento, NÃO pergunte isso novamente.
+
+Quando uma informação já está respondida, use-a como gancho comercial.
+
+Exemplos:
+- Se o cliente já disse que é para consultório do filho, não pergunte se é moradia ou investimento. Retome o consultório do filho.
+- Se o cliente já pediu valores e o corretor já enviou o link com disponibilidades, não pergunte o que chamou atenção nem volte para descoberta. Retome a análise das salas/valores.
+- Se o cliente já escolheu unidade para simulação, não compare com outra unidade só porque ela foi citada.
+- Se o cliente já disse que procura moradia, não pergunte se é investimento.
+
+A próxima mensagem deve continuar do último ponto útil da conversa:
+- material enviado;
+- valores enviados;
+- sala/unidade a escolher;
+- simulação pendente;
+- visita a organizar;
+- decisão com esposo/esposa/filho/sócio.
+
+Nunca use mudança de jornada quando o produto atual é o mesmo produto da conversa e o histórico já explicou o objetivo.
+Nunca escreva "assunto anterior" como se fosse um produto. Se o produto anterior não foi identificado com segurança, não force mudança de jornada.
 
 ==========================================
 LAPIDAÇÃO DE LINGUAGEM DAS SUGESTÕES
@@ -634,6 +696,8 @@ const REGRA_TESE_COMERCIAL = ``;
 // Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
 const REGRAS_MSG_PROMPT = [
   "- Use somente fatos do histórico; hipóteses precisam ser marcadas como hipótese.",
+  "- Aplique a hierarquia comercial: compromisso pendente do corretor > ação autorizada pelo cliente > material já enviado > perguntas já respondidas > pendência financeira/escolha > direcionamento do corretor > mudança real de jornada > tempo parado > avanço natural.",
+  "- A primeira regra aplicável define a estratégia; regras mais genéricas não podem apagar pendências concretas.",
   "- Não escreva relatório para o cliente; escreva WhatsApp natural de corretor experiente.",
   "- Continue do ponto real onde a conversa parou.",
   "- Não pergunte o que o cliente já respondeu.",
@@ -856,7 +920,7 @@ function mensagensFallbackCompromissoCorretor({ lead = {}, diagnostico = {}, raw
   const semBox = contextoSimulacaoSemBox({ diagnostico, raw, lead });
   const complementoBox = semBox ? ", sem o box" : "";
   return [
-    sanitizarMensagemFallback(`${prefixo}vi que ficou pendente da minha parte a simulação ${produtoComDe(produto)} considerando ${unidades.texto}${complementoBox}, com ${parcela}. Vou atualizar os valores e te envio uma composição com entrada, mensais, reforços e saldo para vocês avaliarem.`),
+    sanitizarMensagemFallback(`${prefixo}ficou pendente da minha parte a simulação ${produtoComDe(produto)} considerando ${unidades.texto}${complementoBox}, com ${parcela}. Vou atualizar os valores e te envio uma composição com entrada, mensais, reforços e saldo para vocês avaliarem.`),
     sanitizarMensagemFallback(`${prefixo}vou montar a simulação ${produtoComDe(produto)} usando ${unidades.texto} como base${complementoBox} e mantendo ${parcela}. Assim vocês conseguem avaliar a condição completa antes de avançarmos para qualquer outro ponto.`),
     sanitizarMensagemFallback(`${prefixo}ficou pendente aquela simulação ${produtoComDe(produto)} considerando ${unidades.texto}${complementoBox}. Vou preparar a composição com entrada, parcelas mensais, reforços e saldo final para vocês avaliarem se fica confortável.`)
   ];
@@ -926,11 +990,59 @@ function diagnosticoIndicaDirecionamentoCorretor({ diagnostico = {}, raw = {}, l
   return (direcionamentoDeclarado && !clienteMudouSozinho) || trocaResidencialMesmoObjetivo;
 }
 
+
+function contextoPerguntasRespondidas({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const produtoComercial = /premium\s+office|sala\s+comercial|consult[oó]rio|cl[ií]nica/.test(blob);
+  const objetivoConsultorioFilho = /(consult[oó]rio|cl[ií]nica).{0,120}(filho|urolog)|filho.{0,120}(consult[oó]rio|cl[ií]nica|urolog)|urolog/.test(blob);
+  const valoresPedidosOuEnviados = /(tem\s+valores|valores\s+j[aá]|valor(es)?\s+j[aá]|link\s+com\s+(as\s+)?disponibilidades|disponibilidades\s+e\s+valores|prazo\s+para\s+pagamento|pagamento\s+at[eé]\s+2029|direto\s+com\s+construtora)/.test(blob);
+  const objetivoJaRespondido = objetivoConsultorioFilho || /objetivo\s*:\s*(morar|investir)|objetivo\s+real|para\s+moradia|para\s+investimento|uso\s+pr[oó]prio/.test(blob);
+  const mudancaComercialResidencialReal = /premium\s+office/.test(blob) && /personali[tée]|personalit/.test(blob) && /(outro\s+an[uú]ncio|novo\s+an[uú]ncio|qual\s+valor\s+deste\s+apto|apartamento|apto)/.test(blob);
+  return {
+    ativo: !mudancaComercialResidencialReal && !!((produtoComercial && (objetivoConsultorioFilho || valoresPedidosOuEnviados)) || (objetivoJaRespondido && valoresPedidosOuEnviados)),
+    produtoComercial,
+    objetivoConsultorioFilho,
+    valoresPedidosOuEnviados,
+    objetivoJaRespondido
+  };
+}
+
+function mensagemPerguntaDescobertaJaRespondida(txt, ctx = {}) {
+  const s = String(txt || "").toLowerCase();
+  const c = contextoPerguntasRespondidas(ctx);
+  if (!c.ativo) return false;
+  return /assunto\s+anterior|o\s+que\s+(te\s+)?chamou\s+(tua\s+|sua\s+)?aten[cç][aã]o|padr[aã]o,?\s+localiza[cç][aã]o|possibilidade\s+diferente|buscando\s+algo\s+diferente|objetivo\s+atual|moradia,?\s+investimento|uso\s+pr[oó]prio|pensando\s+em\s+investimento|compara[cç][aã]o\s+de\s+oportunidade/.test(s);
+}
+
+function mensagensFallbackPerguntasRespondidas({ lead = {}, diagnostico = {}, raw = {} } = {}) {
+  const nome = primeiraPalavraNome(lead);
+  const prefixo = nome ? `${nome}, ` : "";
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const produto = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || (/premium\s+office/.test(blob) ? "a Premium Office" : "essa opção"), "essa opção");
+  const c = contextoPerguntasRespondidas({ diagnostico, raw, lead });
+  const projeto = c.objetivoConsultorioFilho ? "o consultório do teu filho" : "o projeto que vocês estavam avaliando";
+  const pensandoProjeto = c.objetivoConsultorioFilho ? "no consultório do teu filho" : "no projeto que vocês estavam avaliando";
+  const paraProjeto = c.objetivoConsultorioFilho ? "para o consultório do teu filho" : "para o projeto que vocês estavam avaliando";
+  if (produtoEhComercial(produto, blob) || /premium\s+office/.test(blob)) {
+    return [
+      sanitizarMensagemFallback(`${prefixo}conseguiu dar uma olhada nas salas da Premium Office? Pensando ${pensandoProjeto}, se vocês já tiverem alguma preferência de metragem ou faixa de investimento, consigo separar as opções que mais se encaixam para vocês avaliarem.`),
+      sanitizarMensagemFallback(`${prefixo}depois que te enviei o link com disponibilidades e valores da Premium Office, ficou em aberto escolher quais salas fazem mais sentido ${paraProjeto}. Alguma metragem ou faixa de valor chamou mais atenção?`),
+      sanitizarMensagemFallback(`${prefixo}para facilitar a decisão, posso separar as salas da Premium Office por metragem, posição e valor, já pensando ${pensandoProjeto}. Assim vocês olham primeiro as opções com mais encaixe. Quer que eu organize essa seleção?`)
+    ];
+  }
+  return [
+    sanitizarMensagemFallback(`${prefixo}retomando o ponto que já estava claro na conversa, posso organizar as opções em cima do que vocês informaram e evitar voltar para perguntas que já foram respondidas. Quer que eu separe o caminho mais objetivo?`),
+    sanitizarMensagemFallback(`${prefixo}para facilitar, posso separar as opções usando os critérios que vocês já passaram na conversa. Assim avaliamos direto o que tem mais encaixe, sem reiniciar o atendimento.`),
+    sanitizarMensagemFallback(`${prefixo}ficou em aberto avançar a partir das informações que vocês já tinham passado. Posso organizar uma seleção objetiva com os próximos passos?`)
+  ];
+}
+
 function diagnosticoIndicaMudancaComRetomada({ diagnostico = {}, raw = {}, lead = {} }) {
   if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) return false;
+  if (contextoPerguntasRespondidas({ diagnostico, raw, lead }).ativo) return false;
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
   const houveMudanca = /houvemudancajornada"\s*:\s*"?sim|mudan[cç]a de jornada|mudou de produto|produto anterior|interesse anterior|outro an[uú]ncio|premium office.*personali|personali.*premium office|sala comercial.*apartamento|apartamento.*sala comercial/.test(blob);
-  const temRetomada = /tempo parado|conversa parada|retomada|retomando|voltou depois|voltou por|conversa antiga|depois de tempo|três meses|tres meses|meses parado|h[aá]\s+mais\s+de\s+7\s+dias|\b[89]|[1-9][0-9]\s+dias/.test(blob);
+  const temRetomada = /tempo parado|conversa parada|retomada|retomando|voltou depois|voltou por|outro an[uú]ncio|novo an[uú]ncio|conversa antiga|depois de tempo|meses depois|três meses|tres meses|meses parado|h[aá]\s+mais\s+de\s+7\s+dias|\b[89]|[1-9][0-9]\s+dias/.test(blob);
   return houveMudanca && temRetomada;
 }
 
@@ -1007,10 +1119,12 @@ function limparVocativoInvalido(txt, lead = {}) {
 }
 
 function mensagensFallbackMudancaRetomada({ lead = {}, diagnostico = {}, raw = {} }) {
+  if (contextoPerguntasRespondidas({ diagnostico, raw, lead }).ativo) return mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw });
   const nome = primeiraPalavraNome(lead);
   const blob = JSON.stringify({ lead, diagnostico, raw }).toLowerCase();
-  const anterior = produtoCurtoParaMensagem(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) ? "a Premium Office" : "o assunto anterior"), "o assunto anterior");
+  const anterior = produtoCurtoParaMensagem(diagnostico.produtoAnterior || diagnostico.interesseAnterior || (/premium\s+office|premium/.test(blob) && /personali[tée]|personalit/.test(blob) ? "a Premium Office" : ""), "");
   const atual = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || (/personali[tée]|personalit/.test(blob) ? "o Personalité" : "essa nova opção"), "essa nova opção");
+  if (!anterior || anterior === "o assunto anterior" || anterior === atual) return mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw });
   const prefixo = nome ? `${nome}, ` : "";
   return [
     sanitizarMensagemFallback(`${prefixo}retomando nosso contato: antes falávamos sobre ${anterior}, e agora você me chamou sobre ${atual}. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`),
@@ -1214,20 +1328,28 @@ function mensagemTemRetomadaOuMudancaComHistorico(txt) {
   return /retomando|nosso contato|nossa conversa|antes\s+(fal[aá]vamos|voc[eê]\s+tinha|conversamos)|saiu\s+de|mudou\s+de|voltou\s+por|agora\s+voc[eê]\s+me\s+chamou/i.test(String(txt || ""));
 }
 
-function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) {
-  if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead })) {
-    return { aLabel: "Recomendada", bLabel: "Montar simulação", cLabel: "Direta ao ponto" };
-  }
-  if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
-    return { aLabel: "Recomendada", bLabel: "Descobrir objetivo", cLabel: "Direta ao ponto" };
-  }
-  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
-    return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
-  }
+function cenarioPrioritarioComercial({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  // v746: uma única hierarquia para evitar regras competindo.
+  // A primeira condição aplicável define o cenário principal; as demais só servem
+  // como segurança final, não como motor para reescrever tudo.
+  if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead })) return "compromisso-corretor";
+  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) return "material-ja-enviado";
+  if (contextoPerguntasRespondidas({ diagnostico, raw, lead }).ativo) return "perguntas-respondidas";
+  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) return "direcionamento-corretor";
+  if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) return "mudanca-jornada";
   const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
-  if (/tempo parado|conversa parada|retomada|retomando|dias|semanas|meses/.test(blob)) {
-    return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Retomada curta" };
-  }
+  if (/tempo parado|conversa parada|retomada|retomando|dias|semanas|meses/.test(blob)) return "retomada-contextual";
+  return "avanco-natural";
+}
+
+function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) {
+  const cenario = cenarioPrioritarioComercial({ diagnostico, raw, lead });
+  if (cenario === "compromisso-corretor") return { aLabel: "Recomendada", bLabel: "Montar simulação", cLabel: "Direta ao ponto" };
+  if (cenario === "material-ja-enviado") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
+  if (cenario === "perguntas-respondidas") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
+  if (cenario === "mudanca-jornada") return { aLabel: "Recomendada", bLabel: "Descobrir objetivo", cLabel: "Direta ao ponto" };
+  if (cenario === "direcionamento-corretor") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
+  if (cenario === "retomada-contextual") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Retomada curta" };
   return { aLabel: "Recomendada", bLabel: "Consultiva", cLabel: "Natural" };
 }
 
@@ -1254,32 +1376,37 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     return x;
   });
 
-  if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead })) {
+  const cenarioPrincipal = cenarioPrioritarioComercial({ diagnostico, raw, lead });
+
+  if (cenarioPrincipal === "compromisso-corretor") {
     const fallbackCompromisso = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemPrecisaFallbackCompromissoCorretor(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
         mensagens[i] = fallbackCompromisso[i];
       }
     }
-  }
-
-  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) {
+  } else if (cenarioPrincipal === "material-ja-enviado") {
     const fallbackMaterial = mensagensFallbackMaterialJaEnviado({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemFalaComoSeMaterialAindaFosseEnviar(mensagens[i]) || !mensagens[i]) {
         mensagens[i] = fallbackMaterial[i];
       }
     }
-  }
-
-  if (!diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead }) && diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
+  } else if (cenarioPrincipal === "perguntas-respondidas") {
+    const fallbackRespondidas = mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw });
+    for (let i = 0; i < mensagens.length; i++) {
+      if (mensagemPerguntaDescobertaJaRespondida(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
+        mensagens[i] = fallbackRespondidas[i];
+      }
+    }
+  } else if (cenarioPrincipal === "direcionamento-corretor") {
     const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemPrecisaFallbackDirecionamento(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
         mensagens[i] = fallbackDirecionamento[i];
       }
     }
-  } else if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
+  } else if (cenarioPrincipal === "mudanca-jornada") {
     const fallbackJornada = mensagensFallbackMudancaRetomada({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemQueApagouRetomadaOuVirouPropaganda(mensagens[i]) || !mensagemTemRetomadaOuMudancaComHistorico(mensagens[i])) {
@@ -1290,6 +1417,9 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
 
   for (let i = 0; i < mensagens.length; i++) {
     mensagens[i] = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(mensagens[i], { diagnostico, raw, lead }));
+    if (mensagemPerguntaDescobertaJaRespondida(mensagens[i], { diagnostico, raw, lead })) {
+      mensagens[i] = mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw })[i];
+    }
     if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead }) && mensagemMisturaUnidadeEscolhidaComAlternativa(mensagens[i], { diagnostico, raw, lead })) {
       mensagens[i] = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw })[i];
     }
@@ -3058,6 +3188,9 @@ Use este formato de compatibilidade:
     "probabilidadeVenda":"Muito baixa|Baixa|Média|Alta|Muito alta com justificativa",
     "probabilidadeComentada":"nota/10 ou percentual com justificativa",
     "tempoParado":"quantos dias a conversa ficou parada e como isso afeta a abordagem",
+    "regraPrioritariaAplicada":"compromisso pendente do corretor|cliente autorizou ação|material já enviado|perguntas já respondidas|pendência financeira/escolha|direcionamento comercial do corretor|mudança real de jornada do cliente|retomada por tempo parado|avanço natural, com explicação curta",
+    "fatosConsolidadosQueNaoPodemSerPerguntados":["objetivo, unidade, pessoa decisora, orçamento, metragem, forma de pagamento ou outro dado já respondido"],
+    "proximaAcaoObrigatoria":"ação que o corretor deve assumir agora, se houver",
     "mensagemQueEuEnviariaHoje":"Sugestão 1 pronta para copiar"
   },
   "oQueFaltaDescobrir":["..."],
@@ -3196,7 +3329,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v744 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o produto, ordem dos acontecimentos, compromisso pendente do corretor ou alternativa indevida contra a unidade escolhida pelo contexto."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v746 usado apenas quando a mensagem violou a hierarquia comercial: compromisso pendente, material já enviado, pergunta já respondida, mudança indevida de jornada, produto incompatível ou unidade alternativa indevida."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
