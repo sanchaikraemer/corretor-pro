@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v740-ordem-acontecimentos-material";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v743-unidade-escolhida-pelo-contexto";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -444,6 +444,42 @@ A retomada deve mencionar que o material já foi encaminhado, retomar o compromi
 Nunca use "seguem as fotos", "estou enviando", "vou enviar" ou "posso separar as fotos" quando o material já foi enviado na conversa.
 
 ==========================================
+COMPROMISSO NÃO CUMPRIDO DO CORRETOR
+==========================================
+
+Antes de gerar as sugestões, verifique se o corretor ficou devendo alguma informação, simulação, proposta, material, planta, valor, condição, retorno ou encaminhamento.
+
+Se o corretor prometeu entregar algo e não entregou depois, essa pendência deve ser o centro da próxima mensagem.
+
+Nesse caso:
+- não trate como objeção do cliente;
+- não trate como perda de interesse;
+- não pergunte se o cliente ainda tem interesse;
+- não conduza direto para visita;
+- não reinicie a venda;
+- não pergunte novamente se pode fazer algo que o cliente já autorizou;
+- reconheça a pendência com naturalidade, sem exagero;
+- assuma a ação do corretor e diga que vai entregar ou atualizar o que ficou pendente;
+- confirme apenas o dado mínimo se isso for indispensável para calcular corretamente.
+
+Quando a próxima ação é do corretor, a sugestão deve assumir a ação, não transferir trabalho para o cliente.
+
+Se o cliente autorizou uma simulação financeira, por exemplo "pode ser" ou "vamos simular só o apartamento", a mensagem deve confirmar a montagem da simulação e usar os dados já informados, como unidade, parcela máxima, entrada, reforços, saldo, com ou sem box.
+
+Se houver várias unidades citadas na conversa, identifique qual unidade o cliente realmente escolheu ou consolidou como preferência real para a simulação, proposta ou próxima ação.
+Não escolha por número fixo.
+Não compare unidades só porque foram citadas.
+Não use uma unidade lateral como alternativa se o cliente já consolidou outra como base.
+Analise no contexto:
+- qual unidade o cliente elogiou com mais clareza;
+- qual unidade foi tratada como opção principal;
+- qual unidade ficou vinculada ao próximo passo;
+- qual unidade o corretor e cliente estavam considerando no momento da simulação.
+Use a unidade escolhida pelo contexto como base da mensagem.
+
+Se o cliente decidiu simular sem box, não volte a oferecer ou incluir o box na mensagem seguinte.
+
+==========================================
 SUGESTÕES DE RESPOSTAS
 ==========================================
 
@@ -606,6 +642,9 @@ const REGRAS_MSG_PROMPT = [
   "- Nunca deixe a mudança de jornada apagar a retomada quando existe histórico anterior.",
   "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
   "- Se o cliente pediu material e o corretor já enviou depois, não escreva como se ainda fosse enviar; retome a avaliação do material já encaminhado.",
+  "- Se o corretor ficou devendo simulação, proposta, valores, planta ou retorno, essa pendência vira prioridade: assuma a ação e não pergunte de novo se pode fazer.",
+  "- Se o cliente autorizou simulação financeira, confirme que vai montar/atualizar usando os dados já informados; não conduza para visita antes disso.",
+  "- Se o cliente pediu simulação sem box, não traga o box de volta como opção na mensagem seguinte.",
   "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada real mais importante.",
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
@@ -649,6 +688,125 @@ function textoFallbackCurto(valor, fallback) {
   const s = String(valor || "").replace(/\s+/g, " ").trim();
   if (!s || /^(nenhum|nenhuma|não identificad[ao]|nao identificad[ao]|—|-)$/i.test(s)) return fallback;
   return s;
+}
+
+
+function diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const prometeu = /compromissocorretornaocumprido"\s*:\s*"?sim|ficou devendo|pendente da minha parte|não entregou|nao entregou|nunca foi enviada|nunca foi enviado|vou\s+(fazer|montar|preparar|providenciar|enviar|te encaminhar)|fiquei de\s+(te\s+)?(enviar|mandar|montar|preparar|fazer)|corretor\s+(deve|deveria|ficou|prometeu)/.test(blob);
+  const simulacao = /simula[cç][aã]o|simular|parcelas?|parcela\s+(m[aá]xima|perto|pr[oó]xima)|r\$\s*4\.?000|4000|entrada|refor[cç]os?|saldo\s+final|condi[cç][aã]o\s+financeira|proposta/.test(blob);
+  const corretorAge = /quemdeveagiragora"\s*:\s*"?corretor|proximopasso"\s*:\s*"?corretor|pr[oó]ximo passo.*corretor|corretor deve|corretor deveria|você se comprometeu|voce se comprometeu/.test(blob);
+  const clienteAutorizou = /clientejaautorizouacao"\s*:\s*"?sim|pode ser|vamos simular|simular s[oó]|monte|montar|preparar|providenciar|aceitou fazer uma simula[cç][aã]o|autorizou/.test(blob);
+  return (prometeu && (simulacao || corretorAge)) || (simulacao && corretorAge && clienteAutorizou);
+}
+
+function contextoSimulacaoSemBox({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  return /sem\s+(o\s+)?box|s[oó]\s+o\s+apartamento|somente\s+(o\s+)?apartamento|apenas\s+(o\s+)?apartamento|box\s+(de\s+garagem\s+)?n[aã]o\s+(incluso|inclu[ií]do)|valores.*n[aã]o abrangem.*box/.test(blob);
+}
+
+function extrairUnidadesPreferidas({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const textoBase = [
+    raw?.conversationText,
+    raw?.textoConversa,
+    raw?.transcript,
+    raw?.historico,
+    raw?.messages,
+    raw?.mensagens,
+    diagnostico?.unidadePrincipal,
+    diagnostico?.unidadeEscolhida,
+    diagnostico?.produtoPrincipal,
+    diagnostico?.ultimoCompromissoCliente,
+    diagnostico?.ultimoCompromissoCorretor,
+    diagnostico?.pendenciaPrincipal,
+    diagnostico?.justificativa,
+    lead?.title,
+    lead?.name,
+    lead?.product
+  ].filter(Boolean).join("\n");
+
+  const blob = textoBase || JSON.stringify({ diagnostico, raw, lead });
+  const matches = [...blob.matchAll(/\b(?:ap(?:to|artamento|unidade)?\s*)?(\d{3,4})\b/gi)]
+    .filter(m => /^(10|11|12|13|14|15|16|17|18)\d{2}$/.test(m[1]));
+
+  const mapa = new Map();
+  for (const m of matches) {
+    const unidade = m[1];
+    const idx = m.index || 0;
+    const antes = blob.slice(Math.max(0, idx - 180), idx).toLowerCase();
+    const depois = blob.slice(idx + unidade.length, Math.min(blob.length, idx + unidade.length + 180)).toLowerCase();
+    const trecho = `${antes} ${unidade} ${depois}`;
+    let score = 1;
+
+    if (/\b(escolh(eu|emos|eram|ida|ido)|defini(u|mos|ram)|ficou\s+(como|no|na)|base\s+(da|do|para)|considerando|usar\s+como\s+base|seguir\s+(com|no|na)|vamos\s+simular|simular\s+(o|a)?|simula[cç][aã]o)\b/.test(trecho)) score += 80;
+    if (/\b(gostei|gostamos|gostou|gostaram|preferi|preferimos|preferiu|preferiram|prefer[eê]ncia|favorit[ao]|melhor\s+op[cç][aã]o|mais\s+gostou|mais\s+gostamos)\b/.test(trecho)) score += 55;
+    if (/\b(parcelas?|parcela\s+m[aá]xima|entrada|refor[cç]os?|saldo|condi[cç][aã]o|proposta|r\$\s*4\.?000|4000)\b/.test(trecho)) score += 25;
+    if (/\b(apartamento|apto|unidade|planta|terra[cç]o)\b/.test(trecho)) score += 10;
+    if (/\b(talvez|tamb[eé]m|ou\s+(o|a)?\s*\d{3,4}|outra\s+op[cç][aã]o|possibilidade|comparar|compara[cç][aã]o|se\s+a\s+condi[cç][aã]o\s+mudar)\b/.test(trecho)) score -= 35;
+
+    const atual = mapa.get(unidade) || { unidade, score: 0, count: 0, lastIndex: -1 };
+    atual.score += score;
+    atual.count += 1;
+    atual.lastIndex = Math.max(atual.lastIndex, idx);
+    mapa.set(unidade, atual);
+  }
+
+  if (!mapa.size) {
+    return { principal: "a unidade escolhida", alternativo: "", texto: "a unidade que vocês ficaram de avaliar" };
+  }
+
+  const ordenadas = [...mapa.values()].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.lastIndex !== a.lastIndex) return b.lastIndex - a.lastIndex;
+    return b.count - a.count;
+  });
+  const escolhida = ordenadas[0]?.unidade;
+  if (!escolhida) {
+    return { principal: "a unidade escolhida", alternativo: "", texto: "a unidade que vocês ficaram de avaliar" };
+  }
+  return { principal: escolhida, alternativo: "", texto: `o ${escolhida}` };
+}
+
+function referenciaParcela({ diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  if (/r\$\s*4\.?000|4\.?000|4000|4\s*mil/.test(blob)) return "parcelas próximas dos R$ 4 mil";
+  if (/parcela\s+m[aá]xima/.test(blob)) return "a parcela máxima que você comentou";
+  if (/parcela/.test(blob)) return "a parcela que você comentou";
+  return "a condição financeira que vocês comentaram";
+}
+
+function mensagemPareceCortada(txt) {
+  const s = String(txt || "").trim().replace(/[.!?…]+$/g, "").trim().toLowerCase();
+  return /\b(para|pra|se|que|de|com|e|ou|ver|avaliar|ficar|chegar|montar)$/.test(s) || /ver\s+se\s+(pra|para)\s+voc[eê]s$/.test(s);
+}
+
+function mensagemPrecisaFallbackCompromissoCorretor(txt, { diagnostico = {}, raw = {}, lead = {} } = {}) {
+  const s = String(txt || "").toLowerCase();
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  if (!s.trim() || mensagemFormatoRuim(txt) || mensagemComVocativoInvalido(txt) || mensagemPareceCortada(txt)) return true;
+  if (/ainda tem interesse|segue interessado|faz sentido|qualquer dúvida|fico à disposição|passando para saber|passando para retomar|sem compromisso|se quiser|se acharem interessante|me avisa como preferem|tudo bem\?|pode ser\?|continua fazendo sentido|continua nos planos/.test(s)) return true;
+  if (/simula[cç][aã]o|simular|parcela|entrada|refor[cç]o|saldo|condi[cç][aã]o|proposta/.test(blob)) {
+    if (!/simula[cç][aã]o|simular|valores|condi[cç][aã]o|parcela|entrada|refor[cç]o|saldo|composi[cç][aã]o|atualizar/.test(s)) return true;
+    if (/\b(quer que eu|posso)\b.*\?/.test(s) && !/confirmar|comparar/.test(s)) return true;
+  }
+  if (contextoSimulacaoSemBox({ diagnostico, raw, lead }) && /com\s+(o\s+)?box|incluir\s+(o\s+)?box|ver como ficaria com o box|com box duplo/.test(s)) return true;
+  if (/visita|conhecer pessoalmente|horário para visitar|agendar/.test(s) && /simula[cç][aã]o|simular|r\$\s*4\.?000|4000|parcela/.test(blob) && !/simula[cç][aã]o/.test(s)) return true;
+  return false;
+}
+
+function mensagensFallbackCompromissoCorretor({ lead = {}, diagnostico = {}, raw = {} } = {}) {
+  const nome = primeiraPalavraNome(lead);
+  const prefixo = nome ? `${nome}, ` : "";
+  const produto = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
+  const unidades = extrairUnidadesPreferidas({ diagnostico, raw, lead });
+  const parcela = referenciaParcela({ diagnostico, raw, lead });
+  const semBox = contextoSimulacaoSemBox({ diagnostico, raw, lead });
+  const complementoBox = semBox ? ", sem o box" : "";
+  return [
+    sanitizarMensagemFallback(`${prefixo}vi que ficou pendente da minha parte a simulação ${produtoComDe(produto)} considerando ${unidades.texto}${complementoBox}, com ${parcela}. Vou atualizar os valores e te envio uma composição com entrada, mensais, reforços e saldo para vocês avaliarem.`),
+    sanitizarMensagemFallback(`${prefixo}vou montar a simulação ${produtoComDe(produto)} usando ${unidades.texto} como base${complementoBox} e mantendo ${parcela}. Assim vocês conseguem avaliar a condição completa antes de avançarmos para qualquer outro ponto.`),
+    sanitizarMensagemFallback(`${prefixo}ficou pendente aquela simulação ${produtoComDe(produto)} considerando ${unidades.texto}${complementoBox}. Vou preparar a composição com entrada, parcelas mensais, reforços e saldo final para vocês avaliarem se fica confortável.`)
+  ];
 }
 
 function gerarMensagemBaseFallback({ lead, diagnostico = {}, raw = {} }) {
@@ -1004,6 +1162,9 @@ function mensagemTemRetomadaOuMudancaComHistorico(txt) {
 }
 
 function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) {
+  if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead })) {
+    return { aLabel: "Recomendada", bLabel: "Montar simulação", cLabel: "Direta ao ponto" };
+  }
   if (diagnosticoIndicaMudancaComRetomada({ diagnostico, raw, lead })) {
     return { aLabel: "Recomendada", bLabel: "Descobrir objetivo", cLabel: "Direta ao ponto" };
   }
@@ -1039,6 +1200,15 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     return x;
   });
 
+  if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead })) {
+    const fallbackCompromisso = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw });
+    for (let i = 0; i < mensagens.length; i++) {
+      if (mensagemPrecisaFallbackCompromissoCorretor(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
+        mensagens[i] = fallbackCompromisso[i];
+      }
+    }
+  }
+
   if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) {
     const fallbackMaterial = mensagensFallbackMaterialJaEnviado({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
@@ -1048,7 +1218,7 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     }
   }
 
-  if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
+  if (!diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead }) && diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
     const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
       if (mensagemPrecisaFallbackDirecionamento(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
@@ -2804,6 +2974,9 @@ Use este formato de compatibilidade:
     "ultimaPessoaFalar":"Você|Cliente|desconhecido",
     "ultimoCompromissoCliente":"texto curto ou Não houve compromisso claro do cliente.",
     "ultimaInformacaoPrometida":"texto curto ou Não houve informação prometida pelo corretor.",
+    "compromissoCorretorNaoCumprido":"sim|não; se sim, diga exatamente o que o corretor ficou devendo e qual evidência na conversa",
+    "acaoPrometidaPeloCorretor":"simulação|proposta|material|valor|planta|retorno|nenhuma",
+    "clienteJaAutorizouAcao":"sim|não; se sim, diga qual frase do cliente autorizou a ação",
     "ultimaInformacaoEnviada":"texto curto",
     "produtoPrincipal":"produto principal de interesse atual",
     "produtoAtual":"produto principal de interesse atual",
@@ -2890,6 +3063,9 @@ ${timelineText}`;
         ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Não houve compromisso claro do cliente."),
         ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não houve informação prometida pelo corretor."),
         ultimaInformacaoPrometida: txt(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não houve informação prometida pelo corretor."),
+        compromissoCorretorNaoCumprido: txt(d.compromissoCorretorNaoCumprido, "não"),
+        acaoPrometidaPeloCorretor: txt(d.acaoPrometidaPeloCorretor, "nenhuma"),
+        clienteJaAutorizouAcao: txt(d.clienteJaAutorizouAcao, "não"),
         produtoAtual,
         produtoPrincipalInteresse: produtoAtual,
         interesseAnterior: txt(d.interesseAnterior, "Nenhum"),
@@ -2958,7 +3134,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v740 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o status real do produto ou com a ordem dos acontecimentos."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v743 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o produto, ordem dos acontecimentos, compromisso pendente do corretor ou troca indevida da unidade escolhida pelo contexto."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
