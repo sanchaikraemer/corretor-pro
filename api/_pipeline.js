@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v739-ia-pensante-contexto-real";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v740-ordem-acontecimentos-material";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -97,6 +97,59 @@ function normalizarTextoComparacao(txt) {
 function mensagemSoSaudacao(txt) {
   return /^(?:[a-záàâãéèêíïóôõöúçñ .'-]+,?\s*)?(?:oi|ol[aá]|bom dia|boa tarde|boa noite),?\s*(?:tudo bem|td bem|tudo certo|como vai)\??$/i.test(String(txt || "").trim());
 }
+
+function autorPareceNegocioPipeline(author = "") {
+  return /\b(construtora|senger|corretor|corretora|imobili[áa]ria|atendimento|sanchai|miguel kirinus)\b/i.test(String(author || ""));
+}
+function autorPareceClientePipeline(author = "", lead = {}) {
+  const a = String(author || "").trim().toLowerCase();
+  if (!a || autorPareceNegocioPipeline(a)) return false;
+  const nome = String(lead?.clientName || lead?.nomeCliente || lead?.contactName || lead?.name || lead?.title || "").toLowerCase();
+  const primeiro = nome.replace(/^conversa\s+do\s+whatsapp\s+com\s+/i, "").split(/\s+/)[0] || "";
+  if (primeiro && a.includes(primeiro)) return true;
+  return !/\b(construtora|senger|atendimento)\b/i.test(a);
+}
+function textoPedeMaterialOuInfo(texto = "") {
+  const t = String(texto || "").toLowerCase();
+  return /(foto|fotos|imagem|imagens|vídeo|video|material|apresenta[cç][aã]o|folder|pdf|planta|plantas|mapa|localiza[cç][aã]o|valor|pre[cç]o|condi[cç][aã]o|pode(r)?\s+nos\s+enviar|me\s+manda|me\s+envia|podes?\s+enviar)/i.test(t);
+}
+function textoEntregaMaterialOuInfo(texto = "") {
+  const t = String(texto || "").toLowerCase();
+  return /(mídia|midia|arquivo anexado|segue|seguem|enviei|encaminhei|te encaminhei|vou te apresentar|apresentar esse|claro,?\s+fico|http|\.pdf|\.mp4|\.jpg|\.jpeg|\.png|vídeo|video|folder|mapa|plantas?|valores?|localiza[cç][aã]o|fotos?)/i.test(t);
+}
+function extrairCompromissoMaterial(texto = "") {
+  const l = String(texto || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (/(esposo|marido)/.test(l) && /(noite|retorno|retornar|ver|avaliar)/.test(l)) return "ver com seu esposo e me retornar";
+  if (/(esposa|mulher)/.test(l) && /(noite|retorno|retornar|ver|avaliar)/.test(l)) return "ver com sua esposa e me retornar";
+  if (/(retorno|retornar|me dar um retorno|dou retorno)/.test(l)) return "me dar um retorno depois de avaliar";
+  return "avaliar o material enviado";
+}
+function detectarOrdemMaterialTimeline(timeline = [], lead = {}) {
+  let ultimoPedido = null, entregaDepois = null;
+  for (let i = 0; i < (Array.isArray(timeline) ? timeline.length : 0); i++) {
+    const m = timeline[i] || {};
+    const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+    const author = String(m.author || "");
+    if (!texto) continue;
+    if (autorPareceClientePipeline(author, lead) && textoPedeMaterialOuInfo(texto)) {
+      ultimoPedido = { index: i, texto, author, compromisso: extrairCompromissoMaterial(texto), data: m.date || "", hora: m.time || "" };
+      entregaDepois = null;
+      continue;
+    }
+    if (ultimoPedido && i > ultimoPedido.index && autorPareceNegocioPipeline(author) && textoEntregaMaterialOuInfo(texto)) {
+      entregaDepois = { index: i, texto, author, data: m.date || "", hora: m.time || "" };
+    }
+  }
+  return {
+    materialPedidoPeloCliente: !!ultimoPedido,
+    materialJaEnviadoDepois: !!(ultimoPedido && entregaDepois),
+    pedidoCliente: ultimoPedido?.texto || "",
+    entregaCorretor: entregaDepois?.texto || "",
+    compromissoClienteAposMaterial: ultimoPedido?.compromisso || "",
+    regra: ultimoPedido && entregaDepois ? "Cliente pediu material/informação e o corretor já enviou depois; retome a avaliação do material já encaminhado." : "Não foi detectado pedido de material com envio posterior pelo corretor."
+  };
+}
+
 
 // Fonte ÚNICA dos termos proibidos nas mensagens. O validador (regex) E o aviso
 // do prompt são montados a partir desta MESMA lista — se divergirem, o modelo
@@ -379,6 +432,18 @@ Se dois leads tiverem contextos diferentes, as sugestões precisam ficar diferen
 A IA deve raciocinar antes de escrever, não aplicar template fixo.
 
 ==========================================
+ORDEM DOS ACONTECIMENTOS
+==========================================
+
+Antes de escrever qualquer sugestão, confira a ordem real dos acontecimentos.
+
+Se o cliente pediu fotos, vídeo, plantas, valores, mapa, localização, link ou material, e o corretor já enviou isso depois do pedido, NÃO escreva como se ainda fosse enviar.
+
+A retomada deve mencionar que o material já foi encaminhado, retomar o compromisso do cliente depois de receber e conduzir para o próximo passo comercial.
+
+Nunca use "seguem as fotos", "estou enviando", "vou enviar" ou "posso separar as fotos" quando o material já foi enviado na conversa.
+
+==========================================
 SUGESTÕES DE RESPOSTAS
 ==========================================
 
@@ -540,6 +605,7 @@ const REGRAS_MSG_PROMPT = [
   "- Se o corretor apresentou outro imóvel como alternativa compatível, isso é direcionamento comercial: retome a última pendência desse imóvel e não pergunte novamente o objetivo.",
   "- Nunca deixe a mudança de jornada apagar a retomada quando existe histórico anterior.",
   "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
+  "- Se o cliente pediu material e o corretor já enviou depois, não escreva como se ainda fosse enviar; retome a avaliação do material já encaminhado.",
   "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada real mais importante.",
   "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
   `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
@@ -757,12 +823,58 @@ function compromissoDirecionamentoTexto({ diagnostico = {}, raw = {}, produto = 
   if (/(esposa|mulher)/i.test(ultimo) || (/(esposa|mulher)/.test(blob) && /(avaliar|ver|retorno|retornar)/.test(blob))) {
     return `você tinha ficado de avaliar ${produto} com sua esposa e me retornar`;
   }
+  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) {
+    const compromisso = raw?._ordemMaterial?.compromissoClienteAposMaterial || "avaliar o material enviado";
+    return `você tinha ficado de ${compromisso} depois do material ${produtoComDe(produto)}`;
+  }
   if (/(foto|fotos|imagem|imagens)/.test(blob)) return `ficou em aberto o envio ou a avaliação das fotos ${produtoComDe(produto)}`;
   if (/(planta|plantas)/.test(blob)) return `ficou em aberto a avaliação das plantas ${produtoComDe(produto)}`;
   if (/(valor|pre[cç]o|condi[cç][aã]o|parcel|entrada|financi)/.test(blob)) return `ficou em aberto a análise de valores e condição ${produtoComDe(produto)}`;
   if (/(visita|conhecer|olhar|ver no local)/.test(blob)) return `ficou em aberto a possibilidade de conhecer ${produto}`;
   if (/(retorno|retornar|me dar um retorno|dar retorno)/.test(blob)) return `você tinha ficado de me dar um retorno sobre ${produto}`;
   return ultimo && !/^não houve/i.test(ultimo) ? ultimo : `ficou em aberto a avaliação de vocês sobre ${produto}`;
+}
+
+
+function materialJaFoiEnviadoDepoisDoPedido({ diagnostico = {}, raw = {} } = {}) {
+  if (raw?._ordemMaterial?.materialJaEnviadoDepois === true) return true;
+  const blob = JSON.stringify({ diagnostico, raw }).toLowerCase();
+  return /materialjaenviadodepois"\s*:\s*true|material.*j[aá]\s+foi\s+enviado|j[aá]\s+encaminh(ei|ado)|te\s+encaminhei\s+(o\s+)?(v[ií]deo|material|fotos?)/.test(blob);
+}
+function mensagemFalaComoSeMaterialAindaFosseEnviar(txt = "") {
+  const s = String(txt || "").toLowerCase();
+  return /\b(seguem?|estou\s+enviando|vou\s+enviar|vou\s+te\s+enviar|vou\s+te\s+mandar|posso\s+(separar|enviar|mandar|te\s+mandar)\s+(as\s+)?(fotos?|imagens?|v[ií]deo|material)|estou\s+mandando)\b/.test(s);
+}
+function tipoMaterialJaEnviado(raw = {}) {
+  const blob = JSON.stringify(raw?._ordemMaterial || raw || {}).toLowerCase();
+  if (/v[ií]deo|video|\.mp4/.test(blob)) return "vídeo";
+  if (/planta|plantas/.test(blob)) return "plantas";
+  if (/valor|pre[cç]o|condi[cç][aã]o/.test(blob)) return "informações";
+  return "material";
+}
+function mensagensFallbackMaterialJaEnviado({ lead = {}, diagnostico = {}, raw = {} }) {
+  const nome = primeiraPalavraNome(lead);
+  const produto = produtoCurtoParaMensagem(diagnostico.produtoAtual || diagnostico.produtoPrincipal || raw.produtoInteresse || lead?.product || "essa opção", "essa opção");
+  const prefixo = nome ? `${nome}, ` : "";
+  const blob = JSON.stringify({ diagnostico, raw, lead }).toLowerCase();
+  const material = tipoMaterialJaEnviado(raw);
+  const conjuge = /(esposo|marido)/.test(blob) ? "seu esposo" : (/(esposa|mulher)/.test(blob) ? "sua esposa" : "vocês");
+  const buscaTamanho = /100|110|132|m²|m2|metros|metragem|tamanho|amplo/.test(blob);
+  const pronto = produtoEhProntoParaMorar(produto, blob);
+  const naPlanta = produtoEhNaPlantaOuLancamento(produto, blob);
+  if (naPlanta && !pronto) {
+    return [
+      sanitizarMensagemFallback(`${prefixo}te encaminhei o ${material} ${produtoComDe(produto)} para vocês avaliarem com calma. Como ficou de olhar com ${conjuge}, queria retomar esse ponto: vale eu separar plantas, posição e condição para comparar melhor?`),
+      sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação depois do material enviado, posso organizar as opções ${produtoComDe(produto)} por planta, posição, prazo e condição. Quer que eu te mande essa visão mais objetiva?`),
+      sanitizarMensagemFallback(`${prefixo}ficou em aberto o retorno depois do material ${produtoComDe(produto)}. Posso retomar pelo que pesa mais para vocês agora: planta, prazo, posição ou condição?`)
+    ];
+  }
+  const encaixe = buscaTamanho ? "Como vocês procuram algo com bom tamanho e pronto para morar, essa opção encaixa bem no que comentaram" : "Como ele já está pronto, a visita ajuda a avaliar melhor tamanho, posição e acabamento";
+  return [
+    sanitizarMensagemFallback(`${prefixo}te encaminhei o ${material} ${produtoComDe(produto)} para vocês avaliarem com calma. Como você comentou que iria ver com ${conjuge} e me retornar, queria retomar esse ponto: acham que vale conhecer pessoalmente?`),
+    sanitizarMensagemFallback(`${prefixo}para facilitar a avaliação de vocês depois do material enviado, posso resumir metragem, posição, móveis planejados, valor e possibilidade de financiamento. Quer que eu te mande esse resumo?`),
+    sanitizarMensagemFallback(`${prefixo}ficou em aberto aquele retorno depois de vocês avaliarem ${produto}. ${encaixe}. Posso te passar alguns horários para visita?`)
+  ];
 }
 
 function ganchoDirecionamento({ blob = "", produto = "essa opção", tipo = "pronto" }) {
@@ -814,6 +926,10 @@ function mensagensFallbackDirecionamentoCorretor({ lead = {}, diagnostico = {}, 
   const terreno = produtoEhTerrenoOuLoteamento(produto, blob);
   const comercial = produtoEhComercial(produto, blob);
   const naPlanta = produtoEhNaPlantaOuLancamento(produto, blob);
+
+  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) {
+    return mensagensFallbackMaterialJaEnviado({ lead, diagnostico, raw });
+  }
 
   if (terreno) {
     return [
@@ -871,6 +987,7 @@ function mensagemPrecisaFallbackDirecionamento(txt, { diagnostico = {}, raw = {}
   if (mensagemComVocativoInvalido(txt) || mensagemFormatoRuim(txt)) return true;
   if (mensagemPareceMudancaJornadaIndevida(txt)) return true;
   if (/ainda tem interesse|segue interessado|faz sentido|qualquer dúvida|fico à disposição|passando para saber|passando para retomar/.test(s)) return true;
+  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw }) && mensagemFalaComoSeMaterialAindaFosseEnviar(txt)) return true;
 
   const falaPronto = /já está pronto|ja está pronto|pronto para morar|visita rápida no apartamento|ver melhor tamanho, móveis|m[oó]veis e posição|acabamento, tamanho e posição/.test(s);
   if (/renaissance/.test(blob) && falaPronto) return true;
@@ -901,6 +1018,9 @@ function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) 
 }
 
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
+  const nome = primeiraPalavraNome(lead) || "";
+  const produto = produtoCurtoParaMensagem(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
+  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || diagnostico.ultimoCompromissoCliente || raw.nextAction, produto);
   const trioBase = gerarTrioFallbackContextual({ lead, diagnostico, raw });
   const base = trioBase[0];
   let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
@@ -919,6 +1039,15 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
     return x;
   });
 
+  if (materialJaFoiEnviadoDepoisDoPedido({ diagnostico, raw })) {
+    const fallbackMaterial = mensagensFallbackMaterialJaEnviado({ lead, diagnostico, raw });
+    for (let i = 0; i < mensagens.length; i++) {
+      if (mensagemFalaComoSeMaterialAindaFosseEnviar(mensagens[i]) || !mensagens[i]) {
+        mensagens[i] = fallbackMaterial[i];
+      }
+    }
+  }
+
   if (diagnosticoIndicaDirecionamentoCorretor({ diagnostico, raw, lead })) {
     const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
     for (let i = 0; i < mensagens.length; i++) {
@@ -936,10 +1065,10 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   }
 
   if (normalizarTextoComparacao(mensagens[1]) === normalizarTextoComparacao(mensagens[0])) {
-    mensagens[1] = sanitizarMensagemFallback(`Oi, ${nome}. Para facilitar, posso separar as opções que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
+    mensagens[1] = sanitizarMensagemFallback(`${nome ? nome + ", " : ""}para facilitar, posso separar os pontos que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
   }
   if (normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[0]) || normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[1])) {
-    mensagens[2] = sanitizarMensagemFallback(`${nome}, ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva para o próximo passo.`);
+    mensagens[2] = sanitizarMensagemFallback(`${nome ? nome + ", " : ""}ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva para o próximo passo.`);
   }
 
   return {
@@ -2658,9 +2787,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const blocoCatalogo = `\n\n${catalogoSenger}\n${diferenciaisDoCaso ? "\n" + diferenciaisDoCaso : ""}`;
   const blocoVoz = exemplosVoz ? `\n\nEXEMPLOS REAIS DO JEITO DO CORRETOR NESTA CONVERSA (use como tom, não copie literal):\n${exemplosVoz}` : "";
   const blocoIncremental = contextoIncremental ? `\n\nContexto anterior consolidado, apenas como memória factual. Não trate como nova fala do cliente:\n${JSON.stringify(contextoIncremental)}` : "";
+  const contextoOrdemMaterial = detectarOrdemMaterialTimeline(timeline, lead);
+  const blocoOrdemMaterial = `\n\nORDEM DOS ACONTECIMENTOS DETECTADA PELO SISTEMA:\n${JSON.stringify(contextoOrdemMaterial, null, 2)}`;
   const prompt = `${PROMPT_ANALISE_PURA}
 
-Hoje é ${hoje}.${perspectiva}${orientacoesCerebro}${blocoConhecimento}${blocoCatalogo}${blocoVoz}${blocoIncremental}
+Hoje é ${hoje}.${perspectiva}${orientacoesCerebro}${blocoConhecimento}${blocoCatalogo}${blocoVoz}${blocoIncremental}${blocoOrdemMaterial}
 
 IMPORTANTE PARA O SISTEMA:
 Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
@@ -2732,7 +2863,8 @@ ${timelineText}`;
       timeout: 32000
     });
 
-    const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
+    const rawBase = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
+    const raw = { ...rawBase, _ordemMaterial: contextoOrdemMaterial };
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
@@ -2826,7 +2958,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v739 usado apenas quando a mensagem veio inválida, genérica proibida ou incompatível com o status real do produto."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v740 usado apenas quando a mensagem veio inválida, genérica proibida, incompatível com o status real do produto ou com a ordem dos acontecimentos."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
