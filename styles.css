@@ -1785,3 +1785,96 @@ html[data-theme="light"] .notice{background:#ffffff!important;border-color:var(-
 
 /* A pedido: remover o bloco Atendidos hoje / Movimentação da carteira da Home. */
 .cp-activities-card{display:none!important}
+
+/* ============================================================
+   ATUALIZAÇÃO #752 — TEMA CLARO REVISADO + REANÁLISE LEGÍVEL
+   Corrige contraste de telas geradas via JS/inlines e remove blocos escuros remanescentes.
+   ============================================================ */
+html[data-theme="light"] .cp697-page,
+html[data-theme="light"] .cp697-head,
+html[data-theme="light"] #carteiraBody,
+html[data-theme="light"] .cp697-list,
+html[data-theme="light"] .cp697-home-progress{
+  background:#ffffff!important;
+  color:#102631!important;
+  border-color:#d9e4e8!important;
+  box-shadow:0 8px 22px rgba(15,45,60,.06)!important;
+}
+html[data-theme="light"] .cp697-page{background:transparent!important;box-shadow:none!important}
+html[data-theme="light"] .cp697-head h2,
+html[data-theme="light"] .cp697-progress b,
+html[data-theme="light"] .cp697-copy b,
+html[data-theme="light"] .cp697-empty b,
+html[data-theme="light"] .cp697-loading b,
+html[data-theme="light"] .cp697-home-title b{color:#102631!important}
+html[data-theme="light"] .cp697-head p,
+html[data-theme="light"] .cp697-progress span,
+html[data-theme="light"] .cp697-copy em,
+html[data-theme="light"] .cp697-copy small,
+html[data-theme="light"] .cp697-empty,
+html[data-theme="light"] .cp697-loading,
+html[data-theme="light"] .cp697-home-meta{color:#526b76!important;opacity:1!important}
+html[data-theme="light"] .cp697-progress>div,
+html[data-theme="light"] .cp697-row{
+  background:#ffffff!important;
+  border-color:#d9e4e8!important;
+  color:#102631!important;
+}
+html[data-theme="light"] .cp697-row:hover{background:#f8fbfc!important}
+html[data-theme="light"] .cp697-tabs button{
+  background:#ffffff!important;
+  border-color:#d9e4e8!important;
+  color:#314a55!important;
+}
+html[data-theme="light"] .cp697-tabs button.active{
+  background:#ff5b50!important;
+  border-color:#ff5b50!important;
+  color:#ffffff!important;
+}
+html[data-theme="light"] .cp697-status{background:#f7fafb!important;border-color:#c4d2d8!important;color:#314a55!important}
+html[data-theme="light"] .cp697-row.ready .cp697-status{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.38)!important;color:#138348!important}
+html[data-theme="light"] .cp697-row.pending .cp697-status{background:rgba(255,163,45,.12)!important;border-color:rgba(255,163,45,.40)!important;color:#9b5b00!important}
+
+html[data-theme="light"] .ui682-analysis-progress{
+  background:#fff8eb!important;
+  border-color:#f0c978!important;
+  color:#102631!important;
+}
+html[data-theme="light"] .ui682-analysis-progress *,
+html[data-theme="light"] #ui682ProgressText,
+html[data-theme="light"] #ui682ProgressPct{color:#102631!important}
+html[data-theme="light"] .ui682-analysis-progress div[style*="background"]{background:#eadfca!important}
+html[data-theme="light"] .cp704-empty-analysis,
+html[data-theme="light"] .cp704-empty-analysis b,
+html[data-theme="light"] .cp704-empty-analysis span{
+  color:#102631!important;
+}
+html[data-theme="light"] .cp704-empty-analysis{
+  background:#fffaf1!important;
+  border-color:#f0c978!important;
+}
+html[data-theme="light"] .cp704-empty-analysis button,
+html[data-theme="light"] .cp704-reanalyse,
+html[data-theme="light"] button[onclick*="ui670Reanalisar"]{
+  background:#ffffff!important;
+  color:#102631!important;
+  border-color:#c4d2d8!important;
+  box-shadow:0 4px 14px rgba(15,45,60,.06)!important;
+}
+html[data-theme="light"] .cp704-empty-analysis button:hover,
+html[data-theme="light"] .cp704-reanalyse:hover,
+html[data-theme="light"] button[onclick*="ui670Reanalisar"]:hover{
+  background:#f8fbfc!important;
+  border-color:#ff5b50!important;
+  color:#d83e36!important;
+}
+html[data-theme="light"] .notice,
+html[data-theme="light"] .config-note,
+html[data-theme="light"] .toast,
+html[data-theme="light"] [style*="color:var(--muted)"]{
+  color:#526b76!important;
+}
+html[data-theme="light"] [style*="color:#fff"],
+html[data-theme="light"] [style*="color: #fff"]{
+  color:#102631!important;
+}

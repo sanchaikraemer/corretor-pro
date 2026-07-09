@@ -434,7 +434,7 @@ async function reanalisarLeadHandler702(req, res) {
   let timelineFinal = timeline;
   const sigAtual6863 = assinaturaTimeline6863(timelineFinal || timeline);
   const sigAnterior6863 = previous?._iaIncremental?.timelineHash;
-  const podeReusar6863 = !body?.force && !body?.forcarVariacao && !novoAtendimento && !["corrigir-observacao"].includes(String(body?.action || ""));
+  const podeReusar6863 = false; // v752: botão de reanalisar nunca reutiliza análise antiga
   if (podeReusar6863 && sigAnterior6863 === sigAtual6863.hash && analiseEstaUtil6863(previous)) {
     const mergedReuse = {
       ...previous,
@@ -450,10 +450,10 @@ async function reanalisarLeadHandler702(req, res) {
     return json(res, 200, { ok: true, reused: true, incremental: true, analysis: mergedReuse });
   }
   const leadModelo = {
-    ...(previous.lead || {}),
+    // v752: identificação mínima. Não carregar produto/unidade/nextAction de análise antiga.
     name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
     clientName: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
-    product: previous.produtoInteresse || previous?.modeloComercial?.oportunidade?.produto || previous?.lead?.product || ""
+    phone: previous?.lead?.phone || previous?.phone || ""
   };
   // Ajuste manual de score (comando "aumentar/baixar score" na observação). Soma sobre o
   // campo scoreAjuste que o app já usa no número exibido — o corretor manda no score quando quiser.

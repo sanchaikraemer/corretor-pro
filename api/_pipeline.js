@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v750-contexto-limpo-sem-legado";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v752-ia-direta-sem-legado";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -850,7 +850,7 @@ export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico =
   // v748: sem fallback comercial. Não inventa produto, unidade, simulação ou próximo passo.
   const pick = (...vals) => vals.map(v => String(v || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
   const limpar = (txt) => limparVocativoInvalido(String(txt || "").replace(/\s+/g, " ").trim(), lead);
-  const a = limpar(pick(mensagensRaw.recomendada, mensagensRaw.a, diagnostico.mensagemQueEuEnviariaHoje, raw.proximaMensagemSugerida));
+  const a = limpar(pick(mensagensRaw.recomendada, mensagensRaw.a));
   const b = limpar(pick(mensagensRaw.maisSuave, mensagensRaw.suave, mensagensRaw.b));
   const c = limpar(pick(mensagensRaw.maisDireta, mensagensRaw.direta, mensagensRaw.c));
   return { a, b, c, fallbackUsado: false };
@@ -2552,6 +2552,12 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const hoje = new Date().toISOString().slice(0, 10);
   const configCerebro = await loadCerebroConfig().catch(() => null);
   const corretorNome = String(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
+  // v752: metadados mínimos e seguros. Nunca enviar produto, unidade, nextAction ou análise salva.
+  const leadIA = {
+    nomeArquivo: String(lead?.fileName || lead?.filename || lead?.txtFile || "").slice(0, 180),
+    nomeContato: String(lead?.clientName || lead?.name || lead?.nome || "").slice(0, 120),
+    telefone: String(lead?.phone || lead?.telefone || "").slice(0, 40)
+  };
   const prompt = `Retorne somente JSON válido. Analise a conversa de WhatsApp abaixo e gere um diagnóstico comercial e 3 sugestões de mensagem para o corretor enviar ao cliente. Não use informações externas nem análises antigas. Se algo não estiver claro, escreva "Não identificado".
 
 Data atual: ${hoje}
@@ -2609,7 +2615,7 @@ ${timelineText}`;
     });
 
     const rawBase = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
-    const raw = { ...rawBase, _ordemMaterial: contextoOrdemMaterial, _timelineText: timelineText };
+    const raw = { ...rawBase, _timelineText: timelineText };
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();

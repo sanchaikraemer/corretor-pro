@@ -951,7 +951,14 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v750-contexto-limpo-sem-legado";
+const ARQUITETURA_MENSAGENS_ATUAL = "v752-ia-direta-sem-legado";
+
+function analiseAtualValida752(a){
+  return !!(a && typeof a === "object" &&
+    String(a.arquiteturaMensagens || "") === ARQUITETURA_MENSAGENS_ATUAL &&
+    a.sugestoesPendentes !== true &&
+    !["erro_api","reconciliacao_local","reanalise_pendente"].includes(String(a.mode || "")));
+}
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4760,15 +4767,13 @@ function cp704Css(){
     return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
   }
   function cp704Impedimento(lead, mc){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.motivo) return obsFact.motivo;
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    if(!analiseAtualValida752(a)) return 'Análise comercial pendente nesta versão. Reanalise para evitar informação antiga.';
     return cp705SanitizeFactText(cp704Text(mc?.oportunidade?.motivo || mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal || mem.pontosSensiveis || 'Impedimento ainda não identificado.'), lead);
   }
   function cp704Next(lead, mc){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.next) return obsFact.next;
     const a=lead?.analysis||{};
+    if(!analiseAtualValida752(a)) return 'Atualize a análise comercial para gerar a próxima ação sem usar dados antigos.';
     return cp705SanitizeFactText(cp704Text(mc?.acao?.descricao || a.nextAction || a.melhorPergunta || 'Atualize a análise comercial para gerar a próxima ação.'), lead);
   }
   function cp704DataHora(m){
@@ -4809,8 +4814,13 @@ function cp704Css(){
   }
   function cp704Insights(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    if(!analiseAtualValida752(a)) return [
+      'Análise comercial precisa ser atualizada nesta versão.',
+      'As mensagens antigas foram bloqueadas para evitar mistura de contexto.',
+      'Use Reanalisar agora para gerar leitura nova somente pela conversa.'
+    ];
     const arr=[];
-    const obsFact=cp707ObservationFacts(lead);
+    const obsFact=null;
     if(obsFact) return [obsFact.insight1,obsFact.insight2,obsFact.insight3].filter(Boolean);
     const facts=Array.isArray(a.fatosConfirmados)?a.fatosConfirmados.filter(Boolean).slice(0,2):[];
     const infs=Array.isArray(a.inferenciasIA)?a.inferenciasIA.filter(Boolean).slice(0,1):[];
@@ -4827,23 +4837,14 @@ function cp704Css(){
   function cp704Msgs(lead){
     const a=lead?.analysis||{};
     const m=(typeof mensagensDaAnalise==='function') ? mensagensDaAnalise(a) : {};
-    const obsFact=cp707ObservationFacts(lead);
-    const mc=cp704Modelo(lead);
-    const fb=obsFact ? {a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC} : ((typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(lead, mc) : {});
-    const out={
-      a:cp705SanitizeFactText(cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || fb.a || ''), lead),
-      b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
-      c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
-      aLabel:cp704Text(m.aLabel || fb.aLabel || 'Recomendada'), bLabel:cp704Text(m.bLabel || fb.bLabel || 'Facilitar decisão'), cLabel:cp704Text(m.cLabel || fb.cLabel || 'Direta ao ponto')
+    return {
+      a:cp705SanitizeFactText(cp704Text(m.a || ''), lead),
+      b:cp705SanitizeFactText(cp704Text(m.b || ''), lead),
+      c:cp705SanitizeFactText(cp704Text(m.c || ''), lead),
+      aLabel:cp704Text(m.aLabel || 'Recomendada'),
+      bLabel:cp704Text(m.bLabel || 'Alternativa'),
+      cLabel:cp704Text(m.cLabel || 'Direta ao ponto')
     };
-    // v731: se veio só a recomendada, a interface completa as outras duas
-    // imediatamente, sem esconder tudo atrás de "Mensagem ainda não gerada".
-    if(!cp705MessagesReady(out) && (fb.a&&fb.b&&fb.c)){
-      out.a=cp705SanitizeFactText(out.a || fb.a,lead);
-      out.b=cp705SanitizeFactText(out.b || fb.b,lead);
-      out.c=cp705SanitizeFactText(out.c || fb.c,lead);
-    }
-    return out;
   }
   // v724-6: mostra o motivo real de a mensagem não ter sido gerada, direto na
   // tela — sem precisar abrir o DevTools. Só aparece quando há algo pra dizer.
@@ -4959,10 +4960,10 @@ function renderLeadFoco(lead){
   const saud=document.querySelector('#saudacao');
   if(saud) saud.style.display='none';
     const a=lead.analysis||{}, mc=cp704Modelo(lead), prob=cp704Prob(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
-    const stale=(typeof analiseComercialAntiga==='function') ? analiseComercialAntiga(lead) : false;
+    const stale=!analiseAtualValida752(a);
     const messagesReady=cp705MessagesReady(msgs);
-    const semAcaoUrgente=String(mc?.acao?.status||'')==='sem-acao-urgente';
-    const needsAnalysis=stale; // v708: mensagens de fallback confiáveis aparecem mesmo quando a API não devolve 3 textos
+    const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
+    const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
     const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
@@ -9811,71 +9812,18 @@ window.ui670OpenWhatsLivre=function(){
   window.open(whatsappLink(p,""),"_blank","noopener");
 };
 function ui675AnaliseDeterministica(lead, baseAnalysis){
-  const base=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
-  const leadBase={...lead,analysis:base};
-  const mc=ui670ModeloComercial(leadBase);
-  mc.versao=678;
-  const out={...base,modeloComercial:mc,_schemaComercial:715,reanalisadoEm:new Date().toISOString()};
-  const ctx678=ui678ContextoMudouParaImovel(lead);
-  if(ctx678 && ctx678.mudouParaImovel && !["ganha","perdida"].includes(String(mc?.oportunidade?.status||""))){
-    out.summary=ctx678.resumo;
-    out.tipoContato="comprador-direto";
-    out.clientProfile=out.clientProfile||"Interesse inicial em imóvel, ainda sem perfil qualificado.";
-    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==="object")?{...out.diagnostico}:{};
-    out.diagnostico.etapa="descoberta";
-    out.diagnostico.interesse="médio";
-    out.diagnostico.objecaoPrincipal=ctx678.impedimento;
-    out.diagnostico.ultimoCompromissoCliente=ctx678.ultimoCompromisso;
-    out.diagnostico.proximaAcao=ctx678.nextAction;
-  }
-  out.nextAction=mc?.acao?.descricao||ctx678?.nextAction||out.nextAction||"Ação ainda não definida.";
-  const semAcao=mc?.acao?.status==="sem-acao-urgente";
-  if(!semAcao){
-    const atuais = out.messages && typeof out.messages === "object" ? out.messages : {};
-    if(!(String(atuais.a||"").trim() && String(atuais.b||"").trim() && String(atuais.c||"").trim())){
-      // v731: fallback local seguro. Não é ideal como IA, mas é melhor do que
-      // deixar o lead sem as 3 opções por causa de um JSON incompleto.
-      const fb = (typeof ui682FallbackMessages==='function') ? ui682FallbackMessages(leadBase, mc) : {};
-      out.messages = {
-        ...atuais,
-        a:String(atuais.a||fb.a||"").trim(),
-        b:String(atuais.b||fb.b||"").trim(),
-        c:String(atuais.c||fb.c||"").trim(),
-        aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a"
-      };
-      out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
-      out.sugestoesPendentes = false;
-      out.aprovada = !!(out.messages.a && out.messages.b && out.messages.c);
-      out.validacaoSugestoes = ["Fallback v731 completou as 3 sugestões na interface."];
-    }
-  }
-  if(semAcao){
-    out.messages={a:"",b:"",c:"",aLabel:"Sem mensagem agora",bLabel:"",cLabel:"",recomendada:"a"};
-    out.sugestoesPendentes=false;out.aprovada=true;out.validacaoSugestoes=[];out.tipoRetomada="stand-by";
-    out.confirmedAppointments=[];out.lembrete=null;out.lembreteSugerido=null;
-    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==="object")?{...out.diagnostico}:{};
-    out.diagnostico.mensagemQueEuEnviariaHoje="";
-    out.diagnostico.proximaAcao=out.nextAction;
-    out.diagnostico.ultimaInfoPrometida=mc?.contexto?.ultimoCompromisso||"Nenhum compromisso pendente.";
-  }
-  const obsFact = (typeof cp707ObservationFacts==='function') ? cp707ObservationFacts({...lead,analysis:out}) : null;
-  if(obsFact){
-    out.summary=obsFact.motivo;
-    out.nextAction=obsFact.next;
-    out.clientProfile=out.clientProfile || "Lead em decisão, com influência familiar na compra.";
-    out.diagnostico=(out.diagnostico&&typeof out.diagnostico==='object')?{...out.diagnostico}:{};
-    out.diagnostico.etapa="decisão";
-    out.diagnostico.objecaoPrincipal=obsFact.motivo;
-    out.diagnostico.proximaAcao=obsFact.next;
-    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Facilitar decisão",cLabel:"Direta ao ponto",recomendada:"a"};
-    out.sugestoesPendentes=false;out.aprovada=true;out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
-    out.modeloComercial=out.modeloComercial||{};
-    out.modeloComercial.oportunidade={...(out.modeloComercial.oportunidade||{}),status:"decisao",motivo:obsFact.motivo};
-    out.modeloComercial.acao={...(out.modeloComercial.acao||{}),status:"retomar",descricao:obsFact.next,urgencia:"media"};
-  }
-  if(mc?.oportunidade?.status==="perdida"){
-    out.probabilityPercent=0;out.probability="0%";out.etapaSugerida=ui670Parceiro(lead)?"Standby":(out.etapaSugerida||"Perdido");
-  }
+  // v752: fallback comercial local DESATIVADO.
+  // Se a IA/API falhar ou vier incompleta, a tela deve pedir reanálise, não inventar produto, unidade, simulação ou mensagem.
+  const out=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
+  out.mode=out.mode||"reanalise_pendente";
+  out.summary=out.summary||"Análise pendente. Reanalise para gerar leitura nova pela conversa.";
+  out.nextAction="Atualize a análise comercial para gerar a próxima ação.";
+  out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
+  out.sugestoesPendentes=true;
+  out.aprovada=false;
+  out.messages={a:"",b:"",c:"",aLabel:"Reanalisar",bLabel:"Reanalisar",cLabel:"Reanalisar",recomendada:"a"};
+  out.validacaoSugestoes=["v752: fallback comercial local desativado."];
+  out._schemaComercial=715;
   return out;
 }
 async function ui675BuscarDetalhe(id){
@@ -9954,28 +9902,8 @@ window.ui670Reanalisar=async function(btn){
       }
     }
 
-    // Última barreira: consolida os fatos no cliente e grava por uma rota independente.
-    // Assim, uma resposta incompleta da reanálise não deixa o botão sem efeito.
-    if(!analysis||schema<682){
-      const local=ui675AnaliseDeterministica(leadBaseAtualizado,analysis||leadBaseAtualizado.analysis||lead.analysis||{});
-      analysis=await ui675PersistirFallback(lead.id,local);
-      schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
-      usouFallback=true;
-    }
-    // v708: se a API gravou schema atual mas voltou sem 3 mensagens válidas,
-    // gera e salva mensagens locais usando a observação/histórico mais recente.
-    try{
-      const tmpLead={...leadBaseAtualizado,analysis};
-      const tmpMc=ui670ModeloComercial(tmpLead);
-      const tmpMsgs=cp704Msgs(tmpLead);
-      if(!cp705MessagesReady(tmpMsgs)){
-        const local=ui675AnaliseDeterministica(leadBaseAtualizado,analysis||leadBaseAtualizado.analysis||{});
-        analysis=await ui675PersistirFallback(lead.id,local);
-        schema=Number(analysis?._schemaComercial||analysis?.modeloComercial?.versao||0);
-        usouFallback=true;
-      }
-    }catch(e){ console.warn('Fallback v708 de mensagens não persistiu:', e); }
-    if(!analysis||schema<682)throw new Error("A análise foi processada, mas não ficou gravada na versão comercial atual.");
+    // v752: sem fallback local. Se a API não devolver análise atual, não inventar mensagem.
+    if(!analysis||schema<682)throw new Error("A análise não foi gerada pela IA atual. Tente reanalisar novamente.");
     clearInterval(progressoTimer);
     progresso.done("Análise concluída e salva.");
 
