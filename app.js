@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v747-ia-contexto-limpo-sem-templates";
+const ARQUITETURA_MENSAGENS_ATUAL = "v748-sem-prompt-sem-regras";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -9720,37 +9720,8 @@ function ui682ProdutoLead(lead, mc){
   return ui682ProdutoCurto(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel", "o imóvel");
 }
 function ui682FallbackMessages(lead, mc){
-  const nome = ui682PrimeiroNomeLead(lead);
-  const produto = ui682ProdutoLead(lead, mc);
-  const prefixo = nome ? `${nome}, ` : "";
-  const hist = JSON.stringify({lead,mc}).toLowerCase();
-  const temPremium = /premium\s+office|premium/.test(hist);
-  const temPersonalite = /personali[tée]/.test(hist) || /personalit/.test(hist);
-  const ehRenaissance = /renaissance/.test(String(produto||'').toLowerCase()) || /renaissance/.test(hist);
-  const ehTerreno = /nova\s+vila\s+rica|nvr|loteamento|terreno|\blote\b/.test(hist);
-  if(temPremium && temPersonalite){
-    const a = `${prefixo}retomando nosso contato: antes falávamos sobre a Premium Office, e agora você me chamou sobre o Personalité. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`;
-    const b = `${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre a Premium Office, e agora você olhou o Personalité. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
-    const c = `${prefixo}como teu interesse saiu da Premium Office e veio para o Personalité, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`;
-    return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
-  }
-  if(ehRenaissance){
-    const a = `${prefixo}retomando nosso contato sobre o Renaissance. Como ele é uma opção em lançamento/na planta, o melhor é avaliar o ponto que ficou pendente na conversa: planta, posição, prazo ou condição. Qual desses pontos você quer que eu organize primeiro?`;
-    const b = `${prefixo}para facilitar a avaliação do Renaissance, posso separar as opções disponíveis de forma mais objetiva, sem voltar a conversa do zero. Você prefere olhar primeiro plantas, valores ou posição das unidades?`;
-    const c = `${prefixo}ficou aquele ponto do Renaissance em aberto. Posso retomar pelo que ficou mais importante para vocês na última conversa e montar uma visão mais clara das opções?`;
-    return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
-  }
-  if(ehTerreno){
-    const a = `${prefixo}retomando nosso contato sobre o loteamento. Posso separar as opções disponíveis e mostrar posição, acesso e tamanho dos lotes para vocês avaliarem com calma?`;
-    const b = `${prefixo}para facilitar, posso destacar os lotes com melhor posição e condição dentro do que vocês comentaram. Assim a visita fica mais objetiva. Quer que eu organize isso?`;
-    const c = `${prefixo}ficou aquele ponto do loteamento em aberto. Posso te passar as opções disponíveis e alguns horários para vocês conhecerem o local?`;
-    return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
-  }
-  const baseProduto = produto && !/não identificado|produto/i.test(produto) ? produto : "o imóvel";
-  const a = `${prefixo}retomando nosso contato sobre ${baseProduto}. Ficou um ponto em aberto na última conversa e posso te ajudar a avançar sem recomeçar tudo do zero. Para vocês fica melhor durante a semana ou no sábado?`;
-  const b = `${prefixo}para facilitar a avaliação, posso separar as informações principais de ${baseProduto} e organizar o próximo passo de forma mais objetiva. Quer que eu prepare isso para vocês?`;
-  const c = `${prefixo}ficou aquele ponto de ${baseProduto} em aberto. Posso te passar os melhores horários ou caminhos para vocês avaliarem com calma?`;
-  return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
+  // v748: sem fallback comercial local. A interface não inventa mensagem.
+  return { a:"", b:"", c:"", aLabel:"Recomendada", bLabel:"Alternativa", cLabel:"Direta ao ponto", recomendada:"a", fallback:false };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
   const fb = ui682FallbackMessages(lead, mc);
@@ -10138,23 +10109,10 @@ function ui670DetailRows(lead,mc){
   };
 
   function ui683RenderAtendidosHojeHome(){
-    ui683InjectStyles();
-    const area=qs('#leadFocoArea');
-    const antigo=qs('#ui683AtendidosHojeCard');
-    // v735: nunca exibir "Atendidos hoje" dentro do detalhe do lead.
-    // Em alguns fluxos mobile, state.active continuava como home enquanto o lead estava aberto.
-    if(!area || state.active!=='home' || state.focoLeadId || document.body.classList.contains('lead-foco-aberto')){
-      if(antigo) antigo.remove();
-      return;
-    }
-    const all=state.todosLeads?.length ? state.todosLeads : state.itemsAtivos || [];
-    const lista=ui683AtendidosHoje(all);
+    // v748: removido da tela principal/home por solicitação do usuário.
+    const antigo = qs('#ui683AtendidosHojeCard');
     if(antigo) antigo.remove();
-    const card=document.createElement('section'); card.id='ui683AtendidosHojeCard'; card.className='ui683-card';
-    const preview=lista.slice(0,4).map(x=>`<div class="ui683-row" onclick='abrirLead(${JSON.stringify(String(x.lead.id||''))})'><div class="ui683-time">${escapeHtml(ui683HoraBR(x.ev.quando))}</div><div style="min-width:0"><div class="ui683-name">${escapeHtml(x.lead.name||'Cliente')}</div><div class="ui683-sub">${escapeHtml(ui683Origem(x.ev))}${x.lead.product?` · ${escapeHtml(x.lead.product)}`:''}</div></div><div class="ui683-open">›</div></div>`).join('');
-    card.innerHTML=`<div class="ui683-head"><div><h3>✓ Atendidos hoje</h3><p>Controle do que você já trabalhou no dia. Atendido não muda a etapa do lead.</p></div><button class="ui683-pill" onclick="abrirAtendidosHoje()">${lista.length} atendido${lista.length===1?'':'s'}</button></div>${lista.length?`<div class="ui683-list">${preview}</div>${lista.length>4?`<div style="margin-top:10px"><button class="ui683-link" onclick="abrirAtendidosHoje()">Ver todos os ${lista.length} atendidos de hoje</button></div>`:''}`:`<div class="ui683-empty">Nenhum lead marcado como atendido hoje ainda.</div>`}`;
-    const ref=qs('#filaPrioridade') || area.firstElementChild;
-    if(ref && ref.parentElement===area) area.insertBefore(card, ref.nextSibling); else area.prepend(card);
+    return;
   }
 
   const __ui683ProcessarDashboard = window._processarDashboard || (typeof _processarDashboard==='function' ? _processarDashboard : null);

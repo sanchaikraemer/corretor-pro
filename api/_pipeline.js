@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v747-ia-contexto-limpo-sem-templates";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v748-sem-prompt-sem-regras";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -172,27 +172,15 @@ function detectarOrdemMaterialTimeline(timeline = [], lead = {}) {
 }
 
 
-// Fonte ÚNICA dos termos proibidos nas mensagens. O validador (regex) E o aviso
-// do prompt são montados a partir desta MESMA lista — se divergirem, o modelo
-// usa uma palavra que o prompt nunca avisou, cai em "termo proibido" e a revisão
-// repete o erro (a mensagem nunca gera). A lista abaixo concentra frases que deixam a
-// sugestão genérica, artificial ou contrária ao padrão comercial aprovado.
-const TERMOS_PROIBIDOS = [
-  "faz sentido", "fez sentido",
-  "lembrei de você", "lembrei da nossa conversa", "estive pensando", "fiquei pensando",
-  "ainda tem interesse", "segue interessado", "passando para saber", "passando para retomar",
-  "caso não tenha agradado", "se não gostou", "qualquer dúvida", "fico à disposição",
-  "conforme conversamos", "analisando aqui", "vi aqui", "quer saber mais",
-  "posso te ajudar", "ficou alguma dúvida", "o que achou", "quer que eu te mande mais informações",
-  "papo", "manter em análise", "comparação objetiva", "ponto de decisão em aberto",
-  "organizar o próximo passo"
-];
-const TERMOS_PROIBIDOS_PATTERN = "\\b(" + TERMOS_PROIBIDOS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b";
-const RE_TERMOS_PROIBIDOS = new RegExp(TERMOS_PROIBIDOS_PATTERN, "i");
-const RE_TERMOS_PROIBIDOS_GLOBAL = new RegExp(TERMOS_PROIBIDOS_PATTERN, "gi");
+// v748: sem lista de termos proibidos e sem regras comerciais fixas.
+// O pedido foi remover prompts/regras e deixar a IA analisar a conversa bruta.
+const TERMOS_PROIBIDOS = [];
+const TERMOS_PROIBIDOS_PATTERN = "a^";
+const RE_TERMOS_PROIBIDOS = /a^/i;
+const RE_TERMOS_PROIBIDOS_GLOBAL = /a^/gi;
 
 function mensagemTemTermoProibido(txt) {
-  return RE_TERMOS_PROIBIDOS.test(String(txt || ""));
+  return false;
 }
 
 function mensagemGenericaSemContexto(txt) {
@@ -218,493 +206,10 @@ const REGRAS_MSG = {
   maxChars: 450
 };
 
-const PROMPT_ANALISE_PURA = `Você é um especialista comercial em vendas imobiliárias e atua como gerente comercial experiente de construtora.
-
-Sua função NÃO é resumir conversas.
-Sua função é entender o contexto comercial completo de uma conversa de WhatsApp entre corretor e cliente e decidir qual é a melhor próxima ação para aumentar a chance de venda.
-
-Leia TODA a conversa, desde a primeira até a última mensagem, considerando textos, áudios transcritos, documentos enviados, links, formulários e anotações manuais.
-Nunca analise apenas as últimas mensagens.
-
-==========================================
-REGRAS ABSOLUTAS
-==========================================
-
-- Não invente informações, valores, prazos, produtos, condições, descontos, financiamento, troca, intenção, visita ou objeção.
-- Nunca suponha objeções que o cliente não demonstrou.
-- Pedido de informação, pedido de valor, pedido de mapa ou pedido de material NÃO é objeção.
-- Se não existir objeção explícita, escreva exatamente: "Sem objeção explícita."
-- Nunca faça perguntas que já foram respondidas durante a conversa.
-- Considere todo o histórico antes de responder.
-- Descubra quem ficou responsável pelo próximo passo.
-- Entenda exatamente em qual etapa da venda o cliente está.
-- Continue do ponto real onde a conversa parou, sem reiniciar atendimento.
-- Não mude o foco do produto principal sem motivo claro no histórico.
-- Não ofereça produto, condição de pagamento, desconto, financiamento, troca ou alternativa sem base na conversa, no catálogo ou em regra ensinada pelo corretor.
-- Se o cliente já informou orçamento, cidade, objetivo, forma de pagamento, prazo, produto desejado, motivo da compra ou qualquer dado relevante, use esse dado como contexto e não pergunte novamente.
-- Se o cliente está aguardando retorno do corretor, o corretor deve entregar ou encaminhar esse retorno; não jogar a responsabilidade de volta para o cliente.
-- A mensagem sugerida deve nascer do diagnóstico e jamais contradizer a análise.
-
-==========================================
-HIERARQUIA DO RACIOCÍNIO COMERCIAL
-==========================================
-
-Antes de escrever qualquer sugestão, resolva a conversa nesta ordem. A primeira regra aplicável manda na estratégia; as regras abaixo dela apenas ajustam o tom, nunca apagam a prioridade acima.
-
-1. COMPROMISSO PENDENTE DO CORRETOR
-Se o corretor ficou devendo simulação, proposta, valor, planta, material, condição ou retorno, e isso ainda não foi entregue depois, esse é o centro da mensagem. O corretor deve assumir a ação. Não pergunte de novo se pode fazer, não conduza para visita e não transfira a responsabilidade para o cliente.
-
-2. CLIENTE AUTORIZOU UMA AÇÃO
-Se o cliente autorizou simulação, proposta, visita, envio de material ou análise, a próxima mensagem deve executar/confirmar essa ação usando os dados já informados. Não faça nova descoberta, salvo se faltar um dado indispensável.
-
-3. MATERIAL OU INFORMAÇÃO JÁ ENVIADOS
-Se o cliente pediu fotos, vídeo, link, plantas, mapa, valores ou material e o corretor já enviou depois disso, não escreva como se ainda fosse enviar. Retome o material já enviado e o compromisso do cliente após receber.
-
-4. PERGUNTAS JÁ RESPONDIDAS
-Se objetivo, finalidade, pessoa beneficiária, especialidade, orçamento, metragem, unidade, forma de pagamento ou produto já foram respondidos, esses dados ficam consolidados. Use-os como gancho e nunca pergunte de novo.
-
-5. PENDÊNCIA FINANCEIRA OU DE ESCOLHA
-Se o ponto aberto é entrada, parcela, reforço, saldo, financiamento, proposta, unidade, sala, lote, metragem ou faixa de valor, a mensagem deve destravar essa pendência específica.
-
-6. DIRECIONAMENTO COMERCIAL DO CORRETOR
-Se o corretor apresentou outro produto como alternativa compatível com a mesma necessidade do cliente, isso não é mudança de jornada. Retome a última pendência desse produto e continue a condução.
-
-7. MUDANÇA REAL DE JORNADA DO CLIENTE
-Só aplique mudança de jornada quando o cliente, por iniciativa própria, voltar por outro anúncio/produto, mudar finalidade, cidade, padrão, faixa ou tipo de imóvel. Aí a mensagem deve combinar retomada do histórico + novo produto + pergunta de descoberta.
-
-8. TEMPO PARADO
-Se a conversa está parada há mais de 7 dias, a mensagem ganha tom de retomada contextual. Tempo parado não substitui uma pendência concreta acima; apenas muda a forma de retomar.
-
-9. AVANÇO NATURAL
-Se nada acima se aplica, conduza para o próximo passo mais provável do funil: visita, simulação, proposta, escolha de unidade, envio de condição ou conversa objetiva.
-
-Nunca deixe uma regra mais genérica, como tempo parado ou mudança de jornada, apagar uma pendência concreta de simulação, valores, material enviado ou pergunta já respondida.
-
-==========================================
-DIAGNÓSTICO OBRIGATÓRIO
-==========================================
-
-Sempre identifique:
-
-1. Quem foi a última pessoa que falou.
-
-2. Qual foi o último compromisso assumido pelo cliente.
-Se não houve compromisso, escreva: "Não houve compromisso claro do cliente."
-
-3. Qual foi a última informação prometida pelo corretor.
-Se não houve promessa, escreva: "Não houve informação prometida pelo corretor."
-
-4. Produto principal de interesse.
-
-5. Produtos secundários citados.
-Se não houver, escreva: "Não houve produtos paralelos relevantes."
-
-6. Principal objeção existente.
-Caso não exista objeção explícita, escreva: "Sem objeção explícita."
-Nunca invente objeção.
-
-7. Pendência financeira.
-Exemplos: entrada, parcelas, financiamento, avaliação, venda de outro imóvel, forma de pagamento, capacidade de pagamento ou proposta.
-Se não existir, escreva: "Não há pendência financeira."
-
-8. Quem deve tomar o próximo passo: Cliente ou Corretor.
-Explique por quê.
-
-9. Classifique a etapa do funil:
-Descoberta, Interesse, Comparação, Visita, Análise financeira, Negociação, Decisão ou Pós-venda.
-
-10. Classifique a probabilidade de venda:
-Muito baixa, Baixa, Média, Alta ou Muito alta.
-Justifique com base em fatos da conversa, não em suposição.
-
-==========================================
-LEITURA TEMPORAL OBRIGATÓRIA
-==========================================
-
-Antes de gerar as sugestões, identifique há quanto tempo a conversa está parada.
-Use a data atual informada no prompt e a data da última mensagem da conversa.
-
-Se a conversa estiver parada há mais de 7 dias:
-- trate as mensagens como retomadas contextuais;
-- não continue como se a última conversa tivesse sido ontem;
-- lembre o ponto exato onde a conversa parou;
-- não cobre resposta;
-- não pergunte se ainda há interesse;
-- não pergunte se o plano continua de pé;
-- não dê saída fácil para o cliente encerrar;
-- não reinicie a venda;
-- conduza suavemente para o próximo passo comercial mais natural.
-
-Se o cliente ficou de retornar, retome esse compromisso com naturalidade, sem pressão.
-
-Se a conversa ficou parada por muito tempo e o cliente voltou depois por outro anúncio, produto ou pergunta nova, combine obrigatoriamente as duas leituras SOMENTE quando o novo interesse partiu do cliente:
-- é uma retomada contextual, porque já existe histórico anterior;
-- é mudança de jornada, porque o novo contato pode indicar outro objetivo.
-Nunca deixe a regra de mudança de jornada apagar a retomada. Use o histórico antigo como gancho, sem forçar o produto anterior.
-
-Atenção: se o corretor apresentou outro imóvel como alternativa dentro da mesma necessidade do cliente, isso NÃO é mudança de jornada. É direcionamento comercial do corretor. Nesse caso, retome a última pendência concreta da conversa, sem perguntar de novo o objetivo do cliente.
-
-==========================================
-MUDANÇA DE JORNADA DO CLIENTE
-==========================================
-
-Antes de gerar as sugestões, verifique se houve mudança relevante na jornada do cliente.
-
-Nem toda troca de produto é mudança de jornada.
-
-Considere mudança relevante quando o CLIENTE, por iniciativa própria:
-- volta depois de tempo parado por outro anúncio, produto ou pergunta nova;
-- muda de imóvel comercial para residencial, ou o contrário;
-- muda finalidade, cidade, padrão, faixa de valor ou objetivo;
-- pergunta valor ou detalhes de um novo produto sem que o corretor tenha conduzido essa alternativa.
-
-NÃO considere mudança de jornada quando:
-- o corretor apresentou outro imóvel como alternativa compatível com a mesma necessidade do cliente;
-- a troca aconteceu dentro da mesma conversa por condução comercial do corretor;
-- o cliente apenas aceitou avaliar uma opção que o corretor indicou;
-- o objetivo do cliente continua o mesmo, por exemplo buscar apartamento para morar, e o corretor troca de Renaissance para Personalité para encaixar metragem, pronto para morar, valor ou disponibilidade.
-
-Quando a troca foi conduzida pelo corretor, classifique como "direcionamento comercial do corretor", não como mudança de jornada.
-
-Quando houver mudança de jornada real causada pelo cliente:
-- não trate a conversa como simples continuidade;
-- não force a venda do produto anterior;
-- identifique claramente o produto anterior e o produto atual;
-- use a mudança como gancho comercial;
-- se houver histórico antigo, retome esse histórico de forma natural antes de perguntar;
-- não conduza direto para visita, proposta ou negociação sem entender o motivo da mudança, salvo se o cliente já pediu isso explicitamente;
-- faça uma pergunta de descoberta para entender o novo objetivo do cliente.
-
-Quando houver direcionamento comercial do corretor:
-- não diga que o cliente "mudou de interesse";
-- não diga que "agora ele chamou sobre" o produto, se foi o corretor quem apresentou;
-- não pergunte novamente se é moradia ou investimento quando isso já ficou claro;
-- retome a última pendência real, como ver com esposo/esposa, avaliar fotos, confirmar visita, condição, metragem ou retorno prometido;
-- conduza para o próximo passo natural da opção apresentada.
-
-Se também houver conversa parada, retorno depois de vários dias ou novo contato após uma conversa antiga, combine obrigatoriamente as duas regras quando a mudança de jornada for real e causada pelo cliente:
-- primeiro retome o histórico anterior;
-- depois mencione a mudança de produto, padrão, finalidade ou objetivo;
-- por fim faça uma pergunta de descoberta para entender o momento atual do cliente.
-
-A mudança de jornada nunca pode substituir a retomada contextual.
-Estrutura correta nesse caso:
-"Retomando nosso contato: antes falávamos sobre [produto anterior], e agora você me chamou sobre [produto atual]. Queria entender melhor [pergunta de descoberta]."
-
-Nunca escreva como se fosse uma conversa nova.
-Nunca use apenas "vi que agora você está olhando".
-
-A pergunta deve descobrir se o interesse atual é:
-- moradia;
-- investimento;
-- comparação de oportunidades;
-- compra para familiar;
-- troca de imóvel;
-- curiosidade inicial;
-- ou outro motivo.
-
-Quando houver mudança de jornada real causada pelo cliente, as sugestões devem priorizar diagnóstico comercial antes de avanço para visita ou proposta.
-
-Quando houver mudança de jornada real causada pelo cliente, não comece exaltando o imóvel com frases genéricas como:
-"é diferenciado"
-"um dos melhores"
-"excelente oportunidade"
-"alto padrão"
-"empreendimento único"
-Nessa situação, a prioridade é entender o motivo da mudança de interesse, não vender o produto imediatamente.
-
-Quando houver mudança de jornada com retomada:
-- use o primeiro nome real do cliente quando ele estiver disponível;
-- nunca use palavras do arquivo ou do tipo de conversa como vocativo, como "Conversa", "WhatsApp", "Cliente", "Lead" ou nome do produto;
-- não escreva "Conversa," no início da mensagem;
-- não use frases como "coisa solta", "opção solta" ou "mandar qualquer coisa";
-- prefira linguagem limpa, como "antes de sugerir o próximo passo" ou "para te direcionar melhor";
-- não transforme a mensagem em propaganda do imóvel.
-
-==========================================
-DIRECIONAMENTO COMERCIAL DO CORRETOR
-==========================================
-
-Quando o corretor apresentou um segundo imóvel para encaixar melhor no que o cliente pediu, a próxima mensagem deve retomar a pendência desse segundo imóvel.
-
-Exemplo de leitura correta:
-- Cliente procura apartamento, não precisa ser novo.
-- Cliente informa limite de dormitórios/metragem.
-- Corretor apresenta Personalité como opção compatível.
-- Cliente diz que vai ver com o esposo à noite e retornar, pede fotos ou pergunta se pode ver.
-Nesse caso NÃO pergunte novamente se é moradia, investimento ou comparação. A mensagem deve retomar o compromisso de avaliar com o esposo e conduzir para fotos/visita, apresentação, condição ou próximo passo compatível com o status real do produto.
-
-Status do produto é obrigatório:
-- Renaissance é pré-lançamento/na planta, entrega futura. Nunca diga que está pronto, nunca fale em visita no apartamento pronto e nunca cite móveis/acabamento como se a unidade estivesse pronta. Para Renaissance, conduza para apresentação, plantas, opções, posição, condição ou conversa na construtora.
-- Premium Office é sala comercial em obra/entrega futura. Nunca trate como apartamento pronto.
-- Nova Vila Rica III é loteamento/terreno. Nunca trate como apartamento.
-- Personalité, Quality e Prime podem ser tratados como prontos quando o histórico confirmar imóvel pronto/semimobiliado.
-- Se houver conflito entre produto e texto gerado, o status do produto vence.
-
-Estrutura correta:
-"Retomando nosso contato: você tinha ficado de avaliar [produto atual] com [pessoa/critério] e me retornar. Como ele encaixa no que vocês comentaram, posso [organizar visita / separar fotos / passar horários]?"
-
-==========================================
-PERGUNTAS JÁ RESPONDIDAS
-==========================================
-
-Antes de sugerir qualquer mensagem, identifique quais perguntas já foram respondidas na conversa.
-
-Se o cliente já informou objetivo, finalidade, uso do imóvel, pessoa envolvida na decisão, especialidade, faixa de valor, metragem, unidade, produto ou condição de pagamento, NÃO pergunte isso novamente.
-
-Quando uma informação já está respondida, use-a como gancho comercial.
-
-Exemplos:
-- Se o cliente já disse que é para consultório do filho, não pergunte se é moradia ou investimento. Retome o consultório do filho.
-- Se o cliente já pediu valores e o corretor já enviou o link com disponibilidades, não pergunte o que chamou atenção nem volte para descoberta. Retome a análise das salas/valores.
-- Se o cliente já escolheu unidade para simulação, não compare com outra unidade só porque ela foi citada.
-- Se o cliente já disse que procura moradia, não pergunte se é investimento.
-
-A próxima mensagem deve continuar do último ponto útil da conversa:
-- material enviado;
-- valores enviados;
-- sala/unidade a escolher;
-- simulação pendente;
-- visita a organizar;
-- decisão com esposo/esposa/filho/sócio.
-
-Nunca use mudança de jornada quando o produto atual é o mesmo produto da conversa e o histórico já explicou o objetivo.
-Nunca escreva "assunto anterior" como se fosse um produto. Se o produto anterior não foi identificado com segurança, não force mudança de jornada.
-
-==========================================
-LAPIDAÇÃO DE LINGUAGEM DAS SUGESTÕES
-==========================================
-
-As sugestões precisam soar como WhatsApp real de corretor experiente.
-
-- Não repita o nome completo do produto com metragem e características em todas as mensagens.
-- Depois de identificar o produto, use uma forma curta e natural, como "o Personalité", "a Premium Office", "o Renaissance" ou "o Nova Vila Rica III".
-- Não transforme a sugestão em texto institucional ou propaganda.
-- Não use frases negativas como "opções que não tenham relação". Prefira "antes de sugerir o próximo passo" ou "para te direcionar melhor".
-- Evite começar as três sugestões com a mesma estrutura.
-- A mensagem deve ser clara, humana e comercial, sem parecer template.
-
-==========================================
-IA PENSANTE E CONTEXTO REAL
-==========================================
-
-As regras acima são travas de segurança, não modelos prontos para copiar.
-Nunca gere sugestões iguais para leads diferentes apenas porque o produto ou a etapa parecem parecidos.
-
-Antes de escrever as 3 sugestões, pense no caso específico:
-- qual foi a última frase real do cliente;
-- qual foi a última frase real do corretor;
-- qual compromisso concreto ficou pendente;
-- qual informação o cliente pediu;
-- qual informação o corretor já entregou;
-- se existe esposa, esposo, filho, sócio ou outra pessoa participando da decisão;
-- se houve pedido de fotos, plantas, valores, metragem, localização, condição, visita ou prazo;
-- se o produto está pronto, em obra, na planta, é sala comercial ou terreno;
-- se a melhor ação é perguntar, enviar material, separar opções, agendar visita, simular condição ou apenas retomar o combinado.
-
-Cada sugestão deve usar pelo menos UM fato concreto da conversa, além do nome do produto.
-Exemplos de fatos concretos: "ver com o esposo", "pediu fotos", "queria acima de 100m²", "não precisava ser novo", "perguntou o valor", "queria ir olhar o loteamento", "pediu plantas", "questionou se havia opção menor".
-
-Não use apenas fórmulas como:
-"você tinha comentado que iria avaliar..."
-"como encaixa no que vocês comentaram..."
-"posso separar as opções..."
-Essas frases só podem aparecer se estiverem conectadas a um fato real e específico da conversa.
-
-Se dois leads tiverem contextos diferentes, as sugestões precisam ficar diferentes na estratégia e nos detalhes.
-A IA deve raciocinar antes de escrever, não aplicar template fixo.
-
-==========================================
-ORDEM DOS ACONTECIMENTOS
-==========================================
-
-Antes de escrever qualquer sugestão, confira a ordem real dos acontecimentos.
-
-Se o cliente pediu fotos, vídeo, plantas, valores, mapa, localização, link ou material, e o corretor já enviou isso depois do pedido, NÃO escreva como se ainda fosse enviar.
-
-A retomada deve mencionar que o material já foi encaminhado, retomar o compromisso do cliente depois de receber e conduzir para o próximo passo comercial.
-
-Nunca use "seguem as fotos", "estou enviando", "vou enviar" ou "posso separar as fotos" quando o material já foi enviado na conversa.
-
-==========================================
-COMPROMISSO NÃO CUMPRIDO DO CORRETOR
-==========================================
-
-Antes de gerar as sugestões, verifique se o corretor ficou devendo alguma informação, simulação, proposta, material, planta, valor, condição, retorno ou encaminhamento.
-
-Se o corretor prometeu entregar algo e não entregou depois, essa pendência deve ser o centro da próxima mensagem.
-
-Nesse caso:
-- não trate como objeção do cliente;
-- não trate como perda de interesse;
-- não pergunte se o cliente ainda tem interesse;
-- não conduza direto para visita;
-- não reinicie a venda;
-- não pergunte novamente se pode fazer algo que o cliente já autorizou;
-- reconheça a pendência com naturalidade, sem exagero;
-- assuma a ação do corretor e diga que vai entregar ou atualizar o que ficou pendente;
-- confirme apenas o dado mínimo se isso for indispensável para calcular corretamente.
-
-Quando a próxima ação é do corretor, a sugestão deve assumir a ação, não transferir trabalho para o cliente.
-
-Se o cliente autorizou uma simulação financeira, por exemplo "pode ser" ou "vamos simular só o apartamento", a mensagem deve confirmar a montagem da simulação e usar os dados já informados, como unidade, parcela máxima, entrada, reforços, saldo, com ou sem box.
-
-Se houver várias unidades citadas na conversa, identifique qual unidade o cliente realmente escolheu ou consolidou como preferência real para a simulação, proposta ou próxima ação.
-Não escolha por número fixo.
-Não compare unidades só porque foram citadas.
-Não use uma unidade lateral como alternativa se o cliente já consolidou outra como base.
-Analise no contexto:
-- qual unidade o cliente elogiou com mais clareza;
-- qual unidade foi tratada como opção principal;
-- qual unidade ficou vinculada ao próximo passo;
-- qual unidade o corretor e cliente estavam considerando no momento da simulação.
-Use a unidade escolhida pelo contexto como base da mensagem.
-Se uma unidade ficou escolhida/consolidada, não escreva "1302 ou 1402", "unidade A ou B" nem volte a tratar a unidade como alternativa aberta. Cite somente a unidade consolidada.
-Se o contexto não permitir identificar uma unidade consolidada com segurança, não invente número: diga "a unidade que vocês ficaram de avaliar".
-
-Se o cliente decidiu simular sem box, não volte a oferecer ou incluir o box na mensagem seguinte.
-
-==========================================
-SUGESTÕES DE RESPOSTAS
-==========================================
-
-Depois do diagnóstico, gere exatamente 3 sugestões de mensagem.
-As mensagens devem parecer escritas por um corretor experiente, natural e objetivo.
-Jamais parecer um robô.
-
-Frases proibidas nas mensagens:
-"lembrei de você"
-"lembrei da nossa conversa"
-"estive pensando"
-"fiquei pensando"
-"faz sentido"
-"ainda tem interesse?"
-"segue interessado?"
-"passando para saber"
-"passando para retomar"
-"caso não tenha agradado"
-"se não gostou"
-"qualquer dúvida"
-"fico à disposição"
-"conforme conversamos"
-"analisando aqui"
-"vi aqui"
-"quer saber mais?"
-"posso te ajudar?"
-"ficou alguma dúvida?"
-"o que achou?"
-"quer que eu te mande mais informações?"
-"papo"
-
-Regras das mensagens:
-
-- Continue do ponto real onde a conversa parou.
-- Use a pendência existente como gancho, exceto quando houver mudança de jornada real causada pelo cliente.
-- Se houver direcionamento comercial do corretor para outro imóvel compatível, use a última pendência desse imóvel como gancho principal.
-- Se houver pendência financeira, retome exatamente esse assunto, salvo quando o cliente mudou de produto/objetivo por iniciativa própria e ainda é preciso entender o motivo.
-- Se o próximo passo for visita, conduza naturalmente para agendamento, exceto quando a mudança de jornada real exigir primeiro uma pergunta de descoberta.
-- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual.
-- Se a conversa estiver parada e também houver mudança de jornada, combine as duas regras: retome o histórico anterior, mencione a mudança e faça pergunta de descoberta.
-- Não reinicie a conversa.
-- Não pergunte o que o cliente já respondeu.
-- Não pressione.
-- Não dê saída fácil para o cliente encerrar.
-- Não use emoji.
-- Não use linguagem formal demais.
-- Não use linguagem de robô.
-- Cada mensagem deve ter entre 220 e 420 caracteres.
-- Cada mensagem pode ter no máximo uma pergunta.
-- Se não for necessário perguntar, não pergunte.
-- A pergunta, quando existir, deve mover a venda para frente.
-
-Perguntas válidas são perguntas que destravam a venda, seja por avanço comercial ou descoberta do novo objetivo, por exemplo:
-- Para vocês fica melhor durante a semana ou no sábado?
-- Qual horário fica mais tranquilo para vocês?
-- Prefere que eu mostre primeiro as opções com melhor posição ou melhor condição?
-- Quer que eu organize uma simulação em cima dessa forma de pagamento?
-- O que chamou tua atenção nesse imóvel: padrão, localização ou uma possibilidade diferente agora?
-- Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?
-- Você está buscando algo para uso próprio ou pensando em investimento?
-
-Perguntas proibidas:
-- Tem interesse?
-- Ainda tem interesse?
-- Quer saber mais?
-- Posso te ajudar?
-- Ficou alguma dúvida?
-- O que achou?
-- Quer que eu te mande mais informações?
-
-==========================================
-DIFERENÇA ENTRE AS 3 SUGESTÕES
-==========================================
-
-As 3 sugestões devem ter estratégias comerciais realmente diferentes, não apenas palavras diferentes.
-Não gere três mensagens com a mesma estrutura.
-Não comece as três mensagens do mesmo jeito.
-Não termine as três mensagens com o mesmo tipo de pergunta.
-
-Se houver mudança de jornada real causada pelo cliente E também houver conversa parada, retorno depois de tempo ou novo contato após uma conversa antiga, as 3 sugestões devem ser retomadas contextuais de mudança de jornada:
-
-Sugestão 1 — Retomada + motivo da mudança:
-Retome o contato anterior, cite o produto/assunto anterior e o produto atual, perguntando o que chamou atenção no novo produto.
-
-Sugestão 2 — Retomada + redefinição do objetivo:
-Mostre que, para direcionar melhor essa retomada, é preciso entender se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
-
-Sugestão 3 — Retomada curta + objetivo atual:
-Mensagem mais curta e direta, deixando claro que antes de sugerir o próximo passo, o corretor precisa entender o objetivo atual do cliente.
-
-Se houver mudança de jornada real causada pelo cliente, mas NÃO houver retomada/conversa antiga relevante, as 3 sugestões devem investigar o novo objetivo antes de tentar vender direto:
-
-Sugestão 1 — Entender o motivo da mudança:
-Pergunte o que chamou atenção no novo produto.
-
-Sugestão 2 — Redefinir o objetivo:
-Descubra se o cliente está buscando moradia, investimento, comparação de oportunidade, compra para familiar ou outra finalidade.
-
-Sugestão 3 — Direcionar a venda:
-Mostre que, entendendo o objetivo atual, o corretor consegue indicar a melhor oportunidade, sem empurrar visita, proposta ou condição antes da hora.
-
-Se NÃO houver mudança de jornada real e a conversa estiver parada há mais de 7 dias, as 3 sugestões devem ser retomadas contextuais com ganchos diferentes.
-
-Se houve direcionamento comercial do corretor para outro imóvel compatível, as 3 sugestões devem retomar a última pendência desse imóvel:
-- Sugestão 1 — Retomar compromisso: retome exatamente o que o cliente ficou de avaliar e conduza para visita/retorno.
-- Sugestão 2 — Facilitar decisão: reduza o esforço do cliente, oferecendo fotos, horários, comparação de opções ou organização da visita.
-- Sugestão 3 — Reativar com objetividade: curta, humana e comercial, conectando a opção apresentada ao que o cliente pediu.
-
-Quando for apenas retomada contextual sem mudança real nem direcionamento comercial:
-
-Sugestão 1 — Retomar o compromisso:
-Use exatamente o ponto em que o cliente parou e conduza para o próximo passo.
-
-Sugestão 2 — Facilitar a decisão:
-Reduza o esforço do cliente. Ofereça uma forma simples de avançar, como separar opções, horários, lotes disponíveis, condições ou organizar a visita.
-
-Sugestão 3 — Reativar com objetividade:
-Mensagem curta, humana e comercial, sem cobrança, trazendo a conversa de volta para a ação principal.
-
-Se NÃO houver mudança de jornada real e a conversa NÃO estiver parada há mais de 7 dias:
-
-Sugestão 1 — Avanço direto:
-Conduza para o próximo passo mais provável da venda, como visita, proposta, simulação, escolha de unidade, envio de condição ou definição de horário.
-
-Sugestão 2 — Consultiva:
-Use o contexto do cliente para reforçar o motivo do próximo passo. Mostre por que aquele avanço ajuda na decisão, sem parecer explicação longa.
-
-Sugestão 3 — Natural/leve:
-Escreva como uma mensagem humana de WhatsApp, simples e próxima, mantendo o objetivo comercial.
-
-==========================================
-SAÍDA
-==========================================
-
-Retorne diagnóstico e sugestões dentro do JSON solicitado pelo sistema.
-O conteúdo deve respeitar exatamente os campos pedidos no formato de compatibilidade.
-Não use markdown fora do JSON.
-Se algum dado não existir, diga isso claramente no campo correspondente.`;
-
-const REGRA_TESE_COMERCIAL = ``;
+// v748: todo prompt comercial anterior foi removido.
+// Mantém-se apenas uma instrução técnica mínima na chamada da IA para ela retornar JSON.
+const PROMPT_ANALISE_PURA = "";
+const REGRA_TESE_COMERCIAL = "";
 
 // v724-2: bloco antigo de raciocínio comercial removido.
 
@@ -714,32 +219,8 @@ const REGRA_TESE_COMERCIAL = ``;
 
 
 
-// Bloco de regras injetado nos prompts de geração e de revisão (um texto só).
-const REGRAS_MSG_PROMPT = [
-  "- Use somente fatos do histórico; hipóteses precisam ser marcadas como hipótese.",
-  "- Aplique a hierarquia comercial: compromisso pendente do corretor > ação autorizada pelo cliente > material já enviado > perguntas já respondidas > pendência financeira/escolha > direcionamento do corretor > mudança real de jornada > tempo parado > avanço natural.",
-  "- A primeira regra aplicável define a estratégia; regras mais genéricas não podem apagar pendências concretas.",
-  "- Não escreva relatório para o cliente; escreva WhatsApp natural de corretor experiente.",
-  "- Continue do ponto real onde a conversa parou.",
-  "- Não pergunte o que o cliente já respondeu.",
-  "- Não invente objeção: se não existe objeção explícita, registre Sem objeção explícita.",
-  "- Se houver mudança de jornada real causada pelo cliente, investigue o novo objetivo antes de conduzir para visita, proposta ou condição.",
-  "- Se o cliente voltou por outro anúncio depois de tempo parado, combine retomada contextual + mudança de jornada: histórico anterior, produto atual e pergunta de descoberta.",
-  "- Se o corretor apresentou outro imóvel como alternativa compatível, isso é direcionamento comercial: retome a última pendência desse imóvel e não pergunte novamente o objetivo.",
-  "- Nunca deixe a mudança de jornada apagar a retomada quando existe histórico anterior.",
-  "- Se a conversa estiver parada há mais de 7 dias, faça retomada contextual usando o último ponto concreto.",
-  "- Se o cliente pediu material e o corretor já enviou depois, não escreva como se ainda fosse enviar; retome a avaliação do material já encaminhado.",
-  "- Se o corretor ficou devendo simulação, proposta, valores, planta ou retorno, essa pendência vira prioridade: assuma a ação e não pergunte de novo se pode fazer.",
-  "- Se o cliente autorizou simulação financeira, confirme que vai montar/atualizar usando os dados já informados; não conduza para visita antes disso.",
-  "- Se o cliente pediu simulação sem box, não traga o box de volta como opção na mensagem seguinte.",
-  "- Se houver pendência financeira, use essa pendência como gancho principal, desde que não exista mudança de jornada real mais importante.",
-  "- Não ofereça condição, desconto, financiamento, troca ou outro produto sem base no histórico/catálogo.",
-  `- No máximo ${REGRAS_MSG.maxPerguntas} pergunta por mensagem.`,
-  `- Cada mensagem: mínimo ${REGRAS_MSG.minChars} e máximo ${REGRAS_MSG.maxChars} caracteres.`,
-  "- As 3 mensagens devem ter estratégias realmente diferentes.",
-  "- Use nomes curtos dos produtos depois da primeira menção; não repita metragem/características em todas as sugestões.",
-  "- Evite frases negativas como opções que não tenham relação; prefira antes de sugerir o próximo passo ou para te direcionar melhor."
-].join("\n");
+// v748: sem bloco de regras injetado no prompt.
+const REGRAS_MSG_PROMPT = "";
 
 // Limpeza determinística e SEGURA aplicada antes da validação: NÃO reescreve
 // palavra nem muda o sentido — só remove emoji, espaços/quebras repetidos e
@@ -755,7 +236,6 @@ function limparMensagemComercial(txt) {
 
 function limitarMensagemWhatsApp(txt) {
   let s = limparMensagemComercial(txt);
-  s = s.replace(RE_TERMOS_PROIBIDOS_GLOBAL, "").replace(/\s{2,}/g, " ").trim();
   if (s.length <= REGRAS_MSG.maxChars) return s;
   return s.slice(0, REGRAS_MSG.maxChars - 1).replace(/[\s,.;:!?-]+$/g, "").trim() + ".";
 }
@@ -763,7 +243,6 @@ function limitarMensagemWhatsApp(txt) {
 function sanitizarMensagemFallback(txt) {
   let s = limitarMensagemWhatsApp(txt);
   if (mensagemTemEmoji(s)) s = limparMensagemComercial(s);
-  if (mensagemTemTermoProibido(s)) s = s.replace(RE_TERMOS_PROIBIDOS_GLOBAL, "").replace(/\s{2,}/g, " ").trim();
   if ((s.match(/\?/g) || []).length > REGRAS_MSG.maxPerguntas) {
     let count = 0;
     s = s.replace(/\?/g, () => (++count <= REGRAS_MSG.maxPerguntas ? "?" : "."));
@@ -1364,50 +843,17 @@ function cenarioPrioritarioComercial({ diagnostico = {}, raw = {}, lead = {} } =
 }
 
 function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) {
-  const cenario = cenarioPrioritarioComercial({ diagnostico, raw, lead });
-  if (cenario === "compromisso-corretor") return { aLabel: "Recomendada", bLabel: "Montar simulação", cLabel: "Direta ao ponto" };
-  if (cenario === "material-ja-enviado") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
-  if (cenario === "perguntas-respondidas") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
-  if (cenario === "mudanca-jornada") return { aLabel: "Recomendada", bLabel: "Descobrir objetivo", cLabel: "Direta ao ponto" };
-  if (cenario === "direcionamento-corretor") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Direta ao ponto" };
-  if (cenario === "retomada-contextual") return { aLabel: "Recomendada", bLabel: "Facilitar decisão", cLabel: "Retomada curta" };
-  return { aLabel: "Recomendada", bLabel: "Consultiva", cLabel: "Natural" };
+  return { aLabel: "Recomendada", bLabel: "Alternativa", cLabel: "Direta ao ponto" };
 }
 
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
-  // v747: esta função deixou de ser motor comercial. Ela não deve mais criar
-  // mensagens com produto/unidade/simulação a partir de regex ou resumo antigo.
-  // O trabalho comercial é da IA, lendo a CONVERSA COMPLETA. Aqui só limpamos
-  // formato, vocativo inválido, termos proibidos e completamos campos vazios de
-  // forma neutra para não quebrar a interface.
-  const nome = primeiraPalavraNome(lead) || "";
+  // v748: sem fallback comercial. Não inventa produto, unidade, simulação ou próximo passo.
   const pick = (...vals) => vals.map(v => String(v || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
-  const limpar = (txt) => {
-    let x = sanitizarMensagemFallback(limparVocativoInvalido(txt, lead));
-    x = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(x, { diagnostico, raw, lead }));
-    if (mensagemFormatoRuim(x) || mensagemComVocativoInvalido(x) || mensagemPareceCortada(x)) return "";
-    return x;
-  };
-
-  let a = limpar(pick(mensagensRaw.recomendada, mensagensRaw.a, diagnostico.mensagemQueEuEnviariaHoje, raw.proximaMensagemSugerida));
-  let b = limpar(pick(mensagensRaw.maisSuave, mensagensRaw.suave, mensagensRaw.b));
-  let c = limpar(pick(mensagensRaw.maisDireta, mensagensRaw.direta, mensagensRaw.c));
-
-  const neutra = `${nome ? nome + ", " : ""}preciso revisar o ponto exato da conversa antes de sugerir a próxima mensagem. Reanalise o lead para gerar uma sugestão com base no histórico completo.`;
-  if (!a || a.length < REGRAS_MSG.minChars) a = sanitizarMensagemFallback(neutra);
-  if (!b || b.length < REGRAS_MSG.minChars) b = a;
-  if (!c || c.length < REGRAS_MSG.minChars) c = a;
-
-  // Evita três cartões idênticos, mas sem inventar produto, unidade ou simulação.
-  if (normalizarTextoComparacao(b) === normalizarTextoComparacao(a)) b = a;
-  if (normalizarTextoComparacao(c) === normalizarTextoComparacao(a) || normalizarTextoComparacao(c) === normalizarTextoComparacao(b)) c = a;
-
-  return {
-    a,
-    b,
-    c,
-    fallbackUsado: false
-  };
+  const limpar = (txt) => limparVocativoInvalido(String(txt || "").replace(/\s+/g, " ").trim(), lead);
+  const a = limpar(pick(mensagensRaw.recomendada, mensagensRaw.a, diagnostico.mensagemQueEuEnviariaHoje, raw.proximaMensagemSugerida));
+  const b = limpar(pick(mensagensRaw.maisSuave, mensagensRaw.suave, mensagensRaw.b));
+  const c = limpar(pick(mensagensRaw.maisDireta, mensagensRaw.direta, mensagensRaw.c));
+  return { a, b, c, fallbackUsado: false };
 }
 
 function primeiraPalavraNome(lead) {
@@ -3101,88 +2547,51 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = prefixo + recentes.join("\n")
       + (linhasManuais.length ? "\n\nANOTAÇÕES DO CORRETOR (fatos confirmados — sempre considere TODAS):\n" + linhasManuais.join("\n") : "");
   }
-  // v725: a análise continua simples, mas volta a receber o Cérebro Comercial como orientação controlada.
-  // O histórico da conversa segue sendo a fonte principal. Cérebro/catálogo entram como regras do corretor
-  // e fatos de produto, sem substituir o que o cliente realmente disse.
+  // v748: análise sem prompt comercial, sem catálogo, sem Cérebro, sem regras persistentes,
+  // sem nextAction/diagnóstico antigo. A conversa bruta é a única fonte comercial.
   const hoje = new Date().toISOString().slice(0, 10);
   const configCerebro = await loadCerebroConfig().catch(() => null);
   const corretorNome = String(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
-  const perspectiva = `\n\nPerspectiva: você é o corretor. As mensagens enviadas por ${corretorNome} ou pela Construtora/Senger são suas. O lead é a outra pessoa da conversa. A próxima mensagem sugerida deve ser escrita por você para o lead.`;
-  const orientacoesCerebro = montarOrientacoes(configCerebro || {}, timelineText.slice(-18000));
-  const conhecimentoCorretor = await loadConhecimentoCorretor().catch(() => "");
-  const catalogoSenger = await loadCatalogoSenger().catch(() => CATALOGO_SENGER_FALLBACK);
-  const diferenciaisDoCaso = diferenciaisRelevantes(timelineText);
-  const exemplosVoz = exemplosDoCorretor(timeline);
-  const blocoConhecimento = conhecimentoCorretor ? `\n\nCONHECIMENTO ENSINADO PELO CORRETOR (fatos e regras persistentes):\n${conhecimentoCorretor.slice(0, 12000)}` : "";
-  const blocoCatalogo = `\n\n${catalogoSenger}\n${diferenciaisDoCaso ? "\n" + diferenciaisDoCaso : ""}`;
-  const blocoVoz = exemplosVoz ? `\n\nEXEMPLOS REAIS DO JEITO DO CORRETOR NESTA CONVERSA (use como tom, não copie literal):\n${exemplosVoz}` : "";
-  const blocoIncremental = contextoIncremental ? `\n\nContexto anterior consolidado, apenas como memória factual. Não trate como nova fala do cliente:\n${JSON.stringify(contextoIncremental)}` : "";
-  const contextoOrdemMaterial = detectarOrdemMaterialTimeline(timeline, lead);
-  const blocoOrdemMaterial = `\n\nORDEM DOS ACONTECIMENTOS DETECTADA PELO SISTEMA:\n${JSON.stringify(contextoOrdemMaterial, null, 2)}`;
-  const prompt = `${PROMPT_ANALISE_PURA}
+  const prompt = `Retorne somente JSON válido. Analise a conversa de WhatsApp abaixo e gere um diagnóstico comercial e 3 sugestões de mensagem para o corretor enviar ao cliente. Não use informações externas nem análises antigas. Se algo não estiver claro, escreva "Não identificado".
 
-Hoje é ${hoje}.${perspectiva}${orientacoesCerebro}${blocoConhecimento}${blocoCatalogo}${blocoVoz}${blocoIncremental}${blocoOrdemMaterial}
+Data atual: ${hoje}
+Corretor: ${corretorNome}
 
-IMPORTANTE PARA O SISTEMA:
-Responda SOMENTE em JSON válido, sem markdown e sem texto fora do JSON.
-Não use estrutura antiga do sistema. Não gere cards auxiliares. Gere exatamente 3 mensagens comerciais, no mesmo JSON, sem segunda IA.
-
-Use este formato de compatibilidade:
+Formato obrigatório:
 {
-  "summary":"Resumo da conversa em 2 a 5 parágrafos, no estilo de uma análise pura do ChatGPT.",
+  "summary":"resumo curto da conversa",
   "diagnostico":{
-    "ultimaPessoaFalar":"Você|Cliente|desconhecido",
-    "ultimoCompromissoCliente":"texto curto ou Não houve compromisso claro do cliente.",
-    "ultimaInformacaoPrometida":"texto curto ou Não houve informação prometida pelo corretor.",
-    "compromissoCorretorNaoCumprido":"sim|não; se sim, diga exatamente o que o corretor ficou devendo e qual evidência na conversa",
-    "acaoPrometidaPeloCorretor":"simulação|proposta|material|valor|planta|retorno|nenhuma",
-    "clienteJaAutorizouAcao":"sim|não; se sim, diga qual frase do cliente autorizou a ação",
-    "ultimaInformacaoEnviada":"texto curto",
-    "produtoPrincipal":"produto principal de interesse atual",
-    "produtoAtual":"produto principal de interesse atual",
-    "produtoAnterior":"produto anterior relevante ou Nenhum",
-    "produtosParalelos":"produtos secundários citados ou Não houve produtos paralelos relevantes.",
-    "interesseAnterior":"texto curto ou Nenhum",
-    "houveMudancaJornada":"sim|não, com explicação curta",
-      "mudancaJornada":"se houve mudança real causada pelo cliente, explique a mudança de produto/objetivo; se não houve, escreva Não houve mudança relevante de jornada.",
-    "trocaProdutoFoiDirecionamentoCorretor":"sim|não, explique se o corretor apresentou outro imóvel como alternativa compatível dentro da mesma necessidade do cliente",
-    "perguntaDescobertaNecessaria":"se houver mudança de jornada real causada pelo cliente, qual pergunta precisa destravar o objetivo atual; se não, escreva Não necessária.",
-    "objecaoPrincipal":"Sem objeção explícita. ou objeção explícita com evidência",
-    "objecaoIdentificada":"Sem objeção explícita. ou objeção explícita com evidência",
-    "pendenciaFinanceira":"Não há pendência financeira. ou pendência financeira específica",
-    "pendenciaPrincipal":"principal pendência comercial concreta",
-    "quemDeveAgirAgora":"Cliente|Corretor com motivo",
-    "proximoPasso":"Cliente|Corretor|ambos com motivo",
-    "etapaFunil":"Descoberta|Interesse|Comparação|Visita|Análise financeira|Negociação|Decisão|Pós-venda|outro",
-    "probabilidadeVenda":"Muito baixa|Baixa|Média|Alta|Muito alta com justificativa",
-    "probabilidadeComentada":"nota/10 ou percentual com justificativa",
-    "tempoParado":"quantos dias a conversa ficou parada e como isso afeta a abordagem",
-    "regraPrioritariaAplicada":"compromisso pendente do corretor|cliente autorizou ação|material já enviado|perguntas já respondidas|pendência financeira/escolha|direcionamento comercial do corretor|mudança real de jornada do cliente|retomada por tempo parado|avanço natural, com explicação curta",
-    "fatosConsolidadosQueNaoPodemSerPerguntados":["objetivo, unidade, pessoa decisora, orçamento, metragem, forma de pagamento ou outro dado já respondido"],
-    "proximaAcaoObrigatoria":"ação que o corretor deve assumir agora, se houver",
-    "mensagemQueEuEnviariaHoje":"Sugestão 1 pronta para copiar"
+    "ultimaPessoaFalar":"Você|Cliente|Não identificado",
+    "ultimoCompromissoCliente":"texto curto",
+    "ultimaInformacaoPrometida":"texto curto",
+    "compromissoCorretorNaoCumprido":"texto curto",
+    "produtoPrincipal":"texto curto",
+    "produtosParalelos":"texto curto",
+    "objecaoPrincipal":"texto curto",
+    "pendenciaFinanceira":"texto curto",
+    "quemDeveAgirAgora":"texto curto",
+    "etapaFunil":"texto curto",
+    "probabilidadeVenda":"texto curto",
+    "mensagemQueEuEnviariaHoje":"mensagem pronta"
   },
-  "oQueFaltaDescobrir":["..."],
-  "estrategiaMensagem":"por que a mensagem recomendada foi escolhida",
-  "prioridadeLead":"baixa|média|alta com justificativa",
   "mensagens":{
-    "recomendada":"Sugestão 1 — retomar compromisso ou avanço direto, pronta para copiar",
-    "maisSuave":"Sugestão 2 — facilitar decisão ou consultiva, pronta para copiar",
-    "maisDireta":"Sugestão 3 — reativar com objetividade ou natural/leve, pronta para copiar"
+    "recomendada":"mensagem pronta",
+    "maisSuave":"mensagem pronta",
+    "maisDireta":"mensagem pronta"
   },
-  "produtoInteresse":"produto atual",
-  "produtosInteresse":["produtos citados"],
-  "etapaSugerida":"descoberta|interesse|comparacao|analise-financeira|negociacao|decisao|outro",
-  "probability":"baixa|média|alta",
-  "probabilityPercent": número inteiro de 0 a 100 coerente com a justificativa,
-  "clientProfile":"perfil em texto curto",
-  "nextAction":"próximo passo do corretor"
+  "produtoInteresse":"texto curto",
+  "produtosInteresse":["..."],
+  "etapaSugerida":"texto curto",
+  "probability":"texto curto",
+  "probabilityPercent":50,
+  "clientProfile":"texto curto",
+  "nextAction":"texto curto"
 }
 
-METADADOS DO LEAD (somente identificação; NÃO use como histórico comercial, produto, unidade ou pendência se isso não aparecer na conversa):
+METADADOS DO LEAD, somente identificação:
 ${JSON.stringify(leadIA)}
 
-CONVERSA COMPLETA — FONTE ÚNICA DA VERDADE COMERCIAL:
+CONVERSA COMPLETA:
 ${timelineText}`;
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
@@ -3213,7 +2622,7 @@ ${timelineText}`;
     const msg = msgA;
     const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead: leadIA });
     const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
-    const corrigirUnidade = (v, fb = "") => corrigirAlternativaUnidadeEscolhidaTexto(txt(v, fb), { diagnostico: d, raw, lead: leadIA });
+    const corrigirUnidade = (v, fb = "") => txt(v, fb);
     const probPct = clamp(raw.probabilityPercent);
 
     // v724-2: objeto final deliberadamente simples.
@@ -3298,7 +2707,7 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: false,
-      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback v746 usado apenas quando a mensagem violou a hierarquia comercial: compromisso pendente, material já enviado, pergunta já respondida, mudança indevida de jornada, produto incompatível ou unidade alternativa indevida."] : [],
+      validacaoSugestoes: trioMensagens.fallbackUsado ? ["Fallback técnico sem regra comercial."] : [],
       mensagensValidadasEm: new Date().toISOString(),
       melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
     };
