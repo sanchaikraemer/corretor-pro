@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v746-hierarquia-raciocinio-comercial";
+const ARQUITETURA_MENSAGENS_ATUAL = "v747-ia-contexto-limpo-sem-templates";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();

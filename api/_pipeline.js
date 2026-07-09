@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v746-hierarquia-raciocinio-comercial";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v747-ia-contexto-limpo-sem-templates";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -70,6 +70,27 @@ export function getModelosIASummary() {
       orquestrador: modeloOrquestrador()
     }
   };
+}
+
+
+function leadSeguroParaAnalise(lead = {}) {
+  // v747: a conversa é a fonte da verdade. O objeto do lead pode trazer análises,
+  // sugestões, nextAction, produto e unidade salvos por versões antigas. Enviar isso
+  // inteiro para a IA contaminava uma conversa com pendências de outra.
+  const src = lead && typeof lead === "object" ? lead : {};
+  const chavesSeguras = [
+    "id", "name", "title", "clientName", "nomeCliente", "contactName", "phone", "telefone",
+    "source", "origin", "createdAt", "updatedAt", "lastInteractionAt"
+  ];
+  const out = {};
+  for (const k of chavesSeguras) {
+    const v = src[k];
+    if (v == null) continue;
+    if (["string", "number", "boolean"].includes(typeof v)) {
+      out[k] = String(v).slice(0, 240);
+    }
+  }
+  return out;
 }
 
 function contatoPareceParceiro(lead, timelineText) {
@@ -1354,92 +1375,40 @@ function labelsMensagensParaContexto({ diagnostico = {}, raw = {}, lead = {} }) 
 }
 
 export function completarMensagensComFallback({ mensagensRaw = {}, diagnostico = {}, raw = {}, lead = {} }) {
+  // v747: esta função deixou de ser motor comercial. Ela não deve mais criar
+  // mensagens com produto/unidade/simulação a partir de regex ou resumo antigo.
+  // O trabalho comercial é da IA, lendo a CONVERSA COMPLETA. Aqui só limpamos
+  // formato, vocativo inválido, termos proibidos e completamos campos vazios de
+  // forma neutra para não quebrar a interface.
   const nome = primeiraPalavraNome(lead) || "";
-  const produto = produtoCurtoParaMensagem(raw.produtoInteresse || diagnostico.produtoAtual || diagnostico.produtoPrincipal || lead?.product, "essa opção");
-  const pendencia = textoFallbackCurto(diagnostico.pendenciaPrincipal || diagnostico.ultimoCompromissoCliente || raw.nextAction, produto);
-  const trioBase = gerarTrioFallbackContextual({ lead, diagnostico, raw });
-  const base = trioBase[0];
-  let a = sanitizarMensagemFallback(mensagensRaw.recomendada || mensagensRaw.a || diagnostico.mensagemQueEuEnviariaHoje || raw.proximaMensagemSugerida || base);
-  if (!a || mensagemFormatoRuim(a) || a.length < REGRAS_MSG.minChars) a = base;
-
-  let b = sanitizarMensagemFallback(mensagensRaw.maisSuave || mensagensRaw.suave || mensagensRaw.b || trioBase[1]);
-  let c = sanitizarMensagemFallback(mensagensRaw.maisDireta || mensagensRaw.direta || mensagensRaw.c || trioBase[2]);
-
-  a = sanitizarMensagemFallback(limparVocativoInvalido(a, lead));
-  b = sanitizarMensagemFallback(limparVocativoInvalido(b, lead));
-  c = sanitizarMensagemFallback(limparVocativoInvalido(c, lead));
-
-  const mensagens = [a, b, c].map((m, i) => {
-    let x = sanitizarMensagemFallback(m || a || base);
+  const pick = (...vals) => vals.map(v => String(v || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
+  const limpar = (txt) => {
+    let x = sanitizarMensagemFallback(limparVocativoInvalido(txt, lead));
     x = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(x, { diagnostico, raw, lead }));
-    if (!x || x.length < REGRAS_MSG.minChars || mensagemFormatoRuim(x)) x = i === 0 ? base : a;
+    if (mensagemFormatoRuim(x) || mensagemComVocativoInvalido(x) || mensagemPareceCortada(x)) return "";
     return x;
-  });
+  };
 
-  const cenarioPrincipal = cenarioPrioritarioComercial({ diagnostico, raw, lead });
+  let a = limpar(pick(mensagensRaw.recomendada, mensagensRaw.a, diagnostico.mensagemQueEuEnviariaHoje, raw.proximaMensagemSugerida));
+  let b = limpar(pick(mensagensRaw.maisSuave, mensagensRaw.suave, mensagensRaw.b));
+  let c = limpar(pick(mensagensRaw.maisDireta, mensagensRaw.direta, mensagensRaw.c));
 
-  if (cenarioPrincipal === "compromisso-corretor") {
-    const fallbackCompromisso = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw });
-    for (let i = 0; i < mensagens.length; i++) {
-      if (mensagemPrecisaFallbackCompromissoCorretor(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
-        mensagens[i] = fallbackCompromisso[i];
-      }
-    }
-  } else if (cenarioPrincipal === "material-ja-enviado") {
-    const fallbackMaterial = mensagensFallbackMaterialJaEnviado({ lead, diagnostico, raw });
-    for (let i = 0; i < mensagens.length; i++) {
-      if (mensagemFalaComoSeMaterialAindaFosseEnviar(mensagens[i]) || !mensagens[i]) {
-        mensagens[i] = fallbackMaterial[i];
-      }
-    }
-  } else if (cenarioPrincipal === "perguntas-respondidas") {
-    const fallbackRespondidas = mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw });
-    for (let i = 0; i < mensagens.length; i++) {
-      if (mensagemPerguntaDescobertaJaRespondida(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
-        mensagens[i] = fallbackRespondidas[i];
-      }
-    }
-  } else if (cenarioPrincipal === "direcionamento-corretor") {
-    const fallbackDirecionamento = mensagensFallbackDirecionamentoCorretor({ lead, diagnostico, raw });
-    for (let i = 0; i < mensagens.length; i++) {
-      if (mensagemPrecisaFallbackDirecionamento(mensagens[i], { diagnostico, raw, lead }) || !mensagens[i]) {
-        mensagens[i] = fallbackDirecionamento[i];
-      }
-    }
-  } else if (cenarioPrincipal === "mudanca-jornada") {
-    const fallbackJornada = mensagensFallbackMudancaRetomada({ lead, diagnostico, raw });
-    for (let i = 0; i < mensagens.length; i++) {
-      if (mensagemQueApagouRetomadaOuVirouPropaganda(mensagens[i]) || !mensagemTemRetomadaOuMudancaComHistorico(mensagens[i])) {
-        mensagens[i] = fallbackJornada[i];
-      }
-    }
-  }
+  const neutra = `${nome ? nome + ", " : ""}preciso revisar o ponto exato da conversa antes de sugerir a próxima mensagem. Reanalise o lead para gerar uma sugestão com base no histórico completo.`;
+  if (!a || a.length < REGRAS_MSG.minChars) a = sanitizarMensagemFallback(neutra);
+  if (!b || b.length < REGRAS_MSG.minChars) b = a;
+  if (!c || c.length < REGRAS_MSG.minChars) c = a;
 
-  for (let i = 0; i < mensagens.length; i++) {
-    mensagens[i] = sanitizarMensagemFallback(corrigirAlternativaUnidadeEscolhidaTexto(mensagens[i], { diagnostico, raw, lead }));
-    if (mensagemPerguntaDescobertaJaRespondida(mensagens[i], { diagnostico, raw, lead })) {
-      mensagens[i] = mensagensFallbackPerguntasRespondidas({ lead, diagnostico, raw })[i];
-    }
-    if (diagnosticoIndicaCompromissoCorretorNaoCumprido({ diagnostico, raw, lead }) && mensagemMisturaUnidadeEscolhidaComAlternativa(mensagens[i], { diagnostico, raw, lead })) {
-      mensagens[i] = mensagensFallbackCompromissoCorretor({ lead, diagnostico, raw })[i];
-    }
-  }
-
-  if (normalizarTextoComparacao(mensagens[1]) === normalizarTextoComparacao(mensagens[0])) {
-    mensagens[1] = sanitizarMensagemFallback(`${nome ? nome + ", " : ""}para facilitar, posso separar os pontos que combinam melhor com ${pendencia} e te mostrar primeiro o caminho mais simples. Você prefere receber isso hoje ou amanhã?`);
-  }
-  if (normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[0]) || normalizarTextoComparacao(mensagens[2]) === normalizarTextoComparacao(mensagens[1])) {
-    mensagens[2] = sanitizarMensagemFallback(`${nome ? nome + ", " : ""}ficou aquele ponto em aberto sobre ${produto}. Posso retomar direto nele e te passar uma condução objetiva para o próximo passo.`);
-  }
+  // Evita três cartões idênticos, mas sem inventar produto, unidade ou simulação.
+  if (normalizarTextoComparacao(b) === normalizarTextoComparacao(a)) b = a;
+  if (normalizarTextoComparacao(c) === normalizarTextoComparacao(a) || normalizarTextoComparacao(c) === normalizarTextoComparacao(b)) c = a;
 
   return {
-    a: mensagens[0],
-    b: mensagens[1],
-    c: mensagens[2],
-    fallbackUsado: !(mensagensRaw.recomendada && mensagensRaw.maisSuave && mensagensRaw.maisDireta)
+    a,
+    b,
+    c,
+    fallbackUsado: false
   };
 }
-
 
 function primeiraPalavraNome(lead) {
   const fontes = [lead?.clientName, lead?.nomeCliente, lead?.contactName, lead?.name, lead?.title]
@@ -3210,10 +3179,10 @@ Use este formato de compatibilidade:
   "nextAction":"próximo passo do corretor"
 }
 
-LEAD:
-${JSON.stringify(lead)}
+METADADOS DO LEAD (somente identificação; NÃO use como histórico comercial, produto, unidade ou pendência se isso não aparecer na conversa):
+${JSON.stringify(leadIA)}
 
-CONVERSA COMPLETA:
+CONVERSA COMPLETA — FONTE ÚNICA DA VERDADE COMERCIAL:
 ${timelineText}`;
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
@@ -3237,14 +3206,14 @@ ${timelineText}`;
     const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
     const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const trioMensagens = completarMensagensComFallback({ mensagensRaw, diagnostico: d, raw, lead });
+    const trioMensagens = completarMensagensComFallback({ mensagensRaw, diagnostico: d, raw, lead: leadIA });
     const msgA = trioMensagens.a;
     const msgB = trioMensagens.b;
     const msgC = trioMensagens.c;
     const msg = msgA;
-    const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead });
+    const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead: leadIA });
     const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
-    const corrigirUnidade = (v, fb = "") => corrigirAlternativaUnidadeEscolhidaTexto(txt(v, fb), { diagnostico: d, raw, lead });
+    const corrigirUnidade = (v, fb = "") => corrigirAlternativaUnidadeEscolhidaTexto(txt(v, fb), { diagnostico: d, raw, lead: leadIA });
     const probPct = clamp(raw.probabilityPercent);
 
     // v724-2: objeto final deliberadamente simples.
