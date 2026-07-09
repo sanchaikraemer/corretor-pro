@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v734-retomada-jornada-linguagem-limpa";
+const ARQUITETURA_MENSAGENS_ATUAL = "v736-direcionamento-vs-mudanca-jornada";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
