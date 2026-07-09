@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v737-linguagem-natural-sugestoes";
+const ARQUITETURA_MENSAGENS_ATUAL = "v739-ia-pensante-contexto-real";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4828,7 +4828,7 @@ function cp704Css(){
       a:cp705SanitizeFactText(cp704Text(m.a || a?.diagnostico?.mensagemQueEuEnviariaHoje || a.recommendedMessage || fb.a || ''), lead),
       b:cp705SanitizeFactText(cp704Text(m.b || fb.b || ''), lead),
       c:cp705SanitizeFactText(cp704Text(m.c || fb.c || ''), lead),
-      aLabel:cp704Text(m.aLabel || fb.aLabel || 'Recomendada'), bLabel:cp704Text(m.bLabel || fb.bLabel || 'Descobrir objetivo'), cLabel:cp704Text(m.cLabel || fb.cLabel || 'Direta ao ponto')
+      aLabel:cp704Text(m.aLabel || fb.aLabel || 'Recomendada'), bLabel:cp704Text(m.bLabel || fb.bLabel || 'Facilitar decisão'), cLabel:cp704Text(m.cLabel || fb.cLabel || 'Direta ao ponto')
     };
     // v731: se veio só a recomendada, a interface completa as outras duas
     // imediatamente, sem esconder tudo atrás de "Mensagem ainda não gerada".
@@ -4962,7 +4962,7 @@ function renderLeadFoco(lead){
       ${cp717MudancasHtml(a)}
       <section class="cp704-card"><div class="cp704-card-title"><h2>Sugestões de mensagem</h2><small>copie a melhor opção</small></div>
         ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>Atualize a análise comercial para criar a sugestão correta.</span>${cp724DiagRecusaHtml(a,msgs)}<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></div>`):`
-        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Descobrir objetivo')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
+        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
       </section>
       <div class="cp704-accordions">
         <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
@@ -9723,20 +9723,34 @@ function ui682FallbackMessages(lead, mc){
   const nome = ui682PrimeiroNomeLead(lead);
   const produto = ui682ProdutoLead(lead, mc);
   const prefixo = nome ? `${nome}, ` : "";
-  const hist = JSON.stringify(lead || {}).toLowerCase();
+  const hist = JSON.stringify({lead,mc}).toLowerCase();
   const temPremium = /premium\s+office|premium/.test(hist);
   const temPersonalite = /personali[tée]/.test(hist) || /personalit/.test(hist);
+  const ehRenaissance = /renaissance/.test(String(produto||'').toLowerCase()) || /renaissance/.test(hist);
+  const ehTerreno = /nova\s+vila\s+rica|nvr|loteamento|terreno|\blote\b/.test(hist);
   if(temPremium && temPersonalite){
     const a = `${prefixo}retomando nosso contato: antes falávamos sobre a Premium Office, e agora você me chamou sobre o Personalité. Queria entender melhor o que te chamou atenção nesse imóvel: foi o padrão, a localização ou está avaliando uma possibilidade diferente agora?`;
     const b = `${prefixo}para eu te direcionar melhor nessa retomada, vale entender uma coisa: antes falávamos sobre a Premium Office, e agora você olhou o Personalité. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
     const c = `${prefixo}como teu interesse saiu da Premium Office e veio para o Personalité, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`;
     return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
   }
+  if(ehRenaissance){
+    const a = `${prefixo}retomando nosso contato sobre o Renaissance. Como ele é uma opção em lançamento/na planta, o melhor é avaliar o ponto que ficou pendente na conversa: planta, posição, prazo ou condição. Qual desses pontos você quer que eu organize primeiro?`;
+    const b = `${prefixo}para facilitar a avaliação do Renaissance, posso separar as opções disponíveis de forma mais objetiva, sem voltar a conversa do zero. Você prefere olhar primeiro plantas, valores ou posição das unidades?`;
+    const c = `${prefixo}ficou aquele ponto do Renaissance em aberto. Posso retomar pelo que ficou mais importante para vocês na última conversa e montar uma visão mais clara das opções?`;
+    return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
+  }
+  if(ehTerreno){
+    const a = `${prefixo}retomando nosso contato sobre o loteamento. Posso separar as opções disponíveis e mostrar posição, acesso e tamanho dos lotes para vocês avaliarem com calma?`;
+    const b = `${prefixo}para facilitar, posso destacar os lotes com melhor posição e condição dentro do que vocês comentaram. Assim a visita fica mais objetiva. Quer que eu organize isso?`;
+    const c = `${prefixo}ficou aquele ponto do loteamento em aberto. Posso te passar as opções disponíveis e alguns horários para vocês conhecerem o local?`;
+    return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
+  }
   const baseProduto = produto && !/não identificado|produto/i.test(produto) ? produto : "o imóvel";
-  const a = `${prefixo}retomando nosso contato: percebi que a busca mudou de rumo em relação ao que falamos antes. Para eu te direcionar melhor, o que chamou tua atenção agora em ${baseProduto}?`;
-  const b = `${prefixo}para eu ajustar melhor essa retomada, vale entender teu objetivo atual. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
-  const c = `${prefixo}antes de sugerir o próximo passo, prefiro entender o momento da tua busca. Você está avaliando algo para uso próprio ou pensando em investimento?`;
-  return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
+  const a = `${prefixo}retomando nosso contato sobre ${baseProduto}. Ficou um ponto em aberto na última conversa e posso te ajudar a avançar sem recomeçar tudo do zero. Para vocês fica melhor durante a semana ou no sábado?`;
+  const b = `${prefixo}para facilitar a avaliação, posso separar as informações principais de ${baseProduto} e organizar o próximo passo de forma mais objetiva. Quer que eu prepare isso para vocês?`;
+  const c = `${prefixo}ficou aquele ponto de ${baseProduto} em aberto. Posso te passar os melhores horários ou caminhos para vocês avaliarem com calma?`;
+  return { a, b, c, aLabel:"Recomendada", bLabel:"Facilitar decisão", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
 }
 function ui682MesclarMensagens(msgs, lead, mc){
   const fb = ui682FallbackMessages(lead, mc);
@@ -9746,7 +9760,7 @@ function ui682MesclarMensagens(msgs, lead, mc){
     b:String(msgs?.b||fb.b||"").trim(),
     c:String(msgs?.c||fb.c||"").trim(),
     aLabel:String(msgs?.aLabel||"Recomendada"),
-    bLabel:String(msgs?.bLabel||"Descobrir objetivo"),
+    bLabel:String(msgs?.bLabel||"Facilitar decisão"),
     cLabel:String(msgs?.cLabel||"Direta ao ponto"),
     recomendada:["a","b","c"].includes(String(msgs?.recomendada||"")) ? String(msgs.recomendada) : "a"
   };
@@ -9861,7 +9875,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
     out.diagnostico.etapa="decisão";
     out.diagnostico.objecaoPrincipal=obsFact.motivo;
     out.diagnostico.proximaAcao=obsFact.next;
-    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Descobrir objetivo",cLabel:"Direta ao ponto",recomendada:"a"};
+    out.messages={a:obsFact.msgA,b:obsFact.msgB,c:obsFact.msgC,aLabel:"Recomendada",bLabel:"Facilitar decisão",cLabel:"Direta ao ponto",recomendada:"a"};
     out.sugestoesPendentes=false;out.aprovada=true;out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
     out.modeloComercial=out.modeloComercial||{};
     out.modeloComercial.oportunidade={...(out.modeloComercial.oportunidade||{}),status:"decisao",motivo:obsFact.motivo};
