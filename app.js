@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v736-direcionamento-vs-mudanca-jornada";
+const ARQUITETURA_MENSAGENS_ATUAL = "v737-linguagem-natural-sugestoes";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4680,7 +4680,7 @@ function cp704Css(){
       .replace(/\bEdifício Personalit[eé]\b/gi, 'o Personalité')
       .replace(/\bte passar coisa solta\b/gi, 'sugerir o próximo passo')
       .replace(/\bte mandar opção solta\b/gi, 'sugerir o próximo passo')
-      .replace(/\bopções soltas\b/gi, 'opções sem relação com teu objetivo')
+      .replace(/\bopções soltas\b/gi, 'sugestões desalinhadas ao teu objetivo')
       .replace(/\bde a Premium Office\b/gi, 'da Premium Office')
       .replace(/\bde o Personalit[eé]\b/gi, 'do Personalité');
     return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
@@ -9704,8 +9704,20 @@ function ui682PrimeiroNomeLead(lead){
   const primeiro = (limpo.split(/\s+/)[0] || "").trim();
   return /^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(primeiro) ? "" : primeiro;
 }
+function ui682ProdutoCurto(valor, fallback='o imóvel'){
+  const s=String(valor||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(!s) return fallback;
+  if(/premium\s+office/i.test(s)) return 'a Premium Office';
+  if(/personalit[eé]/i.test(s)) return 'o Personalité';
+  if(/renaissance/i.test(s)) return 'o Renaissance';
+  if(/nova\s+vila\s+rica/i.test(s)) return 'o Nova Vila Rica III';
+  if(/evolutti/i.test(s)) return 'o Evolutti';
+  if(/quality/i.test(s)) return 'o Quality';
+  if(/boulevard/i.test(s)) return 'o Boulevard';
+  return s;
+}
 function ui682ProdutoLead(lead, mc){
-  return String(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel").trim() || "o imóvel";
+  return ui682ProdutoCurto(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel", "o imóvel");
 }
 function ui682FallbackMessages(lead, mc){
   const nome = ui682PrimeiroNomeLead(lead);
@@ -9720,7 +9732,7 @@ function ui682FallbackMessages(lead, mc){
     const c = `${prefixo}como teu interesse saiu da Premium Office e veio para o Personalité, prefiro entender teu objetivo atual antes de sugerir o próximo passo. Você está buscando algo para uso próprio ou pensando em investimento?`;
     return { a, b, c, aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a", fallback:true };
   }
-  const baseProduto = produto && !/não identificado|produto/i.test(produto) ? `o ${produto}` : "o imóvel";
+  const baseProduto = produto && !/não identificado|produto/i.test(produto) ? produto : "o imóvel";
   const a = `${prefixo}retomando nosso contato: percebi que a busca mudou de rumo em relação ao que falamos antes. Para eu te direcionar melhor, o que chamou tua atenção agora em ${baseProduto}?`;
   const b = `${prefixo}para eu ajustar melhor essa retomada, vale entender teu objetivo atual. Hoje você está olhando mais para moradia, investimento ou comparação de oportunidade?`;
   const c = `${prefixo}antes de sugerir o próximo passo, prefiro entender o momento da tua busca. Você está avaliando algo para uso próprio ou pensando em investimento?`;
@@ -9823,7 +9835,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
         a:String(atuais.a||fb.a||"").trim(),
         b:String(atuais.b||fb.b||"").trim(),
         c:String(atuais.c||fb.c||"").trim(),
-        aLabel:"Recomendada", bLabel:"Mais suave", cLabel:"Mais direta", recomendada:"a"
+        aLabel:"Recomendada", bLabel:"Descobrir objetivo", cLabel:"Direta ao ponto", recomendada:"a"
       };
       out.arquiteturaMensagens = ARQUITETURA_MENSAGENS_ATUAL;
       out.sugestoesPendentes = false;
