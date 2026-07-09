@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v748-sem-prompt-sem-regras";
+const ARQUITETURA_MENSAGENS_ATUAL = "v749-sem-prompt-historico-completo";
 
 function mensagemAprovadaSemAlteracao(texto){
   return String(texto || "").trim();
@@ -4272,7 +4272,8 @@ async function abrirLead(id, options={}){
     if(!(history.state?.cpApp && history.state?.screen === "lead" && String(history.state?.leadId) === sid)) cpPushRoute(route);
   }
   state.focoLeadId = sid;
-  state.timelineVisibleCount = TIMELINE_PAGE_SIZE;
+  state.timelineVisibleCount = 4;
+  state.cp704HistoryFull = false;
   document.body.classList.add("lead-foco-aberto");
   garantirIntelCarregado().catch(()=>{});
 
@@ -4778,14 +4779,19 @@ function cp704Css(){
     return msgs.filter(m=>cp704Text(m?.text)).slice(-max).reverse();
   }
   function cp704TimelineHtml(lead){
-    const msgs=cp704RecentMessages(lead,4);
+    const all=Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>cp704Text(m?.text)):[];
+    const total=all.length;
+    const limite = state.cp704HistoryFull ? total : Math.max(4, Math.min(Number(state.timelineVisibleCount||4), total || 4));
+    const msgs=all.slice(-limite).reverse();
     const pn=cp704Text(lead?.name).toLowerCase().split(/\s+/)[0]||'';
     if(!msgs.length) return '<div class="empty">Sem mensagens recentes.</div>';
+    const faltam = Math.max(0, total - msgs.length);
+    const btn = faltam>0 ? `<button type="button" class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa (${total} mensagens)</button>` : '';
     return msgs.map((m,i)=>{
       const cliente=(typeof ehMsgDoCliente==='function') ? ehMsgDoCliente(m,pn) : false;
       const who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
-      return `<div class="cp704-tmsg"><span class="cp704-dot ${cliente?'':'you'}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,260))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
-    }).join('');
+      return `<div class="cp704-tmsg"><span class="cp704-dot ${cliente?'':'you'}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,520))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
+    }).join('') + btn;
   }
   function cp704DetailRows(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
@@ -4876,13 +4882,28 @@ function cp704Css(){
     const url=(typeof whatsappLink==='function') ? whatsappLink(lead.phone,msg) : `https://wa.me/${String(lead.phone).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
     window.open(url,'_blank');
   };
-  window.cp704HistoryToggle=function(){
+  window.cp704HistoryToggle=async function(){
     try{
-      const legacy=document.querySelector('.ui670-legacy-hidden') || document.querySelector('.lead-ui670');
-      const hist=[...document.querySelectorAll('details')].find(d=>/histórico de conversa/i.test(d.textContent||''));
-      if(hist){ hist.open=true; hist.scrollIntoView({behavior:'smooth',block:'center'}); return; }
-    }catch(_){ }
-    toast('Histórico completo indisponível nesta tela.');
+      if(!state.lead?.id){ toast('Abra um lead primeiro.'); return; }
+      let lead = state.lead;
+      if(!lead.historyLoaded){
+        toast('Carregando conversa completa…');
+        lead = await getLeadDetail(lead.id, true);
+        if(String(state.lead?.id||'') === String(lead.id||'')){
+          state.lead = lead;
+          state.analysis = lead.analysis || state.analysis;
+        }
+      }
+      state.cp704HistoryFull = true;
+      state.timelineVisibleCount = Math.max(Number(totalMensagensLead(lead)||0), Array.isArray(lead.recentMessages)?lead.recentMessages.length:0, 9999);
+      renderLeadFoco(state.lead || lead);
+      requestAnimationFrame(()=>{
+        const details=[...document.querySelectorAll('.cp704-details')].find(d=>/Últimas mensagens/i.test(d.textContent||''));
+        if(details){ details.open=true; details.scrollIntoView({behavior:'smooth',block:'center'}); }
+      });
+    }catch(err){
+      toast('Não consegui carregar o histórico completo: ' + (err?.message || err));
+    }
   };
   window.cp715EditarLead = function(id){
     const leadAtual = (state?.lead && String(state.lead.id) === String(id)) ? state.lead : null;
@@ -4965,7 +4986,7 @@ function renderLeadFoco(lead){
         <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
       </section>
       <div class="cp704-accordions">
-        <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div><button class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa</button></div></details>
+        <details class="cp704-details"><summary>Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
         <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
         <details class="cp704-details"><summary>Leitura comercial</summary><div class="cp704-body">${cp718LeituraComercialHtml(a,lead)}</div></details>
         <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
