@@ -5404,6 +5404,27 @@ function cerebroDefaultConfig(){
   };
 }
 
+
+function normalizarCerebroConfigTela(config){
+  const out = { ...(config && typeof config === "object" ? config : {}) };
+  const metodo = String(out.metodo || "");
+  const tom = String(out.tom || "");
+  const evitar = String(out.evitar || "");
+  const diferenciais = String(out.diferenciais || "");
+  const metodoAntigo = /^Método Corretor Pro:/i.test(metodo) || /Identifique a fase do cliente/i.test(metodo);
+  const tomAntigo = /tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(tom);
+  const evitarAntigo = /gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(evitar);
+  const diferenciaisAntigo = /Construtora Senger \(sede em Carazinho\/RS\).*Produtos em Carazinho/i.test(diferenciais);
+  if(metodoAntigo) out.metodo = CEREBRO_PROMPT_MINIMO;
+  if(tomAntigo) out.tom = "";
+  if(evitarAntigo) out.evitar = "";
+  if(diferenciaisAntigo) out.diferenciais = "";
+  if(!Number(out.diasImportacao)) out.diasImportacao = 90;
+  if(!Array.isArray(out.regras)) out.regras = [];
+  if(!Array.isArray(out.objecoes)) out.objecoes = [];
+  return out;
+}
+
 function getCerebroConfigParaIA(){
   const ler = (sel) => qs(sel)?.value;
   const naTela = qs("#cerebroMetodo") || qs("#cerebroTom") || qs("#cerebroDiferenciais") || qs("#cerebroEvitar");
@@ -5423,9 +5444,9 @@ function getCerebroConfigParaIA(){
   }
   try{
     const saved = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null");
-    if(saved && typeof saved === "object") return { ...saved, _fonte: "frontend-localStorage" };
+    if(saved && typeof saved === "object") return { ...normalizarCerebroConfigTela(saved), _fonte: "frontend-localStorage" };
   }catch(_){ }
-  return { ...cerebroDefaultConfig(), _fonte: "frontend-default" };
+  return { ...normalizarCerebroConfigTela(cerebroDefaultConfig()), _fonte: "frontend-default" };
 }
 window.getCerebroConfigParaIA = getCerebroConfigParaIA;
 
@@ -5794,18 +5815,20 @@ async function carregarCerebro(){
   const status = qs("#cerebroStatus");
   status.textContent = "Carregando...";
   let config = null;
+  let configLocal = null;
+  try{ configLocal = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){ configLocal = null; }
   try{
     const res = await fetch("./api/cerebro-config", { cache:"no-store" });
     const data = await res.json();
-    if(data?.ok && data.config) config = data.config;
+    if(data?.ok && data.config){
+      // Se a API devolveu default porque a tabela não existe/está vazia, não sobrepõe o que foi salvo no navegador.
+      config = (data.usingDefaults && configLocal) ? configLocal : data.config;
+    }
     if(data?.warning) status.innerHTML = '<span style="color:#ffc4f4">'+escapeHtml(data.warning)+'</span>';
   }catch(_){ /* fallback local */ }
-  if(!config){
-    try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
-  }
-  if(!config){
-    config = cerebroDefaultConfig();
-  }
+  if(!config && configLocal) config = configLocal;
+  if(!config) config = cerebroDefaultConfig();
+  config = normalizarCerebroConfigTela(config);
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
   qs("#cerebroMetodo").value = config.metodo || "";
   qs("#cerebroTom").value = config.tom || "";
@@ -5867,11 +5890,12 @@ async function salvarCerebro(){
     regras: cerebroRegras,
     objecoes: cerebroObjecoes
   };
-  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
+  const configLimpa = normalizarCerebroConfigTela(config);
+  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(configLimpa)); }catch(_){}
   const status = qs("#cerebroStatus");
   status.textContent = "Salvando...";
   try{
-    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(config) });
+    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(configLimpa) });
     const data = await res.json();
     if(data?.warning){
       status.innerHTML = '<span style="color:#ffc4f4">Salvo localmente. '+escapeHtml(data.warning)+'</span>';

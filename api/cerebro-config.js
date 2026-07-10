@@ -18,17 +18,26 @@ function validarUrlSegura(urlStr) {
 
 const CONFIG_KEY = "direciona-cerebro";
 
+const PROMPT_MINIMO_CEREBRO = `Leia toda a conversa de WhatsApp.
+
+Identifique:
+1. qual foi a última pergunta ou pendência real;
+2. o que o cliente já respondeu;
+3. o que o corretor não deve perguntar de novo;
+4. qual é o próximo passo comercial mais natural.
+
+Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
+
+Não seja genérico.
+Não reinicie a venda.
+Não pergunte o que já foi respondido.`;
+
 const DEFAULTS = {
   corretorNome: "",
-  metodo: `Método Corretor Pro:
-1. Identifique a fase do cliente (descoberta, comparando, decidindo, indeciso).
-2. Mostre que entendeu o contexto antes de propor solução.
-3. Cite o produto específico que mais combina com o que ele disse.
-4. Termine sempre com uma pergunta curta ou próximo passo claro.
-5. Evite jargão técnico e textos longos. WhatsApp é leitura rápida.`,
-  tom: "Direto, próximo, profissional. Sem 'faz sentido', sem 'tô retomando contato', sem texto motivacional. Fala como corretor experiente que respeita o tempo do cliente.",
-  diferenciais: "Construtora Senger (sede em Carazinho/RS), com obras em Carazinho e também em Ibirubá. Produtos em Carazinho: Renaissance, Evolutti, Premium Office, Quality, Personalité, Prime, Terrenos. Em Ibirubá: Boulevard.",
-  evitar: "Não usar 'faz sentido', 'gostaria de retomar', 'estava passando aqui pra'. Evitar promessas vazias e textos longos.",
+  metodo: PROMPT_MINIMO_CEREBRO,
+  tom: "",
+  diferenciais: "",
+  evitar: "",
   diasImportacao: 90,
   regras: [],
   objecoes: []
@@ -73,6 +82,30 @@ async function saveConfig(supabase, valor) {
   return { error };
 }
 
+
+function normalizarConfigCerebroServidor(valor) {
+  const out = { ...(valor && typeof valor === "object" ? valor : {}) };
+  const metodo = String(out.metodo || "");
+  const tom = String(out.tom || "");
+  const evitar = String(out.evitar || "");
+  const diferenciais = String(out.diferenciais || "");
+
+  const metodoAntigo = /^Método Corretor Pro:/i.test(metodo) || /Identifique a fase do cliente/i.test(metodo);
+  const tomAntigo = /tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(tom);
+  const evitarAntigo = /gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(evitar);
+  const diferenciaisAntigo = /Construtora Senger \(sede em Carazinho\/RS\).*Produtos em Carazinho/i.test(diferenciais);
+
+  // Se encontrar defaults antigos, substitui apenas o que é legado. Não apaga campo que o usuário editou.
+  if (metodoAntigo) out.metodo = PROMPT_MINIMO_CEREBRO;
+  if (tomAntigo) out.tom = "";
+  if (evitarAntigo) out.evitar = "";
+  if (diferenciaisAntigo) out.diferenciais = "";
+  if (!Number(out.diasImportacao)) out.diasImportacao = 90;
+  if (!Array.isArray(out.regras)) out.regras = [];
+  if (!Array.isArray(out.objecoes)) out.objecoes = [];
+  return out;
+}
+
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
   const supabase = getSupabaseAdmin();
@@ -83,11 +116,11 @@ export default async function handler(req, res) {
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
-    return json(res, 200, { ok: true, config: r.valor || DEFAULTS, usingDefaults: !r.found });
+    return json(res, 200, { ok: true, config: normalizarConfigCerebroServidor(r.valor || DEFAULTS), usingDefaults: !r.found });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
-    const body = await readJsonBody(req).catch(() => ({}));
+    let body = await readJsonBody(req).catch(() => ({}));
 
     // AÇÃO: aprender de uma imagem/print (lê a imagem com visão da IA)
     if (body.action === "aprender-imagem") {
@@ -268,20 +301,21 @@ export default async function handler(req, res) {
       inteligenciaAprendida: baseAprend.inteligenciaAprendida || {},
       estiloHistorico: Array.isArray(baseAprend.estiloHistorico) ? baseAprend.estiloHistorico : undefined
     };
-    const r = await saveConfig(supabase, valor);
+    const valorLimpo = normalizarConfigCerebroServidor(valor);
+    const r = await saveConfig(supabase, valorLimpo);
     if (r.error) {
       const missing = /relation .* does not exist|not find the table|schema cache/i.test(r.error.message || "");
       if (missing) {
         return json(res, 200, {
           ok: false,
           warning: "Tabela direciona_config não existe. Configuração não foi persistida no banco — o app vai usar localStorage do navegador como fallback.",
-          config: valor,
+          config: valorLimpo,
           sqlNecessario: "create table if not exists public.direciona_config (chave text primary key, valor jsonb, atualizado_em timestamptz default now());"
         });
       }
       return json(res, 500, { ok: false, error: r.error.message });
     }
-    return json(res, 200, { ok: true, config: valor });
+    return json(res, 200, { ok: true, config: valorLimpo });
   }
 
   return json(res, 405, { ok: false, error: "Use GET, POST ou PUT." });
