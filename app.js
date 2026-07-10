@@ -102,6 +102,20 @@ function atualizarDiagnosticoPerformance(){
 window.atualizarDiagnosticoPerformance = atualizarDiagnosticoPerformance;
 
 
+// Fetch com timeout: depois de voltar de outro app (WhatsApp etc.), a rede pode ficar
+// "pendurada" por um tempo enquanto reconecta. Sem limite, o fetch nunca resolve nem
+// rejeita — e uma tela que depende dele fica travada no skeleton pra sempre. Isso força
+// o fetch a desistir depois de um tempo, pra sempre cair no catch/fallback de quem chamou.
+async function fetchComTimeout(url, opts = {}, timeoutMs = 15000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try{
+    return await fetch(url, { ...opts, signal: controller.signal });
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 // ===== Cache da base de leads (limit=2000) =====
 // O app busca a base inteira em vários pontos (dashboard, agenda, pipeline, busca...).
 // Sem cache, abrir a Hoje dispara 3-4 buscas pesadas ao mesmo tempo. Aqui guardamos o
@@ -117,7 +131,7 @@ async function getLeadsData(force){
   if(_leadsCache.inflight) return _leadsCache.inflight; // junta chamadas simultâneas numa só
   _leadsCache.inflight = (async () => {
     try{
-      const res = await fetch(`./api/leads-recentes?limit=2000${force ? "&fresh=1" : ""}`, { cache:"no-store" });
+      const res = await fetchComTimeout(`./api/leads-recentes?limit=2000${force ? "&fresh=1" : ""}`, { cache:"no-store" });
       const data = await res.json().catch(() => ({ ok:false, items:[] }));
       // Só guarda no cache resposta BOA (HTTP 2xx + ok != false).
       // Respostas 401/403/500 com items[] não envenenam o cache.
@@ -152,7 +166,7 @@ async function restaurarLeadsAntigos(force = false){
   if(statusEl) statusEl.textContent = "Conferindo a base anterior e restaurando os leads que faltam…";
   _legacyRestoreInflight = (async () => {
     try{
-      const res = await fetch("./api/restaurar-leads" + (force ? "?force=1" : ""), {
+      const res = await fetchComTimeout("./api/restaurar-leads" + (force ? "?force=1" : ""), {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ force:false }),
@@ -199,7 +213,7 @@ async function getLeadDetail(id, force){
   if(cached?.inflight) return cached.inflight;
   const _perfStart = cpPerfNow();
   const inflight = (async () => {
-    const res = await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
+    const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
     const data = await res.json().catch(()=>({ok:false}));
     if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "Não foi possível carregar o histórico completo.");
     const item = limparLead(data.item);
@@ -9250,7 +9264,7 @@ window.ui667MarcarAtendido=async function(btn){
   const original=btn?.textContent||"✓ Atendido";
   if(btn){btn.disabled=true;btn.textContent="Marcando...";}
   try{
-    const res=await fetch("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))});
+    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))});
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
     const quando=d.quando||new Date().toISOString();
@@ -9282,7 +9296,14 @@ configurarEscolhaTema();
 async function iniciarDireciona(){
   renderLeads();
   checkShared();
-  await garantirRestauracaoLeadsAntigos();
+  // Dashboard/agenda não dependem da restauração de leads antigos nem da lista rápida
+  // abaixo — rodam em paralelo, cada um com seu próprio fallback, em vez de ficarem
+  // atrás de um await sequencial que trava a tela inteira se uma etapa pendurar.
+  if(state.active === "home"){
+    carregarDashboard();
+    carregarAgendaTopo();
+  }
+  garantirRestauracaoLeadsAntigos().catch(()=>{});
   try{
     const data = await getLeadsData(false);
     if(data?.ok && Array.isArray(data.items)){
@@ -9291,10 +9312,6 @@ async function iniciarDireciona(){
       renderLeads();
     }
   }catch(err){ console.warn("iniciarDireciona", err); }
-  if(state.active === "home"){
-    carregarDashboard();
-    carregarAgendaTopo();
-  }
 }
 requestAnimationFrame(iniciarDireciona);
 
