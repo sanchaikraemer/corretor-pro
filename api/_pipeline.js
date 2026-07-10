@@ -2549,7 +2549,7 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
 // v724-2: geração antiga de três mensagens removida.
 
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null, cerebroConfig = null }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -2614,7 +2614,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
-  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa e os metadados de identificação. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
+  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado". Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}
 Corretor: ${corretorNome}
@@ -2664,13 +2664,14 @@ ${timelineText}`;
       const r = await chamarGPT4Json({
         openai,
         prompt,
-        model: modeloAnaliseRapida(),
+        model: modeloAnalise(),
         maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
         timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
       });
       parsedRaw = r.parsed; completion = r.response;
     } catch (primeiroErro) {
-      // Segunda tentativa ainda mais curta. Não usa análise antiga nem produto salvo.
+      // Segunda tentativa: contexto mais curto e modelo mais rápido, só como rede de
+      // segurança após falha técnica (timeout/erro) da primeira tentativa com o modelo completo.
       const linhasRetry = timelineArr.map(linhaDe);
       const ultimas = linhasRetry.slice(-120).join("\n");
       const promptRetry = prompt.replace(timelineText, "[Tentativa curta após falha técnica. Últimas mensagens da conversa:]\n" + ultimas);
