@@ -4805,6 +4805,7 @@ function cp704Css(){
       ['Produto',cp704Produto(lead,mc)],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
       ['Motivo da oportunidade',mc?.oportunidade?.motivo],
+      ['Pendência financeira',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
       ['Preferências',mem.preferencias]
