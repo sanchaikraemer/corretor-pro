@@ -9624,62 +9624,6 @@ function ui670Parceiro(lead){
   return /parceir|corretor|corretora|imobili[áa]ria|creci/.test([a.tipoContato,a?.modeloComercial?.contato?.tipo,lead?.name].join(" ").toLowerCase());
 }
 
-function ui678ContextoMudouParaImovel(lead){
-  const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-  if(!msgs.length) return null;
-  const pn=String(lead?.name||"").toLowerCase().trim().split(/\s+/)[0]||"";
-  const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-  const jobRe=/\b(trabalho|emprego|vaga|zelador|curriculo|currículo|sindico|síndico|empresa|servico|serviço)\b/;
-  const imovelRe=/\b(apartamento|imovel|imóvel|parcela|mensal|entrada|fgts|caixa|banrisul|financi|pronto|na planta|dormitorio|dormitório|suite|suíte|box|semimobiliado|alto padrao|alto padrão|condicoes|condições)\b/;
-  const qualifPergRe=/\b(pronto ou na planta|na planta|quantos dormit|quantos quartos|qual faixa|faixa de valor|perfil|objetivo|mais ao perfil|entra no perfil|outras opcoes|outras opções|valor e condicoes|valor e condições|que tipo de imovel|que tipo de imóvel|o ideal pra voce|o ideal pra você|duvida especifica|dúvida específica)\b/;
-  const financiamentoRe=/\b(parcela|mensal|entrada|fgts|caixa|banrisul|financi)\b/;
-  let idxJob=-1,idxImovel=-1,lastPergQualif=-1,lastClienteImovel=-1,lastCorretorImovel=-1,temFinanciamento=false,temDorms=false;
-  const usados=[];
-  for(let i=0;i<msgs.length;i++){
-    const m=msgs[i];
-    const text=String(m?.text||"").trim();
-    if(!text) continue;
-    const source=String(m.source||""),type=String(m.type||"");
-    if(source==="manual"||source==="crm"||type==="print-whatsapp"||["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
-    const t=norm(text);
-    const cliente=ehMsgDoCliente(m,pn);
-    usados.push({ i, text, t, cliente });
-    if(jobRe.test(t) && idxJob<0) idxJob=i;
-    if(imovelRe.test(t)){
-      idxImovel=i;
-      if(cliente) lastClienteImovel=i; else lastCorretorImovel=i;
-      if(financiamentoRe.test(t)) temFinanciamento=true;
-      if(/dormit|quartos|suite|suíte/.test(t)) temDorms=true;
-    }
-    if(!cliente && qualifPergRe.test(t)) lastPergQualif=i;
-  }
-  if(idxJob<0 || idxImovel<0 || idxImovel<=idxJob) return null;
-  const mudou=true;
-  const ultimoRelevante=usados.length?usados[usados.length-1]:null;
-  const aguardandoResposta=!!(ultimoRelevante && !ultimoRelevante.cliente && lastPergQualif>=0 && lastPergQualif===ultimoRelevante.i && (lastClienteImovel<0 || lastPergQualif>lastClienteImovel));
-  const produtoBase=(String(lead?.product||"").trim() && !/não identificad/i.test(String(lead?.product||""))) ? String(lead.product).trim() : "Apartamento pronto";
-  const resumo = temFinanciamento
-    ? `Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, com ponto financeiro citado no histórico, mas ainda sem perfil de compra confirmado.`
-    : `Interesse imobiliário identificado depois de um assunto antigo sobre trabalho. A oportunidade atual é compra de imóvel, mas ainda sem perfil de compra confirmado.`;
-  const ultimoCompromisso=aguardandoResposta
-    ? `Você pediu para alinhar se ele busca algo pronto ou na planta, qual faixa faz sentido e quantos dormitórios seriam ideais.`
-    : (temFinanciamento ? `O cliente demonstrou interesse no imóvel e pediu esclarecimentos comerciais ligados a valor ou condições.` : `O cliente demonstrou interesse no imóvel, mas ainda precisa confirmar perfil e próximos passos.`);
-  const impedimento=`Perfil de compra ainda não qualificado: falta confirmar objetivo, faixa de valor e tipologia ideal.`;
-  const nextAction=aguardandoResposta
-    ? `Aguardar a resposta do contato sobre perfil, faixa de valor e se busca imóvel pronto ou na planta antes de uma nova abordagem.`
-    : `Retomar usando a pendência aberta: confirmar se ele busca imóvel pronto ou na planta, faixa de valor e número de dormitórios.`;
-  return {
-    mudouParaImovel:mudou,
-    aguardandoResposta,
-    produto:produtoBase,
-    resumo,
-    ultimoCompromisso,
-    impedimento,
-    nextAction,
-    temFinanciamento,
-    temDorms
-  };
-}
 
 function ui671HojeIso(){
   try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
@@ -9730,7 +9674,6 @@ function ui670ModeloComercial(lead){
   mc.contato=mc.contato||{};
   mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
   mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"Contato principal da oportunidade");
-  const ctx678=ui678ContextoMudouParaImovel(lead);
   mc.oportunidade=mc.oportunidade||{};
   mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
   mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
@@ -9743,16 +9686,6 @@ function ui670ModeloComercial(lead){
   if(parceiro&&mc.oportunidade.status==="perdida") mc.relacionamento.status="aguardando-nova-oportunidade";
   mc.relacionamento.potencial=mc.relacionamento.potencial||(parceiro?"médio":"não avaliado");
   mc.relacionamento.motivo=mc.relacionamento.motivo||(parceiro?"O contato pode apresentar novos compradores.":a.clientProfile||"");
-  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !comprouOutra && !vendaConosco){
-    mc.contato.tipo="comprador-direto";
-    mc.contato.papel="Potencial comprador direto; o assunto antigo sobre trabalho ficou superado por um interesse imobiliário posterior.";
-    mc.oportunidade.status="descoberta";
-    mc.oportunidade.resultado="em-andamento";
-    if(!mc.oportunidade.produto || /não identificado/i.test(String(mc.oportunidade.produto||""))) mc.oportunidade.produto=ctx678.produto;
-    mc.oportunidade.motivo=ctx678.resumo;
-    mc.relacionamento.status="ativo";
-    mc.relacionamento.motivo="Existe interesse inicial no imóvel, mas o perfil de compra ainda precisa ser qualificado.";
-  }
   mc.acao=mc.acao||{};
   mc.acao.status=mc.acao.status||(last.falante==="corretor"?"aguardando-resposta":"responder-agora");
   mc.acao.responsavel=mc.acao.responsavel||(last.falante==="corretor"?"contato":"corretor");
@@ -9769,19 +9702,13 @@ function ui670ModeloComercial(lead){
   }else if(despedida){
     mc.acao.status="sem-acao-urgente";mc.acao.responsavel="ninguem";mc.acao.urgencia="nenhuma";mc.acao.descricao="Nenhuma ação urgente neste momento.";
   }
-  if(ctx678 && ctx678.mudouParaImovel && !parceiro && !["ganha","perdida"].includes(String(mc.oportunidade.status||""))){
-    mc.acao.status=ctx678.aguardandoResposta?"aguardando-resposta":"retomar";
-    mc.acao.responsavel=ctx678.aguardandoResposta?"contato":"corretor";
-    mc.acao.urgencia=ctx678.aguardandoResposta?"baixa":"media";
-    mc.acao.descricao=ctx678.nextAction;
-  }
   mc.contexto=mc.contexto||{};
   mc.contexto.ultimaPessoaFalar=last.falante;
   mc.contexto.ultimaMensagem=String(last.m?.text||mc.contexto.ultimaMensagem||"").trim();
   mc.contexto.ultimoCompromisso=mc.oportunidade.resultado==="comprou-outra-opcao"
     ? "O contato informou que o comprador final adquiriu outro imóvel; não há retorno pendente desta oportunidade."
-    : (ctx678?.ultimoCompromisso||compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
-  mc.contexto.impedimentoPrincipal=ctx678?.impedimento||mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
+    : (compromisso?.texto||mc.contexto.ultimoCompromisso||a?.diagnostico?.ultimoCompromissoCliente||"Nenhum compromisso identificado.");
+  mc.contexto.impedimentoPrincipal=mc.contexto.impedimentoPrincipal||a?.diagnostico?.objecaoPrincipal||a.risk||"Não identificado.";
   return mc;
 }
 window.ui670ModeloComercial=ui670ModeloComercial;
