@@ -1,21 +1,22 @@
-# v765 — IA ignorava a pergunta que o corretor já tinha feito
+# v765 — Análise comercial usa o modelo bom, não o rápido
 
-## O problema (relatado pelo usuário com conversa real)
+## O problema (relatado pelo usuário com exemplo real)
 
-Na conversa com a Marina, a última mensagem era do corretor perguntando se ela teria uma contrapartida financeira para a troca de apartamento — pergunta ainda sem resposta da cliente. As 3 sugestões de mensagem geradas, porém, ignoravam essa pergunta pendente e voltavam a oferecer "mostrar opções de apartamento menor com 3 quartos" como se fosse o primeiro contato — exatamente o que o próprio Cérebro instrui a NÃO fazer ("não reinicie a venda", "não pergunte o que já foi respondido").
+Comparando a mesma conversa (Marina) analisada pelo Corretor Pro vs. colada direto no ChatGPT com a própria chave: o ChatGPT lia a conversa, entendia que a última pergunta do corretor (sobre contrapartida financeira na troca do apê) ainda estava sem resposta, recomendava esperar a cliente responder antes de insistir, e gerava 3 mensagens de retomada naturais e coerentes entre si. O Corretor Pro, na mesma conversa, ignorava a pergunta pendente e sugeria mensagens genéricas de reabordagem, como se fosse o primeiro contato.
 
 ## Causa raiz
 
-O prompt de análise (`analyzeWithBrain` em `api/_pipeline.js`) pedia um diagnóstico com vários campos (`ultimoCompromissoCliente`, `quemDeveAgirAgora` etc.), mas nenhum deles obrigava a IA a identificar explicitamente "o corretor fez uma pergunta e ainda não foi respondida" — então o modelo, sem essa âncora, gerava mensagens genéricas de reengajamento em vez de cobrar a resposta pendente.
+`analyzeWithBrain` (usado tanto na importação quanto no botão "Reanalisar agora") estava chamando a IA com `modeloAnaliseRapida()` — `gpt-4o-mini`, o modelo rápido/barato pensado para não estourar tempo durante importação em lote. Só que esse modelo mais simples é significativamente pior em raciocínio comercial do que o modelo principal (`gpt-4.1`) que o resto do app já usa — e o próprio código já dizia, no comentário de `modeloMensagens()`, que "diagnóstico e mensagens usam o mesmo modelo [principal]", mas a implementação usava outro. Nenhuma quantidade de regra extra no prompt compensa um modelo mais fraco.
+
+Uma tentativa anterior (nesta mesma sessão) tentou compensar isso adicionando uma regra explícita e um campo obrigatório no JSON pedindo pra IA identificar "pergunta pendente do corretor". Path errado: regra de código rígida em cima de um modelo fraco, exatamente o tipo de remendo que o app já tem demais (vários `mensagensFallback*` em `api/_pipeline.js` usando match de frase). Foi revertido.
 
 ## O que foi corrigido
 
-- Novo campo obrigatório no diagnóstico: `perguntaAbertaSemResposta` — a pergunta exata do corretor que ficou sem resposta, quando ele foi o último a falar.
-- Nova regra explícita no início do prompt (independente do Cérebro configurado pelo usuário): se o corretor foi quem falou por último com uma pergunta, as 3 mensagens sugeridas têm que cobrar exatamente essa pergunta antes de qualquer coisa — nunca "recomeçar" oferecendo o que já foi oferecido.
-- O campo aparece agora também em "Detalhes comerciais" na tela do lead, como "Pergunta pendente sua", pra dar visibilidade de que a IA identificou certo.
+- `analyzeWithBrain` agora usa `modeloAnalise()` (`gpt-4.1`) na chamada principal de diagnóstico + mensagens, tanto na importação quanto na reanálise manual. Isso está dentro do limite de 60s da function (é uma conversa por chamada, não lote).
+- A segunda tentativa (só acontece se a primeira falhar tecnicamente — timeout/erro) continua usando o modelo rápido, como rede de segurança, com contexto mais curto.
+- O prompt voltou a ser enxuto: sem lista numerada de regras nem campo extra no JSON — só uma frase orientando a IA a ler a conversa como um corretor experiente leria, prestando atenção em quem falou por último. Confiar no modelo bom para interpretar, em vez de empilhar regras de código.
 
 ## Testes
 
-- `npm test` passou.
-- `npm run build` passou.
-- Não foi possível rodar a reanálise real (sem credenciais de OpenAI/Supabase neste ambiente) — validar reanalisando o lead da Marina em produção.
+- `npm test` e `npm run build` passaram.
+- Não foi possível rodar a reanálise real aqui (sem credenciais de OpenAI/Supabase neste ambiente). Validar reanalisando o lead da Marina em produção e comparando com o exemplo do ChatGPT.
