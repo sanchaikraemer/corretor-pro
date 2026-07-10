@@ -1811,6 +1811,33 @@ function montarInstrucoesCerebroAtual(config = {}) {
   return partes.length ? partes.join("\n\n") : "";
 }
 
+function normalizarCerebroConfigExterno(config) {
+  if (!config || typeof config !== "object") return null;
+  const texto = (v, max) => String(v || "").slice(0, max);
+  const regras = Array.isArray(config.regras)
+    ? config.regras.slice(0, 80).map(r => {
+        if (typeof r === "string") return { texto: texto(r, 600), origem: "local" };
+        return { texto: texto(r?.texto, 600), origem: texto(r?.origem || "local", 40), criadoEm: texto(r?.criadoEm, 40) };
+      }).filter(r => r.texto.trim())
+    : [];
+  const objecoes = Array.isArray(config.objecoes)
+    ? config.objecoes.slice(0, 80).map(o => ({ objecao: texto(o?.objecao, 300), resposta: texto(o?.resposta, 800), criadoEm: texto(o?.criadoEm, 40) })).filter(o => o.objecao.trim() || o.resposta.trim())
+    : [];
+  const dias = Number(config.diasImportacao);
+  return limparDefaultsAntigosDoCerebroPipeline({
+    corretorNome: texto(config.corretorNome, 80).trim(),
+    metodo: texto(config.metodo, 5000),
+    tom: texto(config.tom, 2500),
+    diferenciais: texto(config.diferenciais, 2500),
+    evitar: texto(config.evitar, 2500),
+    diasImportacao: Number.isFinite(dias) && dias > 0 ? Math.min(365, Math.round(dias)) : undefined,
+    regras,
+    objecoes,
+    inteligenciaAprendida: (config.inteligenciaAprendida && typeof config.inteligenciaAprendida === "object") ? config.inteligenciaAprendida : undefined,
+    _fonte: texto(config._fonte || "frontend-localStorage", 80)
+  });
+}
+
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
 // Bloco curto acumulado de tudo que o corretor ensinou nas conversas reais
 // (regras de produto, FGTS, condições, respostas a objeções). Toda análise e
@@ -2527,7 +2554,7 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
 // v724-2: geração antiga de três mensagens removida.
 
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null, cerebroConfigOverride = null }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -2584,7 +2611,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   }
 
   const hoje = new Date().toISOString().slice(0, 10);
-  const configCerebro = await loadCerebroConfig().catch(() => null);
+  const configCerebroBanco = await loadCerebroConfig().catch(() => null);
+  const configCerebroLocal = normalizarCerebroConfigExterno(cerebroConfigOverride);
+  const configCerebro = configCerebroLocal || configCerebroBanco || null;
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
   const instrucoesCerebroAtual = montarInstrucoesCerebroAtual(configCerebro || {});
   const leadIA = {
@@ -2599,7 +2628,7 @@ Data atual: ${hoje}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
-CÉREBRO ATUAL SALVO:
+CÉREBRO ATUAL SALVO (${configCerebroLocal ? "enviado pelo app/localStorage" : (configCerebroBanco ? "banco" : "vazio")}):
 ${instrucoesCerebroAtual || "(vazio)"}
 
 JSON obrigatório:
@@ -3268,7 +3297,7 @@ export async function finalizarAnaliseDaConversa(payload) {
     txtFile, messages, audioFilesRelevantes, audioFilesForaDaJanela, transcriptionMap, janelaConversa,
     ignoredFilesCount, ignoredFiles, audiosTotalNoZip, audiosDescartadosPorJanela,
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
-    audiosReaproveitados = 0, audiosNovosSolicitados = 0
+    audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfigOverride = null
   } = payload;
 
   const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || []);
@@ -3292,7 +3321,7 @@ export async function finalizarAnaliseDaConversa(payload) {
   // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
   // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
   if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
-  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId });
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfigOverride });
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;

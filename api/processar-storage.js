@@ -124,6 +124,7 @@ export default async function handler(req, res) {
         existingTimeline,
         previousAnalysis: null,
         existingLeadId,
+        cerebroConfigOverride: body?.cerebroConfig || null,
         audiosReaproveitados: body?.audiosReaproveitados,
         audiosNovosSolicitados: body?.audiosNovosSolicitados
       });

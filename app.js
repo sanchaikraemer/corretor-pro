@@ -1555,7 +1555,7 @@ async function reanalisarEmSegundoPlano(id){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id }) // sem novoAtendimento = reanalisa a timeline atual (já com a obs), sem duplicar
+      body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }) // sem novoAtendimento = reanalisa a timeline atual (já com a obs), sem duplicar
     });
     const d = await res.json().catch(()=>({}));
     if(d?.ok){
@@ -3039,7 +3039,7 @@ async function executarReanaliseTudo(items){
     try{
       const res = await fetch("./api/reanalisar-lead", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: l.id })
+        body: JSON.stringify({ id: l.id, cerebroConfig: getCerebroConfigParaIA() })
       });
       const data = await res.json().catch(() => ({ ok: false, error: "Resposta inválida do servidor" }));
       if(data?.ok) return { ok: true };
@@ -4195,7 +4195,7 @@ async function salvarEditarLead(id){
       toast("Corrigindo e reanalisando…");
       const r = await fetch("./api/reanalisar-lead", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id, action:"corrigir-observacao", texto: obsNova })
+        body: JSON.stringify({ id, action:"corrigir-observacao", texto: obsNova, cerebroConfig: getCerebroConfigParaIA() })
       });
       const dr = await r.json().catch(() => ({ ok:false }));
       if(dr?.ok){ toast("Análise corrigida."); }
@@ -4206,7 +4206,7 @@ async function salvarEditarLead(id){
       toast("Empreendimento salvo. Atualizando as mensagens…");
       const r = await fetch("./api/reanalisar-lead", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() })
       });
       const dr = await r.json().catch(() => ({ ok:false }));
       if(dr?.ok){ toast("Mensagens atualizadas com o empreendimento."); }
@@ -5404,6 +5404,31 @@ function cerebroDefaultConfig(){
   };
 }
 
+function getCerebroConfigParaIA(){
+  const ler = (sel) => qs(sel)?.value;
+  const naTela = qs("#cerebroMetodo") || qs("#cerebroTom") || qs("#cerebroDiferenciais") || qs("#cerebroEvitar");
+  if(naTela){
+    const diasN = Number(qs("#cerebroDiasImportacao")?.value);
+    return {
+      corretorNome: String(ler("#cerebroCorretorNome") || "").slice(0,80),
+      metodo: String(ler("#cerebroMetodo") || ""),
+      tom: String(ler("#cerebroTom") || ""),
+      diferenciais: String(ler("#cerebroDiferenciais") || ""),
+      evitar: String(ler("#cerebroEvitar") || ""),
+      diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? Math.round(diasN) : 90,
+      regras: Array.isArray(cerebroRegras) ? cerebroRegras : [],
+      objecoes: Array.isArray(cerebroObjecoes) ? cerebroObjecoes : [],
+      _fonte: "frontend-cerebro-tela"
+    };
+  }
+  try{
+    const saved = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null");
+    if(saved && typeof saved === "object") return { ...saved, _fonte: "frontend-localStorage" };
+  }catch(_){ }
+  return { ...cerebroDefaultConfig(), _fonte: "frontend-default" };
+}
+window.getCerebroConfigParaIA = getCerebroConfigParaIA;
+
 // Cache leve da inteligenciaAprendida pra usar em renderLeadsParecidos sem refetch a cada lead.
 let _ultimoIntelCarregado = 0;
 async function garantirIntelCarregado(){
@@ -6218,9 +6243,11 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
     try{
+      const bodyPayload = { bucket, path, ...payload };
+      if(payload?.action === "analisar") bodyPayload.cerebroConfig = getCerebroConfigParaIA();
       const res = await fetch("./api/processar-storage", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ bucket, path, ...payload }), signal: ctrl.signal
+        body: JSON.stringify(bodyPayload), signal: ctrl.signal
       });
       const data = await res.json().catch(() => ({ ok:false, error:"Resposta inválida do servidor." }));
       if(!res.ok || !data.ok){
@@ -7353,7 +7380,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
           const myId = ativosIds[idx++];
           try{
             const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 60000);
-            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: myId }), signal: ctrl.signal });
+            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: myId, cerebroConfig: getCerebroConfigParaIA() }), signal: ctrl.signal });
             clearTimeout(to);
           }catch(_){ /* segue; dá pra reanalisar o lead depois pela tela dele */ }
           an++;
@@ -7518,7 +7545,7 @@ qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   await salvarMemoria();
   qs("#memoriaStatus").textContent = "Reanalisando com memória nova... (pode levar até 30s)";
   try{
-    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id }) });
+    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }) });
     const data = await res.json();
     if(data?.ok){
       renderAnalysis(data.analysis, state.lead);
@@ -7642,7 +7669,7 @@ async function reanalisarLeadAuto(id, { motivo } = {}){
   const to = setTimeout(() => ctrl.abort(), 90000);
   try{
     toast(motivo ? "Atualizando análise ("+motivo+")…" : "Atualizando análise…");
-    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id }), signal: ctrl.signal });
+    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }), signal: ctrl.signal });
     clearTimeout(to);
     const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
     if(data?.ok){
@@ -9910,7 +9937,7 @@ window.ui670Reanalisar=async function(btn){
     try{ leadBaseAtualizado = (await ui675BuscarDetalhe(lead.id)) || lead; }catch(_){}
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||709)}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||709),cerebroConfig:getCerebroConfigParaIA()}),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const textoResposta = await res.text();
