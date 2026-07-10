@@ -4577,6 +4577,7 @@ function iniciarBarraProgresso(btn, texto){
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 function voltarDoLead(){
+  if(typeof cp7ObsPararGravacaoSeAtiva === "function") cp7ObsPararGravacaoSeAtiva();
   if(history.state?.cpApp && history.state?.screen === "lead"){ history.back(); return; }
   cpClearLeadState();
   if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
@@ -4977,6 +4978,16 @@ function renderLeadFoco(lead){
       </section>
       ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
       <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
+      <section class="cp704-card">
+        <div class="cp704-card-title"><h2>Adicionar observação</h2></div>
+        <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — entra na linha do tempo e a próxima análise já considera isso.</p>
+        <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">🎙️ Gravar áudio</button>
+          <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:linear-gradient(135deg,var(--lime),var(--cyan));border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
+        </div>
+        <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
+      </section>
       <section class="cp704-card cp704-ai"><div class="cp704-card-title"><h2>O que a IA percebeu</h2></div><ul>${insights}</ul></section>
       <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
       ${cp717MudancasHtml(a)}
@@ -9923,6 +9934,98 @@ async function ui675PersistirFallback(id,analysis){
   }
   return d.analysis;
 }
+
+// Observação de atendimento (texto ou áudio gravado na hora): soma na linha do tempo do
+// lead (sem apagar nada) e reanalisa, pra virar contexto real pras próximas sugestões.
+let _cp7ObsRecorder = null, _cp7ObsChunks = [], _cp7ObsStream = null;
+function cp7ObsPararGravacaoSeAtiva(){
+  try{ if(_cp7ObsRecorder && _cp7ObsRecorder.state === "recording") _cp7ObsRecorder.stop(); }catch(_){}
+  try{ _cp7ObsStream?.getTracks()?.forEach(t => t.stop()); }catch(_){}
+  _cp7ObsStream = null;
+}
+window.cp7ObsToggleGravacao = async function(btn){
+  const status = qs("#cp7ObsStatus");
+  if(_cp7ObsRecorder && _cp7ObsRecorder.state === "recording"){
+    _cp7ObsRecorder.stop();
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Seu navegador não permite gravar áudio aqui.</span>';
+    return;
+  }
+  try{
+    _cp7ObsStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    const candidatos = ["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;codecs=opus"];
+    const mime = candidatos.find(m => window.MediaRecorder.isTypeSupported?.(m)) || "";
+    _cp7ObsRecorder = mime ? new MediaRecorder(_cp7ObsStream, { mimeType: mime }) : new MediaRecorder(_cp7ObsStream);
+    _cp7ObsChunks = [];
+    _cp7ObsRecorder.ondataavailable = (e) => { if(e.data && e.data.size) _cp7ObsChunks.push(e.data); };
+    _cp7ObsRecorder.onstop = async () => {
+      _cp7ObsStream?.getTracks()?.forEach(t => t.stop());
+      _cp7ObsStream = null;
+      const btnAtual = qs("#cp7ObsGravarBtn");
+      if(btnAtual){ btnAtual.textContent = "🎙️ Gravar áudio"; btnAtual.disabled = true; }
+      const blob = new Blob(_cp7ObsChunks, { type: _cp7ObsRecorder?.mimeType || "audio/webm" });
+      await cp7ObsTranscreverBlob(blob, btnAtual);
+    };
+    _cp7ObsRecorder.start();
+    if(btn){ btn.textContent = "⏹ Parar gravação"; }
+    if(status) status.innerHTML = '<span style="color:var(--morno)">Gravando... toque em "Parar gravação" quando terminar.</span>';
+  }catch(err){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui acessar o microfone: '+escapeHtml(String(err?.message||err))+'</span>';
+  }
+};
+async function cp7ObsTranscreverBlob(blob, btn){
+  const status = qs("#cp7ObsStatus");
+  const ta = qs("#cp7ObsTexto");
+  if(status) status.innerHTML = '<span style="color:var(--morno)">Transcrevendo áudio...</span>';
+  try{
+    const b64 = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    const ext = blob.type.includes("mp4") ? ".mp4" : blob.type.includes("ogg") ? ".ogg" : ".webm";
+    const res = await fetchComTimeout("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"transcrever-audio", audioBase64:b64, ext }) }, 45000);
+    const data = await res.json().catch(()=>({ok:false}));
+    if(data?.ok && data.texto){
+      if(ta) ta.value = (ta.value.trim() ? ta.value.trim()+"\n" : "") + data.texto;
+      if(status) status.innerHTML = '<span style="color:var(--acao)">Transcrito. Revise o texto e toque em Salvar observação.</span>';
+    } else {
+      if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(data?.error||"Não consegui transcrever esse áudio.")+'</span>';
+    }
+  }catch(err){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Erro ao transcrever: '+escapeHtml(String(err?.message||err))+'</span>';
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+window.cp7ObsSalvar = async function(btn){
+  const lead = state.lead;
+  if(!lead?.id){ toast("Não consegui identificar este lead."); return; }
+  const ta = qs("#cp7ObsTexto");
+  const texto = (ta?.value||"").trim();
+  const status = qs("#cp7ObsStatus");
+  if(!texto){ toast("Escreva ou grave a observação primeiro."); return; }
+  const original = btn?.textContent || "Salvar observação";
+  if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+  if(status) status.innerHTML = '<span style="color:var(--morno)">Salvando e atualizando a análise...</span>';
+  try{
+    const res = await fetchComTimeout("./api/reanalisar-lead", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(payloadComCerebro({ id:lead.id, novoAtendimento:texto, autorManual:"Atendimento (corretor)", tipoManual:"atendimento" }))
+    }, 60000);
+    const data = await res.json().catch(()=>({ok:false}));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível salvar a observação.");
+    toast("Observação salva. Análise atualizada.");
+    await recarregarLeadFoco(lead.id);
+  }catch(err){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(String(err?.message||err))+'</span>';
+    if(btn){ btn.disabled=false; btn.textContent=original; }
+  }
+};
+
 window.ui670Reanalisar=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
