@@ -5855,6 +5855,16 @@ function renderCerebroObjecoes(){
 function removerObjecaoCerebro(i){ cerebroObjecoes.splice(i,1); renderCerebroObjecoes(); salvarCerebro(); toast("Objeção removida."); }
 window.removerObjecaoCerebro = removerObjecaoCerebro;
 
+let ultimoSqlCerebro = "";
+function copiarSqlCerebro(){
+  if(!ultimoSqlCerebro){ toast("Nada para copiar."); return; }
+  navigator.clipboard?.writeText(ultimoSqlCerebro).then(
+    ()=>toast("SQL copiado! Cole no SQL Editor do Supabase e clique em Run."),
+    ()=>toast("Não consegui copiar. Copie manualmente.")
+  );
+}
+window.copiarSqlCerebro = copiarSqlCerebro;
+
 async function salvarCerebro(){
   const diasRaw = qs("#cerebroDiasImportacao")?.value;
   const diasN = Number(diasRaw);
@@ -5876,7 +5886,10 @@ async function salvarCerebro(){
     const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(configSanitizado) });
     const data = await res.json();
     if(data?.warning){
-      status.innerHTML = '<span style="color:#ffc4f4">Salvo localmente. '+escapeHtml(data.warning)+'</span>';
+      ultimoSqlCerebro = data.sqlNecessario || "";
+      status.innerHTML = '<span style="color:var(--morno)">Salvo neste aparelho. Para sincronizar entre celular e computador, crie a tabela do Cérebro no banco (uma vez só).'
+        + (ultimoSqlCerebro ? ' <button type="button" onclick="copiarSqlCerebro()" style="background:transparent;border:1px solid var(--line);color:var(--morno);border-radius:999px;padding:2px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-left:2px">Copiar SQL</button>' : '')
+        + '</span>';
     } else if(data?.ok){
       status.textContent = "Salvo no banco.";
       toast("Cérebro salvo.");
