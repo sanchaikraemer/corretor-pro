@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v752-ia-direta-sem-legado";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v755-ia-limpa-conversa-bruta";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -2472,8 +2472,9 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
     const apiPromise = openai.chat.completions.create({
       model,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: maxOutputTokens
+      temperature: 0.1,
+      max_tokens: maxOutputTokens,
+      response_format: { type: "json_object" }
     }, { signal: controller.signal, timeout });
     const completion = await Promise.race([apiPromise, timeoutPromise]);
     const texto = completion.choices[0]?.message?.content || "";
@@ -2492,10 +2493,23 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
 
 
 export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null }) {
+  const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
+  const nowIso = new Date().toISOString();
+  const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
+  const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
+  const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => clean(x)).filter(Boolean) : [];
+  const pickMsg = (obj, keys) => {
+    for (const k of keys) {
+      const v = clean(obj?.[k]);
+      if (v) return v;
+    }
+    return "";
+  };
+
   if (!openai) {
     return {
       mode: "sem_api",
-      summary: "Conversa importada com sucesso, mas a análise comercial está indisponível.",
+      summary: "Conversa importada, mas a análise comercial está indisponível porque a API não está configurada.",
       clientProfile: "—",
       probability: "—",
       probabilityPercent: null,
@@ -2503,69 +2517,55 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       bestTime: "—",
       objections: [],
       risk: "—",
-      tipoContato: null,
       produtoInteresse: null,
       produtosInteresse: [],
       etapaSugerida: null,
-      tipoRetomada: null,
-      memoriaSugerida: null,
-      permuta: false,
-      permutaResumo: "",
-      melhorHorarioContato: "",
-      materiais: [],
-      nextAction: "A análise ainda não foi configurada no servidor. Sem ela, o Corretor Pro não consegue analisar a conversa nem gerar mensagens.",
+      nextAction: null,
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
       sugestoesPendentes: true,
       validacaoSugestoes: ["OpenAI não configurada"],
-      messages: {
-        a: "", b: "", c: "",
-        aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
-      }
+      messages: emptyMessages
     };
   }
-  // Texto completo da conversa — usado nas verificações que precisam do histórico inteiro.
-  const linhaDe = (m) => `[${m.date || ""} ${m.time || ""}] ${m.author}: ${m.text}`;
-  const ehAnotacaoManual = (m) => m && (m.source === "manual" || m.source === "crm");
-  const timelineTextFull = timeline.map(linhaDe).join("\n");
-  // Manda o HISTÓRICO INTEIRO pra IA reanalisar tudo. Limite alto só por segurança
-  // (conversas absurdas). Mesmo quando corta a conversa antiga, as ANOTAÇÕES DO CORRETOR
-  // (manuais/sistema antigo) são SEMPRE mantidas — são fatos confirmados do que já aconteceu.
-  const PROMPT_TL_MAX = 300000;
+
+  const linhaDe = (m) => `[${m?.date || ""} ${m?.time || ""}] ${m?.author || ""}: ${m?.text || ""}`;
+  const timelineArr = Array.isArray(timeline) ? timeline : [];
+  const timelineTextFull = timelineArr.map(linhaDe).join("\n");
+
+  // Limite técnico para evitar travar a etapa de análise em conversas enormes.
+  // Não injeta resumo antigo, produto antigo, unidade antiga ou nextAction antigo.
+  const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 180000);
   let timelineText = timelineTextFull;
-  if (timelineTextFull.length > PROMPT_TL_MAX) {
-    const linhasManuais = timeline.filter(ehAnotacaoManual).map(linhaDe);
-    const linhasConversa = timeline.filter(m => !ehAnotacaoManual(m)).map(linhaDe);
-    const orcamento = Math.max(8000, PROMPT_TL_MAX - linhasManuais.join("\n").length - 200);
+  if (timelineText.length > MAX_CHARS) {
+    const linhas = timelineArr.map(linhaDe);
     const recentes = [];
     let total = 0;
-    for (let i = linhasConversa.length - 1; i >= 0; i--) {
-      total += linhasConversa[i].length + 1;
-      if (total > orcamento) break;
-      recentes.unshift(linhasConversa[i]);
+    for (let i = linhas.length - 1; i >= 0; i--) {
+      total += linhas[i].length + 1;
+      if (total > MAX_CHARS) break;
+      recentes.unshift(linhas[i]);
     }
-    const prefixo = recentes.length < linhasConversa.length ? "[...mensagens mais antigas omitidas por tamanho...]\n" : "";
-    timelineText = prefixo + recentes.join("\n")
-      + (linhasManuais.length ? "\n\nANOTAÇÕES DO CORRETOR (fatos confirmados — sempre considere TODAS):\n" + linhasManuais.join("\n") : "");
+    timelineText = "[Parte antiga omitida por limite técnico; sem usar análise antiga.]\n" + recentes.join("\n");
   }
-  // v748: análise sem prompt comercial, sem catálogo, sem Cérebro, sem regras persistentes,
-  // sem nextAction/diagnóstico antigo. A conversa bruta é a única fonte comercial.
+
   const hoje = new Date().toISOString().slice(0, 10);
   const configCerebro = await loadCerebroConfig().catch(() => null);
-  const corretorNome = String(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai").trim() || "Sanchai";
-  // v752: metadados mínimos e seguros. Nunca enviar produto, unidade, nextAction ou análise salva.
+  const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
   const leadIA = {
-    nomeArquivo: String(lead?.fileName || lead?.filename || lead?.txtFile || "").slice(0, 180),
-    nomeContato: String(lead?.clientName || lead?.name || lead?.nome || "").slice(0, 120),
-    telefone: String(lead?.phone || lead?.telefone || "").slice(0, 40)
+    nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
+    nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
+    telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
-  const prompt = `Retorne somente JSON válido. Analise a conversa de WhatsApp abaixo e gere um diagnóstico comercial e 3 sugestões de mensagem para o corretor enviar ao cliente. Não use informações externas nem análises antigas. Se algo não estiver claro, escreva "Não identificado".
+
+  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa e os metadados de identificação. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
 
 Data atual: ${hoje}
 Corretor: ${corretorNome}
+Lead: ${JSON.stringify(leadIA)}
 
-Formato obrigatório:
+JSON obrigatório:
 {
-  "summary":"resumo curto da conversa",
+  "summary":"resumo curto",
   "diagnostico":{
     "ultimaPessoaFalar":"Você|Cliente|Não identificado",
     "ultimoCompromissoCliente":"texto curto",
@@ -2586,7 +2586,7 @@ Formato obrigatório:
     "maisDireta":"mensagem pronta"
   },
   "produtoInteresse":"texto curto",
-  "produtosInteresse":["..."],
+  "produtosInteresse":["texto curto"],
   "etapaSugerida":"texto curto",
   "probability":"texto curto",
   "probabilityPercent":50,
@@ -2594,99 +2594,69 @@ Formato obrigatório:
   "nextAction":"texto curto"
 }
 
-METADADOS DO LEAD, somente identificação:
-${JSON.stringify(leadIA)}
-
 CONVERSA COMPLETA:
 ${timelineText}`;
+
   try {
     const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
       openai,
       prompt,
-      // v724-4: a v724-2 uniu diagnóstico + as 3 mensagens numa única chamada
-      // ("sem segunda IA"), mas manteve o teto de tokens que só bastava pro
-      // diagnóstico sozinho. Num lead com histórico real, o JSON (resumo +
-      // diagnóstico inteiro + 3 mensagens completas de WhatsApp) passava de
-      // 4096 tokens, cortava no meio, o JSON.parse falhava e a análise caía
-      // em modo de erro — reaproveitando pra sempre a análise antiga (sem
-      // mensagens), não importava quantas vezes reanalisasse.
-      maxOutputTokens: 8192,
-      timeout: 32000
+      maxOutputTokens: 4096,
+      timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 52000)
     });
 
-    const rawBase = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
-    const raw = { ...rawBase, _timelineText: timelineText };
+    const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
-    const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => String(x).trim()).filter(Boolean) : [];
-    const txt = (v, fb = "") => String(v ?? fb ?? "").replace(/\s+/g, " ").trim();
-    const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const trioMensagens = completarMensagensComFallback({ mensagensRaw, diagnostico: d, raw, lead: leadIA });
-    const msgA = trioMensagens.a;
-    const msgB = trioMensagens.b;
-    const msgC = trioMensagens.c;
-    const msg = msgA;
-    const labelsMensagens = labelsMensagensParaContexto({ diagnostico: d, raw, lead: leadIA });
-    const produtoAtual = txt(raw.produtoInteresse || d.produtoPrincipal || d.produtoAtual || lead?.product, "Não identificado");
-    const corrigirUnidade = (v, fb = "") => txt(v, fb);
+    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+    const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10);
     const probPct = clamp(raw.probabilityPercent);
+    const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
 
-    // v724-2: objeto final deliberadamente simples.
-    // O código NÃO reescreve análise, NÃO regenera mensagens, NÃO injeta leitura comercial,
-    // NÃO monta tese, NÃO aplica bloqueios comerciais e NÃO chama uma segunda IA.
-    const parsed = {
+    return {
       mode: "openai",
-      summary: txt(raw.summary),
+      summary: clean(raw.summary),
       diagnostico: {
-        ultimaPessoaFalar: txt(d.ultimaPessoaFalar, "Não identificado"),
-        ultimoCompromissoCliente: txt(d.ultimoCompromissoCliente, "Não houve compromisso claro do cliente."),
-        ultimaInformacaoEnviada: txt(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não houve informação prometida pelo corretor."),
-        ultimaInformacaoPrometida: txt(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não houve informação prometida pelo corretor."),
-        compromissoCorretorNaoCumprido: txt(d.compromissoCorretorNaoCumprido, "não"),
-        acaoPrometidaPeloCorretor: txt(d.acaoPrometidaPeloCorretor, "nenhuma"),
-        clienteJaAutorizouAcao: txt(d.clienteJaAutorizouAcao, "não"),
+        ultimaPessoaFalar: clean(d.ultimaPessoaFalar, "Não identificado"),
+        ultimoCompromissoCliente: clean(d.ultimoCompromissoCliente, "Não identificado"),
+        ultimaInformacaoEnviada: clean(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificado"),
+        ultimaInformacaoPrometida: clean(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não identificado"),
+        compromissoCorretorNaoCumprido: clean(d.compromissoCorretorNaoCumprido, "Não identificado"),
         produtoAtual,
         produtoPrincipalInteresse: produtoAtual,
-        interesseAnterior: txt(d.interesseAnterior, "Nenhum"),
-        produtosParalelos: txt(d.produtosParalelos, "Não houve produtos paralelos relevantes."),
-        objecaoIdentificada: txt(d.objecaoIdentificada || d.objecaoPrincipal, "Sem objeção explícita."),
-        objecaoPrincipal: txt(d.objecaoPrincipal || d.objecaoIdentificada, "Sem objeção explícita."),
-        pendenciaPrincipal: corrigirUnidade(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificada"),
-        pendenciaFinanceira: txt(d.pendenciaFinanceira, "Não há pendência financeira."),
-        quemDeveAgirAgora: txt(d.quemDeveAgirAgora || d.proximoPasso, "Corretor"),
-        proximoPasso: corrigirUnidade(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
-        proximoPassoDeQuem: corrigirUnidade(d.proximoPasso || d.quemDeveAgirAgora, "Corretor"),
-        etapaFunil: txt(d.etapaFunil || raw.etapaSugerida, "Interesse / Descoberta de necessidade"),
-        probabilidadeComentada: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
-        probabilidadeFechamentoHoje: txt(d.probabilidadeVenda || d.probabilidadeComentada || d.probabilidadeFechamentoHoje || raw.probability, "Não identificada"),
-        tempoParado: txt(d.tempoParado, "Não identificado"),
-        // v724-5: só preenche quando as 3 mensagens existem. Deixar isto com a
-        // mensagem A sozinha (quando B/C vieram vazias) engana o front: ele usa
-        // este campo pra decidir se "já existe mensagem real da IA" e, achando
-        // que sim, desliga o fallback de B/C — só que messages.a/b/c são
-        // zerados logo abaixo (garantirMensagensMotorComercialV714) quando o
-        // trio não está completo. Resultado: a seção inteira fica escondida
-        // ("Mensagem ainda não gerada") apesar da mensagem A existir aqui.
-        mensagemQueEuEnviariaHoje: msg,
-        percepcaoTodaConversa: txt(raw.summary)
+        produtosParalelos: clean(d.produtosParalelos, "Não identificado"),
+        objecaoIdentificada: clean(d.objecaoIdentificada || d.objecaoPrincipal, "Não identificado"),
+        objecaoPrincipal: clean(d.objecaoPrincipal || d.objecaoIdentificada, "Não identificado"),
+        pendenciaPrincipal: clean(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificado"),
+        pendenciaFinanceira: clean(d.pendenciaFinanceira, "Não identificado"),
+        quemDeveAgirAgora: clean(d.quemDeveAgirAgora, "Não identificado"),
+        proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
+        proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
+        etapaFunil: clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"),
+        probabilidadeComentada: clean(d.probabilidadeVenda || raw.probability, "Não identificado"),
+        probabilidadeFechamentoHoje: clean(d.probabilidadeVenda || raw.probability, "Não identificado"),
+        mensagemQueEuEnviariaHoje: clean(d.mensagemQueEuEnviariaHoje || msgA),
+        percepcaoTodaConversa: clean(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
-      estrategiaMensagem: corrigirUnidade(raw.estrategiaMensagem),
-      prioridadeLead: txt(raw.prioridadeLead),
+      estrategiaMensagem: clean(raw.estrategiaMensagem),
+      prioridadeLead: clean(raw.prioridadeLead),
       produtoInteresse: produtoAtual,
       produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
-      etapaSugerida: txt(raw.etapaSugerida || d.etapaFunil, "descoberta"),
-      probability: txt(raw.probability, probPct != null ? `${probPct}%` : "média"),
+      etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
+      probability: clean(raw.probability, probPct != null ? `${probPct}%` : "Não identificado"),
       probabilityPercent: probPct,
-      clientProfile: txt(raw.clientProfile),
-      nextAction: corrigirUnidade(raw.nextAction || d.pendenciaPrincipal || raw.estrategiaMensagem),
+      clientProfile: clean(raw.clientProfile),
+      nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
       messages: {
         a: msgA,
         b: msgB,
         c: msgC,
-        aLabel: labelsMensagens.aLabel,
-        bLabel: labelsMensagens.bLabel,
-        cLabel: labelsMensagens.cLabel,
+        aLabel: clean(mensagensRaw.aLabel, "Recomendada"),
+        bLabel: clean(mensagensRaw.bLabel, "Alternativa"),
+        cLabel: clean(mensagensRaw.cLabel, "Direta ao ponto"),
         recomendada: "a"
       },
       tipoContato: null,
@@ -2698,7 +2668,7 @@ ${timelineText}`;
       objections: [],
       risk: "",
       concorrencia: null,
-      tipoRetomada: "morno-confirmar",
+      tipoRetomada: null,
       memoriaSugerida: null,
       inteligenciaObservada: null,
       materiais: [],
@@ -2707,28 +2677,22 @@ ${timelineText}`;
       mudancas: [],
       modeloComercial: null,
       raciocinioComercial: null,
-      estrategia: corrigirUnidade(raw.estrategiaMensagem),
+      estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
-      sugestoesPendentes: false,
-      validacaoSugestoes: [],
-      mensagensValidadasEm: new Date().toISOString(),
-      melhorHorarioContato: calcularMelhorHorario(timeline, lead?.clientName)
+      sugestoesPendentes: !trioOk,
+      validacaoSugestoes: trioOk ? [] : ["A IA não retornou 3 mensagens novas completas."],
+      mensagensValidadasEm: nowIso,
+      melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName)
     };
-
-    return parsed;
   } catch (error) {
     const detail = describeOpenAIError(error);
-    const isQuota = /quota|insufficient|429|billing/i.test(detail);
-    const motivo = isQuota
-      ? "O provedor de análise está sem saldo/limite agora. Tente reanalisar novamente; se persistir, confira o Diagnóstico."
-      : "O Corretor Pro não conseguiu analisar agora. Toque em Reanalisar daqui a alguns minutos.";
     return {
       mode: "erro_api",
       error: detail,
-      summary: "Conversa importada com sucesso, mas a análise comercial não pôde ser gerada agora.",
+      summary: "Conversa importada, mas a análise comercial não pôde ser gerada agora.",
       clientProfile: "—",
       probability: "—",
       probabilityPercent: null,
@@ -2736,24 +2700,14 @@ ${timelineText}`;
       bestTime: "—",
       objections: [],
       risk: "—",
-      tipoContato: null,
       produtoInteresse: null,
       produtosInteresse: [],
       etapaSugerida: null,
-      tipoRetomada: null,
-      memoriaSugerida: null,
-      permuta: false,
-      permutaResumo: "",
-      melhorHorarioContato: "",
-      materiais: [],
       nextAction: null,
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
       sugestoesPendentes: true,
       validacaoSugestoes: [detail],
-      messages: {
-        a: "", b: "", c: "",
-        aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
-      }
+      messages: emptyMessages
     };
   }
 }
