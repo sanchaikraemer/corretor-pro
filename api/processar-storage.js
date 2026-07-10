@@ -124,9 +124,9 @@ export default async function handler(req, res) {
         existingTimeline,
         previousAnalysis: null,
         existingLeadId,
-        cerebroConfigOverride: body?.cerebroConfig || null,
         audiosReaproveitados: body?.audiosReaproveitados,
-        audiosNovosSolicitados: body?.audiosNovosSolicitados
+        audiosNovosSolicitados: body?.audiosNovosSolicitados,
+        cerebroConfig: body?.cerebroConfig || null
       });
       const analysis = result?.analysis || null;
       const mensagens = analysis?.messages || {};
@@ -147,7 +147,7 @@ export default async function handler(req, res) {
 
     // ===== MODO COMPLETO (single-shot, legado — pra ZIPs pequenos) =====
     const buffer = await baixarZip();
-    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays, cerebroConfigOverride: body?.cerebroConfig || null });
+    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays, cerebroConfig: body?.cerebroConfig || null });
     return json(res, 200, { ok: true, bucket, path: storagePath, sizeBytes: buffer.length, autoSaved: false, ...result });
   } catch (error) {
     if (error?._download) {

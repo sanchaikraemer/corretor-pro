@@ -18,23 +18,11 @@ function validarUrlSegura(urlStr) {
 
 const CONFIG_KEY = "direciona-cerebro";
 
-const PROMPT_MINIMO_CEREBRO = `Leia toda a conversa de WhatsApp.
-
-Identifique:
-1. qual foi a última pergunta ou pendência real;
-2. o que o cliente já respondeu;
-3. o que o corretor não deve perguntar de novo;
-4. qual é o próximo passo comercial mais natural.
-
-Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
-
-Não seja genérico.
-Não reinicie a venda.
-Não pergunte o que já foi respondido.`;
+const CEREBRO_PROMPT_MINIMO = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
 
 const DEFAULTS = {
   corretorNome: "",
-  metodo: PROMPT_MINIMO_CEREBRO,
+  metodo: CEREBRO_PROMPT_MINIMO,
   tom: "",
   diferenciais: "",
   evitar: "",
@@ -42,6 +30,30 @@ const DEFAULTS = {
   regras: [],
   objecoes: []
 };
+
+function isLegacyCerebroText(v) {
+  const t = String(v || "").toLowerCase();
+  return /m[eé]todo corretor pro/.test(t)
+    || /identifique a fase do cliente/.test(t)
+    || /cite o produto espec[ií]fico/.test(t)
+    || /construtora senger \(sede em carazinho/.test(t)
+    || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
+}
+
+function sanitizeCerebroConfig(valor = {}) {
+  const v = valor && typeof valor === "object" ? valor : {};
+  return {
+    corretorNome: typeof v.corretorNome === "string" ? v.corretorNome.slice(0, 80).trim() : "",
+    metodo: typeof v.metodo === "string" ? (isLegacyCerebroText(v.metodo) ? CEREBRO_PROMPT_MINIMO : v.metodo) : CEREBRO_PROMPT_MINIMO,
+    tom: typeof v.tom === "string" ? (isLegacyCerebroText(v.tom) ? "" : v.tom) : "",
+    diferenciais: typeof v.diferenciais === "string" ? (isLegacyCerebroText(v.diferenciais) ? "" : v.diferenciais) : "",
+    evitar: typeof v.evitar === "string" ? (isLegacyCerebroText(v.evitar) ? "" : v.evitar) : "",
+    diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
+    regras: Array.isArray(v.regras) ? v.regras : [],
+    objecoes: Array.isArray(v.objecoes) ? v.objecoes : [],
+    inteligenciaAprendida: v.inteligenciaAprendida && typeof v.inteligenciaAprendida === "object" ? v.inteligenciaAprendida : undefined
+  };
+}
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -72,7 +84,7 @@ async function loadConfig(supabase) {
     .maybeSingle();
   if (error) return { found: false, error: error.message };
   if (!data?.valor) return { found: false, defaults: true };
-  return { found: true, valor: data.valor };
+  return { found: true, valor: sanitizeCerebroConfig(data.valor) };
 }
 
 async function saveConfig(supabase, valor) {
@@ -80,30 +92,6 @@ async function saveConfig(supabase, valor) {
     .from("direciona_config")
     .upsert({ chave: CONFIG_KEY, valor, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
   return { error };
-}
-
-
-function normalizarConfigCerebroServidor(valor) {
-  const out = { ...(valor && typeof valor === "object" ? valor : {}) };
-  const metodo = String(out.metodo || "");
-  const tom = String(out.tom || "");
-  const evitar = String(out.evitar || "");
-  const diferenciais = String(out.diferenciais || "");
-
-  const metodoAntigo = /^Método Corretor Pro:/i.test(metodo) || /Identifique a fase do cliente/i.test(metodo);
-  const tomAntigo = /tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(tom);
-  const evitarAntigo = /gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(evitar);
-  const diferenciaisAntigo = /Construtora Senger \(sede em Carazinho\/RS\).*Produtos em Carazinho/i.test(diferenciais);
-
-  // Se encontrar defaults antigos, substitui apenas o que é legado. Não apaga campo que o usuário editou.
-  if (metodoAntigo) out.metodo = PROMPT_MINIMO_CEREBRO;
-  if (tomAntigo) out.tom = "";
-  if (evitarAntigo) out.evitar = "";
-  if (diferenciaisAntigo) out.diferenciais = "";
-  if (!Number(out.diasImportacao)) out.diasImportacao = 90;
-  if (!Array.isArray(out.regras)) out.regras = [];
-  if (!Array.isArray(out.objecoes)) out.objecoes = [];
-  return out;
 }
 
 export default async function handler(req, res) {
@@ -116,11 +104,11 @@ export default async function handler(req, res) {
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
-    return json(res, 200, { ok: true, config: normalizarConfigCerebroServidor(r.valor || DEFAULTS), usingDefaults: !r.found });
+    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
-    let body = await readJsonBody(req).catch(() => ({}));
+    const body = await readJsonBody(req).catch(() => ({}));
 
     // AÇÃO: aprender de uma imagem/print (lê a imagem com visão da IA)
     if (body.action === "aprender-imagem") {
@@ -301,21 +289,20 @@ export default async function handler(req, res) {
       inteligenciaAprendida: baseAprend.inteligenciaAprendida || {},
       estiloHistorico: Array.isArray(baseAprend.estiloHistorico) ? baseAprend.estiloHistorico : undefined
     };
-    const valorLimpo = normalizarConfigCerebroServidor(valor);
-    const r = await saveConfig(supabase, valorLimpo);
+    const r = await saveConfig(supabase, valor);
     if (r.error) {
       const missing = /relation .* does not exist|not find the table|schema cache/i.test(r.error.message || "");
       if (missing) {
         return json(res, 200, {
           ok: false,
           warning: "Tabela direciona_config não existe. Configuração não foi persistida no banco — o app vai usar localStorage do navegador como fallback.",
-          config: valorLimpo,
+          config: valor,
           sqlNecessario: "create table if not exists public.direciona_config (chave text primary key, valor jsonb, atualizado_em timestamptz default now());"
         });
       }
       return json(res, 500, { ok: false, error: r.error.message });
     }
-    return json(res, 200, { ok: true, config: valorLimpo });
+    return json(res, 200, { ok: true, config: valor });
   }
 
   return json(res, 405, { ok: false, error: "Use GET, POST ou PUT." });
@@ -407,4 +394,4 @@ async function extrairLicoesDeImagem(dataUrl, openai) {
   return { resumo: parsed.resumo || "", regras: Array.isArray(parsed.regras) ? parsed.regras.filter(r => typeof r === "string" && r.trim()).slice(0, 6) : [] };
 }
 
-export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY };
+export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY, CEREBRO_PROMPT_MINIMO, sanitizeCerebroConfig };

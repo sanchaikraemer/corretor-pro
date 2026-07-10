@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v760-cerebro-validado-na-analise";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v762-cerebro-fonte-unica";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -43,7 +43,7 @@ export function modeloAnalise() {
 export function modeloAnaliseRapida() {
   // v756: importação precisa concluir dentro do servidor. Usa modelo rápido por padrão,
   // sem regras comerciais extras, apenas leitura da conversa bruta. Pode ser sobrescrito no Vercel.
-  return envModel("DIRECIONA_IMPORT_MODEL", envModel("DIRECIONA_FAST_MODEL", modeloAnalise()));
+  return envModel("DIRECIONA_IMPORT_MODEL", envModel("DIRECIONA_FAST_MODEL", "gpt-4o-mini"));
 }
 
 export function modeloMensagens() {
@@ -215,20 +215,6 @@ const REGRAS_MSG = {
 // Mantém-se apenas uma instrução técnica mínima na chamada da IA para ela retornar JSON.
 const PROMPT_ANALISE_PURA = "";
 const REGRA_TESE_COMERCIAL = "";
-
-const CEREBRO_PROMPT_MINIMO_BACKEND = `Leia toda a conversa de WhatsApp.
-
-Identifique:
-1. qual foi a última pergunta ou pendência real;
-2. o que o cliente já respondeu;
-3. o que o corretor não deve perguntar de novo;
-4. qual é o próximo passo comercial mais natural.
-
-Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
-
-Não seja genérico.
-Não reinicie a venda.
-Não pergunte o que já foi respondido.`;
 
 // v724-2: bloco antigo de raciocínio comercial removido.
 
@@ -1781,17 +1767,58 @@ As faixas são de REFERÊNCIA (preço exato muda — NÃO cite valor fechado sem
 }
 
 
-function limparDefaultsAntigosDoCerebroPipeline(config) {
-  if (!config || typeof config !== "object") return config;
-  const out = { ...config };
-  if (/^Método Corretor Pro:/i.test(String(out.metodo || "")) || /Identifique a fase do cliente/i.test(String(out.metodo || ""))) out.metodo = "";
-  if (/tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(String(out.tom || ""))) out.tom = "";
-  if (/Construtora Senger \(sede em Carazinho\/RS\)/i.test(String(out.diferenciais || ""))) out.diferenciais = "";
-  if (/gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(String(out.evitar || ""))) out.evitar = "";
-  return out;
+const CEREBRO_PROMPT_MINIMO = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
+function isLegacyCerebroText(v) {
+  const t = String(v || "").toLowerCase();
+  return /m[eé]todo corretor pro/.test(t)
+    || /identifique a fase do cliente/.test(t)
+    || /cite o produto espec[ií]fico/.test(t)
+    || /construtora senger \(sede em carazinho/.test(t)
+    || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
+}
+function sanitizeCerebroConfig(valor = {}) {
+  const v = valor && typeof valor === "object" ? valor : {};
+  return {
+    corretorNome: typeof v.corretorNome === "string" ? v.corretorNome.slice(0,80).trim() : "",
+    metodo: typeof v.metodo === "string" ? (isLegacyCerebroText(v.metodo) ? CEREBRO_PROMPT_MINIMO : v.metodo) : CEREBRO_PROMPT_MINIMO,
+    tom: typeof v.tom === "string" ? (isLegacyCerebroText(v.tom) ? "" : v.tom) : "",
+    diferenciais: typeof v.diferenciais === "string" ? (isLegacyCerebroText(v.diferenciais) ? "" : v.diferenciais) : "",
+    evitar: typeof v.evitar === "string" ? (isLegacyCerebroText(v.evitar) ? "" : v.evitar) : "",
+    diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
+    regras: Array.isArray(v.regras) ? v.regras : [],
+    objecoes: Array.isArray(v.objecoes) ? v.objecoes : []
+  };
+}
+function hasCerebroContent(cfg) {
+  if (!cfg || typeof cfg !== "object") return false;
+  return [cfg.corretorNome, cfg.metodo, cfg.tom, cfg.diferenciais, cfg.evitar].some(v => String(v || "").trim())
+    || (Array.isArray(cfg.regras) && cfg.regras.length)
+    || (Array.isArray(cfg.objecoes) && cfg.objecoes.length);
+}
+function formatCerebroPrompt(cfg) {
+  const c = sanitizeCerebroConfig(cfg || {});
+  const regras = (Array.isArray(c.regras) ? c.regras : [])
+    .map(r => typeof r === "string" ? r : r?.texto)
+    .filter(Boolean)
+    .map(r => `- ${String(r)}`)
+    .join("\n");
+  const objecoes = (Array.isArray(c.objecoes) ? c.objecoes : [])
+    .map(o => typeof o === "string" ? o : `${o?.objecao || ""} => ${o?.resposta || ""}`)
+    .filter(Boolean)
+    .map(r => `- ${String(r)}`)
+    .join("\n");
+  return [
+    c.metodo ? `MÉTODO DO CÉREBRO:\n${c.metodo}` : "",
+    c.tom ? `TOM DE VOZ:\n${c.tom}` : "",
+    c.diferenciais ? `DIFERENCIAIS/FATOS DO CORRETOR:\n${c.diferenciais}` : "",
+    c.evitar ? `O QUE EVITAR:\n${c.evitar}` : "",
+    regras ? `REGRAS COMERCIAIS SALVAS:\n${regras}` : "",
+    objecoes ? `RESPOSTAS A OBJEÇÕES SALVAS:\n${objecoes}` : ""
+  ].filter(Boolean).join("\n\n");
 }
 
-async function loadCerebroConfig() {
+async function loadCerebroConfig(frontendConfig = null) {
+  if (hasCerebroContent(frontendConfig)) return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-localStorage" };
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
@@ -1802,54 +1829,8 @@ async function loadCerebroConfig() {
       .eq("chave", "direciona-cerebro")
       .maybeSingle();
     if (error || !data?.valor) return null;
-    return limparDefaultsAntigosDoCerebroPipeline(data.valor);
+    return { ...sanitizeCerebroConfig(data.valor), _fonte: "banco" };
   } catch (_) { return null; }
-}
-
-function montarInstrucoesCerebroAtual(config = {}) {
-  const partes = [];
-  const add = (titulo, valor) => {
-    const txt = String(valor || "").trim();
-    if (txt) partes.push(`${titulo}:\n${txt.slice(0, 2500)}`);
-  };
-  add("MÉTODO SALVO NO CÉREBRO", config.metodo);
-  add("TOM DE VOZ SALVO NO CÉREBRO", config.tom);
-  add("DIFERENCIAIS SALVOS NO CÉREBRO", config.diferenciais);
-  add("O QUE EVITAR SALVO NO CÉREBRO", config.evitar);
-  const regras = Array.isArray(config.regras) ? config.regras.map(r => typeof r === "string" ? r : r?.texto).filter(Boolean) : [];
-  if (regras.length) partes.push("REGRAS MANUAIS SALVAS NO CÉREBRO:\n" + regras.slice(0, 30).map(r => `- ${String(r).slice(0, 500)}`).join("\n"));
-  const objecoes = Array.isArray(config.objecoes) ? config.objecoes.filter(Boolean) : [];
-  if (objecoes.length) {
-    partes.push("SINAIS/OBJEÇÕES SALVOS NO CÉREBRO:\n" + objecoes.slice(0, 20).map(o => `- ${String(o.objecao || "").slice(0, 180)} → ${String(o.resposta || "").slice(0, 500)}`).join("\n"));
-  }
-  return partes.length ? partes.join("\n\n") : "";
-}
-
-function normalizarCerebroConfigExterno(config) {
-  if (!config || typeof config !== "object") return null;
-  const texto = (v, max) => String(v || "").slice(0, max);
-  const regras = Array.isArray(config.regras)
-    ? config.regras.slice(0, 80).map(r => {
-        if (typeof r === "string") return { texto: texto(r, 600), origem: "local" };
-        return { texto: texto(r?.texto, 600), origem: texto(r?.origem || "local", 40), criadoEm: texto(r?.criadoEm, 40) };
-      }).filter(r => r.texto.trim())
-    : [];
-  const objecoes = Array.isArray(config.objecoes)
-    ? config.objecoes.slice(0, 80).map(o => ({ objecao: texto(o?.objecao, 300), resposta: texto(o?.resposta, 800), criadoEm: texto(o?.criadoEm, 40) })).filter(o => o.objecao.trim() || o.resposta.trim())
-    : [];
-  const dias = Number(config.diasImportacao);
-  return limparDefaultsAntigosDoCerebroPipeline({
-    corretorNome: texto(config.corretorNome, 80).trim(),
-    metodo: texto(config.metodo, 5000),
-    tom: texto(config.tom, 2500),
-    diferenciais: texto(config.diferenciais, 2500),
-    evitar: texto(config.evitar, 2500),
-    diasImportacao: Number.isFinite(dias) && dias > 0 ? Math.min(365, Math.round(dias)) : undefined,
-    regras,
-    objecoes,
-    inteligenciaAprendida: (config.inteligenciaAprendida && typeof config.inteligenciaAprendida === "object") ? config.inteligenciaAprendida : undefined,
-    _fonte: texto(config._fonte || "frontend-localStorage", 80)
-  });
 }
 
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
@@ -2568,7 +2549,7 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
 // v724-2: geração antiga de três mensagens removida.
 
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null, cerebroConfigOverride = null }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, modeloMensagens, contextoIncremental = null, cerebroConfig = null }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -2625,29 +2606,23 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   }
 
   const hoje = new Date().toISOString().slice(0, 10);
-  const configCerebroBanco = await loadCerebroConfig().catch(() => null);
-  const configCerebroLocal = normalizarCerebroConfigExterno(cerebroConfigOverride);
-  const configCerebro = configCerebroLocal || configCerebroBanco || { metodo: CEREBRO_PROMPT_MINIMO_BACKEND, _fonte: "backend-default-minimo" };
+  const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
-  const instrucoesCerebroAtual = montarInstrucoesCerebroAtual(configCerebro || {});
-  const cerebroFonte = configCerebroLocal ? "frontend-localStorage" : (configCerebroBanco ? "banco" : "backend-default-minimo");
-  const cerebroTextoCompleto = JSON.stringify(configCerebro || {}) + "\n" + String(instrucoesCerebroAtual || "");
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
     nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
-  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa, os metadados de identificação e o Cérebro salvo atualmente. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
+  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa e os metadados de identificação. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
 
 Data atual: ${hoje}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
+Fonte do Cérebro: ${configCerebro?._fonte || "backend-default"}
 
-CÉREBRO ATUAL SALVO (${cerebroFonte}):
-${instrucoesCerebroAtual || "(vazio)"}
-
-As instruções do CÉREBRO ATUAL SALVO são obrigatórias. Se o Cérebro pedir uma palavra ou formato específico nas mensagens, cumpra exatamente.
+INSTRUÇÕES DO CÉREBRO ATUAL:
+${formatCerebroPrompt(configCerebro) || "(vazio — analisar só a conversa)"}
 
 JSON obrigatório:
 {
@@ -2717,20 +2692,9 @@ ${timelineText}`;
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    let msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
-    let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
-    let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
-
-    // Teste operacional do Cérebro: se o usuário salvou uma instrução como
-    // "use a palavra TESTE-CEREBRO no final da terceira sugestão", a API só
-    // consegue cumprir se o Cérebro saiu do navegador e chegou ao backend.
-    // Mantemos isso propositalmente para validar a integração, sem depender de
-    // comportamento probabilístico do modelo.
-    const marcadorCerebro = String(cerebroTextoCompleto || "").match(/\bTESTE-CEREBRO\b/i)?.[0];
-    if (marcadorCerebro && msgC && !/TESTE-CEREBRO/i.test(msgC)) {
-      msgC = String(msgC).replace(/[\s.?!]*$/g, "").trim() + " TESTE-CEREBRO";
-    }
-
+    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10);
     const probPct = clamp(raw.probabilityPercent);
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
@@ -2799,14 +2763,14 @@ ${timelineText}`;
       raciocinioComercial: null,
       estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
-      cerebroFonteUsada: cerebroFonte,
-      cerebroRecebidoNaAnalise: !!instrucoesCerebroAtual,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: !trioOk,
       validacaoSugestoes: trioOk ? [] : ["A IA não retornou 3 mensagens novas completas."],
       mensagensValidadasEm: nowIso,
+      _cerebroFonte: configCerebro?._fonte || "backend-default",
+      _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
       melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName)
     };
   } catch (error) {
@@ -3103,7 +3067,7 @@ export async function processZipBuffer(buffer, options = {}) {
     openai
   });
   const lead = guessLeadData(timeline);
-  const analysis = await analyzeWithBrain({ lead, timeline, openai, cerebroConfigOverride: options?.cerebroConfigOverride || options?.cerebroConfig || null });
+  const analysis = await analyzeWithBrain({ lead, timeline, openai, cerebroConfig: options.cerebroConfig || null });
   const audioValues = Object.values(audioTranscriptions || {});
   const audiosTranscritos = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
   const audiosComErro = audioValues.filter(item => item?.status === "erro_transcricao").length;
@@ -3328,7 +3292,7 @@ export async function finalizarAnaliseDaConversa(payload) {
     txtFile, messages, audioFilesRelevantes, audioFilesForaDaJanela, transcriptionMap, janelaConversa,
     ignoredFilesCount, ignoredFiles, audiosTotalNoZip, audiosDescartadosPorJanela,
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
-    audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfigOverride = null
+    audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfig = null
   } = payload;
 
   const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || []);
@@ -3352,7 +3316,7 @@ export async function finalizarAnaliseDaConversa(payload) {
   // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
   // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
   if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
-  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfigOverride });
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig });
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;

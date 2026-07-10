@@ -271,6 +271,7 @@ async function reanalisarLeadHandler702(req, res) {
   if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST." });
   const body = await readJsonBody(req).catch(() => ({}));
+  const cerebroConfig = body?.cerebroConfig || null;
   const id = body?.id;
   if (!id) return json(res, 400, { ok: false, error: "Informe id do lead." });
 
@@ -403,7 +404,7 @@ async function reanalisarLeadHandler702(req, res) {
     }
     if (!novaTl.length) return json(res, 400, { ok: false, error: "Sem conteúdo pra analisar (deixe ao menos uma observação)." });
     const leadC = prev.lead || {};
-    const novoC = await analyzeWithBrain({ lead: leadC, timeline: novaTl, openai: openaiC, leadId: id, forcarVariacao: true, cerebroConfigOverride: body?.cerebroConfig || null });
+    const novoC = await analyzeWithBrain({ lead: leadC, timeline: novaTl, openai: openaiC, leadId: id, forcarVariacao: true, cerebroConfig });
     const mergedC = {
       ...prev, ...novoC,
       venda: prev.venda || undefined,
@@ -602,7 +603,7 @@ async function reanalisarLeadHandler702(req, res) {
   if (openai) {
     try {
       const timelineParaIA6863 = timelineFinal;
-      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true, cerebroConfigOverride: body?.cerebroConfig || null });
+      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true, cerebroConfig });
       novoAnalysis._iaEntrada6863 = { totalOriginal: timelineFinal.length, totalEnviado: timelineParaIA6863.length, compactado: timelineParaIA6863.length < timelineFinal.length };
     } catch (e) {
       avisoReanalise = String(e?.message || e || "");

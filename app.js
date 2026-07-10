@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v756-ia-limpa-rapida-estavel";
+const ARQUITETURA_MENSAGENS_ATUAL = "v762-cerebro-fonte-unica";
 
 function analiseAtualValida752(a){
   return !!(a && typeof a === "object" &&
@@ -1555,7 +1555,7 @@ async function reanalisarEmSegundoPlano(id){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }) // sem novoAtendimento = reanalisa a timeline atual (já com a obs), sem duplicar
+      body: JSON.stringify(payloadComCerebro({ id })) // sem novoAtendimento = reanalisa a timeline atual (já com a obs), sem duplicar
     });
     const d = await res.json().catch(()=>({}));
     if(d?.ok){
@@ -3039,7 +3039,7 @@ async function executarReanaliseTudo(items){
     try{
       const res = await fetch("./api/reanalisar-lead", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: l.id, cerebroConfig: getCerebroConfigParaIA() })
+        body: JSON.stringify(payloadComCerebro({ id: l.id }))
       });
       const data = await res.json().catch(() => ({ ok: false, error: "Resposta inválida do servidor" }));
       if(data?.ok) return { ok: true };
@@ -4195,7 +4195,7 @@ async function salvarEditarLead(id){
       toast("Corrigindo e reanalisando…");
       const r = await fetch("./api/reanalisar-lead", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id, action:"corrigir-observacao", texto: obsNova, cerebroConfig: getCerebroConfigParaIA() })
+        body: JSON.stringify(payloadComCerebro({ id, action:"corrigir-observacao", texto: obsNova }))
       });
       const dr = await r.json().catch(() => ({ ok:false }));
       if(dr?.ok){ toast("Análise corrigida."); }
@@ -4206,7 +4206,7 @@ async function salvarEditarLead(id){
       toast("Empreendimento salvo. Atualizando as mensagens…");
       const r = await fetch("./api/reanalisar-lead", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() })
+        body: JSON.stringify(payloadComCerebro({ id }))
       });
       const dr = await r.json().catch(() => ({ ok:false }));
       if(dr?.ok){ toast("Mensagens atualizadas com o empreendimento."); }
@@ -5224,7 +5224,7 @@ async function reagendarLembrete(id, dateStr){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action:"reagendar-lembrete", data: dateStr })
+      body: JSON.stringify(payloadComCerebro({ id, action:"reagendar-lembrete", data: dateStr }))
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
@@ -5243,7 +5243,7 @@ async function removerLembrete(id){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action:"remover-lembrete" })
+      body: JSON.stringify(payloadComCerebro({ id, action:"remover-lembrete" }))
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
@@ -5378,77 +5378,51 @@ async function carregarAgenda(){
 
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
-const CEREBRO_PROMPT_MINIMO = `Leia toda a conversa de WhatsApp.
 
-Identifique:
-1. qual foi a última pergunta ou pendência real;
-2. o que o cliente já respondeu;
-3. o que o corretor não deve perguntar de novo;
-4. qual é o próximo passo comercial mais natural.
-
-Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
-
-Não seja genérico.
-Não reinicie a venda.
-Não pergunte o que já foi respondido.`;
-function cerebroDefaultConfig(){
+const CEREBRO_PROMPT_MINIMO_V762 = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
+function cerebroTextoEhLegadoV762(v) {
+  const t = String(v || "").toLowerCase();
+  return /m[eé]todo corretor pro/.test(t)
+    || /identifique a fase do cliente/.test(t)
+    || /cite o produto espec[ií]fico/.test(t)
+    || /construtora senger \(sede em carazinho/.test(t)
+    || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
+}
+function sanitizeCerebroConfigV762(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
   return {
-    corretorNome: qs("#cerebroCorretorNome")?.value || "",
-    metodo: CEREBRO_PROMPT_MINIMO,
-    tom: "",
-    diferenciais: "",
-    evitar: "",
-    diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-    regras: [],
-    objecoes: []
+    corretorNome: typeof c.corretorNome === "string" ? c.corretorNome : "",
+    metodo: typeof c.metodo === "string" ? (cerebroTextoEhLegadoV762(c.metodo) ? CEREBRO_PROMPT_MINIMO_V762 : c.metodo) : CEREBRO_PROMPT_MINIMO_V762,
+    tom: typeof c.tom === "string" ? (cerebroTextoEhLegadoV762(c.tom) ? "" : c.tom) : "",
+    diferenciais: typeof c.diferenciais === "string" ? (cerebroTextoEhLegadoV762(c.diferenciais) ? "" : c.diferenciais) : "",
+    evitar: typeof c.evitar === "string" ? (cerebroTextoEhLegadoV762(c.evitar) ? "" : c.evitar) : "",
+    diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
+    regras: Array.isArray(c.regras) ? c.regras : [],
+    objecoes: Array.isArray(c.objecoes) ? c.objecoes : []
   };
 }
-
-
-function normalizarCerebroConfigTela(config){
-  const out = { ...(config && typeof config === "object" ? config : {}) };
-  const metodo = String(out.metodo || "");
-  const tom = String(out.tom || "");
-  const evitar = String(out.evitar || "");
-  const diferenciais = String(out.diferenciais || "");
-  const metodoAntigo = /^Método Corretor Pro:/i.test(metodo) || /Identifique a fase do cliente/i.test(metodo);
-  const tomAntigo = /tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(tom);
-  const evitarAntigo = /gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(evitar);
-  const diferenciaisAntigo = /Construtora Senger \(sede em Carazinho\/RS\).*Produtos em Carazinho/i.test(diferenciais);
-  if(metodoAntigo) out.metodo = CEREBRO_PROMPT_MINIMO;
-  if(tomAntigo) out.tom = "";
-  if(evitarAntigo) out.evitar = "";
-  if(diferenciaisAntigo) out.diferenciais = "";
-  if(!Number(out.diasImportacao)) out.diasImportacao = 90;
-  if(!Array.isArray(out.regras)) out.regras = [];
-  if(!Array.isArray(out.objecoes)) out.objecoes = [];
-  return out;
-}
-
-function getCerebroConfigParaIA(){
-  const ler = (sel) => qs(sel)?.value;
-  const naTela = qs("#cerebroMetodo") || qs("#cerebroTom") || qs("#cerebroDiferenciais") || qs("#cerebroEvitar");
-  if(naTela){
-    const diasN = Number(qs("#cerebroDiasImportacao")?.value);
-    return {
-      corretorNome: String(ler("#cerebroCorretorNome") || "").slice(0,80),
-      metodo: String(ler("#cerebroMetodo") || ""),
-      tom: String(ler("#cerebroTom") || ""),
-      diferenciais: String(ler("#cerebroDiferenciais") || ""),
-      evitar: String(ler("#cerebroEvitar") || ""),
-      diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? Math.round(diasN) : 90,
-      regras: Array.isArray(cerebroRegras) ? cerebroRegras : [],
-      objecoes: Array.isArray(cerebroObjecoes) ? cerebroObjecoes : [],
-      _fonte: "frontend-cerebro-tela"
+function obterCerebroConfigParaAnalise() {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); } catch(_) { cfg = null; }
+  const temCampos = qs("#cerebroMetodo") || qs("#cerebroTom") || qs("#cerebroDiferenciais") || qs("#cerebroEvitar");
+  if (temCampos) {
+    const diasRaw = qs("#cerebroDiasImportacao")?.value;
+    cfg = {
+      ...(cfg || {}),
+      corretorNome: qs("#cerebroCorretorNome")?.value || cfg?.corretorNome || "",
+      metodo: qs("#cerebroMetodo")?.value ?? cfg?.metodo ?? CEREBRO_PROMPT_MINIMO_V762,
+      tom: qs("#cerebroTom")?.value ?? cfg?.tom ?? "",
+      diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
+      evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
+      diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
+      regras: Array.isArray(cerebroRegras) ? cerebroRegras : (Array.isArray(cfg?.regras) ? cfg.regras : []),
+      objecoes: Array.isArray(cerebroObjecoes) ? cerebroObjecoes : (Array.isArray(cfg?.objecoes) ? cfg.objecoes : [])
     };
   }
-  try{
-    const saved = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null");
-    if(saved && typeof saved === "object") return { ...normalizarCerebroConfigTela(saved), _fonte: "frontend-localStorage" };
-  }catch(_){ }
-  return { ...normalizarCerebroConfigTela(cerebroDefaultConfig()), _fonte: "frontend-default" };
+  return sanitizeCerebroConfigV762(cfg || { metodo: CEREBRO_PROMPT_MINIMO_V762, diasImportacao: 90 });
 }
-window.getCerebroConfigParaIA = getCerebroConfigParaIA;
+function payloadComCerebro(obj = {}) { return { ...obj, cerebroConfig: obterCerebroConfigParaAnalise() }; }
+
 
 // Cache leve da inteligenciaAprendida pra usar em renderLeadsParecidos sem refetch a cada lead.
 let _ultimoIntelCarregado = 0;
@@ -5815,20 +5789,24 @@ async function carregarCerebro(){
   const status = qs("#cerebroStatus");
   status.textContent = "Carregando...";
   let config = null;
-  let configLocal = null;
-  try{ configLocal = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){ configLocal = null; }
   try{
     const res = await fetch("./api/cerebro-config", { cache:"no-store" });
     const data = await res.json();
-    if(data?.ok && data.config){
-      // Se a API devolveu default porque a tabela não existe/está vazia, não sobrepõe o que foi salvo no navegador.
-      config = (data.usingDefaults && configLocal) ? configLocal : data.config;
-    }
+    if(data?.ok && data.config) config = data.config;
     if(data?.warning) status.innerHTML = '<span style="color:#ffc4f4">'+escapeHtml(data.warning)+'</span>';
   }catch(_){ /* fallback local */ }
-  if(!config && configLocal) config = configLocal;
-  if(!config) config = cerebroDefaultConfig();
-  config = normalizarCerebroConfigTela(config);
+  if(!config){
+    try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
+  }
+  if(!config){
+    config = {
+      metodo: "Método Corretor Pro:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
+      tom: "Direto, próximo, profissional.",
+      diferenciais: "Construtora Senger. Carazinho/RS.",
+      evitar: "Não usar 'faz sentido', 'retomando contato'.",
+      diasImportacao: 90
+    };
+  }
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
   qs("#cerebroMetodo").value = config.metodo || "";
   qs("#cerebroTom").value = config.tom || "";
@@ -5890,12 +5868,12 @@ async function salvarCerebro(){
     regras: cerebroRegras,
     objecoes: cerebroObjecoes
   };
-  const configLimpa = normalizarCerebroConfigTela(config);
-  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(configLimpa)); }catch(_){}
+  const configSanitizado = sanitizeCerebroConfigV762(config);
+  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(configSanitizado)); }catch(_){}
   const status = qs("#cerebroStatus");
   status.textContent = "Salvando...";
   try{
-    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(configLimpa) });
+    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(configSanitizado) });
     const data = await res.json();
     if(data?.warning){
       status.innerHTML = '<span style="color:#ffc4f4">Salvo localmente. '+escapeHtml(data.warning)+'</span>';
@@ -5910,51 +5888,32 @@ async function salvarCerebro(){
   }
 }
 
-async function resetarCerebro(){
-  if(!confirm("Restaurar o prompt mínimo padrão do Cérebro? Isso substitui método, tom, diferenciais, evitar, regras e objeções atuais.")) return;
-  const status = qs("#cerebroStatus");
-  const config = cerebroDefaultConfig();
-  cerebroRegras = [];
-  cerebroObjecoes = [];
-  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
-  if(status) status.textContent = "Restaurando padrão...";
-  try{
-    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(config) });
-    const data = await res.json().catch(() => ({}));
-    if(!res.ok || data?.ok === false) throw new Error(data?.error || data?.warning || "Não salvou no banco.");
-    toast("Prompt mínimo restaurado.");
-    await carregarCerebro();
-  }catch(e){
-    if(status) status.innerHTML = '<span style="color:#ff5b7a">Erro ao restaurar: '+escapeHtml(String(e?.message||e))+'</span>';
-  }
+function resetarCerebro(){
+  const padrao = sanitizeCerebroConfigV762({ metodo: CEREBRO_PROMPT_MINIMO_V762, diasImportacao: 90 });
+  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(padrao)); }catch(_){}
+  carregarCerebro();
+  toast("Padrão mínimo restaurado.");
 }
 
-// Zera o Cérebro manual e todo o Aprendizado. Não recria padrões antigos.
+// Zera o Cérebro (método/tom/o-que-evitar/regras/objeções) E todo o Aprendizado, pra a
+// análise rodar "pura" (só o modelo lendo a conversa). Mantém o nome do corretor e os
+// produtos (Diferenciais), que são FATOS que a IA precisa — não regra/aprendizado.
 async function zerarCerebroTudo(){
-  if(!confirm("Zerar o Cérebro e TODO o aprendizado?\n\nIsso limpa método, tom, diferenciais, evitar, regras, objeções e aprendizado. Não tem como desfazer.")) return;
+  if(!confirm("Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.")) return;
   const status = qs("#cerebroStatus"); if(status) status.textContent = "Zerando...";
   try{
     const cfg = {
       corretorNome: qs("#cerebroCorretorNome")?.value || "",
-      metodo: "",
-      tom: "",
+      metodo: "", tom: "", evitar: "",
       diferenciais: "",
-      evitar: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-      regras: [],
-      objecoes: []
+      regras: [], objecoes: []
     };
-    const r1 = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
-    const d1 = await r1.json().catch(() => ({}));
-    if(!r1.ok || d1?.ok === false) throw new Error(d1?.error || d1?.warning || "Falha ao salvar Cérebro vazio.");
-    const r2 = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"intel-update", inteligenciaAprendida:{} }) });
-    const d2 = await r2.json().catch(() => ({}));
-    if(!r2.ok || d2?.ok === false) throw new Error(d2?.error || "Falha ao zerar aprendizado.");
-    try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(cfg)); }catch(_){}
-    cerebroRegras = [];
-    cerebroObjecoes = [];
-    toast("Cérebro e aprendizado zerados.");
-    await carregarCerebro();
+    await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
+    await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"intel-update", inteligenciaAprendida:{} }) });
+    try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(sanitizeCerebroConfigV762(cfg))); }catch(_){}
+    toast("Cérebro e aprendizado zerados. Análise agora roda pura.");
+    carregarCerebro();
   }catch(e){
     if(status) status.innerHTML = '<span style="color:#ff5b7a">Erro ao zerar: '+escapeHtml(String(e?.message||e))+'</span>';
   }
@@ -6267,11 +6226,9 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
     try{
-      const bodyPayload = { bucket, path, ...payload };
-      if(payload?.action === "analisar") bodyPayload.cerebroConfig = getCerebroConfigParaIA();
       const res = await fetch("./api/processar-storage", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify(bodyPayload), signal: ctrl.signal
+        body: JSON.stringify({ bucket, path, cerebroConfig: obterCerebroConfigParaAnalise(), ...payload }), signal: ctrl.signal
       });
       const data = await res.json().catch(() => ({ ok:false, error:"Resposta inválida do servidor." }));
       if(!res.ok || !data.ok){
@@ -7323,7 +7280,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
       try{
         const res = await fetch("./api/reanalisar-lead", {
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ id: alvo.id, novoAtendimento: obs.slice(0,4000), apenasSalvar:true, autorManual:"Anotação importada", tipoManual:"nota" })
+          body: JSON.stringify(payloadComCerebro({ id: alvo.id, novoAtendimento: obs.slice(0,4000), apenasSalvar:true, autorManual:"Anotação importada", tipoManual:"nota" }))
         });
         const d = await res.json().catch(()=>({}));
         if(d?.ok){ alvo.obs = (alvo.obs ? alvo.obs+"\n" : "") + obs; return "mesclado"; }
@@ -7404,7 +7361,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
           const myId = ativosIds[idx++];
           try{
             const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 60000);
-            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: myId, cerebroConfig: getCerebroConfigParaIA() }), signal: ctrl.signal });
+            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payloadComCerebro({ id: myId })), signal: ctrl.signal });
             clearTimeout(to);
           }catch(_){ /* segue; dá pra reanalisar o lead depois pela tela dele */ }
           an++;
@@ -7569,7 +7526,7 @@ qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   await salvarMemoria();
   qs("#memoriaStatus").textContent = "Reanalisando com memória nova... (pode levar até 30s)";
   try{
-    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }) });
+    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payloadComCerebro({ id })) });
     const data = await res.json();
     if(data?.ok){
       renderAnalysis(data.analysis, state.lead);
@@ -7693,7 +7650,7 @@ async function reanalisarLeadAuto(id, { motivo } = {}){
   const to = setTimeout(() => ctrl.abort(), 90000);
   try{
     toast(motivo ? "Atualizando análise ("+motivo+")…" : "Atualizando análise…");
-    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, cerebroConfig: getCerebroConfigParaIA() }), signal: ctrl.signal });
+    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payloadComCerebro({ id })), signal: ctrl.signal });
     clearTimeout(to);
     const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
     if(data?.ok){
@@ -8268,13 +8225,13 @@ async function registrarMensagemEnviada(lead, txt){
   try{
     await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({
+      body: JSON.stringify(payloadComCerebro({
         id: lead.id,
         novoAtendimento: "Mensagem copiada e enviada: " + msg.slice(0, 500),
         apenasSalvar: true,
         autorManual: "Mensagem enviada (WhatsApp)",
         tipoManual: "mensagem"
-      })
+      }))
     });
   }catch(_){}
   try{ await registrarAprendizado("contato_manual", null, { de: "copiar_msg", tipo: "mensagem enviada" }); }catch(_){}
@@ -8988,7 +8945,7 @@ async function registrarPropostaNoLead(){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id: state.propLeadId, novoAtendimento: texto, apenasSalvar:true, autorManual:"Proposta gerada", tipoManual:"proposta", proposta: coletarPropostaData() })
+      body: JSON.stringify(payloadComCerebro({ id: state.propLeadId, novoAtendimento: texto, apenasSalvar:true, autorManual:"Proposta gerada", tipoManual:"proposta", proposta: coletarPropostaData() }))
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
@@ -9012,7 +8969,7 @@ async function excluirPropostaTimeline(leadId, iso){
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id: leadId, action:"remover-item", iso })
+      body: JSON.stringify(payloadComCerebro({ id: leadId, action:"remover-item", iso }))
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
@@ -9280,7 +9237,7 @@ window.ui667MarcarAtendido=async function(btn){
   const original=btn?.textContent||"✓ Atendido";
   if(btn){btn.disabled=true;btn.textContent="Marcando...";}
   try{
-    const res=await fetch("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:lead.id,action:"marcar-atendido"})});
+    const res=await fetch("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))});
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
     const quando=d.quando||new Date().toISOString();
@@ -9961,7 +9918,7 @@ window.ui670Reanalisar=async function(btn){
     try{ leadBaseAtualizado = (await ui675BuscarDetalhe(lead.id)) || lead; }catch(_){}
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||709),cerebroConfig:getCerebroConfigParaIA()}),signal:ctrl.signal,cache:"no-store"
+      body:JSON.stringify(payloadComCerebro({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||709)})),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const textoResposta = await res.text();
