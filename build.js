@@ -45,7 +45,7 @@ try {
 
 const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
-  "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png", "logo-direciona-light.svg", "logo-direciona-dark.svg"
+  "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png"
 ];
 const textFiles = new Set(["index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js"]);
 
