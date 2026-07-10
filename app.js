@@ -23,21 +23,41 @@
     }
     return atual;
   };
+  // v757: conta chamadas /api/ em andamento. A atualização automática (service worker novo /
+  // checagem de versão) recarrega a página sozinha, e se isso acontecer no meio de uma análise
+  // (10-40s de espera na IA), o reload mata o fetch sem erro nenhum — a tela só "para e some".
+  // O auto-update passa a esperar esse contador zerar antes de recarregar.
+  window.__corretorProReqEmVoo = 0;
   window.fetch = async function(input, init = {}){
     if (!isApiUrl(input)) return originalFetch(input, init);
     const key = getKey();
     const headers = new Headers((init && init.headers) || (typeof input !== "string" && input?.headers) || {});
     if (key && !headers.has("X-Corretor-Pro-Key")) headers.set("X-Corretor-Pro-Key", key);
-    const res = await originalFetch(input, { ...init, headers });
-    if (res.status === 401) {
-      const nova = window.definirChaveSegurancaCorretorPro();
-      if (nova && nova !== key) {
-        const retryHeaders = new Headers(headers);
-        retryHeaders.set("X-Corretor-Pro-Key", nova);
-        return originalFetch(input, { ...init, headers: retryHeaders });
+    window.__corretorProReqEmVoo++;
+    try {
+      const res = await originalFetch(input, { ...init, headers });
+      if (res.status === 401) {
+        const nova = window.definirChaveSegurancaCorretorPro();
+        if (nova && nova !== key) {
+          const retryHeaders = new Headers(headers);
+          retryHeaders.set("X-Corretor-Pro-Key", nova);
+          return originalFetch(input, { ...init, headers: retryHeaders });
+        }
       }
+      return res;
+    } finally {
+      window.__corretorProReqEmVoo = Math.max(0, window.__corretorProReqEmVoo - 1);
     }
-    return res;
+  };
+  // Só recarrega quando não há chamada /api/ em andamento (evita matar uma análise no meio).
+  // Espera no máximo maxEsperaMs; se algo travar demais, recarrega assim mesmo pra não prender
+  // o app numa versão antiga pra sempre.
+  window.corretorProRecarregarQuandoOcioso = function(executar, maxEsperaMs = 30000){
+    const inicio = Date.now();
+    (function checar(){
+      if (window.__corretorProReqEmVoo <= 0 || Date.now() - inicio > maxEsperaMs) { executar(); return; }
+      setTimeout(checar, 700);
+    })();
   };
 })();
 
@@ -8462,8 +8482,12 @@ async function checarVersaoServidor(){
     const servidor = m ? (parseInt(m[1], 10) || 0) : 0;
     sessionStorage.setItem("vchk", "1"); // só tenta 1x por sessão — nunca entra em loop
     if(servidor > atual){
-      try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } }catch(_){}
-      location.reload();
+      const recarregar = async () => {
+        try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } }catch(_){}
+        location.reload();
+      };
+      if (window.corretorProRecarregarQuandoOcioso) window.corretorProRecarregarQuandoOcioso(recarregar);
+      else recarregar();
     }
   }catch(_){ /* offline/erro: ignora, segue na versão atual */ }
 }
@@ -8477,7 +8501,10 @@ if("serviceWorker" in navigator){
     // Só recarrega numa ATUALIZAÇÃO (já havia uma versão ativa). Na 1ª instalação, não.
     if(recarregandoSW || !tinhaController) return;
     recarregandoSW = true;
-    location.reload();
+    // v757: não recarrega no meio de uma análise em andamento — espera as chamadas /api/
+    // terminarem (ex.: reanálise de lead, que pode levar dezenas de segundos na IA).
+    if (window.corretorProRecarregarQuandoOcioso) window.corretorProRecarregarQuandoOcioso(() => location.reload());
+    else location.reload();
   });
   addEventListener("load", async ()=>{
     try{
