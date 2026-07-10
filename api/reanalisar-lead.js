@@ -3,6 +3,11 @@ import { getSupabaseAdmin } from "./_persistence.js";
 import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
+// nome_arquivo pode trazer uma tag interna de deduplicação (ex.: "Fulana [CSV a1b2c3]"),
+// nunca deveria ser exibido. Usado só como última rede de segurança quando clientName se perde.
+function nomeSemTagImportacao(nome) {
+  return textoLimpo(nome).replace(/\s*\[(?:SISTEMA|CSV)\s+[A-Za-z0-9]{1,8}\]\s*$/i, "").trim();
+}
 function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
 function produtoLeadLocal(lead, analysis) {
   return textoLimpo(analysis?.modeloComercial?.oportunidade?.produto || lead?.product || analysis?.product || "o imóvel") || "o imóvel";
@@ -450,10 +455,11 @@ async function reanalisarLeadHandler702(req, res) {
     };
     return json(res, 200, { ok: true, reused: true, incremental: true, analysis: mergedReuse });
   }
+  const nomeRecuperado = previous.clientName || previous?.lead?.clientName || previous?.lead?.name || nomeSemTagImportacao(row.nome_arquivo) || "Contato";
   const leadModelo = {
     // v752: identificação mínima. Não carregar produto/unidade/nextAction de análise antiga.
-    name: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
-    clientName: previous.clientName || previous?.lead?.clientName || previous?.lead?.name || row.nome_arquivo || "Contato",
+    name: nomeRecuperado,
+    clientName: nomeRecuperado,
     phone: previous?.lead?.phone || previous?.phone || ""
   };
   // Ajuste manual de score (comando "aumentar/baixar score" na observação). Soma sobre o
@@ -647,8 +653,13 @@ async function reanalisarLeadHandler702(req, res) {
 
   // v750: análise nova não herda diagnóstico, mensagens, produto, unidade ou nextAction antigos.
   // Preserva apenas dados não comerciais/operacionais que não contaminam a IA.
+  // clientName/lead NÃO são dado comercial — são a identidade do contato. Sem preservar isso
+  // aqui, toda reanálise apagava o nome limpo e a tela caía pro nome_arquivo interno (ex.:
+  // "Fulano [CSV a1b2c3]"), que existe só para deduplicar importação, nunca pra exibir.
   let merged = {
     ...novoAnalysis,
+    clientName: freshPrevious.clientName || freshPrevious?.lead?.clientName || freshPrevious?.lead?.name || nomeRecuperado,
+    lead: freshPrevious.lead || leadModelo,
     venda: freshPrevious.venda || undefined,
     memoria: { observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,

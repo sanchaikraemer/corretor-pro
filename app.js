@@ -4805,6 +4805,7 @@ function cp704Css(){
       ['Produto',cp704Produto(lead,mc)],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
       ['Motivo da oportunidade',mc?.oportunidade?.motivo],
+      ['Pendência financeira',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
       ['Preferências',mem.preferencias]
@@ -6134,21 +6135,36 @@ function rotuloJanelaAudio(valor){
 function escolherPeriodoAudiosImportacao(){
   let salvo = "90";
   try{ salvo = localStorage.getItem("corretor_pro_audio_window_days_v__VERSION__") || "90"; }catch(_){}
-  const texto = [
-    "Escolha o período dos ÁUDIOS para transcrição:",
-    "",
-    "30 = últimos 30 dias",
-    "60 = últimos 60 dias",
-    "90 = últimos 90 dias (padrão)",
-    "todo = todo o período",
-    "",
-    "As mensagens escritas serão importadas completas em qualquer opção."
-  ].join("\n");
-  const resposta = prompt(texto, salvo === "all" ? "todo" : salvo);
-  const final = resposta == null ? normalizarJanelaAudioCliente(salvo) : normalizarJanelaAudioCliente(resposta);
-  try{ localStorage.setItem("corretor_pro_audio_window_days_v__VERSION__", final); }catch(_){}
-  state.ultimaJanelaAudio = final;
-  return final;
+  const opcoes = [
+    { valor:"30", label:"30 dias" },
+    { valor:"60", label:"60 dias" },
+    { valor:"90", label:"90 dias" },
+    { valor:"all", label:"Todo o período" }
+  ];
+  return new Promise((resolve) => {
+    document.querySelector("#periodoAudioModal")?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "periodoAudioModal";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
+    overlay.innerHTML = `
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:360px;width:100%">
+        <div style="font-size:17px;font-weight:950;margin-bottom:4px">Período dos áudios</div>
+        <div class="small" style="color:var(--muted);margin-bottom:16px">Áudios fora do período não são transcritos. As mensagens escritas entram completas em qualquer opção.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${opcoes.map(o => `<button type="button" class="periodoAudioBtn" data-valor="${o.valor}" style="padding:14px 8px;background:${o.valor===salvo?'linear-gradient(135deg,var(--lime),var(--cyan))':'transparent'};border:1px solid ${o.valor===salvo?'transparent':'var(--line)'};border-radius:10px;color:${o.valor===salvo?'var(--on-accent)':'var(--text)'};font-weight:950;cursor:pointer">${escapeHtml(o.label)}</button>`).join("")}
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll(".periodoAudioBtn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const final = normalizarJanelaAudioCliente(btn.dataset.valor);
+        try{ localStorage.setItem("corretor_pro_audio_window_days_v__VERSION__", final); }catch(_){}
+        state.ultimaJanelaAudio = final;
+        overlay.remove();
+        resolve(final);
+      }, { once:true });
+    });
+  });
 }
 
 async function uploadLargeZipToSupabase(file, options = {}){
@@ -6711,7 +6727,7 @@ async function processFile(file){
     state.processing=false;return;
   }
 
-  const audioWindowDays = escolherPeriodoAudiosImportacao();
+  const audioWindowDays = await escolherPeriodoAudiosImportacao();
   qs("#processingText").textContent = "Áudios: transcrição limitada a " + rotuloJanelaAudio(audioWindowDays) + ". Mensagens escritas entram completas.";
 
   // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.

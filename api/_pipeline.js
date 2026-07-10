@@ -1893,7 +1893,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
-  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado". Retorne somente JSON válido, sem markdown.
+  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado". Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}
 Corretor: ${corretorNome}
@@ -1914,7 +1914,7 @@ JSON obrigatório:
     "produtoPrincipal":"texto curto",
     "produtosParalelos":"texto curto",
     "objecaoPrincipal":"texto curto",
-    "pendenciaFinanceira":"texto curto",
+    "pendenciaFinanceira":"texto curto — inclua aqui qualquer permuta/entrada com imóvel próprio (terreno, casa, apto) que o cliente tenha oferecido em algum ponto da conversa, com os detalhes que ele deu (tamanho, bairro, valor), mesmo que tenha sido comentado uma vez só há tempo",
     "quemDeveAgirAgora":"texto curto",
     "etapaFunil":"texto curto",
     "probabilidadeVenda":"texto curto",
