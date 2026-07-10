@@ -1382,13 +1382,41 @@ export function describeOpenAIError(error) {
   return header + apiMessage;
 }
 
+// v756: quota/billing/chave inválida NUNCA se resolvem tentando de novo — é estado da conta,
+// não instabilidade momentânea. Insistir só atrasa o corretor e some com mensagens confusas.
+function erroOpenAINaoRetentavel(error) {
+  const status = error?.status || error?.statusCode || error?.response?.status;
+  const code = String(error?.code || error?.error?.code || "").toLowerCase();
+  const msg = String(error?.error?.message || error?.message || "").toLowerCase();
+  if (code === "insufficient_quota" || /exceeded your current quota|check your plan and billing/.test(msg)) return true;
+  if (status === 401 || code === "invalid_api_key" || /invalid api key|incorrect api key/.test(msg)) return true;
+  return false;
+}
+
 function isRetryableOpenAIError(error) {
+  if (erroOpenAINaoRetentavel(error)) return false;
   const status = error?.status || error?.statusCode || error?.response?.status;
   if (status === 429) return true;
   if (status >= 500 && status < 600) return true;
   const code = String(error?.code || error?.cause?.code || "");
   if (["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND", "ECONNREFUSED"].includes(code)) return true;
   return false;
+}
+
+// Dica curta e acionável em português — mostrada ao corretor no lugar do despejo técnico da API.
+export function dicaErroOpenAI(error) {
+  const status = error?.status || error?.statusCode || error?.response?.status;
+  const code = String(error?.code || error?.error?.code || "").toLowerCase();
+  const msg = String(error?.error?.message || error?.message || "").toLowerCase();
+  if (code === "insufficient_quota" || /exceeded your current quota|check your plan and billing/.test(msg)) {
+    return "Sem saldo na conta OpenAI usada pelo sistema. Peça para o administrador adicionar crédito em platform.openai.com → Billing.";
+  }
+  if (status === 401 || code === "invalid_api_key" || /invalid api key|incorrect api key/.test(msg)) {
+    return "Chave da OpenAI inválida ou revogada. Peça para o administrador verificar OPENAI_API_KEY na Vercel.";
+  }
+  if (status === 429) return "Limite de uso momentâneo da OpenAI. Aguarde um minuto e tente reanalisar de novo.";
+  if (status >= 500) return "Instabilidade temporária da OpenAI. Tente reanalisar novamente em instantes.";
+  return "";
 }
 
 async function withRetries(fn, { tries = 3, baseDelayMs = 600 } = {}) {
@@ -2614,6 +2642,13 @@ ${timelineText}`;
       });
       parsedRaw = r.parsed; completion = r.response;
     } catch (primeiroErro) {
+      // v756: erro de quota/billing/chave inválida é estado da conta — repetir a chamada
+      // não muda o resultado. Falha rápido, sem gastar a segunda tentativa à toa.
+      if (erroOpenAINaoRetentavel(primeiroErro)) {
+        const dica = dicaErroOpenAI(primeiroErro);
+        const e = new Error("Falha na análise IA: " + describeOpenAIError(primeiroErro) + (dica ? " — " + dica : ""));
+        throw e;
+      }
       // Segunda tentativa ainda mais curta. Não usa análise antiga nem produto salvo.
       const linhasRetry = timelineArr.map(linhaDe);
       const ultimas = linhasRetry.slice(-120).join("\n");
@@ -2628,7 +2663,8 @@ ${timelineText}`;
         });
         parsedRaw = r2.parsed; completion = r2.response;
       } catch (segundoErro) {
-        const e = new Error("Falha na análise IA. Primeira tentativa: " + describeOpenAIError(primeiroErro) + " | Segunda tentativa: " + describeOpenAIError(segundoErro));
+        const dica = dicaErroOpenAI(segundoErro) || dicaErroOpenAI(primeiroErro);
+        const e = new Error("Falha na análise IA. Primeira tentativa: " + describeOpenAIError(primeiroErro) + " | Segunda tentativa: " + describeOpenAIError(segundoErro) + (dica ? " — " + dica : ""));
         throw e;
       }
     }
@@ -2836,7 +2872,11 @@ Não invente. Se não há mensagens novas reais do cliente, houveResposta=false 
 export function getOpenAIRaw() {
   const key = process.env.OPENAI_API_KEY;
   if (!key || key === "colocar-depois") return null;
-  const config = { apiKey: key };
+  // v756: o SDK da OpenAI retenta 429/5xx sozinho por padrão (maxRetries=2), inclusive quando o
+  // motivo é quota esgotada — isso empilha atraso em cima das nossas próprias tentativas (que já
+  // tratam esse caso) sem chance de dar certo. Desligado aqui; retry de instabilidade real fica
+  // por conta de withRetries()/chamarGPT4Json(), que sabem quando vale a pena tentar de novo.
+  const config = { apiKey: key, maxRetries: 0 };
   const baseURL = process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE;
   if (baseURL) config.baseURL = baseURL.replace(/\/+$/, "");
   const organization = process.env.OPENAI_ORG_ID || process.env.OPENAI_ORGANIZATION;
