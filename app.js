@@ -5378,6 +5378,31 @@ async function carregarAgenda(){
 
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
+const CEREBRO_PROMPT_MINIMO = `Leia toda a conversa de WhatsApp.
+
+Identifique:
+1. qual foi a última pergunta ou pendência real;
+2. o que o cliente já respondeu;
+3. o que o corretor não deve perguntar de novo;
+4. qual é o próximo passo comercial mais natural.
+
+Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
+
+Não seja genérico.
+Não reinicie a venda.
+Não pergunte o que já foi respondido.`;
+function cerebroDefaultConfig(){
+  return {
+    corretorNome: qs("#cerebroCorretorNome")?.value || "",
+    metodo: CEREBRO_PROMPT_MINIMO,
+    tom: "",
+    diferenciais: "",
+    evitar: "",
+    diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
+    regras: [],
+    objecoes: []
+  };
+}
 
 // Cache leve da inteligenciaAprendida pra usar em renderLeadsParecidos sem refetch a cada lead.
 let _ultimoIntelCarregado = 0;
@@ -5754,13 +5779,7 @@ async function carregarCerebro(){
     try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
   }
   if(!config){
-    config = {
-      metodo: "Método Corretor Pro:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
-      tom: "Direto, próximo, profissional.",
-      diferenciais: "Construtora Senger. Carazinho/RS.",
-      evitar: "Não usar 'faz sentido', 'retomando contato'.",
-      diasImportacao: 90
-    };
+    config = cerebroDefaultConfig();
   }
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
   qs("#cerebroMetodo").value = config.metodo || "";
@@ -5842,31 +5861,51 @@ async function salvarCerebro(){
   }
 }
 
-function resetarCerebro(){
-  localStorage.removeItem(CEREBRO_LS_KEY);
-  carregarCerebro();
-  toast("Restaurando padrão.");
+async function resetarCerebro(){
+  if(!confirm("Restaurar o prompt mínimo padrão do Cérebro? Isso substitui método, tom, diferenciais, evitar, regras e objeções atuais.")) return;
+  const status = qs("#cerebroStatus");
+  const config = cerebroDefaultConfig();
+  cerebroRegras = [];
+  cerebroObjecoes = [];
+  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
+  if(status) status.textContent = "Restaurando padrão...";
+  try{
+    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(config) });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok || data?.ok === false) throw new Error(data?.error || data?.warning || "Não salvou no banco.");
+    toast("Prompt mínimo restaurado.");
+    await carregarCerebro();
+  }catch(e){
+    if(status) status.innerHTML = '<span style="color:#ff5b7a">Erro ao restaurar: '+escapeHtml(String(e?.message||e))+'</span>';
+  }
 }
 
-// Zera o Cérebro (método/tom/o-que-evitar/regras/objeções) E todo o Aprendizado, pra a
-// análise rodar "pura" (só o modelo lendo a conversa). Mantém o nome do corretor e os
-// produtos (Diferenciais), que são FATOS que a IA precisa — não regra/aprendizado.
+// Zera o Cérebro manual e todo o Aprendizado. Não recria padrões antigos.
 async function zerarCerebroTudo(){
-  if(!confirm("Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.")) return;
+  if(!confirm("Zerar o Cérebro e TODO o aprendizado?\n\nIsso limpa método, tom, diferenciais, evitar, regras, objeções e aprendizado. Não tem como desfazer.")) return;
   const status = qs("#cerebroStatus"); if(status) status.textContent = "Zerando...";
   try{
     const cfg = {
       corretorNome: qs("#cerebroCorretorNome")?.value || "",
-      metodo: "", tom: "", evitar: "",
-      diferenciais: qs("#cerebroDiferenciais")?.value || "",
+      metodo: "",
+      tom: "",
+      diferenciais: "",
+      evitar: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-      regras: [], objecoes: []
+      regras: [],
+      objecoes: []
     };
-    await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
-    await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"intel-update", inteligenciaAprendida:{} }) });
-    try{ localStorage.removeItem(CEREBRO_LS_KEY); }catch(_){}
-    toast("Cérebro e aprendizado zerados. Análise agora roda pura.");
-    carregarCerebro();
+    const r1 = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
+    const d1 = await r1.json().catch(() => ({}));
+    if(!r1.ok || d1?.ok === false) throw new Error(d1?.error || d1?.warning || "Falha ao salvar Cérebro vazio.");
+    const r2 = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"intel-update", inteligenciaAprendida:{} }) });
+    const d2 = await r2.json().catch(() => ({}));
+    if(!r2.ok || d2?.ok === false) throw new Error(d2?.error || "Falha ao zerar aprendizado.");
+    try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(cfg)); }catch(_){}
+    cerebroRegras = [];
+    cerebroObjecoes = [];
+    toast("Cérebro e aprendizado zerados.");
+    await carregarCerebro();
   }catch(e){
     if(status) status.innerHTML = '<span style="color:#ff5b7a">Erro ao zerar: '+escapeHtml(String(e?.message||e))+'</span>';
   }

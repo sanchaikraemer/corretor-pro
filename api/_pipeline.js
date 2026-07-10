@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v756-ia-limpa-rapida-estavel";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v758-cerebro-prompt-minimo";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -43,7 +43,7 @@ export function modeloAnalise() {
 export function modeloAnaliseRapida() {
   // v756: importação precisa concluir dentro do servidor. Usa modelo rápido por padrão,
   // sem regras comerciais extras, apenas leitura da conversa bruta. Pode ser sobrescrito no Vercel.
-  return envModel("DIRECIONA_IMPORT_MODEL", envModel("DIRECIONA_FAST_MODEL", "gpt-4o-mini"));
+  return envModel("DIRECIONA_IMPORT_MODEL", envModel("DIRECIONA_FAST_MODEL", modeloAnalise()));
 }
 
 export function modeloMensagens() {
@@ -1766,6 +1766,17 @@ As faixas são de REFERÊNCIA (preço exato muda — NÃO cite valor fechado sem
   }
 }
 
+
+function limparDefaultsAntigosDoCerebroPipeline(config) {
+  if (!config || typeof config !== "object") return config;
+  const out = { ...config };
+  if (/^Método Corretor Pro:/i.test(String(out.metodo || "")) || /Identifique a fase do cliente/i.test(String(out.metodo || ""))) out.metodo = "";
+  if (/tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(String(out.tom || ""))) out.tom = "";
+  if (/Construtora Senger \(sede em Carazinho\/RS\)/i.test(String(out.diferenciais || ""))) out.diferenciais = "";
+  if (/gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(String(out.evitar || ""))) out.evitar = "";
+  return out;
+}
+
 async function loadCerebroConfig() {
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
@@ -1777,8 +1788,27 @@ async function loadCerebroConfig() {
       .eq("chave", "direciona-cerebro")
       .maybeSingle();
     if (error || !data?.valor) return null;
-    return data.valor;
+    return limparDefaultsAntigosDoCerebroPipeline(data.valor);
   } catch (_) { return null; }
+}
+
+function montarInstrucoesCerebroAtual(config = {}) {
+  const partes = [];
+  const add = (titulo, valor) => {
+    const txt = String(valor || "").trim();
+    if (txt) partes.push(`${titulo}:\n${txt.slice(0, 2500)}`);
+  };
+  add("MÉTODO SALVO NO CÉREBRO", config.metodo);
+  add("TOM DE VOZ SALVO NO CÉREBRO", config.tom);
+  add("DIFERENCIAIS SALVOS NO CÉREBRO", config.diferenciais);
+  add("O QUE EVITAR SALVO NO CÉREBRO", config.evitar);
+  const regras = Array.isArray(config.regras) ? config.regras.map(r => typeof r === "string" ? r : r?.texto).filter(Boolean) : [];
+  if (regras.length) partes.push("REGRAS MANUAIS SALVAS NO CÉREBRO:\n" + regras.slice(0, 30).map(r => `- ${String(r).slice(0, 500)}`).join("\n"));
+  const objecoes = Array.isArray(config.objecoes) ? config.objecoes.filter(Boolean) : [];
+  if (objecoes.length) {
+    partes.push("SINAIS/OBJEÇÕES SALVOS NO CÉREBRO:\n" + objecoes.slice(0, 20).map(o => `- ${String(o.objecao || "").slice(0, 180)} → ${String(o.resposta || "").slice(0, 500)}`).join("\n"));
+  }
+  return partes.length ? partes.join("\n\n") : "";
 }
 
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
@@ -2556,17 +2586,21 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const hoje = new Date().toISOString().slice(0, 10);
   const configCerebro = await loadCerebroConfig().catch(() => null);
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
+  const instrucoesCerebroAtual = montarInstrucoesCerebroAtual(configCerebro || {});
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
     nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
-  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa e os metadados de identificação. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
+  const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa, os metadados de identificação e o Cérebro salvo atualmente. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
 
 Data atual: ${hoje}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
+
+CÉREBRO ATUAL SALVO:
+${instrucoesCerebroAtual || "(vazio)"}
 
 JSON obrigatório:
 {
