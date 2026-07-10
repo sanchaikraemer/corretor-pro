@@ -951,7 +951,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v752-ia-direta-sem-legado";
+const ARQUITETURA_MENSAGENS_ATUAL = "v756-ia-limpa-rapida-estavel";
 
 function analiseAtualValida752(a){
   return !!(a && typeof a === "object" &&
@@ -6019,8 +6019,11 @@ Tamanho: ${file?((file.size/1024/1024).toFixed(1)+" MB"):""}`;
   if(/HTTP 4\d\d/i.test(raw)){
     return "O servidor não aceitou o arquivo. Verifique se é o ZIP exportado pelo WhatsApp (com texto e mídia).";
   }
+  if(/A conversa foi lida|Falha na análise IA|análise comercial|IA não concluiu|não devolveu as 3 mensagens/i.test(raw)){
+    return raw;
+  }
   if(/HTTP 5\d\d/i.test(raw)){
-    return "O servidor teve um problema interno. Aguarde um minuto e tente novamente.";
+    return raw.length < 260 ? raw : "O servidor teve um problema interno. Aguarde um minuto e tente novamente.";
   }
   // Sem casamento conhecido: mostra mensagem genérica + sugestão.
   if(raw.length > 200 || /[<>{}]/.test(raw)){
@@ -6181,7 +6184,11 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
         body: JSON.stringify({ bucket, path, ...payload }), signal: ctrl.signal
       });
       const data = await res.json().catch(() => ({ ok:false, error:"Resposta inválida do servidor." }));
-      if(!res.ok || !data.ok) throw new Error(data.error || data.details || ("Erro HTTP "+res.status));
+      if(!res.ok || !data.ok){
+        const partes = [data.error, data.details, data.hint].filter(Boolean);
+        const msg = partes.length ? partes.join("\n") : ("Erro HTTP "+res.status);
+        throw new Error(msg);
+      }
       return data;
     } finally { clearTimeout(to); }
   }
@@ -6293,7 +6300,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     existingLeadId,
     audiosReaproveitados,
     audiosNovosSolicitados: audios.length
-  }, 60000);
+  }, 120000);
   const analysis = result?.analysis || null;
   const msgs = analysis?.messages || {};
   const temTrio = [msgs.a, msgs.b, msgs.c].every(v => String(v || "").trim().length >= 10);
@@ -9807,7 +9814,7 @@ window.ui670OpenWhatsLivre=function(){
   window.open(whatsappLink(p,""),"_blank","noopener");
 };
 function ui675AnaliseDeterministica(lead, baseAnalysis){
-  // v752: fallback comercial local DESATIVADO.
+  // v756: fallback comercial local DESATIVADO.
   // Se a IA/API falhar ou vier incompleta, a tela deve pedir reanálise, não inventar produto, unidade, simulação ou mensagem.
   const out=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
   out.mode=out.mode||"reanalise_pendente";
@@ -9817,7 +9824,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   out.sugestoesPendentes=true;
   out.aprovada=false;
   out.messages={a:"",b:"",c:"",aLabel:"Reanalisar",bLabel:"Reanalisar",cLabel:"Reanalisar",recomendada:"a"};
-  out.validacaoSugestoes=["v752: fallback comercial local desativado."];
+  out.validacaoSugestoes=["v756: fallback comercial local desativado."];
   out._schemaComercial=715;
   return out;
 }
@@ -9897,7 +9904,7 @@ window.ui670Reanalisar=async function(btn){
       }
     }
 
-    // v752: sem fallback local. Se a API não devolver análise atual, não inventar mensagem.
+    // v756: sem fallback local. Se a API não devolver análise atual, não inventar mensagem.
     if(!analysis||schema<682)throw new Error("A análise não foi gerada pela IA atual. Tente reanalisar novamente.");
     clearInterval(progressoTimer);
     progresso.done("Análise concluída e salva.");

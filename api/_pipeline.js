@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v755-ia-limpa-conversa-bruta";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v756-ia-limpa-rapida-estavel";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -36,9 +36,14 @@ export function modeloTranscricao() {
 }
 
 export function modeloAnalise() {
-  // Variável nova para evitar que um OPENAI_ANALYSIS_MODEL antigo (ex.: gpt-4o)
-  // mantenha o deploy preso no modelo anterior sem o usuário perceber.
+  // Modelo principal configurável.
   return envModel("DIRECIONA_MAIN_MODEL", MODELOS_PADRAO.analise);
+}
+
+export function modeloAnaliseRapida() {
+  // v756: importação precisa concluir dentro do servidor. Usa modelo rápido por padrão,
+  // sem regras comerciais extras, apenas leitura da conversa bruta. Pode ser sobrescrito no Vercel.
+  return envModel("DIRECIONA_IMPORT_MODEL", envModel("DIRECIONA_FAST_MODEL", "gpt-4o-mini"));
 }
 
 export function modeloMensagens() {
@@ -2460,8 +2465,8 @@ function textoDaRespostaResponses(resp) {
   return partes.join("\n").trim();
 }
 
-async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout = 25000 }) {
-  const model = modeloAnalise();
+async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout = 25000, model: modeloOverride = null }) {
+  const model = modeloOverride || modeloAnalise();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   let timeoutId;
@@ -2534,7 +2539,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
 
   // Limite técnico para evitar travar a etapa de análise em conversas enormes.
   // Não injeta resumo antigo, produto antigo, unidade antiga ou nextAction antigo.
-  const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 180000);
+  const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 30000);
   let timelineText = timelineTextFull;
   if (timelineText.length > MAX_CHARS) {
     const linhas = timelineArr.map(linhaDe);
@@ -2545,7 +2550,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       if (total > MAX_CHARS) break;
       recentes.unshift(linhas[i]);
     }
-    timelineText = "[Parte antiga omitida por limite técnico; sem usar análise antiga.]\n" + recentes.join("\n");
+    timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
   const hoje = new Date().toISOString().slice(0, 10);
@@ -2598,12 +2603,35 @@ CONVERSA COMPLETA:
 ${timelineText}`;
 
   try {
-    const { parsed: parsedRaw, response: completion } = await chamarGPT4Json({
-      openai,
-      prompt,
-      maxOutputTokens: 4096,
-      timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 52000)
-    });
+    let parsedRaw, completion;
+    try {
+      const r = await chamarGPT4Json({
+        openai,
+        prompt,
+        model: modeloAnaliseRapida(),
+        maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
+        timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
+      });
+      parsedRaw = r.parsed; completion = r.response;
+    } catch (primeiroErro) {
+      // Segunda tentativa ainda mais curta. Não usa análise antiga nem produto salvo.
+      const linhasRetry = timelineArr.map(linhaDe);
+      const ultimas = linhasRetry.slice(-120).join("\n");
+      const promptRetry = prompt.replace(timelineText, "[Tentativa curta após falha técnica. Últimas mensagens da conversa:]\n" + ultimas);
+      try {
+        const r2 = await chamarGPT4Json({
+          openai,
+          prompt: promptRetry,
+          model: modeloAnaliseRapida(),
+          maxOutputTokens: 1800,
+          timeout: Number(process.env.DIRECIONA_ANALYSIS_RETRY_TIMEOUT_MS || 22000)
+        });
+        parsedRaw = r2.parsed; completion = r2.response;
+      } catch (segundoErro) {
+        const e = new Error("Falha na análise IA. Primeira tentativa: " + describeOpenAIError(primeiroErro) + " | Segunda tentativa: " + describeOpenAIError(segundoErro));
+        throw e;
+      }
+    }
 
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
@@ -2848,6 +2876,7 @@ export function getOpenAIConfigSummary() {
     project: process.env.OPENAI_PROJECT_ID || process.env.OPENAI_PROJECT || null,
     transcriptionModel: modeloTranscricao(),
     analysisModel: modeloAnalise(),
+    importAnalysisModel: modeloAnaliseRapida(),
     messagesModel: modeloMensagens(),
     visionModel: modeloVisao(),
     simpleModel: modeloTarefasSimples(),

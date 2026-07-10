@@ -136,6 +136,7 @@ export default async function handler(req, res) {
           ok: false,
           error: "A conversa foi lida, mas a análise comercial não foi concluída.",
           details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as 3 mensagens.",
+          hint: "Verifique se OPENAI_API_KEY está configurada no Vercel e tente novamente. A conversa já foi lida; o erro está só na etapa de IA.",
           bucket,
           path: storagePath
         });
