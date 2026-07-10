@@ -147,7 +147,7 @@ export default async function handler(req, res) {
 
     // ===== MODO COMPLETO (single-shot, legado — pra ZIPs pequenos) =====
     const buffer = await baixarZip();
-    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays });
+    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays, cerebroConfigOverride: body?.cerebroConfig || null });
     return json(res, 200, { ok: true, bucket, path: storagePath, sizeBytes: buffer.length, autoSaved: false, ...result });
   } catch (error) {
     if (error?._download) {

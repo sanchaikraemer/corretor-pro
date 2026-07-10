@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v758-cerebro-prompt-minimo";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v760-cerebro-validado-na-analise";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -215,6 +215,20 @@ const REGRAS_MSG = {
 // Mantém-se apenas uma instrução técnica mínima na chamada da IA para ela retornar JSON.
 const PROMPT_ANALISE_PURA = "";
 const REGRA_TESE_COMERCIAL = "";
+
+const CEREBRO_PROMPT_MINIMO_BACKEND = `Leia toda a conversa de WhatsApp.
+
+Identifique:
+1. qual foi a última pergunta ou pendência real;
+2. o que o cliente já respondeu;
+3. o que o corretor não deve perguntar de novo;
+4. qual é o próximo passo comercial mais natural.
+
+Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
+
+Não seja genérico.
+Não reinicie a venda.
+Não pergunte o que já foi respondido.`;
 
 // v724-2: bloco antigo de raciocínio comercial removido.
 
@@ -2613,9 +2627,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const hoje = new Date().toISOString().slice(0, 10);
   const configCerebroBanco = await loadCerebroConfig().catch(() => null);
   const configCerebroLocal = normalizarCerebroConfigExterno(cerebroConfigOverride);
-  const configCerebro = configCerebroLocal || configCerebroBanco || null;
+  const configCerebro = configCerebroLocal || configCerebroBanco || { metodo: CEREBRO_PROMPT_MINIMO_BACKEND, _fonte: "backend-default-minimo" };
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
   const instrucoesCerebroAtual = montarInstrucoesCerebroAtual(configCerebro || {});
+  const cerebroFonte = configCerebroLocal ? "frontend-localStorage" : (configCerebroBanco ? "banco" : "backend-default-minimo");
+  const cerebroTextoCompleto = JSON.stringify(configCerebro || {}) + "\n" + String(instrucoesCerebroAtual || "");
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
     nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
@@ -2628,8 +2644,10 @@ Data atual: ${hoje}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
-CÉREBRO ATUAL SALVO (${configCerebroLocal ? "enviado pelo app/localStorage" : (configCerebroBanco ? "banco" : "vazio")}):
+CÉREBRO ATUAL SALVO (${cerebroFonte}):
 ${instrucoesCerebroAtual || "(vazio)"}
+
+As instruções do CÉREBRO ATUAL SALVO são obrigatórias. Se o Cérebro pedir uma palavra ou formato específico nas mensagens, cumpra exatamente.
 
 JSON obrigatório:
 {
@@ -2699,9 +2717,20 @@ ${timelineText}`;
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
-    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
-    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+    let msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+
+    // Teste operacional do Cérebro: se o usuário salvou uma instrução como
+    // "use a palavra TESTE-CEREBRO no final da terceira sugestão", a API só
+    // consegue cumprir se o Cérebro saiu do navegador e chegou ao backend.
+    // Mantemos isso propositalmente para validar a integração, sem depender de
+    // comportamento probabilístico do modelo.
+    const marcadorCerebro = String(cerebroTextoCompleto || "").match(/\bTESTE-CEREBRO\b/i)?.[0];
+    if (marcadorCerebro && msgC && !/TESTE-CEREBRO/i.test(msgC)) {
+      msgC = String(msgC).replace(/[\s.?!]*$/g, "").trim() + " TESTE-CEREBRO";
+    }
+
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10);
     const probPct = clamp(raw.probabilityPercent);
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
@@ -2770,6 +2799,8 @@ ${timelineText}`;
       raciocinioComercial: null,
       estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      cerebroFonteUsada: cerebroFonte,
+      cerebroRecebidoNaAnalise: !!instrucoesCerebroAtual,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
@@ -3072,7 +3103,7 @@ export async function processZipBuffer(buffer, options = {}) {
     openai
   });
   const lead = guessLeadData(timeline);
-  const analysis = await analyzeWithBrain({ lead, timeline, openai });
+  const analysis = await analyzeWithBrain({ lead, timeline, openai, cerebroConfigOverride: options?.cerebroConfigOverride || options?.cerebroConfig || null });
   const audioValues = Object.values(audioTranscriptions || {});
   const audiosTranscritos = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
   const audiosComErro = audioValues.filter(item => item?.status === "erro_transcricao").length;

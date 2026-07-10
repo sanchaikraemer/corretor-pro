@@ -20,45 +20,19 @@ const CONFIG_KEY = "direciona-cerebro";
 
 const DEFAULTS = {
   corretorNome: "",
-  metodo: `Leia toda a conversa de WhatsApp.
-
-Identifique:
-1. qual foi a última pergunta ou pendência real;
-2. o que o cliente já respondeu;
-3. o que o corretor não deve perguntar de novo;
-4. qual é o próximo passo comercial mais natural.
-
-Gere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.
-
-Não seja genérico.
-Não reinicie a venda.
-Não pergunte o que já foi respondido.`,
-  tom: "",
-  diferenciais: "",
-  evitar: "",
+  metodo: `Método Corretor Pro:
+1. Identifique a fase do cliente (descoberta, comparando, decidindo, indeciso).
+2. Mostre que entendeu o contexto antes de propor solução.
+3. Cite o produto específico que mais combina com o que ele disse.
+4. Termine sempre com uma pergunta curta ou próximo passo claro.
+5. Evite jargão técnico e textos longos. WhatsApp é leitura rápida.`,
+  tom: "Direto, próximo, profissional. Sem 'faz sentido', sem 'tô retomando contato', sem texto motivacional. Fala como corretor experiente que respeita o tempo do cliente.",
+  diferenciais: "Construtora Senger (sede em Carazinho/RS), com obras em Carazinho e também em Ibirubá. Produtos em Carazinho: Renaissance, Evolutti, Premium Office, Quality, Personalité, Prime, Terrenos. Em Ibirubá: Boulevard.",
+  evitar: "Não usar 'faz sentido', 'gostaria de retomar', 'estava passando aqui pra'. Evitar promessas vazias e textos longos.",
   diasImportacao: 90,
   regras: [],
-  objecoes: [],
-  inteligenciaAprendida: {},
-  estiloHistorico: []
+  objecoes: []
 };
-
-
-function limparDefaultsAntigosDoCerebro(config) {
-  const out = (config && typeof config === "object") ? { ...config } : { ...DEFAULTS };
-  const metodo = String(out.metodo || "");
-  const tom = String(out.tom || "");
-  const diferenciais = String(out.diferenciais || "");
-  const evitar = String(out.evitar || "");
-  if (/^Método Corretor Pro:/i.test(metodo) || /Identifique a fase do cliente/i.test(metodo)) out.metodo = DEFAULTS.metodo;
-  if (/tô retomando contato|tom motivacional|Fala como corretor experiente/i.test(tom)) out.tom = DEFAULTS.tom;
-  if (/Construtora Senger \(sede em Carazinho\/RS\)/i.test(diferenciais)) out.diferenciais = DEFAULTS.diferenciais;
-  if (/gostaria de retomar|estava passando aqui pra|promessas vazias/i.test(evitar)) out.evitar = DEFAULTS.evitar;
-  if (!Number.isFinite(Number(out.diasImportacao)) || Number(out.diasImportacao) <= 0) out.diasImportacao = DEFAULTS.diasImportacao;
-  if (!Array.isArray(out.regras)) out.regras = [];
-  if (!Array.isArray(out.objecoes)) out.objecoes = [];
-  return out;
-}
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -109,7 +83,7 @@ export default async function handler(req, res) {
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
-    return json(res, 200, { ok: true, config: limparDefaultsAntigosDoCerebro(r.valor || DEFAULTS), usingDefaults: !r.found });
+    return json(res, 200, { ok: true, config: r.valor || DEFAULTS, usingDefaults: !r.found });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
