@@ -2616,6 +2616,12 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
 
   const prompt = `Retorne somente JSON válido, sem markdown. Leia a conversa de WhatsApp abaixo e gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente. Use apenas a conversa e os metadados de identificação. Não use análise antiga, produto salvo, unidade salva ou qualquer contexto externo. Quando algo não estiver claro, escreva "Não identificado".
 
+REGRA MAIS IMPORTANTE — leia a última mensagem da conversa antes de tudo:
+1. Descubra quem falou por último: o corretor (Você) ou o cliente.
+2. Se foi o CORRETOR quem falou por último e a mensagem dele contém uma pergunta ou pedido de informação (ex.: perguntou algo, propôs uma condição, pediu confirmação), essa pergunta está SEM RESPOSTA. Preencha "perguntaAbertaSemResposta" com o texto exato ou resumido dessa pergunta.
+3. Quando existir uma "perguntaAbertaSemResposta", as 3 mensagens sugeridas DEVEM cobrar/retomar exatamente essa pergunta — nunca oferecer de novo algo que o corretor já ofereceu, nunca "recomeçar" a conversa como se fosse o primeiro contato, e nunca ignorar a pergunta pendente para pular direto para "apresentar opções". Primeiro resolve-se a pendência; só depois disso faz sentido avançar.
+4. Se foi o CLIENTE quem falou por último, aí sim as mensagens podem avançar normalmente para o próximo passo comercial (responder, propor produto, agendar etc).
+
 Data atual: ${hoje}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
@@ -2629,6 +2635,7 @@ JSON obrigatório:
   "summary":"resumo curto",
   "diagnostico":{
     "ultimaPessoaFalar":"Você|Cliente|Não identificado",
+    "perguntaAbertaSemResposta":"pergunta/pedido exato do corretor ainda sem resposta do cliente, ou 'Nenhuma' se o cliente foi quem falou por último",
     "ultimoCompromissoCliente":"texto curto",
     "ultimaInformacaoPrometida":"texto curto",
     "compromissoCorretorNaoCumprido":"texto curto",
@@ -2704,6 +2711,7 @@ ${timelineText}`;
       summary: clean(raw.summary),
       diagnostico: {
         ultimaPessoaFalar: clean(d.ultimaPessoaFalar, "Não identificado"),
+        perguntaAbertaSemResposta: clean(d.perguntaAbertaSemResposta, "Nenhuma"),
         ultimoCompromissoCliente: clean(d.ultimoCompromissoCliente, "Não identificado"),
         ultimaInformacaoEnviada: clean(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificado"),
         ultimaInformacaoPrometida: clean(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não identificado"),

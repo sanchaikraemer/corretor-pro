@@ -4790,6 +4790,7 @@ function cp704Css(){
       ['Produto',cp704Produto(lead,mc)],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
       ['Motivo da oportunidade',mc?.oportunidade?.motivo],
+      ['Pergunta pendente sua',/^(nenhuma|não identificado)$/i.test(cp704Text(a?.diagnostico?.perguntaAbertaSemResposta))?'':a?.diagnostico?.perguntaAbertaSemResposta],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
       ['Preferências',mem.preferencias]
