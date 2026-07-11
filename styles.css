@@ -2033,3 +2033,6 @@ html[data-theme="light"] [style*="color: #ffc"]{
   border-color:#d9e4e8!important;
   opacity:1!important;
 }
+
+/* v785 — bloco "Preparação da carteira" removido da Home */
+#cp697HomeProgress,#cp702HomeProgress{display:none!important}
