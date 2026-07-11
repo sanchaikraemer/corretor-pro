@@ -6508,7 +6508,9 @@ async function renderProcessedResult(data, meta){
     const produtosDiferentes = !ehNaoIdent(prodExist) && !ehNaoIdent(prodNovo) && prodExist !== prodNovo;
     autoPorNome = semTelefonePraDistinguir && !produtosDiferentes;
   }
-  const perguntarNome = !!(match && match.via === "nome") && !autoPorNome; // nome ambíguo → PERGUNTA
+  // Nome PARECIDO (ex.: "Elisandro Altman" x "Elisandro Altmann Altan") SEMPRE pergunta —
+  // nunca junta sozinho, porque a diferença pode ser outra pessoa.
+  const perguntarNome = (!!(match && match.via === "nome") && !autoPorNome) || !!(match && match.via === "nome-parecido");
   let acoesHtml;
   if(existente && !perguntarNome){
     // Mesmo cliente (telefone igual, OU nome igual sem telefone pra distinguir) → atualiza sozinho.
@@ -6610,6 +6612,38 @@ async function acharLeadExistente(nome, telefone, arquivo){
     const data = await getLeadsData(true);
     if(Array.isArray(data?.items)) leads = data.items.map(limparLead);
   }catch(_){ /* se a rede falhar, usa o que já tem em memória */ }
+  // Distância de edição (Levenshtein) limitada — pra reconhecer nomes quase iguais
+  // (ex.: "Altman" x "Altmann") sem depender de igualdade perfeita.
+  const distEdicao = (a, b) => {
+    a = String(a||""); b = String(b||"");
+    if(a === b) return 0;
+    if(!a.length) return b.length;
+    if(!b.length) return a.length;
+    let prev = Array.from({length: b.length+1}, (_,i)=>i);
+    for(let i=1;i<=a.length;i++){
+      let cur = [i];
+      for(let j=1;j<=b.length;j++){
+        const custo = a[i-1] === b[j-1] ? 0 : 1;
+        cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+custo);
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  };
+  // "Parecido" = MESMO primeiro nome + segundo nome quase igual (1 ou 2 letras de diferença).
+  // Só serve pra PERGUNTAR ("é o mesmo?"), nunca pra juntar sozinho.
+  const tokens = (s) => semProduto(s).split(/\s+/).filter(Boolean);
+  const alvoTok = tokens(nome);
+  const nomeParecido = (nomeLead) => {
+    const b = tokens(nomeLead);
+    if(alvoTok.length < 2 || b.length < 2) return false;      // precisa de nome + sobrenome dos dois lados
+    if(alvoTok[0].length < 3 || alvoTok[0] !== b[0]) return false; // primeiro nome tem que bater
+    if(alvoTok[1] === b[1]) return true;
+    const d = distEdicao(alvoTok[1], b[1]);
+    return d <= 2 && Math.min(alvoTok[1].length, b[1].length) >= 4; // sobrenome quase igual
+  };
+
+  let candidatoParecido = null;
   for(const l of leads){
     if(!l.id) continue;
     // 1) Telefone bate = mesmo lead (sinal mais forte → atualiza sozinho)
@@ -6630,7 +6664,11 @@ async function acharLeadExistente(nome, telefone, arquivo){
     if(alvoArq.length >= 3 && l.fileName){
       if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "arquivo" };
     }
+    // 4) Nome PARECIDO (ex.: "Elisandro Altman" x "Elisandro Altmann Altan"): guarda como
+    // candidato pra PERGUNTAR no fim, se nada exato tiver batido. Nunca junta sozinho.
+    if(!candidatoParecido && nomeParecido(l.name)) candidatoParecido = l;
   }
+  if(candidatoParecido) return { lead: candidatoParecido, via: "nome-parecido" };
   return null;
 }
 

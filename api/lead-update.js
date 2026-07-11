@@ -875,8 +875,10 @@ async function acaoAtualizarComEvolucao(body, res) {
   const pareceTelefoneNome = (n) => { const s = String(n || "").trim(); const dig = s.replace(/\D/g, ""); const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, ""); return dig.length >= 8 && letras.length < 3; };
   const nomeRuim = (n) => { const s = String(n || "").trim(); return !s || /^cliente importado$/i.test(s) || pareceTelefoneNome(s); };
   const nomeAnterior = anterior.clientName || anterior?.lead?.clientName || "";
-  const nomeNovo = nova.clientName || nova?.lead?.clientName || "";
-  if (nomeRuim(nomeNovo) && !nomeRuim(nomeAnterior)) {
+  // Reimportar NÃO deve trocar o nome que o corretor já curou na carteira. O nome salvo no
+  // contato do WhatsApp costuma vir bagunçado ("Elisandro Altmann Altan"); o nome que já
+  // estava no lead manda. Só adota o nome do arquivo quando o do lead estava vazio/ruim.
+  if (!nomeRuim(nomeAnterior)) {
     merged.clientName = nomeAnterior;
     merged.lead = { ...(merged.lead || {}), clientName: nomeAnterior };
   }
