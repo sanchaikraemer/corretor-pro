@@ -472,7 +472,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       .replace(/\.zip$/i, "")
       .replace(/-enxuto$/i, "")
       .replace(/\s*\(\d+\)\s*$/g, "")
-      .replace(/^Conversa do WhatsApp com\s+/i, "")
+      // WhatsApp exporta "Conversa do WhatsApp com Fulano", mas às vezes vem "Conversa do com Fulano"
+      // (sem a palavra WhatsApp). Sem cobrir os dois, o lead ficava com o NOME DO ARQUIVO inteiro.
+      .replace(/^Conversa (?:do )?(?:whatsapp )?com\s+/i, "")
       .replace(/[_-]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();

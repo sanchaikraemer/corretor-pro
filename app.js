@@ -6595,7 +6595,7 @@ async function acharLeadExistente(nome, telefone, arquivo){
   const PRODUTOS = ["renaissance","evolutti","boulevard","terrenos","premium office","quality","personalite","prime"];
   const semProduto = (s) => { let o = norm(s); for(const p of PRODUTOS) o = o.replace(new RegExp("\\b"+p+"\\b","g")," "); return o.replace(/\s+/g," ").trim(); };
   // Nome do arquivo da conversa = identidade estável do contato (mesmo export = mesmo cliente).
-  const normArquivo = (s) => norm(String(s||"").replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa do whatsapp com\s+/i,""));
+  const normArquivo = (s) => norm(String(s||"").replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa (?:do )?(?:whatsapp )?com\s+/i,""));
   const soDigitos = (s) => String(s||"").replace(/\D/g,"");
   const alvoNome = norm(nome);
   const alvoNomeSP = semProduto(nome);
