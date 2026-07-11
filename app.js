@@ -426,8 +426,8 @@ function carregarTelaAtiva(t, force=false){
         else if(t === "agenda") await carregarAgenda();
         else if(t === "cerebro"){ await carregarCerebro(); await carregarAprendizado(); icTab("cerebro"); }
         else if(t === "vendas") await carregarVendas();
-        else if(t === "perdidos"){ await carregarPerdidos(); await carregarGeladeira(); arqTab("perdidos"); }
-        else if(t === "geladeira") await carregarGeladeira();
+        // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
+        else if(t === "perdidos" || t === "geladeira") await carregarGeladeira();
         else if(t === "aprendizado") await carregarAprendizado();
         else if(t === "relatorio") await carregarRelatorio(force);
         else if(t === "carteira") await carregarCarteira(force);
@@ -515,15 +515,19 @@ function show(t, options={}){
   if(!options.skipHistory && !cpApplyingHistory && prev !== t){
     cpPushRoute(cpRouteForScreen(t));
   }
+  // A "Geladeira" não é uma tela própria: mora dentro da seção #perdidos (o balde único
+  // de leads fora do pipeline). Sem esse alias, show("geladeira") tentava ativar um
+  // #geladeira inexistente e o corretor caía numa tela em branco (os leads nunca apareciam).
+  const secId = (t === "geladeira") ? "perdidos" : t;
   if(!isDesktop()){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
-    qs("#"+t)?.classList.add("active");
+    qs("#"+secId)?.classList.add("active");
   }else{
     const escondidas = ["menu","cerebro","vendas","pipeline","agenda","zip","linhaTempo","perdidos","geladeira","aprendizado","propostas","relatorio","carteira"];
     escondidas.forEach(id => qs("#"+id)?.classList.remove("active"));
     const home = qs("#home");
     if(t === "home") home?.classList.add("active");
-    else { qs("#"+t)?.classList.add("active"); home?.classList.remove("active"); }
+    else { qs("#"+secId)?.classList.add("active"); home?.classList.remove("active"); }
   }
   // A troca visual acontece primeiro; o cálculo da tela entra no próximo frame.
   // Isso elimina a sensação de botão travado.
@@ -4947,8 +4951,8 @@ function cp704Css(){
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
     return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
-    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button type="button" class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button></div></div>
+    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
 
@@ -8601,7 +8605,7 @@ async function carregarGeladeira(){
   try{
     const res = { ok:true, json: async () => await getLeadsData() };
     const data = await res.json();
-    const items = (data?.items || []).map(limparLead).filter(l => normalizarEtapa(l.etapa) === "Geladeira");
+    const items = (data?.items || []).map(limparLead).filter(l => ["Geladeira","Perdido"].includes(normalizarEtapa(l.etapa)));
     if(!items.length){
       box.innerHTML = '<div class="empty">Nenhum lead na geladeira no momento.</div>';
       return;
@@ -10450,8 +10454,7 @@ function ui670DetailRows(lead,mc){
       <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
       <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
       <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
-      <button type="button" class="danger" onclick="marcarPerdido(${id},${nome})">Perdido</button>
-      <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
+      <button type="button" onclick="arquivarLead(${id},${nome})">Colocar na geladeira</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
   }
@@ -10545,7 +10548,14 @@ function ui670DetailRows(lead,mc){
 
   async function ui683MoverEtapaComEvento(id, etapa, label, evento){
     if(!id) return toast('Lead não identificado.');
-    if(!confirm(`Marcar este lead como ${label || etapa}?`)) return;
+    // Dois destinos "de saída" (Geladeira e Perdido) explicados na hora, pra ninguém
+    // confundir "guardar pra depois" com "encerrar sem venda".
+    const confirmMsg = etapa === 'Geladeira'
+      ? 'Colocar este lead na Geladeira? Ele sai das listas ativas, mas fica guardado pra você reativar depois.'
+      : etapa === 'Perdido'
+        ? 'Marcar este lead como Perdido? Ele sai das listas ativas e da busca (dá pra reabrir depois).'
+        : `Marcar este lead como ${label || etapa}?`;
+    if(!confirm(confirmMsg)) return;
     try{
       const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
       const data = await res.json().catch(()=>({}));
@@ -10576,7 +10586,7 @@ function ui670DetailRows(lead,mc){
 
   const antigoArquivarLead = window.arquivarLead;
   window.arquivarLead = function(id, nome){
-    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Arquivado/Geladeira', 'lead_arquivado');
+    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Geladeira', 'lead_arquivado');
   };
 
   function ui683CorrigirBotoesRapidos(){
@@ -11355,7 +11365,7 @@ function ui670DetailRows(lead,mc){
     box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
     try{
       const data = await getLeadsData(false);
-      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Geladeira');
+      const items = baseRows(data?.items).filter(l => ['Geladeira','Perdido'].includes(normalizarEtapa(l.etapa)));
       const limite = ensureVisibleKey('geladeiraVisibleCount');
       const lote = items.slice(0, limite);
       if(!items.length){ box.innerHTML = '<div class="empty">Nenhum lead na geladeira no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
