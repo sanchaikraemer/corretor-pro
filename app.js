@@ -7465,6 +7465,141 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
+// ============ IMPORTAR CONVERSAS EM LOTE (ZIP de ZIPs) ============
+// Recebe um .zip que contém vários .zip de conversas do WhatsApp (um por cliente,
+// cada um no formato normal de exportação: um .txt dentro). Cada um passa pelo
+// mesmo caminho de uma importação manual (upload -> processar -> salvar), só que
+// em lote e sem precisar abrir tela por tela. O backend já deduplica por
+// telefone/nome (persistProcessingResult), então rodar de novo nunca duplica —
+// só atualiza. Guardamos localmente quais arquivos já entraram com sucesso pra
+// não gastar chamada de IA de novo à toa se o corretor rodar o mesmo pacote outra vez.
+const BULK_ZIP_IMPORT_RESUME_KEY = "corretor_pro_bulk_zip_import_done_v1";
+function bulkZipImportResumeSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem(BULK_ZIP_IMPORT_RESUME_KEY) || "[]")); }
+  catch(_){ return new Set(); }
+}
+function bulkZipImportMarkDone(nome){
+  try{
+    const s = bulkZipImportResumeSet();
+    s.add(nome);
+    localStorage.setItem(BULK_ZIP_IMPORT_RESUME_KEY, JSON.stringify([...s]));
+  }catch(_){}
+}
+
+async function bulkZipImportUm(master, nomeZip){
+  const blob = await master.files[nomeZip].async("blob");
+  const nomeArquivo = nomeZip.split("/").pop();
+  const fileZip = new File([blob], nomeArquivo, { type: "application/zip" });
+
+  const metaRes = await fetch("./api/criar-upload-url", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ fileName: nomeArquivo, size: fileZip.size, contentType: "application/zip" })
+  });
+  const meta = await metaRes.json().catch(() => ({}));
+  if(!metaRes.ok || !meta.ok) throw new Error(meta.error || meta.details || "Não consegui preparar o upload.");
+
+  const signedUrl = meta.signedUrl || meta.signedurl || meta.signed_url;
+  if(!signedUrl) throw new Error("Upload sem URL assinada.");
+  const putRes = await fetch(signedUrl, {
+    method:"PUT",
+    headers:{ "Content-Type":"application/zip", "x-upsert":"true" },
+    body: fileZip
+  });
+  if(!putRes.ok) throw new Error("Falha ao enviar o arquivo pro armazenamento.");
+
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 55000);
+  let procRes, proc;
+  try{
+    procRes = await fetch("./api/processar-storage", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ bucket: meta.bucket, path: meta.path, action:"completo", cerebroConfig: (typeof obterCerebroConfigParaAnalise === "function" ? obterCerebroConfigParaAnalise() : null) }),
+      signal: ctrl.signal
+    });
+    proc = await procRes.json().catch(() => ({}));
+  } finally { clearTimeout(to); }
+  if(!procRes.ok || !proc.ok) throw new Error(proc.error || proc.details || `Erro ${procRes.status} ao analisar.`);
+
+  const saveRes = await fetch("./api/lead-update", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ action:"salvar-novo", result: proc, fileName: nomeArquivo, source:"bulk-import-planilha", bucket: meta.bucket, path: meta.path })
+  });
+  const saved = await saveRes.json().catch(() => ({}));
+  if(!saveRes.ok || !saved.ok || !saved?.persistence?.processing?.id) throw new Error(saved.error || "Servidor não confirmou a gravação.");
+  return saved;
+}
+
+qs("#crmZipImportBtn")?.addEventListener("click", () => qs("#crmZipInput")?.click());
+qs("#crmZipInput")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if(!file) return;
+  const st = qs("#crmZipImportStatus");
+  const wrap = qs("#crmZipImportProgressWrap"), bar = qs("#crmZipImportProgress");
+  const btn = qs("#crmZipImportBtn");
+  btn.disabled = true;
+  wrap.style.display = "block"; bar.style.width = "0%";
+  st.textContent = "Lendo o pacote...";
+  try{
+    const JSZip = await ensureJSZip();
+    const master = await JSZip.loadAsync(file);
+    const todasEntradas = Object.keys(master.files).filter(name => !master.files[name].dir && name.toLowerCase().endsWith(".zip"));
+    if(!todasEntradas.length){
+      st.innerHTML = '<span style="color:var(--risco)">Não encontrei nenhum .zip de conversa dentro do pacote.</span>';
+      return;
+    }
+    const jaFeitos = bulkZipImportResumeSet();
+    const entries = todasEntradas.filter(n => !jaFeitos.has(n.split("/").pop()));
+    const puladas = todasEntradas.length - entries.length;
+    if(!entries.length){
+      st.innerHTML = `<span style="color:var(--acao)">Todas as ${todasEntradas.length} conversas desse pacote já foram importadas antes. Nada a fazer.</span>`;
+      return;
+    }
+    if(!confirm(`Encontrei ${todasEntradas.length} conversa(s) no pacote${puladas ? ` (${puladas} já importadas antes, vou pular)` : ""}.\n\n• Cada uma é enviada, analisada pela IA e salva sozinha.\n• Se já existir lead com o mesmo telefone/nome, ele é atualizado — não duplica.\n• Usa a API da OpenAI (tem custo) e pode levar alguns minutos.\n\nImportar ${entries.length} conversa(s) agora?`)) return;
+
+    let ok = 0, falhas = 0, feitos = 0;
+    const total = entries.length;
+    const erros = [];
+    const CONC = 3;
+    let idx = 0;
+
+    async function worker(){
+      while(idx < entries.length){
+        const nomeZip = entries[idx++];
+        const nomeCurto = nomeZip.split("/").pop();
+        try{
+          await bulkZipImportUm(master, nomeZip);
+          bulkZipImportMarkDone(nomeCurto);
+          ok++;
+        }catch(err){
+          falhas++;
+          erros.push(`${nomeCurto}: ${err?.message || err}`);
+        }
+        feitos++;
+        bar.style.width = Math.round((feitos/total)*100) + "%";
+        st.textContent = `Importando: ${feitos}/${total} · ${ok} ok${falhas ? `, ${falhas} falharam` : ""}`;
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(CONC, total)}, worker));
+
+    invalidarLeadsCache?.();
+    await loadRecentLeads();
+    await carregarDashboard();
+    await carregarAgendaTopo?.();
+
+    if(falhas){
+      st.innerHTML = `<span style="color:${ok ? 'var(--acao)' : 'var(--risco)'}">${ok} importada(s)/atualizada(s), ${falhas} falharam. Selecione o mesmo ZIP de novo pra tentar só as que faltaram.</span>` +
+        `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted)">Ver erros</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--risco)">${escapeHtml(erros.join("\n"))}</pre></details>`;
+    } else {
+      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${ok} conversa(s) importada(s)/atualizada(s)${puladas ? ` (${puladas} já vinham de antes)` : ""}. Já aparecem em Hoje e no Pipeline.</span>`;
+    }
+  }catch(err){
+    st.innerHTML = '<span style="color:var(--risco)">Erro na importação: ' + escapeHtml(String(err?.message || err)) + '</span>';
+  }finally{
+    btn.disabled = false;
+    e.target.value = "";
+  }
+});
+
 // Busca global
 let buscaGlobalTimer = null;
 qs("#buscaGlobal")?.addEventListener("input", (e) => {

@@ -708,6 +708,14 @@
         <div class="small" id="crmImportStatus" style="margin-top:8px;color:var(--muted)"></div>
         <div class="progress" id="crmImportProgressWrap" style="display:none;margin-top:8px"><div class="progress-bar" id="crmImportProgress" style="width:0%"></div></div>
       </div>
+      <div class="card compact" id="crmZipImportCard">
+        <div class="label">Importar conversas em lote (ZIP de ZIPs)</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Sobe um .zip contendo vários ".zip" de conversas do WhatsApp (um por cliente, cada um no formato normal de exportação). Cada conversa é enviada, analisada pela IA e salva sozinha — sem precisar abrir uma por uma. Se um cliente já existir (mesmo telefone ou nome), o lead é <b>atualizado</b>, nunca duplicado. Rodar de novo só reprocessa o que faltou.</div>
+        <input class="file-native" type="file" id="crmZipInput" accept=".zip" style="display:none">
+        <button class="btn secondary" type="button" id="crmZipImportBtn" style="width:100%">Escolher ZIP de conversas e importar</button>
+        <div class="small" id="crmZipImportStatus" style="margin-top:8px;color:var(--muted)"></div>
+        <div class="progress" id="crmZipImportProgressWrap" style="display:none;margin-top:8px"><div class="progress-bar" id="crmZipImportProgress" style="width:0%"></div></div>
+      </div>
 
       <div class="card compact" id="performanceDiagCard">
         <div class="label">Diagnóstico de performance</div>
