@@ -785,7 +785,7 @@ function analiseComercialPrincipalHTML(a){
     ["4. Produto principal de interesse", ac.produtoPrincipalInteresse],
     ["5. Produtos paralelos apresentados", paralelos || "Nenhum"],
     ["6. Objeção principal", ac.objecaoPrincipal],
-    ["7. Pendência financeira", ac.pendenciaFinanceira],
+    ["7. Permuta / entrada com imóvel", ac.pendenciaFinanceira],
     ["8. Próximo passo é de quem", ac.proximoPassoDeQuem],
     ["9. Etapa do funil", ac.etapaFunil],
     ["10. Nível de interesse", ac.nivelInteresse]
@@ -4825,7 +4825,7 @@ function cp704Css(){
       ['Produto',cp704Produto(lead,mc)],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
       ['Motivo da oportunidade',mc?.oportunidade?.motivo],
-      ['Pendência financeira',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
+      ['Permuta / entrada com imóvel',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
       ['Preferências',mem.preferencias]
@@ -9131,7 +9131,7 @@ function ui631LeadMotivo(l){
   if(hist.includes("proposta")) return ["Proposta enviada" + (d?` há ${d} dia${d===1?'':'s'}`:""), d?"Não respondeu desde então":"Acompanhar retorno"];
   if(hist.includes("simula")) return ["Pediu simulação", "Não recebeu retorno"];
   if(hist.includes("visita") || hist.includes("conhecer")) return ["Prometeu visitar", "Acompanhar interesse"];
-  if(pend) return ["Pendência financeira", pend.slice(0,58)];
+  if(pend) return ["Permuta / entrada com imóvel", pend.slice(0,58)];
   if(etapa.includes("negoci")) return ["Em negociação", "Próximo passo precisa ser conduzido"];
   if(d>=7) return [`Último contato há ${d} dias`, "Bom momento para retomar"];
   if(d>=3) return [`Parado há ${d} dias`, "Retomar antes de esfriar"];
