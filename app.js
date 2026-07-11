@@ -123,15 +123,21 @@ async function fetchComTimeout(url, opts = {}, timeoutMs = 15000){
 // Mutações (salvar, mudar etapa, etc.) invalidam o cache pra não mostrar dado velho.
 const LEADS_CACHE_TTL = 300000; // 5 min
 let _leadsCache = { ts: 0, data: null, inflight: null };
+// Depois de uma mutação (salvar/editar/apagar/mudar etapa), a próxima busca precisa vir
+// FRESCA do servidor — senão o cache de 30s do backend devolve a lista velha (lead apagado
+// continua aparecendo, nome editado não muda). invalidarLeadsCache liga esse sinal.
+let _leadsForceFresh = false;
 async function getLeadsData(force){
   const agora = Date.now();
   if(!force && _leadsCache.data && (agora - _leadsCache.ts) < LEADS_CACHE_TTL){ state.performance.cacheHits = Number(state.performance.cacheHits||0)+1; return _leadsCache.data; }
   state.performance.cacheMisses = Number(state.performance.cacheMisses||0)+1;
   const _perfStart = cpPerfNow();
   if(_leadsCache.inflight) return _leadsCache.inflight; // junta chamadas simultâneas numa só
+  const usarFresh = force || _leadsForceFresh;
+  _leadsForceFresh = false;
   _leadsCache.inflight = (async () => {
     try{
-      const res = await fetchComTimeout(`./api/leads-recentes?limit=2000${force ? "&fresh=1" : ""}`, { cache:"no-store" });
+      const res = await fetchComTimeout(`./api/leads-recentes?limit=2000${usarFresh ? "&fresh=1" : ""}`, { cache:"no-store" });
       const data = await res.json().catch(() => ({ ok:false, items:[] }));
       // Só guarda no cache resposta BOA (HTTP 2xx + ok != false).
       // Respostas 401/403/500 com items[] não envenenam o cache.
@@ -235,6 +241,7 @@ function invalidarLeadDetail(id){
 }
 function invalidarLeadsCache(){
   _leadsCache = { ts: 0, data: null, inflight: null };
+  _leadsForceFresh = true; // a próxima busca ignora o cache de 30s do servidor
   invalidarLeadDetail();
   state.dataRevision = (Number(state.dataRevision) || 0) + 1;
   state.viewRendered = {};
