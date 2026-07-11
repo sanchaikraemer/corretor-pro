@@ -68,7 +68,7 @@
       <button type="button" class="sb-item go" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg></span>Propostas</button>
       <button type="button" class="sb-item go" data-target="cerebro" data-nav-key="cerebro"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span>Inteligência Comercial</button>
       <button type="button" class="sb-item go" data-target="relatorio" data-nav-key="relatorios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span>Desempenho</button>
-      <button type="button" class="sb-item go" data-target="perdidos" data-nav-key="arquivo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v3H3z"/><path d="M5 10v10h14V10M9 13h6"/></svg></span>Arquivo <span id="geladeiraRevisitarBadge" style="display:none;background:var(--cp-coral);color:#fff;border-radius:999px;padding:0 8px;font-size:11px;font-weight:800;margin-left:4px"></span></button>
+      <button type="button" class="sb-item go" data-target="perdidos" data-nav-key="arquivo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v3H3z"/><path d="M5 10v10h14V10M9 13h6"/></svg></span>Geladeira <span id="geladeiraRevisitarBadge" style="display:none;background:var(--cp-coral);color:#fff;border-radius:999px;padding:0 8px;font-size:11px;font-weight:800;margin-left:4px"></span></button>
       <button type="button" class="sb-item go" data-target="menu" data-nav-key="config"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 7 2.6a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>Configurações</button>
     </nav>
     <div class="cp-sidebar-user">
@@ -192,21 +192,10 @@
     </section>
 
     <section id="perdidos" class="screen">
-      <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap">
-        <button type="button" id="arqTabPerdidos" onclick="arqTab('perdidos')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--lime);background:rgba(255,107,92,.15);color:var(--lime)">Perdidos</button>
-        <button type="button" id="arqTabGeladeira" onclick="arqTab('geladeira')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted)">Geladeira</button>
-      </div>
-      <div id="arqPerdidos">
-        <div class="card compact">
-          <div class="label" style="margin-bottom:6px">Leads perdidos</div>
-          <div class="small" style="color:var(--muted);margin-bottom:8px">Leads marcados como perdidos. Toque em "Reabrir" pra devolver pro pipeline ativo.</div>
-          <div id="perdidosList"></div>
-        </div>
-      </div>
-      <div id="arqGeladeira" style="display:none">
+      <div id="arqGeladeira">
         <div class="card compact">
           <div class="label" style="margin-bottom:6px">❄ Geladeira</div>
-          <div class="small" style="color:var(--muted);margin-bottom:8px">Negócios que não valem a pena agora, mas você guarda pra revisitar daqui uns meses. Toque em "Reativar" pra devolver pro pipeline.</div>
+          <div class="small" style="color:var(--muted);margin-bottom:8px">Leads que saíram do pipeline ficam guardados aqui pra você revisitar. Toque em "Reativar" pra devolver pro pipeline ativo.</div>
           <div id="geladeiraList"></div>
         </div>
       </div>
@@ -660,11 +649,8 @@
           <button type="button" class="menu-card go" data-target="vendas">
             <div class="menu-card-ico">$</div><div class="menu-card-txt"><div class="menu-card-titulo">Vendas registradas</div><div class="menu-card-desc">Histórico de vendas e valores fechados.</div></div><div class="menu-card-seta">›</div>
           </button>
-          <button type="button" class="menu-card go" data-target="perdidos">
-            <div class="menu-card-ico">×</div><div class="menu-card-txt"><div class="menu-card-titulo">Leads perdidos</div><div class="menu-card-desc">Leads não convertidos e motivos registrados.</div></div><div class="menu-card-seta">›</div>
-          </button>
-          <button type="button" class="menu-card go" data-target="geladeira">
-            <div class="menu-card-ico">▱</div><div class="menu-card-txt"><div class="menu-card-titulo">Geladeira</div><div class="menu-card-desc">Leads pausados para reativação futura.</div></div><div class="menu-card-seta">›</div>
+          <button type="button" class="menu-card go" data-target="geladeira" data-nav-key="arquivo">
+            <div class="menu-card-ico">▱</div><div class="menu-card-txt"><div class="menu-card-titulo">Geladeira</div><div class="menu-card-desc">Leads que saíram do pipeline, guardados pra reativar depois.</div></div><div class="menu-card-seta">›</div>
           </button>
           <button type="button" class="menu-card" id="btnInstalarApp" style="display:none">
             <div class="menu-card-ico">↓</div><div class="menu-card-txt"><div class="menu-card-titulo">Instalar app</div><div class="menu-card-desc">Instale o Corretor Pro no seu dispositivo.</div></div><div class="menu-card-seta">›</div>
