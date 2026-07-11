@@ -1224,10 +1224,10 @@ function prioridadeAtendimento(l){
     else { score -= 90; motivos.unshift("você chamou recentemente — aguarde resposta"); }
   }
   if(lembreteFuturo(l)){ score -= 140; motivos.unshift("tem lembrete futuro — não antecipar"); }
-  if(ehContatadoHoje(l)){
+  if(protegidoPosAtendimento(l)){
     if(negociacaoAguardandoRetorno && ultimoCliente) score -= 10;
     else if(negociacaoAguardandoRetorno) score -= 35;
-    else { score -= 300; motivos.unshift("você já falou com esse lead hoje"); }
+    else { score -= 300; motivos.unshift(ehContatadoHoje(l) ? "você já falou com esse lead hoje" : "você já falou com esse lead recentemente"); }
   }
 
   if(!msgsCli.length && !sinalCompra && !pendenciaCorretor && !temAgenda){
@@ -1241,8 +1241,8 @@ function prioridadeAtendimento(l){
     pendenciaCorretor || negociacaoAguardandoRetorno || parceiroComClienteFinal || sc682.quenteEscondido || sc682.urgencia || sc682.pendencia;
 
   let grupo, titulo;
-  if(ehContatadoHoje(l)){
-    grupo = "tratado-hoje"; titulo = "Tratado hoje";
+  if(protegidoPosAtendimento(l)){
+    grupo = "tratado-hoje"; titulo = ehContatadoHoje(l) ? "Tratado hoje" : "Atendido recentemente";
   } else if(lembreteFuturo(l)){
     grupo = "pode-aguardar"; titulo = "Tem lembrete futuro";
   } else if(emJanelaDeEspera(l) && !negociacaoAguardandoRetorno && !ultimoCliente){
@@ -1794,6 +1794,26 @@ function ehContatadoHoje(l){
   return null;
 }
 
+// Dias de calendário (BR) desde o último "contato_manual" registrado. null = nunca atendido.
+function diasDesdeAtendimentoManual(l){
+  const eventos = l.analysis?.aprendizado?.eventos || [];
+  let maisRecente = null;
+  for(const e of eventos){
+    if(e.evento !== "contato_manual" || !e.quando) continue;
+    const t = new Date(e.quando);
+    if(isNaN(t.getTime())) continue;
+    if(!maisRecente || t > maisRecente) maisRecente = t;
+  }
+  return maisRecente ? diasCalendarioBR(maisRecente) : null;
+}
+
+// Prazo de proteção: lead atendido não volta pra fila de prioritários antes de PRAZO_PROTECAO_ATENDIDO dias.
+const PRAZO_PROTECAO_ATENDIDO = 5;
+function protegidoPosAtendimento(l){
+  const dias = diasDesdeAtendimentoManual(l);
+  return dias != null && dias < PRAZO_PROTECAO_ATENDIDO;
+}
+
 // Última resposta do cliente registrada pelo corretor (fecha o ciclo: a mensagem funcionou?).
 // Retorna "sim" | "nao" | "aguardando" | null. Pega o registro mais recente (qualquer dia).
 function respostaClienteRegistrada(l){
@@ -2153,7 +2173,7 @@ function entraEmRetomada(l){
 }
 
 // Home = 3 listas pra decidir quem atacar. Nenhum lead vem aberto.
-// - Prioritários: precisa de ação agora (quente/morno/objeção), não contatado hoje. Ordenado por score.
+// - Prioritários: precisa de ação agora (quente/morno/objeção), fora do prazo de proteção pós-atendimento. Ordenado por score.
 // - Stand by: teve interação mas esfriou (stand-by / frio-reaquecer). Retomar depois dos prioritários.
 // - Sem evolução: pediu/recebeu info ou primeiro contato e nunca houve conversa real de volta.
 function classificarGrupoHome(l){
@@ -2165,7 +2185,7 @@ const GRUPOS_HOME = {
   "boa-sem-urgencia":   { titulo: "Boa oportunidade, sem urgência", sub: "Leads bons, mas travados por venda, safra, decisão de terceiros ou prazo." },
   "pode-aguardar":      { titulo: "Pode aguardar", sub: "Você já chamou, há lembrete futuro ou o cliente pediu tempo — não precisa insistir agora." },
   "baixa-prioridade":   { titulo: "Baixa prioridade", sub: "Pouco sinal comercial ou conversa ainda rasa." },
-  "tratado-hoje":       { titulo: "Tratados hoje", sub: "Leads que você já contatou hoje — voltam pra fila amanhã." },
+  "tratado-hoje":       { titulo: "Atendidos recentemente", sub: `Leads que você já atendeu nos últimos ${PRAZO_PROTECAO_ATENDIDO} dias — voltam pra fila de prioritários depois disso.` },
   "hoje":               { titulo: "Atender hoje", sub: "Fila ordenada por prioridade de atendimento, não apenas por chance de venda." },
   "todos":              { titulo: "Todos os leads ativos", sub: "Todos os leads em aberto, com prioridade comercial calculada pela conversa." }
 };
