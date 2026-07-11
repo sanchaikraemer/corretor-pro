@@ -526,7 +526,12 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // "Nome" que na verdade é um telefone (muitos dígitos, quase sem letras) NÃO serve como nome —
     // acontece quando o export do WhatsApp traz só o número no lugar do contato. Aí cai pro nome do arquivo.
     const pareceTelefone = (n) => { const s = String(n || "").trim(); const dig = s.replace(/\D/g, ""); const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, ""); return dig.length >= 8 && letras.length < 3; };
-    const analyzedName = analysis?.clientName || analysis?.lead?.clientName || row.nome_cliente || row.nome;
+    let analyzedName = analysis?.clientName || analysis?.lead?.clientName || row.nome_cliente || row.nome;
+    // Às vezes a análise gravou o NOME DO ARQUIVO como nome do cliente
+    // ("Conversa do com Fulano-enxuto.zip"). Limpa antes de usar, senão o card fica com o arquivo.
+    if (analyzedName && (/\.zip$/i.test(analyzedName) || /^conversa\s+d/i.test(analyzedName))) {
+      analyzedName = cleanFileName(analyzedName);
+    }
     if (analyzedName && !/^cliente importado$/i.test(String(analyzedName)) && !pareceTelefone(analyzedName)) {
       const limpo = limparRuidoNome(analyzedName);
       return limpo || analyzedName;
