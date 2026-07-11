@@ -4681,7 +4681,18 @@ function cp704Css(){
   function cp705FormatDateTime(v){
     const raw=String(v||'').trim();
     if(!raw) return '';
-    const d=new Date(raw);
+    // Datas do histórico do WhatsApp vêm como DD/MM/AAAA (padrão BR) — o construtor nativo
+    // Date() interpreta "02/06/2026" como MM/DD (mês 02, dia 06) e inverte dia/mês.
+    // Por isso o formato BR precisa ser parseado explicitamente antes de cair no Date() genérico.
+    const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,T]+(\d{1,2}):(\d{2}))?/);
+    let d;
+    if(br){
+      const [, dd, mm, yy, hh, mi] = br;
+      const ano = yy.length===2 ? 2000+Number(yy) : Number(yy);
+      d = new Date(ano, Number(mm)-1, Number(dd), Number(hh||0), Number(mi||0));
+    } else {
+      d = new Date(raw);
+    }
     if(!Number.isNaN(d.getTime())){
       return d.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', ' •');
     }
