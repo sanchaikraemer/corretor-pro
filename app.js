@@ -4954,7 +4954,7 @@ function cp704Css(){
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
     return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button></div></div>
     <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button type="button" class="bad" onclick='marcarPerdido(${id},${name})'>Perdido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
@@ -10458,7 +10458,7 @@ function ui670DetailRows(lead,mc){
       <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
       <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
       <button type="button" class="danger" onclick="marcarPerdido(${id},${nome})">Perdido</button>
-      <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
+      <button type="button" onclick="arquivarLead(${id},${nome})">Colocar na geladeira</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
   }
@@ -10552,7 +10552,14 @@ function ui670DetailRows(lead,mc){
 
   async function ui683MoverEtapaComEvento(id, etapa, label, evento){
     if(!id) return toast('Lead não identificado.');
-    if(!confirm(`Marcar este lead como ${label || etapa}?`)) return;
+    // Dois destinos "de saída" (Geladeira e Perdido) explicados na hora, pra ninguém
+    // confundir "guardar pra depois" com "encerrar sem venda".
+    const confirmMsg = etapa === 'Geladeira'
+      ? 'Colocar este lead na Geladeira? Ele sai das listas ativas, mas fica guardado pra você reativar depois.'
+      : etapa === 'Perdido'
+        ? 'Marcar este lead como Perdido? Ele sai das listas ativas e da busca (dá pra reabrir depois).'
+        : `Marcar este lead como ${label || etapa}?`;
+    if(!confirm(confirmMsg)) return;
     try{
       const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
       const data = await res.json().catch(()=>({}));
@@ -10583,7 +10590,7 @@ function ui670DetailRows(lead,mc){
 
   const antigoArquivarLead = window.arquivarLead;
   window.arquivarLead = function(id, nome){
-    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Arquivado/Geladeira', 'lead_arquivado');
+    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Geladeira', 'lead_arquivado');
   };
 
   function ui683CorrigirBotoesRapidos(){
