@@ -6682,7 +6682,10 @@ async function atualizarLeadComEvolucao(){
     toast(incrementalMeta?.reimportacao
       ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} mensagem(ns) nova(s).`
       : (viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução.")));
-    loadRecentLeads();
+    // Mesma correção do salvar: sem zerar o cache de 5 min, a Carteira seguia mostrando o
+    // lead como estava ANTES da atualização (ainda em "preparação").
+    invalidarLeadsCache();
+    loadRecentLeads(true); refreshAllSections();
     // A análise já foi atualizada durante a importação incremental. Não dispara uma segunda
     // reanálise do histórico inteiro: isso repetiria custo de API e anularia a economia da v669.
     qs("#pendingActions")?.remove();
@@ -6725,7 +6728,11 @@ async function salvarLeadPendente(){
     }
     qs("#pendingActions")?.remove();
     toast("Lead salvo.");
-    loadRecentLeads(); refreshAllSections();
+    // Sem invalidar o cache (TTL de 5 min), a Carteira/Preparação continuava mostrando o
+    // estado ANTES de salvar — o lead recém-importado nunca saía da "preparação" e parecia
+    // que a importação não tinha sido salva. Zera o cache pra a lista reler o banco.
+    invalidarLeadsCache();
+    loadRecentLeads(true); refreshAllSections();
     // Após salvar, abre o lead da home pra mostrar o card de foco completo (com badges, materiais, etc).
     setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id); }, 800);
   }catch(err){
