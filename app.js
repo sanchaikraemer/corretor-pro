@@ -667,7 +667,13 @@ function limpoBestTime(v){
 }
 function limpoNome(v){
   if(!v) return "Cliente";
-  return String(v).replace(PRODUTOS_RX, "").replace(/\s+/g," ").trim() || String(v);
+  let s = String(v);
+  // Nome que na verdade é o NOME DO ARQUIVO ("Conversa do com Fulano-enxuto.zip"):
+  // limpa pra mostrar o nome do cliente e pra o reconhecimento de duplicado funcionar.
+  if(/\.zip$/i.test(s) || /^conversa\s+d/i.test(s)){
+    s = s.replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa\s+(?:do\s+)?(?:whatsapp\s+)?com\s+/i,"").trim();
+  }
+  return s.replace(PRODUTOS_RX, "").replace(/\s+/g," ").trim() || String(v);
 }
 function limparLead(l){
   if(!l || typeof l !== "object") return l;
