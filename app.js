@@ -12411,24 +12411,9 @@ function ui670DetailRows(lead,mc){
   try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
 
   function homeProgress697(){
-    if(!(state?.active === 'home')) return;
-    const root = document.querySelector('#home.active, .screen.active#home, #leadFocoArea')?.closest('.screen') || document.querySelector('#home');
-    const leads = (Array.isArray(state?.todosLeads) && state.todosLeads.length ? state.todosLeads : (Array.isArray(state?.itemsAtivos)?state.itemsAtivos:[])).filter(isAtivo697);
-    if(!root || !leads.length) return;
-    let card = document.getElementById('cp697HomeProgress');
-    const ready = leads.filter(isReady697).length;
-    const prep = leads.length - ready;
-    const pct = leads.length ? Math.round((ready/leads.length)*100) : 0;
-    const html = `<div class="cp697-home-title"><b>Preparação da carteira</b><button type="button" onclick="cp697SetTab('preparacao');show('carteira')">Preparar leads</button></div>
-      <div class="cp697-home-bar"><span style="width:${pct}%"></span></div>
-      <div class="cp697-home-meta"><span>${ready} prontos para contato</span><span>${prep} aguardando histórico</span><span>${pct}%</span></div>`;
-    if(!card){
-      card = document.createElement('section'); card.id='cp697HomeProgress'; card.className='cp697-home-progress';
-      const anchor = document.querySelector('#leadFocoArea') || root.querySelector('.card,section');
-      if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor);
-      else root.appendChild(card);
-    }
-    card.innerHTML = html;
+    // Bloco "Preparação da carteira" removido da Home (a pedido) — carteira já está em dia.
+    const antigo = document.getElementById('cp697HomeProgress');
+    if(antigo && antigo.parentNode) antigo.parentNode.removeChild(antigo);
   }
 
   const oldShow = window.show;
@@ -12665,23 +12650,11 @@ function ui670DetailRows(lead,mc){
     return card;
   }
   async function renderHomePrep(force){
+    // Bloco "Preparação da carteira" removido da Home (a pedido). Mantém só a atualização do
+    // rótulo de versão; não desenha mais o card nem busca a base inteira à toa.
     textVersion();
-    if(!activeHome()) return;
-    const card = ensureCard();
-    if(!card) return;
-    const local = bestLocalLeads();
-    if(!local.length && !fullLeadsCache){
-      const html = cardHtml([], true);
-      if(html !== lastHtml){ card.innerHTML = html; lastHtml = html; }
-    }else{
-      const html = cardHtml(fullLeadsCache || local, false);
-      if(html !== lastHtml){ card.innerHTML = html; lastHtml = html; }
-    }
-    const full = await loadFullLeads(!!force);
-    if(!activeHome()) return;
-    const html2 = cardHtml(full, false);
-    const card2 = ensureCard();
-    if(card2 && html2 !== lastHtml){ card2.innerHTML = html2; lastHtml = html2; }
+    const antigo = qs('#cp702HomeProgress') || qs('#cp697HomeProgress');
+    if(antigo && antigo.parentNode) antigo.parentNode.removeChild(antigo);
   }
   function schedule(force){
     if(scheduled) return;
