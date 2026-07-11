@@ -427,7 +427,7 @@ function carregarTelaAtiva(t, force=false){
         else if(t === "cerebro"){ await carregarCerebro(); await carregarAprendizado(); icTab("cerebro"); }
         else if(t === "vendas") await carregarVendas();
         else if(t === "perdidos"){ await carregarPerdidos(); await carregarGeladeira(); arqTab("perdidos"); }
-        else if(t === "geladeira") await carregarGeladeira();
+        else if(t === "geladeira"){ await carregarPerdidos(); await carregarGeladeira(); arqTab("geladeira"); }
         else if(t === "aprendizado") await carregarAprendizado();
         else if(t === "relatorio") await carregarRelatorio(force);
         else if(t === "carteira") await carregarCarteira(force);
@@ -515,16 +515,23 @@ function show(t, options={}){
   if(!options.skipHistory && !cpApplyingHistory && prev !== t){
     cpPushRoute(cpRouteForScreen(t));
   }
+  // A "Geladeira" não é uma tela própria: mora dentro da seção "Arquivo" (#perdidos),
+  // atrás de uma aba interna. Sem esse alias, show("geladeira") tentava ativar um
+  // #geladeira inexistente e o corretor caía numa tela em branco (os leads nunca apareciam).
+  const secId = (t === "geladeira") ? "perdidos" : t;
   if(!isDesktop()){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
-    qs("#"+t)?.classList.add("active");
+    qs("#"+secId)?.classList.add("active");
   }else{
     const escondidas = ["menu","cerebro","vendas","pipeline","agenda","zip","linhaTempo","perdidos","geladeira","aprendizado","propostas","relatorio","carteira"];
     escondidas.forEach(id => qs("#"+id)?.classList.remove("active"));
     const home = qs("#home");
     if(t === "home") home?.classList.add("active");
-    else { qs("#"+t)?.classList.add("active"); home?.classList.remove("active"); }
+    else { qs("#"+secId)?.classList.add("active"); home?.classList.remove("active"); }
   }
+  // Já deixa a aba interna certa aberta na hora da navegação (antes do carregamento
+  // deferido), pra "Perdidos" e "Geladeira" nunca mostrarem a aba do irmão.
+  if(t === "perdidos" || t === "geladeira") arqTab(t === "geladeira" ? "geladeira" : "perdidos");
   // A troca visual acontece primeiro; o cálculo da tela entra no próximo frame.
   // Isso elimina a sensação de botão travado.
   if(prev !== t) window.scrollTo(0,0);
