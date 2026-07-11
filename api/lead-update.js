@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     case "desfecho":      return await acaoDesfecho(id, body, res);
     case "lembrete-set":  return await acaoLembreteSet(id, body, res);
     case "lembrete-clear":return await acaoLembreteClear(id, res);
-    case "apagar":        return await acaoApagar(id, res);
+    case "apagar":        return await acaoApagar(id, res, body?.ids);
     case "editar-dados":  return await acaoEditarDados(id, body, res);
     case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
@@ -1308,13 +1308,17 @@ async function acaoEditarDados(id, body, res) {
   return json(res, 200, { ok: true, nome, telefone, produto });
 }
 
-async function acaoApagar(id, res) {
+async function acaoApagar(id, res, ids) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+  // Apaga TODAS as cópias do mesmo lead de uma vez. O front manda em `ids` os registros que a
+  // lista já tinha juntado como o mesmo cliente (duplicados). Sem isso, apagar tirava só uma
+  // cópia e o lead "voltava" — o corretor precisava apagar duas vezes.
+  const alvos = [...new Set((Array.isArray(ids) ? ids : []).concat([id]).map(v => String(v || "")).filter(Boolean))];
   const { error } = await supabase
     .from("whatsapp_processamentos")
     .delete()
-    .eq("id", id);
+    .in("id", alvos);
   if (error) return json(res, 500, { ok: false, error: error.message });
-  return json(res, 200, { ok: true, id });
+  return json(res, 200, { ok: true, id, ids: alvos, apagados: alvos.length });
 }

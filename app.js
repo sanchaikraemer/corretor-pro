@@ -3683,11 +3683,23 @@ async function copiarHistoricoLead(){
 }
 window.copiarHistoricoLead = copiarHistoricoLead;
 
+// Junta os ids de TODAS as cópias do lead (duplicados que a lista juntou num card só),
+// pra apagar tudo de uma vez — senão sobra uma cópia e o lead "volta".
+function coletarDupeIds(id){
+  const sid = String(id||"");
+  const fontes = [state.lead && [state.lead], _leadsCache?.data?.items, state.todosLeads, state.itemsAtivos, state.carteiraLeads].filter(Array.isArray);
+  for(const lista of fontes){
+    const it = lista.find(l => l && String(l.id) === sid && Array.isArray(l.dupeIds) && l.dupeIds.length);
+    if(it) return [...new Set(it.dupeIds.map(String).concat(sid))];
+  }
+  return [sid];
+}
 async function apagarLead(id, nome){
   if(!id) return;
   if(!confirm(`Apagar lead "${nome||"sem nome"}"? Não tem como desfazer.`)) return;
   try{
-    const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, action: "apagar" }) });
+    const ids = coletarDupeIds(id);
+    const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
     const data = await res.json();
     if(data?.ok){
       toast("Lead apagado.");
@@ -4306,7 +4318,8 @@ async function excluirLeadDefinitivo(id, nome){
   if(!id) return;
   if(!confirm(`Excluir DEFINITIVAMENTE o lead "${nome||"sem nome"}"?\n\nIsso apaga tudo (conversa, análise, histórico). Não tem como desfazer.`)) return;
   try{
-    const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, action: "apagar" }) });
+    const ids = coletarDupeIds(id);
+    const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
     const data = await res.json();
     if(data?.ok){
       toast("Lead excluído.");

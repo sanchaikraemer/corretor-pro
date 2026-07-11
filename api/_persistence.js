@@ -695,12 +695,17 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   const riqueza = (it) => (Number(it.messageCount) || 0) + (it.analyzed ? 1 : 0);
   const bestByKey = new Map();
   const fotoByKey = new Map(); // foto (avatar) de QUALQUER registro do cliente, pra não depender de qual ficou líder
+  const idsByKey = new Map();  // TODOS os ids juntados sob o mesmo cliente (pra apagar duplicados de uma vez)
   const ordem = [];
   for (const item of mapped) {
     const k = item.dedupeKey;
     if (!fotoByKey.has(k)) {
       const f = item.analysis?.avatarFoto || item.avatarFoto;
       if (f) fotoByKey.set(k, f);
+    }
+    if (item.id != null) {
+      if (!idsByKey.has(k)) idsByKey.set(k, []);
+      idsByKey.get(k).push(String(item.id));
     }
     const prev = bestByKey.get(k);
     if (!prev) { bestByKey.set(k, item); ordem.push(k); }
@@ -709,6 +714,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   const unique = [];
   for (const k of ordem) {
     const { dedupeKey, ...clean } = bestByKey.get(k);
+    // Todos os registros duplicados desse mesmo cliente — o front usa pra apagar tudo de uma vez.
+    const dupeIds = idsByKey.get(k) || [];
+    if (dupeIds.length > 1) clean.dupeIds = dupeIds;
     // A foto pode ter sido salva num registro diferente do que virou líder da dedupe
     // (mesmo cliente, várias importações). Se o líder não tem foto mas outro registro
     // dele tem, herda — assim o avatar nunca "some" ao reabrir/recarregar a lista.
