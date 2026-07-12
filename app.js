@@ -431,7 +431,11 @@ function carregarTelaAtiva(t, force=false){
         if(t === "home") await carregarDashboard();
         else if(t === "pipeline") await carregarPipeline();
         else if(t === "agenda") await carregarAgenda();
-        else if(t === "cerebro"){ await carregarCerebro(); await carregarAprendizado(); icTab("cerebro"); }
+        else if(t === "cerebro"){
+          await carregarCerebro();
+          await carregarAprendizado();
+          icTab(state.icTabAtiva === "aprendizado" ? "aprendizado" : "cerebro", true);
+        }
         else if(t === "vendas") await carregarVendas();
         // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
         else if(t === "perdidos" || t === "geladeira") await carregarGeladeira();
@@ -556,14 +560,15 @@ function destacarMenuPipeline(){
 }
 window.destacarMenuPipeline = destacarMenuPipeline;
 // Abas internas do menu "Inteligência Comercial": Cérebro (o que você ensina) x Aprendizado (o que a IA captou).
-function icTab(which){
+function icTab(which, dadosJaCarregados=false){
   const cer = which !== "aprendizado";
+  state.icTabAtiva = cer ? "cerebro" : "aprendizado";
   const gc = qs("#icCerebro"), ga = qs("#icAprendizado");
   if(gc) gc.style.display = cer ? "" : "none";
   if(ga) ga.style.display = cer ? "none" : "";
   const bc = qs("#icTabCerebro"), ba = qs("#icTabAprend");
   [[bc,cer],[ba,!cer]].forEach(([b,on])=>{ if(!b) return; b.style.borderColor = on?"var(--lime)":"var(--line)"; b.style.background = on?"rgba(255,107,92,.15)":"transparent"; b.style.color = on?"var(--lime)":"var(--muted)"; });
-  if(!cer) carregarAprendizado();
+  if(!cer && !dadosJaCarregados) carregarAprendizado();
 }
 window.icTab = icTab;
 // Abas internas do menu "Arquivo": Perdidos x Geladeira (congelados).
@@ -12904,6 +12909,8 @@ function ui670DetailRows(lead,mc){
   document.head.appendChild(css);
 })();
 
+/* Atualização #789 — limpeza da tela Atendimentos e correção da navegação em “O que a IA aprendeu”. */
+
 /* ============================================================
    ATUALIZAÇÃO #788 — separação definitiva entre condução e histórico
    - Hoje mostra somente quem exige ação agora.
@@ -12928,39 +12935,27 @@ function ui670DetailRows(lead,mc){
     return melhor;
   }
 
-  function cp788FonteAtendimento(evento){
-    const de=String(evento?.detalhes?.de||'').toLowerCase();
-    const tipo=String(evento?.detalhes?.tipo||'').toLowerCase();
-    if(de==='botao_atendido'||tipo==='atendido') return 'Marcado como atendido';
-    if(de==='copiar_msg') return 'Mensagem enviada';
-    if(de==='listaprioridade') return 'Contato registrado';
-    if(de==='novoatendimento') return 'Atendimento registrado';
-    return 'Atendimento registrado';
-  }
-
   function cp788TempoAtendimento(ts){
     const d=new Date(ts);
     if(!Number.isFinite(d.getTime())) return '';
     const diff=Math.max(0,Date.now()-d.getTime());
     const min=Math.floor(diff/60000);
-    const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
     let dias=null;
     try{ dias=typeof diasCalendarioBR==='function'?diasCalendarioBR(d):null; }catch(_){ dias=null; }
     if(min<1) return 'Atendido agora';
     if(min<60) return `Atendido há ${min} min`;
-    if(dias===0) return `Atendido hoje · ${hora}`;
-    if(dias===1) return `Atendido ontem · ${hora}`;
-    if(dias!=null&&dias<7) return `Atendido há ${dias} dias · ${hora}`;
-    return `Atendido em ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Sao_Paulo'})} · ${hora}`;
+    if(dias===0) return 'Atendido hoje';
+    if(dias===1) return 'Atendido ontem';
+    if(dias!=null&&dias<7) return `Atendido há ${dias} dias`;
+    return `Atendido em ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'})}`;
   }
 
   function cp788LinhaAtendimento(item){
     const l=item.lead, id=JSON.stringify(String(l?.id||''));
     const produto=(typeof produtosLabel==='function'?produtosLabel(l):'')||'Produto não identificado';
-    const fonte=cp788FonteAtendimento(item.evento);
     const tempo=cp788TempoAtendimento(item.ts);
     return `<button type="button" class="cp788-att-row" onclick='abrirLead(${id})'>
-      <span class="cp788-att-copy"><strong>${esc(l?.name||'Cliente')}</strong><small>${esc(produto)}</small><em>${esc(fonte)}</em></span>
+      <span class="cp788-att-copy"><strong>${esc(l?.name||'Cliente')}</strong><small>${esc(produto)}</small></span>
       <span class="cp788-att-time">${esc(tempo)}</span><span class="cp788-att-chevron">›</span>
     </button>`;
   }
@@ -12995,7 +12990,7 @@ function ui670DetailRows(lead,mc){
         <div><h2>Atendimentos</h2><p>${registros.length} cliente${registros.length===1?'':'s'} atendido${registros.length===1?'':'s'} · mais recentes primeiro</p></div>
         <span>${hoje} hoje</span>
       </header>
-      ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui com data e hora.</span></div>`}
+      ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui pela ordem dos atendimentos.</span></div>`}
       ${faltam?`<button type="button" class="cp788-att-more" onclick="cp788MostrarMaisAtendimentos()">Mostrar mais ${Math.min(80,faltam)} atendimentos</button>`:''}
     </section>`;
   }
