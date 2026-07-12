@@ -9535,13 +9535,15 @@ renderResumoDia = function(items){
   const ativos=items.filter(leadEhAtivo);
   const categorias=ativos.map(cp786Categoria);
   const fazerAgora=categorias.filter(c=>c==='agora').length;
-  const clienteRespondeu=categorias.filter(c=>c==='respondeu').length;
   const compromissos=categorias.filter(c=>c==='programados').length;
   const aguardando=categorias.filter(c=>c==='aguardando').length;
+  // Total de leads ativos (soma de todas as categorias). Substitui o card "Cliente respondeu"
+  // a pedido do corretor: quando o cliente responde, ele já dá seguimento por fora.
+  const totalLeads=ativos.length;
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi active" onclick="cp786AbrirConducao('agora')"><span>Fazer agora</span><div><b>${fazerAgora}</b><i>${ui631Icon('resposta')}</i></div></div>
-    <div class="ui-kpi" onclick="cp786AbrirConducao('respondeu')"><span>Cliente respondeu</span><div><b>${clienteRespondeu}</b><i>${ui631Icon('conversa')}</i></div></div>
+    <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('programados')"><span>Programados</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
 };
