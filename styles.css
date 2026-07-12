@@ -2036,3 +2036,30 @@ html[data-theme="light"] [style*="color: #ffc"]{
 
 /* v785 — bloco "Preparação da carteira" removido da Home */
 #cp697HomeProgress,#cp702HomeProgress{display:none!important}
+
+/* ===== v787 — Sino da Central de atenção =====
+   Um único indicador, preso ao sino e sem contador ambíguo. */
+#topBell{
+  position:relative!important;
+  overflow:visible!important;
+}
+#topBell .bell-badge:not([hidden]){
+  display:block!important;
+  position:absolute!important;
+  top:2px!important;
+  right:2px!important;
+  width:9px!important;
+  min-width:9px!important;
+  height:9px!important;
+  padding:0!important;
+  margin:0!important;
+  border:2px solid var(--cp-bg, var(--bg, #001E2B))!important;
+  border-radius:50%!important;
+  background:var(--accent, #ff6257)!important;
+  box-shadow:0 0 0 3px rgba(255,98,87,.16)!important;
+  color:transparent!important;
+  font-size:0!important;
+  line-height:0!important;
+  box-sizing:border-box!important;
+  pointer-events:none!important;
+}

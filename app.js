@@ -3362,16 +3362,9 @@ async function atualizarSinoAgenda(leadsAll){
   }
   state.agendaCount = agendaN;
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
-  const _bell = qs("#topBell"), _bb = qs("#bellBadge");
-  if(_bell && _bb){
-    if(agendaN > 0){
-      _bb.hidden = false; _bb.textContent = agendaN > 9 ? "9+" : String(agendaN);
-      _bell.classList.add("tem-alerta");
-      _bell.setAttribute("title", `${agendaN} compromisso${agendaN>1?"s":""} de hoje — toque pra ver`);
-    } else {
-      _bb.hidden = true; _bell.classList.remove("tem-alerta"); _bell.setAttribute("title", "Agenda do dia");
-    }
-  }
+  // v787: o sino pertence exclusivamente à Central de atenção.
+  // A agenda mantém sua contagem própria, sem disputar o mesmo badge visual.
+  try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
   return agendaN;
 }
 window.atualizarSinoAgenda = atualizarSinoAgenda;
@@ -3410,7 +3403,8 @@ async function _processarDashboard(data){
     const items = all.filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; });
     state.itemsAtivos = items;
     state.todosLeads = all;
-    // Sino do topo + nº da Agenda (compromissos/lembretes de HOJE). Mesma lógica de sempre,
+    try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
+    // Contagem da Agenda permanece separada da Central de atenção.
     // agora no helper atualizarSinoAgenda (reusado ao excluir/reagendar lembrete, pra refletir sem F5).
     atualizarSinoAgenda(all);
     // Radar da Geladeira: badge do Menu desativado (dono não quer aviso).
@@ -11879,11 +11873,21 @@ function ui670DetailRows(lead,mc){
   }
   function updateBell(){
     const badge = $('#bellBadge');
-    if(!badge) return;
+    const bell = $('#topBell');
+    if(!badge || !bell) return;
     const n = notifyData().acao || 0;
     badge.hidden = !n;
-    badge.textContent = n > 9 ? '9+' : String(n);
+    // v787: indicador discreto, sem número solto ou ambíguo na interface.
+    // As quantidades exatas ficam dentro da Central de atenção.
+    badge.textContent = '';
+    bell.classList.toggle('tem-alerta', n > 0);
+    const label = n > 0
+      ? `${n} cliente${n===1?' precisa':'s precisam'} de atenção — toque para abrir`
+      : 'Central de atenção';
+    bell.setAttribute('title', label);
+    bell.setAttribute('aria-label', label);
   }
+  window.cpAtualizarSinoAtencao = updateBell;
 
   function polishEmptyStates(root=document){
     const patterns = ['Nenhum lead perdido no momento.','Nada agendado.','Nenhum compromisso registrado','Nenhum lead marcado como atendido hoje ainda.','Nenhuma condição de pagamento definida.'];
