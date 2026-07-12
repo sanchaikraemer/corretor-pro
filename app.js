@@ -4191,7 +4191,8 @@ async function salvarNovoLead(){
       await loadRecentLeads(true);
       await loadTodosLeadsBusca();
       if(data.id) abrirLead(data.id);
-      else show("carteira", { navKey:"leads" });
+      else if(typeof cp788AbrirCarteiraAtiva === "function") cp788AbrirCarteiraAtiva();
+      else show("pipeline", { navKey:"negocios" });
     } else {
       toast("Erro: " + (data?.error || "não foi possível incluir o lead"));
       if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
@@ -12901,4 +12902,232 @@ function ui670DetailRows(lead,mc){
     @media(max-width:760px){.cp786-daily-reading{grid-template-columns:1fr;padding:17px;gap:14px}.cp786-daily-reading h3{font-size:21px}.cp786-action-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp786-action-kpis .ui-kpi{min-width:0!important}.cp786-action-kpis .ui-kpi span{white-space:normal;line-height:1.1}}
   `;
   document.head.appendChild(css);
+})();
+
+/* ============================================================
+   ATUALIZAÇÃO #788 — separação definitiva entre condução e histórico
+   - Hoje mostra somente quem exige ação agora.
+   - Condução organiza a próxima ação e mantém a carteira ativa como visão secundária.
+   - Atendimentos mostra apenas contatos realmente registrados, do mais recente ao mais antigo.
+   ============================================================ */
+(function(){
+  if(window.__cp788ConducaoHistorico) return;
+  window.__cp788ConducaoHistorico = true;
+
+  const esc = (v)=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function cp788EventoAtendimento(lead){
+    const eventos=Array.isArray(lead?.analysis?.aprendizado?.eventos)?lead.analysis.aprendizado.eventos:[];
+    let melhor=null;
+    for(const evento of eventos){
+      if(evento?.evento!=='contato_manual'||!evento?.quando) continue;
+      const ts=typeof cp786DataTs==='function'?cp786DataTs(evento.quando):new Date(evento.quando).getTime();
+      if(!Number.isFinite(ts)||ts<=0) continue;
+      if(!melhor||ts>melhor.ts) melhor={evento,ts};
+    }
+    return melhor;
+  }
+
+  function cp788FonteAtendimento(evento){
+    const de=String(evento?.detalhes?.de||'').toLowerCase();
+    const tipo=String(evento?.detalhes?.tipo||'').toLowerCase();
+    if(de==='botao_atendido'||tipo==='atendido') return 'Marcado como atendido';
+    if(de==='copiar_msg') return 'Mensagem enviada';
+    if(de==='listaprioridade') return 'Contato registrado';
+    if(de==='novoatendimento') return 'Atendimento registrado';
+    return 'Atendimento registrado';
+  }
+
+  function cp788TempoAtendimento(ts){
+    const d=new Date(ts);
+    if(!Number.isFinite(d.getTime())) return '';
+    const diff=Math.max(0,Date.now()-d.getTime());
+    const min=Math.floor(diff/60000);
+    const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    let dias=null;
+    try{ dias=typeof diasCalendarioBR==='function'?diasCalendarioBR(d):null; }catch(_){ dias=null; }
+    if(min<1) return 'Atendido agora';
+    if(min<60) return `Atendido há ${min} min`;
+    if(dias===0) return `Atendido hoje · ${hora}`;
+    if(dias===1) return `Atendido ontem · ${hora}`;
+    if(dias!=null&&dias<7) return `Atendido há ${dias} dias · ${hora}`;
+    return `Atendido em ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'America/Sao_Paulo'})} · ${hora}`;
+  }
+
+  function cp788LinhaAtendimento(item){
+    const l=item.lead, id=JSON.stringify(String(l?.id||''));
+    const produto=(typeof produtosLabel==='function'?produtosLabel(l):'')||'Produto não identificado';
+    const fonte=cp788FonteAtendimento(item.evento);
+    const tempo=cp788TempoAtendimento(item.ts);
+    return `<button type="button" class="cp788-att-row" onclick='abrirLead(${id})'>
+      <span class="cp788-att-copy"><strong>${esc(l?.name||'Cliente')}</strong><small>${esc(produto)}</small><em>${esc(fonte)}</em></span>
+      <span class="cp788-att-time">${esc(tempo)}</span><span class="cp788-att-chevron">›</span>
+    </button>`;
+  }
+
+  async function cp788CarregarBase(force=false){
+    let data=null;
+    try{ data=await getLeadsData(!!force); }catch(_){ data=null; }
+    const listas=[data?.items,state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].filter(Array.isArray);
+    const leads=(listas.sort((a,b)=>b.length-a.length)[0]||[]).map(typeof limparLead==='function'?limparLead:(x=>x));
+    if(leads.length){
+      state.todosLeads=leads;
+      state.carteiraLeads=leads;
+    }
+    return leads;
+  }
+
+  function cp788RenderAtendimentos(leads){
+    const box=document.querySelector('#carteiraBody');
+    if(!box) return;
+    const registros=[];
+    for(const lead of (Array.isArray(leads)?leads:[])){
+      const ultimo=cp788EventoAtendimento(lead);
+      if(ultimo) registros.push({lead,evento:ultimo.evento,ts:ultimo.ts});
+    }
+    registros.sort((a,b)=>b.ts-a.ts||String(a.lead?.name||'').localeCompare(String(b.lead?.name||''),'pt-BR'));
+    const limite=Math.max(80,Number(state.cp788AtendimentosVisible||80));
+    const visiveis=registros.slice(0,limite);
+    const faltam=Math.max(0,registros.length-visiveis.length);
+    const hoje=registros.filter(x=>{try{return typeof diasCalendarioBR==='function'&&diasCalendarioBR(new Date(x.ts))===0;}catch(_){return false;}}).length;
+    box.innerHTML=`<section class="cp788-att-page">
+      <header class="cp788-att-head">
+        <div><h2>Atendimentos</h2><p>${registros.length} cliente${registros.length===1?'':'s'} atendido${registros.length===1?'':'s'} · mais recentes primeiro</p></div>
+        <span>${hoje} hoje</span>
+      </header>
+      ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui com data e hora.</span></div>`}
+      ${faltam?`<button type="button" class="cp788-att-more" onclick="cp788MostrarMaisAtendimentos()">Mostrar mais ${Math.min(80,faltam)} atendimentos</button>`:''}
+    </section>`;
+  }
+
+  window.cp788MostrarMaisAtendimentos=function(){
+    state.cp788AtendimentosVisible=Math.max(80,Number(state.cp788AtendimentosVisible||80))+80;
+    const base=[state?.todosLeads,state?.carteiraLeads,state?.itemsAtivos].find(a=>Array.isArray(a)&&a.length)||[];
+    cp788RenderAtendimentos(base);
+  };
+
+  window.carregarCarteira=async function(force){
+    const box=document.querySelector('#carteiraBody');
+    if(box) box.innerHTML='<div class="cp788-att-loading"><i></i><b>Carregando atendimentos...</b><span>Ordenando pelos últimos contatos registrados.</span></div>';
+    const leads=await cp788CarregarBase(!!force);
+    cp788RenderAtendimentos(leads);
+  };
+  try{ carregarCarteira=window.carregarCarteira; }catch(_){ }
+  window.renderCarteiraTabela=function(){
+    const base=[state?.todosLeads,state?.carteiraLeads,state?.itemsAtivos].find(a=>Array.isArray(a)&&a.length)||[];
+    cp788RenderAtendimentos(base);
+  };
+  try{ renderCarteiraTabela=window.renderCarteiraTabela; }catch(_){ }
+  window.setCarteiraFiltro=function(){
+    if(state.active!=='carteira'&&typeof show==='function') show('carteira');
+    else window.renderCarteiraTabela();
+  };
+
+  function cp788Grupos(leads){
+    const grupos={agora:[],respondeu:[],programados:[],aguardando:[],todos:[]};
+    for(const l of (Array.isArray(leads)?leads:[])){
+      if(typeof leadEhAtivo==='function'&&!leadEhAtivo(l)) continue;
+      grupos.todos.push(l);
+      const c=typeof cp786Categoria==='function'?cp786Categoria(l):'aguardando';
+      if(grupos[c]) grupos[c].push(l);
+    }
+    for(const k of ['agora','respondeu','programados','aguardando']) grupos[k]=typeof cp786OrdenarConducao==='function'?cp786OrdenarConducao(grupos[k]):grupos[k];
+    grupos.todos=typeof cp786OrdenarConducao==='function'?cp786OrdenarConducao(grupos.todos):grupos.todos;
+    return grupos;
+  }
+
+  function cp788LinhaConducao(l){
+    return typeof ui631LeadRow==='function'?ui631LeadRow(l,typeof cp786Badge==='function'?cp786Badge(l):'Abrir'):'';
+  }
+
+  window.carregarPipeline=async function(){
+    if(state.active!=='pipeline') return;
+    const board=document.querySelector('#pipelineBoard');
+    if(!board) return;
+    const render=(leads)=>{
+      const grupos=cp788Grupos(leads);
+      const validos=['agora','respondeu','programados','aguardando','todos'];
+      const filtro=validos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
+      state.pipelineVisualFiltro=filtro;
+      const lista=grupos[filtro]||[];
+      const tabs=[['agora','Fazer agora'],['respondeu','Cliente respondeu'],['programados','Programados'],['aguardando','Aguardando cliente']];
+      const titulos={agora:['Quem precisa de ação','Somente atendimentos sob sua responsabilidade agora.'],respondeu:['Clientes que responderam','Dê continuidade a quem voltou para a conversa.'],programados:['Compromissos programados','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','Não faça nova cobrança antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
+      const [titulo,sub]=titulos[filtro]||titulos.agora;
+      const sinais=[];
+      if(grupos.respondeu.length) sinais.push(`<li><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu':'s responderam'}.</li>`);
+      if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação.</li>`);
+      if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
+      if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta.</li>`);
+      board.innerHTML=`
+        <div class="ui-pipeline-kpis cp786-action-kpis">
+          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='respondeu'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('respondeu')"><span>Cliente respondeu</span><div><b>${grupos.respondeu.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('conversa'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Programados</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
+        </div>
+        <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
+        <section class="cp786-daily-reading"><div><small>LEITURA DO DIA</small><h3>O que merece sua atenção</h3></div><ul>${sinais.length?sinais.join(''):'<li>Sua carteira não tem pendências imediatas.</li>'}</ul></section>
+        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><button type="button" onclick="${filtro==='todos'?"setPipelineVisualFiltro('agora')":"cp788AbrirCarteiraAtiva()"}">${filtro==='todos'?'Voltar às prioridades':'Ver clientes ativos'}</button></div><div class="ui-priority-list cp695-list">${lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>'}</div></section>`;
+    };
+    const memoria=[state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
+    if(memoria) render(memoria);
+    else{
+      board.innerHTML='<div class="cp695-loading">Lendo sua carteira...</div>';
+      const leads=await cp788CarregarBase(false);
+      render(leads);
+    }
+  };
+  try{ carregarPipeline=window.carregarPipeline; }catch(_){ }
+
+  window.setPipelineVisualFiltro=function(f){
+    state.pipelineVisualFiltro=f||'agora';
+    if(state.active!=='pipeline'&&typeof show==='function') show('pipeline');
+    else window.carregarPipeline();
+  };
+  window.cp788AbrirCarteiraAtiva=function(){
+    state.pipelineVisualFiltro='todos';
+    if(state.active!=='pipeline'&&typeof show==='function') show('pipeline');
+    else window.carregarPipeline();
+  };
+
+  window.renderListasHome=function(ordenados){
+    const foco=document.querySelector('#leadFocoArea'); if(!foco) return;
+    const area=document.querySelector('#top3Area'); if(area){area.style.display='none';area.innerHTML='';}
+    const fila=document.querySelector('#filaPrioridade'); if(fila){fila.style.display='none';fila.innerHTML='';}
+    const ativos=(ordenados||[]).filter(typeof leadEhAtivo==='function'?leadEhAtivo:()=>true);
+    const grupos=cp788Grupos(ativos);
+    const fontePrioridades=grupos.agora.length?grupos.agora:(grupos.respondeu.length?grupos.respondeu:grupos.programados);
+    const prioritarios=fontePrioridades.slice(0,4);
+    const filtroPrincipal=grupos.agora.length?'agora':grupos.respondeu.length?'respondeu':grupos.programados.length?'programados':'aguardando';
+    state.gruposHome={
+      respondeu:grupos.respondeu,agora:grupos.agora,programados:grupos.programados,aguardando:grupos.aguardando,todos:ativos,
+      hoje:[...grupos.respondeu,...grupos.agora],retomada:grupos.agora,'acao-hoje':[...grupos.respondeu,...grupos.agora],
+      'retomar-cuidado':[],'boa-sem-urgencia':[],'pode-aguardar':grupos.aguardando,'baixa-prioridade':[],
+      'tratado-hoje':ativos.filter(l=>typeof ehContatadoHoje==='function'&&ehContatadoHoje(l))
+    };
+    if(state.grupoAtivo||state.focoLeadId||state.lead?.id) return;
+    foco.innerHTML=`<div class="ui-home-content">
+      ${typeof ui677ToolbarHTML==='function'?ui677ToolbarHTML('home'):''}
+      <section class="ui-insight-card">
+        <div class="ui-insight-title"><i>✦</i><strong>Leitura do dia</strong></div>
+        <p><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu':'s responderam'}, <b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' pede':'s pedem'} ação, <b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'} e <b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta.</p>
+        <button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Abrir Condução</button>
+      </section>
+      <section class="ui-priority-card">
+        <div class="ui-section-head"><div><h3>${grupos.agora.length?'Ações prioritárias para hoje':'Próximas prioridades'}</h3><p>${grupos.agora.length?'Somente quem exige uma ação sua agora.':'Nenhuma ação vencida; veja quem respondeu ou está programado.'}</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
+        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>typeof ui631LeadRow==='function'?ui631LeadRow(l,typeof cp786Badge==='function'?cp786Badge(l):'Abrir',i):'').join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
+      </section>
+    </div>`;
+  };
+  try{ renderListasHome=window.renderListasHome; }catch(_){ }
+
+  // Atalhos que mostram "clientes ativos" não devem abrir o histórico de atendimentos.
+  document.addEventListener('DOMContentLoaded',()=>{
+    const metric=document.querySelector('#cpNewLeads')?.closest('button');
+    if(metric) metric.setAttribute('onclick','cp788AbrirCarteiraAtiva()');
+  });
+  setTimeout(()=>{
+    const metric=document.querySelector('#cpNewLeads')?.closest('button');
+    if(metric) metric.setAttribute('onclick','cp788AbrirCarteiraAtiva()');
+  },300);
 })();
