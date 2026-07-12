@@ -2685,12 +2685,11 @@ function buildDesempenhoInsightsHTML(items){
   const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
   const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
   const agora=ativos.filter(l=>categoriaDe(l)==='agora').length;
-  const respondeu=ativos.filter(l=>categoriaDe(l)==='respondeu').length;
   const programados=ativos.filter(l=>categoriaDe(l)==='programados').length;
   const aguardando=ativos.filter(l=>categoriaDe(l)==='aguardando').length;
   const atendidosHoje=ativos.filter(ehAtendidoHoje).length;
   const atendidosSemana=ativos.filter(ehAtendidoNaSemana).length;
-  const pedemAcao=agora+respondeu;
+  const pedemAcao=agora;
   const ringPct=ativos.length?Math.max(6,Math.min(100,Math.round((pedemAcao/ativos.length)*100))):0;
   return `
     <div class="dash-card">
@@ -2700,14 +2699,13 @@ function buildDesempenhoInsightsHTML(items){
         <div class="dash-stats">
           <div class="st" style="cursor:pointer" onclick="show('home')"><b>${atendidosHoje}</b><span>Atendidos hoje</span></div>
           <div class="st"><b>${atendidosSemana}</b><span>Atendidos na semana</span></div>
-          <div class="st" style="cursor:pointer" onclick="cp786AbrirConducao('respondeu')"><b>${respondeu}</b><span>Responder agora</span></div>
         </div>
       </div>
       <button type="button" class="dash-btn" onclick="show('relatorio')">Ver desempenho completo</button>
     </div>
     <div class="dash-card">
       <div class="dh"><h4>✨ Leitura do Corretor Pro</h4></div>
-      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="cp786AbrirConducao('${respondeu?'respondeu':'agora'}')">Abrir prioridades →</a>`:''}</div></div>
+      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="cp786AbrirConducao('agora')">Abrir prioridades →</a>`:''}</div></div>
     </div>`;
 }
 function renderHomeRight(items){
@@ -8081,14 +8079,14 @@ function renderDesempenhoDash(all){
   }
   const nomeMes=agoraData.toLocaleDateString('pt-BR',{month:'long'}),ticket=vMesQtd?vMesValor/vMesQtd:0;
   const totalAcoes=Math.max(1,counts.agora+counts.respondeu+counts.programados+counts.aguardando);
-  const leitura=[['Fazer agora',counts.agora],['Cliente respondeu',counts.respondeu],['Programados',counts.programados],['Aguardando cliente',counts.aguardando]].map(([lbl,n])=>{const pct=Math.round(n/totalAcoes*100);return `<div class="row"><div class="top"><b>${lbl}</b><span>${n} · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;}).join('');
+  const leitura=[['Fazer agora',counts.agora],['Programados',counts.programados],['Aguardando cliente',counts.aguardando]].map(([lbl,n])=>{const pct=Math.round(n/totalAcoes*100);return `<div class="row"><div class="top"><b>${lbl}</b><span>${n} · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;}).join('');
   const kpi=(k,v)=>`<div class="dz-kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   return `
     <div class="dz-head"><h2>Ritmo comercial</h2><div class="sub">Movimentação real · últimos 7 dias</div></div>
     <div class="dz-kpis">
       ${kpi('Clientes ativos',ativos.length)}
       ${kpi('Atendidos hoje',atendimentosHoje)}
-      ${kpi('Pedem sua ação',counts.agora+counts.respondeu)}
+      ${kpi('Pedem sua ação',counts.agora)}
       ${kpi('Vendas no mês',vMesQtd)}
     </div>
     <div class="dz-grid">
@@ -9395,7 +9393,10 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   const modeloValido=modelo&&typeof modelo==='object'&&!Array.isArray(modelo)?modelo:null;
   const ultimaValida=ultimaReal&&typeof ultimaReal==='object'&&!Array.isArray(ultimaReal)&&'falante' in ultimaReal?ultimaReal:null;
   const mc=modeloValido||cp786Modelo(l), ultima=ultimaValida||cp786UltimaMensagemReal(l);
-  if(cp786ClienteRespondeu(l,mc,ultima)) return 'respondeu';
+  // A categoria "Cliente respondeu" foi extinta a pedido do corretor: ela só indicava que a
+  // última mensagem importada era do cliente (muitas vezes só um "ok"/"até"), inflando um número
+  // sem valor de decisão. Sem esse atalho, o lead é classificado pela AÇÃO real (agora / programados
+  // / aguardando), então o que precisa de resposta cai em "Fazer agora" e o resto em "Aguardando".
   if(cp786TemCompromisso(l)) return 'programados';
   const acao=mc?.acao||{}, status=String(acao.status||''), responsavel=String(acao.responsavel||'');
   const msgTs=cp786UltimaMensagemTs(l,ultima), atendimentoTs=cp786UltimoAtendimentoTs(l);
@@ -9511,7 +9512,7 @@ function cp786AbrirConducao(filtro){
 }
 function cp786AbrirPrioridadePrincipal(){
   const leads=(state?.itemsAtivos||state?.todosLeads||[]).filter(leadEhAtivo);
-  cp786AbrirConducao(leads.some(l=>cp786Categoria(l)==='respondeu')?'respondeu':'agora');
+  cp786AbrirConducao('agora');
 }
 window.cp786PrecisaAcao=cp786PrecisaAcao;
 window.cp786ClienteRespondeu=cp786ClienteRespondeu;
@@ -9552,7 +9553,6 @@ function ui631LeadMotivo(l){
   const mc=cp786Modelo(l), acao=cp786TextoSemJargao(mc?.acao?.descricao||l?.nextAction||'');
   const d=Number(l?.daysSinceLastInteraction||0);
   if(acao) return [acao.length>72?acao.slice(0,69).trim()+'...':acao,''];
-  if(cp786Categoria(l)==='respondeu') return ['O cliente respondeu','Dar continuidade agora'];
   if(cp786Categoria(l)==='programados') return ['Há um compromisso programado','Acompanhar na data certa'];
   if(cp786Categoria(l)==='aguardando') return ['Aguardando o cliente','Não cobrar novamente agora'];
   if(d>=7) return [`Último contato há ${d} dias`,'Bom momento para retomar'];
@@ -9603,15 +9603,9 @@ renderListasHome = function(ordenados){
     "tratado-hoje":ativos.filter(l=>typeof ehContatadoHoje==='function'&&ehContatadoHoje(l))
   };
   if(state.grupoAtivo || state.focoLeadId || state.lead?.id) return;
-  const filtroPrincipal=respondeu.length?'respondeu':'agora';
   foco.innerHTML=`
     <div class="ui-home-content">
       ${ui677ToolbarHTML('home')}
-      <section class="ui-insight-card">
-        <div class="ui-insight-title"><i>✦</i><strong>Leitura do dia</strong></div>
-        <p><b>${respondeu.length}</b> cliente${respondeu.length===1?' respondeu':'s responderam'}, <b>${agora.length}</b> atendimento${agora.length===1?' pede':'s pedem'} ação, <b>${programados.length}</b> compromisso${programados.length===1?' está':'s estão'} programado${programados.length===1?'':'s'} e <b>${aguardando.length}</b> cliente${aguardando.length===1?' está':'s estão'} no tempo de resposta.</p>
-        <button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Abrir Condução</button>
-      </section>
       <section class="ui-priority-card">
         <div class="ui-section-head"><div><h3>Atendimentos prioritários para hoje</h3><p>O Corretor Pro colocou primeiro quem precisa de você agora.</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
         <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l,cp786Badge(l),i)).join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
@@ -9895,11 +9889,11 @@ function renderCorretorProDashboard(items, all){
   const categoriaDe=l=>categorias786.get(l)||cp786Categoria(l);
   const fazerAgora=items.filter(l=>categoriaDe(l)==='agora').length;
   const compromissos=items.filter(l=>categoriaDe(l)==='programados').length;
-  const respostas=items.filter(l=>categoriaDe(l)==='respondeu').length;
+  const aguardandoN=items.filter(l=>categoriaDe(l)==='aguardando').length;
   cpSetText("cpNewLeads",items.length);
   cpSetText("cpActiveDeals",fazerAgora);
   cpSetText("cpVisits",compromissos);
-  cpSetText("cpProposals",respostas);
+  cpSetText("cpProposals",aguardandoN);
   cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
   const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=items.length?"ativos agora":"base sem leads ativos";
 
@@ -9931,14 +9925,12 @@ function renderCorretorProDashboard(items, all){
   const legend=qs("#cpTempLegend");
   if(legend) legend.innerHTML=[
     ["Fazer agora",counts.agora,cpPct(counts.agora,total),"var(--cp-coral)"],
-    ["Cliente respondeu",counts.respondeu,cpPct(counts.respondeu,total),"var(--cp-orange)"],
     ["Programados",counts.programados,cpPct(counts.programados,total),"var(--cp-blue)"],
     ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"]
   ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[3]}"></i><span>${x[0]}</span><b>${x[2]}%</b></div>`).join("");
 
   const stageDefs=[
     ["Fazer agora",counts.agora],
-    ["Cliente respondeu",counts.respondeu],
     ["Programados",counts.programados],
     ["Aguardando cliente",counts.aguardando]
   ];
@@ -11854,7 +11846,7 @@ function ui670DetailRows(lead,mc){
     const leads=(state?.todosLeads||state?.itemsAtivos||state?.leads||[]).filter(leadEhAtivo);
     const counts={agora:0,respondeu:0,programados:0,aguardando:0};
     for(const l of leads){const c=cp786Categoria(l);if(counts[c]!==undefined)counts[c]++;}
-    return {total:leads.length,...counts,acao:counts.agora+counts.respondeu};
+    return {total:leads.length,...counts,acao:counts.agora};
   }
   function openNotifyPanel(){
     let panel=$('.cp687-notify-panel');
@@ -11862,7 +11854,6 @@ function ui670DetailRows(lead,mc){
     const d=notifyData();
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
-      <div class="cp687-notify-item" data-go="pipeline" data-filter="respondeu"><i>↗</i><div><b>${d.respondeu} cliente${d.respondeu===1?' respondeu':'s responderam'}</b><span>Dê continuidade antes de iniciar uma nova retomada.</span></div></div>
       <div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>
       <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${d.programados} compromisso${d.programados===1?' programado':'s programados'}</b><span>Veja visitas, reuniões e lembretes com data.</span></div></div>
       <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
@@ -12247,21 +12238,19 @@ function ui670DetailRows(lead,mc){
       const all = (data?.items || []).map(typeof limparLead === 'function' ? limparLead : (x=>x)).filter(typeof leadEhAtivo === 'function' ? leadEhAtivo : (()=>true));
       const grupos = {agora:[],respondeu:[],programados:[],aguardando:[]};
       for(const l of all){ const c=cp786Categoria(l); if(grupos[c]) grupos[c].push(l); }
-      const filtrosValidos=['agora','respondeu','programados','aguardando'];
+      const filtrosValidos=['agora','programados','aguardando'];
       const filtro = filtrosValidos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
       const lista = sortedLeads(grupos[filtro]);
-      const tabs=[['agora','Fazer agora'],['respondeu','Cliente respondeu'],['programados','Programados'],['aguardando','Aguardando cliente']];
+      const tabs=[['agora','Fazer agora'],['programados','Programados'],['aguardando','Aguardando cliente']];
       const listRows = lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhuma ação pendente nesta visão.</div>';
       const sinais=[];
-      if(grupos.respondeu.length) sinais.push(`<li><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu e espera':'s responderam e esperam'} sua continuidade.</li>`);
       if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
       if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação agora.</li>`);
       if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta, sem nova cobrança agora.</li>`);
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
           <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='respondeu'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('respondeu')"><span>Cliente respondeu</span><div><b>${grupos.respondeu.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('conversa'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Programados</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
@@ -13029,7 +13018,15 @@ function ui670DetailRows(lead,mc){
   }
 
   function cp788LinhaConducao(l){
-    return typeof ui631LeadRow==='function'?ui631LeadRow(l,typeof cp786Badge==='function'?cp786Badge(l):'Abrir'):'';
+    if(typeof ui631LeadRow!=='function') return '';
+    let selo = typeof cp786Badge==='function'?cp786Badge(l):'Abrir';
+    // Na visão Programados, o selo mostra a DATA do compromisso em vez da palavra "Programado"
+    // (que já está implícita na aba e no título), pra o corretor bater o olho no quando.
+    if(typeof cp786Categoria==='function' && cp786Categoria(l)==='programados' && typeof cpAppointmentData==='function'){
+      const quando = cpAppointmentData(l)?.time;
+      if(quando) selo = quando;
+    }
+    return ui631LeadRow(l, selo);
   }
 
   window.carregarPipeline=async function(){
@@ -13038,22 +13035,20 @@ function ui670DetailRows(lead,mc){
     if(!board) return;
     const render=(leads)=>{
       const grupos=cp788Grupos(leads);
-      const validos=['agora','respondeu','programados','aguardando','todos'];
+      const validos=['agora','programados','aguardando','todos'];
       const filtro=validos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
       const lista=grupos[filtro]||[];
-      const tabs=[['agora','Fazer agora'],['respondeu','Cliente respondeu'],['programados','Programados'],['aguardando','Aguardando cliente']];
+      const tabs=[['agora','Fazer agora'],['programados','Programados'],['aguardando','Aguardando cliente']];
       const titulos={agora:['Quem precisa de ação','Somente atendimentos sob sua responsabilidade agora.'],respondeu:['Clientes que responderam','Dê continuidade a quem voltou para a conversa.'],programados:['Compromissos programados','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','Não faça nova cobrança antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
       const [titulo,sub]=titulos[filtro]||titulos.agora;
       const sinais=[];
-      if(grupos.respondeu.length) sinais.push(`<li><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu':'s responderam'}.</li>`);
       if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação.</li>`);
       if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
       if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta.</li>`);
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
           <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='respondeu'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('respondeu')"><span>Cliente respondeu</span><div><b>${grupos.respondeu.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('conversa'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Programados</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
@@ -13088,9 +13083,9 @@ function ui670DetailRows(lead,mc){
     const fila=document.querySelector('#filaPrioridade'); if(fila){fila.style.display='none';fila.innerHTML='';}
     const ativos=(ordenados||[]).filter(typeof leadEhAtivo==='function'?leadEhAtivo:()=>true);
     const grupos=cp788Grupos(ativos);
-    const fontePrioridades=grupos.agora.length?grupos.agora:(grupos.respondeu.length?grupos.respondeu:grupos.programados);
+    const fontePrioridades=grupos.agora.length?grupos.agora:grupos.programados;
     const prioritarios=fontePrioridades.slice(0,4);
-    const filtroPrincipal=grupos.agora.length?'agora':grupos.respondeu.length?'respondeu':grupos.programados.length?'programados':'aguardando';
+    const filtroPrincipal=grupos.agora.length?'agora':grupos.programados.length?'programados':'aguardando';
     state.gruposHome={
       respondeu:grupos.respondeu,agora:grupos.agora,programados:grupos.programados,aguardando:grupos.aguardando,todos:ativos,
       hoje:[...grupos.respondeu,...grupos.agora],retomada:grupos.agora,'acao-hoje':[...grupos.respondeu,...grupos.agora],
@@ -13100,13 +13095,8 @@ function ui670DetailRows(lead,mc){
     if(state.grupoAtivo||state.focoLeadId||state.lead?.id) return;
     foco.innerHTML=`<div class="ui-home-content">
       ${typeof ui677ToolbarHTML==='function'?ui677ToolbarHTML('home'):''}
-      <section class="ui-insight-card">
-        <div class="ui-insight-title"><i>✦</i><strong>Leitura do dia</strong></div>
-        <p><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu':'s responderam'}, <b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' pede':'s pedem'} ação, <b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'} e <b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta.</p>
-        <button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Abrir Condução</button>
-      </section>
       <section class="ui-priority-card">
-        <div class="ui-section-head"><div><h3>${grupos.agora.length?'Ações prioritárias para hoje':'Próximas prioridades'}</h3><p>${grupos.agora.length?'Somente quem exige uma ação sua agora.':'Nenhuma ação vencida; veja quem respondeu ou está programado.'}</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
+        <div class="ui-section-head"><div><h3>${grupos.agora.length?'Ações prioritárias para hoje':'Próximas prioridades'}</h3><p>${grupos.agora.length?'Somente quem exige uma ação sua agora.':'Nenhuma ação vencida; veja quem está programado ou aguardando.'}</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
         <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>typeof ui631LeadRow==='function'?ui631LeadRow(l,typeof cp786Badge==='function'?cp786Badge(l):'Abrir',i):'').join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
       </section>
     </div>`;
