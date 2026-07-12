@@ -2675,43 +2675,35 @@ function _clienteFalouPorUltimo(l){
   return false;
 }
 function buildDesempenhoInsightsHTML(items){
-  items = items || state.itemsAtivos || [];
-  const _esqRaiox = leadsEsquecidos(items); // mesmo radar usado no centro — pro Raio-X aqui da direita (desktop)
-  const ativos = items.length;
-  // Medidor = TOTAL de leads em aberto (escolha do usuário). Anel = proporção de leads
-  // QUENTES (alta chance de venda) — ligado ao que importa: probabilidade de venda.
-  const quentes = items.filter(l => { const p = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0); return p >= 55; }).length;
-  const ringPct = ativos ? Math.max(6, Math.min(100, Math.round((quentes/ativos)*100))) : 0;
-  const atendidosHoje = items.filter(ehAtendidoHoje).length;
-  const atendidosSemana = items.filter(ehAtendidoNaSemana).length;
-  const quaseFechando = items.filter(l => { const p = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0); return p >= 70; }).length;
-  const _acaoHoje = state.gruposHome?.["acao-hoje"]?.length ?? 0;
-  const _retomada = state.gruposHome?.["retomada"]?.length ?? 0;
-  const prioritariosHoje = _acaoHoje > 0 ? _acaoHoje : _retomada;
+  items=items||state.itemsAtivos||[];
+  const ativos=items.filter(leadEhAtivo);
+  const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
+  const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
+  const agora=ativos.filter(l=>categoriaDe(l)==='agora').length;
+  const respondeu=ativos.filter(l=>categoriaDe(l)==='respondeu').length;
+  const programados=ativos.filter(l=>categoriaDe(l)==='programados').length;
+  const aguardando=ativos.filter(l=>categoriaDe(l)==='aguardando').length;
+  const atendidosHoje=ativos.filter(ehAtendidoHoje).length;
+  const atendidosSemana=ativos.filter(ehAtendidoNaSemana).length;
+  const pedemAcao=agora+respondeu;
+  const ringPct=ativos.length?Math.max(6,Math.min(100,Math.round((pedemAcao/ativos.length)*100))):0;
   return `
     <div class="dash-card">
-      <div class="dh"><h4>📊 Seu desempenho</h4><span class="dash-sub">Esta semana ▾</span></div>
+      <div class="dh"><h4>📊 Seu ritmo de atendimento</h4><span class="dash-sub">Esta semana ▾</span></div>
       <div class="dash-desemp">
-        <div class="gauge" style="--p:${ringPct}"><div class="gv"><b>${ativos}</b><span>Leads em aberto</span></div></div>
+        <div class="gauge" style="--p:${ringPct}"><div class="gv"><b>${ativos.length}</b><span>clientes ativos</span></div></div>
         <div class="dash-stats">
-          <div class="st" style="cursor:pointer" onclick="show('home')" title="Ver atendidos hoje"><b>${atendidosHoje}</b><span>Atendidos hoje</span></div>
+          <div class="st" style="cursor:pointer" onclick="show('home')"><b>${atendidosHoje}</b><span>Atendidos hoje</span></div>
           <div class="st"><b>${atendidosSemana}</b><span>Atendidos na semana</span></div>
-          <div class="st" style="cursor:pointer" onclick="abrirTodosLeads()" title="Ver quem está quase fechando"><b>${quaseFechando}</b><span>Quase fechando</span></div>
+          <div class="st" style="cursor:pointer" onclick="cp786AbrirConducao('respondeu')"><b>${respondeu}</b><span>Responder agora</span></div>
         </div>
       </div>
-      <button type="button" class="dash-btn" onclick="show('relatorio')">Ver relatório completo</button>
+      <button type="button" class="dash-btn" onclick="show('relatorio')">Ver desempenho completo</button>
     </div>
     <div class="dash-card">
-      <div class="dh"><h4>✨ Insights do Corretor Pro</h4></div>
-      <div class="ins-item">
-        <div class="ins-ic">↗</div>
-        <div style="min-width:0">
-          <div class="it">${_acaoHoje>0 ? `Você tem <b style="color:var(--lime)">${_acaoHoje}</b> lead${_acaoHoje>1?"s":""} urgente${_acaoHoje>1?"s":""} esperando ação agora.` : _retomada>0 ? `Nenhum urgente — <b style="color:var(--lime)">${_retomada}</b> retomada${_retomada>1?"s":""} proativa${_retomada>1?"s":""} sugerida${_retomada>1?"s":""}.` : "Tudo em dia! Nenhum lead pendente agora."}</div>
-          ${prioritariosHoje>0 ? `<a onclick="verListaHoje()">Ver lista de hoje →</a>` : ""}
-        </div>
-      </div>
-    </div>
-    ${insightFocoHTML(items, _esqRaiox)}`;
+      <div class="dh"><h4>✨ Leitura do Corretor Pro</h4></div>
+      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="cp786AbrirConducao('${respondeu?'respondeu':'agora'}')">Abrir prioridades →</a>`:''}</div></div>
+    </div>`;
 }
 function renderHomeRight(items){
   const el = qs("#homeRight");
@@ -4823,7 +4815,7 @@ function cp704Css(){
     if(/interesse/.test(st)) return 'Com interesse';
     if(/perdid|encerr/.test(st)) return 'Perdido';
     if(/ganh|vend/.test(st)) return 'Vendido';
-    if(/geladeira/.test(st)) return 'Na geladeira';
+    if(/geladeira/.test(st)) return 'Arquivado';
     return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
   }
   function cp704Impedimento(lead, mc){
@@ -4977,7 +4969,7 @@ function cp704Css(){
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
     return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Colocar na geladeira</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
     <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
@@ -5397,11 +5389,11 @@ async function carregarAgenda(){
       html += `</div>`;
     }
     if(lembretesGeladeiraVencidos.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (geladeira) (${lembretesGeladeiraVencidos.length})</div>`;
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${lembretesGeladeiraVencidos.length})</div>`;
       html += lembretesGeladeiraVencidos.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,45,155,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}) · está na geladeira</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
+        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,45,155,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
         return agendaCardHTML(l, extra);
       }).join("");
       html += `</div>`;
@@ -6788,7 +6780,7 @@ async function salvarLeadPendente(){
       pendingBox.style.background = "rgba(104,255,149,.08)";
       pendingBox.style.borderColor = "rgba(104,255,149,.32)";
       pendingBox.style.color = "#bdffd0";
-      pendingBox.innerHTML = "<b>Salvo no banco.</b> Lead disponível no Pipeline e na Home.";
+      pendingBox.innerHTML = "<b>Salvo no banco.</b> Lead disponível na Condução e na Home.";
     }
     qs("#pendingActions")?.remove();
     toast("Lead salvo.");
@@ -7506,7 +7498,7 @@ qs("#crmCsvInput")?.addEventListener("change", async (e) => {
     if(criados === 0 && falhas > 0){
       st.innerHTML = `<span style="color:var(--risco)"><b>Nenhum lead foi salvo.</b> O servidor recusou a gravação${ultimoErroServidor?`: <b>${escapeHtml(String(ultimoErroServidor))}</b>`:"."} Tira um print desta mensagem — é esse o problema a resolver.</span>`;
     } else {
-      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${criados} leads novos${mesclados?`, ${mesclados} juntados em leads que já existiam (mesmo telefone)`:""}${jaTinha?`, ${jaTinha} já importados antes`:""}${falhas?`, ${falhas} a refazer (rode de novo)`:""}. Já aparecem em Hoje e no Pipeline.</span>`;
+      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${criados} leads novos${mesclados?`, ${mesclados} juntados em leads que já existiam (mesmo telefone)`:""}${jaTinha?`, ${jaTinha} já importados antes`:""}${falhas?`, ${falhas} a refazer (rode de novo)`:""}. Já aparecem em Hoje e na Condução.</span>`;
     }
 
     // 2) ANALISAR os ativos — em segundo plano, em paralelo. Não trava: os leads já estão salvos.
@@ -7665,7 +7657,7 @@ qs("#crmZipInput")?.addEventListener("change", async (e) => {
       st.innerHTML = `<span style="color:${ok ? 'var(--acao)' : 'var(--risco)'}">${ok} importada(s)/atualizada(s), ${falhas} falharam. Selecione o mesmo ZIP de novo pra tentar só as que faltaram.</span>` +
         `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted)">Ver erros</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--risco)">${escapeHtml(erros.join("\n"))}</pre></details>`;
     } else {
-      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${ok} conversa(s) importada(s)/atualizada(s)${puladas ? ` (${puladas} já vinham de antes)` : ""}. Já aparecem em Hoje e no Pipeline.</span>`;
+      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${ok} conversa(s) importada(s)/atualizada(s)${puladas ? ` (${puladas} já vinham de antes)` : ""}. Já aparecem em Hoje e na Condução.</span>`;
     }
   }catch(err){
     st.innerHTML = '<span style="color:var(--risco)">Erro na importação: ' + escapeHtml(String(err?.message || err)) + '</span>';
@@ -8065,75 +8057,58 @@ window.carregarRelatorio = carregarRelatorio;
 
 // Painel de Desempenho (visual #481): KPIs + atendimentos/dia + funil de conversão — tudo com dado REAL.
 function renderDesempenhoDash(all){
-  const ativo = l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; };
-  const cont = e => all.filter(l => normalizarEtapa(l.etapa) === e).length;
-  const leadsAtivos = all.filter(ativo).length;
-  const vendidos = cont("Vendido");
-  const total = all.length;
-  const conversao = total ? Math.round(vendidos / total * 100) : 0;
-  const propostasAbertas = all.filter(l => { const e = normalizarEtapa(l.etapa); return e === "Visita/Proposta" || e === "Negociação"; }).length;
+  all=Array.isArray(all)?all:[];
+  const ativos=all.filter(leadEhAtivo);
+  const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
+  const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
+  const counts={agora:0,respondeu:0,programados:0,aguardando:0};
+  for(const l of ativos){const c=categoriaDe(l);if(counts[c]!==undefined)counts[c]++;}
 
-  // ---- Atendimentos por dia (últimos 7 dias) — eventos "contato_manual" reais ----
-  const hoje0 = (typeof inicioDoDiaBR === "function") ? inicioDoDiaBR() : new Date(new Date().setHours(0,0,0,0));
-  const DOW = ["D","S","T","Q","Q","S","S"];
-  const dias = [];
-  for(let i = 6; i >= 0; i--){ const d = new Date(hoje0); d.setDate(d.getDate() - i); dias.push({ ini: d, n: 0, lbl: DOW[d.getDay()], hoje: i === 0 }); }
+  const hoje0=(typeof inicioDoDiaBR==='function')?inicioDoDiaBR():new Date(new Date().setHours(0,0,0,0));
+  const DOW=['D','S','T','Q','Q','S','S'];
+  const dias=[];
+  for(let i=6;i>=0;i--){const d=new Date(hoje0);d.setDate(d.getDate()-i);dias.push({ini:d,n:0,lbl:DOW[d.getDay()],hoje:i===0});}
   for(const l of all){
-    const evs = l.analysis?.aprendizado?.eventos || [];
+    const evs=l.analysis?.aprendizado?.eventos||[];
     for(const ev of evs){
-      if(ev.evento !== "contato_manual" || !ev.quando) continue;
-      const q = new Date(ev.quando);
-      if(isNaN(q.getTime())) continue;
-      for(const dd of dias){ const fim = new Date(dd.ini); fim.setDate(fim.getDate() + 1); if(q >= dd.ini && q < fim){ dd.n++; break; } }
+      if(ev.evento!=='contato_manual'||!ev.quando) continue;
+      const q=new Date(ev.quando);if(isNaN(q.getTime())) continue;
+      for(const dd of dias){const fim=new Date(dd.ini);fim.setDate(fim.getDate()+1);if(q>=dd.ini&&q<fim){dd.n++;break;}}
     }
   }
-  const atendimentosHoje = dias[6].n;
-  const maxN = Math.max(1, ...dias.map(d => d.n));
-  const barras = dias.map(d => `<div class="dz-bar${d.hoje?" hoje":""}"><span class="num">${d.n}</span><span class="col" style="height:${Math.round(d.n/maxN*100)}%"></span><span class="d">${d.lbl}</span></div>`).join("");
+  const atendimentosHoje=dias[6].n,maxN=Math.max(1,...dias.map(d=>d.n));
+  const barras=dias.map(d=>`<div class="dz-bar${d.hoje?' hoje':''}"><span class="num">${d.n}</span><span class="col" style="height:${Math.round(d.n/maxN*100)}%"></span><span class="d">${d.lbl}</span></div>`).join('');
 
-  // ---- Funil de conversão (acumulado) ----
-  const emContato = all.filter(l => { const e = normalizarEtapa(l.etapa); return e === "Atendimento" || e === "Visita/Proposta" || e === "Negociação" || e === "Vendido"; }).length;
-  const propostaEnv = all.filter(l => { const e = normalizarEtapa(l.etapa); return e === "Visita/Proposta" || e === "Negociação" || e === "Vendido"; }).length;
-  const fechado = vendidos;
-  const funilDef = [["Leads recebidos", total],["Em contato", emContato],["Proposta enviada", propostaEnv],["Fechado", fechado]];
-  const funilHtml = funilDef.map(([lbl, n]) => {
-    const pct = total ? Math.round(n / total * 100) : 0;
-    return `<div class="row"><div class="top"><b>${lbl}</b><span>${n} · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
-  }).join("");
-
-  // ---- Vendas do mês (dado real, mantido do relatório antigo) ----
-  const agora = new Date();
-  let vMesQtd = 0, vMesValor = 0;
+  const agoraData=new Date();let vMesQtd=0,vMesValor=0;
   for(const l of all){
-    if(normalizarEtapa(l.etapa) !== "Vendido") continue;
-    const dt = l.analysis?.venda?.registradaEm ? new Date(l.analysis.venda.registradaEm) : null;
-    if(!dt || isNaN(dt.getTime())) continue;
-    if(dt.getMonth() === agora.getMonth() && dt.getFullYear() === agora.getFullYear()){ vMesQtd++; vMesValor += parseValorVenda(l.analysis?.venda?.valor); }
+    if(normalizarEtapa(l.etapa)!=='Vendido') continue;
+    const dt=l.analysis?.venda?.registradaEm?new Date(l.analysis.venda.registradaEm):null;
+    if(!dt||isNaN(dt.getTime())) continue;
+    if(dt.getMonth()===agoraData.getMonth()&&dt.getFullYear()===agoraData.getFullYear()){vMesQtd++;vMesValor+=parseValorVenda(l.analysis?.venda?.valor);}
   }
-  const nomeMes = agora.toLocaleDateString("pt-BR", { month: "long" });
-  const ticket = vMesQtd ? vMesValor / vMesQtd : 0;
-
-  const kpi = (k, v) => `<div class="dz-kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  const nomeMes=agoraData.toLocaleDateString('pt-BR',{month:'long'}),ticket=vMesQtd?vMesValor/vMesQtd:0;
+  const totalAcoes=Math.max(1,counts.agora+counts.respondeu+counts.programados+counts.aguardando);
+  const leitura=[['Fazer agora',counts.agora],['Cliente respondeu',counts.respondeu],['Programados',counts.programados],['Aguardando cliente',counts.aguardando]].map(([lbl,n])=>{const pct=Math.round(n/totalAcoes*100);return `<div class="row"><div class="top"><b>${lbl}</b><span>${n} · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;}).join('');
+  const kpi=(k,v)=>`<div class="dz-kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   return `
-    <div class="dz-head"><h2>Desempenho</h2><div class="sub">Visão geral · últimos 7 dias</div></div>
+    <div class="dz-head"><h2>Ritmo comercial</h2><div class="sub">Movimentação real · últimos 7 dias</div></div>
     <div class="dz-kpis">
-      ${kpi("Leads ativos", leadsAtivos)}
-      ${kpi("Atendimentos hoje", atendimentosHoje)}
-      ${kpi("Taxa de conversão", conversao + "%")}
-      ${kpi("Propostas abertas", propostasAbertas)}
+      ${kpi('Clientes ativos',ativos.length)}
+      ${kpi('Atendidos hoje',atendimentosHoje)}
+      ${kpi('Pedem sua ação',counts.agora+counts.respondeu)}
+      ${kpi('Vendas no mês',vMesQtd)}
     </div>
     <div class="dz-grid">
       <div class="dz-card"><h4>Atendimentos por dia</h4><div class="dz-bars">${barras}</div></div>
-      <div class="dz-card dz-funil"><h4>Funil de conversão</h4>${funilHtml}</div>
+      <div class="dz-card"><h4>Condução atual</h4>${leitura}</div>
     </div>
     <div class="dz-card dz-vendas"><h4 style="text-transform:capitalize">Fechamento de ${nomeMes}</h4>
       <div class="dz-vrow">
-        <div><div class="v" style="color:var(--lime)">${vMesQtd}</div><div class="k">${vMesQtd===1?"venda":"vendas"}</div></div>
-        <div><div class="v" style="color:var(--acao)">${vMesValor>0?formatBRL(vMesValor):"R$ 0"}</div><div class="k">valor total</div></div>
-        <div><div class="v">${ticket>0?formatBRL(ticket):"—"}</div><div class="k">ticket médio</div></div>
+        <div><div class="v" style="color:var(--lime)">${vMesQtd}</div><div class="k">${vMesQtd===1?'venda':'vendas'}</div></div>
+        <div><div class="v" style="color:var(--acao)">${vMesValor>0?formatBRL(vMesValor):'R$ 0'}</div><div class="k">valor total</div></div>
+        <div><div class="v">${ticket>0?formatBRL(ticket):'—'}</div><div class="k">ticket médio</div></div>
       </div>
-    </div>
-    ${ (all.length ? `<div style="margin-top:14px">${buildDesempenhoInsightsHTML(all)}</div>` : "") }`;
+    </div>`;
 }
 
 // ===== Carteira completa: todos os leads num lugar (panorama + contatar hoje + ranking) =====
@@ -8183,7 +8158,7 @@ async function carregarCarteira(force){
 window.carregarCarteira = carregarCarteira;
 
 // ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["reaquecer","Reaquecer"],["geladeira","Geladeira"]];
+const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["reaquecer","Reaquecer"],["geladeira","Arquivados"]];
 const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
 const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
 function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
@@ -8627,7 +8602,7 @@ window.carregarPerdidos = carregarPerdidos;
 
 async function reabrirLeadPerdido(id, btn){
   if(!id) return;
-  if(!confirm("Reabrir esse lead? Ele volta pro pipeline em Atendimento.")) return;
+  if(!confirm("Reabrir este cliente? Ele volta para os atendimentos ativos.")) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reabrindo..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -8678,7 +8653,7 @@ async function carregarGeladeira(){
     const data = await res.json();
     const items = (data?.items || []).map(limparLead).filter(l => ["Geladeira","Perdido"].includes(normalizarEtapa(l.etapa)));
     if(!items.length){
-      box.innerHTML = '<div class="empty">Nenhum lead na geladeira no momento.</div>';
+      box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>';
       return;
     }
     const cardGel = (l, motivos) => {
@@ -8693,7 +8668,7 @@ async function carregarGeladeira(){
               <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||"Cliente")}</strong>
               <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?" · "+dias:""}</div>
             </div>
-            <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">❄ GELADEIRA</span>
+            <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
           </div>
           ${motivoHtml}
           <div style="display:flex;gap:8px;margin-top:10px">
@@ -8714,7 +8689,7 @@ window.carregarGeladeira = carregarGeladeira;
 
 async function reativarLeadGeladeira(id, btn){
   if(!id) return;
-  if(!confirm("Reativar esse lead? Ele volta pro pipeline em Atendimento.")) return;
+  if(!confirm("Reativar este cliente? Ele volta para os atendimentos ativos.")) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reativando..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -8735,7 +8710,7 @@ window.reativarLeadGeladeira = reativarLeadGeladeira;
 
 async function arquivarLead(id, nome){
   if(!id) return;
-  if(!confirm(`Mandar ${nome || "este lead"} pra Geladeira? Ele sai das listas ativas mas continua guardado pra revisitar depois.`)) return;
+  if(!confirm(`Arquivar ${nome || "este lead"}? Ele sai das prioridades, mas continua guardado para ser reativado depois.`)) return;
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -8743,7 +8718,7 @@ async function arquivarLead(id, nome){
     });
     const data = await res.json().catch(()=>({ok:false}));
     if(data?.ok){
-      toast("Lead movido pra Geladeira.");
+      toast("Lead arquivado.");
       voltarDoLead();
       carregarDashboard();
     } else {
@@ -9323,97 +9298,328 @@ function abrirAtendimentosFiltro(filtro="todos"){
 window.leadEhQuente=leadEhQuente;
 window.abrirAtendimentosFiltro=abrirAtendimentosFiltro;
 
+function cp786Modelo(l){
+  try{return ui670ModeloComercial(l)||{};}catch(_){return {};}
+}
+function cp786DataTs(v, hora=''){
+  if(v==null||v==='') return 0;
+  if(v instanceof Date) return Number.isFinite(v.getTime())?v.getTime():0;
+  if(typeof v==='number'){
+    const n=v<1e12?v*1000:v;
+    return Number.isFinite(n)?n:0;
+  }
+  const raw=String(v).trim();
+  if(!raw) return 0;
+  if(/^\d{10,13}$/.test(raw)){
+    const n=Number(raw); return Number.isFinite(n)?(raw.length<=10?n*1000:n):0;
+  }
+  const br=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  const iso=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const m=br||iso;
+  if(m){
+    const y=Number(br?m[3]:m[1]), mes=Number(m[2]), dia=Number(br?m[1]:m[3]);
+    const hm=String(hora||'').match(/\b([01]?\d|2[0-3])[:h](\d{2})?\b/);
+    const hh=hm?String(hm[1]).padStart(2,'0'):'12', mm=hm?String(hm[2]||'00').padStart(2,'0'):'00';
+    const d=new Date(`${String(y).padStart(4,'0')}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}T${hh}:${mm}:00-03:00`);
+    return Number.isFinite(d.getTime())?d.getTime():0;
+  }
+  const direto=new Date(raw);
+  return Number.isFinite(direto.getTime())?direto.getTime():0;
+}
+function cp786MensagemTs(m){
+  return cp786DataTs(m?.iso||m?.timestamp||m?.quando)||cp786DataTs(m?.date,m?.time);
+}
+function cp786UltimaMensagemReal(l){
+  const msgs=Array.isArray(l?.recentMessages)?l.recentMessages:[];
+  const pn=String(l?.name||'').toLowerCase().trim().split(/\s+/)[0]||'';
+  const candidatos=[];
+  for(let i=0;i<msgs.length;i++){
+    const m=msgs[i];
+    if(!m||!String(m?.text||'').trim()) continue;
+    const source=String(m?.source||'').toLowerCase(), type=String(m?.type||'').toLowerCase();
+    if(source==='manual'||source==='crm'||type==='print-whatsapp'||['atendimento','nota','ligacao','visita','presencial'].includes(type)) continue;
+    candidatos.push({m,i,ts:cp786MensagemTs(m),falante:ehMsgDoCliente(m,pn)?'contato':'corretor'});
+  }
+  if(candidatos.length){
+    const todosComData=candidatos.every(x=>x.ts>0);
+    if(todosComData) return candidatos.reduce((a,b)=>b.ts>=a.ts?b:a);
+    return candidatos[candidatos.length-1];
+  }
+  return {m:null,i:-1,ts:0,falante:'desconhecido'};
+}
+function cp786UltimoFoiCliente(l,modelo=null,ultima=null){
+  const real=ultima||cp786UltimaMensagemReal(l);
+  if(real?.falante&&real.falante!=='desconhecido') return real.falante==='contato';
+  const mc=modelo||cp786Modelo(l), a=l?.analysis||{}, d=a?.diagnostico||{};
+  const canonico=String(mc?.contexto?.ultimaPessoaFalar||'').toLowerCase();
+  if(canonico) return /contato|cliente|lead|comprador|interessad/.test(canonico);
+  const autor=String(d.ultimaPessoa||d.ultimoAutor||a.ultimaPessoa||l?.lastMessageSender||l?.lastSender||'').toLowerCase();
+  return /cliente|contato|lead|comprador|interessad/.test(autor);
+}
+function cp786UltimaMensagemTs(l,ultima=null){
+  const real=ultima||cp786UltimaMensagemReal(l);
+  if(real?.m) return Number(real.ts)||0;
+  return cp786DataTs(l?.lastMessageAt||l?.lastInteractionAt);
+}
+function cp786UltimoAtendimentoTs(l){
+  const eventos=Array.isArray(l?.analysis?.aprendizado?.eventos)?l.analysis.aprendizado.eventos:[];
+  return eventos.reduce((max,e)=>e?.evento==='contato_manual'?Math.max(max,cp786DataTs(e.quando)):max,0);
+}
+function cp786ClienteRespondeu(l,modelo=null,ultima=null){
+  if(!leadEhAtivo(l)) return false;
+  const mc=modelo||cp786Modelo(l), real=ultima||cp786UltimaMensagemReal(l);
+  if(!cp786UltimoFoiCliente(l,mc,real)) return false;
+  const acao=mc?.acao||{}, status=String(acao.status||''), responsavel=String(acao.responsavel||'');
+  if(['sem-acao-urgente','aguardando-resposta','compromisso-agendado'].includes(status)||responsavel==='ninguem') return false;
+  const msgTs=cp786UltimaMensagemTs(l,real), atendimentoTs=cp786UltimoAtendimentoTs(l);
+  if(msgTs) return !atendimentoTs||msgTs>atendimentoTs;
+  // Sem horário confiável, mostra uma vez até o primeiro atendimento; depois não reaparece sozinho.
+  return !atendimentoTs;
+}
+function cp786TemCompromisso(l){
+  if(!leadEhAtivo(l)) return false;
+  if(lembreteFuturo(l)) return true;
+  const apps=Array.isArray(l?.analysis?.confirmedAppointments)?l.analysis.confirmedAppointments:[];
+  let dispensados=null;
+  try{ dispensados=typeof compromissosDispensados==='function'?compromissosDispensados():null; }catch(_){ dispensados=null; }
+  for(const ap of apps){
+    const data=String(ap?.data||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)) continue;
+    const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
+    if(diff==null||diff<0) continue;
+    const prova=String(ap?.trechoLiteral||ap?.quando||ap?.oQue||'').trim();
+    if(!prova) continue;
+    const key=String(l?.id||'')+'|'+String(ap?.oQue||'')+'|'+data;
+    if(dispensados?.has?.(key)) continue;
+    return true;
+  }
+  return false;
+}
+function cp786Categoria(l,modelo=null,ultimaReal=null){
+  if(!leadEhAtivo(l)) return '';
+  // Quando usada como callback de Array.map, o segundo argumento é o índice.
+  // Só aceita os caches opcionais quando são objetos válidos de verdade.
+  const modeloValido=modelo&&typeof modelo==='object'&&!Array.isArray(modelo)?modelo:null;
+  const ultimaValida=ultimaReal&&typeof ultimaReal==='object'&&!Array.isArray(ultimaReal)&&'falante' in ultimaReal?ultimaReal:null;
+  const mc=modeloValido||cp786Modelo(l), ultima=ultimaValida||cp786UltimaMensagemReal(l);
+  if(cp786ClienteRespondeu(l,mc,ultima)) return 'respondeu';
+  if(cp786TemCompromisso(l)) return 'programados';
+  const acao=mc?.acao||{}, status=String(acao.status||''), responsavel=String(acao.responsavel||'');
+  const msgTs=cp786UltimaMensagemTs(l,ultima), atendimentoTs=cp786UltimoAtendimentoTs(l);
+  const mensagemTratada=!!atendimentoTs&&(!msgTs||atendimentoTs>=msgTs);
+  const precisaCorretor=responsavel==='corretor'||['responder-agora','retomar'].includes(status)||lembreteVencido(l);
+  if(precisaCorretor){
+    if(status==='responder-agora'&&mensagemTratada) return 'aguardando';
+    if(!lembreteVencido(l)&&(ehContatadoHoje(l)||(mensagemTratada&&typeof protegidoPosAtendimento==='function'&&protegidoPosAtendimento(l)))) return 'aguardando';
+    return 'agora';
+  }
+  if(status==='aguardando-resposta'||responsavel==='contato') return 'aguardando';
+  // A interface trabalha com apenas quatro visões. Um atendimento ativo sem ação
+  // imediata permanece em “Aguardando cliente”, em vez de criar uma quinta categoria oculta.
+  if(status==='sem-acao-urgente'||responsavel==='ninguem') return 'aguardando';
+  return 'aguardando';
+}
+function cp786CategoriaLabel(c){
+  return ({agora:'Fazer agora',respondeu:'Cliente respondeu',programados:'Programado',aguardando:'Aguardando cliente','sem-acao':'Sem ação agora'})[c]||'Sem ação agora';
+}
+function cp786CompromissoOrdemTs(l){
+  let menor=Number.MAX_SAFE_INTEGER;
+  const lembreteTs=cp786DataTs(l?.analysis?.lembrete?.quando);
+  if(typeof lembreteFuturo==='function'&&lembreteFuturo(l)&&lembreteTs) menor=Math.min(menor,lembreteTs);
+  const apps=Array.isArray(l?.analysis?.confirmedAppointments)?l.analysis.confirmedAppointments:[];
+  let dispensados=null;
+  try{dispensados=typeof compromissosDispensados==='function'?compromissosDispensados():null;}catch(_){dispensados=null;}
+  for(const ap of apps){
+    const data=String(ap?.data||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)) continue;
+    const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
+    if(diff==null||diff<0) continue;
+    const key=String(l?.id||'')+'|'+String(ap?.oQue||'')+'|'+data;
+    if(dispensados?.has?.(key)) continue;
+    const hora=String(ap?.hora||ap?.quando||ap?.dataHora||'').match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const ts=cp786DataTs(data,hora?`${hora[1]}:${hora[2]}`:'12:00');
+    if(ts) menor=Math.min(menor,ts);
+  }
+  return menor;
+}
+function cp786CompararConducao(a,b){
+  const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
+  const ca=cp786Categoria(a),cb=cp786Categoria(b);
+  const oa=ordem[ca]??9,ob=ordem[cb]??9;
+  if(oa!==ob) return oa-ob;
+  if(ca==='programados'){
+    const d=cp786CompromissoOrdemTs(a)-cp786CompromissoOrdemTs(b);
+    if(Number.isFinite(d)&&d!==0) return d;
+  }
+  try{
+    const d=compararPrioridadeAtendimento(a,b);
+    if(Number.isFinite(d)&&d!==0) return d;
+  }catch(_){ }
+  return String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR');
+}
+function cp786OrdenarConducao(lista,metaPronto=null){
+  const arr=Array.isArray(lista)?lista.slice():[];
+  const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
+  const meta=new Map();
+  for(const l of arr){
+    let score=Number(l?._score);
+    if(!Number.isFinite(score)){try{score=scoreRankingHoje(l);}catch(_){score=0;}}
+    const categoria=metaPronto?.get?.(l)?.categoria||cp786Categoria(l);
+    meta.set(l,{categoria,ordem:ordem[categoria]??9,score:Number.isFinite(score)?score:0,compromisso:categoria==='programados'?cp786CompromissoOrdemTs(l):Number.MAX_SAFE_INTEGER});
+  }
+  return arr.sort((a,b)=>{
+    const ma=meta.get(a),mb=meta.get(b);
+    if(ma.ordem!==mb.ordem) return ma.ordem-mb.ordem;
+    if(ma.categoria==='programados'&&ma.compromisso!==mb.compromisso) return ma.compromisso-mb.compromisso;
+    if(ma.score!==mb.score) return mb.score-ma.score;
+    return String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR');
+  });
+}
+function cp786TextoSemJargao(v){
+  return String(v||'')
+    .replace(/lead quente escondido/gi,'oportunidade com sinais fortes')
+    .replace(/antes que esfrie/gi,'enquanto o interesse está ativo')
+    .replace(/\besfriando\b/gi,'perdendo ritmo')
+    .replace(/\breaquecer\b/gi,'retomar')
+    .replace(/\bmuito quente\b/gi,'alta oportunidade')
+    .replace(/\bem negocia[cç][aã]o\b/gi,'em decisão')
+    .replace(/\bpipeline\b/gi,'condução')
+    .replace(/\bfunil\b/gi,'jornada')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function cp786ResumoAcao(l,modelo=null){
+  let descricao='';
+  try{ descricao=String((modelo||cp786Modelo(l))?.acao?.descricao||''); }catch(_){ descricao=''; }
+  const raw=cp786TextoSemJargao(descricao||l?.nextAction||l?.proximaAcao||(typeof motivoCurto==='function'?motivoCurto(l):'')||'Abrir atendimento para conferir.');
+  return raw.length>78?raw.slice(0,75).trim()+'...':raw;
+}
+function cp786Badge(l,categoria=null){
+  const c=categoria||cp786Categoria(l);
+  return ({agora:'Fazer agora',respondeu:'Responder',programados:'Programado',aguardando:'Aguardar','sem-acao':'Sem ação'})[c]||'Abrir';
+}
+function cp786Classe(l,categoria=null){
+  const c=categoria||cp786Categoria(l);
+  if(c==='agora'||c==='respondeu') return 'hot';
+  if(c==='programados') return 'warm';
+  if(c==='aguardando'||c==='sem-acao') return 'low';
+  return 'normal';
+}
+function cp786MetaConducao(l){
+  const modelo=cp786Modelo(l),ultima=cp786UltimaMensagemReal(l);
+  const categoria=cp786Categoria(l,modelo,ultima);
+  return {categoria,modelo,ultima,resumo:cp786ResumoAcao(l,modelo),badge:cp786Badge(l,categoria),classe:cp786Classe(l,categoria)};
+}
+function cp786PrecisaAcao(l){return cp786Categoria(l)==='agora';}
+function cp786AguardandoCliente(l){return cp786Categoria(l)==='aguardando';}
+function cp786AbrirConducao(filtro){
+  state.pipelineVisualFiltro=filtro||'agora';
+  show('pipeline');
+}
+function cp786AbrirPrioridadePrincipal(){
+  const leads=(state?.itemsAtivos||state?.todosLeads||[]).filter(leadEhAtivo);
+  cp786AbrirConducao(leads.some(l=>cp786Categoria(l)==='respondeu')?'respondeu':'agora');
+}
+window.cp786PrecisaAcao=cp786PrecisaAcao;
+window.cp786ClienteRespondeu=cp786ClienteRespondeu;
+window.cp786UltimoFoiCliente=cp786UltimoFoiCliente;
+window.cp786TemCompromisso=cp786TemCompromisso;
+window.cp786AguardandoCliente=cp786AguardandoCliente;
+window.cp786Categoria=cp786Categoria;
+window.cp786CategoriaLabel=cp786CategoriaLabel;
+window.cp786CompararConducao=cp786CompararConducao;
+window.cp786OrdenarConducao=cp786OrdenarConducao;
+window.cp786MetaConducao=cp786MetaConducao;
+window.cp786ResumoAcao=cp786ResumoAcao;
+window.cp786Badge=cp786Badge;
+window.cp786AbrirConducao=cp786AbrirConducao;
+window.cp786AbrirPrioridadePrincipal=cp786AbrirPrioridadePrincipal;
+
 renderResumoDia = function(items){
   const box = qs("#resumoDia");
   if(!box) return;
   if(!items?.length){ box.style.display="none"; box.innerHTML=""; return; }
-  const prioridade = items.filter(l => !ehContatadoHoje(l) && !lembreteFuturo(l) && (classificarGrupoHome(l)==="acao-hoje" || classificarGrupoHome(l)==="retomar-cuidado" || Number(l.daysSinceLastInteraction)>=3)).length;
-  const muitoQuentes = items.filter(leadEhQuente).length;
-  const retornos = items.filter(leadEhReaquecer).length;
-  const visitas = items.filter(l => {
-    const aps=l.analysis?.confirmedAppointments;
-    return (Array.isArray(aps)&&aps.length) || !!l.analysis?.lembrete?.quando;
-  }).length;
+  const ativos=items.filter(leadEhAtivo);
+  const categorias=ativos.map(cp786Categoria);
+  const fazerAgora=categorias.filter(c=>c==='agora').length;
+  const clienteRespondeu=categorias.filter(c=>c==='respondeu').length;
+  const compromissos=categorias.filter(c=>c==='programados').length;
+  const aguardando=categorias.filter(c=>c==='aguardando').length;
   box.style.display="grid";
   box.innerHTML = `
-    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('todos')"><span>Ativos</span><div><b>${items.filter(leadEhAtivo).length}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi active" onclick="abrirAtendimentosFiltro('quentes')"><span>Quentes</span><div><b>${muitoQuentes}</b><i>${ui631Icon('quente')}</i></div></div>
-    <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${visitas}</b><i>${ui631Icon('compromisso')}</i></div></div>
-    <div class="ui-kpi" onclick="abrirAtendimentosFiltro('reaquecer')"><span>Reaquecer</span><div><b>${retornos}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
+    <div class="ui-kpi active" onclick="cp786AbrirConducao('agora')"><span>Fazer agora</span><div><b>${fazerAgora}</b><i>${ui631Icon('resposta')}</i></div></div>
+    <div class="ui-kpi" onclick="cp786AbrirConducao('respondeu')"><span>Cliente respondeu</span><div><b>${clienteRespondeu}</b><i>${ui631Icon('conversa')}</i></div></div>
+    <div class="ui-kpi" onclick="cp786AbrirConducao('programados')"><span>Programados</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
+    <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
-  const a = l.analysis || {};
-  const d = Number(l.daysSinceLastInteraction||0);
-  const diag = a.diagnostico || {};
-  const pend = String(diag.pendenciaFinanceira || diag.pendencia || a.pendencia || "").trim();
-  const etapa = String(diag.etapa || l.etapa || "").toLowerCase();
-  const hist = [a.resumo, a.summary, a.ultimoCompromisso, diag.ultimoCompromisso, diag.ultimaInfoPrometida, diag.objecaoRelevante].map(x=>String(x||"")).join(" ").toLowerCase();
-  if(hist.includes("proposta")) return ["Proposta enviada" + (d?` há ${d} dia${d===1?'':'s'}`:""), d?"Não respondeu desde então":"Acompanhar retorno"];
-  if(hist.includes("simula")) return ["Pediu simulação", "Não recebeu retorno"];
-  if(hist.includes("visita") || hist.includes("conhecer")) return ["Prometeu visitar", "Acompanhar interesse"];
-  if(pend) return ["Permuta / entrada com imóvel", pend.slice(0,58)];
-  if(etapa.includes("negoci")) return ["Em negociação", "Próximo passo precisa ser conduzido"];
-  if(d>=7) return [`Último contato há ${d} dias`, "Bom momento para retomar"];
-  if(d>=3) return [`Parado há ${d} dias`, "Retomar antes de esfriar"];
-  return ["Próxima ação pendente", "Abrir diagnóstico antes de responder"];
+  const mc=cp786Modelo(l), acao=cp786TextoSemJargao(mc?.acao?.descricao||l?.nextAction||'');
+  const d=Number(l?.daysSinceLastInteraction||0);
+  if(acao) return [acao.length>72?acao.slice(0,69).trim()+'...':acao,''];
+  if(cp786Categoria(l)==='respondeu') return ['O cliente respondeu','Dar continuidade agora'];
+  if(cp786Categoria(l)==='programados') return ['Há um compromisso programado','Acompanhar na data certa'];
+  if(cp786Categoria(l)==='aguardando') return ['Aguardando o cliente','Não cobrar novamente agora'];
+  if(d>=7) return [`Último contato há ${d} dias`,'Bom momento para retomar'];
+  return ['Próxima ação pendente','Abrir diagnóstico antes de responder'];
 }
 function ui631LeadStatus(l){
-  const p = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-  const interesse = String(l.analysis?.diagnostico?.interesse||"").toLowerCase();
-  const etapa = normalizarEtapa(l.etapa);
-  const d = Number(l.daysSinceLastInteraction||0);
-  if(p>=55 || interesse==="alto") return ["Muito quente", "hot"];
-  if(etapa==="Negociação" || etapa==="Visita/Proposta") return ["Em negociação", "warm"];
-  if(d>=7) return [`Parado há ${d} dias`, "cold"];
-  return ["Prioridade", "neutral"];
+  const c=cp786Categoria(l);
+  return [cp786CategoriaLabel(c),c==='agora'||c==='respondeu'?'hot':c==='programados'?'warm':'neutral'];
 }
 
 function ui631LeadRow(l, actionLabel, pos){
-  const id=JSON.stringify(String(l.id||""));
-  const dias=l.daysSinceLastInteraction!=null?`${l.daysSinceLastInteraction}d`:(l.lastInteractionAt?formatarTempoRelativo(l.lastInteractionAt).replace(/ atrás$/,""):'');
-  const etapaLabel=normalizarEtapa(l.etapa);
-  const sub=produtosLabel(l)||etapaLabel||"";
-  const label=actionLabel||(etapaLabel==="Negociação"?"Negociação":etapaLabel==="Visita/Proposta"?"Visita":"Retomar");
+  const id=JSON.stringify(String(l.id||''));
+  const dias=l.daysSinceLastInteraction!=null?`${l.daysSinceLastInteraction}d`:(l.lastInteractionAt?formatarTempoRelativo(l.lastInteractionAt).replace(/ atrás$/,''):'');
+  const sub=produtosLabel(l)||'Produto não identificado';
+  const label=actionLabel||cp786Badge(l);
   const subLine=[sub,dias].filter(Boolean).join(' · ');
   const [motivo]=ui631LeadMotivo(l);
   return `<button type="button" class="ui-priority-row" onclick='abrirLead(${id})'>
-    <span class="ui-row-copy"><strong>${escapeHtml(l.name||"Cliente")}</strong><small>${escapeHtml(subLine)}</small>${motivo?`<em class="ui-row-motivo">${escapeHtml(motivo)}</em>`:''}</span>
+    <span class="ui-row-copy"><strong>${escapeHtml(l.name||'Cliente')}</strong><small>${escapeHtml(subLine)}</small>${motivo?`<em class="ui-row-motivo">${escapeHtml(motivo)}</em>`:''}</span>
     <span class="ui-row-action">${escapeHtml(label)}</span><span class="ui-row-chevron">›</span>
   </button>`;
 }
 
 renderListasHome = function(ordenados){
-  const foco=qs("#leadFocoArea"); if(!foco) return;
-  const area=qs("#top3Area"); if(area){area.style.display="none";area.innerHTML="";}
-  const fila=qs("#filaPrioridade"); if(fila){fila.style.display="none";fila.innerHTML="";}
-  const grupos={"acao-hoje":[],"retomar-cuidado":[],"boa-sem-urgencia":[],"pode-aguardar":[],"baixa-prioridade":[],"tratado-hoje":[]};
-  for(const l of (ordenados||[])){ const g=classificarGrupoHome(l); (grupos[g]||grupos["baixa-prioridade"]).push(l); }
-  Object.values(grupos).forEach(a=>a.sort(compararPrioridadeAtendimento));
-  grupos.todos=(ordenados||[]).slice().sort(compararPrioridadeAtendimento);
-  grupos.retomada=grupos.todos.filter(l=>!ehContatadoHoje(l)&&Number(l.daysSinceLastInteraction)>=3).slice(0,20);
-  state.gruposHome=grupos;
+  const foco=qs('#leadFocoArea'); if(!foco) return;
+  const area=qs('#top3Area'); if(area){area.style.display='none';area.innerHTML='';}
+  const fila=qs('#filaPrioridade'); if(fila){fila.style.display='none';fila.innerHTML='';}
+  const ativos=(ordenados||[]).filter(leadEhAtivo);
+  const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
+  const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
+  const respondeu=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='respondeu'));
+  const agora=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='agora'));
+  const programados=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='programados'));
+  const aguardando=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='aguardando'));
+  const prioritarios=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i).slice(0,4);
+  // As novas visões orientadas à ação são a fonte principal. Mantemos aliases internos
+  // usados por rotinas antigas (voltar, histórico e atalhos) para não quebrar navegação.
+  const acaoHoje=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i);
+  state.gruposHome={
+    respondeu,agora,programados,aguardando,todos:ativos,
+    hoje:acaoHoje,
+    retomada:agora,
+    "acao-hoje":acaoHoje,
+    "retomar-cuidado":[],
+    "boa-sem-urgencia":[],
+    "pode-aguardar":aguardando,
+    "baixa-prioridade":[],
+    "tratado-hoje":ativos.filter(l=>typeof ehContatadoHoje==='function'&&ehContatadoHoje(l))
+  };
   if(state.grupoAtivo || state.focoLeadId || state.lead?.id) return;
-  const prioritarios=[...grupos["acao-hoje"],...grupos["retomar-cuidado"],...grupos["boa-sem-urgencia"]].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i).slice(0,4);
-  const esfriando=(ordenados||[]).filter(l=>Number(l.daysSinceLastInteraction||0)>=14 && !ehContatadoHoje(l)).length;
-  const propostas=(ordenados||[]).filter(l=>{
-    const e=normalizarEtapa(l.etapa);
-    const temProposta = e==="Visita/Proposta" || e==="Negociação" || (Array.isArray(l.recentMessages) && l.recentMessages.some(m=>m&&m.proposta));
-    return temProposta && !ehContatadoHoje(l);
-  }).length;
-  const visitas=(ordenados||[]).filter(l=>{const aps=l.analysis?.confirmedAppointments;return (Array.isArray(aps)&&aps.length)||!!l.analysis?.lembrete?.quando;}).length;
-  const oportunidades=prioritarios.length;
+  const filtroPrincipal=respondeu.length?'respondeu':'agora';
   foco.innerHTML=`
     <div class="ui-home-content">
-      ${ui677ToolbarHTML("home")}
+      ${ui677ToolbarHTML('home')}
       <section class="ui-insight-card">
-        <div class="ui-insight-title"><i>✦</i><strong>O sistema percebeu</strong></div>
-        <p>${esfriando} ${esfriando===1?'lead esfriando':'leads esfriando'}, ${propostas} proposta${propostas===1?'':'s'} sem retorno e ${visitas} visita${visitas===1?'':'s'} para confirmar. ${oportunidades?`${oportunidades} prioridade${oportunidades===1?'':'s'} para avançar hoje.`:'Base sem urgência agora.'}</p>
-        <button type="button" onclick="show('pipeline')">Ver análise</button>
+        <div class="ui-insight-title"><i>✦</i><strong>Leitura do dia</strong></div>
+        <p><b>${respondeu.length}</b> cliente${respondeu.length===1?' respondeu':'s responderam'}, <b>${agora.length}</b> atendimento${agora.length===1?' pede':'s pedem'} ação, <b>${programados.length}</b> compromisso${programados.length===1?' está':'s estão'} programado${programados.length===1?'':'s'} e <b>${aguardando.length}</b> cliente${aguardando.length===1?' está':'s estão'} no tempo de resposta.</p>
+        <button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Abrir Condução</button>
       </section>
       <section class="ui-priority-card">
-        <div class="ui-section-head"><div><h3>Leads prioritários para hoje</h3><p>Toque num lead para ver o diagnóstico e a mensagem pronta pra enviar no WhatsApp.</p></div><button type="button" onclick="show('pipeline')">Ver todos</button></div>
-        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l, l.analysis?.confirmedAppointments?.length?'Ver visita':'Responder', i)).join(''):'<div class="empty">Nenhum lead prioritário agora.</div>'}</div>
+        <div class="ui-section-head"><div><h3>Atendimentos prioritários para hoje</h3><p>O Corretor Pro colocou primeiro quem precisa de você agora.</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
+        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l,cp786Badge(l),i)).join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
       </section>
     </div>`;
 };
@@ -9615,34 +9821,53 @@ function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
 function cpInitials(name){ return String(name||"C").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "C"; }
 function cpStage(lead){ return normalizarEtapa(lead?.etapa) || "Atendimento"; }
 function cpPriorityMeta(lead){
-  const p = prioridadeAtendimento(lead) || {};
-  const grupo = String(p.grupo || "");
-  if(grupo === "acao-hoje") return {label:"Atender hoje", cls:"hot", cor:"var(--cp-coral)"};
-  if(grupo === "retomar-cuidado") return {label:"Retomar", cls:"warm", cor:"var(--cp-orange)"};
-  if(grupo === "boa-sem-urgencia") return {label:"Em andamento", cls:"warm", cor:"var(--cp-orange)"};
-  return {label:"Pode aguardar", cls:"cold", cor:"var(--cp-blue)"};
+  const categoria=typeof cp786Categoria==='function'?cp786Categoria(lead):'';
+  if(categoria==='respondeu') return {label:'Responder',cls:'hot',cor:'var(--cp-coral)'};
+  if(categoria==='agora') return {label:'Fazer agora',cls:'hot',cor:'var(--cp-coral)'};
+  if(categoria==='programados') return {label:'Programado',cls:'warm',cor:'var(--cp-blue)'};
+  if(categoria==='aguardando') return {label:'Aguardar',cls:'cold',cor:'var(--cp-slate)'};
+  return {label:'Sem ação',cls:'cold',cor:'var(--cp-slate)'};
 }
 function cpHasAppointment(lead){
   const aps=lead?.analysis?.confirmedAppointments;
   return (Array.isArray(aps)&&aps.length>0) || !!lead?.analysis?.lembrete?.quando;
 }
 function cpAppointmentData(lead){
-  const aps=lead?.analysis?.confirmedAppointments;
-  const a=Array.isArray(aps)&&aps.length ? (aps[0]||{}) : null;
-  const raw=a?.quando||a?.dataHora||lead?.analysis?.lembrete?.quando||"";
-  let time="Hoje";
-  if(raw){
-    const dt=new Date(raw);
-    if(!Number.isNaN(dt.getTime())) time=dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-    else { const m=String(raw).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/); if(m) time=m[0].padStart(5,"0"); }
+  const apps=Array.isArray(lead?.analysis?.confirmedAppointments)?lead.analysis.confirmedAppointments:[];
+  const hoje=typeof ui671HojeIso==='function'?ui671HojeIso():new Date().toISOString().slice(0,10);
+  const validos=apps.map(ap=>{
+    const data=String(ap?.data||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
+    const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
+    if(diff==null||diff<0) return null;
+    const hora=String(ap?.hora||ap?.quando||ap?.dataHora||'').match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const hh=hora?String(hora[1]).padStart(2,'0'):'12',mm=hora?hora[2]:'00';
+    const ts=cp786DataTs(data,`${hh}:${mm}`);
+    return {ap,data,diff,ts,hora:hora?`${hh}:${mm}`:''};
+  }).filter(Boolean).sort((a,b)=>a.ts-b.ts);
+  const escolhido=validos[0]||null;
+  const lembreteRaw=lead?.analysis?.lembrete?.quando||'';
+  const lembreteTs=cp786DataTs(lembreteRaw);
+  const usarLembrete=!escolhido&&lembreteTs>Date.now();
+  let time='Hoje',text='';
+  if(escolhido){
+    const prefixo=escolhido.diff===0?'Hoje':escolhido.diff===1?'Amanhã':new Date(`${escolhido.data}T12:00:00-03:00`).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    time=[prefixo,escolhido.hora].filter(Boolean).join(' · ');
+    text=[escolhido.ap?.oQue||escolhido.ap?.tipo||'',produtosLabel(lead)||''].filter(Boolean).join(' · ');
+  }else if(usarLembrete){
+    const d=new Date(lembreteTs), hojeIso=hoje;
+    const dataIso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    const diff=typeof ui671DiasAte==='function'?ui671DiasAte(dataIso):null;
+    const prefixo=diff===0?'Hoje':diff===1?'Amanhã':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    time=`${prefixo} · ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    text=[lead?.analysis?.lembrete?.motivo||'Lembrete',produtosLabel(lead)||''].filter(Boolean).join(' · ');
   }
-  const text=[a?.oQue||a?.tipo||"",produtosLabel(lead)||""].filter(Boolean).join(" · ") || cpStage(lead);
-  return {time,text};
+  return {time,text:text||cpStage(lead),sortTs:escolhido?.ts||lembreteTs||Number.MAX_SAFE_INTEGER};
 }
 function cpDaysText(lead){ const d=Number(lead?.daysSinceLastInteraction); if(Number.isFinite(d)) return d<=0?"Hoje":d===1?"Há 1 dia":`Há ${d} dias`; return "—"; }
 function cpNextAction(lead){
-  const a=lead?.analysis||{}, d=a?.diagnostico||{};
-  return String(a.proximaAcao||a.nextAction||d.proximaAcao||d.ultimaInfoPrometida||motivoCurto(lead)||"Retomar atendimento").replace(/\s+/g," ").slice(0,62);
+  const acao=typeof cp786ResumoAcao==='function'?cp786ResumoAcao(lead):'';
+  return String(acao||'Abrir atendimento para conferir.').replace(/\s+/g,' ').slice(0,62);
 }
 function cpSaleValue(all){
   const now=new Date(); let total=0;
@@ -9671,26 +9896,26 @@ function renderCorretorProDashboard(items, all){
     dateEl.textContent=txt.charAt(0).toLowerCase()+txt.slice(1);
   }
 
-  const prioridades=items.filter(l=>{
-    if(ehContatadoHoje(l)||lembreteFuturo(l)) return false;
-    const g=String((prioridadeAtendimento(l)||{}).grupo||"");
-    return g==="acao-hoje"||g==="retomar-cuidado";
-  }).length;
-  const compromissos=items.filter(cpHasAppointment).length;
-  const negociacao=items.filter(l=>["Visita/Proposta","Negociação"].includes(cpStage(l))||l?.hasProposal===true).length;
+  const categorias786=new Map(items.map(l=>[l,cp786Categoria(l)]));
+  const categoriaDe=l=>categorias786.get(l)||cp786Categoria(l);
+  const fazerAgora=items.filter(l=>categoriaDe(l)==='agora').length;
+  const compromissos=items.filter(l=>categoriaDe(l)==='programados').length;
+  const respostas=items.filter(l=>categoriaDe(l)==='respondeu').length;
   cpSetText("cpNewLeads",items.length);
-  cpSetText("cpActiveDeals",prioridades);
+  cpSetText("cpActiveDeals",fazerAgora);
   cpSetText("cpVisits",compromissos);
-  cpSetText("cpProposals",negociacao);
+  cpSetText("cpProposals",respostas);
   cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
   const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=items.length?"ativos agora":"base sem leads ativos";
 
-  const ordered=items.slice().sort(compararPrioridadeAtendimento);
-  const withAppointment=items.filter(cpHasAppointment).sort((a,b)=>String(cpAppointmentData(a).time).localeCompare(String(cpAppointmentData(b).time)));
+  const ordered=cp786OrdenarConducao(items);
+  const programados=items.filter(l=>categoriaDe(l)==='programados');
+  const appointmentMeta=new Map(programados.map(l=>[l,cpAppointmentData(l)]));
+  const withAppointment=programados.slice().sort((a,b)=>appointmentMeta.get(a).sortTs-appointmentMeta.get(b).sortTs);
   const apBox=qs("#cpAppointments");
   if(apBox){
     apBox.innerHTML=withAppointment.length?withAppointment.slice(0,4).map(l=>{
-      const meta=cpPriorityMeta(l), ap=cpAppointmentData(l), id=String(l.id||"");
+      const meta=cpPriorityMeta(l), ap=appointmentMeta.get(l), id=String(l.id||"");
       return `<button type="button" class="cp-appointment" onclick='cpOpenLead(${JSON.stringify(id)})'>
         <span class="cp-time">${cpEscape(ap.time)}</span>
         <span class="cp-lead-avatar" style="${cpAvatarStyle(l.name)}">${cpInitials(l.name)}</span>
@@ -9700,33 +9925,27 @@ function renderCorretorProDashboard(items, all){
     }).join(""):`<div class="cp-empty cp-empty-compact"><strong>Nenhum compromisso registrado</strong><span>Visitas, reuniões e lembretes aparecerão aqui.</span></div>`;
   }
 
-  const counts={hoje:0,retomar:0,andamento:0,aguardar:0};
-  for(const l of items){
-    const g=String((prioridadeAtendimento(l)||{}).grupo||"");
-    if(g==="acao-hoje") counts.hoje++;
-    else if(g==="retomar-cuidado") counts.retomar++;
-    else if(g==="boa-sem-urgencia") counts.andamento++;
-    else counts.aguardar++;
-  }
-  const total=Math.max(1,items.length);
-  const hp=cpPct(counts.hoje,total), rp=cpPct(counts.retomar,total), ap=cpPct(counts.andamento,total);
+  const counts={agora:0,respondeu:0,programados:0,aguardando:0};
+  for(const l of items){ const c=categoriaDe(l); if(counts[c]!==undefined) counts[c]++; }
+  const totalConduzido=counts.agora+counts.respondeu+counts.programados+counts.aguardando;
+  const total=Math.max(1,totalConduzido);
+  const hp=cpPct(counts.agora,total), rp=cpPct(counts.respondeu,total), pp=cpPct(counts.programados,total);
   const donut=qs("#cpTempDonut");
-  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+ap)}%,var(--cp-slate) ${Math.min(100,hp+rp+ap)}% 100%)`;
-  cpSetText("cpTotalAtendimentos",items.length);
+  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+pp)}%,var(--cp-slate) ${Math.min(100,hp+rp+pp)}% 100%)`;
+  cpSetText("cpTotalAtendimentos",totalConduzido);
   const legend=qs("#cpTempLegend");
   if(legend) legend.innerHTML=[
-    ["Atender hoje",counts.hoje,cpPct(counts.hoje,total),"var(--cp-coral)"],
-    ["Retomar",counts.retomar,cpPct(counts.retomar,total),"var(--cp-orange)"],
-    ["Em andamento",counts.andamento,cpPct(counts.andamento,total),"var(--cp-blue)"],
-    ["Pode aguardar",counts.aguardar,cpPct(counts.aguardar,total),"var(--cp-slate)"]
+    ["Fazer agora",counts.agora,cpPct(counts.agora,total),"var(--cp-coral)"],
+    ["Cliente respondeu",counts.respondeu,cpPct(counts.respondeu,total),"var(--cp-orange)"],
+    ["Programados",counts.programados,cpPct(counts.programados,total),"var(--cp-blue)"],
+    ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"]
   ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[3]}"></i><span>${x[0]}</span><b>${x[2]}%</b></div>`).join("");
 
   const stageDefs=[
-    ["Leads ativos",items.length],
-    ["Qualificados",items.filter(l=>["Qualificado","Visita/Proposta","Negociação"].includes(cpStage(l))).length],
-    ["Visita/Proposta",items.filter(l=>cpStage(l)==="Visita/Proposta").length],
-    ["Negociação",items.filter(l=>cpStage(l)==="Negociação").length],
-    ["Vendidos",all.filter(l=>cpStage(l)==="Vendido").length]
+    ["Fazer agora",counts.agora],
+    ["Cliente respondeu",counts.respondeu],
+    ["Programados",counts.programados],
+    ["Aguardando cliente",counts.aguardando]
   ];
   const maxStage=Math.max(1,...stageDefs.map(x=>x[1]));
   const stageBox=qs("#cpStageBars");
@@ -9738,7 +9957,7 @@ function renderCorretorProDashboard(items, all){
       const meta=cpPriorityMeta(l), id=String(l.id||"");
       return `<button type="button" class="cp-running-row" onclick='cpOpenLead(${JSON.stringify(id)})'>
         <span class="cp-running-lead"><i class="cp-lead-avatar" style="${cpAvatarStyle(l.name)}">${cpInitials(l.name)}</i><span><strong>${cpEscape(l.name||"Cliente")}</strong><small>${cpEscape(produtosLabel(l)||"Atendimento")}</small></span></span>
-        <span class="cp-chip ${meta.cls}">${cpEscape(cpStage(l))}</span>
+        <span class="cp-chip ${meta.cls}">${cpEscape(cp786CategoriaLabel(categoriaDe(l)))}</span>
         <span>${cpDaysText(l)}</span><span>${cpEscape(cpNextAction(l))}</span><span class="cp-priority ${meta.cls}">${meta.label}</span>
       </button>`;
     }).join(""):`<div class="cp-empty cp-empty-table"><strong>Nenhum atendimento em andamento</strong><span>Importe uma conversa para começar.</span></div>`;
@@ -10478,7 +10697,7 @@ function ui670DetailRows(lead,mc){
       const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== 'Vendido' && e !== 'Perdido'; });
       const filtro = state.carteiraFiltro || 'todos';
       const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(filtro==='atendidos-hoje' ? ((a,b)=>{const ea=ui683UltimoAtendimento(a), eb=ui683UltimoAtendimento(b); return new Date(eb?.quando||0)-new Date(ea?.quando||0);}) : compararPrioridadeAtendimento);
-      const filtros683 = [['todos','Todos'],['quentes','Quentes'],['mornos','Mornos'],['frios','Frios'],['reaquecer','Reaquecer'],['atendidos-hoje','✓ Atendidos hoje'],['geladeira','Geladeira']];
+      const filtros683 = [['todos','Todos'],['atendidos-hoje','✓ Atendidos hoje'],['geladeira','Arquivados']];
       const chips = filtros683.map(([k,lbl]) => `<button type="button" class="${k===filtro?'active':''}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join('');
       const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
       const lote = lista.slice(0, visiveis);
@@ -10525,7 +10744,7 @@ function ui670DetailRows(lead,mc){
       <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
       <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
       <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
-      <button type="button" onclick="arquivarLead(${id},${nome})">Colocar na geladeira</button>`;
+      <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }
   }
@@ -10622,7 +10841,7 @@ function ui670DetailRows(lead,mc){
     // Dois destinos "de saída" (Geladeira e Perdido) explicados na hora, pra ninguém
     // confundir "guardar pra depois" com "encerrar sem venda".
     const confirmMsg = etapa === 'Geladeira'
-      ? 'Colocar este lead na Geladeira? Ele sai das listas ativas, mas fica guardado pra você reativar depois.'
+      ? 'Arquivar este lead? Ele sai das prioridades, mas fica guardado para você reativar depois.'
       : etapa === 'Perdido'
         ? 'Marcar este lead como Perdido? Ele sai das listas ativas e da busca (dá pra reabrir depois).'
         : `Marcar este lead como ${label || etapa}?`;
@@ -10657,7 +10876,7 @@ function ui670DetailRows(lead,mc){
 
   const antigoArquivarLead = window.arquivarLead;
   window.arquivarLead = function(id, nome){
-    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Geladeira', 'lead_arquivado');
+    return ui683MoverEtapaComEvento(id, 'Geladeira', 'Arquivado', 'lead_arquivado');
   };
 
   function ui683CorrigirBotoesRapidos(){
@@ -10711,7 +10930,7 @@ function ui670DetailRows(lead,mc){
     if(low.includes('visita')) return 'Propor dois horários objetivos para visita e confirmar quem participa da decisão.';
     if(low.includes('proposta')) return 'Enviar ou revisar a proposta e combinar claramente o próximo retorno.';
     if(low.includes('retomar')) return 'Retomar a conversa usando o último compromisso do cliente como gancho, sem mensagem genérica.';
-    if(/^receber/i.test(txt)) return 'Pedir os dados que faltam para avançar: ' + txt.replace(/^receber\s*/i,'').trim();
+    if(/^receber\b/i.test(txt)) return 'Pedir os dados que faltam para avançar: ' + txt.replace(/^receber\s*/i,'').trim();
     return txt;
   }
   function ui684Data(lead){
@@ -11002,7 +11221,7 @@ function ui670DetailRows(lead,mc){
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
         <div>
           <div style="font-size:18px;font-weight:950;color:var(--text)">${vendido?'✅':'⚠️'} Aprendizado contínuo</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:3px">Este desfecho alimenta o funil real e as próximas recomendações da IA.</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px">Este desfecho alimenta o aprendizado comercial e as próximas recomendações da IA.</div>
         </div>
         <span style="font-size:12px;font-weight:950;border:1px solid ${vendido?'rgba(124,240,165,.35)':'rgba(255,107,122,.35)'};color:${vendido?'var(--acao)':'#ff8b8b'};border-radius:999px;padding:7px 10px">${titulo}</span>
       </div>
@@ -11439,7 +11658,7 @@ function ui670DetailRows(lead,mc){
       const items = baseRows(data?.items).filter(l => ['Geladeira','Perdido'].includes(normalizarEtapa(l.etapa)));
       const limite = ensureVisibleKey('geladeiraVisibleCount');
       const lote = items.slice(0, limite);
-      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum lead na geladeira no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
+      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
       box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(l => {
         const idJs = leadId(l);
         const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
@@ -11450,7 +11669,7 @@ function ui670DetailRows(lead,mc){
                 <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
                 <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
               </div>
-              <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">❄ GELADEIRA</span>
+              <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
             </div>
             <div style="display:flex;gap:8px;margin-top:10px">
               <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
@@ -11637,33 +11856,31 @@ function ui670DetailRows(lead,mc){
   };
 
   function notifyData(){
-    const leads = Array.isArray(window.leads) ? window.leads : (Array.isArray(window.state?.leads) ? window.state.leads : []);
-    const total = leads.length || Number($('#pillTotalLeadsDesktop')?.textContent?.match(/\d+/)?.[0]||0) || 0;
-    const urgentes = leads.filter(l=>String(l.prioridade||l.statusPrioridade||l.proxima_acao||'').toLowerCase().includes('atender')).length || Number((document.body.innerText.match(/(\d+)\s+leads?\s+pra atender/i)||[])[1]||0);
-    const propostas = leads.filter(l=>String(l.etapa||l.status||l.resultado||'').toLowerCase().includes('proposta') || String(l.proxima_acao||'').toLowerCase().includes('proposta')).length;
-    const frios = leads.filter(l=>String(l.prioridade||l.relacionamento||'').toLowerCase().includes('esfri')).length;
-    return {total, urgentes, propostas, frios};
+    const leads=(state?.todosLeads||state?.itemsAtivos||state?.leads||[]).filter(leadEhAtivo);
+    const counts={agora:0,respondeu:0,programados:0,aguardando:0};
+    for(const l of leads){const c=cp786Categoria(l);if(counts[c]!==undefined)counts[c]++;}
+    return {total:leads.length,...counts,acao:counts.agora+counts.respondeu};
   }
   function openNotifyPanel(){
-    let panel = $('.cp687-notify-panel');
-    if(!panel){ panel=document.createElement('div'); panel.className='cp687-notify-panel'; document.body.appendChild(panel); }
-    const d = notifyData();
-    panel.innerHTML = `
-      <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>Resumo prático do que merece ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
-      <div class="cp687-notify-item" data-go="carteira"><i>!</i><div><b>${d.urgentes||0} clientes pedem ação</b><span>Abra Atendimentos para priorizar de cima para baixo.</span></div></div>
-      <div class="cp687-notify-item" data-go="pipeline"><i>↗</i><div><b>${d.propostas||0} oportunidades em etapa avançada</b><span>Confira negociações e propostas sem retorno.</span></div></div>
-      <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>Agenda e retornos</b><span>Veja compromissos e lembretes marcados.</span></div></div>
-      <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total||0} leads na carteira</b><span>Acompanhe desempenho, movimentação e prioridades.</span></div></div>`;
+    let panel=$('.cp687-notify-panel');
+    if(!panel){panel=document.createElement('div');panel.className='cp687-notify-panel';document.body.appendChild(panel);}
+    const d=notifyData();
+    panel.innerHTML=`
+      <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
+      <div class="cp687-notify-item" data-go="pipeline" data-filter="respondeu"><i>↗</i><div><b>${d.respondeu} cliente${d.respondeu===1?' respondeu':'s responderam'}</b><span>Dê continuidade antes de iniciar uma nova retomada.</span></div></div>
+      <div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>
+      <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${d.programados} compromisso${d.programados===1?' programado':'s programados'}</b><span>Veja visitas, reuniões e lembretes com data.</span></div></div>
+      <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
     panel.classList.add('open');
     panel.querySelector('.cp687-notify-close')?.addEventListener('click',()=>panel.classList.remove('open'));
-    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{ panel.classList.remove('open'); if(typeof window.show==='function') window.show(el.dataset.go); }));
-    setTimeout(()=>document.addEventListener('click', outside, {once:true}),0);
-    function outside(ev){ if(!panel.contains(ev.target) && !ev.target.closest('#topBell')) panel.classList.remove('open'); }
+    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{panel.classList.remove('open');const filtro=el.dataset.filter;if(filtro&&typeof cp786AbrirConducao==='function')cp786AbrirConducao(filtro);else if(typeof window.show==='function')window.show(el.dataset.go);}));
+    setTimeout(()=>document.addEventListener('click',outside,{once:true}),0);
+    function outside(ev){if(!panel.contains(ev.target)&&!ev.target.closest('#topBell'))panel.classList.remove('open');}
   }
   function updateBell(){
     const badge = $('#bellBadge');
     if(!badge) return;
-    const n = notifyData().urgentes || 0;
+    const n = notifyData().acao || 0;
     badge.hidden = !n;
     badge.textContent = n > 9 ? '9+' : String(n);
   }
@@ -11932,34 +12149,17 @@ function ui670DetailRows(lead,mc){
     });
   }
   function sortedLeads(list){
+    if(typeof cp786OrdenarConducao==='function') return cp786OrdenarConducao(list||[]);
     return (list||[]).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
       .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
   }
   function etapaProduto(l){
-    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
     const p = String(l?.product || '').trim();
-    return p ? `${e} · ${p}` : e;
+    return p || 'Produto não identificado';
   }
-  function resumoAcao(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
-    return raw.length > 72 ? raw.slice(0,69).trim() + '...' : raw;
-  }
-  function badge(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
-    const t = String(p.titulo || '').trim();
-    if(/atender/i.test(t)) return 'Atender';
-    if(/retomar/i.test(t)) return 'Retomar';
-    if(/aguardar/i.test(t)) return 'Aguardar';
-    if(/sem/i.test(t)) return 'Sem ação';
-    return t || 'Abrir';
-  }
-  function cls(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
-    if(p.grupo === 'acao-hoje') return 'hot';
-    if(p.grupo === 'retomar-cuidado') return 'warm';
-    if(p.grupo === 'baixa-prioridade') return 'low';
-    return 'normal';
-  }
+  function resumoAcao(l){ return cp786ResumoAcao(l); }
+  function badge(l){ return cp786Badge(l); }
+  function cls(l){ return cp786Classe(l); }
   function row(l){
     return `<button type="button" class="cp695-lead-row ${cls(l)}" onclick='abrirLead(${idJs(l)})'>
       <span class="cp695-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapaProduto(l))}</em><small>${esc(resumoAcao(l))}</small></span>
@@ -12038,44 +12238,42 @@ function ui670DetailRows(lead,mc){
     if(!board) return;
     const render = (data) => {
       const all = (data?.items || []).map(typeof limparLead === 'function' ? limparLead : (x=>x)).filter(typeof leadEhAtivo === 'function' ? leadEhAtivo : (()=>true));
-      const hot = typeof leadEhQuente === 'function' ? leadEhQuente : (()=>false);
-      const compromisso = l => { const a = l?.analysis?.confirmedAppointments; return (Array.isArray(a)&&a.length)||!!l?.analysis?.lembrete?.quando; };
-      const reaquecer = typeof leadEhReaquecer === 'function' ? leadEhReaquecer : (()=>false);
-      const filtros = { todos:all, quentes:all.filter(hot), esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)), compromisso:all.filter(compromisso), reaquecer:all.filter(reaquecer) };
-      const filtro = state.pipelineVisualFiltro || 'todos';
-      const lista = sortedLeads(filtros[filtro] || all);
-      const listaPrioritaria = lista.filter(l=>{
-        try{ return ui670ModeloComercial(l)?.acao?.status !== 'sem-acao-urgente'; }catch(_){ return true; }
-      });
-      const etapas=['Novo','Atendimento','Visita/Proposta','Negociação','Standby'];
-      const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
-      all.forEach(l=>{ const e=typeof normalizarEtapa==='function'?normalizarEtapa(l?.etapa):String(l?.etapa||''); if(cnt[e]!==undefined) cnt[e]++; });
-      const tabs=[['todos','Todos'],['quentes','Quentes'],['esfriando','Esfriando'],['compromisso','Agenda'],['reaquecer','Reaquecer']];
-      const listRows = listaPrioritaria.length ? listaPrioritaria.map(row).join('') : '<div class="cp695-empty">Nenhum lead com ação pendente nesse filtro.</div>';
+      const grupos = {agora:[],respondeu:[],programados:[],aguardando:[]};
+      for(const l of all){ const c=cp786Categoria(l); if(grupos[c]) grupos[c].push(l); }
+      const filtrosValidos=['agora','respondeu','programados','aguardando'];
+      const filtro = filtrosValidos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
+      state.pipelineVisualFiltro=filtro;
+      const lista = sortedLeads(grupos[filtro]);
+      const tabs=[['agora','Fazer agora'],['respondeu','Cliente respondeu'],['programados','Programados'],['aguardando','Aguardando cliente']];
+      const listRows = lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhuma ação pendente nesta visão.</div>';
+      const sinais=[];
+      if(grupos.respondeu.length) sinais.push(`<li><b>${grupos.respondeu.length}</b> cliente${grupos.respondeu.length===1?' respondeu e espera':'s responderam e esperam'} sua continuidade.</li>`);
+      if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
+      if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação agora.</li>`);
+      if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta, sem nova cobrança agora.</li>`);
       board.innerHTML=`
-        <div class="ui-pipeline-kpis">
-          <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
-          <div class="ui-kpi active"><span>Quentes</span><div><b>${filtros.quentes.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('quente'):''}</i></div></div>
-          <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
-          <div class="ui-kpi"><span>Reaquecer</span><div><b>${filtros.reaquecer.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('reaquecer'):''}</i></div></div>
+        <div class="ui-pipeline-kpis cp786-action-kpis">
+          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='respondeu'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('respondeu')"><span>Cliente respondeu</span><div><b>${grupos.respondeu.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('conversa'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Programados</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
-        <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-        <div class="ui-pipeline-grid">
-          <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
-          <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
-        </div>
-        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list cp695-list">${listRows}</div></section>`;
+        <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
+        <section class="cp786-daily-reading">
+          <div><small>LEITURA DO DIA</small><h3>O que merece sua atenção</h3></div>
+          <ul>${sinais.length?sinais.join(''):'<li>Sua carteira não tem pendências imediatas.</li>'}</ul>
+        </section>
+        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Próximas ações</h3><p>O Corretor Pro ordenou quem precisa de você primeiro.</p></div><button type="button" onclick="reanalisarTudo()">↻ Atualizar leitura</button></div><div class="ui-priority-list cp695-list">${listRows}</div></section>`;
       requestAnimationFrame(fixLayout);
-      try{ cpPerfMark('renderPipeline695', cpPerfNow(), {total:listaPrioritaria.length}); }catch(_){}
     };
     const emMemoria = [state.todosLeads, state.itemsAtivos, state.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
     if(emMemoria) render({items:emMemoria});
-    else { board.innerHTML='<div class="cp695-loading">Carregando pipeline...</div>'; try{ render(await getLeadsData()); }catch(e){ board.innerHTML = typeof boxErro==='function'?boxErro('carregarPipeline()'):'<div class="empty">Falha ao carregar.</div>'; } }
+    else { board.innerHTML='<div class="cp695-loading">Lendo sua carteira...</div>'; try{ render(await getLeadsData()); }catch(e){ board.innerHTML = typeof boxErro==='function'?boxErro('carregarPipeline()'):'<div class="empty">Falha ao carregar.</div>'; } }
   };
   try{ carregarPipeline = window.carregarPipeline; }catch(_){}
 
   window.setPipelineVisualFiltro = function(f){
-    state.pipelineVisualFiltro = f || 'todos';
+    state.pipelineVisualFiltro = f || 'agora';
     if(state.active !== 'pipeline' && typeof show === 'function') show('pipeline');
     else window.carregarPipeline();
   };
@@ -12134,11 +12332,10 @@ function ui670DetailRows(lead,mc){
     catch(_){ return arr; }
   }
   function meta(l){
-    const e = normalEtapa(l);
-    const p = String(l?.product || '').trim();
+    const p = String(l?.product || '').trim() || 'Produto não identificado';
     const dias = Number(l?.daysSinceLastInteraction || l?.diasSemResposta || 0);
     const d = dias > 0 ? ` · ${dias}d` : '';
-    return p ? `${p}${d}` : `${e}${d}`;
+    return `${p}${d}`;
   }
   function acao(l){
     const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
@@ -12318,30 +12515,23 @@ function ui670DetailRows(lead,mc){
   function leadStage697(l){
     return isReady697(l) ? 'pronto' : 'preparacao';
   }
-  function sort697(list){
-    const copy = list.slice();
-    if(typeof compararPrioridadeAtendimento === 'function') return copy.sort(compararPrioridadeAtendimento);
+  function sort697(list,meta){
+    if(typeof cp786OrdenarConducao==='function') return cp786OrdenarConducao(list,meta);
+    const copy=list.slice();
+    if(typeof compararPrioridadeAtendimento==='function') return copy.sort(compararPrioridadeAtendimento);
     return copy.sort((a,b)=>String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR'));
   }
   function meta697(l){
-    const e = normalEtapa(l);
-    const p = String(l?.product || '').trim();
-    const hist = recentCount(l);
-    if(leadStage697(l) === 'preparacao') return p ? `${p} · histórico pendente` : `histórico pendente`;
-    return p ? `${p} · ${hist || 'histórico'} mensagens` : `${hist || 'histórico'} mensagens`;
+    const p=String(l?.product||'').trim()||'Produto não identificado';
+    const dias=Number(l?.daysSinceLastInteraction||0);
+    return dias>0?`${p} · ${dias}d`:`${p}`;
   }
-  function acao697(l){
-    if(leadStage697(l) === 'preparacao') return 'Importar conversa do WhatsApp para análise automática.';
-    const raw = String(l?.nextAction || l?.proximaAcao || '').replace(/\s+/g,' ').trim();
-    if(raw) return raw.length > 84 ? raw.slice(0,81).trim() + '...' : raw;
-    return 'Diagnóstico e respostas prontos para atendimento.';
-  }
-  function badge697(l){ return leadStage697(l) === 'pronto' ? 'Pronto' : 'Preparar'; }
-  function cls697(l){ return leadStage697(l) === 'pronto' ? 'ready' : 'pending'; }
-  function row697(l){
-    return `<button type="button" class="cp697-row ${cls697(l)}" onclick='abrirLead(${idJs(l)})'>
-      <span class="cp697-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta697(l))}</em><small>${esc(acao697(l))}</small></span>
-      <span class="cp697-status">${esc(badge697(l))}</span><span class="cp697-chevron">›</span>
+  function row697(l,m){
+    const meta=m||cp786MetaConducao(l);
+    const cls=['agora','respondeu'].includes(meta.categoria)?'ready':'pending';
+    return `<button type="button" class="cp697-row ${cls}" onclick='abrirLead(${idJs(l)})'>
+      <span class="cp697-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta697(l))}</em><small>${esc(meta.resumo)}</small></span>
+      <span class="cp697-status">${esc(meta.badge)}</span><span class="cp697-chevron">›</span>
     </button>`;
   }
   function updateVersion697(){
@@ -12369,28 +12559,15 @@ function ui670DetailRows(lead,mc){
   window.cp697SetTab = setTab697;
 
   function renderCarteira697(leads){
-    const box = document.querySelector('#carteiraBody');
+    const box=document.querySelector('#carteiraBody');
     if(!box) return;
-    const ativos = sort697((leads||[]).filter(isAtivo697));
-    const prep = ativos.filter(l=>leadStage697(l)==='preparacao');
-    const ready = ativos.filter(l=>leadStage697(l)==='pronto');
-    let tab = currentTab697();
-    if(tab === 'preparacao' && prep.length === 0 && ready.length) tab = 'prontos';
-    const list = tab === 'prontos' ? ready : (tab === 'todos' ? ativos : prep);
-    const rows = list.length ? list.map(row697).join('') : `<div class="cp697-empty"><b>${tab==='prontos'?'Nenhum lead pronto ainda.':'Nenhum lead nesta lista.'}</b><span>${tab==='prontos'?'Importe conversas do WhatsApp; elas serão analisadas automaticamente.':'Quando importar o histórico, o lead sai da preparação e entra em Prontos.'}</span></div>`;
-    const pct = ativos.length ? Math.round((ready.length / ativos.length) * 100) : 0;
-    try{ state.carteiraLeads = ativos; state.todosLeads = Array.isArray(state.todosLeads)&&state.todosLeads.length?state.todosLeads:ativos; }catch(_){ }
-    box.innerHTML = `<section class="cp697-page">
-      <header class="cp697-head">
-        <h2>Preparação da carteira</h2>
-        <p>Importe os históricos agora. O Corretor Pro analisa sozinho e separa os leads prontos para trabalhar.</p>
-        <div class="cp697-progress"><div><b>${ready.length}</b><span>prontos</span></div><div><b>${prep.length}</b><span>pendentes</span></div><div><b>${pct}%</b><span>preparado</span></div></div>
-      </header>
-      <div class="cp697-tabs">
-        <button class="${tab==='preparacao'?'active':''}" onclick="cp697SetTab('preparacao')">Preparação <span>${prep.length}</span></button>
-        <button class="${tab==='prontos'?'active':''}" onclick="cp697SetTab('prontos')">Prontos <span>${ready.length}</span></button>
-        <button class="${tab==='todos'?'active':''}" onclick="cp697SetTab('todos')">Todos <span>${ativos.length}</span></button>
-      </div>
+    const base=(leads||[]).filter(isAtivo697);
+    const meta=new Map(base.map(l=>[l,cp786MetaConducao(l)]));
+    const ativos=sort697(base,meta);
+    const rows=ativos.length?ativos.map(l=>row697(l,meta.get(l))).join(''):'<div class="cp697-empty"><b>Nenhum atendimento ativo.</b><span>Importe uma conversa ou inclua um cliente manualmente.</span></div>';
+    try{state.carteiraLeads=ativos;state.todosLeads=Array.isArray(state.todosLeads)&&state.todosLeads.length?state.todosLeads:ativos;}catch(_){}
+    box.innerHTML=`<section class="cp697-page">
+      <header class="cp697-head"><h2>Atendimentos</h2><p>${ativos.length} cliente${ativos.length===1?' ativo':'s ativos'} · a próxima ação aparece em cada atendimento.</p></header>
       <div class="cp697-list">${rows}</div>
     </section>`;
     requestAnimationFrame(applyFix697);
@@ -12398,7 +12575,7 @@ function ui670DetailRows(lead,mc){
   window.cp697RenderCarteira = renderCarteira697;
   window.carregarCarteira = async function(force){
     const box = document.querySelector('#carteiraBody');
-    if(box){ box.innerHTML = '<div class="cp697-loading"><i></i><b>Preparando carteira...</b><span>Buscando todos os leads e separando pendentes dos prontos.</span></div>'; }
+    if(box){ box.innerHTML = '<div class="cp697-loading"><i></i><b>Carregando atendimentos...</b><span>Organizando a próxima ação de cada cliente.</span></div>'; }
     const leads = await fetchAll697(!!force);
     renderCarteira697(leads);
   };
@@ -12706,3 +12883,18 @@ function ui670DetailRows(lead,mc){
 
 
 // Atualização #724-2: bloco antigo da tela orientada à ação removido; renderLeadFoco foi consolidado na função principal.
+
+
+/* Atualização #786 — condução diária sem aparência de CRM */
+(function(){
+  const css=document.createElement('style');
+  css.id='cp786ConducaoCSS';
+  css.textContent=`
+    .cp786-daily-reading{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(260px,1.3fr);gap:22px;padding:22px;margin:16px 0;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58)}
+    .cp786-daily-reading small{color:var(--lime);font-weight:950;letter-spacing:.12em;font-size:10px}.cp786-daily-reading h3{margin:7px 0 0;color:var(--text);font-size:24px;line-height:1.08}.cp786-daily-reading ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}.cp786-daily-reading li{color:rgba(227,245,249,.82);font-size:14px;line-height:1.35;padding-left:16px;position:relative}.cp786-daily-reading li:before{content:'›';position:absolute;left:0;color:var(--lime);font-weight:950}.cp786-daily-reading li b{color:var(--text)}
+    .cp786-action-tabs{overflow-x:auto;scrollbar-width:none}.cp786-action-tabs::-webkit-scrollbar{display:none}.cp786-action-tabs button{white-space:nowrap}.cp786-action-kpis .ui-kpi{cursor:pointer}.cp786-action-kpis .ui-kpi span{font-size:12px!important}
+    #relatorio .cp-dashboard-continue{width:100%;display:flex!important;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding:13px 16px;border:1px solid rgba(255,107,92,.36);border-radius:13px;background:rgba(255,107,92,.07);color:var(--lime);font:inherit;font-size:13px;font-weight:950;cursor:pointer}#relatorio .cp-dashboard-continue b{font-size:20px;line-height:1}
+    @media(max-width:760px){.cp786-daily-reading{grid-template-columns:1fr;padding:17px;gap:14px}.cp786-daily-reading h3{font-size:21px}.cp786-action-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp786-action-kpis .ui-kpi{min-width:0!important}.cp786-action-kpis .ui-kpi span{white-space:normal;line-height:1.1}}
+  `;
+  document.head.appendChild(css);
+})();
