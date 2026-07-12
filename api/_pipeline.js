@@ -1112,6 +1112,24 @@ async function loadCerebroConfig(frontendConfig = null) {
   } catch (_) { return null; }
 }
 
+// Carrega SÓ o banco de inteligência aprendida (as observações extraídas de "Aprender de
+// toda a carteira"). loadCerebroConfig/sanitizeCerebroConfig descartam esse campo de propósito;
+// aqui a gente lê o valor cru pra alimentar as SUGESTÕES DE MENSAGEM com o jeito real do corretor.
+async function loadInteligenciaAprendida() {
+  try {
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return null;
+    const { data } = await supabase
+      .from("direciona_config")
+      .select("valor")
+      .eq("chave", "direciona-cerebro")
+      .maybeSingle();
+    const ia = data?.valor?.inteligenciaAprendida;
+    return ia && typeof ia === "object" ? ia : null;
+  } catch (_) { return null; }
+}
+
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
 // Bloco curto acumulado de tudo que o corretor ensinou nas conversas reais
 // (regras de produto, FGTS, condições, respostas a objeções). Toda análise e
@@ -1893,6 +1911,16 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
+  // JEITO APRENDIDO — alimenta SOMENTE as 3 sugestões de mensagem com a voz real do corretor
+  // e o que já funcionou (técnicas/objeções/produto×perfil que combinam com esta conversa).
+  // Versão enxuta de propósito e escopada às mensagens: não altera o diagnóstico, que continua
+  // saindo só da conversa. Falha aqui nunca derruba a análise.
+  let jeitoAprendido = "";
+  try {
+    const iaAprend = await loadInteligenciaAprendida();
+    if (iaAprend) jeitoAprendido = jeitoAprendidoCompacto({ inteligenciaAprendida: iaAprend }, timelineText);
+  } catch (_) { jeitoAprendido = ""; }
+
   const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, compare a data da ÚLTIMA mensagem da conversa com a Data atual informada abaixo. Se tiver passado mais de alguns dias — principalmente se o corretor ficou de retornar e não retornou —, as três mensagens têm que reconhecer essa demora de forma natural (ex.: "Simoni, peço desculpa pela demora em retornar..." / "Faz um tempo que não nos falamos, mas...") e retomar o assunto a partir daí; elas NÃO podem soar como se tivessem sido escritas no mesmo dia da última mensagem quando não foram. Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}
@@ -1902,7 +1930,11 @@ Fonte do Cérebro: ${configCerebro?._fonte || "backend-default"}
 
 INSTRUÇÕES DO CÉREBRO ATUAL:
 ${formatCerebroPrompt(configCerebro) || "(vazio — analisar só a conversa)"}
+${jeitoAprendido ? `
+${jeitoAprendido}
 
+IMPORTANTE: use o bloco "SEU JEITO" acima APENAS para definir o tom, o vocabulário e a abordagem das TRÊS mensagens (campos "mensagens" e "mensagemQueEuEnviariaHoje"). NÃO use esse bloco para preencher os campos do diagnóstico — o diagnóstico continua saindo exclusivamente da conversa. Adapte ao contexto real desta conversa; nunca copie frases literais do bloco.
+` : ""}
 JSON obrigatório:
 {
   "summary":"resumo curto",
