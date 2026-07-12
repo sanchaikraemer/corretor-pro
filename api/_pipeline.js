@@ -1902,7 +1902,16 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const _agoraDt = new Date();
+  // Data no fuso do corretor (Brasil) + dia da semana, pra IA julgar corretamente se um
+  // intervalo é só um fim de semana ou uma demora real antes de reconhecer atraso.
+  let hoje, hojeSemana = "";
+  try {
+    hoje = _agoraDt.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    hojeSemana = _agoraDt.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });
+  } catch (_) {
+    hoje = _agoraDt.toISOString().slice(0, 10);
+  }
   const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
   const leadIA = {
@@ -1921,9 +1930,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     if (iaAprend) jeitoAprendido = jeitoAprendidoCompacto({ inteligenciaAprendida: iaAprend }, timelineText);
   } catch (_) { jeitoAprendido = ""; }
 
-  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, compare a data da ÚLTIMA mensagem da conversa com a Data atual informada abaixo. Se tiver passado mais de alguns dias — principalmente se o corretor ficou de retornar e não retornou —, as três mensagens têm que reconhecer essa demora de forma natural (ex.: "Simoni, peço desculpa pela demora em retornar..." / "Faz um tempo que não nos falamos, mas...") e retomar o assunto a partir daí; elas NÃO podem soar como se tivessem sido escritas no mesmo dia da última mensagem quando não foram. Retorne somente JSON válido, sem markdown.
+  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) até cerca de 5 dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal e esperado: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, como quem dá sequência normal. (b) Só reconheça a demora, de forma leve e natural, quando tiver passado cerca de uma semana OU MAIS (7+ dias corridos). (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando, na verdade, já se passou uma semana ou mais. Retorne somente JSON válido, sem markdown.
 
-Data atual: ${hoje}
+Data atual: ${hoje}${hojeSemana ? ` (${hojeSemana})` : ""}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 Fonte do Cérebro: ${configCerebro?._fonte || "backend-default"}
