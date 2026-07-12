@@ -5733,23 +5733,16 @@ async function carregarAprendizado(){
     const ia = data?.config?.inteligenciaAprendida || {};
     cerebroIntel = JSON.parse(JSON.stringify(ia));
     const total = APRENDIZADO_CATS.reduce((s, c) => s + ((ia[c.key]||[]).length), 0);
-    // Card destaque com total grande + minicards por categoria
-    const miniCards = APRENDIZADO_CATS.map(cat => {
-      const n = (ia[cat.key]||[]).length;
-      return `<div style="padding:8px 10px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:8px;text-align:center;min-width:90px">
-        <div style="font-size:18px;font-weight:950;color:${cat.cor}">${n}</div>
-        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:950;line-height:1.2;margin-top:2px">${cat.label.split(" ").slice(0,2).join(" ")}</div>
-      </div>`;
-    }).join("");
+    // Card destaque só com o total grande. A contagem por categoria vive uma única vez
+    // no bloco "Estado do aprendizado da IA" (rótulos completos), sem duplicar aqui.
     const header = `<div style="margin-bottom:18px">
-      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,rgba(255,107,92,.08),rgba(55,232,255,.04));border:1px solid var(--lime);border-radius:12px;margin-bottom:10px">
+      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,rgba(255,107,92,.08),rgba(55,232,255,.04));border:1px solid var(--lime);border-radius:12px">
         <div style="font-size:42px;font-weight:950;line-height:1;color:var(--lime)">${total}</div>
         <div>
           <div style="font-size:13px;font-weight:950">observa${total===1?"ção":"ções"} no Cérebro</div>
           <div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">o Corretor Pro usa isso para calibrar próximas sugestões</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${miniCards}</div>
     </div>`;
     const blocos = APRENDIZADO_CATS.map(cat => {
       const arr = Array.isArray(ia[cat.key]) ? ia[cat.key] : [];
