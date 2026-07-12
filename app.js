@@ -11874,15 +11874,17 @@ function ui670DetailRows(lead,mc){
     const badge = $('#bellBadge');
     const bell = $('#topBell');
     if(!badge || !bell) return;
-    const n = notifyData().acao || 0;
+    // O pontinho do sino reflete a AGENDA DE HOJE: aparece só quando há compromisso ou
+    // lembrete para o dia (state.agendaCount, calculado em atualizarSinoAgenda). Sem agenda
+    // hoje, sem pontinho. O sino leva direto para a Agenda.
+    const n = Number(state.agendaCount) || 0;
     badge.hidden = !n;
-    // v787: indicador discreto, sem número solto ou ambíguo na interface.
-    // As quantidades exatas ficam dentro da Central de atenção.
+    // Indicador discreto, sem número solto ou ambíguo na interface.
     badge.textContent = '';
     bell.classList.toggle('tem-alerta', n > 0);
     const label = n > 0
-      ? `${n} cliente${n===1?' precisa':'s precisam'} de atenção — toque para abrir`
-      : 'Central de atenção';
+      ? `${n} compromisso${n===1?'':'s'} na agenda de hoje — toque para abrir`
+      : 'Agenda';
     bell.setAttribute('title', label);
     bell.setAttribute('aria-label', label);
   }
