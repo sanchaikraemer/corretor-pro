@@ -320,7 +320,7 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
         status: "retomar",
         responsavel: "corretor",
         urgencia: Math.abs(diff) >= 3 ? "alta" : "media",
-        descricao: `O compromisso combinado venceu há ${Math.abs(diff)} dia(s). Retome usando exatamente essa pendência como gancho.`,
+        descricao: `O compromisso combinado venceu há ${Math.abs(diff)} ${Math.abs(diff) === 1 ? "dia" : "dias"}. Retome usando exatamente essa pendência como gancho.`,
         texto: prova,
         data: String(ap.data || "").slice(0, 10)
       };
@@ -343,7 +343,7 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
     if (idadeDias != null && idadeDias > 30) {
       return {
         status: "retomar", responsavel: "corretor", urgencia: "alta",
-        descricao: `O retorno combinado está vencido há ${idadeDias} dia(s). Retome pela pendência, sem tratar como conversa encerrada.`,
+        descricao: `O retorno combinado está vencido há ${idadeDias} ${idadeDias === 1 ? "dia" : "dias"}. Retome pela pendência, sem tratar como conversa encerrada.`,
         texto: t, data: ""
       };
     }
@@ -353,7 +353,7 @@ function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
         status: prazo.dias === 0 ? "aguardando-resposta" : "aguardando-resposta",
         responsavel: "contato",
         urgencia: prazo.dias <= 1 ? "media" : "baixa",
-        descricao: prazo.dias === 0 ? "Aguardar o retorno combinado para hoje." : `Aguardar o retorno combinado do contato em ${prazo.dias} dia(s).`,
+        descricao: prazo.dias === 0 ? "Aguardar o retorno combinado para hoje." : `Aguardar o retorno combinado do contato em ${prazo.dias} ${prazo.dias === 1 ? "dia" : "dias"}.`,
         texto: t,
         data: ""
       };

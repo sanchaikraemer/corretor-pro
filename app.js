@@ -4363,7 +4363,7 @@ async function abrirLead(id, options={}){
         `<b>Lead:</b> ${escapeHtml(lead.name||"")}<br>` +
         `<b>Produto:</b> ${escapeHtml(lead.product||"--")}<br>` +
         `<b>Etapa:</b> ${escapeHtml(lead.etapa||"--")}<br>` +
-        `<b>Última interação:</b> ${lead.daysSinceLastInteraction != null ? lead.daysSinceLastInteraction+" dia(s) atrás" : "--"}<br>` +
+        `<b>Última interação:</b> ${lead.daysSinceLastInteraction != null ? lead.daysSinceLastInteraction+(lead.daysSinceLastInteraction===1?" dia atrás":" dias atrás") : "--"}<br>` +
         `<b>Mensagens:</b> ${totalMensagensLead(lead)}<br>` +
         `<b>Áudios:</b> ${lead.audiosEncontrados||0} encontrados, ${lead.audiosTranscritos||0} transcritos`;
     }
@@ -4692,7 +4692,7 @@ function cp704Css(){
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:15px;padding:2px 0 0}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:12px 14px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:15px;padding:2px 0 0}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -4731,6 +4731,9 @@ function cp704Css(){
   }
   function cp705SanitizeFactText(text, lead){
     let out=cp705PlainText(text);
+    // Blindagem: marcadores de teste/instrução do Cérebro nunca podem vazar para o texto final
+    // (ex.: "TESTE-CEREBRO" que o corretor coloca pra checar se o Cérebro está ativo).
+    out = out.replace(/\s*TESTE[\s\-–—_]?C[EÉ]REBRO\s*/gi, ' ').replace(/\s{2,}/g, ' ').trim();
     try{
       const pn = (typeof ui682PrimeiroNomeLead==='function') ? ui682PrimeiroNomeLead(lead) : '';
       if(pn && /^retomando nosso contato/i.test(out)) out = `${pn}, ${out.charAt(0).toLowerCase()}${out.slice(1)}`;
@@ -5027,7 +5030,7 @@ function renderLeadFoco(lead){
         <div class="cp704-metrics"><div class="cp704-metric"><span>🤝</span><div><small>Relacionamento</small>${escapeHtml(rel)}</div></div><div class="cp704-metric"><span>⏱</span><div><small>Urgência</small>${escapeHtml(urg)}</div></div></div>
       </section>
       ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml(cp704Text(last,'Sem data registrada'))} · ${escapeHtml(atendimento)}</span></div></div></section>
+      <section class="cp704-card"><div class="cp704-last"><span>📅</span><div><b>Última interação</b><span>${escapeHtml([String(cp704Text(last)||'').trim(),String(atendimento||'').trim()].filter(Boolean).join(' · ')||'Sem data registrada')}</span></div></div></section>
       <section class="cp704-card">
         <div class="cp704-card-title"><h2>Adicionar observação</h2></div>
         <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — entra na linha do tempo e a próxima análise já considera isso.</p>
@@ -5047,7 +5050,6 @@ function renderLeadFoco(lead){
       <div class="cp704-accordions">
         <details class="cp704-details cp704-history-details"><summary><span class="cp704-summary-left">Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></span><span class="cp704-summary-actions"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
         <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
-        <details class="cp704-details"><summary>Leitura comercial</summary><div class="cp704-body">${cp718LeituraComercialHtml(a,lead)}</div></details>
         <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
       </div>
       <div class="cp704-quickbar" style="grid-template-columns:repeat(3,1fr)"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button type="button" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">📅 Agendar retorno</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
