@@ -10070,10 +10070,26 @@ async function iniciarDireciona(){
   const compartilhado = await checkShared().catch(() => ({ handled:false }));
   if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
   renderLeads();
+  // Se o app RECARREGOU enquanto o corretor estava vendo um lead (atualização de versão,
+  // troca de service worker ou o Android reabrindo o PWA depois de ir pro WhatsApp), o
+  // history.state sobrevive ao reload e ainda guarda a rota do lead. Sem isto, todo reload
+  // caía na Home e o corretor era jogado pra tela inicial de novo e de novo.
+  const rotaSalva = history.state;
+  const leadSalvoId = (rotaSalva && rotaSalva.cpApp && rotaSalva.screen === "lead" && rotaSalva.leadId)
+    ? String(rotaSalva.leadId) : "";
+  if(leadSalvoId){
+    if(rotaSalva.carteiraFiltro) state.carteiraFiltro = rotaSalva.carteiraFiltro;
+    if(rotaSalva.pipelineFiltro) state.pipelineVisualFiltro = rotaSalva.pipelineFiltro;
+    if(rotaSalva.grupoAtivo) state.grupoAtivo = rotaSalva.grupoAtivo;
+    // Reabre o lead direto. abrirLead busca o detalhe pela API e volta pra Home sozinho
+    // se o lead não existir mais, então é seguro chamar já no boot.
+    abrirLead(leadSalvoId, { fromHistory:true }).catch(err => console.warn("restaurar lead no boot", err));
+  }
   // Dashboard/agenda não dependem da restauração de leads antigos nem da lista rápida
   // abaixo — rodam em paralelo, cada um com seu próprio fallback, em vez de ficarem
   // atrás de um await sequencial que trava a tela inteira se uma etapa pendurar.
-  if(state.active === "home"){
+  // Rodam mesmo quando restauramos um lead: assim, ao tocar em "Voltar", a Home já está pronta.
+  if(state.active === "home" || leadSalvoId){
     carregarDashboard();
     carregarAgendaTopo();
   }
