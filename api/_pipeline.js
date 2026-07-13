@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v762-cerebro-fonte-unica";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v806-cerebro-validacao-retomada";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -1096,6 +1096,162 @@ function formatCerebroPrompt(cfg) {
   ].filter(Boolean).join("\n\n");
 }
 
+
+function textoIntegralCerebro(cfg) {
+  const c = sanitizeCerebroConfig(cfg || {});
+  return [
+    c.metodo,
+    c.tom,
+    c.diferenciais,
+    c.evitar,
+    ...(Array.isArray(c.regras) ? c.regras.map(r => typeof r === "string" ? r : r?.texto) : []),
+    ...(Array.isArray(c.objecoes) ? c.objecoes.map(o => typeof o === "string" ? o : `${o?.objecao || ""} ${o?.resposta || ""}`) : [])
+  ].filter(Boolean).join("\n");
+}
+
+function extrairLimiarRetomada(cfg) {
+  const texto = textoIntegralCerebro(cfg);
+  const padroes = [
+    /retom\w*[^.\n]{0,100}?(?:ap[oó]s|depois\s+de|a\s+partir\s+de)\s*(\d{1,3})\s*dias?/i,
+    /(?:ap[oó]s|depois\s+de|a\s+partir\s+de)\s*(\d{1,3})\s*dias?[^.\n]{0,100}?retom\w*/i
+  ];
+  for (const re of padroes) {
+    const m = texto.match(re);
+    const n = Number(m?.[1]);
+    if (Number.isFinite(n) && n >= 1 && n <= 90) return n;
+  }
+  return 7;
+}
+
+function numeroDiaCivil(y, m, d) {
+  if (![y, m, d].every(Number.isFinite)) return null;
+  const dt = Date.UTC(y, m - 1, d);
+  const check = new Date(dt);
+  if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return null;
+  return Math.floor(dt / 86400000);
+}
+
+function partesDataBR(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(date).map(x => [x.type, x.value]));
+    return { y: Number(p.year), m: Number(p.month), d: Number(p.day) };
+  } catch (_) {
+    return { y: date.getFullYear(), m: date.getMonth() + 1, d: date.getDate() };
+  }
+}
+
+function ehMensagemRealParaTempo(m) {
+  if (!m || typeof m !== "object") return false;
+  const source = String(m.source || "").toLowerCase();
+  const type = String(m.type || "").toLowerCase();
+  const author = String(m.author || "").toLowerCase();
+  if (/^(sistema|system)$/.test(author.trim())) return false;
+  if (/atendimento\s*\(corretor\)|anota[cç][aã]o|proposta gerada/.test(author)) return false;
+  if (source === "manual" && !/(print-whatsapp|whatsapp|mensagem)/.test(type)) return false;
+  if (/(nota|lembrete|proposta|atendimento)/.test(type) && source === "manual") return false;
+  return true;
+}
+
+function dataCivilDeMensagem(m) {
+  const iso = String(m?.iso || "").trim();
+  if (iso) {
+    const dt = new Date(iso);
+    const p = partesDataBR(dt);
+    if (p) return { ...p, dia: numeroDiaCivil(p.y, p.m, p.d), texto: `${String(p.d).padStart(2,"0")}/${String(p.m).padStart(2,"0")}/${p.y}` };
+  }
+  const raw = String(m?.date || m?.data || "").trim();
+  let mm = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (mm) {
+    const p = { y: Number(mm[3]), m: Number(mm[2]), d: Number(mm[1]) };
+    return { ...p, dia: numeroDiaCivil(p.y, p.m, p.d), texto: `${String(p.d).padStart(2,"0")}/${String(p.m).padStart(2,"0")}/${p.y}` };
+  }
+  mm = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (mm) {
+    const p = { y: Number(mm[1]), m: Number(mm[2]), d: Number(mm[3]) };
+    return { ...p, dia: numeroDiaCivil(p.y, p.m, p.d), texto: `${String(p.d).padStart(2,"0")}/${String(p.m).padStart(2,"0")}/${p.y}` };
+  }
+  return null;
+}
+
+export function calcularContextoTemporalMensagens(timeline, cfg = {}, agora = new Date()) {
+  const hojePartes = partesDataBR(agora);
+  const hojeDia = hojePartes ? numeroDiaCivil(hojePartes.y, hojePartes.m, hojePartes.d) : null;
+  let ultima = null;
+  const todos = Array.isArray(timeline) ? timeline : [];
+  const reais = todos.filter(ehMensagemRealParaTempo);
+  const base = reais.length ? reais : todos;
+  for (const item of base) {
+    const p = dataCivilDeMensagem(item);
+    if (p?.dia != null && (!ultima || p.dia >= ultima.dia)) ultima = p;
+  }
+  const limiar = extrairLimiarRetomada(cfg);
+  const dias = hojeDia != null && ultima?.dia != null ? Math.max(0, hojeDia - ultima.dia) : null;
+  const modo = dias == null ? "sem-data" : (dias >= limiar ? "retomada" : "continuidade");
+  return { dias, limiar, modo, ultimaData: ultima?.texto || "Não identificada" };
+}
+
+const PADROES_GENERICOS_RETOMADA = [
+  /\bpassando\s+(?:pra|para)\s+(?:saber|ver|perguntar)\b/i,
+  /\bfico\s+(?:à|a)\s+disposi[cç][aã]o\b/i,
+  /\bs[oó]\s+me\s+chamar\b/i,
+  /\bme\s+avise\s+quando\b/i,
+  /\bquando\s+for\s+um\s+bom\s+momento\b/i,
+  /\bespero\s+que\s+(?:voc[eê]\s+)?esteja\s+bem\b/i,
+  /\bpensar\s+com\s+carinho\b/i,
+  /\bretomar\s+(?:a|nossa)\s+conversa\b/i,
+  /\bse\s+quiser\b/i
+];
+
+const STOPWORDS_ANCORA = new Set(`a ao aos aquela aquele aquilo as ate com como da das de dela dele do dos e ela ele em entre era essa esse esta este eu foi foram ha isso ja mais mas me meu minha na nas nem no nos nos o os ou para pela pelo por pra que quem se sem ser seu sua so tambem te tem ter tudo um uma voce voces queria poderia gostaria ainda agora depois antes cliente corretor contato conversa mensagem imovel imoveis apartamento apartamentos opcao opcoes valor valores condicao condicoes forma formas pagamento interesse analisar analise retorno oi ola tudo bem bom boa dia tarde noite`.split(/\s+/));
+
+function normalizarBusca(v) {
+  return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function ancorasDaConversa(timeline) {
+  const base = (Array.isArray(timeline) ? timeline.filter(ehMensagemRealParaTempo).slice(-100) : []);
+  const texto = base
+    .map(m => `${m?.text || ""}`)
+    .join(" ");
+  const tokens = normalizarBusca(texto).match(/[a-z0-9]{3,}/g) || [];
+  const freq = new Map();
+  for (const t of tokens) {
+    if (STOPWORDS_ANCORA.has(t)) continue;
+    if (/^\d{1,2}$/.test(t)) continue;
+    freq.set(t, (freq.get(t) || 0) + 1);
+  }
+  return [...freq.entries()]
+    .sort((a,b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 120)
+    .map(([t]) => t);
+}
+
+export function validarMensagensCerebro(mensagens, contextoTemporal, timeline) {
+  const trio = [mensagens?.a, mensagens?.b, mensagens?.c].map(v => String(v || "").replace(/\s+/g, " ").trim());
+  const motivos = [];
+  const porMensagem = [];
+  const ancoras = ancorasDaConversa(timeline);
+  trio.forEach((msg, i) => {
+    const erros = [];
+    if (msg.length < 10) erros.push("mensagem vazia ou curta");
+    if (msg && !/\?\s*$/.test(msg)) erros.push("não termina com pergunta");
+    if (contextoTemporal?.modo === "retomada" && msg) {
+      const generico = PADROES_GENERICOS_RETOMADA.find(re => re.test(msg));
+      if (generico) erros.push("usa abertura/passividade genérica de retomada");
+      const norm = normalizarBusca(msg);
+      if (ancoras.length && !ancoras.some(a => norm.includes(a))) erros.push("não retoma nenhum fato concreto da conversa");
+    }
+    if (erros.length) {
+      porMensagem.push({ indice: i + 1, erros });
+      motivos.push(`Mensagem ${i + 1}: ${erros.join(", ")}.`);
+    }
+  });
+  return { ok: motivos.length === 0, motivos, porMensagem };
+}
+
 async function loadCerebroConfig(frontendConfig = null) {
   if (hasCerebroContent(frontendConfig)) return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-localStorage" };
   try {
@@ -1814,7 +1970,7 @@ function textoDaRespostaResponses(resp) {
   return partes.join("\n").trim();
 }
 
-async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout = 25000, model: modeloOverride = null }) {
+async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputTokens = 4096, timeout = 25000, model: modeloOverride = null }) {
   const model = modeloOverride || modeloAnalise();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -1825,7 +1981,10 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
   try {
     const apiPromise = openai.chat.completions.create({
       model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        ...(String(systemPrompt || "").trim() ? [{ role: "system", content: String(systemPrompt).trim() }] : []),
+        { role: "user", content: prompt }
+      ],
       temperature: 0.1,
       max_tokens: maxOutputTokens,
       response_format: { type: "json_object" }
@@ -1838,6 +1997,51 @@ async function chamarGPT4Json({ openai, prompt, maxOutputTokens = 4096, timeout 
     clearTimeout(timer);
     clearTimeout(timeoutId);
   }
+}
+
+async function corrigirMensagensPelasRegras({ openai, mensagens, contextoTemporal, timelineText, cerebroTexto, diagnostico, leadIA }) {
+  const modo = contextoTemporal?.modo || "sem-data";
+  const diasTxt = contextoTemporal?.dias == null ? "não calculados" : String(contextoTemporal.dias);
+  const sistema = `Você é o revisor final das mensagens comerciais do Corretor Pro. Sua única função é reescrever as três mensagens para que TODAS obedeçam às regras abaixo. Não altere fatos, não invente e não explique.
+
+REGRAS OBRIGATÓRIAS:
+- Obedeça integralmente às instruções do Cérebro.
+- Cada mensagem deve continuar exatamente do ponto real da conversa.
+- Cada mensagem deve terminar com UMA pergunta específica e útil.
+- Não use linguagem passiva ou genérica como: "passando para saber", "fico à disposição", "só me chamar", "me avise quando", "se quiser", "pensar com carinho".
+- Modo temporal: ${modo.toUpperCase()}. Dias desde a última mensagem: ${diasTxt}. Limiar de retomada: ${contextoTemporal?.limiar || 7} dias.
+- Em RETOMADA, cada mensagem precisa tocar logo em um fato, condição, pendência, produto ou decisão concreta da conversa; não pode parecer mensagem enviada no mesmo dia e não pode reiniciar a venda.
+- As três opções devem ter abordagens realmente diferentes.
+- Responda somente JSON válido no formato {"mensagens":{"recomendada":"...","maisSuave":"...","maisDireta":"..."}}.`;
+  const usuario = `INSTRUÇÕES DO CÉREBRO:
+${cerebroTexto || "(vazio)"}
+
+LEAD:
+${JSON.stringify(leadIA || {})}
+
+DIAGNÓSTICO JÁ EXTRAÍDO:
+${JSON.stringify(diagnostico || {})}
+
+MENSAGENS QUE FALHARAM NA VALIDAÇÃO:
+${JSON.stringify(mensagens || {})}
+
+TRECHO MAIS RECENTE DA CONVERSA:
+${String(timelineText || "").slice(-16000)}`;
+  const r = await chamarGPT4Json({
+    openai,
+    systemPrompt: sistema,
+    prompt: usuario,
+    model: modeloMensagens(),
+    maxOutputTokens: 1100,
+    timeout: Number(process.env.DIRECIONA_MESSAGE_REWRITE_TIMEOUT_MS || 18000)
+  });
+  const m = r?.parsed?.mensagens || r?.parsed || {};
+  return {
+    a: String(m.recomendada || m.a || "").trim(),
+    b: String(m.maisSuave || m.b || "").trim(),
+    c: String(m.maisDireta || m.c || "").trim(),
+    completion: r.response
+  };
 }
 
 // v724-2: regeneração antiga por segunda IA removida.
@@ -1917,6 +2121,22 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
   };
 
+  const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
+  const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro) || "(vazio — analisar só a conversa)";
+  const systemPromptAnalise = `Você é o motor comercial do Corretor Pro. As regras abaixo são obrigatórias e têm prioridade na geração das três mensagens.
+
+- Obedeça integralmente ao Cérebro Comercial enviado pelo corretor.
+- Gere três mensagens contextuais, diferentes e prontas para WhatsApp.
+- TODAS devem terminar com uma pergunta específica.
+- Não use frases genéricas/passivas: "passando para saber", "fico à disposição", "só me chamar", "me avise quando", "se quiser", "pensar com carinho".
+- Data da última mensagem: ${contextoTemporal.ultimaData}. Dias corridos desde ela: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}.
+- Limiar configurado para retomada: ${contextoTemporal.limiar} dias. Modo obrigatório: ${contextoTemporal.modo.toUpperCase()}.
+- Em RETOMADA, toque imediatamente em um fato, condição, pendência, produto ou decisão concreta da conversa. Não reinicie a venda e não escreva como se o último contato tivesse ocorrido hoje.
+- Não invente fatos.
+
+CÉREBRO COMERCIAL:
+${instrucoesCerebroTexto}`;
+
   // JEITO APRENDIDO — alimenta SOMENTE as 3 sugestões de mensagem com a voz real do corretor
   // e o que já funcionou (técnicas/objeções/produto×perfil que combinam com esta conversa).
   // Versão enxuta de propósito e escopada às mensagens: não altera o diagnóstico, que continua
@@ -1927,7 +2147,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     if (iaAprend) jeitoAprendido = jeitoAprendidoCompacto({ inteligenciaAprendida: iaAprend }, timelineText);
   } catch (_) { jeitoAprendido = ""; }
 
-  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) MENOS de 5 dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, dando sequência normal. (b) A partir de cerca de 5 dias parado, trate como RETOMADA: reabra a conversa de forma natural e específica — retome o último assunto/pendência e proponha o próximo passo — sem soar genérico. ATENÇÃO: retomar NÃO é pedir desculpa. Reconheça o tempo apenas de leve, e só peça desculpa se o corretor tinha prometido um retorno e realmente não cumpriu. (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando já se passaram vários dias. Regra de adiamento pedido pelo cliente: se o cliente disse de forma explícita que quer ESPERAR ou adiar (ex.: "vou esperar uns meses", "me chama daqui a um tempo", "quando sair o inventário / a herança / a venda do meu imóvel", "agora não é o momento"), você NÃO deve pressionar por informações (faixa de valor, número de dormitórios, planta ou pronto) nem empurrar imóvel. Nesse caso, as três mensagens têm que RESPEITAR o tempo dele: reconhecer o que ele falou, se colocar à disposição e, no máximo, combinar um retorno leve mais pra frente (retomar quando ele estiver pronto) — trate a urgência como baixa. Retorne somente JSON válido, sem markdown.
+  const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) MENOS de ${contextoTemporal.limiar} dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, dando sequência normal. (b) A partir de ${contextoTemporal.limiar} dias parado, trate como RETOMADA: reabra a conversa de forma natural e específica — retome o último assunto/pendência e proponha o próximo passo — sem soar genérico. ATENÇÃO: retomar NÃO é pedir desculpa. Reconheça o tempo apenas de leve, e só peça desculpa se o corretor tinha prometido um retorno e realmente não cumpriu. (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando já se passaram vários dias. Regra de adiamento pedido pelo cliente: se o cliente disse de forma explícita que quer ESPERAR ou adiar (ex.: "vou esperar uns meses", "me chama daqui a um tempo", "quando sair o inventário / a herança / a venda do meu imóvel", "agora não é o momento"), você NÃO deve pressionar por informações (faixa de valor, número de dormitórios, planta ou pronto) nem empurrar imóvel. Nesse caso, as três mensagens têm que RESPEITAR o tempo dele: reconhecer o que ele falou, se colocar à disposição e, no máximo, combinar um retorno leve mais pra frente (retomar quando ele estiver pronto) — trate a urgência como baixa. Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}${hojeSemana ? ` (${hojeSemana})` : ""}
 Corretor: ${corretorNome}
@@ -1935,7 +2155,7 @@ Lead: ${JSON.stringify(leadIA)}
 Fonte do Cérebro: ${configCerebro?._fonte || "backend-default"}
 
 INSTRUÇÕES DO CÉREBRO ATUAL:
-${formatCerebroPrompt(configCerebro) || "(vazio — analisar só a conversa)"}
+${instrucoesCerebroTexto}
 ${jeitoAprendido ? `
 ${jeitoAprendido}
 
@@ -1977,6 +2197,7 @@ ${timelineText}`;
     try {
       const r = await chamarGPT4Json({
         openai,
+        systemPrompt: systemPromptAnalise,
         prompt,
         model: modeloAnalise(),
         maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
@@ -1992,6 +2213,7 @@ ${timelineText}`;
       try {
         const r2 = await chamarGPT4Json({
           openai,
+          systemPrompt: systemPromptAnalise,
           prompt: promptRetry,
           model: modeloAnaliseRapida(),
           maxOutputTokens: 1800,
@@ -2007,10 +2229,39 @@ ${timelineText}`;
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
-    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
-    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
-    const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10);
+    let msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+    let validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr);
+    let mensagensCorrigidasPelaValidacao = false;
+    if (!validacaoMensagens.ok) {
+      try {
+        const corrigidas = await corrigirMensagensPelasRegras({
+          openai,
+          mensagens: { a: msgA, b: msgB, c: msgC },
+          contextoTemporal,
+          timelineText,
+          cerebroTexto: instrucoesCerebroTexto,
+          diagnostico: d,
+          leadIA
+        });
+        const novaValidacao = validarMensagensCerebro(corrigidas, contextoTemporal, timelineArr);
+        if (novaValidacao.ok) {
+          msgA = corrigidas.a; msgB = corrigidas.b; msgC = corrigidas.c;
+          completion = corrigidas.completion || completion;
+          validacaoMensagens = novaValidacao;
+          mensagensCorrigidasPelaValidacao = true;
+        } else {
+          validacaoMensagens = novaValidacao;
+        }
+      } catch (e) {
+        validacaoMensagens = {
+          ok: false,
+          motivos: [...(validacaoMensagens.motivos || []), `A correção automática das mensagens falhou: ${describeOpenAIError(e)}`]
+        };
+      }
+    }
+    const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10) && validacaoMensagens.ok;
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
 
     return {
@@ -2033,7 +2284,7 @@ ${timelineText}`;
         proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         etapaFunil: clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"),
-        mensagemQueEuEnviariaHoje: clean(d.mensagemQueEuEnviariaHoje || msgA),
+        mensagemQueEuEnviariaHoje: clean(msgA || d.mensagemQueEuEnviariaHoje),
         percepcaoTodaConversa: clean(raw.summary)
       },
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
@@ -2077,8 +2328,10 @@ ${timelineText}`;
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
       sugestoesPendentes: !trioOk,
-      validacaoSugestoes: trioOk ? [] : ["A IA não retornou 3 mensagens novas completas."],
+      validacaoSugestoes: trioOk ? [] : (validacaoMensagens.motivos?.length ? validacaoMensagens.motivos : ["A IA não retornou 3 mensagens novas completas e válidas."]),
       mensagensValidadasEm: nowIso,
+      mensagensCorrigidasPelaValidacao,
+      contextoTemporalMensagens: contextoTemporal,
       _cerebroFonte: configCerebro?._fonte || "backend-default",
       _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
       melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName)
