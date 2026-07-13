@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.js",
-    "test": "NODE_ENV=test node --check app.js && node --check build.js && node --check service-worker.js && node --check api/lead-update.js && node --check api/_pipeline.js && node --check api/_persistence.js && node --check api/processar-storage.js && node --check api/restaurar-leads.js && node --check api/leads-recentes.js && node --check api/reanalisar-lead.js && node --check api/diagnostico.js && node tests/retomada-validator.test.mjs"
+    "test": "NODE_ENV=test node --check app.js && node --check build.js && node --check service-worker.js && node --check api/lead-update.js && node --check api/_pipeline.js && node --check api/_persistence.js && node --check api/processar-storage.js && node --check api/restaurar-leads.js && node --check api/leads-recentes.js && node --check api/reanalisar-lead.js && node --check api/diagnostico.js && node tests/retomada-validator.test.mjs && node tests/home-loading-regression.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
@@ -10,6 +10,6 @@
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "7.106.0",
-  "displayVersion": "806"
+  "version": "7.107.0",
+  "displayVersion": "807"
 }

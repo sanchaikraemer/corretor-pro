@@ -3301,6 +3301,38 @@ async function atualizarSinoAgenda(leadsAll){
 }
 window.atualizarSinoAgenda = atualizarSinoAgenda;
 
+function homeAindaEmSkeleton(){
+  const area = qs("#leadFocoArea");
+  if(!area) return false;
+  return !!area.querySelector(".skel-loading,.cp-home-skeleton,.cp-db-loading,.cp694-loading") ||
+    /Carregando (?:banco de dados|sua carteira)|Organizando sua carteira/i.test(area.textContent || "");
+}
+
+function renderHomeFallbackSeguro(items){
+  const area = qs("#leadFocoArea");
+  if(!area) return;
+  const lista = (Array.isArray(items) ? items : [])
+    .filter(l => l && typeof l === "object" && (l.id != null || l.name))
+    .slice(0, 4);
+  const linhas = lista.map(l => {
+    const id = JSON.stringify(String(l.id || ""));
+    const produto = produtosLabel(l) || "Produto não identificado";
+    const dias = Number(l.daysSinceLastInteraction);
+    const tempo = Number.isFinite(dias) ? (dias <= 0 ? "hoje" : dias === 1 ? "há 1 dia" : `há ${dias} dias`) : "Abrir";
+    return `<button type="button" class="ui-priority-row" onclick='abrirLead(${id})'>
+      <span class="ui-row-copy"><strong>${escapeHtml(l.name || "Cliente")}</strong><small>${escapeHtml(produto)}</small><em class="ui-row-motivo">Abrir atendimento para conferir a próxima ação.</em></span>
+      <span class="ui-row-action">${escapeHtml(tempo)}</span><span class="ui-row-chevron">›</span>
+    </button>`;
+  }).join("");
+  area.innerHTML = `<div class="ui-home-content">
+    ${typeof ui677ToolbarHTML === "function" ? ui677ToolbarHTML("home") : ""}
+    <section class="ui-priority-card">
+      <div class="ui-section-head"><div><h3>Atendimentos prioritários</h3><p>Sua carteira foi carregada. Abra um cliente para continuar.</p></div><button type="button" onclick="show('pipeline')">Ver todos</button></div>
+      <div class="ui-priority-list">${linhas || '<div class="empty">Nenhum atendimento ativo agora.</div>'}</div>
+    </section>
+  </div>`;
+}
+
 async function carregarDashboard(){
   if(state.active !== "home") return;
   try{
@@ -3424,7 +3456,16 @@ async function _processarDashboard(data){
     }
   }catch(err){
     console.warn("_processarDashboard falhou:", err?.message||err);
+    // Hotfix #807: um lead inconsistente ou um renderer antigo não pode bloquear a Home inteira.
+    // Os dados já carregados continuam acessíveis por uma lista básica e clicável.
+    try{ renderHomeFallbackSeguro(state.itemsAtivos || data?.items || []); }catch(_){ }
   }
+  // Defesa final contra skeleton eterno em atualizações/cache ou corrida entre hotfixes.
+  setTimeout(() => {
+    if(state.active === "home" && homeAindaEmSkeleton()){
+      try{ renderHomeFallbackSeguro(state.itemsAtivos || state.todosLeads || data?.items || []); }catch(_){ }
+    }
+  }, 600);
 }
 
 // ============ PIPELINE ============
@@ -9526,6 +9567,10 @@ renderListasHome = function(ordenados){
   const programados=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='programados'));
   const aguardando=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='aguardando'));
   const prioritarios=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i).slice(0,4);
+  // Hotfix #807: este renderer intermediário também pode ser chamado durante a carga inicial.
+  // Sem esta variável, a interpolação do botão "Ver todos" lançava ReferenceError e deixava
+  // a Home presa no skeleton, embora os contadores já tivessem sido carregados.
+  const filtroPrincipal=agora.length?'agora':programados.length?'programados':'aguardando';
   // As novas visões orientadas à ação são a fonte principal. Mantemos aliases internos
   // usados por rotinas antigas (voltar, histórico e atalhos) para não quebrar navegação.
   const acaoHoje=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i);
