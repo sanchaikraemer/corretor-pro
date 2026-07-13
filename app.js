@@ -23,6 +23,18 @@
     }
     return atual;
   };
+  function agendarAprendizadoDepoisDaMutacao(input, init, resposta){
+    if(!resposta?.ok) return;
+    const url = String(typeof input === "string" ? input : (input && input.url) || "");
+    let relevante = /api\/reanalisar-lead(?:\?|$)/.test(url);
+    if(/api\/lead-update(?:\?|$)/.test(url)){
+      try{
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : (init?.body || {});
+        relevante = ["salvar-novo","atualizar-com-evolucao"].includes(String(body?.action || ""));
+      }catch(_){ relevante = false; }
+    }
+    if(relevante) setTimeout(() => window.iniciarAprendizadoContinuoAutomatico?.({ somentePendentes:true }), 700);
+  }
   window.fetch = async function(input, init = {}){
     if (!isApiUrl(input)) return originalFetch(input, init);
     const key = getKey();
@@ -34,9 +46,12 @@
       if (nova && nova !== key) {
         const retryHeaders = new Headers(headers);
         retryHeaders.set("X-Corretor-Pro-Key", nova);
-        return originalFetch(input, { ...init, headers: retryHeaders });
+        const retry = await originalFetch(input, { ...init, headers: retryHeaders });
+        agendarAprendizadoDepoisDaMutacao(input, init, retry);
+        return retry;
       }
     }
+    agendarAprendizadoDepoisDaMutacao(input, init, res);
     return res;
   };
 })();
@@ -2707,22 +2722,12 @@ function abrirMaisAcoes(){
   qs("#maAcTelefones").onclick = () => { close(); if(window.importarTelefonesCSV) importarTelefonesCSV(); };
 }
 
-// Varre toda a carteira e ensina o Corretor Pro a falar como você (junta suas respostas reais).
-// Sem IA, sem custo — só leitura das conversas já salvas.
+// Reprocessa a carteira pelo mesmo motor automático v808. O aprendizado normal
+// já acontece sozinho; este atalho serve apenas para uma nova varredura intencional.
 async function aprenderDaCarteira(){
-  toast("Aprendendo das suas conversas…");
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action: "aprender-carteira" })
-    });
-    const d = await res.json().catch(()=>({ok:false}));
-    if(d?.ok){
-      toast(`✓ Aprendi com ${d.lidos} conversas — ${d.total} respostas suas no estilo. As sugestões já saem com a sua cara.`);
-    } else {
-      toast("Não consegui aprender agora: " + (d?.error || "erro"));
-    }
-  }catch(err){ toast("Erro: " + (err?.message||err)); }
+  toast("Reprocessando suas conversas reais em segundo plano…");
+  const iniciou = await iniciarAprendizadoContinuoAutomatico({ forcar:true, mostrarToast:true });
+  if(!iniciou) toast("O aprendizado já está rodando em outra aba ou dispositivo.");
 }
 window.aprenderDaCarteira = aprenderDaCarteira;
 
@@ -5695,17 +5700,28 @@ async function carregarAprendizado(){
     const res = await fetch("./api/cerebro-config", { cache:"no-store" });
     const data = await res.json();
     const ia = data?.config?.inteligenciaAprendida || {};
+    const auto = data?.aprendizadoAutomatico || {};
     cerebroIntel = JSON.parse(JSON.stringify(ia));
     const total = APRENDIZADO_CATS.reduce((s, c) => s + ((ia[c.key]||[]).length), 0);
-    // Card destaque só com o total grande. A contagem por categoria vive uma única vez
-    // no bloco "Estado do aprendizado da IA" (rótulos completos), sem duplicar aqui.
-    const header = `<div style="margin-bottom:18px">
+    const totalCasos = Number(auto.totalCasos || 0);
+    const historicos = Number(auto.historicosProcessados || 0);
+    const pendenciasAuto = Number(auto.aprendizadosPendentes || 0);
+    const autoStatus = auto.bootstrapConcluidoEm
+      ? (pendenciasAuto ? `${pendenciasAuto} atualização(ões) aguardando leitura automática.` : "Carteira inicial processada. Novas mensagens entram automaticamente.")
+      : "Processando os históricos existentes em segundo plano.";
+    const header = `<div style="margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
       <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,rgba(255,107,92,.08),rgba(55,232,255,.04));border:1px solid var(--lime);border-radius:12px">
-        <div style="font-size:42px;font-weight:950;line-height:1;color:var(--lime)">${total}</div>
+        <div style="font-size:42px;font-weight:950;line-height:1;color:var(--lime)">${totalCasos}</div>
         <div>
-          <div style="font-size:13px;font-weight:950">observa${total===1?"ção":"ções"} no Cérebro</div>
-          <div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">o Corretor Pro usa isso para calibrar próximas sugestões</div>
+          <div style="font-size:13px;font-weight:950">caso${totalCasos===1?" comercial real":"s comerciais reais"}</div>
+          <div class="small" style="color:var(--muted);font-size:11px;margin-top:2px">situação → sua condução → resposta do cliente</div>
         </div>
+      </div>
+      <div style="padding:14px 16px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:12px">
+        <div style="font-size:11px;color:var(--acao);text-transform:uppercase;letter-spacing:.12em;font-weight:950">Aprendizado contínuo ativo</div>
+        <div style="font-size:24px;font-weight:950;margin-top:5px">${historicos} históricos</div>
+        <div class="small" style="color:var(--muted);font-size:11px;margin-top:3px">${escapeHtml(autoStatus)}</div>
+        <div class="small" style="color:var(--soft);font-size:10px;margin-top:5px">${total} observações de estilo e técnica também preservadas</div>
       </div>
     </div>`;
     const blocos = APRENDIZADO_CATS.map(cat => {
@@ -5726,7 +5742,7 @@ async function carregarAprendizado(){
         ${itensHtml}
       </div>`;
     }).join("");
-    box.innerHTML = header + blocos + (total > 0 ? `<button type="button" onclick="limparAprendizadoTudo()" style="width:100%;margin-top:6px;padding:10px;background:transparent;color:var(--risco);border:1px dashed var(--risco);border-radius:10px;font-size:12px;font-weight:950;cursor:pointer">Apagar TUDO que o Corretor Pro aprendeu</button>` : "");
+    box.innerHTML = header + blocos + ((total + totalCasos) > 0 ? `<button type="button" onclick="limparAprendizadoTudo()" style="width:100%;margin-top:6px;padding:10px;background:transparent;color:var(--risco);border:1px dashed var(--risco);border-radius:10px;font-size:12px;font-weight:950;cursor:pointer">Apagar TUDO que o Corretor Pro aprendeu</button>` : "");
   }catch(err){
     box.innerHTML = boxErro("carregarAprendizado()");
   }
@@ -5742,10 +5758,24 @@ async function apagarItemAprendizado(categoria, indice){
 window.apagarItemAprendizado = apagarItemAprendizado;
 
 async function limparAprendizadoTudo(){
-  if(!confirm("Apagar TUDO que o Corretor Pro aprendeu? Ela vai voltar do zero. (Cérebro Comercial manual não é afetado.)")) return;
-  cerebroIntel = {};
-  await salvarAprendizado();
-  carregarAprendizado();
+  if(!confirm("Apagar TUDO que o Corretor Pro aprendeu com os históricos? O Cérebro Comercial digitado manualmente não será afetado.")) return;
+  try{
+    const res = await fetch("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ action:"limpar-aprendizado-completo" })
+    });
+    const data = await res.json().catch(()=>({ok:false}));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "falhou");
+    cerebroIntel = {};
+    try{
+      localStorage.removeItem(CP_APREND_AUTO_OFFSET_KEY);
+      localStorage.removeItem(CP_APREND_AUTO_PENDENTES_KEY);
+    }catch(_){}
+    toast("Aprendizado apagado. O sistema começará uma nova leitura automática da carteira.");
+    carregarAprendizado();
+    carregarEstadoIA();
+    cpAprendAgendarRetomada(1200);
+  }catch(err){ toast("Erro ao apagar aprendizado: " + (err?.message||err)); }
 }
 window.limparAprendizadoTudo = limparAprendizadoTudo;
 
@@ -5759,6 +5789,225 @@ async function salvarAprendizado(){
     if(!data?.ok) toast("Erro ao salvar: " + (data?.error||"falhou"));
   }catch(err){ toast("Erro ao salvar: " + (err?.message||err)); }
 }
+
+
+// ===== Aprendizado contínuo real v808 =====
+// A varredura inicial roda em segundo plano, uma conversa por vez, sem travar as telas.
+// Depois disso, cada importação/reimportação e cada reanálise aprende somente o trecho novo
+// (o servidor usa hash da timeline e não paga outra chamada quando nada mudou).
+const CP_APREND_AUTO_OFFSET_KEY = "corretor_pro_aprendizado_v2_offset";
+const CP_APREND_AUTO_PENDENTES_KEY = "corretor_pro_aprendizado_v2_pendentes";
+const CP_APREND_AUTO_LOCK_KEY = "corretor_pro_aprendizado_v2_lock";
+const CP_APREND_AUTO_TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+let cpAprendAutoRodando = false;
+let cpAprendAutoTimer = null;
+
+function cpAprendLerNumero(chave, fallback=0){
+  try{ const n = Number(localStorage.getItem(chave)); return Number.isFinite(n) && n >= 0 ? n : fallback; }catch(_){ return fallback; }
+}
+function cpAprendSalvarNumero(chave, valor){ try{ localStorage.setItem(chave, String(Math.max(0, Number(valor)||0))); }catch(_){} }
+function cpAprendLerPendentes(){
+  try{
+    const arr = JSON.parse(localStorage.getItem(CP_APREND_AUTO_PENDENTES_KEY) || "[]");
+    return [...new Set((Array.isArray(arr)?arr:[]).map(Number).filter(Number.isFinite).filter(n=>n>=0))].sort((a,b)=>a-b);
+  }catch(_){ return []; }
+}
+function cpAprendSalvarPendentes(arr){
+  try{ localStorage.setItem(CP_APREND_AUTO_PENDENTES_KEY, JSON.stringify([...new Set(arr)].sort((a,b)=>a-b))); }catch(_){}
+}
+function cpAprendAtualizarStatus(texto, erro=false){
+  const el = qs("#cerebroCarteiraStatus");
+  if(el) el.innerHTML = `<span style="color:${erro?'var(--risco)':'var(--cerebro)'}">${escapeHtml(texto)}</span>`;
+}
+function cpAprendAdquirirLock(){
+  const agora = Date.now();
+  try{
+    const atual = JSON.parse(localStorage.getItem(CP_APREND_AUTO_LOCK_KEY) || "null");
+    if(atual?.owner && atual.owner !== CP_APREND_AUTO_TAB_ID && Number(atual.ate||0) > agora) return false;
+    localStorage.setItem(CP_APREND_AUTO_LOCK_KEY, JSON.stringify({ owner:CP_APREND_AUTO_TAB_ID, ate:agora + 300000 }));
+    return true;
+  }catch(_){ return true; }
+}
+function cpAprendRenovarLock(){
+  try{ localStorage.setItem(CP_APREND_AUTO_LOCK_KEY, JSON.stringify({ owner:CP_APREND_AUTO_TAB_ID, ate:Date.now()+300000 })); }catch(_){}
+}
+function cpAprendLiberarLock(){
+  try{
+    const atual = JSON.parse(localStorage.getItem(CP_APREND_AUTO_LOCK_KEY) || "null");
+    if(!atual || atual.owner === CP_APREND_AUTO_TAB_ID) localStorage.removeItem(CP_APREND_AUTO_LOCK_KEY);
+  }catch(_){}
+}
+function cpAprendAgendarRetomada(delay=45000){
+  clearTimeout(cpAprendAutoTimer);
+  cpAprendAutoTimer = setTimeout(() => iniciarAprendizadoContinuoAutomatico().catch(()=>{}), delay);
+}
+async function cpAprendChamarLote(offset, forcar=false){
+  let ultimoErro = "";
+  for(let tentativa=0; tentativa<3; tentativa++){
+    try{
+      const res = await fetchComTimeout("./api/cerebro-config", {
+        method:"POST", cache:"no-store", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ action:"aprender-carteira", offset, limite:1, forcar })
+      }, 50000);
+      const data = await res.json().catch(()=>({ok:false,error:`Resposta inválida (${res.status})`}));
+      if(res.ok && data?.ok) return data;
+      ultimoErro = data?.error || `Servidor respondeu ${res.status}`;
+    }catch(e){ ultimoErro = String(e?.message || e); }
+    await new Promise(r=>setTimeout(r, 1200*(tentativa+1)));
+  }
+  throw new Error(ultimoErro || "Não foi possível processar esta conversa.");
+}
+async function cpAprendFinalizar(totalCarteira){
+  const res = await fetchComTimeout("./api/cerebro-config", {
+    method:"POST", cache:"no-store", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ action:"finalizar-bootstrap-aprendizado", totalCarteira:Number(totalCarteira)||0 })
+  }, 20000);
+  const data = await res.json().catch(()=>({ok:false}));
+  if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível confirmar o aprendizado da carteira.");
+  return data;
+}
+
+async function cpAprendProcessarFilaPendente(maximo=12){
+  let processados = 0;
+  let ultimoStatus = null;
+  for(let i=0; i<Math.max(1,maximo); i++){
+    cpAprendRenovarLock();
+    let data = null;
+    try{
+      const res = await fetchComTimeout("./api/cerebro-config", {
+        method:"POST", cache:"no-store", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ action:"processar-aprendizado-pendente" })
+      }, 50000);
+      data = await res.json().catch(()=>({ok:false,error:`Resposta inválida (${res.status})`}));
+    }catch(e){
+      cpAprendAtualizarStatus(`Aprendizado de uma nova conversa ficou pendente: ${String(e?.message||e)}. Vou tentar novamente.`, true);
+      cpAprendAgendarRetomada(60000);
+      return { ok:false, processados, error:e?.message || String(e), status:ultimoStatus };
+    }
+    if(data?.vazio){ ultimoStatus = data.aprendizadoAutomatico || ultimoStatus; break; }
+    if(!data?.ok){
+      cpAprendAtualizarStatus(`Não consegui aprender o histórico ${data?.leadId || ""}: ${data?.error || "erro"}. Vou tentar novamente.`, true);
+      cpAprendAgendarRetomada(90000);
+      return { ok:false, processados, error:data?.error || "erro", status:ultimoStatus };
+    }
+    if(data?.processado || data?.removido) processados++;
+    ultimoStatus = data?.aprendizadoAutomatico || ultimoStatus;
+    await new Promise(r=>setTimeout(r, 450));
+  }
+  return { ok:true, processados, status:ultimoStatus };
+}
+
+async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
+  const forcar = opcoes?.forcar === true;
+  const somentePendentes = opcoes?.somentePendentes === true;
+  const mostrarToast = opcoes?.mostrarToast === true;
+  if(cpAprendAutoRodando || !navigator.onLine) return false;
+  if(!cpAprendAdquirirLock()) return false;
+  cpAprendAutoRodando = true;
+  let totalCarteira = 0;
+  let processadosNestaRodada = 0;
+  try{
+    let status = null;
+    try{
+      const r = await fetchComTimeout("./api/cerebro-config", { cache:"no-store" }, 18000);
+      const d = await r.json().catch(()=>null);
+      status = d?.aprendizadoAutomatico || null;
+    }catch(_){}
+
+    let pendentes = cpAprendLerPendentes();
+    if(somentePendentes || (!forcar && status?.bootstrapConcluidoEm && !pendentes.length)){
+      const fila = await cpAprendProcessarFilaPendente(somentePendentes ? 6 : 12);
+      const st = fila.status || status || {};
+      cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, status?.bootstrapConcluidoEm ? 0 : cpAprendLerNumero(CP_APREND_AUTO_OFFSET_KEY, 0));
+      cpAprendAtualizarStatus(`Aprendizado contínuo ativo: ${Number(st.historicosProcessados||0)} históricos e ${Number(st.totalCasos||0)} casos reais já aprendidos${Number(st.aprendizadosPendentes||0)>0?` · ${Number(st.aprendizadosPendentes)} na fila`:""}.`);
+      return fila.ok;
+    }
+
+    let offset = forcar ? 0 : cpAprendLerNumero(CP_APREND_AUTO_OFFSET_KEY, 0);
+    if(forcar){ pendentes = []; cpAprendSalvarPendentes([]); cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, 0); }
+    totalCarteira = Number(status?.totalCarteiraNoBootstrap || 0);
+    cpAprendAtualizarStatus(forcar ? "Reprocessando toda a carteira em segundo plano…" : "Aprendendo automaticamente com os históricos já importados…");
+
+    for(let loops=0; loops<10000; loops++){
+      cpAprendRenovarLock();
+      const atualOffset = offset;
+      let data;
+      try{ data = await cpAprendChamarLote(atualOffset, forcar); }
+      catch(e){
+        cpAprendAtualizarStatus(`Aprendizado pausado na conversa ${atualOffset+1}: ${String(e?.message||e)}. Vou tentar novamente.`, true);
+        cpAprendAgendarRetomada(60000);
+        return false;
+      }
+      if(Number.isFinite(Number(data.total))) totalCarteira = Number(data.total);
+      const falhou = Number(data.errosIA||0)>0 || Number(data.falhasSalvar||0)>0;
+      if(falhou && !pendentes.includes(atualOffset)) pendentes.push(atualOffset);
+      cpAprendSalvarPendentes(pendentes);
+      processadosNestaRodada += Number(data.loteProcessado||0);
+      const proximo = data.proximaOffset;
+      if(proximo == null){
+        offset = atualOffset + Number(data.loteProcessado||0);
+        cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, offset);
+        break;
+      }
+      offset = Number(proximo);
+      cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, offset);
+      const totalTxt = totalCarteira ? `/${totalCarteira}` : "";
+      cpAprendAtualizarStatus(`Aprendizado automático em andamento: ${offset}${totalTxt} históricos verificados${pendentes.length?` · ${pendentes.length} para recuperar`:""}.`);
+      await new Promise(r=>setTimeout(r, 450));
+    }
+
+    // Uma falha transitória não é abandonada. Cada offset problemático volta à fila
+    // e só depois de todos terem sido recuperados o bootstrap é marcado como concluído.
+    const aindaPendentes = [];
+    for(let i=0; i<pendentes.length; i++){
+      const off = pendentes[i];
+      cpAprendRenovarLock();
+      cpAprendAtualizarStatus(`Recuperando histórico ${i+1}/${pendentes.length} que não foi aprendido na primeira tentativa…`);
+      try{
+        const d = await cpAprendChamarLote(off, true);
+        if(Number(d.errosIA||0)>0 || Number(d.falhasSalvar||0)>0) aindaPendentes.push(off);
+      }catch(_){ aindaPendentes.push(off); }
+      cpAprendSalvarPendentes(aindaPendentes.concat(pendentes.slice(i+1)));
+      await new Promise(r=>setTimeout(r, 700));
+    }
+    cpAprendSalvarPendentes(aindaPendentes);
+    if(aindaPendentes.length){
+      cpAprendAtualizarStatus(`${aindaPendentes.length} histórico(s) ainda não foram aprendidos. O sistema tentará novamente sem bloquear seu uso.`, true);
+      cpAprendAgendarRetomada(90000);
+      return false;
+    }
+
+    // Absorve também alterações que chegaram enquanto a varredura inicial estava rodando.
+    await cpAprendProcessarFilaPendente(30);
+    const totalConfirmado = totalCarteira || offset || processadosNestaRodada;
+    const fim = await cpAprendFinalizar(totalConfirmado);
+    cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, 0);
+    cpAprendSalvarPendentes([]);
+    const st = fim?.aprendizadoAutomatico || {};
+    const msg = `Aprendizado contínuo ativo: ${Number(st.historicosProcessados||totalConfirmado)} históricos e ${Number(st.totalCasos||0)} casos comerciais reais disponíveis para as sugestões.`;
+    cpAprendAtualizarStatus(msg);
+    if(mostrarToast) toast("✓ Carteira aprendida. As próximas sugestões já consultam suas conduções reais.");
+    try{ if(state.active === "cerebro"){ carregarAprendizado(); carregarEstadoIA(); } }catch(_){}
+    return true;
+  }finally{
+    cpAprendAutoRodando = false;
+    cpAprendLiberarLock();
+  }
+}
+window.iniciarAprendizadoContinuoAutomatico = iniciarAprendizadoContinuoAutomatico;
+
+// Começa sozinho depois que a tela principal já teve tempo de carregar. Se a aba ficar
+// sem rede ou for fechada, offset e falhas permanecem salvos e a execução retoma depois.
+function cpAgendarAprendizadoInicial(){
+  setTimeout(()=>iniciarAprendizadoContinuoAutomatico().catch(()=>{}), 3200);
+}
+if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", cpAgendarAprendizadoInicial, {once:true});
+else cpAgendarAprendizadoInicial();
+window.addEventListener("online", ()=>cpAprendAgendarRetomada(1500));
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !cpAprendAutoRodando) cpAprendAgendarRetomada(1800); });
+// Rede, navegador ou outra aba podem impedir o gatilho imediato. Esta verificação leve
+// é só uma rede de segurança; se não houver fila, termina em uma única consulta curta.
+setInterval(()=>{ if(!document.hidden && navigator.onLine && !cpAprendAutoRodando) iniciarAprendizadoContinuoAutomatico({ somentePendentes:true }).catch(()=>{}); }, 60000);
 
 qs("#aprendizadoRefresh")?.addEventListener("click", carregarAprendizado);
 
@@ -5778,6 +6027,7 @@ async function carregarEstadoIA(){
     const res = await fetch("./api/cerebro-config", { cache:"no-store" });
     const data = await res.json();
     const ia = data?.config?.inteligenciaAprendida || {};
+    const auto = data?.aprendizadoAutomatico || {};
     const cats = [
       { key:"tons", label:"Tom observado", cor:"var(--lime)" },
       { key:"tecnicas", label:"Técnicas comerciais", cor:"var(--acao)" },
@@ -5788,28 +6038,29 @@ async function carregarEstadoIA(){
       { key:"padroesFollowup", label:"Padrões de follow-up", cor:"var(--timing)" }
     ];
     const total = cats.reduce((s,c) => s + ((ia[c.key]||[]).length), 0);
-    const META = 60; // ~30 ZIPs costumam gerar ~60 observações
-    const pct = Math.min(100, Math.round((total / META) * 100));
-    const corBar = pct >= 100 ? "var(--acao)" : pct >= 50 ? "var(--lime)" : "var(--dados)";
-    const statusTxt = pct >= 100
-      ? "Massa crítica atingida — o Corretor Pro pode operar guiado principalmente pelo que aprendeu de você."
-      : pct >= 50
-      ? "Banco crescendo bem. Continue importando ZIPs."
-      : "Início do aprendizado. Importe mais ZIPs pra acelerar.";
+    const historicos = Number(auto.historicosProcessados || 0);
+    const casos = Number(auto.totalCasos || 0);
+    const pendenciasAuto = Number(auto.aprendizadosPendentes || 0);
+    const estado = auto.bootstrapConcluidoEm
+      ? (pendenciasAuto ? `${pendenciasAuto} conversa(s) nova(s) estão na fila de aprendizado automático.` : "A carteira existente já foi lida. Cada nova importação, reimportação ou reanálise atualiza esta memória automaticamente.")
+      : "A leitura inicial da carteira está acontecendo em segundo plano. Você pode continuar usando o sistema normalmente.";
     const grade = cats.map(c => `<div style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)">
       <div style="color:${c.cor};text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:9px;margin-bottom:3px">${c.label}</div>
       <div style="font-size:20px;font-weight:950">${(ia[c.key]||[]).length}</div>
     </div>`).join("");
     box.innerHTML = `
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:12px">
-          <span style="color:var(--muted)">Progresso até massa crítica</span>
-          <span style="color:${corBar};font-weight:950">${total} / ${META}</span>
+      <div style="padding:13px 14px;border:1px solid var(--acao);border-radius:12px;background:linear-gradient(135deg,rgba(74,222,128,.07),rgba(55,232,255,.03));margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="color:var(--acao);font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:950">Aprendizado contínuo ativo</div>
+            <div style="font-size:13px;line-height:1.45;margin-top:4px">${escapeHtml(estado)}</div>
+          </div>
+          <div style="display:flex;gap:18px">
+            <div><div style="font-size:24px;font-weight:950">${historicos}</div><div class="small" style="color:var(--muted);font-size:10px">históricos lidos</div></div>
+            <div><div style="font-size:24px;font-weight:950">${casos}</div><div class="small" style="color:var(--muted);font-size:10px">casos reais</div></div>
+          </div>
         </div>
-        <div style="height:8px;background:rgba(255,255,255,.05);border-radius:999px;overflow:hidden">
-          <div style="width:${pct}%;height:100%;background:${corBar};transition:width .3s"></div>
-        </div>
-        <div class="small" style="color:var(--soft);margin-top:6px;font-size:11px">${statusTxt}</div>
+        <div class="small" style="color:var(--soft);font-size:10px;margin-top:7px">${total} observações de estilo, técnica e resposta também disponíveis.</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:7px">${grade}</div>
       <div style="margin-top:10px;text-align:right">
@@ -7160,6 +7411,9 @@ qs("#cerebroCarteiraBtn")?.addEventListener("click", async () => {
             }catch(_){ aindaErro++; }
           }
           totalErrosIA = aindaErro;
+        }
+        if(totalErrosIA === 0 && totalFalhas === 0){
+          try{ await cpAprendFinalizar(total != null ? total : processados); }catch(_){}
         }
         let msg = 'Pronto! Aprendi de ' + ((total != null ? total : processados) - totalSemMaterial - totalErrosIA) + ' conversas — ' + totalAprendidas + ' lições no Cérebro.' + (totalSemMaterial ? (' ' + totalSemMaterial + ' eram só formulário.') : '');
         if(totalErrosIA > 0) msg += ' ' + totalErrosIA + ' deram erro na análise — motivo: ' + motivoErroIA + '.';

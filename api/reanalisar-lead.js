@@ -1,6 +1,6 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, marcarAprendizadoPendente, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 // nome_arquivo pode trazer uma tag interna de deduplicação (ex.: "Fulana [CSV a1b2c3]"),
@@ -729,7 +729,12 @@ async function reanalisarLeadHandler702(req, res) {
     if (persistedSchema < 715) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 715." });
   }
 
-  return json(res, 200, { ok: true, analysis: persisted, warning: avisoReanalise || null, schemaComercial: 715, apiVersion: "715-motor-comercial-v2-layout-mobile" });
+  // v808: a reanálise registra uma fila rápida; a leitura comercial roda em outra
+  // requisição para não somar mais uma chamada de IA ao tempo crítico da reanálise.
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id || ""), motivo: "reanalisado" })
+    .catch(e => ({ ok:false, error:e?.message || String(e) }));
+
+  return json(res, 200, { ok: true, analysis: persisted, aprendizadoAutomatico, warning: avisoReanalise || null, schemaComercial: 715, apiVersion: "715-motor-comercial-v2-layout-mobile" });
 }
 
 export default async function handler(req, res) {

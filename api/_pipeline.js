@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v806-cerebro-validacao-retomada";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v808-aprendizado-continuo-real";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -1286,6 +1286,355 @@ async function loadInteligenciaAprendida() {
   } catch (_) { return null; }
 }
 
+// ─── APRENDIZADO CONTÍNUO REAL v808 ──────────────────────────────────────────
+// Memória separada do formulário do Cérebro. Assim salvar método/tom não apaga os
+// casos aprendidos e o aprendizado automático não sobrescreve campos manuais.
+const MEMORIA_COMERCIAL_V2_KEY = "corretor-memoria-comercial-v2";
+
+function hashTextoAprendizado(valor) {
+  // FNV-1a de 32 bits: suficiente para detectar se a timeline mudou, sem guardar
+  // o texto inteiro como índice. Não é usado como mecanismo de segurança.
+  let h = 0x811c9dc5;
+  const txt = String(valor || "");
+  for (let i = 0; i < txt.length; i++) {
+    h ^= txt.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function mensagemPodeEnsinar(m) {
+  if (!m || m.system) return false;
+  const tipo = String(m.type || "").toLowerCase();
+  const fonte = String(m.source || "").toLowerCase();
+  const autor = String(m.author || "").toLowerCase();
+  // Nunca aprende com uma sugestão produzida pela própria IA, mesmo que alguma
+  // versão antiga a tenha gravado por engano na timeline. Algumas versões antigas
+  // não preenchiam type/source, por isso o autor também faz parte da barreira.
+  if (/sugest|recomenda[cç][aã]o|gerad[ao]-?ia|assistant|openai|chatgpt|ia do sistema/.test(`${tipo} ${fonte} ${autor}`)) return false;
+  const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+  // Eventos operacionais do app não são condução comercial e não podem ensinar estilo.
+  if (/^\[?(?:atendimento registrado|marcado como atendido|lembrete criado|status atualizado)\]?/i.test(texto)) return false;
+  return texto.length >= 2;
+}
+
+function papelMensagemAprendizado(m, clientName = "") {
+  const autor = String(m?.author || "").trim();
+  if (autorPareceNegocioPipeline(autor) || /voc[êe]|mensagem enviada|atendimento \(corretor\)/i.test(autor)) return "CORRETOR";
+  if (autorPareceClientePipeline(autor, { clientName })) return "CLIENTE";
+  return "OUTRO";
+}
+
+// Constrói um material focado nas CONDUÇÕES REAIS: inclui cada mensagem do corretor
+// e o contexto ao redor. Assim uma conversa enorme não perde as ações do meio nem a
+// última mensagem, e não precisamos mandar anexos/ruídos inteiros para a IA.
+export function prepararTimelineParaAprendizado(timeline, clientName = "") {
+  const arr = (Array.isArray(timeline) ? timeline : []).filter(mensagemPodeEnsinar);
+  if (!arr.length) return "";
+  const escolhidos = new Set();
+  arr.forEach((m, i) => {
+    if (papelMensagemAprendizado(m, clientName) !== "CORRETOR") return;
+    for (let j = Math.max(0, i - 5); j <= Math.min(arr.length - 1, i + 3); j++) escolhidos.add(j);
+  });
+  // Se não foi possível reconhecer o corretor, mantém começo e fim para não jogar
+  // fora a conversa; a IA recebe a atribuição por autor e decide com cautela.
+  if (!escolhidos.size) {
+    for (let i = 0; i < Math.min(20, arr.length); i++) escolhidos.add(i);
+    for (let i = Math.max(0, arr.length - 40); i < arr.length; i++) escolhidos.add(i);
+  }
+  const indices = [...escolhidos].sort((a, b) => a - b);
+  const linhas = [];
+  let anterior = -2;
+  for (const i of indices) {
+    if (i > anterior + 1) linhas.push("[... outro trecho da mesma conversa ...]");
+    const m = arr[i];
+    const papel = papelMensagemAprendizado(m, clientName);
+    const texto = String(m.text || "").replace(/\s+/g, " ").trim().slice(0, 900);
+    linhas.push(`[${m.date || ""} ${m.time || ""}] ${papel} (${String(m.author || "").slice(0, 80)}): ${texto}`);
+    anterior = i;
+  }
+  let texto = linhas.join("\n");
+  // Teto técnico. Mantém início, amostras centrais e principalmente o final, onde
+  // ficam as conduções novas que precisam virar aprendizado imediatamente.
+  const MAX = 48000;
+  if (texto.length > MAX) {
+    const partes = texto.split("\n");
+    const manter = new Set();
+    const addFaixa = (ini, fim) => { for (let i = Math.max(0, ini); i < Math.min(partes.length, fim); i++) manter.add(i); };
+    addFaixa(0, 45);
+    for (const c of [0.25, 0.5, 0.75]) {
+      const meio = Math.floor(partes.length * c);
+      addFaixa(meio - 18, meio + 18);
+    }
+    addFaixa(partes.length - 95, partes.length);
+    texto = [...manter].sort((a, b) => a - b).map(i => partes[i]).join("\n").slice(-MAX);
+  }
+  return texto;
+}
+
+const MEMORIA_CASO_V2_PREFIX = "corretor-memoria-caso-v2:";
+export const APRENDIZADO_PENDENTE_V2_PREFIX = "corretor-aprendizado-pendente-v2:";
+let _memoriaComercialCacheV2 = { ts: 0, valor: null };
+
+function memoriaComercialVazia() {
+  return { versao: 2, casos: [], fontes: {}, atualizadoEm: null, bootstrapConcluidoEm: null, totalCarteiraNoBootstrap: null };
+}
+
+function sanitizarMetaMemoriaComercial(valor) {
+  const v = valor && typeof valor === "object" ? valor : {};
+  return {
+    versao: 2,
+    atualizadoEm: v.atualizadoEm || null,
+    bootstrapConcluidoEm: v.bootstrapConcluidoEm || null,
+    totalCarteiraNoBootstrap: Number.isFinite(Number(v.totalCarteiraNoBootstrap)) ? Number(v.totalCarteiraNoBootstrap) : null
+  };
+}
+
+async function supabaseMemoriaV2() {
+  const { getSupabaseAdmin } = await import("./_persistence.js");
+  return getSupabaseAdmin();
+}
+
+function chaveFonteMemoriaV2(leadId, sourceHash = "") {
+  const id = String(leadId || "").trim() || `sem-id-${String(sourceHash || "desconhecido")}`;
+  return `${MEMORIA_CASO_V2_PREFIX}${id.slice(0, 180)}`;
+}
+
+// As mutações do lead apenas registram esta fila, operação rápida e confiável. A
+// leitura pela IA acontece em uma requisição separada, para não atrasar nem fazer
+// a importação/reanálise estourar o tempo da função.
+export async function marcarAprendizadoPendente({ leadId, motivo = "timeline-atualizada" } = {}) {
+  const id = String(leadId || "").trim();
+  if (!id) return { ok: false, error: "Lead sem id para aprendizado." };
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return { ok: false, error: "Supabase não configurado." };
+    const agora = new Date().toISOString();
+    const valor = { leadId: id, motivo: String(motivo || "timeline-atualizada").slice(0, 120), solicitadoEm: agora, tentativas: 0 };
+    const { error } = await supabase.from("direciona_config").upsert({
+      chave: `${APRENDIZADO_PENDENTE_V2_PREFIX}${id.slice(0, 180)}`, valor, atualizado_em: agora
+    }, { onConflict: "chave" });
+    return error ? { ok: false, error: error.message } : { ok: true, pendente: true };
+  } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+}
+
+async function loadMetaMemoriaComercialV2() {
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return sanitizarMetaMemoriaComercial({});
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", MEMORIA_COMERCIAL_V2_KEY).maybeSingle();
+    return sanitizarMetaMemoriaComercial(data?.valor);
+  } catch (_) { return sanitizarMetaMemoriaComercial({}); }
+}
+
+async function loadFonteMemoriaV2(leadId, sourceHash = "") {
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return null;
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveFonteMemoriaV2(leadId, sourceHash)).maybeSingle();
+    return data?.valor && typeof data.valor === "object" ? data.valor : null;
+  } catch (_) { return null; }
+}
+
+// Cada lead vive em uma linha própria. Isso evita que duas importações simultâneas
+// façam load-modify-save do mesmo JSON e apaguem o aprendizado uma da outra.
+async function loadMemoriaComercialV2(force = false) {
+  const agora = Date.now();
+  if (!force && _memoriaComercialCacheV2.valor && agora - _memoriaComercialCacheV2.ts < 60000) return _memoriaComercialCacheV2.valor;
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return memoriaComercialVazia();
+    const meta = await loadMetaMemoriaComercialV2();
+    const rows = [];
+    const PAGE = 1000;
+    for (let ini = 0; ini < 10000; ini += PAGE) {
+      const { data, error } = await supabase
+        .from("direciona_config")
+        .select("chave,valor")
+        .like("chave", `${MEMORIA_CASO_V2_PREFIX}%`)
+        .order("chave", { ascending: true })
+        .range(ini, ini + PAGE - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    const fontes = {};
+    const casos = [];
+    let atualizadoEm = meta.atualizadoEm;
+    for (const row of rows) {
+      const v = row?.valor && typeof row.valor === "object" ? row.valor : {};
+      const leadId = String(v.sourceLeadId || row.chave?.slice(MEMORIA_CASO_V2_PREFIX.length) || "");
+      fontes[leadId] = {
+        hash: String(v.sourceHash || ""),
+        nomeArquivo: String(v.sourceFile || "").slice(0, 180),
+        totalMensagens: Number(v.totalMensagens) || 0,
+        casos: Array.isArray(v.casos) ? v.casos.length : 0,
+        processadoEm: v.processadoEm || null
+      };
+      if (Array.isArray(v.casos)) casos.push(...v.casos.filter(c => c && typeof c === "object"));
+      if (v.processadoEm && (!atualizadoEm || String(v.processadoEm) > String(atualizadoEm))) atualizadoEm = v.processadoEm;
+    }
+    const valor = { ...meta, casos, fontes, atualizadoEm };
+    _memoriaComercialCacheV2 = { ts: agora, valor };
+    return valor;
+  } catch (_) { return memoriaComercialVazia(); }
+}
+
+function textoCaso(v, max) { return String(v || "").replace(/\s+/g, " ").trim().slice(0, max); }
+function removerNomeDoExemplo(texto, clientName) {
+  let out = textoCaso(texto, 700);
+  const nomes = String(clientName || "").split(/\s+/).map(n => n.trim()).filter(n => n.length >= 3);
+  for (const n of nomes) {
+    const seguro = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`\\b${seguro}\\b`, "gi"), "[cliente]");
+  }
+  return out.replace(/\[cliente\](?:\s+\[cliente\])+/g, "[cliente]");
+}
+
+function sanitizarCasoAprendido(caso, meta = {}) {
+  if (!caso || typeof caso !== "object") return null;
+  const situacao = textoCaso(caso.situacao, 420);
+  const conducao = removerNomeDoExemplo(caso.conducaoCorretor || caso.conducao || caso.mensagem, meta.clientName);
+  const regra = textoCaso(caso.regra, 420);
+  if (situacao.length < 12 || conducao.length < 8 || regra.length < 12) return null;
+  const permitidos = new Set(["observada", "validada", "parcial", "nao-funcionou", "inconclusiva"]);
+  let resultado = String(caso.resultado || "observada").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  resultado = resultado.replace(/\s+/g, "-").replace(/^nao-funcionou.*$/, "nao-funcionou");
+  if (!permitidos.has(resultado)) resultado = "observada";
+  const idBase = [meta.leadId, situacao, conducao, regra].join("|");
+  return {
+    id: `${meta.leadId || "sem-id"}-${hashTextoAprendizado(idBase)}`,
+    sourceLeadId: String(meta.leadId || ""),
+    sourceFile: textoCaso(meta.nomeArquivo, 180),
+    sourceHash: String(meta.sourceHash || ""),
+    aprendidoEm: new Date().toISOString(),
+    situacao,
+    sinalCliente: textoCaso(caso.sinalCliente, 320),
+    impedimento: textoCaso(caso.impedimento, 260),
+    conducaoCorretor: conducao,
+    resultado,
+    evidenciaResultado: textoCaso(caso.evidenciaResultado, 320),
+    regra,
+    produto: textoCaso(caso.produto || meta.produto, 100),
+    etapa: textoCaso(caso.etapa || meta.etapa, 80)
+  };
+}
+
+async function salvarCasosAprendidos(casos, meta = {}) {
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return { ok: false, error: "Supabase não configurado." };
+    const novos = (Array.isArray(casos) ? casos : []).map(c => sanitizarCasoAprendido(c, meta)).filter(Boolean).slice(0, 8);
+    const processadoEm = new Date().toISOString();
+    const valor = {
+      versao: 2,
+      sourceLeadId: String(meta.leadId || ""),
+      sourceFile: textoCaso(meta.nomeArquivo, 180),
+      sourceHash: String(meta.sourceHash || ""),
+      totalMensagens: Number(meta.totalMensagens) || 0,
+      processadoEm,
+      casos: novos
+    };
+    const { error } = await supabase.from("direciona_config").upsert({
+      chave: chaveFonteMemoriaV2(meta.leadId, meta.sourceHash), valor, atualizado_em: processadoEm
+    }, { onConflict: "chave" });
+    if (error) return { ok: false, error: error.message };
+    _memoriaComercialCacheV2 = { ts: 0, valor: null };
+    return { ok: true, casosDoLead: novos.length };
+  } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+}
+
+export async function obterStatusAprendizadoAutomatico() {
+  const mem = await loadMemoriaComercialV2(true);
+  let pendentes = 0;
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (supabase) {
+      const r = await supabase.from("direciona_config").select("chave", { count: "exact", head: true }).like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
+      if (Number.isFinite(Number(r.count))) pendentes = Number(r.count);
+    }
+  } catch (_) {}
+  return {
+    versao: 2,
+    ativo: true,
+    totalCasos: mem.casos.length,
+    historicosProcessados: Object.keys(mem.fontes || {}).length,
+    aprendizadosPendentes: pendentes,
+    atualizadoEm: mem.atualizadoEm,
+    bootstrapConcluidoEm: mem.bootstrapConcluidoEm,
+    totalCarteiraNoBootstrap: mem.totalCarteiraNoBootstrap
+  };
+}
+
+export async function marcarBootstrapAprendizadoConcluido(totalCarteira) {
+  try {
+    const supabase = await supabaseMemoriaV2();
+    if (!supabase) return false;
+    const meta = await loadMetaMemoriaComercialV2();
+    meta.bootstrapConcluidoEm = new Date().toISOString();
+    meta.totalCarteiraNoBootstrap = Number(totalCarteira) || (await obterStatusAprendizadoAutomatico()).historicosProcessados;
+    meta.atualizadoEm = new Date().toISOString();
+    const { error } = await supabase.from("direciona_config").upsert({ chave: MEMORIA_COMERCIAL_V2_KEY, valor: meta, atualizado_em: meta.atualizadoEm }, { onConflict: "chave" });
+    _memoriaComercialCacheV2 = { ts: 0, valor: null };
+    return !error;
+  } catch (_) { return false; }
+}
+
+export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", openai = null, forcar = false } = {}) {
+  const material = prepararTimelineParaAprendizado(timeline, clientName);
+  if (material.trim().length < 40) return { ok: true, ignorado: true, motivo: "sem diálogo real", casosDoLead: 0 };
+  const sourceHash = hashTextoAprendizado(material);
+  const anterior = await loadFonteMemoriaV2(leadId, sourceHash);
+  if (!forcar && anterior?.sourceHash === sourceHash) {
+    return { ok: true, ignorado: true, motivo: "histórico já aprendido", casosDoLead: Array.isArray(anterior.casos) ? anterior.casos.length : 0 };
+  }
+  const oa = openai || getOpenAI();
+  if (!oa) return { ok: false, error: "Análise não configurada." };
+  const intel = await extrairInteligenciaObservada(material, oa);
+  if (intel?._erroIA) return { ok: false, error: intel._erroIA };
+  if (!intel || typeof intel !== "object") return { ok: false, error: "A IA não devolveu aprendizado válido." };
+  // Mantém compatibilidade com a tela antiga de categorias e, em paralelo, grava
+  // os casos estruturados que passam a guiar obrigatoriamente as sugestões.
+  const legado = await registrarInteligenciaAprendida(intel);
+  const salvo = await salvarCasosAprendidos(intel.casos, {
+    leadId, clientName, nomeArquivo, sourceHash, produto, etapa,
+    totalMensagens: Array.isArray(timeline) ? timeline.length : 0
+  });
+  return {
+    ok: salvo.ok !== false,
+    casosDoLead: salvo.casosDoLead || 0,
+    totalCasos: null,
+    observacoesLegadas: legado?.total || 0,
+    sourceHash,
+    error: salvo.error || null
+  };
+}
+
+export function ranquearCasosAprendidos(casos, contexto, limite = 5) {
+  const query = new Set(_tokensRank(contexto || ""));
+  return (Array.isArray(casos) ? casos : []).map((c, i) => {
+    const base = [c.situacao, c.sinalCliente, c.impedimento, c.regra, c.produto, c.etapa].filter(Boolean).join(" ");
+    let score = _simRank(query, base);
+    if (c.resultado === "validada") score += 0.10;
+    else if (c.resultado === "parcial") score += 0.05;
+    else if (c.resultado === "nao-funcionou") score += 0.02;
+    return { ...c, _score: score, _ordem: i };
+  }).filter(c => c._score > 0 || !query.size)
+    .sort((a, b) => b._score - a._score || b._ordem - a._ordem)
+    .slice(0, Math.max(1, limite));
+}
+
+async function casosSemelhantesPrompt(contexto) {
+  const memoria = await loadMemoriaComercialV2();
+  const top = ranquearCasosAprendidos(memoria.casos, contexto, 5);
+  if (!top.length) return "";
+  const linhas = top.map((c, i) => {
+    const resultado = c.resultado === "validada" ? "resultado confirmado" : c.resultado === "nao-funcionou" ? "não funcionou — evite repetir" : c.resultado === "parcial" ? "resultado parcial" : "condução observada, ainda sem validação";
+    return `${i + 1}. Situação parecida: ${c.situacao}\n   O que você realmente fez: ${c.conducaoCorretor}\n   Regra extraída: ${c.regra}\n   Evidência: ${resultado}${c.evidenciaResultado ? ` — ${c.evidenciaResultado}` : ""}`;
+  });
+  return `CASOS REAIS RECUPERADOS DO SEU HISTÓRICO (use a LÓGICA, nunca copie nome, produto, preço ou frase sem confirmar na conversa atual):\n${linhas.join("\n")}\n\nREGRAS DE USO DOS CASOS:\n- Sua mensagem realmente enviada vale como condução observada, mesmo sem resposta posterior.\n- Só trate como estratégia comprovada quando estiver marcada como resultado confirmado.\n- Casos marcados como não funcionou servem para evitar o mesmo erro.\n- A conversa atual continua sendo a fonte dos fatos; os casos servem apenas para decidir COMO conduzir.`;
+}
+
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
 // Bloco curto acumulado de tudo que o corretor ensinou nas conversas reais
 // (regras de produto, FGTS, condições, respostas a objeções). Toda análise e
@@ -1775,9 +2124,15 @@ function jeitoAprendidoCompacto(config, contexto) {
 // focado, mesma forma que o campo inteligenciaObservada da análise. Retorna {} se não der pra extrair.
 export async function extrairInteligenciaObservada(timelineText, openai) {
   if (!timelineText || timelineText.trim().length < 40) return {};
-  // Lê até ~1.800 PALAVRAS — pega o essencial da conversa e mantém a chamada CURTA (3-5s), pra o
-  // request voltar rápido e nunca pendurar/cair.
-  const textoConversa = String(timelineText).split(/\s+/).slice(0, 1800).join(" ");
+  // O material já vem filtrado para conter as mensagens reais do corretor e o
+  // contexto ao redor. Mantemos até 48 mil caracteres, priorizando também o final,
+  // para que a condução mais recente nunca desapareça do aprendizado.
+  const bruto = String(timelineText || "").trim();
+  const textoConversa = bruto.length <= 48000
+    ? bruto
+    : `${bruto.slice(0, 12000)}
+[... trechos intermediários preservados pelo preparador ...]
+${bruto.slice(-35000)}`;
   const prompt = `Você vai LER E ENTENDER uma conversa INTEIRA de WhatsApp entre um CORRETOR da Construtora Senger (Carazinho/RS) e um cliente — TUDO que aconteceu: as PERGUNTAS, dúvidas e situações do CLIENTE e as RESPOSTAS e a condução do CORRETOR. Leia os dois lados, do começo ao fim, e entenda o que rolou.
 
 Seu objetivo: aprender COMO O CORRETOR AGE em cada situação — qual era a situação/pergunta do cliente, o que o corretor respondeu/fez, e qual foi o resultado — pra o Corretor Pro saber repetir isso em situações SEMELHANTES no futuro. Pense sempre em PARES: "quando o cliente faz/pergunta/objeta X → o corretor responde/conduz Y → deu resultado Z".
@@ -1792,9 +2147,28 @@ Retorne SOMENTE este JSON:
   "produtoVsPerfil": [{"produto":"empreendimento oferecido","perfilCliente":"perfil curto do cliente (o que ele buscava/disse)","reacao":"como o cliente reagiu a esse produto"}],
   "movimentosQueAvancaram": ["situação + ação do corretor que destravou avanço, 'diante de X o corretor fez Y → cliente avançou'"],
   "movimentosQueTravaram": ["situação + ação do corretor que esfriou o lead"],
-  "padroesFollowup": ["só se OBSERVÁVEL: depois de N dias de silêncio do cliente o corretor reaqueceu com Y E o cliente respondeu"]
+  "padroesFollowup": ["só se OBSERVÁVEL: depois de N dias de silêncio do cliente o corretor reaqueceu com Y E o cliente respondeu"],
+  "casos": [{
+    "situacao":"contexto comercial factual e reutilizável, sem nome do cliente",
+    "sinalCliente":"fala, condição ou comportamento real que disparou a ação",
+    "impedimento":"o que bloqueava o avanço naquele momento",
+    "conducaoCorretor":"a mensagem ou ação que o corretor REALMENTE usou, nunca sugestão da IA",
+    "resultado":"observada|validada|parcial|nao-funcionou|inconclusiva",
+    "evidenciaResultado":"o que o cliente respondeu depois; se ainda não respondeu, diga 'sem resposta posterior ainda'",
+    "regra":"regra prática no formato quando X, fazer Y; evitar Z",
+    "produto":"empreendimento ou categoria, se houver",
+    "etapa":"momento da negociação"
+  }]
 }
-Regras: pedido normal do cliente ('quero valores') NÃO é objeção, é interesse; 'vou pensar' vago sem resistência NÃO é objeção; objeção é resistência explícita a fechar. funcionou=true só se o cliente avançou de fato depois da resposta; false se sumiu/repetiu/esfriou. Frases curtas e acionáveis. Não copie os exemplos.
+Regras adicionais dos casos:
+- Extraia no máximo 8 casos realmente úteis por conversa.
+- "observada" = foi a condução escolhida pelo corretor, mas ainda não há resposta posterior.
+- "validada" = a resposta do cliente confirmou avanço concreto.
+- "parcial" = houve resposta, mas sem avanço claro.
+- "nao-funcionou" = houve rejeição, correção de premissa, incômodo ou esfriamento depois da ação.
+- Nunca classifique como validada só porque o cliente respondeu.
+- Nunca aprenda com texto identificado como sugestão, recomendação, assistant ou OpenAI.
+- Pedido normal do cliente ('quero valores') NÃO é objeção, é interesse; 'vou pensar' vago sem resistência NÃO é objeção; objeção é resistência explícita a fechar. funcionou=true só se o cliente avançou de fato depois da resposta; false se sumiu/repetiu/esfriou. Frases curtas e acionáveis. Não copie os exemplos.
 
 CONVERSA (lê os dois lados, do início ao fim):
 ${textoConversa}`;
@@ -2147,6 +2521,11 @@ ${instrucoesCerebroTexto}`;
     if (iaAprend) jeitoAprendido = jeitoAprendidoCompacto({ inteligenciaAprendida: iaAprend }, timelineText);
   } catch (_) { jeitoAprendido = ""; }
 
+  // Recuperação obrigatória de casos semelhantes já conduzidos pelo próprio corretor.
+  // Diferente do tom genérico, estes casos carregam situação → ação real → resultado.
+  let casosAprendidos = "";
+  try { casosAprendidos = await casosSemelhantesPrompt(timelineText); } catch (_) { casosAprendidos = ""; }
+
   const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) MENOS de ${contextoTemporal.limiar} dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, dando sequência normal. (b) A partir de ${contextoTemporal.limiar} dias parado, trate como RETOMADA: reabra a conversa de forma natural e específica — retome o último assunto/pendência e proponha o próximo passo — sem soar genérico. ATENÇÃO: retomar NÃO é pedir desculpa. Reconheça o tempo apenas de leve, e só peça desculpa se o corretor tinha prometido um retorno e realmente não cumpriu. (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando já se passaram vários dias. Regra de adiamento pedido pelo cliente: se o cliente disse de forma explícita que quer ESPERAR ou adiar (ex.: "vou esperar uns meses", "me chama daqui a um tempo", "quando sair o inventário / a herança / a venda do meu imóvel", "agora não é o momento"), você NÃO deve pressionar por informações (faixa de valor, número de dormitórios, planta ou pronto) nem empurrar imóvel. Nesse caso, as três mensagens têm que RESPEITAR o tempo dele: reconhecer o que ele falou, se colocar à disposição e, no máximo, combinar um retorno leve mais pra frente (retomar quando ele estiver pronto) — trate a urgência como baixa. Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}${hojeSemana ? ` (${hojeSemana})` : ""}
@@ -2160,6 +2539,11 @@ ${jeitoAprendido ? `
 ${jeitoAprendido}
 
 IMPORTANTE: use o bloco "SEU JEITO" acima APENAS para definir o tom, o vocabulário e a abordagem das TRÊS mensagens (campos "mensagens" e "mensagemQueEuEnviariaHoje"). NÃO use esse bloco para preencher os campos do diagnóstico — o diagnóstico continua saindo exclusivamente da conversa. Adapte ao contexto real desta conversa; nunca copie frases literais do bloco.
+` : ""}
+${casosAprendidos ? `
+${casosAprendidos}
+
+IMPORTANTE: quando um caso recuperado for semanticamente semelhante ao bloqueio atual, use obrigatoriamente a REGRA e a LÓGICA daquele caso para decidir a próxima ação e as três mensagens. Não transporte nenhum fato do caso antigo para este cliente. Se o caso estiver marcado como não funcionou, evite aquela condução. Os casos não podem alterar o diagnóstico factual da conversa atual.
 ` : ""}
 JSON obrigatório:
 {

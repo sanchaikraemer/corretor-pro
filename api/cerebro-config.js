@@ -1,5 +1,5 @@
 import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, extrairInteligenciaObservada, registrarInteligenciaAprendida, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
 
 // Bloqueia URLs que apontem para endereços privados, loopback ou link-local (SSRF).
 function validarUrlSegura(urlStr) {
@@ -104,11 +104,85 @@ export default async function handler(req, res) {
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
-    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found });
+    const aprendizadoAutomatico = await obterStatusAprendizadoAutomatico().catch(() => ({ ativo: true, versao: 2, totalCasos: 0, historicosProcessados: 0 }));
+    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
     const body = await readJsonBody(req).catch(() => ({}));
+
+    // AÇÃO v808: só confirma que a varredura inicial terminou DEPOIS que o front
+    // também recuperou eventuais conversas que falharam. Assim nenhuma conversa
+    // fica marcada como aprendida só porque a paginação chegou ao fim.
+    if (body.action === "finalizar-bootstrap-aprendizado") {
+      const totalCarteira = Math.max(0, Number(body.totalCarteira) || 0);
+      const ok = await marcarBootstrapAprendizadoConcluido(totalCarteira);
+      const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+      return json(res, ok ? 200 : 500, { ok, aprendizadoAutomatico: status });
+    }
+
+    // AÇÃO v808: processa UMA alteração de histórico que foi enfileirada por uma
+    // importação, reimportação ou reanálise. Uma por chamada mantém a função curta.
+    if (body.action === "processar-aprendizado-pendente") {
+      const openai = getOpenAI();
+      if (!openai) return json(res, 200, { ok: false, error: "Análise indisponível agora." });
+      const { data: filas, error: filaErr } = await supabase
+        .from("direciona_config")
+        .select("chave,valor,atualizado_em")
+        .like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`)
+        .order("atualizado_em", { ascending: true })
+        .range(0, 0);
+      if (filaErr) return json(res, 200, { ok:false, error:filaErr.message });
+      const fila = filas?.[0];
+      if (!fila) {
+        const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+        return json(res, 200, { ok:true, vazio:true, aprendizadoAutomatico:status });
+      }
+      const leadId = String(fila?.valor?.leadId || fila.chave.slice(APRENDIZADO_PENDENTE_V2_PREFIX.length));
+      const { data: lead, error: leadErr } = await supabase
+        .from("whatsapp_processamentos")
+        .select("id,nome_arquivo,timeline_json,resultado_analise,etapa")
+        .eq("id", leadId)
+        .maybeSingle();
+      if (leadErr) return json(res, 200, { ok:false, error:leadErr.message, leadId });
+      if (!lead) {
+        await supabase.from("direciona_config").delete().eq("chave", fila.chave);
+        return json(res, 200, { ok:true, removido:true, motivo:"lead não existe mais", leadId });
+      }
+      const a = lead.resultado_analise || {};
+      const r = await aprenderComHistoricoReal({
+        timeline: Array.isArray(lead.timeline_json) ? lead.timeline_json : [],
+        clientName: a.clientName || a?.lead?.clientName || a?.lead?.name || String(lead.nome_arquivo || "").replace(/\.(txt|zip)$/i, ""),
+        leadId: String(lead.id),
+        nomeArquivo: lead.nome_arquivo || "",
+        produto: a?.modeloComercial?.oportunidade?.produto || a.produtoInteresse || a?.lead?.product || "",
+        etapa: a.etapaSugerida || lead.etapa || a?.lead?.etapa || "",
+        openai
+      });
+      if (r?.ok) {
+        await supabase.from("direciona_config").delete().eq("chave", fila.chave);
+        const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+        return json(res, 200, { ok:true, processado:true, leadId, resultado:r, aprendizadoAutomatico:status });
+      }
+      const tentativas = Number(fila?.valor?.tentativas || 0) + 1;
+      const valorFila = { ...(fila.valor || {}), leadId, tentativas, ultimoErro:String(r?.error || "Falha no aprendizado").slice(0,240), ultimaTentativaEm:new Date().toISOString() };
+      await supabase.from("direciona_config").upsert({ chave:fila.chave, valor:valorFila, atualizado_em:new Date().toISOString() }, { onConflict:"chave" });
+      return json(res, 200, { ok:false, pendente:true, leadId, tentativas, error:valorFila.ultimoErro });
+    }
+
+    // AÇÃO v808: apaga tanto as categorias legadas quanto os casos estruturados.
+    // O Cérebro manual (método/tom/regras digitadas) permanece intacto.
+    if (body.action === "limpar-aprendizado-completo") {
+      const atual = await loadConfig(supabase);
+      const base = (atual?.valor && typeof atual.valor === "object") ? atual.valor : { ...DEFAULTS };
+      base.inteligenciaAprendida = {};
+      const salvoLegado = await saveConfig(supabase, base);
+      const apagadoMeta = await supabase.from("direciona_config").delete().eq("chave", "corretor-memoria-comercial-v2");
+      const apagadosCasos = await supabase.from("direciona_config").delete().like("chave", "corretor-memoria-caso-v2:%");
+      const apagadosPendentes = await supabase.from("direciona_config").delete().like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
+      const erro = salvoLegado?.error?.message || apagadoMeta?.error?.message || apagadosCasos?.error?.message || apagadosPendentes?.error?.message || "";
+      return json(res, erro ? 500 : 200, { ok: !erro, error: erro || undefined });
+    }
 
     // AÇÃO: aprender de uma imagem/print (lê a imagem com visão da IA)
     if (body.action === "aprender-imagem") {
@@ -203,7 +277,7 @@ export default async function handler(req, res) {
         }
         const { data: leads, error } = await supabase
           .from("whatsapp_processamentos")
-          .select("id, nome_arquivo, timeline_json")
+          .select("id, nome_arquivo, timeline_json, resultado_analise")
           .order("id", { ascending: true })
           .range(offset, offset + limite - 1);
         if (error) return json(res, 200, { ok: false, error: "Banco: " + error.message });
@@ -212,22 +286,34 @@ export default async function handler(req, res) {
         const amostra = [];
         for (const l of (leads || [])) {
           const tl = Array.isArray(l.timeline_json) ? l.timeline_json : [];
-          const texto = tl.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n").trim();
-          if (texto.length < 40) { semConteudo++; continue; }
-          const intel = await extrairInteligenciaObservada(texto, openai);
-          if (intel && intel._erroIA) { errosIA++; ultimoErroIA = String(intel._erroIA).slice(0, 200); continue; }
-          if (!intel || !Object.keys(intel).length) { semConteudo++; continue; }
-          const r = await registrarInteligenciaAprendida(intel);
+          if (tl.length < 2) { semConteudo++; continue; }
+          const a = l.resultado_analise || {};
+          const clientName = a.clientName || a?.lead?.clientName || String(l.nome_arquivo || "").replace(/\.(txt|zip)$/i, "");
+          const r = await aprenderComHistoricoReal({
+            timeline: tl,
+            clientName,
+            leadId: String(l.id || ""),
+            nomeArquivo: l.nome_arquivo || "",
+            produto: a.produtoInteresse || a?.lead?.product || "",
+            etapa: a.etapaSugerida || a?.lead?.etapa || "",
+            openai,
+            forcar: body.forcar === true
+          });
           if (r?.ok) {
-            aprendidas++;
-            totalNoBanco = r.total || totalNoBanco;
-            if (intel.tom && amostra.length < 3) amostra.push(String(intel.tom).slice(0, 120));
+            try { await supabase.from("direciona_config").delete().eq("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}${String(l.id || "").slice(0,180)}`); } catch (_) {}
+            if (r.ignorado && r.motivo === "sem diálogo real") semConteudo++;
+            else aprendidas++;
+            totalNoBanco = r.totalCasos || totalNoBanco;
+            if (r.casosDoLead && amostra.length < 3) amostra.push(`${r.casosDoLead} caso(s) real(is) extraído(s)`);
           } else {
-            falhasSalvar++;
+            if (r?.error) { errosIA++; ultimoErroIA = String(r.error).slice(0, 200); }
+            else falhasSalvar++;
           }
         }
         const processadosAteAgora = offset + (leads?.length || 0);
         const concluido = total != null ? processadosAteAgora >= total : (leads?.length || 0) < limite;
+        // A conclusão é confirmada por uma ação separada somente depois que o front
+        // recuperar os offsets que eventualmente falharam.
         return json(res, 200, {
           ok: true,
           total,

@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
+import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -212,7 +212,12 @@ async function acaoSalvarNovo(body, res) {
       fileName: body?.fileName || result?.txtFile || null,
       fileSize: body?.fileSize || null
     });
-    return json(res, 200, { ok: !!persistence?.processing?.id, persistence });
+    const salvoId = persistence?.processing?.id;
+    let aprendizadoAutomatico = null;
+    if (salvoId && Array.isArray(result?.timeline) && result.timeline.length) {
+      aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(salvoId), motivo: "nova-importacao" }).catch(e => ({ ok:false, error:e?.message || String(e) }));
+    }
+    return json(res, 200, { ok: !!salvoId, persistence, aprendizadoAutomatico });
   } catch (err) {
     return json(res, 500, { ok: false, error: err?.message || String(err) });
   }
@@ -896,8 +901,14 @@ async function acaoAtualizarComEvolucao(body, res) {
     .eq("id", id);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
 
+  // A timeline já está persistida. A leitura pela IA entra numa fila separada para
+  // não atrasar nem fazer a reimportação expirar. O app processa essa fila na sequência.
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id), motivo: "reimportacao" })
+    .catch(e => ({ ok:false, error:e?.message || String(e) }));
+
   return json(res, 200, {
     ok: true, id, evolucao: evolucaoEntry, totalEvolucoes: historicoEvolucao.length,
+    aprendizadoAutomatico,
     // Quantas mensagens vieram só da conversa antiga (que o arquivo novo não trazia).
     // Se > 0, o frontend reanalisa em segundo plano pra a análise refletir tudo que foi juntado.
     preservadasDoAntigo, totalMensagens: novaTimeline.length
