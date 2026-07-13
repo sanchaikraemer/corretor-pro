@@ -4965,7 +4965,7 @@ function cp704Css(){
   };
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" class="warn" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button></div></div>
+    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button></div></div>
     <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
     <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
@@ -5050,7 +5050,7 @@ function renderLeadFoco(lead){
         <details class="cp704-details"><summary>Leitura comercial</summary><div class="cp704-body">${cp718LeituraComercialHtml(a,lead)}</div></details>
         <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
       </div>
-      <div class="cp704-quickbar"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
+      <div class="cp704-quickbar" style="grid-template-columns:repeat(3,1fr)"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">✓ Marcar atendimento</button><button type="button" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">📅 Agendar retorno</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
       ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
     </div>`;
   return null;
