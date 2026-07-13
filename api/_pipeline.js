@@ -1850,7 +1850,6 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
-  const clamp = (n) => Number.isFinite(Number(n)) ? Math.max(0, Math.min(100, Math.round(Number(n)))) : null;
   const arr = (v) => Array.isArray(v) ? v.filter(Boolean).map(x => clean(x)).filter(Boolean) : [];
   const pickMsg = (obj, keys) => {
     for (const k of keys) {
@@ -1865,8 +1864,6 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       mode: "sem_api",
       summary: "Conversa importada, mas a análise comercial está indisponível porque a API não está configurada.",
       clientProfile: "—",
-      probability: "—",
-      probabilityPercent: null,
       confianca: 0,
       bestTime: "—",
       objections: [],
@@ -1958,7 +1955,6 @@ JSON obrigatório:
     "pendenciaFinanceira":"texto curto sobre PERMUTA — preencha apenas se o cliente tiver oferecido explicitamente, com as próprias palavras, um terreno/casa/apto próprio como parte do pagamento. Cite entre aspas o trecho literal do cliente que embasa isso, junto com os detalhes que ele deu (tamanho, bairro, valor). Não é sobre renda, crédito ou qualquer outra pendência financeira genérica. Se o cliente não disse isso literalmente em nenhum momento da conversa, escreva \"Não identificado\" — não infira a partir de contexto indireto",
     "quemDeveAgirAgora":"texto curto",
     "etapaFunil":"texto curto",
-    "probabilidadeVenda":"texto curto",
     "mensagemQueEuEnviariaHoje":"mensagem pronta"
   },
   "mensagens":{
@@ -1969,8 +1965,6 @@ JSON obrigatório:
   "produtoInteresse":"texto curto",
   "produtosInteresse":["texto curto"],
   "etapaSugerida":"texto curto",
-  "probability":"texto curto",
-  "probabilityPercent":50,
   "clientProfile":"texto curto",
   "nextAction":"texto curto"
 }
@@ -2017,7 +2011,6 @@ ${timelineText}`;
     const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
     const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10);
-    const probPct = clamp(raw.probabilityPercent);
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
 
     return {
@@ -2040,8 +2033,6 @@ ${timelineText}`;
         proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         etapaFunil: clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"),
-        probabilidadeComentada: clean(d.probabilidadeVenda || raw.probability, "Não identificado"),
-        probabilidadeFechamentoHoje: clean(d.probabilidadeVenda || raw.probability, "Não identificado"),
         mensagemQueEuEnviariaHoje: clean(d.mensagemQueEuEnviariaHoje || msgA),
         percepcaoTodaConversa: clean(raw.summary)
       },
@@ -2051,8 +2042,6 @@ ${timelineText}`;
       produtoInteresse: produtoAtual,
       produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
       etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
-      probability: clean(raw.probability, probPct != null ? `${probPct}%` : "Não identificado"),
-      probabilityPercent: probPct,
       clientProfile: clean(raw.clientProfile),
       nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
       messages: {
@@ -2101,8 +2090,6 @@ ${timelineText}`;
       error: detail,
       summary: "Conversa importada, mas a análise comercial não pôde ser gerada agora.",
       clientProfile: "—",
-      probability: "—",
-      probabilityPercent: null,
       confianca: 0,
       bestTime: "—",
       objections: [],
@@ -2126,14 +2113,12 @@ export async function compararEvolucao({ anterior, atual, novasMensagens, openai
   if (!openai || !anterior) return null;
   const resumoAnterior = {
     data: anterior._registradaEm || anterior.registradaEm || null,
-    probabilidade: anterior.probabilityPercent ?? anterior.probability ?? null,
     tipoRetomada: anterior.tipoRetomada || null,
     nextAction: anterior.nextAction || null,
     mensagemSugerida: anterior.messages?.a || anterior.messages?.direta || anterior.messages?.b || anterior.messages?.consultiva || null,
     risco: anterior.risk || null
   };
   const resumoAtual = {
-    probabilidade: atual.probabilityPercent ?? atual.probability ?? null,
     tipoRetomada: atual.tipoRetomada || null,
     nextAction: atual.nextAction || null,
     risco: atual.risk || null
@@ -2587,7 +2572,6 @@ function contextoAnteriorEnxuto(analysis) {
     produtoInteresse: a.produtoInteresse || a?.lead?.product || null,
     produtosInteresse: Array.isArray(a.produtosInteresse) ? a.produtosInteresse : [],
     etapaSugerida: a.etapaSugerida || a?.lead?.etapa || null,
-    probabilityPercent: a.probabilityPercent ?? null,
     diagnostico: a.diagnostico || null,
     memoria: a.memoria || a.memoriaSugerida || null,
     objections: Array.isArray(a.objections) ? a.objections : [],

@@ -494,9 +494,6 @@ async function acaoCriarManual(body, res) {
         produtoInteresse: produto || "Não identificado",
         produtosInteresse: produto ? [produto] : [],
         etapaSugerida: "Novo",
-        probability: "20%",
-        probabilityPercent: 20,
-        confianca: 30,
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
         _schemaComercial: 684,
@@ -602,9 +599,6 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       produtoInteresse: produto,
       produtosInteresse: [produto],
       etapaSugerida: "Novo",
-      probability: "25%",
-      probabilityPercent: 25,
-      confianca: 80,
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
       _schemaComercial: 684,
@@ -757,12 +751,16 @@ async function acaoAtualizarComEvolucao(body, res) {
   if (metaIncremental?.reimportacao && novasMensagens.length === 0) {
     evolucaoEntry = null;
   } else if (metaIncremental?.reimportacao) {
-    const probAnt = Number(anterior?.probabilityPercent);
-    const probNova = Number(nova?.probabilityPercent);
+    const ordemEtapa = { novo: 0, atendimento: 1, "visita/proposta": 2, negociacao: 3, vendido: 4 };
+    const etapaKey = (v) => String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const etapaAnt = etapaKey(anterior?.etapaSugerida || anterior?.lead?.etapa);
+    const etapaNova = etapaKey(nova?.etapaSugerida || nova?.lead?.etapa);
+    const posAnt = ordemEtapa[etapaAnt];
+    const posNova = ordemEtapa[etapaNova];
     let evoluiu = "estagnou";
-    if (Number.isFinite(probAnt) && Number.isFinite(probNova)) {
-      if (probNova >= probAnt + 5) evoluiu = "avancou";
-      else if (probNova <= probAnt - 5) evoluiu = "esfriou";
+    if (Number.isFinite(posAnt) && Number.isFinite(posNova)) {
+      if (posNova > posAnt) evoluiu = "avancou";
+      else if (posNova < posAnt) evoluiu = "reclassificado";
     }
     const nomeLead = String(anterior?.clientName || anterior?.lead?.clientName || "").toLowerCase().split(/\s+/)[0];
     const clienteFalou = novasMensagens.some(m => {
@@ -829,10 +827,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     _atualizadoEm: new Date().toISOString()
   };
 
-  // Mantém o ajuste manual de score do corretor (comando "aumentar/baixar score") —
-  // senão reimportar a conversa zerava o que ele tinha ajustado na mão.
-  const ajusteScoreManual = Number(anterior.scoreAjuste) || 0;
-  if (ajusteScoreManual) merged.scoreAjuste = ajusteScoreManual;
+
 
   // Produto: queremos sempre um NOME PRÓPRIO (Gabro, Renaissance), nunca uma descrição ("apartamento de 2 dormitórios").
   const semProduto = (p) => { const s = String(p || "").toLowerCase().trim(); return !s || s.includes("não identificado") || s.includes("nao identificado"); };

@@ -77,7 +77,6 @@ export function normalizarLeadLegado(row = {}, table = "leads") {
   const updatedAt = iso(str(row.atualizado_em, row.updated_at), createdAt);
   const nextContact = iso(str(row.proximo_contato, row.proxima_acao_em), null);
   const origin = str(row.origem, "Base anterior");
-  const priority = str(row.prioridade, row.probabilidade_resposta, row.probability);
   const reasonLost = str(row.motivo_perda, row.motivoPerda);
   const responsible = str(row.responsavel);
 
@@ -109,9 +108,7 @@ export function normalizarLeadLegado(row = {}, table = "leads") {
     });
   }
 
-  const probabilityPercent = /^\d+(?:[.,]\d+)?$/.test(priority)
-    ? Math.max(0, Math.min(100, Math.round(Number(priority.replace(",", ".")))))
-    : null;
+
 
   const analysis = {
     clientName: name,
@@ -121,8 +118,6 @@ export function normalizarLeadLegado(row = {}, table = "leads") {
     etapaSugerida: etapa,
     summary: observation || "Lead restaurado da base anterior.",
     nextAction: etapa === "Perdido" ? "Reavaliar oportunidade" : (nextContact ? "Realizar o próximo contato agendado" : "Revisar o atendimento e definir o próximo passo"),
-    probabilityPercent,
-    probability: priority || "Importado",
     memoria: { observacoes: observation || "" },
     origemCrm: origin,
     responsavel: responsible || null,

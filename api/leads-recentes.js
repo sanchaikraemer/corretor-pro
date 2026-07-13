@@ -78,7 +78,7 @@ function gerarAuditoriaDados(rows = []) {
       nomes.get(nomeKey).push({ id, nome, arquivo: row.nome_arquivo || row.arquivo_nome || "" });
     }
 
-    const analisado = ra && typeof ra === "object" && (ra.summary || ra.nextAction || ra.probability || ra.probabilityPercent || ra.diagnostico || ra.leituraComercial);
+    const analisado = ra && typeof ra === "object" && (ra.summary || ra.nextAction || ra.messages || ra.diagnostico || ra.leituraComercial);
     if (!analisado) semAnalise++;
     if (!timeline.length) semHistorico++;
     if (!nome || /^cliente importad[oa]?$/i.test(nome)) semNome++;

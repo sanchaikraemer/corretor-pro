@@ -210,19 +210,6 @@ function lembreteDoTexto(txt, baseDate) {
   return { dias, motivo: String(txt).trim().slice(0, 160) };
 }
 
-// Comando manual de score na observação do corretor: "aumentar score" => +10, "baixar score" => -10.
-// Devolve o delta (somado se aparecer mais de uma vez). O corretor manda no número quando quiser.
-function ajusteScoreDoTexto(txt) {
-  const t = String(txt || "").toLowerCase();
-  let delta = 0;
-  const subir = t.match(/\b(aument\w*|sub\w*|sob\w*|elev\w*)\s+(o\s+|a\s+)?score\b/g);
-  const descer = t.match(/\b(baix\w*|diminu\w*|reduz\w*|abaix\w*|derrub\w*|cai\w*|cair)\s+(o\s+|a\s+)?score\b/g);
-  if (subir) delta += 10 * subir.length;
-  if (descer) delta -= 10 * descer.length;
-  return delta;
-}
-
-
 function normalizarTextoV684(v) {
   return String(v || "").trim();
 }
@@ -262,11 +249,8 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     oQueEvitar: evitar,
     sinaisPositivos: [],
     alertas: lacuna ? [lacuna] : [],
-    riscoPerda: { percentual: null, nivel: "não calculado", motivo: normalizarTextoV684(out.risk || evitar), fatores: [], protecao: [] },
-    probabilidadeVenda: { percentual: null, nivel: normalizarTextoV684(out.probability || diag.nivelInteresse || ""), explicacao: normalizarTextoV684(diag.probabilidadeFechamentoHoje || "Sem percentual inventado; usar a leitura comercial qualitativa.") },
-    indiceComercial: null,
-    confiancaAnalise: { percentual: null, motivo: "Sem confiança numérica inventada. A análise deve ser validada pelo conteúdo comercial." },
-    regraAntiAlucinacao: "Não inventar número, percentual, prazo, valor, compromisso, visita, produto ou objeção. Toda métrica exibida precisa vir de cálculo real.",
+    riscoPerda: { nivel: "qualitativo", motivo: normalizarTextoV684(out.risk || evitar), fatores: [], protecao: [] },
+    regraAntiAlucinacao: "Não inventar prazo, valor, compromisso, visita, produto ou objeção. Toda conclusão deve vir do histórico real.",
     geradoEm: new Date().toISOString()
   };
   return out;
@@ -325,7 +309,7 @@ async function reanalisarLeadHandler702(req, res) {
     });
     if (marcadoHoje) {
       const marcadoBR = agoraBR(new Date(marcadoHoje.quando));
-      return json(res, 200, { ok: true, jaMarcado: true, dataBR: marcadoBR.dataBR, horaBR: marcadoBR.horaBR });
+      return json(res, 200, { ok: true, jaMarcado: true, dataBR: marcadoBR.dataBR, horaBR: marcadoBR.horaBR, quando: marcadoHoje.quando });
     }
 
     eventos.push({
@@ -414,8 +398,7 @@ async function reanalisarLeadHandler702(req, res) {
       ...prev, ...novoC,
       venda: prev.venda || undefined,
       memoria: { ...(prev.memoria || {}), observacoes: texto },
-      aprendizado: prev.aprendizado || undefined,
-      scoreAjuste: Number(prev.scoreAjuste) || 0
+      aprendizado: prev.aprendizado || undefined
     };
     if (prev.lembrete && prev.lembrete.auto !== true) mergedC.lembrete = prev.lembrete; // preserva lembrete manual
     const updC = { resultado_analise: mergedC, timeline_json: novaTl, atualizado_em: new Date().toISOString() };
@@ -462,11 +445,6 @@ async function reanalisarLeadHandler702(req, res) {
     clientName: nomeRecuperado,
     phone: previous?.lead?.phone || previous?.phone || ""
   };
-  // Ajuste manual de score (comando "aumentar/baixar score" na observação). Soma sobre o
-  // campo scoreAjuste que o app já usa no número exibido — o corretor manda no score quando quiser.
-  const ajusteScorePrev = Number(previous.scoreAjuste) || 0;
-  const deltaScore = novoAtendimento ? ajusteScoreDoTexto(novoAtendimento) : 0;
-  const ajusteScoreNovo = Math.max(-50, Math.min(50, ajusteScorePrev + deltaScore));
   const observacoesBase = previous.memoria?.observacoes || "";
   let observacoesFinais = observacoesBase;
   let stampAtend = ""; // "[data hora] " do atendimento novo (pra trocar a nota crua pelo resumo da IA depois)
@@ -571,8 +549,7 @@ async function reanalisarLeadHandler702(req, res) {
     }
     const merged = {
       ...previous,
-      memoria: { ...(previous.memoria || {}), observacoes: observacoesFinais },
-      scoreAjuste: ajusteScoreNovo
+      memoria: { ...(previous.memoria || {}), observacoes: observacoesFinais }
     };
     aplicarLembrete(merged);
     const update = { resultado_analise: merged, atualizado_em: new Date().toISOString() };
@@ -663,7 +640,6 @@ async function reanalisarLeadHandler702(req, res) {
     venda: freshPrevious.venda || undefined,
     memoria: { observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,
-    scoreAjuste: ajusteScoreNovo,
     reanalisadoEm: new Date().toISOString()
   };
   merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal, "Sanchai");

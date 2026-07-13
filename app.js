@@ -616,13 +616,11 @@ function renderLeads(){
           <strong>${escapeHtml(item.name||"Cliente importado")}${novo}${contato}${esfri}</strong>
           <div class="small">${escapeHtml(produtosLabel(item))}${item.daysSinceLastInteraction!=null?" · "+item.daysSinceLastInteraction+"d":""}</div>
         </div>
-        <span class="tag hot" title="Probabilidade de fechar a venda">${escapeHtml(item.probability||"--")}</span>
       </div>`;
     }).join("");
   }
   const el1 = qs("#leadList"); if(el1) el1.innerHTML=html;
   const el2 = qs("#mobileLeadList"); if(el2) el2.innerHTML=html;
-  const elProb = qs("#probability"); if(elProb) elProb.textContent=baseLead?baseLead.probability:"--";
   const elTime = qs("#bestTime"); if(elTime) elTime.textContent=baseLead?baseLead.bestTime:"--";
 }
 function clearAnalysis(){
@@ -693,11 +691,13 @@ function limparLead(l){
   const out = {
     ...l,
     name: limpoNome(l.name),
-    probability: limpoTexto(l.probability, "—"),
     bestTime: limpoBestTime(l.bestTime),
     summary: limpoTexto(l.summary, ""),
     nextAction: limpoTexto(l.nextAction, ""),
   };
+  delete out.probability;
+  delete out.probabilityPercent;
+  delete out.scoreAjuste;
   try{ Object.defineProperty(out, "__direcionaClean", { value:true, enumerable:false }); }catch(_){ out.__direcionaClean = true; }
   return out;
 }
@@ -761,10 +761,6 @@ async function buscarSimilares(produto, etapa, leadAtual){
           if(pAtual.includes(pw) && pOutro.includes(pw)) score += 8;
         }
       }
-      // Probabilidade similar
-      const probAtual = Number(leadAtual?.probabilityPercent) || 0;
-      const probOutro = Number(l.probabilityPercent) || 0;
-      if(probAtual && probOutro && Math.abs(probAtual - probOutro) <= 15) score += 5;
       return { ...l, _simScore: score };
     });
     scored.sort((a,b) => b._simScore - a._simScore);
@@ -786,14 +782,13 @@ function analiseComercialPrincipalHTML(a){
     ac.etapaFunil,
     ac.nivelInteresse,
     ac.percepcaoTodaConversa,
-    ac.mensagemIdealHoje,
-    ac.probabilidadeFechamentoHoje
+    ac.mensagemIdealHoje
   ].filter(v => String(v || "").trim()) : [];
 
   if(!ac || !camposObrigatorios.length){
     return `<section style="border:1px solid rgba(255,155,59,.45);border-radius:14px;padding:13px;background:rgba(255,155,59,.07)">
       <div style="font-size:15px;font-weight:950;color:#fff">Diagnóstico comercial completo</div>
-      <div style="margin-top:6px;color:var(--soft);font-size:12px;line-height:1.45">Este lead ainda está com a análise antiga. Toque em <b style="color:var(--morno)">Reanalisar</b> para gerar os 10 pontos, a leitura da conversa inteira, a mensagem ideal e a probabilidade de fechamento.</div>
+      <div style="margin-top:6px;color:var(--soft);font-size:12px;line-height:1.45">Este lead ainda está com a análise antiga. Toque em <b style="color:var(--morno)">Reanalisar</b> para gerar a leitura completa da conversa e as mensagens comerciais.</div>
     </section>`;
   }
 
@@ -829,7 +824,6 @@ function analiseComercialPrincipalHTML(a){
     <div style="margin-top:7px">${linhas}</div>
     ${bloco("O que o Corretor Pro percebeu analisando toda a conversa", ac.percepcaoTodaConversa, false)}
     ${bloco("Mensagem que eu enviaria hoje", ac.mensagemIdealHoje, true)}
-    ${bloco("Probabilidade de fechamento", ac.probabilidadeFechamentoHoje, false)}
   </section>`;
 }
 
@@ -848,7 +842,7 @@ function diagnosticoClienteHTML(a){
   const objTxt = objArr.length ? (typeof objArr[0] === "string" ? objArr[0] : (objArr[0]?.text || "")) : "";
   const dinheiro = [mem.faixaValor, mem.pontosSensiveis].map(s => String(s||"").trim()).filter(Boolean).join(" · ");
   // Diagnóstico da IA (igual ao raciocínio do ChatGPT): interesse, de quem é a bola, o que trava, etapa.
-  const INT = { alto:["Interesse ALTO","var(--acao)"], medio:["Interesse MÉDIO","var(--morno)"], baixo:["Interesse BAIXO","var(--score-frio)"] };
+  const INT = { alto:["Interesse ALTO","var(--acao)"], medio:["Interesse MÉDIO","var(--morno)"], baixo:["Interesse BAIXO","var(--muted)"] };
   const interesse = INT[String(d.interesse||"").toLowerCase()] || null;
   const QD = { cliente:"o cliente — ficou de te retornar", corretor:"você — falta dar o retorno", ambos:"os dois" };
   const bolaTxt = QD[String(d.quemDeveProximoPasso||"").toLowerCase()] || "";
@@ -921,14 +915,14 @@ function renderAnalysis(analysis, lead){
   // Busca similares e adiciona ao final da analise (com guard de leadId pra evitar race)
   if(lead?.product || analysis?.clientProfile){
     const leadIdAtMoment = state.lead?.id || null;
-    buscarSimilares(lead.product, lead.etapa, { id: state.lead?.id, analysis, probabilityPercent: analysis?.probabilityPercent }).then(similares => {
+    buscarSimilares(lead.product, lead.etapa, { id: state.lead?.id, analysis }).then(similares => {
       // Se o user trocou de lead enquanto buscava, descarta o resultado.
       if(state.lead?.id !== leadIdAtMoment) return;
       if(!similares.length) return;
       const box = qs("#analysisBox");
       if(!box || !box.innerHTML.includes("class=\"analysis-grid\"")) return;
       const html = '<div style="margin-top:12px;padding:10px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.18);border-radius:12px"><div class="small" style="color:var(--cerebro);text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:950;margin-bottom:6px">Leads parecidos</div>' +
-        similares.map(s => `<div class="small" style="padding:4px 0">• <span onclick='abrirLead(${JSON.stringify(String(s.id||""))})' style="cursor:pointer;text-decoration:underline">${escapeHtml(s.name||"?")}</span> — ${escapeHtml(s.etapa||"")} (${escapeHtml(s.probability||"--")})</div>`).join("") +
+        similares.map(s => `<div class="small" style="padding:4px 0">• <span onclick='abrirLead(${JSON.stringify(String(s.id||""))})' style="cursor:pointer;text-decoration:underline">${escapeHtml(s.name||"?")}</span> — ${escapeHtml(s.etapa||"")}</div>`).join("") +
         '</div>';
       box.insertAdjacentHTML("beforeend", html);
     });
@@ -941,21 +935,16 @@ function renderAnalysis(analysis, lead){
     return;
   }
   box.className = "";
-  const probabPct = analysis.probabilityPercent ? analysis.probabilityPercent + "%" : (analysis.probability || "—");
   const objArr = Array.isArray(analysis.objections) ? analysis.objections : (analysis.objections ? [analysis.objections] : []);
   let html = diagnosticoClienteHTML(analysis) + '<div class="analysis-grid">';
   html += row("Resumo", analysis.summary);
   html += row("Perfil do cliente", analysis.clientProfile);
-  html += row("Probabilidade de venda", probabPct);
   if(lead?.product) html += row("Produto", lead.product);
   html += '</div>';
   if(objArr.length){
     html += '<div style="margin-top:10px"><b style="color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:11px">Objeções identificadas</b><ul class="bullet-list">';
     for(const o of objArr) html += '<li>'+escapeHtml(typeof o === "string" ? o : (o?.text || JSON.stringify(o)))+'</li>';
     html += '</ul></div>';
-  }
-  if(analysis.nextAction){
-    html += '<div class="action-card"><b>Próxima ação recomendada:</b><br>'+escapeHtml(analysis.nextAction)+'</div>';
   }
   if(analysis.messages){
     html += '<div style="margin-top:12px;color:var(--muted);font-size:13px">3 mensagens prontas estão na aba <b>Msg</b> — escolha entre Direta, Consultiva e Retomada.</div>';
@@ -1110,7 +1099,6 @@ function sinaisPrioridadeComercial682(l){
   const a = l?.analysis || {};
   const txt = textoSinais(l);
   const e = normalizarEtapa(l?.etapa);
-  const prob = Number(probabilidadeRefinada(l) ?? l?.probabilityPercent ?? 0) || 0;
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   const diasDistintos = (() => {
     const set = new Set();
@@ -1158,7 +1146,6 @@ function prioridadeAtendimento(l){
 
   const a = l.analysis || {};
   const txt = textoSinais(l);
-  const prob = Number(probabilidadeRefinada(l) ?? l.probabilityPercent ?? 0) || 0;
   const dias = Number(l.daysSinceLastInteraction);
   let diasResposta = l.daysSinceClientReply; if(diasResposta==null) diasResposta = _diasDesdeMsg(l, true);
   let diasContato = l.daysSinceLastTouch; if(diasContato==null) diasContato = _diasDesdeMsg(l, false);
@@ -1222,7 +1209,6 @@ function prioridadeAtendimento(l){
   }
 
   // Chance de venda entra como tempero, não como dono da fila.
-  score += Math.min(35, Math.max(0, prob) * 0.35);
 
   if(tipo === "quente-fechar") score += 25;
   else if(tipo === "morno-confirmar") score += 12;
@@ -1316,22 +1302,19 @@ function compararPrioridadeAtendimento(a,b){
   const ca = scoreConversaoHoje(a);
   const cb = scoreConversaoHoje(b);
   if(cb !== ca) return cb - ca;
-  const va = probabilidadeRefinada(a) ?? (Number(a.probabilityPercent)||0);
-  const vb = probabilidadeRefinada(b) ?? (Number(b.probabilityPercent)||0);
-  return vb - va;
+  return 0;
 }
 
-// SCORE DE CONVERSÃO HOJE — separado da prioridade de atendimento.
+// ORDEM DE CONVERSÃO HOJE — separado da prioridade de atendimento.
 // Prioridade responde: "quem merece ação agora?"
 // Conversão responde: "quem está mais perto de virar venda se eu agir hoje?"
-// Isso evita caso como Jessica aparecer como maior probabilidade só por ter lembrete/retomada.
+// Isso evita caso como Jessica aparecer como maior avanço comercial só por ter lembrete/retomada.
 // Lead em viabilidade financeira continua importante, mas fica abaixo de quem já visitou,
 // recebeu proposta/simulação ou está comparando decisão.
 function scoreConversaoHoje(l){
   const a = l?.analysis || {};
   const e = normalizarEtapa(l?.etapa);
   const txt = textoSinais(l);
-  const prob = Number(probabilidadeRefinada(l) ?? l?.probabilityPercent ?? 0) || 0;
   const dias = Number(l?.daysSinceLastInteraction);
   let diasResposta = l?.daysSinceClientReply; if(diasResposta==null) diasResposta = _diasDesdeMsg(l, true);
 
@@ -1354,7 +1337,7 @@ function scoreConversaoHoje(l){
   const clientePediuTempo = /vou pensar|vou analisar|estamos analisando|vou conversar|vou ver com|te aviso|te retorno|qualquer coisa te chamo|mais pra frente|semana que vem|m[êe]s que vem/.test(txt);
   const parceiro = /parceir|corretor/i.test(String(a.tipoContato||""));
 
-  let score = prob;
+  let score = 0;
 
   // Etapa pesa mais para CONVERSÃO do que para simples atendimento.
   if(e === "Negociação") score += 30;
@@ -1610,7 +1593,7 @@ async function reanalisarEmSegundoPlano(id){
 window.reanalisarEmSegundoPlano = reanalisarEmSegundoPlano;
 
 // Re-renderiza o lead em foco com os dados FRESCOS do banco (sem precisar de F5), depois de
-// qualquer edição/inclusão — pra refletir na hora score, respostas e a "última atualização".
+// qualquer edição/inclusão — pra refletir na hora respostas, atendimento e datas.
 // Preserva eventos registrados localmente que o banco ainda não devolveu (lag de leitura).
 async function recarregarLeadFoco(id){
   if(!id || String(state.lead?.id) !== String(id)) return;
@@ -1687,7 +1670,6 @@ function motivoCurto(l){
     const pa = prioridadeAtendimento(l);
     if(pa && pa.motivo) return _cortarFrase(pa.motivo, 82);
   }catch(_){}
-  const prob = Number(l.probabilityPercent) || 0;
   const dias = Number(l.daysSinceLastInteraction);
   const a = l.analysis || {};
   if(Array.isArray(a.confirmedAppointments) && a.confirmedAppointments[0]){
@@ -1698,24 +1680,20 @@ function motivoCurto(l){
   }
   if(a.tipoRetomada && TIPO_RETOMADA_CURTO[a.tipoRetomada]) return TIPO_RETOMADA_CURTO[a.tipoRetomada];
   if(a.nextAction && a.nextAction.length < 80) return a.nextAction;
-  if(prob >= 70 && dias <= 3) return "Probabilidade alta · interesse ativo";
-  if(prob >= 70) return "Probabilidade alta · janela esfriando";
+  if(dias <= 3 && String(a?.diagnostico?.interesse||"").toLowerCase() === "alto") return "Interesse alto · contato recente";
   if(dias >= 7) return `${dias}d parado · precisa retomada`;
   return "Aguardando próximo passo";
 }
 
-function classePct(prob){
-  const p = Number(prob) || 0;
-  if(p >= 70) return "";       // verde-limão
-  if(p >= 50) return "warn";   // amarelo
-  return "cold";                // vermelho
-}
+function classePct(){ return ""; }
 
 function ehEsfriando(l){
-  if(!isNaN(lembreteTs(l))) return false; // tem lembrete (futuro=parkeado / vencido=prioridade do dia) — não é "esfriando"
-  const prob = Number(l.probabilityPercent) || 0;
+  if(!isNaN(lembreteTs(l))) return false;
   const dias = Number(l.daysSinceLastInteraction) || 0;
-  return prob >= 60 && dias >= 3 && dias <= 7;
+  const tipo = String(l?.analysis?.tipoRetomada || "").toLowerCase();
+  const interesse = String(l?.analysis?.diagnostico?.interesse || l?.analysis?.leituraComercial?.temperatura || "").toLowerCase();
+  const avancado = ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l?.etapa));
+  return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente" || avancado);
 }
 
 // Detecta (SEM reanalisar — usa a análise já salva) leads que provavelmente sumiram
@@ -1798,12 +1776,12 @@ function diasCalendarioBR(quando){
 function ehAtendidoHoje(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   const hoje = inicioDoDiaBR();
-  return eventos.some(e => ["whatsapp_aberto","mensagem_copiada","contato_manual"].includes(e.evento) && e.quando && new Date(e.quando) >= hoje);
+  return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando) >= hoje);
 }
 function ehAtendidoNaSemana(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   const cutoff = Date.now() - 7*24*60*60*1000;
-  return eventos.some(e => ["whatsapp_aberto","mensagem_copiada","contato_manual"].includes(e.evento) && e.quando && new Date(e.quando).getTime() >= cutoff);
+  return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando).getTime() >= cutoff);
 }
 function ehContatadoHoje(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
@@ -1817,6 +1795,22 @@ function ehContatadoHoje(l){
 }
 
 // Dias de calendário (BR) desde o último "contato_manual" registrado. null = nunca atendido.
+function ultimoAtendimentoManual(l){
+  const eventos = l?.analysis?.aprendizado?.eventos || [];
+  let maisRecente = null;
+  for(const e of eventos){
+    if(e?.evento !== "contato_manual" || !e?.quando) continue;
+    const d = new Date(e.quando);
+    if(isNaN(d.getTime())) continue;
+    if(!maisRecente || d > new Date(maisRecente.quando)) maisRecente = e;
+  }
+  return maisRecente;
+}
+function ultimoAtendimentoDataHora(l){
+  const e = ultimoAtendimentoManual(l);
+  return e?.quando ? fmtUltimaAtualizacao(e.quando) : "";
+}
+
 function diasDesdeAtendimentoManual(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   let maisRecente = null;
@@ -1881,44 +1875,10 @@ function temAtendimentoManual(l){
     return false;
   });
 }
-function probabilidadeRefinada(l){
-  const probIa = Number(l?.probabilityPercent);
-  if(!Number.isFinite(probIa) || probIa <= 0) return null;
-  const score = scoreSinais(l);
-  // Curva conservadora: comprime IA pra escala mais real (× 0.70)
-  const base = probIa * 0.70;
-  // Ajuste baseado em sinais reais
-  const ajuste = Math.round((score - probIa) * 0.18);
-  // Ruído determinístico ±3 baseado no id (impede valores redondos)
-  const id = String(l?.id || "");
-  let hash = 0;
-  for(let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  const ruido = ((Math.abs(hash) % 7) - 3);
-  const final = base + ajuste + ruido;
-  let resultado = Math.max(5, Math.min(95, Math.round(final)));
-  // Teto duro pra venda condicionada/permuta (regra do produto: 30-45% no máx).
-  if(temVendaCondicionada(l)) resultado = Math.min(resultado, 45);
-  // Teto duro pra lead SEM diálogo real: cliente nunca engajou de verdade (mandou só "oi/beleza",
-  // sumiu, nunca houve troca nem negociação). Não pode marcar % alto de fechamento — é frio.
-  if(semDialogoReal(l)) resultado = Math.min(resultado, 15);
-  // Teto MAIS duro: cliente NUNCA respondeu (nenhuma mensagem dela) embora o corretor já tenha
-  // mandado mensagem. Lead frio de verdade — quem nunca leu/respondeu a 1ª msg não vale % alto.
-  // Quanto mais tempo no silêncio, mais baixo. (pedido do dono)
-  // EXCEÇÃO: atendimento presencial/visita registrado pelo corretor é engajamento real — não trava.
-  if(l.daysSinceClientReply == null && !temAtendimentoManual(l) && (l.daysSinceLastTouch != null || l.daysSinceLastInteraction != null)){
-    const diasMudo = Number(l.daysSinceLastTouch != null ? l.daysSinceLastTouch : l.daysSinceLastInteraction) || 0;
-    const teto = diasMudo >= 14 ? 6 : diasMudo >= 4 ? 9 : 12;
-    resultado = Math.min(resultado, teto);
-  }
-  // Ajuste manual do corretor pela obs ("sobe/baixa o score" = ±10), em cima do score da IA.
-  const aj = Number(l?.analysis?.scoreAjuste) || 0;
-  if(aj) resultado = Math.max(5, Math.min(95, resultado + aj));
-  return resultado;
-}
-function probabilidadeRefinadaTxt(l){
-  const v = probabilidadeRefinada(l);
-  return v == null ? (l?.probability || "--") : v + "%";
-}
+// Atualização #805: percentual/score comercial aposentado.
+// O sistema conduz por fatos, etapa, pendências, agenda e comportamento — sem número inventado.
+function probabilidadeRefinada(){ return null; }
+function probabilidadeRefinadaTxt(){ return ""; }
 const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
 // "Corretor", "Imobiliária" e "Imóveis" podem fazer parte do NOME do contato parceiro.
 // Por isso não podem, sozinhos, transformar a fala dele em mensagem da empresa.
@@ -1986,7 +1946,6 @@ function scorePrio(l){
   return scoreSinais(l);
 }
 function scoreSinais(l){
-  const prob = Number(l.probabilityPercent) || 0;
   const dias = Number(l.daysSinceLastInteraction);
   const a = l.analysis || {};
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
@@ -2052,13 +2011,10 @@ function scoreSinais(l){
     else sTemp = -25;
   }
 
-  // Ajuste manual do corretor ("aumentar/baixar score" na obs) também mexe na PRIORIDADE,
-  // não só no número exibido — pra o lead subir/descer no funil como ele mandou.
-  const sAjuste = Number(a.scoreAjuste) || 0;
   // PARCEIRO/corretor: o volume de conversa é OPERACIONAL (planta, projeto, coordenação),
   // não calor de compra — não deixa engajamento/keywords inflarem o score dele.
   if(/parceir|corretor/i.test(String(a.tipoContato||""))){ sEng = 0; sKw = 0; }
-  return prob + sMacro + sEng + sKw + sTemp + sAjuste;
+  return sMacro + sEng + sKw + sTemp;
 }
 
 // Lead SEM diálogo real: o cliente nunca engajou de verdade. Típico do caso "mandou só
@@ -2236,7 +2192,7 @@ function renderListasHome(ordenados){
     const g = classificarGrupoHome(l);
     if(grupos[g]) grupos[g].push(l);
   }
-  // Ordena por prioridade de atendimento primeiro; conversão/chance de venda fica só como tempero.
+  // Ordena por prioridade de atendimento primeiro; avanço comercial fica só como desempate.
   const porPrioridade = compararPrioridadeAtendimento;
   grupos["acao-hoje"].sort(porPrioridade);
   grupos["retomar-cuidado"].sort(porPrioridade);
@@ -2246,16 +2202,14 @@ function renderListasHome(ordenados){
   grupos["tratado-hoje"].sort(porPrioridade);
   // "todos" = lista completa dos ativos, por prioridade de atendimento.
   grupos["todos"] = (ordenados || []).slice().sort(porPrioridade);
-  // "retomada" = aparece quando não há urgentes. Leads que valem um toque proativo:
-  // parados 3-14 dias, probabilidade mínima, não contatados hoje, não parkeados.
+  // "retomada" = aparece quando não há urgentes. Leads parados que valem um toque proativo.
   grupos["retomada"] = (grupos["acao-hoje"].length + grupos["retomar-cuidado"].length) === 0
     ? grupos["todos"].filter(l =>
         !ehContatadoHoje(l) &&
         !lembreteFuturo(l) &&
         !emJanelaDeEspera(l) &&
         Number(l.daysSinceLastInteraction) >= 3 &&
-        Number(l.daysSinceLastInteraction) <= 30 &&
-        (Number(l.probabilityPercent) || 0) >= 25
+        Number(l.daysSinceLastInteraction) <= 30
       ).slice(0, 20)
     : [];
   state.gruposHome = grupos;
@@ -2271,15 +2225,6 @@ function renderListasHome(ordenados){
 }
 
 // Home M1: chips de triagem + top 3 com motivo/WhatsApp + compromissos confirmados + KPI strip.
-// Temperatura do lead pela probabilidade (rótulo + classe de cor) — usada no hero e na fila.
-function tempLeadDe(p){
-  return p>=70 ? {c:"qq",t:"Muito quente",col:"var(--lime)"}
-       : p>=55 ? {c:"q", t:"Quente",      col:"var(--lime)"}
-       : p>=40 ? {c:"m", t:"Morno",       col:"var(--morno)"}
-       :         {c:"f", t:"Frio",        col:"var(--muted)"};
-}
-// Rótulo curto da faixa de probabilidade (mostrado embaixo do % na fila, igual ao desenho).
-function faixaProbLabel(p){ p = Number(p)||0; return p>=70 ? "Alta" : p>=55 ? "Média alta" : p>=40 ? "Média" : "Média baixa"; }
 // Ícone do WhatsApp (igual ao desenho — círculo verde com o glifo).
 const WA_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.7-.3-1.5-.6-2.1-1.5-.5-.6-.8-1.3-.9-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4 0-.1 0-.3 0-.4 0-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.7 4.2 3.7.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1 .1-1.2z"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>`;
@@ -2287,15 +2232,13 @@ const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 function filaRowHTML(l, pos){
   const idJs = JSON.stringify(String(l.id||""));
   const ehSel = state.lead?.id && String(l.id) === String(state.lead.id);
-  const probRef = probabilidadeRefinada(l);
-  const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
   const prioridade = prioridadeAtendimento(l) || {};
   const dias = l.daysSinceLastInteraction != null ? `<span class="fd-n">${l.daysSinceLastInteraction}d</span><span class="fd-l">sem resposta</span>` : "";
   const etapa = normalizarEtapa(l.etapa);
   const waLink = l.phone ? whatsappLink(l.phone, "") : "";
   return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
     <div class="fila-rank">${pos}</div>
-    ${avatarLead(l, classePct(prob))}
+    ${avatarLead(l, "")}
     <div class="fila-info">
       <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
       <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
@@ -2303,7 +2246,6 @@ function filaRowHTML(l, pos){
     <div class="fila-days">${dias}</div>
     <div class="fila-pcwrap">
       <div class="fila-pc" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</div>
-      <div class="fila-faixa" title="Chance de venda" style="color:var(--muted)">${escapeHtml(probabilidadeRefinadaTxt(l))}</div>
     </div>
     <button type="button" class="fila-done" title="Já falei — tira da fila de hoje" onclick='event.stopPropagation();jaFaleiLead(${idJs})'>${CHECK_SVG}</button>
     ${waLink
@@ -2328,15 +2270,11 @@ const HERO_FACT_HEART = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 function renderHeroLead(l){
   const a = l.analysis || {};
   const idJs = JSON.stringify(String(l.id||""));
-  const probRef = probabilidadeRefinada(l);
-  const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
-  const tp = tempLeadDe(prob);
   const dias = l.daysSinceLastInteraction;
   // "Por que é prioridade": sinais reais (motivo + objeções), sem repetir, no máx 4.
-  // Pula a parte de "probabilidade (NN%)" — já está no número grande (evita 68% vs 65%).
   const porque = [];
   if(lembreteVencido(l)) porque.push("Lembrete marcado pra hoje");
-  String(motivoPrioridade(l)||"").split(" · ").forEach(p => { p=p.trim(); if(p && !/^probabilidade/i.test(p)) porque.push(p.charAt(0).toUpperCase()+p.slice(1)); });
+  String(motivoPrioridade(l)||"").split(" · ").forEach(p => { p=p.trim(); if(p) porque.push(p.charAt(0).toUpperCase()+p.slice(1)); });
   (Array.isArray(a.objections) ? a.objections.slice(0,2) : []).forEach(o => { o=String(o||"").trim(); if(o) porque.push(o); });
   const porqueU = [...new Set(porque)].slice(0,4);
   // "Último contato" = o último TOQUE de verdade (inclui meu follow-up), não o tempo de silêncio
@@ -2358,7 +2296,6 @@ function renderHeroLead(l){
       <div style="min-width:0">
         <div class="h-nm">${escapeHtml(l.name||"Cliente")}</div>
         <div class="h-un">${escapeHtml(interesse)}</div>
-        <div class="h-pct"><span class="h-pct-num">${escapeHtml(probabilidadeRefinadaTxt(l))}</span></div>
       </div>
     </div>
     ${porqueU.length ? `<div class="h-why"><div class="t">POR QUE ATENDER</div><ul>${porqueU.slice(0,3).map((p)=>`<li><span>${escapeHtml(p)}</span></li>`).join("")}</ul></div>` : ""}
@@ -2409,19 +2346,27 @@ function leadsEsquecidos(items){
     if(!passoChave) continue;
     const parado = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction);
     if(!(parado >= 7)) continue; // ainda quente/recente não é "esquecido"
-    const score = probabilidadeRefinada(l) || Number(l.probabilityPercent) || 0;
-    out.push({ l, parado, score });
+    let pesoRecuperacao = 0;
+    if(etapa === "Negociação") pesoRecuperacao += 40;
+    else if(etapa === "Visita/Proposta") pesoRecuperacao += 30;
+    if(teveProposta) pesoRecuperacao += 20;
+    if(temAtendimentoManual(l)) pesoRecuperacao += 10;
+    pesoRecuperacao += Math.min(20, parado);
+    out.push({ l, parado, pesoRecuperacao });
   }
-  out.sort((a,b) => b.score - a.score || b.parado - a.parado);
+  out.sort((a,b) => b.pesoRecuperacao - a.pesoRecuperacao || b.parado - a.parado);
   return out.slice(0, 6).map(x => x.l);
 }
 function radarRowHTML(l){
   const idJs = JSON.stringify(String(l.id || ""));
   const parado = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction) || 0;
-  const score = probabilidadeRefinada(l) || Number(l.probabilityPercent) || 0;
-  const rec = score >= 45 ? ["Alta","var(--acao)"] : score >= 25 ? ["Média","var(--lime)"] : ["Baixa","var(--morno)"];
   const etapa = normalizarEtapa(l.etapa);
   const teveProposta = leadTemProposta(l);
+  const rec = (etapa === "Negociação" || teveProposta)
+    ? ["Alta","var(--acao)"]
+    : (etapa === "Visita/Proposta" || temAtendimentoManual(l))
+      ? ["Média","var(--lime)"]
+      : ["Baixa","var(--morno)"];
   let oque = "atendimento feito";
   if(etapa === "Negociação") oque = "negociação aberta";
   else if(etapa === "Visita/Proposta") oque = "visita/proposta em jogo";
@@ -2525,9 +2470,6 @@ function renderBotoesHome(){
   const cardTop = (l) => {
     const idStr = String(l.id||"");
     const idJs = JSON.stringify(idStr);
-    const probRef = probabilidadeRefinada(l);
-    const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
-    const probTxt = probabilidadeRefinadaTxt(l);
     const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction + "d parado" : "";
     const etapa = normalizarEtapa(l.etapa);
     const motivo = motivoCurto(l);
@@ -2846,7 +2788,7 @@ async function importarTelefonesCSV(){
 window.importarTelefonesCSV = importarTelefonesCSV;
 window.abrirMaisAcoes = abrirMaisAcoes;
 
-// Avatar com a(s) inicial(is) do lead, colorido pela faixa de probabilidade.
+// Avatar com a(s) inicial(is) do lead.
 function avatarInicial(name, pctClass, foto){
   const n = String(name||"Cliente").trim();
   // Foto recortada do print (dataURL) — quando existe, mostra a imagem no lugar das iniciais.
@@ -2858,11 +2800,6 @@ function avatarInicial(name, pctClass, foto){
 }
 // Atalho: avatar a partir do objeto lead (pega a foto recortada se houver).
 function avatarLead(l, pctClass){ return avatarInicial(l?.name, pctClass, l?.analysis?.avatarFoto || l?.avatarFoto); }
-// Barra de progresso da probabilidade.
-function barraProgresso(prob, pctClass){
-  const p = Math.max(0, Math.min(100, Math.round(Number(prob)||0)));
-  return `<div class="pbar ${pctClass||""}" title="Probabilidade de fechar a venda"><i style="width:${p}%"></i></div>`;
-}
 // Botão WhatsApp padrão (mesmo em todas as telas).
 function btnWhatsApp(waLink){
   // Bolinha verde só com o ícone (logo do WhatsApp) — não espreme o nome do cliente, que é o principal.
@@ -2874,10 +2811,7 @@ function cardLeadHTML(l, opts){
   opts = opts || {};
   const idStr = String(l.id||"");
   const idJs = JSON.stringify(idStr);
-  const probRef = probabilidadeRefinada(l);
-  const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
-  const probTxt = probabilidadeRefinadaTxt(l);
-  const pctClass = classePct(prob);
+  const pctClass = "";
   const etapa = normalizarEtapa(l.etapa);
   const proxima = motivoCurto(l);
   const prioridade = prioridadeAtendimento(l) || {};
@@ -2904,7 +2838,6 @@ function cardLeadHTML(l, opts){
       <div style="flex-shrink:0;display:flex;align-items:center;gap:8px">
         ${acoesHtml}
         <span style="font-size:12px;font-weight:900;color:var(--lime);white-space:nowrap" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</span>
-        <span style="font-size:11px;font-weight:800;color:var(--muted);white-space:nowrap" title="Chance de venda">${escapeHtml(probTxt)}</span>
       </div>
     </div>
     ${diasHtml}
@@ -2931,13 +2864,9 @@ function abrirGrupoHome(grupo, options={}){
   const cardHtml = (l) => {
     const idStr = String(l.id||"");
     const idJs = JSON.stringify(idStr);
-    const probRef = probabilidadeRefinada(l);
-    const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
-    const probTxt = probabilidadeRefinadaTxt(l);
     const contatadoHoje = ehContatadoHoje(l);
     const dias = (!contatadoHoje && l.daysSinceLastInteraction != null) ? l.daysSinceLastInteraction + "d parado" : "";
     const etapa = normalizarEtapa(l.etapa);
-    const pctClass = classePct(prob);
     const motivo = motivoCurto(l);
 
     const tags = [];
@@ -3179,11 +3108,6 @@ function renderFilaPrioridade(ordenados){
   const resto = (ordenados || []).slice(3, 12); // 4º ao 12º
   if(!resto.length){ box.style.display = "none"; box.innerHTML = ""; return; }
   const selId = state.lead?.id ? String(state.lead.id) : null;
-  // Temperatura do lead pela probabilidade (cor + rótulo) — espelha o layout-alvo.
-  const tempDe = (p) => p>=70 ? {c:"qq",t:"Muito quente",col:"var(--lime)"}
-                      : p>=55 ? {c:"q", t:"Quente",      col:"var(--lime)"}
-                      : p>=40 ? {c:"m", t:"Morno",       col:"var(--morno)"}
-                      :         {c:"f", t:"Frio",        col:"var(--muted)"};
   box.style.display = "block";
   box.innerHTML =
     `<div class="fila-head"><h3>Fila inteligente</h3><span>Ordenada por prioridade</span></div>` +
@@ -3191,14 +3115,12 @@ function renderFilaPrioridade(ordenados){
       const pos = i + 4;
       const idJs = JSON.stringify(String(l.id||""));
       const ehSel = selId && String(l.id) === selId;
-      const probRef = probabilidadeRefinada(l);
-      const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
       const prioridade = prioridadeAtendimento(l) || {};
       const dias = l.daysSinceLastInteraction != null ? `${l.daysSinceLastInteraction} dias<br>sem resposta` : "";
       const etapa = normalizarEtapa(l.etapa);
       return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
         <div class="fila-rank">${pos}</div>
-        ${avatarInicial(l.name, classePct(prob))}
+        ${avatarInicial(l.name, "")}
         <div class="fila-info">
           <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
           <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
@@ -3219,9 +3141,6 @@ function renderTop3(top3){
   area.innerHTML = top3.map((l, i) => {
     const idStr = String(l.id||"");
     const ehSel = selId && idStr === selId;
-    const probRef = probabilidadeRefinada(l);
-    const prob = probRef != null ? probRef : (Number(l.probabilityPercent) || 0);
-    const probTxt = probabilidadeRefinadaTxt(l);
     const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d" : "—";
     const contatado = ehContatadoHoje(l);
     const badgeContato = contatado ? `<span title="Contato registrado hoje" style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:9px;font-weight:950;color:var(--acao);background:rgba(104,255,149,.14);border:1px solid var(--acao);letter-spacing:.04em">✓ CONTATADO HOJE</span>` : "";
@@ -3234,7 +3153,7 @@ function renderTop3(top3){
         <div class="nome">${escapeHtml(l.name||"Cliente")}</div>
         <div class="prod">${escapeHtml(produtosLabel(l))}</div>
         <div class="stats">
-          <span class="pct-mini ${classePct(prob)}" title="Prioridade de atendimento">${escapeHtml(prioridadeTituloCurto(l))}</span>
+          <span class="pct-mini" title="Prioridade de atendimento">${escapeHtml(prioridadeTituloCurto(l))}</span>
           <span class="dias-mini">${escapeHtml(dias)} parado</span>
           ${novo}
           ${permuta}
@@ -3313,7 +3232,7 @@ function renderResumoDia(items){
   // Contadores
   let compHoje = 0, compAmanha = 0;
   let quentes = 0, mornos = 0, frios = 0;
-  let esfriando = 0; // probabilidade alta + 3-7 dias sem retorno
+  let esfriando = 0; // interesse/etapa avançada + 3-7 dias sem retorno
   let aguardandoAcao = 0; // pra agenda: 3+ dias parado
   let lembretesVenceram = 0;
   // "Do dia" = lembrete com data de HOJE (não conta atrasado de dias atrás nem futuro).
@@ -3337,9 +3256,8 @@ function renderResumoDia(items){
     if(t === "quente-fechar") quentes++;
     else if(t === "morno-confirmar" || t === "informacao-enviar" || t === "objecao-tratar") mornos++;
     else if(t === "frio-reaquecer" || t === "stand-by") frios++;
-    const prob = Number(l.probabilityPercent) || 0;
     const dias = Number(l.daysSinceLastInteraction) || 0;
-    if(prob >= 60 && dias >= 3 && dias <= 7) esfriando++;
+    if(ehEsfriando(l)) esfriando++;
     if(dias >= 3 && !ehContatadoHoje(l)) aguardandoAcao++;
   }
   // Atualiza badges no bottom-nav
@@ -3539,7 +3457,6 @@ let pipelineOrdem = "prioridade";
 // Leads sem o dado vão sempre pro fim, independente da direção.
 function ordenarLeadsPor(items, modo){
   const arr = items.slice();
-  const prob = (l) => probabilidadeRefinada(l) ?? (Number(l.probabilityPercent) || 0);
   const nMsg = (l) => totalMensagensLead(l);
   const semResp = (l) => l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction;
   const contato = (l) => l.daysSinceLastTouch != null ? l.daysSinceLastTouch : l.daysSinceLastInteraction;
@@ -3550,8 +3467,6 @@ function ordenarLeadsPor(items, modo){
     case "sr-recentes": return arr.sort(asc(semResp));
     case "ct-antigos":  return arr.sort(desc(contato));
     case "ct-recentes": return arr.sort(asc(contato));
-    case "prob-maior":  return arr.sort(desc(prob));
-    case "prob-menor":  return arr.sort(asc(prob));
     case "msg-mais":    return arr.sort(desc(nMsg));
     case "msg-menos":   return arr.sort(asc(nMsg));
     default:            return arr;
@@ -3637,7 +3552,7 @@ async function carregarPipeline(){
     } else if(pipelineTabAtiva === "todos"){
       ord = items.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"", "pt-BR"));
     } else {
-      // Oportunidades = prioridade real de atendimento, não probabilidade de venda.
+      // Oportunidades = prioridade real de atendimento, não leitura comercial.
       // Corrige o ponto que ainda fazia a tela Leads divergir da Home: lead com
       // contraproposta/pendência aberta deve subir mesmo que o percentual de venda não seja o maior.
       ord = items.slice().sort(compararPrioridadeAtendimento);
@@ -5030,7 +4945,7 @@ function renderLeadFoco(lead){
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
-    const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
+    const atendimento=ultimoAtendimentoDataHora(lead);
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
@@ -5038,7 +4953,7 @@ function renderLeadFoco(lead){
       <section class="cp704-hero">
         <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
         <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),180))}</p></div></div>
-        <div class="cp704-metaline">Última interação — ${escapeHtml([String(cp704Text(last)||'').trim(),String(atendimento||'').trim()].filter(Boolean).join(' · ')||'sem data registrada')}</div>
+        <div class="cp704-metaline">${escapeHtml([last?`Última mensagem — ${last}`:'',atendimento?`Último atendimento — ${atendimento}`:''].filter(Boolean).join(' · ')||'Sem data registrada')}</div>
       </section>
       ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
       <section class="cp704-card">
@@ -5251,7 +5166,7 @@ function agendaCardHTML(l, extra){
     <div class="agenda-item">
       <div style="flex:1;min-width:0">
         <strong onclick='abrirLead(${idJs})' style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.18)">${escapeHtml(l.name||"Cliente")}</strong>
-        <div class="small" style="margin-top:3px">${escapeHtml(l.product||"--")} · ${escapeHtml(l.probability||"--")}</div>
+        <div class="small" style="margin-top:3px">${escapeHtml(l.product||"--")}</div>
         ${l.nextAction ? `<div class="small" style="margin-top:6px;color:var(--soft)"><b>Próxima ação:</b> ${escapeHtml(l.nextAction)}</div>` : ""}
         ${extra || ""}
       </div>
@@ -6481,7 +6396,6 @@ async function renderProcessedResult(data, meta){
     name: lead.clientName || "Cliente importado",
     product: lead.product || "Produto não identificado",
     status: "Conversa processada (não salvo)",
-    probability: analysis.probabilityPercent ? analysis.probabilityPercent + "%" : (analysis.probability || "—"),
     bestTime: analysis.bestTime || "—",
     id: null
   });
@@ -7715,7 +7629,6 @@ function renderBuscaGlobal(termo){
     const idJs = JSON.stringify(String(l.id||""));
     return `<div onclick='abrirLead(${idJs});qs("#buscaGlobal").value="";qs("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
       <div><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
-      <span class="tag" style="font-size:10px">${escapeHtml(probabilidadeRefinadaTxt(l))}</span>
     </div>`;
   }).join("");
 }
@@ -7773,7 +7686,6 @@ function buscaLeadInline(termo, boxId){
       const idJs = JSON.stringify(String(l.id||""));
       return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
-        <span class="tag" style="font-size:10px;flex-shrink:0">${escapeHtml(probabilidadeRefinadaTxt(l))}</span>
       </div>`;
     }).join("");
   }, 200);
@@ -8118,7 +8030,6 @@ function renderDesempenhoDash(all){
 function carteiraEhFinal(e){ return e === "Vendido" || e === "Perdido" || e === "Geladeira"; }
 function carteiraLinhaLead(l, pos){
   const idJs = JSON.stringify(String(l.id||""));
-  const prob = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
   const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d" : "—";
   const etapa = normalizarEtapa(l.etapa);
   return `<div onclick='abrirLead(${idJs})' style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer">
@@ -8128,7 +8039,6 @@ function carteiraLinhaLead(l, pos){
       <div class="small" style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(etapa)} · ${escapeHtml(motivoCurto(l))}</div>
     </div>
     <div style="text-align:right;flex-shrink:0">
-      <div class="${classePct(prob)}" style="font-weight:950;font-size:13px">${escapeHtml(probabilidadeRefinadaTxt(l))}</div>
       <div class="small" style="color:var(--muted)">${dias} parado</div>
     </div>
   </div>`;
@@ -8159,7 +8069,7 @@ async function carregarCarteira(force){
 window.carregarCarteira = carregarCarteira;
 
 // ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["mornos","Mornos"],["frios","Frios"],["reaquecer","Reaquecer"],["geladeira","Arquivados"]];
+const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["reaquecer","Reaquecer"],["geladeira","Arquivados"]];
 const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
 const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
 function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
@@ -8169,9 +8079,6 @@ function carteiraPassaFiltro(l, f){
   if(!leadEhAtivo(l)) return false;
   if(f === "reaquecer") return leadEhReaquecer(l);
   if(f === "quentes") return leadEhQuente(l);
-  const prob = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-  if(f === "mornos") return !leadEhQuente(l) && prob >= 40;
-  if(f === "frios") return !leadEhQuente(l) && prob < 40;
   return true;
 }
 const CARTEIRA_PAGE_SIZE = 80;
@@ -8220,16 +8127,11 @@ function renderCarteiraTabela(){
 }
 function carteiraRowHTML(l){
   const idJs = JSON.stringify(String(l.id||""));
-  const prob = probabilidadeRefinada(l) ?? (Number(l.probabilityPercent)||0);
-  const pcl = classePct(prob);
   const prioridade = prioridadeAtendimento(l) || {};
-  const pScore = Math.max(0, Math.min(100, Math.round(Number(prioridade.score)||0)));
-  const barCor = prioridade.grupo === "acao-hoje" ? "var(--lime)" : prioridade.grupo === "retomar-cuidado" ? "var(--morno)" : prioridade.grupo === "baixa-prioridade" ? "var(--risco)" : "var(--soft)";
   const etapa = normalizarEtapa(l.etapa);
   const dot = ETAPA_DOT[etapa] || "var(--muted)";
   const resp = l.lastInteractionAt ? formatarTempoRelativo(l.lastInteractionAt).replace(/ atrás$/,"") : (l.daysSinceLastInteraction!=null ? l.daysSinceLastInteraction+"d" : "—");
   const acao = l.nextAction ? String(l.nextAction) : motivoCurto(l);
-  const pct = Math.max(4, pScore);
   return `<div class="cart-row" onclick='abrirLead(${idJs})'>
     <div class="cart-cli">
       <div style="min-width:0">
@@ -8238,7 +8140,7 @@ function carteiraRowHTML(l){
       </div>
     </div>
     <div class="cart-emp">${escapeHtml(l.product||"—")}</div>
-    <div class="cart-score"><span class="bar"><i style="width:${pct}%;background:${barCor}"></i></span><b style="color:${barCor}" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</b></div>
+    <div class="cart-priority" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</div>
     <div class="cart-resp">${escapeHtml(resp)}</div>
     <div class="cart-acao">${escapeHtml(acao)}</div>
     <div class="cart-chev">›</div>
@@ -8439,10 +8341,9 @@ async function baixarRelatorioCarteira(){
   linhas.push("");
   for(const l of ordem){
     const etapa = normalizarEtapa(l.etapa);
-    const prob = probabilidadeRefinadaTxt(l);
     const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction + " dias parado" : "—";
     linhas.push(`### ${l.name || "Cliente"} — ${etapa}`);
-    linhas.push(`Produto: ${l.product || "—"} | Prioridade: ${prioridadeTituloCurto(l)} | Probabilidade: ${prob} | ${dias} | Telefone: ${l.phone || "—"}`);
+    linhas.push(`Produto: ${l.product || "—"} | Prioridade: ${prioridadeTituloCurto(l)} | ${dias} | Telefone: ${l.phone || "—"}`);
     const resumo = (l.analysis?.summary || l.summary || "").trim();
     if(resumo) linhas.push(`Situacao: ${resumo}`);
     const next = (l.analysis?.nextAction || l.nextAction || "").trim();
@@ -8557,7 +8458,7 @@ async function registrarRespostaCliente(valor){
   if(box) box.innerHTML = respostaClienteRecordedHTML(valor); // feedback imediato
   toast(valor === "sim" ? "Boa! Registrei que ele respondeu." : valor === "nao" ? "Registrei: não respondeu." : "Ok, aguardando resposta.");
   invalidarLeadsCache();
-  // Atualiza o lead inteiro na hora (score, "última atualização", etc.) — sem precisar de F5.
+  // Atualiza o lead inteiro na hora (atendimento, respostas e datas) — sem precisar de F5.
   if(id) recarregarLeadFoco(id);
 }
 window.registrarRespostaCliente = registrarRespostaCliente;
@@ -8623,20 +8524,17 @@ async function reabrirLeadPerdido(id, btn){
 window.reabrirLeadPerdido = reabrirLeadPerdido;
 
 // Lista os leads na Geladeira (negócios fracos guardados pra revisitar), com botão Reativar.
-// Radar da Geladeira (SEM IA): usa o dado JÁ salvo pra apontar quem vale revisitar.
-// Só marca com SINAL FORTE (prob alta ao congelar, etapa avançada, permuta ou safra) — não só tempo.
+// Radar da Geladeira: aponta quem vale revisitar por etapa, permuta ou contexto concreto.
 function valeRevisitarGeladeira(l){
   if(normalizarEtapa(l.etapa) !== "Geladeira") return null;
   const a = l.analysis || {};
-  const prob = Number(l.probabilityPercent) || 0;
   const dias = Number(l.daysSinceLastInteraction) || 0;
   const etapaIA = normalizarEtapa(a.etapaSugerida);
   const objTxt = ((Array.isArray(a.objections) ? a.objections.join(" ") : String(a.objections||"")) + " " + String(a.memoria?.observacoes||"") + " " + String(a.summary||"")).toLowerCase();
   const temSafra = /safra|colhe|colheita|plantio|lavoura/.test(objTxt);
-  const sinalForte = prob >= 55 || etapaIA === "Negociação" || etapaIA === "Visita/Proposta" || a.permuta || temSafra;
+  const sinalForte = etapaIA === "Negociação" || etapaIA === "Visita/Proposta" || a.permuta || temSafra;
   if(!sinalForte) return null;
   const motivos = [];
-  if(prob >= 55) motivos.push(`tinha ${prob}% de chance`);
   if(etapaIA === "Negociação" || etapaIA === "Visita/Proposta") motivos.push(`parou em ${etapaIA}`);
   if(a.permuta) motivos.push("permuta (talvez já vendeu o bem)");
   if(temSafra) motivos.push("safra/colheita já pode ter terminado");
@@ -9280,12 +9178,11 @@ function leadEhAtivo(l){
 }
 function leadEhQuente(l){
   if(!leadEhAtivo(l)) return false;
-  const p = probabilidadeRefinada(l) ?? (Number(l?.probabilityPercent)||0);
   const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
   const temp = String(l?.analysis?.leituraComercial?.temperatura||"").toLowerCase();
   const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
   const etapa = normalizarEtapa(l?.etapa);
-  return p >= 55 || tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
+  return tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
 }
 function leadEhReaquecer(l){
   return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
@@ -9756,6 +9653,9 @@ function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
     eventos.push({evento:"contato_manual",estilo:null,detalhes:{tipo:"Atendido",de:"botao_atendido"},quando});
   }
   lead.analysis.aprendizado.eventos=eventos;
+  lead.lastAttendanceAt=quando;
+  lead.ultimoAtendimentoEm=quando;
+  lead.lastAttendanceText=`${dataBR} ${horaBR}`;
   lead.analysis.memoria=lead.analysis.memoria||{};
   const registro=`[${dataBR} ${horaBR}] Atendido.`;
   const obs=String(lead.analysis.memoria.observacoes||"").trim();
@@ -9778,7 +9678,12 @@ window.ui667MarcarAtendido=async function(btn){
       if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,d.dataBR,d.horaBR);
     }
     if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${d.horaBR||"hoje"}`;btn.disabled=true;}
+    state.analysis=lead.analysis||null;
+    renderLeadFoco(lead);
     invalidarLeadsCache();
+    carregarAgendaTopo?.();
+    loadRecentLeads(false);
+    recarregarLeadFoco(lead.id);
     toast(d.jaMarcado?`Já estava marcado às ${d.horaBR}.`:`Atendimento marcado às ${d.horaBR}.`);
   }catch(err){
     if(btn){btn.disabled=false;btn.textContent=original;}
@@ -10935,21 +10840,13 @@ function ui670DetailRows(lead,mc){
     st.textContent=`
       .ui684-card{margin:14px 0;padding:16px;border:1px solid rgba(55,232,255,.28);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.075),rgba(255,107,92,.04));box-shadow:0 12px 36px rgba(0,0,0,.14)}
       .ui684-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.ui684-head h3{margin:0;font-size:17px;color:#fff}.ui684-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.ui684-badge{border:1px solid rgba(55,232,255,.42);color:var(--dados);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
-      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-prob{font-size:24px;font-weight:950;line-height:1}.ui684-prob small{font-size:11px;color:var(--muted);font-weight:800;margin-left:5px}.ui684-prob-reason{margin-top:7px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-details{margin-top:10px}.ui684-details summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--soft);font-size:12px;font-weight:950}.ui684-details[open] summary{color:var(--dados);border-color:rgba(55,232,255,.35)}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(55,232,255,.22);border-radius:13px;background:rgba(55,232,255,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}.ui684-score{display:flex;gap:10px;align-items:baseline}.ui684-score strong{font-size:26px;color:#fff}.ui684-score span{font-size:11px;color:var(--muted);font-weight:900}
+      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-details{margin-top:10px}.ui684-details summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--soft);font-size:12px;font-weight:950}.ui684-details[open] summary{color:var(--dados);border-color:rgba(55,232,255,.35)}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(55,232,255,.22);border-radius:13px;background:rgba(55,232,255,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}
       #btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:92px!important}.lead-acts button{border-radius:999px!important} @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}.ui684-card{margin-top:12px}#btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:104px!important}}
     `;
     document.head.appendChild(st);
   }
   function ui684Esc(v){ return typeof escapeHtml==='function' ? escapeHtml(String(v||'')) : String(v||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
   function ui684List(arr){ arr=Array.isArray(arr)?arr.filter(Boolean):[]; return arr.length ? `<ul class="ui684-list">${arr.slice(0,4).map(x=>`<li>${ui684Esc(x)}</li>`).join('')}</ul>` : `<div class="ui684-empty">Nenhum sinal forte registrado ainda.</div>`; }
-  function ui684VendaInfo(lead, risco){
-    const riscoPct = Number(risco?.percentual ?? risco?.valor ?? risco?.score);
-    const baseProb = Number.isFinite(riscoPct) ? (100 - riscoPct) : (Number(probabilidadeRefinada(lead)) || Number(lead?.probabilityPercent) || 0);
-    const pct = Math.max(0, Math.min(100, Math.round(baseProb)));
-    const nivel = pct >= 80 ? 'Muito alta' : pct >= 65 ? 'Alta' : pct >= 45 ? 'Média' : 'Baixa';
-    const cor = pct >= 65 ? 'var(--acao)' : pct >= 45 ? 'var(--morno)' : 'var(--risco)';
-    return { pct, nivel, cor };
-  }
   function ui684TextoAcaoPratica(txt){
     txt = String(txt||'').trim();
     if(!txt) return 'Definir o próximo passo comercial com base no histórico antes de responder.';
@@ -10972,7 +10869,7 @@ function ui670DetailRows(lead,mc){
       perfilCliente:a.clientProfile||'Perfil ainda em leitura; reanalise para a IA Comercial 2.0 aprofundar.',
       etapaComercial:diag.etapa||lc.etapa||normalizarEtapa(lead?.etapa)||'Não definida',
       mudancaComportamento:'Reanalise este lead para detectar mudança de comportamento com mais precisão.',
-      riscoPerda:{percentual:Math.max(0,Math.min(95,100-(Number(lead?.probabilityPercent)||45))),nivel:'estimado',motivo:'estimativa local até a próxima reanálise'},
+      riscoPerda:{nivel:'qualitativo',motivo:'leitura comercial baseada no histórico e nas pendências abertas'},
       proximaAcaoIdeal:a.nextAction||lc.oQueDestravar||a.melhorPergunta||'Reanalisar para definir próxima ação ideal.',
       produtoMaisAdequado:lead?.product||a.product||'Produto ainda não definido',
       estrategiaAbordagem:'Retomar pelo último ponto concreto da conversa e fazer uma pergunta principal.',
@@ -10982,31 +10879,24 @@ function ui670DetailRows(lead,mc){
   function ui684RenderCard(lead){
     const ia=ui684Data(lead);
     const risco=ia.riscoPerda||{};
-    const venda=ia.probabilidadeVenda?.percentual != null ? { pct: Math.max(0, Math.min(100, Math.round(Number(ia.probabilidadeVenda.percentual)||0))), nivel: ia.probabilidadeVenda.nivel || (Number(ia.probabilidadeVenda.percentual)>=80?'Muito alta':Number(ia.probabilidadeVenda.percentual)>=65?'Alta':Number(ia.probabilidadeVenda.percentual)>=45?'Média':'Baixa'), cor: Number(ia.probabilidadeVenda.percentual)>=65?'var(--acao)':Number(ia.probabilidadeVenda.percentual)>=45?'var(--morno)':'var(--risco)' } : ui684VendaInfo(lead, risco);
-    const indice=Number(ia.indiceComercial?.geral ?? ia.indiceComercial);
-    const confianca=Number(ia.confiancaAnalise?.percentual ?? ia.confiancaAnalise);
     const fatoresRisco=Array.isArray(risco.fatores)?risco.fatores:[];
     const fatoresProtecao=Array.isArray(risco.fatoresProtecao)?risco.fatoresProtecao:[];
-    const motivoVenda=ia.probabilidadeVenda?.explicacao||risco.explicacao||risco.motivo||'Probabilidade calculada pelos sinais da conversa, etapa comercial, engajamento e pendências abertas.';
     const proximaPratica = ui684TextoAcaoPratica(ia.proximaAcaoIdeal);
     return `<section id="ui684IAComercial" class="ui684-card">
-      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: probabilidade de venda, perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-final</span></div>
+      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-final</span></div>
       <div class="ui684-grid">
         <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Probabilidade de venda</span><div class="ui684-prob" style="color:${venda.cor}">${venda.pct}% <small>${ui684Esc(venda.nivel)}</small></div><div class="ui684-prob-reason">${ui684Esc(motivoVenda)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(proximaPratica)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Produto mais adequado</span><div class="ui684-val">${ui684Esc(ia.produtoMaisAdequado)}</div></div>
       </div>
       <details class="ui684-details">
         <summary>Ver análise completa</summary>
         <div class="ui684-grid" style="margin-top:10px">
-          ${Number.isFinite(indice)?`<div class="ui684-item"><span class="ui684-lab">Índice comercial</span><div class="ui684-score"><strong>${Math.round(indice)}</strong><span>/100</span></div></div>`:''}
-          ${Number.isFinite(confianca)?`<div class="ui684-item"><span class="ui684-lab">Confiança da leitura</span><div class="ui684-score"><strong>${Math.round(confianca)}%</strong></div></div>`:''}
           <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
           <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
           <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
           <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
-          ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Por que esta probabilidade?</span>${fatoresRisco.length?`<div class="ui684-val"><b>Reduz a chance:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Aumenta a chance:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
+          ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Fatores comerciais</span>${fatoresRisco.length?`<div class="ui684-val"><b>Pontos de atenção:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Sinais favoráveis:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
           <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
         </div>
       </details>
@@ -12544,7 +12434,6 @@ function ui670DetailRows(lead,mc){
     if(a.error) return false;
     if(a.messages && typeof a.messages === 'object' && (a.messages.a || a.messages.b || a.messages.c)) return true;
     if(a.analiseComercial && typeof a.analiseComercial === 'object') return true;
-    if(a.probabilidadeVenda || a.probabilidade || a.probabilidadeFechamento) return true;
     if(a.nextAction || a.proximaAcao || a.resumo) return true;
     return !!(l?.nextAction && recentCount(l) > 0);
   }
@@ -12796,7 +12685,6 @@ function ui670DetailRows(lead,mc){
     if(!a || typeof a !== 'object' || a.error) return false;
     if(a.messages && typeof a.messages === 'object' && (a.messages.a || a.messages.b || a.messages.c)) return true;
     if(a.analiseComercial && typeof a.analiseComercial === 'object') return true;
-    if(a.probabilidadeVenda || a.probabilidade || a.probabilidadeFechamento) return true;
     if(a.nextAction || a.proximaAcao || a.resumo) return true;
     return !!(l?.nextAction && msgCount(l) > 0);
   }

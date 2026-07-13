@@ -247,10 +247,35 @@ async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, p
   return null;
 }
 
+
+function _semScoreComercial(value) {
+  if (Array.isArray(value)) return value.map(_semScoreComercial);
+  if (!value || typeof value !== "object") return value;
+  const proibidos = new Set([
+    "probability", "probabilityPercent", "probabilidade", "probabilidadeVenda",
+    "probabilidadeFechamento", "probabilidadeFechamentoHoje", "probabilidade_resposta",
+    "score", "scoreAjuste", "indiceComercial", "confianca", "confiancaAnalise"
+  ]);
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (proibidos.has(key)) continue;
+    if (key === "riscoPerda" && item && typeof item === "object") {
+      const risco = _semScoreComercial(item);
+      if (risco && typeof risco === "object") delete risco.percentual;
+      out[key] = risco;
+      continue;
+    }
+    out[key] = _semScoreComercial(item);
+  }
+  return out;
+}
+
 function _mesclarAnaliseV681(anterior = {}, nova = {}) {
-  const merged = { ...(anterior || {}), ...(nova || {}) };
+  anterior = _semScoreComercial(anterior || {});
+  nova = _semScoreComercial(nova || {});
+  const merged = { ...anterior, ...nova };
   merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
-  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "lembrete", "avatarFoto", "scoreAjuste"]) {
+  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "lembrete", "avatarFoto"]) {
     if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];
   }
   const nomeAnt = anterior?.clientName || anterior?.lead?.clientName || "";
@@ -265,7 +290,7 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
     merged.produtoInteresse = prodAnt;
     merged.lead = { ...(merged.lead || {}), product: prodAnt };
   }
-  return merged;
+  return _semScoreComercial(merged);
 }
 
 async function buscarAvatarAnterior(supabase, lead, analysis) {
@@ -302,7 +327,7 @@ export async function persistProcessingResult({ result, source = "api", bucket =
   const audiosEncontrados = result?.audiosEncontrados ?? result?.audioFiles?.length ?? 0;
   const audiosTranscritos = result?.audiosTranscritos ?? Object.values(result?.audioTranscriptions || {}).filter(v => String(v?.status || "").includes("transcrito") && v?.text).length;
   const timeline = result?.timeline || [];
-  let analysis = result?.analysis || null;
+  let analysis = _semScoreComercial(result?.analysis || null);
   const lead = result?.lead || null;
 
   // Re-importação: se o lead já tinha foto (avatar) e a análise nova não traz nenhuma, mantém a foto antiga.
@@ -401,8 +426,6 @@ export async function persistProcessingResult({ result, source = "api", bucket =
       produto: lead?.product || "Não identificado",
       etapa: "NOVO / INICIAL",
       status: "Conversa processada",
-      prioridade: analysis?.probabilityPercent || null,
-      probabilidade_resposta: analysis?.probabilityPercent || null,
       melhor_horario: analysis?.bestTime || null,
       proxima_acao: analysis?.nextAction || null,
       resumo: analysis?.summary || null,
@@ -548,7 +571,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   function hasAnalysis(analysis) {
     if (!analysis || typeof analysis !== "object") return false;
-    return Boolean(analysis.summary || analysis.nextAction || analysis.probability || analysis.probabilityPercent || analysis.messages);
+    return Boolean(analysis.summary || analysis.nextAction || analysis.messages || analysis.diagnostico || analysis.leituraComercial);
   }
 
   function compactAnalysisForList(analysis = {}) {
@@ -557,10 +580,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // anteriores. A carteira precisa só dos sinais abaixo. O objeto integral é devolvido
     // exclusivamente no detalhe do lead.
     const keys = [
-      "summary", "nextAction", "messages", "probability", "probabilityPercent", "bestTime",
+      "summary", "nextAction", "messages", "bestTime",
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
       "tipoRetomada", "tipoContato", "avatarFoto", "venda", "motivoPerda", "motivo_perda",
-      "permuta", "risk", "scoreAjuste", "produtoInteresse", "produtosInteresse", "mode",
+      "permuta", "risk", "produtoInteresse", "produtosInteresse", "mode",
       "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
       "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
       "sugestoesPendentes", "arquiteturaMensagens", "error"
@@ -573,7 +596,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   }
 
   const mapped = (data || []).map(row => {
-    let analysis = row.resultado_analise || row.analysis || {};
+    let analysis = _semScoreComercial(row.resultado_analise || row.analysis || {});
     const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
     const last = timeline.length ? timeline[timeline.length - 1] : null;
 
@@ -587,7 +610,6 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
     const fileName = row.nome_arquivo || row.arquivo_nome || "Conversa importada";
     const analyzed = hasAnalysis(analysis);
-    const probabilityPercent = analysis?.probabilityPercent ?? null;
 
     const ehItemManual = (m) => {
       const source = String(m?.source || "");
@@ -665,8 +687,6 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       name: nomeResolvido,
       product: productFrom(fileName, analysis, row),
       produtos: Array.isArray(analysis?.produtosInteresse) ? analysis.produtosInteresse.filter(Boolean) : null,
-      probability: probabilityPercent ? `${probabilityPercent}%` : (analysis?.probability || (analyzed ? "Analisado" : "Importado")),
-      probabilityPercent,
       bestTime: analysis?.bestTime || last?.time || (analyzed ? "Ver análise" : "Aguardando nova análise"),
       summary: analysis?.summary || (analyzed ? "Análise disponível." : "Conversa importada do histórico. Reimporte ou gere nova análise para atualizar."),
       nextAction: analysis?.nextAction || null,
