@@ -4855,7 +4855,6 @@ function cp704Css(){
       ['Comprador final',mc?.oportunidade?.compradorFinal || mc?.contato?.compradorFinal],
       ['Produto',cp704Produto(lead,mc)],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
-      ['Motivo da oportunidade',mc?.oportunidade?.motivo],
       ['Permuta / entrada com imóvel',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
@@ -5020,7 +5019,6 @@ function renderLeadFoco(lead){
     const atendimento=cp704Text(lead.ultimoAtendimentoTexto || lead.lastAttendanceText || 'Você registrou um atendimento.');
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
-    const insights=cp704Insights(lead,mc).map(x=>`<li><i>✓</i><span>${escapeHtml(x)}</span></li>`).join('');
     area.innerHTML=`<div class="cp704-lead">
       <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">⟳ Reanalisar agora</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'✓ Atendido hoje':'✓ Marcar atendimento'}</button></div></div>
       <section class="cp704-hero">
@@ -5040,8 +5038,7 @@ function renderLeadFoco(lead){
         </div>
         <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
       </section>
-      <section class="cp704-card cp704-ai"><div class="cp704-card-title"><h2>O que a IA percebeu</h2></div><ul>${insights}</ul></section>
-      <section class="cp704-card"><div class="cp704-card-title"><h2>Próximo passo sugerido</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
+      <section class="cp704-card"><div class="cp704-card-title"><h2>Fazer agora</h2></div><div class="cp704-step"><span>🎯</span><p>${escapeHtml(next)}</p><span>›</span></div></section>
       ${cp717MudancasHtml(a)}
       <section class="cp704-card"><div class="cp704-card-title"><h2>Sugestões de mensagem</h2><small>copie a melhor opção</small></div>
         ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar agora" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
