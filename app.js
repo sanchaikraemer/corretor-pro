@@ -5038,7 +5038,6 @@ function renderLeadFoco(lead){
       <section class="cp704-hero">
         <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
         <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),180))}</p></div></div>
-        <div class="cp704-metrics"><div class="cp704-metric"><div><small>Relacionamento</small>${escapeHtml(rel)}</div></div><div class="cp704-metric"><div><small>Urgência</small>${escapeHtml(urg)}</div></div></div>
         <div class="cp704-metaline">Última interação — ${escapeHtml([String(cp704Text(last)||'').trim(),String(atendimento||'').trim()].filter(Boolean).join(' · ')||'sem data registrada')}</div>
       </section>
       ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
