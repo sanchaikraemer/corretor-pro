@@ -2682,9 +2682,14 @@ function buildDesempenhoInsightsHTML(items){
     </div>`;
 }
 function renderHomeRight(items){
+  // Atualização #810: a coluna lateral repetia indicadores já exibidos nos cards
+  // principais e podia ficar presa no skeleton quando o dashboard caía no fallback.
+  // Ela permanece desativada e nunca deve bloquear o carregamento da Home.
   const el = qs("#homeRight");
   if(!el) return;
-  el.innerHTML = (items && items.length) ? buildDesempenhoInsightsHTML(items) : "";
+  el.innerHTML = "";
+  el.hidden = true;
+  el.style.setProperty("display", "none", "important");
 }
 window.renderHomeRight = renderHomeRight;
 // Mobile: abre desempenho + insights num modal (pelo menu / item Insights da lateral).
@@ -3314,13 +3319,17 @@ window.atualizarSinoAgenda = atualizarSinoAgenda;
 function homeAindaEmSkeleton(){
   const area = qs("#leadFocoArea");
   if(!area) return false;
+  const lateral = qs("#homeRight");
   return !!area.querySelector(".skel-loading,.cp-home-skeleton,.cp-db-loading,.cp694-loading") ||
+    !!lateral?.querySelector?.(".cp-side-skeleton") ||
     /Carregando (?:banco de dados|sua carteira)|Organizando sua carteira/i.test(area.textContent || "");
 }
 
 function renderHomeFallbackSeguro(items){
   const area = qs("#leadFocoArea");
   if(!area) return;
+  // O fallback também precisa encerrar qualquer placeholder lateral.
+  try{ renderHomeRight([]); }catch(_){}
   const lista = (Array.isArray(items) ? items : [])
     .filter(l => l && typeof l === "object" && (l.id != null || l.name))
     .slice(0, 4);
@@ -3434,7 +3443,9 @@ async function _processarDashboard(data){
     if(items.length){
       const ordenados = items.map(l => ({ ...l, _score: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
       renderListasHome(ordenados);
-      renderHomeRight(items);
+      // A coluna lateral foi removida; mantemos a limpeza isolada para que uma
+      // falha nela jamais derrube a lista principal novamente.
+      try{ renderHomeRight([]); }catch(_){}
     } else {
       renderHomeRight([]);
       const area = qs("#top3Area"); if(area){ area.style.display = "none"; area.innerHTML = ""; }

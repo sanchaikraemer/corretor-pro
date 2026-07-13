@@ -2083,3 +2083,8 @@ html[data-theme="light"] [style*="color: #ffc"]{
   .cp788-att-row{grid-template-columns:minmax(0,1fr) auto 10px;min-height:70px;padding:11px 8px 11px 17px;gap:7px}
   .cp788-att-copy strong{font-size:17px}.cp788-att-copy small{font-size:12.5px}.cp788-att-time{max-width:122px;padding:7px 8px;font-size:10.5px}
 }
+
+
+/* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno */
+#home .home-grid{grid-template-columns:minmax(0,1fr)!important}
+#home .home-right{display:none!important}
