@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { compararEvolucao, getOpenAI, atualizarConhecimentoCorretor, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
+import { compararEvolucao, getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -77,6 +77,7 @@ export default async function handler(req, res) {
     case "etapa":         return await acaoEtapa(id, body.etapa, res);
     case "memoria-get":   return await acaoMemoriaGet(id, res);
     case "memoria-set":   return await acaoMemoriaSet(id, body, res);
+    case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res);
     case "aprendizado":   return await acaoAprendizado(id, body, res);
     case "desfecho":      return await acaoDesfecho(id, body, res);
     case "lembrete-set":  return await acaoLembreteSet(id, body, res);
@@ -999,20 +1000,24 @@ async function acaoMemoriaGet(id, res) {
   return json(res, 200, { ok: true, id, memoria });
 }
 
+function dataHoraSaoPaulo(date = new Date()) {
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit', hour12:false, hourCycle:'h23'
+  }).formatToParts(date).reduce((acc, p) => { if (p.type !== 'literal') acc[p.type] = p.value; return acc; }, {});
+  return { dataBR:`${partes.day}/${partes.month}/${partes.year}`, horaBR:`${partes.hour}:${partes.minute}` };
+}
+
+function camposManuaisMemoria(memoria, campos = []) {
+  return [...new Set([...(Array.isArray(memoria?.camposManuais) ? memoria.camposManuais : []), ...campos].filter(Boolean))];
+}
+
 async function acaoMemoriaSet(id, body, res) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
   const MAX = 5000;
   const clip = (v) => String(v || "").slice(0, MAX);
-  const memoria = {
-    preferencias: clip(body.preferencias),
-    pessoasDecisao: clip(body.pessoasDecisao),
-    pontosSensiveis: clip(body.pontosSensiveis),
-    observacoes: clip(body.observacoes),
-    atualizadoEm: new Date().toISOString()
-  };
-
   const { data: current, error: getErr } = await supabase
     .from("whatsapp_processamentos")
     .select("resultado_analise")
@@ -1021,23 +1026,101 @@ async function acaoMemoriaSet(id, body, res) {
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
-  const merged = { ...(current.resultado_analise || {}), memoria };
+  const anterior = current.resultado_analise || {};
+  const memAnterior = anterior.memoria || {};
+  const agora = new Date().toISOString();
+  const permitidos = ["preferencias", "pessoasDecisao", "pontosSensiveis", "observacoes"];
+  const informadosPeloFront = Array.isArray(body.camposAlterados) ? body.camposAlterados.filter(k => permitidos.includes(k)) : null;
+  const camposRecebidos = informadosPeloFront || permitidos.filter(k =>
+    Object.prototype.hasOwnProperty.call(body, k) && clip(body[k]) !== clip(memAnterior[k])
+  );
+  const memoria = {
+    ...memAnterior,
+    preferencias: Object.prototype.hasOwnProperty.call(body, "preferencias") ? clip(body.preferencias) : clip(memAnterior.preferencias),
+    pessoasDecisao: Object.prototype.hasOwnProperty.call(body, "pessoasDecisao") ? clip(body.pessoasDecisao) : clip(memAnterior.pessoasDecisao),
+    pontosSensiveis: Object.prototype.hasOwnProperty.call(body, "pontosSensiveis") ? clip(body.pontosSensiveis) : clip(memAnterior.pontosSensiveis),
+    observacoes: Object.prototype.hasOwnProperty.call(body, "observacoes") ? clip(body.observacoes) : clip(memAnterior.observacoes),
+    camposManuais: camposManuaisMemoria(memAnterior, camposRecebidos),
+    manualAtualizadoEm: camposRecebidos.length ? agora : memAnterior.manualAtualizadoEm,
+    atualizadoEm: agora
+  };
+
+  const merged = { ...anterior, memoria };
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
-    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
+    .update({ resultado_analise: merged, atualizado_em: agora })
     .eq("id", id);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
 
-  // Observações do corretor alimentam o conhecimento geral — fire-and-forget.
-  const obsTexto = [body.observacoes, body.pontosSensiveis, body.preferencias].filter(Boolean).join(" | ");
-  if (obsTexto.trim().length > 20) {
-    const openai = getOpenAI();
-    if (openai) atualizarConhecimentoCorretor(obsTexto, openai).catch(() => {});
-  }
-
-  return json(res, 200, { ok: true, id, memoria });
+  // A observação/manual entra na mesma fila do aprendizado contínuo. Não reanalisa
+  // o lead e não troca as três sugestões que já estão na tela.
+  const aprendizadoAutomatico = camposRecebidos.length
+    ? await marcarAprendizadoPendente({ leadId:String(id), motivo:"memoria-manual-atualizada" }).catch(e => ({ ok:false, error:e?.message || String(e) }))
+    : { ok:true, ignorado:true, motivo:"nenhum-campo-manual-alterado" };
+  return json(res, 200, { ok: true, id, memoria, camposAlterados:camposRecebidos, aprendizadoAutomatico, reanalisado:false });
 }
 
+async function acaoObservacaoAdicionar(id, body, res) {
+  const texto = String(body?.texto || body?.observacao || "").replace(/\r/g, "").trim().slice(0, 5000);
+  if (!texto) return json(res, 400, { ok:false, error:"Escreva a observação." });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok:false, error:"Supabase não configurado." });
+
+  const { data: current, error:getErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("resultado_analise,timeline_json")
+    .eq("id", id)
+    .maybeSingle();
+  if (getErr) return json(res, 500, { ok:false, error:getErr.message });
+  if (!current) return json(res, 404, { ok:false, error:"Lead não encontrado." });
+
+  const agora = new Date();
+  const iso = agora.toISOString();
+  const { dataBR, horaBR } = dataHoraSaoPaulo(agora);
+  const timeline = Array.isArray(current.timeline_json) ? [...current.timeline_json] : [];
+  const maiorOrder = timeline.reduce((m, x) => Math.max(m, Number(x?.order || x?.id || 0) || 0), 0);
+  const item = {
+    id:`obs-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+    order:maiorOrder + 1,
+    date:dataBR,
+    time:horaBR,
+    iso,
+    author:String(body?.autor || "Observação do corretor").slice(0,80),
+    text:texto,
+    type:"observacao_manual",
+    source:"corretor-pro-manual",
+    manual:true
+  };
+  timeline.push(item);
+
+  const analysis = current.resultado_analise || {};
+  const memAnterior = analysis.memoria || {};
+  const observacoesManuais = Array.isArray(memAnterior.observacoesManuais) ? [...memAnterior.observacoesManuais] : [];
+  observacoesManuais.push({ id:item.id, texto, criadoEm:iso, dataBR, horaBR });
+  const linha = `[${dataBR} ${horaBR}] ${texto}`;
+  const obsAnterior = String(memAnterior.observacoes || "").trim();
+  const memoria = {
+    ...memAnterior,
+    observacoes: obsAnterior ? `${obsAnterior}\n${linha}`.slice(-5000) : linha,
+    observacoesManuais: observacoesManuais.slice(-100),
+    // A observação exata já está em observacoesManuais e na timeline. Não transforma
+    // automaticamente todo o texto antigo de `observacoes` (que pode conter inferências
+    // históricas da IA) em informação manual confirmada.
+    camposManuais: camposManuaisMemoria(memAnterior, []),
+    manualAtualizadoEm:iso,
+    atualizadoEm:iso
+  };
+  const merged = { ...analysis, memoria, _atualizadoEm:iso };
+  const { error:putErr } = await supabase
+    .from("whatsapp_processamentos")
+    .update({ resultado_analise:merged, timeline_json:timeline, atualizado_em:iso })
+    .eq("id", id);
+  if (putErr) return json(res, 500, { ok:false, error:putErr.message });
+
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId:String(id), motivo:"observacao-manual-adicionada" })
+    .catch(e => ({ ok:false, error:e?.message || String(e) }));
+  return json(res, 200, { ok:true, id, item, memoria, aprendizadoAutomatico, reanalisado:false });
+}
 
 
 // ============ DESFECHO / APRENDIZADO CONTÍNUO v685-final ============

@@ -1320,7 +1320,13 @@ function mensagemPodeEnsinar(m) {
 
 function papelMensagemAprendizado(m, clientName = "") {
   const autor = String(m?.author || "").trim();
-  if (autorPareceNegocioPipeline(autor) || /voc[êe]|mensagem enviada|atendimento \(corretor\)/i.test(autor)) return "CORRETOR";
+  const fonte = String(m?.source || "").toLowerCase();
+  const tipo = String(m?.type || "").toLowerCase();
+  // Observações, visitas, ligações e propostas registradas pelo corretor são contexto
+  // comercial real, mesmo quando não vieram como mensagem do WhatsApp.
+  if (["manual", "crm", "corretor-pro-manual"].includes(fonte) ||
+      ["atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual", "proposta"].includes(tipo)) return "CORRETOR";
+  if (autorPareceNegocioPipeline(autor) || /voc[êe]|mensagem enviada|atendimento \(corretor\)|observa[cç][aã]o do corretor|anota[cç][aã]o importada/i.test(autor)) return "CORRETOR";
   if (autorPareceClientePipeline(autor, { clientName })) return "CLIENTE";
   return "OUTRO";
 }
@@ -1328,9 +1334,10 @@ function papelMensagemAprendizado(m, clientName = "") {
 // Constrói um material focado nas CONDUÇÕES REAIS: inclui cada mensagem do corretor
 // e o contexto ao redor. Assim uma conversa enorme não perde as ações do meio nem a
 // última mensagem, e não precisamos mandar anexos/ruídos inteiros para a IA.
-export function prepararTimelineParaAprendizado(timeline, clientName = "") {
+export function prepararTimelineParaAprendizado(timeline, clientName = "", memoriaManual = null) {
   const arr = (Array.isArray(timeline) ? timeline : []).filter(mensagemPodeEnsinar);
-  if (!arr.length) return "";
+  // Mesmo sem conversa suficiente, uma observação explicitamente digitada pelo corretor
+  // ainda é material válido para o aprendizado contínuo.
   const escolhidos = new Set();
   arr.forEach((m, i) => {
     if (papelMensagemAprendizado(m, clientName) !== "CORRETOR") return;
@@ -1353,6 +1360,35 @@ export function prepararTimelineParaAprendizado(timeline, clientName = "") {
     linhas.push(`[${m.date || ""} ${m.time || ""}] ${papel} (${String(m.author || "").slice(0, 80)}): ${texto}`);
     anterior = i;
   }
+  // Informações explicitamente digitadas pelo corretor também ensinam. Só entram campos
+  // marcados como manuais; inferências antigas da própria IA não podem se autoalimentar.
+  const mem = memoriaManual && typeof memoriaManual === "object" ? memoriaManual : {};
+  const camposManuais = new Set(Array.isArray(mem.camposManuais) ? mem.camposManuais : []);
+  const rotulos = {
+    preferencias:"Preferências confirmadas pelo corretor",
+    pessoasDecisao:"Pessoas envolvidas na decisão",
+    pontosSensiveis:"Pontos sensíveis informados pelo corretor",
+    observacoes:"Observação atual do corretor"
+  };
+  const notas = [];
+  for (const [campo, rotulo] of Object.entries(rotulos)) {
+    if (!camposManuais.has(campo)) continue;
+    const valor = String(mem[campo] || "").replace(/\s+/g, " ").trim().slice(0, 5000);
+    if (valor) notas.push(`${rotulo}: ${valor}`);
+  }
+  const textosDaTimeline = new Set(arr.map(m => String(m?.text || "").replace(/\s+/g, " ").trim()).filter(Boolean));
+  const observacoesManuais = Array.isArray(mem.observacoesManuais) ? mem.observacoesManuais.slice(-30) : [];
+  for (const o of observacoesManuais) {
+    const valor = String(o?.texto || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+    // Se a observação já está na timeline, não manda duas vezes para não dar peso
+    // artificial ao mesmo ensinamento.
+    if (valor && !textosDaTimeline.has(valor) && !notas.some(n => n.includes(valor))) notas.push(`Observação manual (${o?.dataBR || ""} ${o?.horaBR || ""}): ${valor}`);
+  }
+  if (notas.length) {
+    linhas.push("[INFORMAÇÕES MANUAIS ATUAIS — prevalecem sobre inferências antigas da conversa]");
+    linhas.push(...notas.map(n => `CORRETOR (observação manual): ${n}`));
+  }
+
   let texto = linhas.join("\n");
   // Teto técnico. Mantém início, amostras centrais e principalmente o final, onde
   // ficam as conduções novas que precisam virar aprendizado imediatamente.
@@ -1580,8 +1616,8 @@ export async function marcarBootstrapAprendizadoConcluido(totalCarteira) {
   } catch (_) { return false; }
 }
 
-export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", openai = null, forcar = false } = {}) {
-  const material = prepararTimelineParaAprendizado(timeline, clientName);
+export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", memoriaManual = null, openai = null, forcar = false } = {}) {
+  const material = prepararTimelineParaAprendizado(timeline, clientName, memoriaManual);
   if (material.trim().length < 40) return { ok: true, ignorado: true, motivo: "sem diálogo real", casosDoLead: 0 };
   const sourceHash = hashTextoAprendizado(material);
   const anterior = await loadFonteMemoriaV2(leadId, sourceHash);
@@ -2442,7 +2478,6 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       mode: "sem_api",
       summary: "Conversa importada, mas a análise comercial está indisponível porque a API não está configurada.",
       clientProfile: "—",
-      confianca: 0,
       bestTime: "—",
       objections: [],
       risk: "—",
@@ -2689,7 +2724,6 @@ ${timelineText}`;
         recomendada: "a"
       },
       tipoContato: null,
-      confianca: 0,
       permuta: false,
       permutaResumo: "",
       bestTime: "",
@@ -2727,7 +2761,6 @@ ${timelineText}`;
       error: detail,
       summary: "Conversa importada, mas a análise comercial não pôde ser gerada agora.",
       clientProfile: "—",
-      confianca: 0,
       bestTime: "—",
       objections: [],
       risk: "—",

@@ -157,6 +157,7 @@ export default async function handler(req, res) {
         nomeArquivo: lead.nome_arquivo || "",
         produto: a?.modeloComercial?.oportunidade?.produto || a.produtoInteresse || a?.lead?.product || "",
         etapa: a.etapaSugerida || lead.etapa || a?.lead?.etapa || "",
+        memoriaManual: a.memoria || {},
         openai
       });
       if (r?.ok) {
@@ -286,8 +287,11 @@ export default async function handler(req, res) {
         const amostra = [];
         for (const l of (leads || [])) {
           const tl = Array.isArray(l.timeline_json) ? l.timeline_json : [];
-          if (tl.length < 2) { semConteudo++; continue; }
           const a = l.resultado_analise || {};
+          const memManual = a.memoria || {};
+          const temMemoriaManual = (Array.isArray(memManual.camposManuais) && memManual.camposManuais.some(k => String(memManual[k] || "").trim())) ||
+            (Array.isArray(memManual.observacoesManuais) && memManual.observacoesManuais.some(o => String(o?.texto || "").trim()));
+          if (tl.length < 2 && !temMemoriaManual) { semConteudo++; continue; }
           const clientName = a.clientName || a?.lead?.clientName || String(l.nome_arquivo || "").replace(/\.(txt|zip)$/i, "");
           const r = await aprenderComHistoricoReal({
             timeline: tl,
@@ -296,6 +300,7 @@ export default async function handler(req, res) {
             nomeArquivo: l.nome_arquivo || "",
             produto: a.produtoInteresse || a?.lead?.product || "",
             etapa: a.etapaSugerida || a?.lead?.etapa || "",
+            memoriaManual: a.memoria || {},
             openai,
             forcar: body.forcar === true
           });

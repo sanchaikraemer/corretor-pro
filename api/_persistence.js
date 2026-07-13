@@ -614,8 +614,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const ehItemManual = (m) => {
       const source = String(m?.source || "");
       const type = String(m?.type || "");
-      return source === "manual" || source === "crm" || type === "print-whatsapp"
-        || ["atendimento", "nota", "ligacao", "visita", "presencial"].includes(type);
+      return source === "manual" || source === "crm" || source === "corretor-pro-manual" || type === "print-whatsapp"
+        || ["atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual"].includes(type);
     };
 
     // Procura de trás pra frente. Antes eram criados arrays completos com filter(),

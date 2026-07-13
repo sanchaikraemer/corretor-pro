@@ -30,7 +30,7 @@
     if(/api\/lead-update(?:\?|$)/.test(url)){
       try{
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : (init?.body || {});
-        relevante = ["salvar-novo","atualizar-com-evolucao"].includes(String(body?.action || ""));
+        relevante = ["salvar-novo","atualizar-com-evolucao","memoria-set","observacao-adicionar"].includes(String(body?.action || ""));
       }catch(_){ relevante = false; }
     }
     if(relevante) setTimeout(() => window.iniciarAprendizadoContinuoAutomatico?.({ somentePendentes:true }), 700);
@@ -1612,22 +1612,39 @@ window.reanalisarEmSegundoPlano = reanalisarEmSegundoPlano;
 // Preserva eventos registrados localmente que o banco ainda não devolveu (lag de leitura).
 async function recarregarLeadFoco(id){
   if(!id || String(state.lead?.id) !== String(id)) return;
+  const localAntes = state.lead;
   try{
     invalidarLeadsCache();
     const fresh = await getLeadsData(true);
     const atualizado = (fresh?.items||[]).map(limparLead).find(l => String(l.id) === String(id));
     if(!atualizado || String(state.lead?.id) !== String(id)) return;
-    const localEv = state.analysis?.aprendizado?.eventos;
-    if(Array.isArray(localEv)){
-      const evFresh = atualizado.analysis?.aprendizado?.eventos || [];
-      if(localEv.length > evFresh.length){
-        atualizado.analysis = atualizado.analysis || {};
-        atualizado.analysis.aprendizado = { ...(atualizado.analysis.aprendizado||{}), eventos: localEv };
-      }
+
+    // O banco pode devolver por alguns instantes uma versão anterior. Mescla eventos por
+    // assinatura e preserva a data de atendimento mais recente, em vez de comparar tamanho.
+    const localEv = localAntes?.analysis?.aprendizado?.eventos || [];
+    const freshEv = atualizado?.analysis?.aprendizado?.eventos || [];
+    const mapa = new Map();
+    for(const e of [...freshEv,...localEv]){
+      const chave=[e?.evento||'',e?.detalhes?.de||'',e?.detalhes?.tipo||'',e?.quando||''].join('|');
+      if(chave.replace(/\|/g,'')) mapa.set(chave,e);
+    }
+    const eventos=[...mapa.values()].sort((a,b)=>String(a?.quando||'').localeCompare(String(b?.quando||'')));
+    if(eventos.length){
+      atualizado.analysis=atualizado.analysis||{};
+      atualizado.analysis.aprendizado={...(atualizado.analysis.aprendizado||{}),eventos:eventos.slice(-100)};
+    }
+    const tLocal=Date.parse(localAntes?.lastAttendanceAt||localAntes?.ultimoAtendimentoEm||'')||0;
+    const tFresh=Date.parse(atualizado?.lastAttendanceAt||atualizado?.ultimoAtendimentoEm||'')||0;
+    if(tLocal>tFresh){
+      atualizado.lastAttendanceAt=localAntes.lastAttendanceAt||localAntes.ultimoAtendimentoEm;
+      atualizado.ultimoAtendimentoEm=localAntes.ultimoAtendimentoEm||localAntes.lastAttendanceAt;
+      atualizado.lastAttendanceText=localAntes.lastAttendanceText||atualizado.lastAttendanceText;
     }
     state.lead = atualizado; state.analysis = atualizado.analysis || null;
     renderLeadFoco(atualizado);
-  }catch(_){}
+  }catch(_){
+    // O patch otimista já está na tela. Uma falha de leitura nunca desfaz o atendimento.
+  }
 }
 window.recarregarLeadFoco = recarregarLeadFoco;
 
@@ -1857,16 +1874,8 @@ function respostaClienteRegistrada(l){
   return null;
 }
 
-// Probabilidade REFINADA mostrada na UI: combina a prob "raw" da IA com o
-// Score Comercial (engajamento, keywords, dias distintos, sinais macro) e adiciona
-// ruído determinístico por ID. Aplica curva CONSERVADORA — IA tende a inflar valores.
-// Em venda imobiliária real: 80%+ é "praticamente fechado", 60-75% é proposta na mesa,
-// 35-55% é engajado mas longe, 15-30% é fogo de palha.
-// Determinístico: mesmo lead = mesmo valor a cada render.
-// Venda condicionada: cliente depende de vender um bem antes de comprar (permuta ou
-// obstáculo escrito pelo corretor nas observações). Regra do produto: probabilidade baixa,
-// porque depende de algo fora do controle do corretor. Aplicado de forma determinística
-// porque a IA nem sempre obedece o teto sozinha.
+// Identifica venda condicionada para ordenar a fila por fatos reais.
+// Não gera nem exibe probabilidade, percentual ou score comercial.
 function temVendaCondicionada(l){
   if(ehPermuta(l)) return true;
   const txt = [
@@ -1890,10 +1899,6 @@ function temAtendimentoManual(l){
     return false;
   });
 }
-// Atualização #805: percentual/score comercial aposentado.
-// O sistema conduz por fatos, etapa, pendências, agenda e comportamento — sem número inventado.
-function probabilidadeRefinada(){ return null; }
-function probabilidadeRefinadaTxt(){ return ""; }
 const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
 // "Corretor", "Imobiliária" e "Imóveis" podem fazer parte do NOME do contato parceiro.
 // Por isso não podem, sozinhos, transformar a fala dele em mensagem da empresa.
@@ -4443,16 +4448,6 @@ const MATERIAL_LABEL = {
   "material-valorizacao":"Valorização","material-wellness":"Lazer/wellness"
 };
 
-function badgeConfianca(c){
-  const n = Number(c) || 0;
-  if(n <= 0) return "";
-  let cor, bg, label;
-  if(n >= 75){ cor = "var(--acao)"; bg = "rgba(104,255,149,.14)"; label = "Alta confiança"; }
-  else if(n >= 45){ cor = "var(--timing)"; bg = "rgba(255,45,155,.14)"; label = "Confiança média"; }
-  else { cor = "var(--morno)"; bg = "rgba(255,155,59,.14)"; label = "Confiança baixa"; }
-  return `<span title="Confiança da análise (quanto contexto teve pra avaliar)" style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:950;color:${cor};background:${bg};border:1px solid ${cor};letter-spacing:.04em">${label} · ${n}%</span>`;
-}
-
 function badgeTipoRetomada(t){
   const cfg = TIPO_RETOMADA_LABEL[t];
   if(!cfg) return "";
@@ -4990,7 +4985,7 @@ function renderLeadFoco(lead){
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
-    const last=cp705FormatDateTime(lead.lastActivityAt || lead.lastInteraction || a.reanalisadoEm || '');
+    const last=cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
     const atendimento=ultimoAtendimentoDataHora(lead);
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -5014,7 +5009,7 @@ function renderLeadFoco(lead){
         <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
         <details class="cp704-details cp704-history-details"><summary><span class="cp704-summary-left">Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></span><span class="cp704-summary-actions"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
         <details class="cp704-details"><summary>Registrar observação</summary><div class="cp704-body">
-          <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — entra na linha do tempo e a próxima análise já considera isso.</p>
+          <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
           <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
@@ -5793,7 +5788,7 @@ async function salvarAprendizado(){
 
 // ===== Aprendizado contínuo real v808 =====
 // A varredura inicial roda em segundo plano, uma conversa por vez, sem travar as telas.
-// Depois disso, cada importação/reimportação e cada reanálise aprende somente o trecho novo
+// Depois disso, cada importação/reimportação, reanálise e observação manual aprende somente o material novo
 // (o servidor usa hash da timeline e não paga outra chamada quando nada mudou).
 const CP_APREND_AUTO_OFFSET_KEY = "corretor_pro_aprendizado_v2_offset";
 const CP_APREND_AUTO_PENDENTES_KEY = "corretor_pro_aprendizado_v2_pendentes";
@@ -6042,7 +6037,7 @@ async function carregarEstadoIA(){
     const casos = Number(auto.totalCasos || 0);
     const pendenciasAuto = Number(auto.aprendizadosPendentes || 0);
     const estado = auto.bootstrapConcluidoEm
-      ? (pendenciasAuto ? `${pendenciasAuto} conversa(s) nova(s) estão na fila de aprendizado automático.` : "A carteira existente já foi lida. Cada nova importação, reimportação ou reanálise atualiza esta memória automaticamente.")
+      ? (pendenciasAuto ? `${pendenciasAuto} conversa(s) nova(s) estão na fila de aprendizado automático.` : "A carteira existente já foi lida. Novas mensagens importadas, reimportações, reanálises e observações manuais atualizam esta memória automaticamente.")
       : "A leitura inicial da carteira está acontecendo em segundo plano. Você pode continuar usando o sistema normalmente.";
     const grade = cats.map(c => `<div style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)">
       <div style="color:${c.cor};text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:9px;margin-bottom:3px">${c.label}</div>
@@ -6517,20 +6512,23 @@ async function uploadLargeZipToSupabase(file, options = {}){
           qs("#progressBar").style.width="100%";
           qs("#processingText").textContent="Conversa processada.";
           renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path });
-          toast("Funcionou na segunda tentativa.");
+          // O ZIP compartilhado permanece pendente até o lead ser salvo, atualizado ou descartado.
+          // Se o app fechar nesta tela, a conversa pode ser recuperada sem nova exportação.
+          toast("Conversa processada. Confira e salve o lead.");
         }catch(e2){ toast("Ainda falhou: " + userFriendlyError(e2, file)); }
         return;
       }
       if(state.ultimoArquivo){ state.processing = false; processFile(state.ultimoArquivo); }
     });
     toast(ehTimeout ? "Tempo esgotado numa das etapas." : "Erro na análise.");
-    return;
+    return false;
   }
 
   qs("#progressBar").style.width="100%";
   qs("#processingText").textContent="Conversa processada.";
   renderProcessedResult(analysisData, { fileName: file.name, fileSize: file.size, source: "storage", bucket: meta.bucket, path: meta.path });
-  toast("ZIP grande processado. Confira e clique em Salvar lead.");
+  toast("ZIP processado. Confira e clique em Salvar lead.");
+  return true;
 }
 
 // Orquestra o processamento em 3 etapas, cada chamada curta o suficiente pro servidor.
@@ -6911,6 +6909,7 @@ async function atualizarLeadComEvolucao(){
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
     const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
+    const shareConcluidoId = String(state.pendingSharedRecordId || "");
     state.pendingSave = null;
     state.pendingExistente = null;
     state.pendingViaTelefone = false;
@@ -6949,6 +6948,7 @@ async function atualizarLeadComEvolucao(){
     // lead como estava ANTES da atualização (ainda em "preparação").
     invalidarLeadsCache();
     loadRecentLeads(true); refreshAllSections();
+    if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     // A análise já foi atualizada durante a importação incremental. Não dispara uma segunda
     // reanálise do histórico inteiro: isso repetiria custo de API e anularia a economia da v669.
     qs("#pendingActions")?.remove();
@@ -6981,6 +6981,7 @@ async function salvarLeadPendente(){
     }
     state.lead.id = data.persistence.processing.id;
     state.lead.status = "Conversa processada";
+    const shareConcluidoId = String(state.pendingSharedRecordId || "");
     state.pendingSave = null;
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
@@ -6996,6 +6997,7 @@ async function salvarLeadPendente(){
     // que a importação não tinha sido salva. Zera o cache pra a lista reler o banco.
     invalidarLeadsCache();
     loadRecentLeads(true); refreshAllSections();
+    if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     // Após salvar, abre o lead da home pra mostrar o card de foco completo (com badges, materiais, etc).
     setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id); }, 800);
   }catch(err){
@@ -7005,15 +7007,23 @@ async function salvarLeadPendente(){
   }
 }
 
-function descartarLeadPendente(){
+async function descartarLeadPendente(){
   if(!confirm("Descartar essa análise sem salvar no banco?")) return;
+  const shareDescartadoId = String(state.pendingSharedRecordId || "");
   state.pendingSave = null;
   clearAnalysis();
+  if(shareDescartadoId) await finalizarSharePendente(shareDescartadoId);
   toast("Análise descartada.");
 }
 
-async function processFile(file){
-  if(!file||state.processing)return;
+async function processFile(file, options = {}){
+  if(!file) return false;
+  if(state.processing) return false;
+  const pendingShareId = String(options.shareId || state.pendingSharedRecordId || "").trim();
+  if(pendingShareId){
+    state.pendingSharedRecordId = pendingShareId;
+    window.__cpShareImportActive = true;
+  }
   state.ultimoArquivo = file;
   clearAnalysis();
   state.processing=true;
@@ -7029,35 +7039,38 @@ async function processFile(file){
     showCard("resultCard", true);
     qs("#resultBox").className="notice error";
     qs("#resultBox").innerHTML="Envie o arquivo ZIP exportado pelo WhatsApp.";
-    state.processing=false;return;
+    state.processing=false;
+    return false;
   }
 
-  const audioWindowDays = await escolherPeriodoAudiosImportacao();
-  qs("#processingText").textContent = "Áudios: transcrição limitada a " + rotuloJanelaAudio(audioWindowDays) + ". Mensagens escritas entram completas.";
-
-  // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
-  let slimInfo = null;
-  let working = file;
   try{
-    qs("#processingText").textContent="Removendo imagens, vídeos e documentos do ZIP no celular...";
-    slimInfo = await slimZipKeepingTextAndAudio(file, ({processed,total,kept,dropped})=>{
-      const pct = Math.round((processed/total)*15) + 3;
-      qs("#progressBar").style.width = Math.min(18, pct) + "%";
-      qs("#processingText").textContent = "Enxugando ZIP: "+processed+"/"+total+" arquivos · mantidos "+kept+", descartados "+dropped;
-    });
-    working = slimInfo.file;
-    const oMb = (slimInfo.originalSize/1024/1024).toFixed(1);
-    const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
-    qs("#processingText").textContent = "ZIP enxugado: "+oMb+" MB → "+sMb+" MB ("+slimInfo.kept+" arquivos úteis, "+slimInfo.dropped+" descartados).";
-  }catch(err){
-    // Se enxugar falhar, segue com o original — pelo menos tenta.
-    qs("#processingText").textContent="Não enxuguei o ZIP ("+escapeHtml(String(err?.message||err))+"). Tentando subir o original.";
-    working = file;
-  }
+    const audioWindowDays = await escolherPeriodoAudiosImportacao();
+    qs("#processingText").textContent = "Áudios: transcrição limitada a " + rotuloJanelaAudio(audioWindowDays) + ". Mensagens escritas entram completas.";
 
-  // Tudo passa pelo Storage — o processar-storage dá conta de qualquer tamanho.
-  try{
-    await uploadLargeZipToSupabase(working, { audioWindowDays });
+    // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
+    let slimInfo = null;
+    let working = file;
+    try{
+      qs("#processingText").textContent="Removendo imagens, vídeos e documentos do ZIP no celular...";
+      slimInfo = await slimZipKeepingTextAndAudio(file, ({processed,total,kept,dropped})=>{
+        const pct = Math.round((processed/total)*15) + 3;
+        qs("#progressBar").style.width = Math.min(18, pct) + "%";
+        qs("#processingText").textContent = "Enxugando ZIP: "+processed+"/"+total+" arquivos · mantidos "+kept+", descartados "+dropped;
+      });
+      working = slimInfo.file;
+      const oMb = (slimInfo.originalSize/1024/1024).toFixed(1);
+      const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
+      qs("#processingText").textContent = "ZIP enxugado: "+oMb+" MB → "+sMb+" MB ("+slimInfo.kept+" arquivos úteis, "+slimInfo.dropped+" descartados).";
+    }catch(err){
+      qs("#processingText").textContent="Não enxuguei o ZIP ("+escapeHtml(String(err?.message||err))+"). Tentando subir o original.";
+      working = file;
+    }
+
+    const ok = await uploadLargeZipToSupabase(working, { audioWindowDays });
+    if(!ok) return false;
+    // Não elimina o ZIP ainda: a importação só termina quando o lead é salvo/atualizado
+    // ou quando o corretor descarta explicitamente a análise.
+    return true;
   }catch(err){
     qs("#progressBar").style.width="100%";
     qs("#processingText").textContent="Falha no processamento.";
@@ -7065,16 +7078,18 @@ async function processFile(file){
     qs("#resultBox").className="notice error";
     state.ultimoArquivo = file;
     qs("#resultBox").innerHTML =
-      escapeHtml(userFriendlyError(err,working)).replace(/\n/g,"<br>") +
+      escapeHtml(userFriendlyError(err,file)).replace(/\n/g,"<br>") +
       `<div style="margin-top:14px;display:flex;gap:10px"><button type="button" class="btn" id="btnTentarNovamente" style="flex:1">Tentar novamente</button><button type="button" class="btn secondary" id="btnDescartarTentativa" style="flex:1">Descartar</button></div>`;
-    qs("#btnTentarNovamente")?.addEventListener("click", () => {
-      if(state.ultimoArquivo){ state.processing = false; processFile(state.ultimoArquivo); }
+    qs("#btnTentarNovamente")?.addEventListener("click", async () => {
+      if(state.ultimoArquivo){ state.processing = false; await processFile(state.ultimoArquivo, { shareId: pendingShareId }); }
     });
-    qs("#btnDescartarTentativa")?.addEventListener("click", () => {
+    qs("#btnDescartarTentativa")?.addEventListener("click", async () => {
+      if(pendingShareId) await descartarSharePendente(pendingShareId);
       state.ultimoArquivo = null;
       showCard("resultCard", false);
     });
-    toast("Erro ao processar.");
+    toast("Erro ao processar. O ZIP ficou guardado para tentar novamente.");
+    return false;
   }finally{
     state.processing=false;
   }
@@ -7129,147 +7144,219 @@ function formatShareDebug(debug){
   return out;
 }
 
-// IndexedDB helpers (mesmas constantes do service worker).
+// Share Target v809 — fila persistente para funcionar também com o app fechado.
+// O ZIP só é removido depois que a leitura/análise termina com sucesso.
 const SHARE_IDB_NAME = 'direciona-share';
 const SHARE_IDB_VERSION = 1;
 const SHARE_IDB_STORE = 'zips';
+const CP_SHARE_PARAMS_INICIAIS = new URLSearchParams(location.search);
+const CP_SHARE_ID_INICIAL = String(CP_SHARE_PARAMS_INICIAIS.get('shareId') || '').trim();
+const CP_VEIO_DE_SHARE = CP_SHARE_PARAMS_INICIAIS.has('shared') || CP_SHARE_PARAMS_INICIAIS.get('source') === 'share-target' || CP_SHARE_PARAMS_INICIAIS.has('share-target');
+window.__cpShareImportActive = CP_VEIO_DE_SHARE;
+let __cpCheckSharedPromise = null;
 
 function shareIdbOpen(){
   return new Promise((resolve, reject)=>{
+    if(!('indexedDB' in window)){ reject(new Error('IndexedDB indisponível')); return; }
     const req = indexedDB.open(SHARE_IDB_NAME, SHARE_IDB_VERSION);
     req.onupgradeneeded = ()=>{
       const db = req.result;
-      if(!db.objectStoreNames.contains(SHARE_IDB_STORE)){
-        db.createObjectStore(SHARE_IDB_STORE, { keyPath: 'id' });
-      }
+      if(!db.objectStoreNames.contains(SHARE_IDB_STORE)) db.createObjectStore(SHARE_IDB_STORE, { keyPath:'id' });
     };
     req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
+    req.onerror = ()=>reject(req.error || new Error('Falha ao abrir armazenamento do compartilhamento'));
   });
 }
 
 async function shareIdbGet(id){
-  if(!("indexedDB" in window)) return null;
+  if(!id || !('indexedDB' in window)) return null;
   let db;
   try{ db = await shareIdbOpen(); }catch(_){ return null; }
   try{
-    return await new Promise((resolve)=>{
-      const tx = db.transaction(SHARE_IDB_STORE, 'readonly');
-      const store = tx.objectStore(SHARE_IDB_STORE);
-      const req = store.get(id);
-      let result = null;
-      req.onsuccess = ()=>{ result = req.result || null; };
-      req.onerror = ()=>{ result = null; };
-      tx.oncomplete = ()=>resolve(result);
-      tx.onerror = ()=>resolve(null);
-      tx.onabort = ()=>resolve(null);
+    return await new Promise(resolve=>{
+      const tx = db.transaction(SHARE_IDB_STORE,'readonly');
+      const req = tx.objectStore(SHARE_IDB_STORE).get(id);
+      let value=null;
+      req.onsuccess=()=>{ value=req.result||null; };
+      req.onerror=()=>{ value=null; };
+      tx.oncomplete=()=>resolve(value);
+      tx.onerror=()=>resolve(null);
+      tx.onabort=()=>resolve(null);
     });
-  }finally{ db.close(); }
+  }finally{ try{db.close();}catch(_){} }
+}
+
+async function shareIdbList(){
+  if(!('indexedDB' in window)) return [];
+  let db;
+  try{ db=await shareIdbOpen(); }catch(_){ return []; }
+  try{
+    return await new Promise(resolve=>{
+      const tx=db.transaction(SHARE_IDB_STORE,'readonly');
+      const req=tx.objectStore(SHARE_IDB_STORE).getAll();
+      let values=[];
+      req.onsuccess=()=>{ values=Array.isArray(req.result)?req.result:[]; };
+      req.onerror=()=>{ values=[]; };
+      tx.oncomplete=()=>resolve(values.sort((a,b)=>String(b?.ts||'').localeCompare(String(a?.ts||''))));
+      tx.onerror=()=>resolve([]);
+      tx.onabort=()=>resolve([]);
+    });
+  }finally{ try{db.close();}catch(_){} }
 }
 
 async function shareIdbDel(id){
-  if(!("indexedDB" in window)) return;
+  if(!id || !('indexedDB' in window)) return;
   let db;
-  try{ db = await shareIdbOpen(); }catch(_){ return; }
+  try{ db=await shareIdbOpen(); }catch(_){ return; }
   try{
-    await new Promise((resolve)=>{
-      const tx = db.transaction(SHARE_IDB_STORE, 'readwrite');
+    await new Promise(resolve=>{
+      const tx=db.transaction(SHARE_IDB_STORE,'readwrite');
       tx.objectStore(SHARE_IDB_STORE).delete(id);
-      tx.oncomplete = ()=>resolve();
-      tx.onerror = ()=>resolve();
+      tx.oncomplete=()=>resolve(); tx.onerror=()=>resolve(); tx.onabort=()=>resolve();
     });
-  }finally{ db.close(); }
+  }finally{ try{db.close();}catch(_){} }
+}
+
+function shareCacheKey(id){ return `/__direciona_shared_zip__/${encodeURIComponent(String(id||''))}`; }
+
+async function apagarShareDoCache(id){
+  if(!('caches' in window)) return;
+  try{
+    const allNames=await caches.keys();
+    const names=['direciona-sharetarget-stable',...allNames.filter(n=>n!=='direciona-sharetarget-stable'&&(n.startsWith('direciona-sharetarget-')||n.startsWith('direciona-static-')))];
+    for(const cacheName of [...new Set(names)]){
+      let cache; try{cache=await caches.open(cacheName);}catch(_){continue;}
+      if(id) await cache.delete(shareCacheKey(id));
+      for(const key of ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__']){
+        try{
+          const r=await cache.match(key);
+          if(!r || !id || r.headers.get('X-Share-Id')===id) await cache.delete(key);
+        }catch(_){ }
+      }
+    }
+  }catch(_){ }
+}
+
+async function finalizarSharePendente(id){
+  await Promise.allSettled([shareIdbDel(id), apagarShareDoCache(id)]);
+  if(String(state.pendingSharedRecordId||'')===String(id||'')) state.pendingSharedRecordId='';
+  window.__cpShareImportActive=false;
+  try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+}
+window.finalizarSharePendente=finalizarSharePendente;
+
+async function descartarSharePendente(id){
+  await finalizarSharePendente(id);
+  toast('Importação descartada.');
+}
+window.descartarSharePendente=descartarSharePendente;
+
+async function localizarSharePendente(idPreferido){
+  const pref=String(idPreferido||'').trim();
+  if(pref){
+    const exato=await shareIdbGet(pref);
+    // Com ID explícito, nunca pega um "latest" antigo: isso poderia importar a conversa
+    // anterior enquanto a transação nova ainda está terminando no cold start.
+    return exato?.blob?.size ? exato : null;
+  }
+  // Compatibilidade com versões antigas, que gravavam sempre como "latest" e não
+  // mandavam shareId no redirecionamento.
+  const legado=await shareIdbGet('latest');
+  if(legado?.blob?.size) return legado;
+  const todos=await shareIdbList();
+  return todos.find(r=>r?.blob?.size && r.status!=='done') || null;
+}
+
+async function localizarShareNoCache(idPreferido){
+  if(!('caches' in window)) return null;
+  const allNames=await caches.keys();
+  const names=['direciona-sharetarget-stable',...allNames.filter(n=>n!=='direciona-sharetarget-stable'&&(n.startsWith('direciona-sharetarget-')||n.startsWith('direciona-static-')))];
+  const keys=[];
+  if(idPreferido) keys.push(shareCacheKey(idPreferido));
+  keys.push('/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__');
+  for(const cacheName of [...new Set(names)]){
+    let cache; try{cache=await caches.open(cacheName);}catch(_){continue;}
+    for(const key of keys){
+      const cached=await cache.match(key).catch(()=>null);
+      if(!cached) continue;
+      const headerId=String(cached.headers.get('X-Share-Id')||'').trim();
+      // Se o redirecionamento trouxe um ID, uma chave legada só é válida quando
+      // pertence exatamente a esse mesmo compartilhamento.
+      if(idPreferido && key!==shareCacheKey(idPreferido) && headerId!==String(idPreferido)) continue;
+      const blob=await cached.blob();
+      if(!blob?.size) continue;
+      const id=String(headerId||idPreferido||'latest');
+      return { id, blob, name:decodeURIComponent(cached.headers.get('X-File-Name')||'conversa-whatsapp.zip'), type:blob.type||'application/zip', cacheOnly:true };
+    }
+  }
+  return null;
+}
+
+function mostrarRecebimentoShare(){
+  show('zip');
+  qs('#processingBox')?.classList.add('show');
+  if(qs('#processingText')) qs('#processingText').textContent='Conversa recebida. Preparando a importação…';
+  if(qs('#progressBar')) qs('#progressBar').style.width='4%';
+}
+
+async function _checkSharedImpl(){
+  // A análise já terminou e está aguardando a decisão de salvar/atualizar/descartar.
+  // Mantém o ZIP persistido, mas não processa a mesma conversa uma segunda vez na mesma aba.
+  if(state.pendingSave && state.pendingSharedRecordId){
+    window.__cpShareImportActive=true;
+    return {handled:true,awaitingSave:true,shareId:String(state.pendingSharedRecordId)};
+  }
+  const params=new URLSearchParams(location.search);
+  const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
+  const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||state.pendingSharedRecordId||'').trim();
+  const erroUrl=params.get('erro');
+  if(cameFromShare){ window.__cpShareImportActive=true; mostrarRecebimentoShare(); }
+
+  // No cold start, o documento pode montar alguns milissegundos antes da transação do
+  // service worker ficar visível. Faz uma espera curta em vez de desistir e ir para a Home.
+  const limite=cameFromShare ? Date.now()+8000 : Date.now();
+  let record=null;
+  do{
+    record=await localizarSharePendente(shareId);
+    if(!record) record=await localizarShareNoCache(shareId);
+    if(record) break;
+    if(Date.now()<limite) await new Promise(r=>setTimeout(r,220));
+  }while(Date.now()<limite);
+
+  if(record?.blob?.size){
+    const id=String(record.id||shareId||'latest');
+    state.pendingSharedRecordId=id;
+    window.__cpShareImportActive=true;
+    mostrarRecebimentoShare();
+    try{ history.replaceState(null,'',`${location.pathname}?shared=1&shareId=${encodeURIComponent(id)}`); }catch(_){ }
+    const file=new File([record.blob],record.name||'conversa-whatsapp.zip',{type:record.type||record.blob.type||'application/zip'});
+    const ok=await processFile(file,{shareId:id});
+    return {handled:true,processingFinished:ok,shareId:id};
+  }
+
+  if(cameFromShare){
+    const debug=await readShareDebug().catch(()=>null);
+    show('zip'); showCard('resultCard',true);
+    qs('#resultBox').className='notice error';
+    qs('#resultBox').innerHTML=
+      '<b>O arquivo ainda não apareceu no armazenamento do aplicativo.</b><br><br>'+
+      'O Corretor Pro não voltou para a tela inicial e não apagou nada. Volte aqui em alguns segundos e toque em <b>Tentar recuperar</b>.'+
+      (erroUrl?'<br><br><b>Motivo:</b> '+escapeHtml(erroUrl):'')+
+      (debug?'<br><br><details><summary>Diagnóstico técnico</summary>'+formatShareDebug(debug)+'</details>':'')+
+      '<div style="margin-top:14px"><button type="button" class="btn" id="btnRecuperarShare">Tentar recuperar</button></div>';
+    qs('#btnRecuperarShare')?.addEventListener('click',()=>{ __cpCheckSharedPromise=null; checkShared(); });
+    return {handled:true,waiting:true};
+  }
+  return {handled:false};
 }
 
 async function checkShared(){
-  const params = new URLSearchParams(location.search);
-  const cameFromShare = params.has("shared") || params.get("source")==="share-target" || params.has("share-target");
-  const erroUrl = params.get("erro");
-
-  // Tenta IndexedDB primeiro (mais confiavel no Android).
-  try{
-    const record = await shareIdbGet('latest');
-    if(record && record.blob && record.blob.size > 0){
-      const file = new File([record.blob], record.name || "conversa-whatsapp.zip", {
-        type: record.type || record.blob.type || "application/zip"
-      });
-      shareIdbDel('latest').catch(()=>{});
-      show("zip");
-      try{ history.replaceState(null, "", location.pathname); }catch(_){}
-      qs("#processingBox")?.classList.add("show");
-      if(qs("#processingText")) qs("#processingText").textContent = "Conversa recebida pelo compartilhamento. Preparando arquivo...";
-      processFile(file);
-      return;
-    }
-  }catch(_){}
-
-  if(!("caches" in window)){
-    if(cameFromShare){
-      show("zip");
-      showCard("resultCard", true);
-      qs("#resultBox").className="notice error";
-      qs("#resultBox").innerHTML="Este navegador não permite ao app guardar o arquivo compartilhado. Use Chrome no Android.";
-    }
-    return;
-  }
-
-  const zipKeys = ["/__direciona_shared_zip__","./__direciona_shared_zip__","__direciona_shared_zip__"];
-
-  try{
-    const allNames = await caches.keys();
-    // Prioriza o cache estável; o resto vem em seguida
-    const shareCaches = [
-      "direciona-sharetarget-stable",
-      ...allNames.filter(n => n !== "direciona-sharetarget-stable" && (n.startsWith("direciona-sharetarget-") || n.startsWith("direciona-static-")))
-    ];
-
-    for(const cacheName of shareCaches){
-      let cache;
-      try{ cache = await caches.open(cacheName); }catch(_){ continue; }
-      for(const key of zipKeys){
-        const cached = await cache.match(key);
-        if(!cached) continue;
-
-        const blob = await cached.blob();
-        const name = decodeURIComponent(cached.headers.get("X-File-Name") || "conversa-whatsapp.zip");
-
-        for(const k of zipKeys){ try{ await cache.delete(k); }catch(e){} }
-
-        show("zip");
-        qs("#processingBox").classList.add("show");
-        qs("#processingText").textContent="Conversa recebida pelo compartilhamento. Preparando arquivo...";
-        qs("#progressBar").style.width="8%";
-        showCard("resultCard", true);
-
-        processFile(new File([blob], name, { type: blob.type || "application/zip" }));
-        return;
-      }
-    }
-
-    if(cameFromShare){
-      const debug = await readShareDebug();
-      show("zip");
-      showCard("resultCard", true);
-      qs("#resultBox").className="notice error";
-      qs("#resultBox").innerHTML =
-        "<b>O Corretor Pro abriu pelo compartilhamento mas o arquivo não foi guardado.</b><br>" +
-        (erroUrl ? "<b>Motivo (URL):</b> "+escapeHtml(erroUrl)+"<br>" : "") +
-        "<b>Caches encontrados:</b> "+shareCaches.filter((v,i,a)=>a.indexOf(v)===i).length+"<br><br>" +
-        "<b>Diagnóstico do que chegou:</b><br>" +
-        formatShareDebug(debug) +
-        (debug ? "" : "<br><i>Sem diagnóstico significa que o service worker antigo ainda estava ativo quando você compartilhou. Tente compartilhar mais uma vez agora — o service worker novo já assumiu.</i>");
-      try{ history.replaceState(null, "", location.pathname); }catch(_){}
-    }
-  }catch(e){
-    if(cameFromShare){
-      show("zip");
-      showCard("resultCard", true);
-      qs("#resultBox").className="notice error";
-      qs("#resultBox").innerHTML="Falha ao ler o arquivo compartilhado: "+escapeHtml(String(e?.message||e));
-      try{ history.replaceState(null, "", location.pathname); }catch(_){}
-    }
-  }
+  if(__cpCheckSharedPromise) return __cpCheckSharedPromise;
+  __cpCheckSharedPromise=_checkSharedImpl().finally(()=>{ __cpCheckSharedPromise=null; });
+  return __cpCheckSharedPromise;
 }
+window.checkShared=checkShared;
+
 qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
   const estavaNaGaveta=document.body.classList.contains("menu-aberto");
   if(estavaNaGaveta) fecharMenuGaveta({replaceOnly:true});
@@ -8129,56 +8216,32 @@ async function carregarMemoria(leadId){
     qs("#memoriaPessoasDecisao").value = m.pessoasDecisao || "";
     qs("#memoriaPontosSensiveis").value = m.pontosSensiveis || "";
     qs("#memoriaObservacoes").value = m.observacoes || "";
-    state.obsCarregada = m.observacoes || ""; // guarda a OBS original pra saber se mudou ao salvar
+    state.obsCarregada = m.observacoes || "";
+    state.memoriaOriginal = {
+      preferencias:m.preferencias || "",
+      pessoasDecisao:m.pessoasDecisao || "",
+      pontosSensiveis:m.pontosSensiveis || "",
+      observacoes:m.observacoes || ""
+    };
     showCard("memoriaCard", true);
     qs("#memoriaStatus").textContent = m.atualizadoEm ? "Atualizada em "+new Date(m.atualizadoEm).toLocaleString("pt-BR") : "";
   }catch(_){ showCard("memoriaCard", false); }
 }
 
-// Reanálise automática: roda só quando a OBSERVAÇÃO do lead muda (ou ao registrar atendimento).
-// Editar nome/telefone/preferências/etc. salva normal mas NÃO reanalisa. Sem botão; evita reentrância com flag.
-let reanalisandoAuto = false;
-async function reanalisarLeadAuto(id, { motivo } = {}){
-  if(!id || reanalisandoAuto) return false;
-  reanalisandoAuto = true;
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 90000);
-  try{
-    toast(motivo ? "Atualizando análise ("+motivo+")…" : "Atualizando análise…");
-    const res = await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payloadComCerebro({ id })), signal: ctrl.signal });
-    clearTimeout(to);
-    const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
-    if(data?.ok){
-      await loadRecentLeads();
-      await carregarDashboard();
-      if(state.lead?.id === id) abrirLead(id);
-      toast("Análise atualizada.");
-      return true;
-    }
-    toast("Não deu pra atualizar a análise: " + (data?.error||"erro"));
-    return false;
-  }catch(err){
-    clearTimeout(to);
-    const ehTimeout = err?.name === "AbortError" || /abort/i.test(String(err?.message||""));
-    toast(ehTimeout ? "Demorou demais — conversa muito grande." : "Erro ao atualizar análise: " + (err?.message||err));
-    return false;
-  }finally{
-    reanalisandoAuto = false;
-  }
-}
-window.reanalisarLeadAuto = reanalisarLeadAuto;
-
+// A memória é salva sem reanalisar. O aprendizado contínuo recebe apenas os
+// campos que o corretor realmente modificou.
 async function salvarMemoria(){
   const id = state.lead?.id;
   if(!id){ toast("Sem lead carregado."); return; }
-  const body = {
-    id,
-    action: "memoria-set",
+  const valores = {
     preferencias: qs("#memoriaPreferencias").value,
     pessoasDecisao: qs("#memoriaPessoasDecisao").value,
     pontosSensiveis: qs("#memoriaPontosSensiveis").value,
     observacoes: qs("#memoriaObservacoes").value
   };
+  const original = state.memoriaOriginal || {};
+  const camposAlterados = Object.keys(valores).filter(k => String(valores[k]||"") !== String(original[k]||""));
+  const body = { id, action:"memoria-set", ...valores, camposAlterados };
   qs("#memoriaStatus").textContent = "Salvando...";
   try{
     const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
@@ -8189,15 +8252,17 @@ async function salvarMemoria(){
       if(state.analysis){
         state.analysis.memoria = { ...(state.analysis.memoria||{}), ...data.memoria };
       }
-      // Só reanalisa se a OBSERVAÇÃO mudou. Outros campos salvam sem reanalisar.
-      const obsMudou = (body.observacoes || "") !== (state.obsCarregada || "");
+      // Memória manual ensina em segundo plano, mas não troca automaticamente as
+      // sugestões atuais. Reanalisar continua sendo uma decisão explícita do corretor.
       state.obsCarregada = body.observacoes || "";
-      if(obsMudou){
-        await reanalisarLeadAuto(id, { motivo: "observação atualizada" });
+      state.memoriaOriginal = { ...valores };
+      if(camposAlterados.length){
+        toast("Memória salva. Aprendizado atualizado em segundo plano.");
+        setTimeout(()=>window.iniciarAprendizadoContinuoAutomatico?.({somentePendentes:true}),500);
       } else {
-        toast("Memória salva.");
-        loadRecentLeads();
+        toast("Memória salva. Nenhuma informação nova para aprender.");
       }
+      loadRecentLeads();
     } else {
       qs("#memoriaStatus").textContent = "Erro: " + (data?.error||"");
     }
@@ -8681,37 +8746,8 @@ async function registrarAprendizado(evento, estilo, detalhes){
   }catch(_){}
 }
 
-// Ao copiar a mensagem pra enviar: registra como contato de hoje (lead sai do "atender
-// hoje"), guarda nas observações com data/hora + o texto enviado, e entra na timeline.
-// Só registra uma vez por dia — copiar de novo não duplica.
-async function registrarMensagemEnviada(lead, txt){
-  if(!lead?.id) return;
-  const msg = String(txt || "").trim();
-  if(!msg) return;
-  if(ehContatadoHoje(lead)) return; // já marcado hoje — não duplica
-  try{
-    await fetch("./api/reanalisar-lead", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(payloadComCerebro({
-        id: lead.id,
-        novoAtendimento: "Mensagem copiada e enviada: " + msg.slice(0, 500),
-        apenasSalvar: true,
-        autorManual: "Mensagem enviada (WhatsApp)",
-        tipoManual: "mensagem"
-      }))
-    });
-  }catch(_){}
-  try{ await registrarAprendizado("contato_manual", null, { de: "copiar_msg", tipo: "mensagem enviada" }); }catch(_){}
-  // Reflete localmente pra UI já considerar como contatado hoje.
-  try{
-    lead.analysis = lead.analysis || {};
-    lead.analysis.aprendizado = lead.analysis.aprendizado || {};
-    lead.analysis.aprendizado.eventos = lead.analysis.aprendizado.eventos || [];
-    lead.analysis.aprendizado.eventos.push({ evento: "contato_manual", quando: new Date().toISOString() });
-  }catch(_){}
-  loadRecentLeads();
-}
-window.registrarMensagemEnviada = registrarMensagemEnviada;
+// Copiar uma sugestão é apenas uma ação de interface. Não registra atendimento,
+// não cria mensagem no histórico e não altera data/status do lead.
 
 // ===== Fechar o ciclo: "o cliente respondeu?" =====
 // Depois que você manda a mensagem, registra se o cliente respondeu — isso alimenta o
@@ -8961,6 +8997,9 @@ qs("#openWhatsapp").addEventListener("click",()=>{
 // em que o service worker não detecta a troca sozinho.
 async function checarVersaoServidor(){
   try{
+    // Nunca recarrega enquanto um ZIP recebido do WhatsApp estiver pendente/processando.
+    // No cold start, um reload aqui era suficiente para perder a primeira tentativa.
+    if(window.__cpShareImportActive || state?.processing || state?.pendingSharedRecordId) return;
     if(sessionStorage.getItem("vchk")) return;
     const elv = document.querySelector(".mob-ver, .sb-ver-top");
     const attr = document.documentElement.dataset.appVersion || document.body?.dataset?.appVersion || "";
@@ -8986,7 +9025,12 @@ if("serviceWorker" in navigator){
   const tinhaController = !!navigator.serviceWorker.controller; // já tinha versão rodando antes?
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     // Só recarrega numa ATUALIZAÇÃO (já havia uma versão ativa). Na 1ª instalação, não.
+    // Se há compartilhamento pendente, adia: o ZIP só pode sair da fila após sucesso.
     if(recarregandoSW || !tinhaController) return;
+    if(window.__cpShareImportActive || state?.processing || state?.pendingSharedRecordId){
+      window.__cpReloadAposShare = true;
+      return;
+    }
     recarregandoSW = true;
     location.reload();
   });
@@ -9013,7 +9057,7 @@ if("serviceWorker" in navigator){
       } else {
         setTimeout(checarVersaoServidor, 4000);
       }
-      setTimeout(checkShared,900);
+      setTimeout(() => { if(!state?.processing) checkShared(); }, 900);
     }catch(e){
       console.warn("Falha ao registrar service worker do Corretor Pro", e);
     }
@@ -9955,10 +9999,6 @@ function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
   lead.lastAttendanceAt=quando;
   lead.ultimoAtendimentoEm=quando;
   lead.lastAttendanceText=`${dataBR} ${horaBR}`;
-  lead.analysis.memoria=lead.analysis.memoria||{};
-  const registro=`[${dataBR} ${horaBR}] Atendido.`;
-  const obs=String(lead.analysis.memoria.observacoes||"").trim();
-  if(!obs.includes(registro)) lead.analysis.memoria.observacoes=obs?`${obs}\n${registro}`:registro;
 }
 
 window.ui667MarcarAtendido=async function(btn){
@@ -9971,19 +10011,22 @@ window.ui667MarcarAtendido=async function(btn){
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
     const quando=d.quando||new Date().toISOString();
-    ui667AplicarAtendidoLocal(lead,quando,d.dataBR||new Date().toLocaleDateString("pt-BR"),d.horaBR||new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+    const agoraFmt=new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,p)=>(p.type!=="literal"&&(o[p.type]=p.value),o),{});
+    const dataLocal=d.dataBR||`${agoraFmt.day}/${agoraFmt.month}/${agoraFmt.year}`;
+    const horaLocal=d.horaBR||`${agoraFmt.hour}:${agoraFmt.minute}`;
+    ui667AplicarAtendidoLocal(lead,quando,dataLocal,horaLocal);
     for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
       const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
-      if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,d.dataBR,d.horaBR);
+      if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,dataLocal,horaLocal);
     }
-    if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${d.horaBR||"hoje"}`;btn.disabled=true;}
+    if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${horaLocal}`;btn.disabled=true;}
     state.analysis=lead.analysis||null;
     renderLeadFoco(lead);
     invalidarLeadsCache();
     carregarAgendaTopo?.();
     loadRecentLeads(false);
     recarregarLeadFoco(lead.id);
-    toast(d.jaMarcado?`Já estava marcado às ${d.horaBR}.`:`Atendimento marcado às ${d.horaBR}.`);
+    toast(d.atualizado?`Atendimento atualizado às ${horaLocal}.`:`Atendimento marcado às ${horaLocal}.`);
   }catch(err){
     if(btn){btn.disabled=false;btn.textContent=original;}
     toast("Não consegui marcar: "+(err?.message||err));
@@ -10002,8 +10045,11 @@ configurarEscolhaTema();
 // Saudação correta desde o primeiro frame (antes dos dados carregarem)
 (function(){ const h=new Date().getHours(); const el=document.getElementById("homePageTitle"); if(el) el.textContent=(h<12?"Bom dia":h<18?"Boa tarde":"Boa noite")+", corretor!"; })();
 async function iniciarDireciona(){
+  // Share Target vem antes da Home. Enquanto existe um ZIP pendente, nenhuma rotina
+  // inicial pode trocar a tela nem disparar recarga automática.
+  const compartilhado = await checkShared().catch(() => ({ handled:false }));
+  if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
   renderLeads();
-  checkShared();
   // Dashboard/agenda não dependem da restauração de leads antigos nem da lista rápida
   // abaixo — rodam em paralelo, cada um com seu próprio fallback, em vez de ficarem
   // atrás de um await sequencial que trava a tela inteira se uma etapa pendurar.
@@ -10645,16 +10691,39 @@ window.cp7ObsSalvar = async function(btn){
   if(!texto){ toast("Escreva ou grave a observação primeiro."); return; }
   const original = btn?.textContent || "Salvar observação";
   if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
-  if(status) status.innerHTML = '<span style="color:var(--morno)">Salvando e atualizando a análise...</span>';
+  if(status) status.innerHTML = '<span style="color:var(--morno)">Salvando observação…</span>';
   try{
-    const res = await fetchComTimeout("./api/reanalisar-lead", {
+    const res = await fetchComTimeout("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(payloadComCerebro({ id:lead.id, novoAtendimento:texto, autorManual:"Atendimento (corretor)", tipoManual:"atendimento" }))
-    }, 60000);
+      body: JSON.stringify({ id:lead.id, action:"observacao-adicionar", texto })
+    }, 30000);
     const data = await res.json().catch(()=>({ok:false}));
     if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível salvar a observação.");
-    toast("Observação salva. Análise atualizada.");
-    await recarregarLeadFoco(lead.id);
+
+    // Patch imediato: a observação aparece sem fechar/reabrir abas. As sugestões atuais
+    // permanecem intactas; só uma reanálise futura vai gerar novas respostas.
+    lead.analysis = lead.analysis || {};
+    lead.analysis.memoria = { ...(lead.analysis.memoria||{}), ...(data.memoria||{}) };
+    const atual = Array.isArray(lead.recentMessages) ? [...lead.recentMessages] : [];
+    const adicionouItem = !!(data.item && !atual.some(m=>String(m?.id||'')===String(data.item.id)));
+    if(adicionouItem) atual.push(data.item);
+    atual.sort((a,b)=>String(a?.iso||'').localeCompare(String(b?.iso||'')) || Number(a?.order||0)-Number(b?.order||0));
+    lead.recentMessages = atual;
+    lead.messageCount = adicionouItem ? Math.max(atual.length, Number(lead.messageCount||0)+1) : Math.max(Number(lead.messageCount||0), atual.length);
+    state.analysis = lead.analysis;
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
+      if(item&&item!==lead){
+        item.analysis=item.analysis||{};
+        item.analysis.memoria={...(item.analysis.memoria||{}),...(data.memoria||{})};
+      }
+    }
+    if(ta) ta.value="";
+    renderLeadFoco(lead);
+    if(status) status.innerHTML = '<span style="color:var(--acao)">Observação salva. Aprendizado em segundo plano; sugestões atuais mantidas.</span>';
+    toast("Observação salva. O sistema vai aprender com ela em segundo plano.");
+    invalidarLeadsCache();
+    setTimeout(()=>window.iniciarAprendizadoContinuoAutomatico?.({somentePendentes:true}),500);
   }catch(err){
     if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(String(err?.message||err))+'</span>';
     if(btn){ btn.disabled=false; btn.textContent=original; }
@@ -11060,7 +11129,6 @@ function ui670DetailRows(lead,mc){
       const lead = state.lead;
       if(lead?.id){
         try{ await ui683RegistrarEvento(lead.id, 'mensagem_copiada', { de:'botao_rapido', preview: txt.slice(0,240) }); }catch(_){}
-        try{ if(typeof registrarMensagemEnviada === 'function') await registrarMensagemEnviada(lead, txt); }catch(_){}
       }
     }catch(_){
       if(typeof antigoCopy === 'function') return antigoCopy();
@@ -12476,10 +12544,6 @@ function ui670DetailRows(lead,mc){
       const lista = sortedLeads(grupos[filtro]);
       const tabs=[['agora','Fazer agora'],['programados','Agenda'],['aguardando','Aguardando cliente']];
       const listRows = lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhuma ação pendente nesta visão.</div>';
-      const sinais=[];
-      if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
-      if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação agora.</li>`);
-      if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta, sem nova cobrança agora.</li>`);
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
           <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
@@ -12487,10 +12551,6 @@ function ui670DetailRows(lead,mc){
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
         <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-        <section class="cp786-daily-reading">
-          <div><small>LEITURA DO DIA</small><h3>O que merece sua atenção</h3></div>
-          <ul>${sinais.length?sinais.join(''):'<li>Sua carteira não tem pendências imediatas.</li>'}</ul>
-        </section>
         <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Próximas ações</h3><p>O Corretor Pro ordenou quem precisa de você primeiro.</p></div><button type="button" onclick="reanalisarTudo()">↻ Atualizar leitura</button></div><div class="ui-priority-list cp695-list">${listRows}</div></section>`;
       requestAnimationFrame(fixLayout);
     };
@@ -13116,11 +13176,9 @@ function ui670DetailRows(lead,mc){
   const css=document.createElement('style');
   css.id='cp786ConducaoCSS';
   css.textContent=`
-    .cp786-daily-reading{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(260px,1.3fr);gap:22px;padding:22px;margin:16px 0;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58)}
-    .cp786-daily-reading small{color:var(--lime);font-weight:950;letter-spacing:.12em;font-size:10px}.cp786-daily-reading h3{margin:7px 0 0;color:var(--text);font-size:24px;line-height:1.08}.cp786-daily-reading ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}.cp786-daily-reading li{color:rgba(227,245,249,.82);font-size:14px;line-height:1.35;padding-left:16px;position:relative}.cp786-daily-reading li:before{content:'›';position:absolute;left:0;color:var(--lime);font-weight:950}.cp786-daily-reading li b{color:var(--text)}
     .cp786-action-tabs{overflow-x:auto;scrollbar-width:none}.cp786-action-tabs::-webkit-scrollbar{display:none}.cp786-action-tabs button{white-space:nowrap}.cp786-action-kpis .ui-kpi{cursor:pointer}.cp786-action-kpis .ui-kpi span{font-size:12px!important}
     #relatorio .cp-dashboard-continue{width:100%;display:flex!important;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding:13px 16px;border:1px solid rgba(255,107,92,.36);border-radius:13px;background:rgba(255,107,92,.07);color:var(--lime);font:inherit;font-size:13px;font-weight:950;cursor:pointer}#relatorio .cp-dashboard-continue b{font-size:20px;line-height:1}
-    @media(max-width:760px){.cp786-daily-reading{grid-template-columns:1fr;padding:17px;gap:14px}.cp786-daily-reading h3{font-size:21px}.cp786-action-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp786-action-kpis .ui-kpi{min-width:0!important}.cp786-action-kpis .ui-kpi span{white-space:normal;line-height:1.1}}
+    @media(max-width:760px){.cp786-action-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cp786-action-kpis .ui-kpi{min-width:0!important}.cp786-action-kpis .ui-kpi span{white-space:normal;line-height:1.1}}
   `;
   document.head.appendChild(css);
 })();
@@ -13280,10 +13338,6 @@ function ui670DetailRows(lead,mc){
       const tabs=[['agora','Fazer agora'],['programados','Agenda'],['aguardando','Aguardando cliente']];
       const titulos={agora:['Quem precisa de ação','Somente atendimentos sob sua responsabilidade agora.'],respondeu:['Clientes que responderam','Dê continuidade a quem voltou para a conversa.'],programados:['Agenda','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','Não faça nova cobrança antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
       const [titulo,sub]=titulos[filtro]||titulos.agora;
-      const sinais=[];
-      if(grupos.agora.length) sinais.push(`<li><b>${grupos.agora.length}</b> atendimento${grupos.agora.length===1?' precisa':'s precisam'} de ação.</li>`);
-      if(grupos.programados.length) sinais.push(`<li><b>${grupos.programados.length}</b> compromisso${grupos.programados.length===1?' está':'s estão'} programado${grupos.programados.length===1?'':'s'}.</li>`);
-      if(grupos.aguardando.length) sinais.push(`<li><b>${grupos.aguardando.length}</b> cliente${grupos.aguardando.length===1?' está':'s estão'} no tempo de resposta.</li>`);
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
           <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
@@ -13291,7 +13345,6 @@ function ui670DetailRows(lead,mc){
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
         <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-        <section class="cp786-daily-reading"><div><small>LEITURA DO DIA</small><h3>O que merece sua atenção</h3></div><ul>${sinais.length?sinais.join(''):'<li>Sua carteira não tem pendências imediatas.</li>'}</ul></section>
         <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><button type="button" onclick="${filtro==='todos'?"setPipelineVisualFiltro('agora')":"cp788AbrirCarteiraAtiva()"}">${filtro==='todos'?'Voltar às prioridades':'Ver clientes ativos'}</button></div><div class="ui-priority-list cp695-list">${lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>'}</div></section>`;
     };
     const memoria=[state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].find(a=>Array.isArray(a)&&a.length);

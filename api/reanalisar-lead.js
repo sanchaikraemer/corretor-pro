@@ -73,7 +73,7 @@ function diasAteDiaSemana(nome, queVem, baseDate) {
 // Data e hora no fuso de Brasília (servidor roda em UTC). Devolve { dataBR, horaBR }.
 function agoraBR(now = new Date()) {
   try {
-    const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, hourCycle: "h23" });
     const p = Object.fromEntries(fmt.formatToParts(now).map(x => [x.type, x.value]));
     return { dataBR: `${p.day}/${p.month}/${p.year}`, horaBR: `${p.hour}:${p.minute}` };
   } catch (_) {
@@ -291,8 +291,8 @@ async function reanalisarLeadHandler702(req, res) {
   }
 
   // Marcação rápida de atendimento: um clique, sem texto obrigatório, sem IA e sem timer.
-  // Guarda somente data/hora nas observações e um evento interno para o lead aparecer
-  // como atendido hoje. Não inventa mensagem na timeline e não cria lembrete automático.
+  // Guarda apenas um evento interno com a data/hora mais recente para o lead aparecer
+  // como atendido. Não cria observação, mensagem na timeline nem lembrete automático.
   if (body?.action === "marcar-atendido") {
     const agora = new Date();
     const br = agoraBR(agora);
@@ -300,41 +300,33 @@ async function reanalisarLeadHandler702(req, res) {
     const aprendizado = { ...(prev.aprendizado || {}) };
     const eventos = Array.isArray(aprendizado.eventos) ? [...aprendizado.eventos] : [];
 
-    // Idempotência específica do botão: outros contatos manuais do mesmo dia não impedem
-    // o registro explícito de "Atendido" solicitado pelo corretor.
-    const marcadoHoje = eventos.find((e) => {
+    // Se já houve atendimento pelo botão hoje, atualiza o horário para o contato mais
+    // recente. Assim uma nova marcação no mesmo dia não fica presa ao primeiro horário.
+    const indiceHoje = eventos.findIndex((e) => {
       if (e?.evento !== "contato_manual" || e?.detalhes?.de !== "botao_atendido" || !e?.quando) return false;
       const d = new Date(e.quando);
       return !isNaN(d.getTime()) && agoraBR(d).dataBR === br.dataBR;
     });
-    if (marcadoHoje) {
-      const marcadoBR = agoraBR(new Date(marcadoHoje.quando));
-      return json(res, 200, { ok: true, jaMarcado: true, dataBR: marcadoBR.dataBR, horaBR: marcadoBR.horaBR, quando: marcadoHoje.quando });
-    }
-
-    eventos.push({
+    const eventoAtual = {
       evento: "contato_manual",
       estilo: null,
       detalhes: { tipo: "Atendido", de: "botao_atendido" },
       quando: agora.toISOString()
-    });
+    };
+    if (indiceHoje >= 0) eventos[indiceHoje] = eventoAtual;
+    else eventos.push(eventoAtual);
     aprendizado.eventos = eventos.slice(-50);
 
-    const memoriaPrev = prev.memoria || {};
-    const obsPrev = String(memoriaPrev.observacoes || "").trim();
-    const registro = `[${br.dataBR} ${br.horaBR}] Atendido.`;
-    const memoria = {
-      ...memoriaPrev,
-      observacoes: obsPrev ? `${obsPrev}\n${registro}` : registro
-    };
-    const merged = { ...prev, aprendizado, memoria };
+    // O evento interno já registra o atendimento. Não duplica isso nas observações
+    // comerciais, porque data/hora/status aparecem nos cards próprios.
+    const merged = { ...prev, aprendizado };
 
     const { error: marcarErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: agora.toISOString() })
       .eq("id", id);
     if (marcarErr) return json(res, 500, { ok: false, error: marcarErr.message });
-    return json(res, 200, { ok: true, marcado: true, dataBR: br.dataBR, horaBR: br.horaBR, quando: agora.toISOString() });
+    return json(res, 200, { ok: true, marcado: indiceHoje < 0, atualizado: indiceHoje >= 0, dataBR: br.dataBR, horaBR: br.horaBR, quando: agora.toISOString() });
   }
 
   // Reagendar (mudar a data) do lembrete manualmente — rápido, sem reanalisar.

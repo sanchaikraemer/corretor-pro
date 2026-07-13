@@ -81,7 +81,7 @@ function openShareDb() {
   });
 }
 
-async function saveSharedZipInIdb(file, body) {
+async function saveSharedZipInIdb(file, body, shareId) {
   let db;
   try {
     db = await openShareDb();
@@ -89,7 +89,9 @@ async function saveSharedZipInIdb(file, body) {
     await new Promise((resolve, reject) => {
       const tx = db.transaction(SHARE_IDB_STORE, 'readwrite');
       tx.objectStore(SHARE_IDB_STORE).put({
-        id: 'latest',
+        id: shareId,
+        status: 'pending',
+        attempts: 0,
         name: file.name || 'whatsapp.zip',
         type: file.type || 'application/zip',
         size: file.size || blob.size || body.byteLength || 0,
@@ -134,9 +136,18 @@ function pickSharedZip(form) {
   return candidates[0] || null;
 }
 
+function createShareId() {
+  try {
+    if (self.crypto && typeof self.crypto.randomUUID === 'function') return `share-${self.crypto.randomUUID()}`;
+  } catch (_) {}
+  return `share-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 async function handleShare(request) {
+  const shareId = createShareId();
   const debug = {
     ts: new Date().toISOString(),
+    shareId,
     buildId: BUILD_ID,
     step: 'started',
     formKeys: [],
@@ -147,6 +158,11 @@ async function handleShare(request) {
     putError: '',
     error: ''
   };
+
+  const redirect = (extra = '') => Response.redirect(
+    `/?source=share-target&shared=1&shareId=${encodeURIComponent(shareId)}${extra}`,
+    303
+  );
 
   try {
     const form = await request.formData();
@@ -162,28 +178,33 @@ async function handleShare(request) {
     if (!file || typeof file.arrayBuffer !== 'function') {
       debug.step = 'no-file';
       await saveShareDebug(debug);
-      return Response.redirect('/?shared=1&erro=sem-arquivo', 303);
+      return redirect('&erro=sem-arquivo');
     }
 
     debug.chosenFile = { key: picked.key, name: file.name || 'whatsapp.zip', type: file.type || '', size: file.size || 0 };
     const body = await file.arrayBuffer();
 
-    // Principal: IndexedDB. É o caminho que o app lê primeiro e é mais estável no Android/PWA.
+    // O arquivo recebe um ID único e permanece como pendente até o APP confirmar
+    // que todo o processamento terminou. Nunca apagamos no cold start.
     try {
-      debug.idbSaved = await saveSharedZipInIdb(file, body);
+      debug.idbSaved = await saveSharedZipInIdb(file, body, shareId);
     } catch (e) {
       debug.putError = 'IndexedDB: ' + (e && e.message ? e.message : String(e));
     }
 
-    // Fallback: Cache Storage com chaves compatíveis com o leitor atual do app.
+    // Fallback no Cache Storage, também separado por shareId. As chaves legadas são
+    // mantidas por compatibilidade, mas o app usa primeiro a chave exclusiva.
     try {
       const cache = await caches.open(SHARE_CACHE);
       const headers = new Headers({
         'Content-Type': file.type || 'application/zip',
         'X-File-Name': encodeURIComponent(file.name || 'whatsapp.zip'),
         'X-Shared-At': new Date().toISOString(),
+        'X-Share-Id': shareId,
         'Cache-Control': 'no-store'
       });
+      const uniqueKey = `/__direciona_shared_zip__/${encodeURIComponent(shareId)}`;
+      await cache.put(new Request(new URL(uniqueKey, self.location.origin).href, { method: 'GET' }), new Response(body.slice(0), { headers }));
       for (const k of ZIP_KEYS) {
         const requestUrl = new URL(k, self.location.origin).href;
         await cache.put(new Request(requestUrl, { method: 'GET' }), new Response(body.slice(0), { headers }));
@@ -193,14 +214,15 @@ async function handleShare(request) {
       debug.putError = (debug.putError ? debug.putError + ' | ' : '') + 'Cache: ' + (e && e.message ? e.message : String(e));
     }
 
-    debug.step = (debug.idbSaved || debug.cacheSaved) ? 'saved' : 'not-saved';
+    debug.step = (debug.idbSaved || debug.cacheSaved) ? 'saved-pending' : 'not-saved';
     await saveShareDebug(debug);
+    if (!debug.idbSaved && !debug.cacheSaved) return redirect('&erro=nao-salvo');
   } catch (e) {
     debug.step = 'exception';
     debug.error = e && e.message ? e.message : String(e);
     await saveShareDebug(debug);
-    return Response.redirect('/?shared=1&erro=excecao', 303);
+    return redirect('&erro=excecao');
   }
 
-  return Response.redirect('/?shared=1', 303);
+  return redirect();
 }
