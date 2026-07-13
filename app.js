@@ -9436,6 +9436,34 @@ function cp786CompromissoOrdemTs(l){
   }
   return menor;
 }
+// Compromisso (visita/retorno/lembrete) que JÁ VENCEU nos últimos dias e ainda não foi tratado.
+// Serve pra destacar "compromissos atrasados" em vez de deixá-los se dissolverem em "Fazer agora".
+// Retorna {dias, dataLabel} do vencido mais recente, ou null.
+function cp786CompromissoAtrasado(l){
+  if(typeof leadEhAtivo==='function' && !leadEhAtivo(l)) return null;
+  if(typeof ehContatadoHoje==='function' && ehContatadoHoje(l)) return null;
+  const JANELA=14; // só os que venceram há no máximo ~2 semanas; mais que isso é retomada normal
+  let melhor=null; // vencido mais RECENTE (diff negativo mais próximo de zero)
+  const considerar=(diff,ts)=>{ if(diff==null||diff>=0||diff< -JANELA||!ts) return; if(!melhor||diff>melhor.diff) melhor={diff,ts}; };
+  try{
+    const lt=cp786DataTs(l?.analysis?.lembrete?.quando);
+    if(lt){ const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(lt)); considerar(typeof ui671DiasAte==='function'?ui671DiasAte(iso):null, lt); }
+  }catch(_){}
+  const apps=Array.isArray(l?.analysis?.confirmedAppointments)?l.analysis.confirmedAppointments:[];
+  let dispensados=null; try{dispensados=typeof compromissosDispensados==='function'?compromissosDispensados():null;}catch(_){}
+  for(const ap of apps){
+    const data=String(ap?.data||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)) continue;
+    const prova=String(ap?.trechoLiteral||ap?.quando||ap?.oQue||'').trim();
+    if(!prova) continue;
+    const key=String(l?.id||'')+'|'+String(ap?.oQue||'')+'|'+data;
+    if(dispensados?.has?.(key)) continue;
+    considerar(typeof ui671DiasAte==='function'?ui671DiasAte(data):null, cp786DataTs(data,'12:00'));
+  }
+  if(!melhor) return null;
+  return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) };
+}
+window.cp786CompromissoAtrasado=cp786CompromissoAtrasado;
 function cp786CompararConducao(a,b){
   const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
   const ca=cp786Categoria(a),cb=cp786Categoria(b);
@@ -11846,7 +11874,8 @@ function ui670DetailRows(lead,mc){
     const leads=(state?.todosLeads||state?.itemsAtivos||state?.leads||[]).filter(leadEhAtivo);
     const counts={agora:0,respondeu:0,programados:0,aguardando:0};
     for(const l of leads){const c=cp786Categoria(l);if(counts[c]!==undefined)counts[c]++;}
-    return {total:leads.length,...counts,acao:counts.agora};
+    const atrasados=leads.filter(l=>typeof cp786CompromissoAtrasado==='function'&&cp786CompromissoAtrasado(l)).length;
+    return {total:leads.length,...counts,acao:counts.agora,atrasados};
   }
   function openNotifyPanel(){
     let panel=$('.cp687-notify-panel');
@@ -11854,6 +11883,7 @@ function ui670DetailRows(lead,mc){
     const d=notifyData();
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
+      ${d.atrasados?`<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Venceram e ainda não foram tratados — retome logo.</span></div></div>`:''}
       <div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>
       <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${d.programados} compromisso${d.programados===1?' programado':'s programados'}</b><span>Veja visitas, reuniões e lembretes com data.</span></div></div>
       <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
@@ -13020,9 +13050,13 @@ function ui670DetailRows(lead,mc){
   function cp788LinhaConducao(l){
     if(typeof ui631LeadRow!=='function') return '';
     let selo = typeof cp786Badge==='function'?cp786Badge(l):'Abrir';
-    // Na visão Programados, o selo mostra a DATA do compromisso em vez da palavra "Programado"
-    // (que já está implícita na aba e no título), pra o corretor bater o olho no quando.
-    if(typeof cp786Categoria==='function' && cp786Categoria(l)==='programados' && typeof cpAppointmentData==='function'){
+    // Compromisso vencido tem prioridade no selo: mostra "Atrasado · era DD/MM" pra não se
+    // perder no meio de "Fazer agora". Senão, na visão Programados mostra a DATA do compromisso
+    // (a palavra "Programado" já está implícita na aba e no título).
+    const atrasado = typeof cp786CompromissoAtrasado==='function'?cp786CompromissoAtrasado(l):null;
+    if(atrasado){
+      selo = `Atrasado · era ${atrasado.dataLabel}`;
+    } else if(typeof cp786Categoria==='function' && cp786Categoria(l)==='programados' && typeof cpAppointmentData==='function'){
       const quando = cpAppointmentData(l)?.time;
       if(quando) selo = quando;
     }
@@ -13097,7 +13131,7 @@ function ui670DetailRows(lead,mc){
       ${typeof ui677ToolbarHTML==='function'?ui677ToolbarHTML('home'):''}
       <section class="ui-priority-card">
         <div class="ui-section-head"><div><h3>${grupos.agora.length?'Ações prioritárias para hoje':'Próximas prioridades'}</h3><p>${grupos.agora.length?'Somente quem exige uma ação sua agora.':'Nenhuma ação vencida; veja quem está programado ou aguardando.'}</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
-        <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>typeof ui631LeadRow==='function'?ui631LeadRow(l,typeof cp786Badge==='function'?cp786Badge(l):'Abrir',i):'').join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
+        <div class="ui-priority-list">${prioritarios.length?prioritarios.map(l=>cp788LinhaConducao(l)).join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
       </section>
     </div>`;
   };
