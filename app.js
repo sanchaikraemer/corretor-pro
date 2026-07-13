@@ -4648,7 +4648,7 @@ function cp704Css(){
     if(document.getElementById('cp704LeadUxCSS')) return;
     const css=document.createElement('style'); css.id='cp704LeadUxCSS';
     css.textContent=`
-      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;max-width:760px;margin:0 auto;color:var(--text)}
+      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
       .cp704-back{border:0;background:transparent;color:var(--muted);font-weight:900;font-size:14px;padding:4px 0;cursor:pointer}
       .cp704-attended{border:1px solid rgba(104,255,149,.55);background:rgba(104,255,149,.10);color:#68ff95;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
@@ -4670,6 +4670,7 @@ function cp704Css(){
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
+      @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
       @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:15px;padding:2px 0 0}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
@@ -5007,31 +5008,37 @@ function renderLeadFoco(lead){
         <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),180))}</p></div></div>
         <div class="cp704-metaline">${escapeHtml([last?`Última mensagem — ${last}`:'',atendimento?`Último atendimento — ${atendimento}`:''].filter(Boolean).join(' · ')||'Sem data registrada')}</div>
       </section>
-      ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
-      <section class="cp704-card">
-        <div class="cp704-card-title"><h2>Fazer agora</h2></div>
-        <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
-        <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
-        ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
-        <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
-      </section>
-      ${cp717MudancasHtml(a)}
-      <div class="cp704-accordions">
-        <details class="cp704-details"><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
-        <details class="cp704-details cp704-history-details"><summary><span class="cp704-summary-left">Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></span><span class="cp704-summary-actions"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
-        <details class="cp704-details"><summary>Registrar observação</summary><div class="cp704-body">
-          <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
-          <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
-            <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:linear-gradient(135deg,var(--lime),var(--cyan));border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
+      <div class="cp704-workspace">
+        <main class="cp704-primary">
+          ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
+          <section class="cp704-card">
+            <div class="cp704-card-title"><h2>Fazer agora</h2></div>
+            <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
+            <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
+            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
+            <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
+          </section>
+          ${cp717MudancasHtml(a)}
+        </main>
+        <aside class="cp704-secondary">
+          <div class="cp704-accordions">
+            <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
+            <details class="cp704-details cp704-history-details"><summary><span class="cp704-summary-left">Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></span><span class="cp704-summary-actions"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
+            <details class="cp704-details"><summary>Registrar observação</summary><div class="cp704-body">
+              <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
+              <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
+                <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:linear-gradient(135deg,var(--lime),var(--cyan));border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
+              </div>
+              <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
+            </div></details>
+            <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
           </div>
-          <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
-        </div></details>
-        <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
+          <div class="cp704-quickbar" style="grid-template-columns:repeat(3,1fr)"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">Marcar atendimento</button><button type="button" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
+          ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
+        </aside>
       </div>
-      <div class="cp704-quickbar" style="grid-template-columns:repeat(3,1fr)"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">Marcar atendimento</button><button type="button" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
-      ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
     </div>`;
   return null;
 }
