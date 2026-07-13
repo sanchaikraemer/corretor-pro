@@ -991,7 +991,9 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-const ARQUITETURA_MENSAGENS_ATUAL = "v806-cerebro-validacao-retomada";
+// IMPORTANTE: precisa ser IDÊNTICA à ARQUITETURA_MENSAGENS_ATUAL do backend (api/_pipeline.js).
+// Se ficarem diferentes, toda análise recém-gerada é tratada como "antiga" e a tela pede reanálise em loop.
+const ARQUITETURA_MENSAGENS_ATUAL = "v808-aprendizado-continuo-real";
 
 function analiseAtualValida752(a){
   return !!(a && typeof a === "object" &&
