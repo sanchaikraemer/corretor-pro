@@ -3334,8 +3334,11 @@ function renderHomeFallbackSeguro(items){
   if(!area) return;
   // O fallback também precisa encerrar qualquer placeholder lateral.
   try{ renderHomeRight([]); }catch(_){}
+  // v824: o modo de segurança também respeita a categoria real. Só entra quem é 'agora'
+  // (precisa de ação), então lead atendido recentemente (proteção de 5 dias) não aparece.
   const lista = (Array.isArray(items) ? items : [])
     .filter(l => l && typeof l === "object" && (l.id != null || l.name))
+    .filter(l => { try{ return typeof cp786Categoria === "function" && cp786Categoria(l) === "agora"; }catch(_){ return false; } })
     .slice(0, 4);
   const linhas = lista.map(l => {
     const id = JSON.stringify(String(l.id || ""));
