@@ -13,9 +13,9 @@ assert.doesNotMatch(app, /<summary>Ferramentas e ações<\/summary>/,
 assert.match(app, /cp704-tools-open[\s\S]*?Ferramentas e ações[\s\S]*?cp704ToolsFlat\(lead,mc\)/,
   'Ferramentas e ações deve aparecer aberta no rodapé com os botões');
 
-// Últimas mensagens continua com a setinha (accordion) — o único.
-assert.match(app, /<summary><span class="cp704-summary-left">Últimas mensagens/,
-  'Últimas mensagens deve continuar como accordion (setinha)');
+// Últimas mensagens continua colapsável com a setinha (agora no rodapé — ver v823).
+assert.match(app, /cp704-hist-inline"><summary>Últimas mensagens/,
+  'Últimas mensagens deve continuar colapsável (setinha)');
 
 // Regressões: observação segue única; Detalhes comerciais segue aberto.
 assert.equal((app.match(/id="cp7ObsTexto"/g) || []).length, 1, 'observação segue única');
