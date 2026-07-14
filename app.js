@@ -8969,8 +8969,20 @@ async function arquivarLead(id, nome){
     const data = await res.json().catch(()=>({ok:false}));
     if(data?.ok){
       toast("Lead arquivado.");
+      // O servidor já arquivou, mas a Home lê de um cache em memória (fast-path do
+      // carregarDashboard). Sem atualizar esse cache e invalidar a busca, o lead
+      // arquivado continuava aparecendo nas prioridades até um refresh manual.
+      const sid = String(id);
+      for(const lista of [state.todosLeads, state.leads]){
+        if(!Array.isArray(lista)) continue;
+        const l = lista.find(x => String(x.id) === sid);
+        if(l) l.etapa = "Geladeira";
+      }
+      if(Array.isArray(state.itemsAtivos)) state.itemsAtivos = state.itemsAtivos.filter(x => String(x.id) !== sid);
+      invalidarLeadsCache();
       voltarDoLead();
       carregarDashboard();
+      loadRecentLeads(true);
     } else {
       toast("Erro: " + (data?.error || "falha"));
     }
