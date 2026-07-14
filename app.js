@@ -991,9 +991,7 @@ function limparAutorAtend(autor){
 }
 
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
-// IMPORTANTE: precisa ser IDÊNTICA à ARQUITETURA_MENSAGENS_ATUAL do backend (api/_pipeline.js).
-// Se ficarem diferentes, toda análise recém-gerada é tratada como "antiga" e a tela pede reanálise em loop.
-const ARQUITETURA_MENSAGENS_ATUAL = "v808-aprendizado-continuo-real";
+const ARQUITETURA_MENSAGENS_ATUAL = "v806-cerebro-validacao-retomada";
 
 function analiseAtualValida752(a){
   return !!(a && typeof a === "object" &&
@@ -8969,20 +8967,8 @@ async function arquivarLead(id, nome){
     const data = await res.json().catch(()=>({ok:false}));
     if(data?.ok){
       toast("Lead arquivado.");
-      // O servidor já arquivou, mas a Home lê de um cache em memória (fast-path do
-      // carregarDashboard). Sem atualizar esse cache e invalidar a busca, o lead
-      // arquivado continuava aparecendo nas prioridades até um refresh manual.
-      const sid = String(id);
-      for(const lista of [state.todosLeads, state.leads]){
-        if(!Array.isArray(lista)) continue;
-        const l = lista.find(x => String(x.id) === sid);
-        if(l) l.etapa = "Geladeira";
-      }
-      if(Array.isArray(state.itemsAtivos)) state.itemsAtivos = state.itemsAtivos.filter(x => String(x.id) !== sid);
-      invalidarLeadsCache();
       voltarDoLead();
       carregarDashboard();
-      loadRecentLeads(true);
     } else {
       toast("Erro: " + (data?.error || "falha"));
     }
@@ -10082,26 +10068,10 @@ async function iniciarDireciona(){
   const compartilhado = await checkShared().catch(() => ({ handled:false }));
   if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
   renderLeads();
-  // Se o app RECARREGOU enquanto o corretor estava vendo um lead (atualização de versão,
-  // troca de service worker ou o Android reabrindo o PWA depois de ir pro WhatsApp), o
-  // history.state sobrevive ao reload e ainda guarda a rota do lead. Sem isto, todo reload
-  // caía na Home e o corretor era jogado pra tela inicial de novo e de novo.
-  const rotaSalva = history.state;
-  const leadSalvoId = (rotaSalva && rotaSalva.cpApp && rotaSalva.screen === "lead" && rotaSalva.leadId)
-    ? String(rotaSalva.leadId) : "";
-  if(leadSalvoId){
-    if(rotaSalva.carteiraFiltro) state.carteiraFiltro = rotaSalva.carteiraFiltro;
-    if(rotaSalva.pipelineFiltro) state.pipelineVisualFiltro = rotaSalva.pipelineFiltro;
-    if(rotaSalva.grupoAtivo) state.grupoAtivo = rotaSalva.grupoAtivo;
-    // Reabre o lead direto. abrirLead busca o detalhe pela API e volta pra Home sozinho
-    // se o lead não existir mais, então é seguro chamar já no boot.
-    abrirLead(leadSalvoId, { fromHistory:true }).catch(err => console.warn("restaurar lead no boot", err));
-  }
   // Dashboard/agenda não dependem da restauração de leads antigos nem da lista rápida
   // abaixo — rodam em paralelo, cada um com seu próprio fallback, em vez de ficarem
   // atrás de um await sequencial que trava a tela inteira se uma etapa pendurar.
-  // Rodam mesmo quando restauramos um lead: assim, ao tocar em "Voltar", a Home já está pronta.
-  if(state.active === "home" || leadSalvoId){
+  if(state.active === "home"){
     carregarDashboard();
     carregarAgendaTopo();
   }
