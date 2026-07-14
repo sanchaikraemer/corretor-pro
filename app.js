@@ -3328,6 +3328,8 @@ function homeAindaEmSkeleton(){
 }
 
 function renderHomeFallbackSeguro(items){
+  // v818: nunca sobrescrever a área quando um lead está aberto (o detalhe vive aqui dentro).
+  if(state.focoLeadId || state.lead?.id) return;
   const area = qs("#leadFocoArea");
   if(!area) return;
   // O fallback também precisa encerrar qualquer placeholder lateral.
@@ -4658,7 +4660,7 @@ function cp704Css(){
       .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
       .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
       .cp704-tags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cp704-tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);padding:5px 8px;border-radius:999px;font-weight:850}
-      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(255,201,107,.45);background:rgba(255,201,107,.10);color:#ffd28a}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}
+      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(255,201,107,.45);background:rgba(255,201,107,.10);color:#ffd28a}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}.cp704-etapa{gap:7px}.cp704-etapa .cp704-etapa-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
       .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(237,246,248,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
       .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
@@ -4799,6 +4801,29 @@ function cp704Css(){
     if(/ganh|vend/.test(st)) return 'Vendido';
     if(/geladeira/.test(st)) return 'Arquivado';
     return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
+  }
+  // v818: etapa da jornada em linguagem simples, com passo (1..6) e cor que esquenta pro
+  // verde conforme aproxima o fechamento. Fonte: status da oportunidade / etapa do lead.
+  function cp704Jornada(lead, mc){
+    const normal = (typeof normalizarEtapa==='function') ? normalizarEtapa(lead?.etapa) : String(lead?.etapa||'');
+    if(normal==='Vendido')   return { label:'Vendido',   passo:6, cor:'#2fe27a', bg:'rgba(47,226,122,.16)',  br:'rgba(47,226,122,.55)' };
+    if(normal==='Perdido')   return { label:'Perdido',   passo:0, cor:'#ff7f74', bg:'rgba(255,127,116,.12)', br:'rgba(255,127,116,.45)' };
+    if(normal==='Geladeira') return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
+    const st = String(mc?.oportunidade?.status || lead?.etapa || 'descoberta').toLowerCase();
+    const etapas = [
+      { re:/decis|fecha|ganho|vend/, label:'Decidindo',              passo:6, cor:'#2fe27a', bg:'rgba(47,226,122,.14)',  br:'rgba(47,226,122,.50)' },
+      { re:/negocia/,                label:'Negociando',             passo:5, cor:'#54c98a', bg:'rgba(84,201,138,.15)',  br:'rgba(84,201,138,.50)' },
+      { re:/analise|finance/,        label:'Vendo se cabe no bolso', passo:4, cor:'#54c9a0', bg:'rgba(84,201,160,.14)',  br:'rgba(84,201,160,.45)' },
+      { re:/compar/,                 label:'Comparando opções',      passo:3, cor:'#33c2cc', bg:'rgba(51,194,204,.13)',  br:'rgba(51,194,204,.45)' },
+      { re:/interess/,               label:'Interessado',            passo:2, cor:'#5aa9e6', bg:'rgba(90,169,230,.13)',  br:'rgba(90,169,230,.45)' },
+      { re:/descob|novo/,            label:'Conhecendo',             passo:1, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' }
+    ];
+    return etapas.find(e => e.re.test(st)) || etapas[etapas.length-1];
+  }
+  function cp704JornadaBadge(lead, mc){
+    const j = cp704Jornada(lead, mc);
+    const passo = (j.passo>=1 && j.passo<=6) ? ` · passo ${j.passo} de 6` : '';
+    return `<span class="cp704-pill cp704-etapa" style="background:${j.bg}!important;border-color:${j.br}!important;color:var(--text)!important"><i class="cp704-etapa-dot" style="background:${j.cor}"></i>${escapeHtml(j.label + passo)}</span>`;
   }
   function cp704Impedimento(lead, mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
@@ -4993,7 +5018,7 @@ function renderLeadFoco(lead){
   state.focoLeadId=lead?.id||null;
   const saud=document.querySelector('#saudacao');
   if(saud) saud.style.display='none';
-    const a=lead.analysis||{}, mc=cp704Modelo(lead), situacao=cp704Situacao(mc,lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
+    const a=lead.analysis||{}, mc=cp704Modelo(lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
     const stale=!analiseAtualValida752(a);
     const messagesReady=cp705MessagesReady(msgs);
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
@@ -5007,7 +5032,7 @@ function renderLeadFoco(lead){
       <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">Reanalisar</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button></div></div>
       <section class="cp704-hero">
         <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
-        <div class="cp704-mainrow"><div class="cp704-situation"><span class="cp704-pill">${escapeHtml(situacao)}</span><p>${escapeHtml(cp705Short(cp705SanitizeFactText(imped,lead),180))}</p></div></div>
+        <div class="cp704-mainrow"><div class="cp704-situation">${cp704JornadaBadge(lead,mc)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
         <div class="cp704-metaline">${escapeHtml([last?`Última mensagem — ${last}`:'',atendimento?`Último atendimento — ${atendimento}`:''].filter(Boolean).join(' · ')||'Sem data registrada')}</div>
       </section>
       <div class="cp704-workspace">
@@ -9685,7 +9710,14 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   const precisaCorretor=responsavel==='corretor'||['responder-agora','retomar'].includes(status)||lembreteVencido(l);
   if(precisaCorretor){
     if(status==='responder-agora'&&mensagemTratada) return 'aguardando';
-    if(!lembreteVencido(l)&&(ehContatadoHoje(l)||(mensagemTratada&&typeof protegidoPosAtendimento==='function'&&protegidoPosAtendimento(l)))) return 'aguardando';
+    // v818: um atendimento recente (marcado pelo corretor) faz o lead descansar, inclusive
+    // quando há lembrete vencido — desde que o atendimento tenha acontecido DEPOIS que o
+    // lembrete venceu. Sem isto, um lembrete antigo furava a proteção de 5 dias e o lead
+    // voltava pra fila no dia seguinte ao atendimento.
+    const lembTs=lembreteTs(l);
+    const atendimentoAposLembrete=!!atendimentoTs&&(!lembTs||isNaN(lembTs)||atendimentoTs>=lembTs);
+    const descansoAtendimento=ehContatadoHoje(l)||(mensagemTratada&&typeof protegidoPosAtendimento==='function'&&protegidoPosAtendimento(l));
+    if(descansoAtendimento&&(!lembreteVencido(l)||atendimentoAposLembrete)) return 'aguardando';
     return 'agora';
   }
   if(status==='aguardando-resposta'||responsavel==='contato') return 'aguardando';
@@ -10119,7 +10151,10 @@ requestAnimationFrame(iniciarDireciona);
 
 // Auto-refresh leve do dashboard a cada 3 min se o usuário está na home e a aba está visível
 setInterval(() => {
-  if(state.active === "home" && document.visibilityState === "visible"){
+  // v818: não atualizar a Home enquanto um lead está aberto. O detalhe do lead é
+  // renderizado DENTRO da Home (#leadFocoArea), então state.active continua "home".
+  // Sem esta trava, o refresh reescrevia a área e jogava o corretor de volta pra lista.
+  if(state.active === "home" && document.visibilityState === "visible" && !state.focoLeadId && !state.lead?.id){
     loadRecentLeads(false);
     carregarDashboard();
     carregarAgendaTopo();
@@ -10128,7 +10163,8 @@ setInterval(() => {
 // Refresh quando a aba volta a ficar visível (depois de mudar pra outra aba)
 let __lastVisibleRefresh = 0;
 document.addEventListener("visibilitychange", () => {
-  if(document.visibilityState === "visible" && state.active === "home"){
+  // v818: mesma trava do interval — não refazer a Home com um lead aberto.
+  if(document.visibilityState === "visible" && state.active === "home" && !state.focoLeadId && !state.lead?.id){
     const agora = Date.now();
     if(agora - __lastVisibleRefresh < 45000) return;
     __lastVisibleRefresh = agora;
