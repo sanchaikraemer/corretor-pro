@@ -4652,7 +4652,7 @@ function cp704Css(){
     if(document.getElementById('cp704LeadUxCSS')) return;
     const css=document.createElement('style'); css.id='cp704LeadUxCSS';
     css.textContent=`
-      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-herorow{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:14px;align-items:stretch}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}
+      .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-herorow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr);gap:14px;align-items:stretch}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:8px}.cp704-tools-row button{flex:1 1 150px;min-width:130px;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:13px;cursor:pointer}.cp704-tools-row button.good{border-color:rgba(104,255,149,.5);background:rgba(104,255,149,.1);color:#68ff95}.cp704-tools-row button.cp704-danger{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.08);color:#ff7f74}
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
       .cp704-back{border:0;background:transparent;color:var(--muted);font-weight:900;font-size:14px;padding:4px 0;cursor:pointer}
       .cp704-attended{border:1px solid rgba(104,255,149,.55);background:rgba(104,255,149,.10);color:#68ff95;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
@@ -4979,6 +4979,12 @@ function cp704Css(){
     <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
+  // v822: versão "aberta" das ferramentas — todos os botões lado a lado, no rodapé do lead.
+  // (Editar lead fica só na barra de ações acima, pra não duplicar.)
+  function cp704ToolsFlat(lead,mc){
+    const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
+    return `<button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button>`;
+  }
 
 // Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
@@ -5063,12 +5069,15 @@ function renderLeadFoco(lead){
           <div class="cp704-accordions">
             <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
             <details class="cp704-details cp704-history-details"><summary><span class="cp704-summary-left">Últimas mensagens <span>${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</span></span><span class="cp704-summary-actions"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></span></summary><div class="cp704-body"><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details>
-            <details class="cp704-details"><summary>Ferramentas e ações</summary><div class="cp704-body">${cp704QuickActions(lead,mc)}</div></details>
           </div>
           <div class="cp704-quickbar" style="grid-template-columns:repeat(3,1fr)"><button type="button" class="good" onclick="ui667MarcarAtendido(this)">Marcar atendimento</button><button type="button" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button></div>
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
         </aside>
       </div>
+      <section class="cp704-card cp704-tools-open">
+        <div class="cp704-card-title"><h2>Ferramentas e ações</h2></div>
+        <div class="cp704-tools-row">${cp704ToolsFlat(lead,mc)}</div>
+      </section>
     </div>`;
   return null;
 }
