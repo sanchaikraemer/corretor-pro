@@ -184,6 +184,23 @@ function _nomeRuimIdentity(value = "") {
   return !s || /^cliente importad[oa]?$/i.test(s) || (d.length >= 8 && letras.length < 3);
 }
 
+// "Mesmo nome, mesmo lead": dois nomes já normalizados apontam para o mesmo cliente quando
+// são iguais OU quando o nome menor está inteiro dentro do maior (ex.: "neto" x "neto boulevard").
+// Não junta nomes completos diferentes que só compartilham o primeiro nome (ex.: "joao silva" x
+// "joao souza"), evitando fundir duas pessoas distintas.
+export function _nomesMesmoLead(aId = "", bId = "") {
+  const a = String(aId || "").trim();
+  const b = String(bId || "").trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const ta = a.split(/\s+/).filter(t => t.length >= 3);
+  const tb = b.split(/\s+/).filter(t => t.length >= 3);
+  if (!ta.length || !tb.length) return false;
+  const menor = ta.length <= tb.length ? ta : tb;
+  const maior = new Set(ta.length <= tb.length ? tb : ta);
+  return menor.every(t => maior.has(t));
+}
+
 function _assinaturaTimelineV681(m) {
   if (!m || typeof m !== "object") return "";
   if (m.mediaFile) return "audio|" + String(m.mediaFile).split(/[\\/]/).pop().toLowerCase().trim();
@@ -241,7 +258,7 @@ async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, p
     for (const row of data) {
       const ra = row.resultado_analise || {};
       const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
-      if (rowName && rowName === nomeNovo) return { row, via: "nome" };
+      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return { row, via: "nome" };
     }
   }
   return null;
