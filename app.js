@@ -5018,7 +5018,7 @@ function renderLeadFoco(lead){
   state.focoLeadId=lead?.id||null;
   const saud=document.querySelector('#saudacao');
   if(saud) saud.style.display='none';
-    const a=lead.analysis||{}, mc=cp704Modelo(lead), produto=cp704Produto(lead,mc), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
+    const a=lead.analysis||{}, mc=cp704Modelo(lead), imped=cp704Impedimento(lead,mc), next=cp704Next(lead,mc), msgs=cp704Msgs(lead);
     const stale=!analiseAtualValida752(a);
     const messagesReady=cp705MessagesReady(msgs);
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
@@ -5031,7 +5031,7 @@ function renderLeadFoco(lead){
     area.innerHTML=`<div class="cp704-lead">
       <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">Reanalisar</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button></div></div>
       <section class="cp704-hero">
-        <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span><span class="cp704-tag">${escapeHtml(produto)}</span></div>
+        <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
         <div class="cp704-mainrow"><div class="cp704-situation">${cp704JornadaBadge(lead,mc)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
         <div class="cp704-metaline">${escapeHtml([last?`Última mensagem — ${last}`:'',atendimento?`Último atendimento — ${atendimento}`:''].filter(Boolean).join(' · ')||'Sem data registrada')}</div>
       </section>
