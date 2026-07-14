@@ -1045,6 +1045,40 @@ As faixas são de REFERÊNCIA (preço exato muda — NÃO cite valor fechado sem
   }
 }
 
+// v820: rede de segurança pro produto. Quando a IA deixa o produto em branco, tentamos
+// pegar o empreendimento REALMENTE citado na conversa a partir do catálogo oficial (nomes
+// reais). Nunca inventa nada fora do catálogo. Função pura, testável isoladamente.
+export function empreendimentoDaConversa(texto, nomes) {
+  const t = String(texto || "").toLowerCase();
+  if (!t || !Array.isArray(nomes)) return "";
+  // Do nome mais longo pro mais curto, pra casar "Boulevard Residence" antes de "Boulevard".
+  const ordenados = [...nomes].filter(Boolean).sort((a, b) => String(b).length - String(a).length);
+  for (const nome of ordenados) {
+    const n = String(nome).trim().toLowerCase();
+    if (n.length >= 4 && t.includes(n)) return String(nome).trim();
+  }
+  return "";
+}
+
+let _nomesEmpCache = { ts: 0, nomes: null };
+// Lê só os NOMES dos empreendimentos da tabela oficial (cache 24h, fail-safe).
+async function nomesEmpreendimentosSenger() {
+  const TTL = 24 * 60 * 60 * 1000;
+  if (_nomesEmpCache.nomes && (Date.now() - _nomesEmpCache.ts) < TTL) return _nomesEmpCache.nomes;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch("https://raw.githubusercontent.com/direcionacorretor/tabelasenger/main/data.js", { signal: ctrl.signal });
+    clearTimeout(to);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const code = await resp.text();
+    const SENGER = parseSengerDataJs(code);
+    const nomes = ((SENGER && SENGER.EMPREENDIMENTOS) || []).map(e => String(e && e.nome || "").trim()).filter(Boolean);
+    if (nomes.length) _nomesEmpCache = { ts: Date.now(), nomes };
+    return nomes;
+  } catch (_) { return _nomesEmpCache.nomes || []; }
+}
+
 
 const CEREBRO_PROMPT_MINIMO = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
 function isLegacyCerebroText(v) {
@@ -2561,6 +2595,11 @@ ${instrucoesCerebroTexto}`;
   let casosAprendidos = "";
   try { casosAprendidos = await casosSemelhantesPrompt(timelineText); } catch (_) { casosAprendidos = ""; }
 
+  // v820: nomes reais dos empreendimentos, pra preencher o produto quando a IA deixar em
+  // branco (rede de segurança abaixo). Falha aqui nunca derruba a análise.
+  let nomesEmpSenger = [];
+  try { nomesEmpSenger = await nomesEmpreendimentosSenger(); } catch (_) { nomesEmpSenger = []; }
+
   const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) MENOS de ${contextoTemporal.limiar} dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, dando sequência normal. (b) A partir de ${contextoTemporal.limiar} dias parado, trate como RETOMADA: reabra a conversa de forma natural e específica — retome o último assunto/pendência e proponha o próximo passo — sem soar genérico. ATENÇÃO: retomar NÃO é pedir desculpa. Reconheça o tempo apenas de leve, e só peça desculpa se o corretor tinha prometido um retorno e realmente não cumpriu. (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando já se passaram vários dias. Regra de adiamento pedido pelo cliente: se o cliente disse de forma explícita que quer ESPERAR ou adiar (ex.: "vou esperar uns meses", "me chama daqui a um tempo", "quando sair o inventário / a herança / a venda do meu imóvel", "agora não é o momento"), você NÃO deve pressionar por informações (faixa de valor, número de dormitórios, planta ou pronto) nem empurrar imóvel. Nesse caso, as três mensagens têm que RESPEITAR o tempo dele: reconhecer o que ele falou, se colocar à disposição e, no máximo, combinar um retorno leve mais pra frente (retomar quando ele estiver pronto) — trate a urgência como baixa. Retorne somente JSON válido, sem markdown.
 
 Data atual: ${hoje}${hojeSemana ? ` (${hojeSemana})` : ""}
@@ -2681,7 +2720,14 @@ ${timelineText}`;
       }
     }
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10) && validacaoMensagens.ok;
-    const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
+    let produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
+    // v820: se a IA não identificou o produto, tenta o empreendimento citado na conversa a
+    // partir do catálogo (só nomes reais — nunca inventa). Resolve o "Não identificado"
+    // quando o cliente CLARAMENTE falou o empreendimento e a IA foi conservadora demais.
+    if (produtoAtual === "Não identificado") {
+      const empDetectado = empreendimentoDaConversa(timelineText, nomesEmpSenger);
+      if (empDetectado) produtoAtual = empDetectado;
+    }
 
     return {
       mode: "openai",
