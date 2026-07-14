@@ -380,10 +380,21 @@ export async function persistProcessingResult({ result, source = "api", bucket =
       attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update", info: `Atualizado sem duplicar (via ${existenteV681.via}; ${mergeTimeline.novasUnicas} nova(s), ${mergeTimeline.duplicadasIgnoradas} duplicada(s) ignorada(s)).` });
     } catch (error) {
       attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update", error: error.message });
+      // Uma segunda tentativa de UPDATE no mesmo lead. NUNCA cair no insert novo abaixo:
+      // o lead já existe e um insert aqui criaria a duplicata (era esta a causa dos "2 Neto").
+      try {
+        const retry = await adaptiveUpdateById(supabase, "whatsapp_processamentos", anterior.id, updatePayload);
+        processingRow = retry || { id: anterior.id };
+        attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update-retry", info: "Atualizado na segunda tentativa; duplicata evitada." });
+      } catch (retryError) {
+        attempts.push({ table: "whatsapp_processamentos", model: "v681-safe-update-retry", error: retryError.message });
+      }
     }
   }
 
-  if (!processingRow) {
+  // Só cria um registro NOVO quando a deduplicação não encontrou lead existente.
+  // Se existe lead mas o update falhou, preferimos falhar (ok:false) a duplicar o contato.
+  if (!processingRow && !existenteV681?.row?.id) {
     try {
       processingRow = await tryInsert(supabase, "whatsapp_processamentos", canonicalPayload);
     } catch (error) {
