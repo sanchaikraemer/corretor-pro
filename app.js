@@ -6769,8 +6769,8 @@ async function renderProcessedResult(data, meta){
   let acoesHtml;
   if(perguntarNome){
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Já existe um cliente chamado “${escapeHtml(existente.name || state.lead.name)}”.</b><br>O que deseja fazer?</div>` +
-      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar o cliente existente</button><button type="button" id="btnSalvarLead" class="btn secondary" style="flex:1;min-width:160px">Criar um novo cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
+      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else{
     acoesHtml =
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
@@ -6806,7 +6806,7 @@ async function renderProcessedResult(data, meta){
   renderLeads();
 
   if(perguntarNome){
-    // Mesmo nome: nunca funde automaticamente; aguarda a escolha explícita do usuário.
+    // Mesmo nome: só permite atualizar o cadastro existente; criar duplicata não é oferecido.
   }else{
     salvarLeadPendente();
   }

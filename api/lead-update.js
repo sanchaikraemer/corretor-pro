@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { analyzeWithBrain, compararEvolucao, getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
+import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -16,6 +16,21 @@ function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(payload));
+}
+
+// A conversa já foi analisada e validada em /api/processar-storage antes de chegar
+// ao botão de atualização. Salvar o lead não pode chamar a IA uma segunda vez: além
+// de cobrar novamente, uma resposta diferente podia falhar na validação e impedir a
+// gravação de uma análise que já estava pronta na tela.
+export function obterAnaliseValidadaDaImportacao(result) {
+  const analysis = result?.analysis;
+  const trio = [analysis?.messages?.a, analysis?.messages?.b, analysis?.messages?.c];
+  const trioPreenchido = trio.every(v => String(v || "").trim().length >= 10);
+  if (!analysis || typeof analysis !== "object" || analysis.sugestoesPendentes === true || !trioPreenchido) {
+    const detalhes = Array.isArray(analysis?.validacaoSugestoes) ? analysis.validacaoSugestoes.join("; ") : "";
+    throw new Error(detalhes || "A importação não contém três mensagens já validadas pelo Cérebro.");
+  }
+  return analysis;
 }
 
 async function readJsonBody(req) {
@@ -227,8 +242,8 @@ async function acaoSalvarNovo(body, res) {
       path: body?.path || null,
       fileName: body?.fileName || result?.txtFile || null,
       fileSize: body?.fileSize || null,
-      // A escolha “criar novo” é explícita e deve ignorar qualquer heurística de deduplicação.
-      forceNew: true
+      // Mesmo nome/telefone nunca cria outro cadastro: a persistência atualiza o existente.
+      forceNew: false
     });
     const salvoId = persistence?.processing?.id;
     let aprendizadoAutomatico = null;
@@ -796,36 +811,18 @@ async function acaoAtualizarComEvolucao(body, res) {
     return json(res, 500, { ok: false, recoverable: true, error: consolidacao.error?.message || "A conversa consolidada não foi confirmada no banco." });
   }
 
-  const leadConsolidado = {
-    ...(result.lead || {}),
-    clientName: anterior.clientName || anterior?.lead?.clientName || result?.lead?.clientName || "Cliente importado",
-    phone: result?.lead?.phone || anterior?.lead?.phone || ""
-  };
+  // A análise exibida na tela já foi gerada e validada pelo pipeline com as regras do
+  // Cérebro. A atualização deve salvar exatamente esse resultado, sem nova chamada à IA.
+  // Era a segunda chamada abaixo que gerava o 422 depois de todas as etapas verdes.
   try {
-    nova = await analyzeWithBrain({
-      lead: leadConsolidado,
-      timeline: novaTimeline,
-      openai: getOpenAI(),
-      leadId: String(id),
-      cerebroConfig: body?.cerebroConfig || null
-    });
+    nova = obterAnaliseValidadaDaImportacao(result);
   } catch (error) {
     return json(res, 422, {
       ok: false,
       recoverable: true,
       conversationSaved: true,
-      error: "A conversa consolidada foi preservada, mas a análise válida ainda não foi concluída.",
+      error: "A conversa foi preservada, mas o resultado recebido não contém as três mensagens validadas.",
       details: error?.message || String(error)
-    });
-  }
-  const trio = [nova?.messages?.a, nova?.messages?.b, nova?.messages?.c];
-  if (nova?.sugestoesPendentes === true || !trio.every(v => String(v || "").trim().length >= 10)) {
-    return json(res, 422, {
-      ok: false,
-      recoverable: true,
-      conversationSaved: true,
-      error: "A conversa consolidada foi preservada, mas as três mensagens ainda não passaram pela validação do Cérebro.",
-      details: Array.isArray(nova?.validacaoSugestoes) ? nova.validacaoSugestoes.join("; ") : null
     });
   }
 
@@ -866,10 +863,24 @@ async function acaoAtualizarComEvolucao(body, res) {
       incremental: true
     };
   } else {
-    try {
-      const openai = getOpenAI();
-      evolucaoEntry = await compararEvolucao({ anterior, atual: nova, novasMensagens, openai });
-    } catch (_) { /* sem evolução não bloqueia a atualização */ }
+    // Registro determinístico da evolução. Salvar uma importação não faz nova chamada à IA.
+    const nomeLead = String(anterior?.clientName || anterior?.lead?.clientName || "").toLowerCase().split(/\s+/)[0];
+    const clienteFalou = novasMensagens.some(m => {
+      const autor = String(m?.author || "").toLowerCase();
+      if (!autor) return false;
+      if (nomeLead && (autor.includes(nomeLead) || nomeLead.includes(autor))) return true;
+      return !/(senger|construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
+    });
+    evolucaoEntry = novasMensagens.length ? {
+      houveResposta: clienteFalou,
+      comoReagiu: clienteFalou ? "houve nova interação do cliente" : "sem nova resposta identificada do cliente",
+      abordagemFuncionou: "sem-dados",
+      evoluiu: "atualizado",
+      oQueMudou: `${novasMensagens.length} mensagem(ns) nova(s) incorporada(s)`,
+      licao: "Conversa atualizada com a análise já validada na importação.",
+      comparadoEm: new Date().toISOString(),
+      incremental: true
+    } : null;
   }
 
   // Preserva o que é do relacionamento (não vem da análise nova)
