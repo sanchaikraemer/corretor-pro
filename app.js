@@ -7056,6 +7056,13 @@ async function processFile(file, options = {}){
     // ou quando o corretor descarta explicitamente a análise.
     return true;
   }catch(err){
+    // Mantém o ZIP disponível no botão "Tentar novamente", mas remove imediatamente a
+    // URL do Share Target. Assim, fechar e abrir o app não dispara a mesma tentativa antiga
+    // nem abre sozinho o seletor de período dos áudios.
+    if(pendingShareId){
+      window.__cpShareImportActive=false;
+      try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+    }
     renderEtapas(7, "a importação pode ser retomada sem perder o ZIP");
     showCard("resultCard", true);
     qs("#resultBox").className="notice error";
@@ -7304,7 +7311,14 @@ async function localizarShareNoCache(idPreferido){
       const blob=await cached.blob();
       if(!blob?.size) continue;
       const id=String(headerId||idPreferido||'latest');
-      return { id, blob, name:decodeURIComponent(cached.headers.get('X-File-Name')||'conversa-whatsapp.zip'), type:blob.type||'application/zip', cacheOnly:true };
+      return {
+        id,
+        blob,
+        name:decodeURIComponent(cached.headers.get('X-File-Name')||'conversa-whatsapp.zip'),
+        type:blob.type||'application/zip',
+        ts:String(cached.headers.get('X-Shared-At')||''),
+        cacheOnly:true
+      };
     }
   }
   return null;
@@ -7326,9 +7340,20 @@ async function _checkSharedImpl(){
   }
   const params=new URLSearchParams(location.search);
   const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
-  const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||state.pendingSharedRecordId||'').trim();
+
+  // Uma abertura normal do aplicativo nunca deve procurar ZIPs antigos no IndexedDB/cache.
+  // Antes, checkShared() era chamado no boot mesmo sem Share Target e acabava escolhendo o
+  // primeiro registro pendente antigo, abrindo sozinho a janela "Período dos áudios".
+  if(!cameFromShare){
+    window.__cpShareImportActive=false;
+    document.querySelector('#periodoAudioModal')?.remove();
+    return {handled:false};
+  }
+
+  const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||'').trim();
   const erroUrl=params.get('erro');
-  if(cameFromShare){ window.__cpShareImportActive=true; mostrarRecebimentoShare(); }
+  window.__cpShareImportActive=true;
+  mostrarRecebimentoShare();
 
   // No cold start, o documento pode montar alguns milissegundos antes da transação do
   // service worker ficar visível. Faz uma espera curta em vez de desistir e ir para a Home.
@@ -7342,6 +7367,18 @@ async function _checkSharedImpl(){
   }while(Date.now()<limite);
 
   if(record?.blob?.size){
+    // Android/PWA pode reabrir a última URL (?shared=1) horas depois. Esse endereço antigo
+    // não representa um novo compartilhamento. Só iniciamos automaticamente quando o ZIP
+    // foi recebido recentemente; caso contrário limpamos a URL e abrimos a Home normalmente.
+    const recebidoEm=Date.parse(record.ts||record.createdAt||'');
+    const registroRecente=Number.isFinite(recebidoEm) && (Date.now()-recebidoEm) <= (15*60*1000);
+    if(!registroRecente){
+      window.__cpShareImportActive=false;
+      state.pendingSharedRecordId='';
+      document.querySelector('#periodoAudioModal')?.remove();
+      try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+      return {handled:false,staleShare:true};
+    }
     const id=String(record.id||shareId||'latest');
     state.pendingSharedRecordId=id;
     window.__cpShareImportActive=true;
