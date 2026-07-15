@@ -60,7 +60,11 @@ realmente governar a análise das três mensagens.
   - exige exatamente três sugestões preenchidas e não duplicadas;
   - bloqueia expressões proibidas configuradas no Cérebro;
   - aplica "Bom dia / Boa tarde / Boa noite" conforme o horário brasileiro quando a
-    regra estiver ativa, corrigindo automaticamente "Oi/Olá";
+    regra estiver ativa, corrigindo automaticamente "Oi/Olá". A regra passa a ser
+    reconhecida tanto na forma proibitiva ("não use oi/olá; use bom dia...") quanto
+    na forma **positiva** que o corretor normalmente escreve ("sempre comece com
+    bom dia, boa tarde ou boa noite", "iniciar com a saudação do horário") — antes
+    só a forma proibitiva era detectada e as mensagens saíam sem saudação;
   - impede repetir pergunta cuja resposta já existe na conversa;
   - impede introduzir preço, prazo ou número que não aparece na conversa;
   - valida tamanho/formato quando objetivamente verificável.

@@ -1315,8 +1315,23 @@ export function compilarRegrasObjetivasCerebro(cfg = {}, agora = new Date()) {
     }
   }
 
-  const regraSaudacao = /(nao\s+(?:use|usar)|evite|proibid)[^\n.]{0,80}\b(?:oi|ola)\b/.test(norm)
-    && /bom\s+dia|boa\s+tarde|boa\s+noite/.test(norm);
+  // Detecção da regra de saudação por horário. Antes exigia a forma proibitiva
+  // ("não use oi/olá. use bom dia/boa tarde/boa noite"). Isso deixava passar as
+  // formas positivas que o corretor realmente escreve ("sempre comece com bom
+  // dia, boa tarde ou boa noite", "iniciar com a saudação do horário"), fazendo
+  // as três mensagens saírem sem saudação. Agora aceitamos as duas formas.
+  const mencionaSaudacaoHorario = /\bbom\s+dia\b|\bboa\s+tarde\b|\bboa\s+noite\b/.test(norm);
+  const proibeOiOla = /(nao\s+(?:use|usar)|evite|proibid)[^\n.]{0,80}\b(?:oi|ola)\b/.test(norm);
+  // Forma positiva: uma linha que cita a saudação por horário junto de um verbo
+  // que manda usá-la. Exigir os dois no mesmo item evita falso positivo quando
+  // "boa noite" aparece só como exemplo solto.
+  let saudacaoDiretiva = false;
+  for (const linha of linhas) {
+    const n = normalizarBusca(linha);
+    if (!/\bbom\s+dia\b|\bboa\s+tarde\b|\bboa\s+noite\b/.test(n)) continue;
+    if (/(\buse\b|\busar\b|comec|inici|\bsempre\b|abertura|\babra\b|\babrir\b|cumpriment|saudac|saude|come[cç])/.test(n)) { saudacaoDiretiva = true; break; }
+  }
+  const regraSaudacao = saudacaoDiretiva || (proibeOiOla && mencionaSaudacaoHorario);
   if (regraSaudacao) { proibidas.add("oi"); proibidas.add("olá"); proibidas.add("ola"); }
 
   let maxCaracteres = null;
