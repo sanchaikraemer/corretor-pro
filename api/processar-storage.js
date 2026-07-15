@@ -112,7 +112,11 @@ async function prepararExtracaoPersistente({ storage, storagePath, importId, aud
   const prefix = `imports/${importId}`;
   const manifestPath = `${prefix}/manifest.json`;
   const existente = await carregarManifesto(storage, manifestPath);
-  if (existente?.sourceZipPath === storagePath && existente?.prep && existente?.audioStorage) {
+  const janelaSolicitada = String(audioWindowDays || "90");
+  // v827-4: só reaproveita a extração anterior se a JANELA de áudio for a mesma. Antes,
+  // trocar a janela reusava a extração antiga (áudios errados) sem refazer.
+  if (existente?.sourceZipPath === storagePath && existente?.prep && existente?.audioStorage
+      && String(existente?.audioWindowDays || "90") === janelaSolicitada) {
     return { manifest: existente, reusedPreparation: true };
   }
 
@@ -125,10 +129,14 @@ async function prepararExtracaoPersistente({ storage, storagePath, importId, aud
   const audioHashes = {};
   const transcriptions = {};
   const arquivosTemporarios = [];
-  let index = 0;
-  for (const [base, audioBuffer] of Object.entries(extracted)) {
+  // v827-4 (ZIP grande): sobe os áudios em LOTES paralelos, senão um upload de cada vez
+  // estourava o tempo da função serverless em ZIPs com muitos áudios.
+  const CONCORRENCIA_UPLOAD = 4;
+  const entradas = Object.entries(extracted).map(([base, audioBuffer], i) => {
     const nome = normalizeName(base);
-    const audioPath = `${prefix}/audio/${String(++index).padStart(4, "0")}-${nomeStorageSeguro(nome)}`;
+    return { nome, audioBuffer, audioPath: `${prefix}/audio/${String(i + 1).padStart(4, "0")}-${nomeStorageSeguro(nome)}` };
+  });
+  const subirUm = async ({ nome, audioBuffer, audioPath }) => {
     const { error } = await storage.upload(audioPath, audioBuffer, {
       contentType: contentTypeAudio(nome),
       upsert: true,
@@ -141,6 +149,9 @@ async function prepararExtracaoPersistente({ storage, storagePath, importId, aud
     const cached = await carregarTranscricaoCache(storage, hash);
     if (cached) transcriptions[nome] = cached;
     arquivosTemporarios.push(audioPath);
+  };
+  for (let i = 0; i < entradas.length; i += CONCORRENCIA_UPLOAD) {
+    await Promise.all(Array.from(entradas.slice(i, i + CONCORRENCIA_UPLOAD), subirUm));
   }
 
   const manifest = {
