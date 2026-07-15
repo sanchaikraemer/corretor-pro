@@ -91,6 +91,12 @@ async function ensureBucketReady(supabase, bucket) {
   return { ok: true, existed, configured: !warning, warning };
 }
 
+
+function sanitizeImportId(value = "") {
+  const id = String(value || "").trim();
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]{7,120}$/.test(id) ? id : "";
+}
+
 function sanitizeFileName(name = "conversa-whatsapp.zip") {
   return String(name)
     .normalize("NFD")
@@ -144,6 +150,10 @@ export default async function handler(req, res) {
   }
 
   const fileName = sanitizeFileName(body?.fileName);
+  const importId = sanitizeImportId(body?.importId);
+  if (!body?.probe && !importId) {
+    return json(res, 400, { ok: false, error: "Identificador da importação não informado." });
+  }
   if (!/\.(zip|mp4|webm|mov|m4v|mkv|mp3|m4a|ogg|oga|opus|wav|aac)$/i.test(fileName)) {
     return json(res, 400, { ok: false, error: "Tipo de arquivo não suportado (envie ZIP do WhatsApp ou um vídeo/áudio)." });
   }
@@ -167,8 +177,8 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, bucket, bucketState });
     }
 
-    const now = new Date();
-    const storagePath = `whatsapp/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now()}-${fileName}`;
+    // Caminho idempotente: retries da mesma importação usam o mesmo objeto, sem criar cópias.
+    const storagePath = `whatsapp/imports/${importId}/${fileName}`;
 
     const { data: signed, error: signedError } = await supabase
       .storage
@@ -191,6 +201,7 @@ export default async function handler(req, res) {
       path: storagePath,
       token: signed.token,
       signedUrl: signed.signedUrl,
+      importId,
       bucketWarning: bucketState.warning || undefined
     });
   } catch (error) {

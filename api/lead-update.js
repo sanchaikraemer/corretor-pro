@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { compararEvolucao, getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
+import { analyzeWithBrain, compararEvolucao, getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -205,13 +205,30 @@ async function acaoSalvarNovo(body, res) {
     return json(res, 400, { ok: false, error: "Informe result com os dados processados." });
   }
   try {
+    const agora = new Date().toISOString();
+    const eventoImportacao = {
+      acao: "criar-novo",
+      importId: String(body?.importId || "") || null,
+      status: "concluida",
+      concluidaEm: agora
+    };
+    const resultNovo = {
+      ...result,
+      analysis: {
+        ...(result.analysis || {}),
+        _historicoImportacoes: [eventoImportacao],
+        _ultimaImportacao: eventoImportacao
+      }
+    };
     const persistence = await persistProcessingResult({
-      result,
+      result: resultNovo,
       source: body?.source || "manual-save",
       bucket: body?.bucket || null,
       path: body?.path || null,
       fileName: body?.fileName || result?.txtFile || null,
-      fileSize: body?.fileSize || null
+      fileSize: body?.fileSize || null,
+      // A escolha “criar novo” é explícita e deve ignorar qualquer heurística de deduplicação.
+      forceNew: true
     });
     const salvoId = persistence?.processing?.id;
     let aprendizadoAutomatico = null;
@@ -728,14 +745,14 @@ async function acaoAtualizarComEvolucao(body, res) {
 
   const { data: current, error: getErr } = await supabase
     .from("whatsapp_processamentos")
-    .select("resultado_analise, etapa, timeline_json")
+    .select("resultado_analise, etapa, timeline_json, atualizado_em, updated_at")
     .eq("id", id)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
   const anterior = current.resultado_analise || {};
-  const nova = result.analysis || {};
+  let nova = result.analysis || {};
 
   // JUNTA a conversa que já estava salva com a do novo arquivo — sem perder mensagem
   // e sem repetir. Antes, a timeline nova SUBSTITUÍA a antiga: se os dois exports tinham
@@ -748,6 +765,70 @@ async function acaoAtualizarComEvolucao(body, res) {
   // Mensagens novas (as que NÃO estavam na conversa salva) = o que a IA usa pra avaliar o que mudou.
   const chavesAntigas = new Set(timelineAntiga.map(assinaturaMsg));
   const novasMensagens = timelineNova.filter(m => !chavesAntigas.has(assinaturaMsg(m)));
+  const importId = String(body?.importId || "") || null;
+  const consolidadaEm = new Date().toISOString();
+  const importacaoPendente = {
+    acao: "atualizar-existente",
+    importId,
+    mensagensNovas: novasMensagens.length,
+    status: "conversa-consolidada-aguardando-reanalise",
+    consolidadaEm
+  };
+
+  // Primeiro salva a linha do tempo consolidada, preservando integralmente a análise e os
+  // dados operacionais existentes. Só depois a IA é chamada sobre esta conversa já persistida.
+  const analiseDuranteReprocessamento = { ...anterior, _importacaoPendente: importacaoPendente };
+  const payloadConsolidacao = {
+    resultado_analise: analiseDuranteReprocessamento,
+    timeline_json: novaTimeline,
+    texto_extraido: novaTimeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
+    atualizado_em: consolidadaEm,
+    updated_at: consolidadaEm
+  };
+  if (result.audiosEncontrados != null) payloadConsolidacao.audios_encontrados = result.audiosEncontrados;
+  if (result.audiosTranscritos != null) payloadConsolidacao.audios_transcritos = result.audiosTranscritos;
+  const consolidacao = await supabase
+    .from("whatsapp_processamentos")
+    .update(payloadConsolidacao)
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (consolidacao.error || !consolidacao.data?.id) {
+    return json(res, 500, { ok: false, recoverable: true, error: consolidacao.error?.message || "A conversa consolidada não foi confirmada no banco." });
+  }
+
+  const leadConsolidado = {
+    ...(result.lead || {}),
+    clientName: anterior.clientName || anterior?.lead?.clientName || result?.lead?.clientName || "Cliente importado",
+    phone: result?.lead?.phone || anterior?.lead?.phone || ""
+  };
+  try {
+    nova = await analyzeWithBrain({
+      lead: leadConsolidado,
+      timeline: novaTimeline,
+      openai: getOpenAI(),
+      leadId: String(id),
+      cerebroConfig: body?.cerebroConfig || null
+    });
+  } catch (error) {
+    return json(res, 422, {
+      ok: false,
+      recoverable: true,
+      conversationSaved: true,
+      error: "A conversa consolidada foi preservada, mas a análise válida ainda não foi concluída.",
+      details: error?.message || String(error)
+    });
+  }
+  const trio = [nova?.messages?.a, nova?.messages?.b, nova?.messages?.c];
+  if (nova?.sugestoesPendentes === true || !trio.every(v => String(v || "").trim().length >= 10)) {
+    return json(res, 422, {
+      ok: false,
+      recoverable: true,
+      conversationSaved: true,
+      error: "A conversa consolidada foi preservada, mas as três mensagens ainda não passaram pela validação do Cérebro.",
+      details: Array.isArray(nova?.validacaoSugestoes) ? nova.validacaoSugestoes.join("; ") : null
+    });
+  }
 
   // Na v669 a própria análise já recebeu o contexto anterior + somente as novidades.
   // Não faz uma segunda chamada de IA para comparar evolução: registra a mudança de forma
@@ -826,12 +907,39 @@ async function acaoAtualizarComEvolucao(body, res) {
   const historicoEvolucao = Array.isArray(anterior.evolucao) ? anterior.evolucao.slice(-20) : [];
   if (evolucaoEntry) historicoEvolucao.push(evolucaoEntry);
 
+  const historicoAnalises = Array.isArray(anterior._historicoAnalises) ? anterior._historicoAnalises.slice(-19) : [];
+  if (anterior && Object.keys(anterior).length) {
+    historicoAnalises.push({
+      analisadaEm: anterior.mensagensValidadasEm || anterior._atualizadoEm || current.atualizado_em || current.updated_at || null,
+      summary: anterior.summary || null,
+      produtoInteresse: anterior.produtoInteresse || anterior?.diagnostico?.produtoAtual || null,
+      etapaSugerida: anterior.etapaSugerida || anterior?.diagnostico?.etapaFunil || null,
+      diagnostico: anterior.diagnostico || null,
+      messages: anterior.messages || null
+    });
+  }
+  const concluidaEm = new Date().toISOString();
+  const eventoImportacao = {
+    acao: "atualizar-existente",
+    importId,
+    mensagensNovas: novasMensagens.length,
+    status: "concluida",
+    concluidaEm
+  };
+  const historicoImportacoes = Array.isArray(anterior._historicoImportacoes) ? anterior._historicoImportacoes.slice(-49) : [];
+  historicoImportacoes.push(eventoImportacao);
+
   const merged = {
+    ...anterior,
     ...nova,
     ...Object.fromEntries(Object.entries(preservado).filter(([, v]) => v !== undefined)),
     evolucao: historicoEvolucao,
-    _atualizadoEm: new Date().toISOString()
+    _historicoAnalises: historicoAnalises,
+    _historicoImportacoes: historicoImportacoes,
+    _ultimaImportacao: eventoImportacao,
+    _atualizadoEm: concluidaEm
   };
+  delete merged._importacaoPendente;
 
 
 
@@ -900,7 +1008,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     .from("whatsapp_processamentos")
     .update(updatePayload)
     .eq("id", id);
-  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
+  if (putErr) return json(res, 500, { ok: false, recoverable: true, conversationSaved: true, error: putErr.message });
 
   // A timeline já está persistida. A leitura pela IA entra numa fila separada para
   // não atrasar nem fazer a reimportação expirar. O app processa essa fila na sequência.

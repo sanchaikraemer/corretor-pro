@@ -171,10 +171,9 @@ function _cleanArquivoIdentity(value = "") {
 }
 
 function _nomeIdentity(value = "") {
-  return _normNome(_cleanArquivoIdentity(value))
-    .replace(/\b(renaissance|evolutti|boulevard|terrenos?|premium office|quality|personalite|personalité|prime|nova vila rica|vila rica|nvr|nvriii|nvrii|nvri|celular|cell|whatsapp|fone|telefone|terreno|lote|apartamento|apto)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Identidade interna pode ignorar apenas caixa, acentos e espaços. O nome visível
+  // nunca é corrigido e palavras que também podem fazer parte do contato não são removidas.
+  return _normNome(_cleanArquivoIdentity(value)).replace(/\s+/g, " ").trim();
 }
 
 function _nomeRuimIdentity(value = "") {
@@ -184,21 +183,12 @@ function _nomeRuimIdentity(value = "") {
   return !s || /^cliente importad[oa]?$/i.test(s) || (d.length >= 8 && letras.length < 3);
 }
 
-// "Mesmo nome, mesmo lead": dois nomes já normalizados apontam para o mesmo cliente quando
-// são iguais OU quando o nome menor está inteiro dentro do maior (ex.: "neto" x "neto boulevard").
-// Não junta nomes completos diferentes que só compartilham o primeiro nome (ex.: "joao silva" x
-// "joao souza"), evitando fundir duas pessoas distintas.
+// Só nomes tecnicamente iguais são candidatos. Nome parecido, contido ou com palavras
+// adicionais nunca autoriza fusão automática; a decisão pertence ao usuário.
 export function _nomesMesmoLead(aId = "", bId = "") {
   const a = String(aId || "").trim();
   const b = String(bId || "").trim();
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const ta = a.split(/\s+/).filter(t => t.length >= 3);
-  const tb = b.split(/\s+/).filter(t => t.length >= 3);
-  if (!ta.length || !tb.length) return false;
-  const menor = ta.length <= tb.length ? ta : tb;
-  const maior = new Set(ta.length <= tb.length ? tb : ta);
-  return menor.every(t => maior.has(t));
+  return !!a && !!b && a === b;
 }
 
 function _assinaturaTimelineV681(m) {
@@ -334,7 +324,15 @@ async function buscarAvatarAnterior(supabase, lead, analysis) {
   return "";
 }
 
-export async function persistProcessingResult({ result, source = "api", bucket = null, path = null, fileName = null, fileSize = null }) {
+export async function persistProcessingResult({
+  result,
+  source = "api",
+  bucket = null,
+  path = null,
+  fileName = null,
+  fileSize = null,
+  forceNew = false
+}) {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return { ok: false, skipped: true, reason: "Supabase não configurado no ambiente." };
@@ -347,8 +345,9 @@ export async function persistProcessingResult({ result, source = "api", bucket =
   let analysis = _semScoreComercial(result?.analysis || null);
   const lead = result?.lead || null;
 
-  // Re-importação: se o lead já tinha foto (avatar) e a análise nova não traz nenhuma, mantém a foto antiga.
-  if (analysis && !analysis.avatarFoto) {
+  // Em uma criação explicitamente nova, nunca herda dados de outro registro com o mesmo nome.
+  // Reaproveitamento de avatar continua disponível apenas nos fluxos legados que não pediram forceNew.
+  if (!forceNew && analysis && !analysis.avatarFoto) {
     const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis);
     if (fotoAnterior) analysis = { ...analysis, avatarFoto: fotoAnterior };
   }
@@ -356,7 +355,9 @@ export async function persistProcessingResult({ result, source = "api", bucket =
   const attempts = [];
   let processingRow = null;
 
-  const existenteV681 = await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path });
+  const existenteV681 = forceNew
+    ? null
+    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path });
 
   const canonicalPayload = {
     nome_arquivo: nomeArquivo,

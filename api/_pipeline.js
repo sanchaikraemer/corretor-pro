@@ -857,13 +857,14 @@ function detectProduct(fullText = "") {
 }
 
 function pickClientName(authors = []) {
-  // Profissões como "Corretor" e "Imobiliária" podem fazer parte do nome do contato parceiro.
-  // Excluímos apenas autores conhecidos como lado da empresa/corretor deste app.
-  const businessHints = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
-  const productHints = /\b(renaissance|evolutti|boulevard|premium\s*office|quality|personalit[eé]|prime|terrenos?|nvri|nvr|eii|ii)\b/gi;
-  const raw = authors.find(a => a && !businessHints.test(a)) || authors.find(Boolean) || "Cliente não identificado";
-  // Tira sufixos de produto colados no nome (ex: "João Paulo Rodrigues Evolutti Quality")
-  return String(raw).replace(productHints, "").replace(/\s+/g, " ").trim() || raw;
+  // O nome importado é dado de origem: deve permanecer exatamente como aparece no TXT.
+  // Só excluímos autores inequivocamente pertencentes ao lado da empresa; não corrigimos,
+  // abreviamos nem retiramos palavras que possam fazer parte do nome salvo no WhatsApp.
+  const businessHints = /^(?:sistema|construtora\s+senger|sanchai|atendimento\s*\(corretor\)|miguel\s+kirinus)$/i;
+  const raw = authors.find(a => String(a || "").trim() && !businessHints.test(String(a).trim()))
+    || authors.find(Boolean)
+    || "Cliente não identificado";
+  return String(raw).trim() || "Cliente não identificado";
 }
 
 export function guessLeadData(timeline) {
@@ -1263,19 +1264,177 @@ function ancorasDaConversa(timeline) {
     .map(([t]) => t);
 }
 
-export function validarMensagensCerebro(mensagens, contextoTemporal, timeline) {
+
+function horaBrasil(agora = new Date()) {
+  try {
+    const partes = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", hour12: false })
+      .formatToParts(agora);
+    const h = Number(partes.find(p => p.type === "hour")?.value);
+    return Number.isFinite(h) ? h : agora.getHours();
+  } catch (_) { return agora.getHours(); }
+}
+
+export function saudacaoBrasil(agora = new Date()) {
+  const h = horaBrasil(agora);
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function escaparRegExp(texto) {
+  return String(texto || "").replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+}
+
+function linhasCerebro(cfg = {}) {
+  const c = sanitizeCerebroConfig(cfg || {});
+  return [
+    c.metodo, c.tom, c.diferenciais, c.evitar,
+    ...(Array.isArray(c.regras) ? c.regras.map(r => typeof r === "string" ? r : r?.texto) : [])
+  ].map(v => String(v || "").trim()).filter(Boolean);
+}
+
+export function compilarRegrasObjetivasCerebro(cfg = {}, agora = new Date()) {
+  const linhas = linhasCerebro(cfg);
+  const integral = linhas.join("\n");
+  const norm = normalizarBusca(integral);
+  const proibidas = new Set();
+  const adicionar = valor => {
+    const v = String(valor || "").replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, "").trim();
+    if (v && v.length <= 80) proibidas.add(v);
+  };
+
+  for (const linha of linhas) {
+    const n = normalizarBusca(linha);
+    if (!/(nao\s+(?:use|usar)|evite|proibid|sem\s+["'“”]?)/.test(n)) continue;
+    for (const m of linha.matchAll(/["“”']([^"“”']{1,80})["“”']/g)) adicionar(m[1]);
+    const clausula = linha.match(/(?:não|nao)\s+(?:use|usar)\s+([^.;\n]{1,100})/i)?.[1];
+    if (clausula) {
+      clausula.split(/\s+(?:ou|e)\s+|,|\//i)
+        .map(v => v.replace(/\b(?:nas|nos|na|no|das|dos|da|do|mensagens?|sugest[oõ]es?)\b/gi, "").trim())
+        .forEach(adicionar);
+    }
+  }
+
+  const regraSaudacao = /(nao\s+(?:use|usar)|evite|proibid)[^\n.]{0,80}\b(?:oi|ola)\b/.test(norm)
+    && /bom\s+dia|boa\s+tarde|boa\s+noite/.test(norm);
+  if (regraSaudacao) { proibidas.add("oi"); proibidas.add("olá"); proibidas.add("ola"); }
+
+  let maxCaracteres = null;
+  let maxPalavras = null;
+  for (const linha of linhas) {
+    let m = linha.match(/(?:m[aá]ximo|at[eé])\s+(\d{2,4})\s+caracteres?/i);
+    if (m) maxCaracteres = Number(m[1]);
+    m = linha.match(/(?:m[aá]ximo|at[eé])\s+(\d{1,3})\s+palavras?/i);
+    if (m) maxPalavras = Number(m[1]);
+  }
+  return {
+    proibidas: [...proibidas].filter(v => v.length >= 2),
+    saudacaoObrigatoria: regraSaudacao,
+    saudacaoEsperada: regraSaudacao ? saudacaoBrasil(agora) : "",
+    maxCaracteres: Number.isFinite(maxCaracteres) ? maxCaracteres : null,
+    maxPalavras: Number.isFinite(maxPalavras) ? maxPalavras : null
+  };
+}
+
+export function aplicarCorrecoesDeterministicasCerebro(mensagens, cfg = {}, agora = new Date()) {
+  const regras = compilarRegrasObjetivasCerebro(cfg, agora);
+  const out = {};
+  for (const chave of ["a", "b", "c"]) {
+    let msg = String(mensagens?.[chave] || "").replace(/\s+/g, " ").trim();
+    if (regras.saudacaoObrigatoria && msg) {
+      const esperada = regras.saudacaoEsperada;
+      if (/^(?:oi|ol[aá])(?=[\s,!.-]|$)[\s,!.-]*/i.test(msg)) msg = msg.replace(/^(?:oi|ol[aá])(?=[\s,!.-]|$)[\s,!.-]*/i, `${esperada} `);
+      else if (!/^(?:bom\s+dia|boa\s+tarde|boa\s+noite)\b/i.test(msg)) msg = `${esperada}, ${msg}`;
+      msg = msg.replace(/^(bom\s+dia|boa\s+tarde|boa\s+noite)\s+/i, "$1, ");
+    }
+    out[chave] = msg.trim();
+  }
+  return out;
+}
+
+function palavrasRelevantesPergunta(texto) {
+  return (normalizarBusca(texto).match(/[a-z0-9]{3,}/g) || [])
+    .filter(t => !STOPWORDS_ANCORA.has(t) && !/^(qual|quais|quanto|quantos|como|onde|quando|porque|por)$/.test(t));
+}
+
+function perguntasRespondidasNaTimeline(timeline) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const respondidas = [];
+  for (let i = 0; i < arr.length; i++) {
+    const m = arr[i] || {};
+    if (!autorPareceNegocioPipeline(m.author) || !/\?/.test(String(m.text || ""))) continue;
+    let houveResposta = false;
+    for (let j = i + 1; j < arr.length; j++) {
+      const prox = arr[j] || {};
+      if (autorPareceClientePipeline(prox.author) && String(prox.text || "").trim()) { houveResposta = true; break; }
+      if (autorPareceNegocioPipeline(prox.author) && /\?/.test(String(prox.text || ""))) break;
+    }
+    if (houveResposta) {
+      const tokens = palavrasRelevantesPergunta(m.text);
+      if (tokens.length) respondidas.push(new Set(tokens));
+    }
+  }
+  return respondidas;
+}
+
+function perguntaRepeteRespostaExistente(msg, respondidas) {
+  const trecho = String(msg || "").split(/[.!]/).filter(v => /\?/.test(v)).pop() || msg;
+  const atual = new Set(palavrasRelevantesPergunta(trecho));
+  if (atual.size < 2) return false;
+  return respondidas.some(antiga => {
+    const comuns = [...atual].filter(t => antiga.has(t)).length;
+    const base = Math.min(atual.size, antiga.size);
+    return base >= 2 && comuns / base >= 0.67;
+  });
+}
+
+function fatosNumericos(texto) {
+  const s = String(texto || "");
+  const matches = [
+    ...s.matchAll(/R\$\s*[\d.]+(?:,\d{1,2})?/gi),
+    ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*%/gi),
+    ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*m(?:²|2)\b/gi),
+    ...s.matchAll(/\b\d+\s*x\b/gi),
+    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g)
+  ];
+  return matches.map(m => normalizarBusca(m[0]).replace(/\s+/g, "")).filter(Boolean);
+}
+
+export function validarMensagensCerebro(mensagens, contextoTemporal, timeline, cerebroConfig = null, agora = new Date()) {
   const trio = [mensagens?.a, mensagens?.b, mensagens?.c].map(v => String(v || "").replace(/\s+/g, " ").trim());
   const motivos = [];
   const porMensagem = [];
   const ancoras = ancorasDaConversa(timeline);
+  const regras = compilarRegrasObjetivasCerebro(cerebroConfig || {}, agora);
+  const respondidas = perguntasRespondidasNaTimeline(timeline);
+  const conversaNorm = normalizarBusca((Array.isArray(timeline) ? timeline : []).map(m => m?.text || "").join(" ")).replace(/\s+/g, "");
+  if (trio.length !== 3 || trio.some(v => !v)) motivos.push("A análise deve conter exatamente três sugestões preenchidas.");
+  if (new Set(trio.map(normalizarBusca)).size !== trio.filter(Boolean).length) motivos.push("As três sugestões não podem ser duplicadas.");
+
   trio.forEach((msg, i) => {
     const erros = [];
+    const norm = normalizarBusca(msg);
     if (msg.length < 10) erros.push("mensagem vazia ou curta");
-    if (msg && !/\?\s*$/.test(msg)) erros.push("não termina com pergunta");
+    const qtdPerguntas = (msg.match(/\?/g) || []).length;
+    if (msg && (qtdPerguntas !== 1 || !/\?\s*$/.test(msg))) erros.push("não termina com pergunta ou contém quantidade diferente de uma pergunta");
+    if (regras.maxCaracteres && msg.length > regras.maxCaracteres) erros.push(`ultrapassa ${regras.maxCaracteres} caracteres`);
+    if (regras.maxPalavras && msg.split(/\s+/).filter(Boolean).length > regras.maxPalavras) erros.push(`ultrapassa ${regras.maxPalavras} palavras`);
+    if (regras.saudacaoObrigatoria) {
+      if (/^(?:oi|ol[aá])(?=[\s,!.-]|$)/i.test(msg)) erros.push("usa saudação proibida");
+      if (!new RegExp(`^${escaparRegExp(regras.saudacaoEsperada)}\\b`, "i").test(msg)) erros.push(`não usa ${regras.saudacaoEsperada} conforme o horário brasileiro`);
+    }
+    for (const proibida of regras.proibidas) {
+      const p = normalizarBusca(proibida);
+      if (p && new RegExp(`(?:^|\\b)${escaparRegExp(p).replace(/\\ /g, "\\s+")}(?:\\b|$)`, "i").test(norm)) {
+        erros.push(`usa expressão proibida: ${proibida}`);
+      }
+    }
+    if (perguntaRepeteRespostaExistente(msg, respondidas)) erros.push("repete pergunta já respondida na conversa");
+    const novosFatos = fatosNumericos(msg).filter(f => !conversaNorm.includes(f));
+    if (novosFatos.length) erros.push(`introduz dado numérico ausente da conversa: ${novosFatos.join(", ")}`);
     if (contextoTemporal?.modo === "retomada" && msg) {
       const generico = PADROES_GENERICOS_RETOMADA.find(re => re.test(msg));
       if (generico) erros.push("usa abertura/passividade genérica de retomada");
-      const norm = normalizarBusca(msg);
       if (ancoras.length && !ancoras.some(a => norm.includes(a))) erros.push("não retoma nenhum fato concreto da conversa");
     }
     if (erros.length) {
@@ -1283,7 +1442,7 @@ export function validarMensagensCerebro(mensagens, contextoTemporal, timeline) {
       motivos.push(`Mensagem ${i + 1}: ${erros.join(", ")}.`);
     }
   });
-  return { ok: motivos.length === 0, motivos, porMensagem };
+  return { ok: motivos.length === 0, motivos, porMensagem, regrasObjetivas: regras };
 }
 
 async function loadCerebroConfig(frontendConfig = null) {
@@ -2443,7 +2602,7 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
   }
 }
 
-async function corrigirMensagensPelasRegras({ openai, mensagens, contextoTemporal, timelineText, cerebroTexto, diagnostico, leadIA }) {
+async function corrigirMensagensPelasRegras({ openai, mensagens, contextoTemporal, timelineText, cerebroTexto, diagnostico, leadIA, motivosValidacao = [] }) {
   const modo = contextoTemporal?.modo || "sem-data";
   const diasTxt = contextoTemporal?.dias == null ? "não calculados" : String(contextoTemporal.dias);
   const sistema = `Você é o revisor final das mensagens comerciais do Corretor Pro. Sua única função é reescrever as três mensagens para que TODAS obedeçam às regras abaixo. Não altere fatos, não invente e não explique.
@@ -2465,6 +2624,9 @@ ${JSON.stringify(leadIA || {})}
 
 DIAGNÓSTICO JÁ EXTRAÍDO:
 ${JSON.stringify(diagnostico || {})}
+
+MOTIVOS DETERMINÍSTICOS DA REPROVAÇÃO:
+${(Array.isArray(motivosValidacao) ? motivosValidacao : []).join("\n") || "Não informado"}
 
 MENSAGENS QUE FALHARAM NA VALIDAÇÃO:
 ${JSON.stringify(mensagens || {})}
@@ -2690,9 +2852,13 @@ ${timelineText}`;
     let msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
     let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
     let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
-    let validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr);
+    let corrigidasDet = aplicarCorrecoesDeterministicasCerebro({ a: msgA, b: msgB, c: msgC }, configCerebro, new Date());
+    msgA = corrigidasDet.a; msgB = corrigidasDet.b; msgC = corrigidasDet.c;
+    let validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
     let mensagensCorrigidasPelaValidacao = false;
-    if (!validacaoMensagens.ok) {
+    let tentativasCorrecao = 0;
+    while (!validacaoMensagens.ok && tentativasCorrecao < 2) {
+      tentativasCorrecao++;
       try {
         const corrigidas = await corrigirMensagensPelasRegras({
           openai,
@@ -2701,22 +2867,20 @@ ${timelineText}`;
           timelineText,
           cerebroTexto: instrucoesCerebroTexto,
           diagnostico: d,
-          leadIA
+          leadIA,
+          motivosValidacao: validacaoMensagens.motivos
         });
-        const novaValidacao = validarMensagensCerebro(corrigidas, contextoTemporal, timelineArr);
-        if (novaValidacao.ok) {
-          msgA = corrigidas.a; msgB = corrigidas.b; msgC = corrigidas.c;
-          completion = corrigidas.completion || completion;
-          validacaoMensagens = novaValidacao;
-          mensagensCorrigidasPelaValidacao = true;
-        } else {
-          validacaoMensagens = novaValidacao;
-        }
+        corrigidasDet = aplicarCorrecoesDeterministicasCerebro(corrigidas, configCerebro, new Date());
+        msgA = corrigidasDet.a; msgB = corrigidasDet.b; msgC = corrigidasDet.c;
+        completion = corrigidas.completion || completion;
+        validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
+        mensagensCorrigidasPelaValidacao = true;
       } catch (e) {
         validacaoMensagens = {
           ok: false,
           motivos: [...(validacaoMensagens.motivos || []), `A correção automática das mensagens falhou: ${describeOpenAIError(e)}`]
         };
+        break;
       }
     }
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10) && validacaoMensagens.ok;
@@ -2795,6 +2959,8 @@ ${timelineText}`;
       validacaoSugestoes: trioOk ? [] : (validacaoMensagens.motivos?.length ? validacaoMensagens.motivos : ["A IA não retornou 3 mensagens novas completas e válidas."]),
       mensagensValidadasEm: nowIso,
       mensagensCorrigidasPelaValidacao,
+      tentativasCorrecaoMensagens: tentativasCorrecao,
+      regrasObjetivasCerebro: validacaoMensagens.regrasObjetivas || null,
       contextoTemporalMensagens: contextoTemporal,
       _cerebroFonte: configCerebro?._fonte || "backend-default",
       _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
@@ -3166,6 +3332,14 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const audioFilesRelevantes = planoAudio.audioFilesTimeline;
   const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
   const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
+  const extractedFiles = {};
+  if (options.includeExtractedFiles === true) {
+    for (const fullName of audioFiles) {
+      const entry = zip.files[fullName];
+      if (!entry || entry.dir) continue;
+      extractedFiles[normalizeName(fullName)] = await entry.async("nodebuffer");
+    }
+  }
 
   return {
     txtFile: txtName,
@@ -3181,6 +3355,7 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     audiosDescartadosPorJanela: audioFilesForaDaJanela.length,
     midiasOcultas,
     exportadoSemMidia,
+    _extractedFiles: extractedFiles,
     metricsBase: {
       totalFiles: allNames.length,
       totalMensagensOriginais: messagesAll.length,
@@ -3212,6 +3387,29 @@ export async function transcreverLoteDoZip(buffer, audioNames) {
     try {
       const r = await transcribeAudioOnce({ zip, audioName: fullName, openai, cache });
       resultado[base] = { status: r.status, text: r.text || "", error: r.error || null };
+    } catch (error) {
+      resultado[base] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
+    }
+  }));
+  return { transcriptions: resultado, transcriptionEnabled: true };
+}
+
+
+export async function transcreverArquivosExtraidos(arquivos = []) {
+  const openai = getOpenAI();
+  const resultado = {};
+  const entradas = Array.isArray(arquivos) ? arquivos : [];
+  if (!openai) {
+    for (const item of entradas) resultado[normalizeName(item?.name)] = { status: "api_nao_configurada", text: "" };
+    return { transcriptions: resultado, transcriptionEnabled: false };
+  }
+  await Promise.all(entradas.map(async item => {
+    const base = normalizeName(item?.name);
+    const buffer = Buffer.isBuffer(item?.buffer) ? item.buffer : Buffer.from(item?.buffer || []);
+    if (!base || !buffer.length) return;
+    try {
+      const text = await transcreverBuffer(buffer, path.extname(base) || ".ogg", openai);
+      resultado[base] = { status: text ? "transcrito" : "audio_grande_ou_vazio", text: text || "" };
     } catch (error) {
       resultado[base] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
     }
