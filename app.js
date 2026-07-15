@@ -6670,7 +6670,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
 
   renderEtapas(2, "baixando e extraindo uma única vez");
-  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000);
+  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 300000);
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
   const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
