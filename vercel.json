@@ -6,7 +6,7 @@
   "outputDirectory": "public",
   "functions": {
     "api/processar-storage.js": {
-      "maxDuration": 300
+      "maxDuration": 60
     },
     "api/reanalisar-lead.js": {
       "maxDuration": 60

@@ -665,6 +665,7 @@ function clearAnalysis(){
   toast("Análise limpa.");
 }
 // Limpa nomes longos com sufixo de produto + textos de erro técnico
+const PRODUTOS_RX = /\b(renaissance|evolutti|boulevard|premium\s*office|quality|personalit[eé]|prime|terrenos?|nvri|nvr|eii|ii)\b/gi;
 const ERRO_RX = /erro na an[áa]lise|aguardando|insufficient|quota|http\s*4\d\d|api\.openai|allowlist|configurar|api\/diag/i;
 function limpoTexto(v, fallback){
   const s = String(v||"").trim();
@@ -3807,7 +3808,7 @@ function abrirEditarLead(id, nome, telefone){
         </div>
         <div style="margin-bottom:12px">
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-          <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${escapeHtml(produtoIni)}" value="${escapeHtml(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
+          <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${escapeHtml(produtoIni)}" value="${escapeHtml(produtoIni)}" placeholder="Ex.: Nova Vila Rica III" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
           <datalist id="editLeadProdutoLista">${EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Escolha da lista ou digite. Deixe em branco se ainda não souber.</div>
         </div>
@@ -3929,7 +3930,7 @@ async function lerPrintEditarLead(ev){
 }
 
 // Modal pra criar lead manualmente (alguém ligou, comentou pessoalmente, indicação)
-const EMPREENDIMENTOS_SENGER = []; // v827 §7.1: sem catálogo fixo de empreendimentos (autocomplete fica livre)
+const EMPREENDIMENTOS_SENGER = ["Renaissance","Quality","Prime","Personalité","Boulevard","Premium Office","Evolutti","Nova Vila Rica I","Nova Vila Rica II","Nova Vila Rica III","Residencial GABRO","Edifício Campos Elísios"];
 function abrirNovoLead(){
   novoLeadAvatarFoto = null;
   qs("#novoLeadModal")?.remove();
@@ -3946,7 +3947,7 @@ function abrirNovoLead(){
       <label for="novoLeadNome">Nome</label>
       <input type="text" id="novoLeadNome" placeholder="Nome do lead" autocomplete="name">
       <label for="novoLeadInteresse">Interesse</label>
-      <input type="text" id="novoLeadInteresse" list="ui677Interesses" placeholder="Ex.: nome do empreendimento, tipologia..." autocomplete="off">
+      <input type="text" id="novoLeadInteresse" list="ui677Interesses" placeholder="Ex.: Renaissance, apartamento de 2 suítes..." autocomplete="off">
       <datalist id="ui677Interesses">${opcoes}</datalist>
       <label for="novoLeadTel">Telefone</label>
       <input type="tel" id="novoLeadTel" placeholder="(54) 99999-9999" autocomplete="tel" inputmode="tel">
@@ -4783,9 +4784,15 @@ function cp704Css(){
     }
     out = out
       .replace(/^\s*(Conversa|WhatsApp|Cliente|Lead|Contato|Arquivo|Zip)\s*,\s*/i, '')
+      .replace(/\bSala comercial no Premium Office\b/gi, 'a Premium Office')
+      .replace(/\bApartamento no Edifício Personalit[eé]\b/gi, 'o Personalité')
+      .replace(/\bApartamento no Personalit[eé]\b/gi, 'o Personalité')
+      .replace(/\bEdifício Personalit[eé]\b/gi, 'o Personalité')
       .replace(/\bte passar coisa solta\b/gi, 'sugerir o próximo passo')
       .replace(/\bte mandar opção solta\b/gi, 'sugerir o próximo passo')
-      .replace(/\bopções soltas\b/gi, 'sugestões desalinhadas ao teu objetivo');
+      .replace(/\bopções soltas\b/gi, 'sugestões desalinhadas ao teu objetivo')
+      .replace(/\bde a Premium Office\b/gi, 'da Premium Office')
+      .replace(/\bde o Personalit[eé]\b/gi, 'do Personalité');
     return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
   }
   function cp705Short(v, n=150){
@@ -4805,7 +4812,7 @@ function cp704Css(){
     const negou=/(nao|não|sem)\s.{0,28}\b(quis|quer|aprovou|aprova|aprovacao|aceitou|aceita|gostou|autorizou|topou)\b|\b(nao quis|nao aprovou|nao gostou|nao topou)\b/.test(norm);
     if(mulher && negou){
       const pessoa=/\besposa\b/.test(norm)?'esposa':'mulher';
-      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || lead?.product || 'o imóvel');
+      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || 'Renaissance');
       const primeiro=cp704Text(lead?.name,'').split(/\s+/)[0]||'';
       return {
         tipo:'decisor_negou',
@@ -5527,6 +5534,7 @@ function cerebroTextoEhLegadoV762(v) {
   return /m[eé]todo corretor pro/.test(t)
     || /identifique a fase do cliente/.test(t)
     || /cite o produto espec[ií]fico/.test(t)
+    || /construtora senger \(sede em carazinho/.test(t)
     || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
 }
 function sanitizeCerebroConfigV762(cfg) {
@@ -6182,7 +6190,7 @@ async function carregarCerebro(){
     config = {
       metodo: "Método Corretor Pro:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
       tom: "Direto, próximo, profissional.",
-      diferenciais: "",
+      diferenciais: "Construtora Senger. Carazinho/RS.",
       evitar: "Não usar 'faz sentido', 'retomando contato'.",
       diasImportacao: 90
     };
@@ -6472,20 +6480,9 @@ function rotuloJanelaAudio(valor){
   return v === "all" ? "todo o período" : `últimos ${v} dias`;
 }
 
-// v827 §7.4 — Padrão persistente da janela de áudio. Vem do Cérebro ("dias de
-// importação"), com uma chave ESTÁVEL (sem número de versão, que antes zerava a cada
-// atualização) como reserva, e 90 como último recurso.
-function janelaAudioPadrao(){
-  try{
-    const cfg = typeof obterCerebroConfigParaAnalise === "function" ? obterCerebroConfigParaAnalise() : null;
-    if(cfg && Number(cfg.diasImportacao) > 0) return normalizarJanelaAudioCliente(String(cfg.diasImportacao));
-  }catch(_){}
-  try{ const s = localStorage.getItem("corretor_pro_audio_window_days"); if(s) return normalizarJanelaAudioCliente(s); }catch(_){}
-  return "90";
-}
-
 function escolherPeriodoAudiosImportacao(){
-  const salvo = janelaAudioPadrao();
+  let salvo = "90";
+  try{ salvo = localStorage.getItem("corretor_pro_audio_window_days_v__VERSION__") || "90"; }catch(_){}
   const opcoes = [
     { valor:"30", label:"30 dias" },
     { valor:"60", label:"60 dias" },
@@ -6509,8 +6506,7 @@ function escolherPeriodoAudiosImportacao(){
     overlay.querySelectorAll(".periodoAudioBtn").forEach(btn => {
       btn.addEventListener("click", () => {
         const final = normalizarJanelaAudioCliente(btn.dataset.valor);
-        // §7.4: a escolha na importação é exceção SÓ daquela importação — não vira o
-        // padrão persistente (esse é ajustado no Cérebro). Fica só na sessão atual.
+        try{ localStorage.setItem("corretor_pro_audio_window_days_v__VERSION__", final); }catch(_){}
         state.ultimaJanelaAudio = final;
         overlay.remove();
         resolve(final);
@@ -6597,7 +6593,6 @@ async function uploadLargeZipToSupabase(file, options = {}){
   try{
     analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId });
   }catch(err){
-    renderEtapas(7, "a importação pode ser retomada sem reenviar o ZIP");
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
     qs("#processingText").textContent = ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.";
@@ -6671,7 +6666,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
 
   renderEtapas(2, "baixando e extraindo uma única vez");
-  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 75000);
+  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000);
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
   const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
@@ -7329,9 +7324,6 @@ async function _checkSharedImpl(){
   const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
   const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||state.pendingSharedRecordId||'').trim();
   const erroUrl=params.get('erro');
-  // Não recupere automaticamente uma tentativa antiga ao abrir o app normalmente.
-  // A retomada automática só é legítima quando a URL veio do Share Target ou traz o ID explícito.
-  if(!cameFromShare && !shareId) return {handled:false};
   if(cameFromShare){ window.__cpShareImportActive=true; mostrarRecebimentoShare(); }
 
   // No cold start, o documento pode montar alguns milissegundos antes da transação do
@@ -10556,6 +10548,7 @@ function ui682PrimeiroNomeLead(lead){
   if(extraido) bruto = extraido;
   const limpo = bruto
     .replace(/\.(zip|txt)$/i, "")
+    .replace(/\b(renaissance|premium\s+office|personalit[eé]|nvr\s*iii|nova\s+vila\s+rica\s*iii|evolutti|quality|boulevard)\b.*$/i, "")
     .replace(/\b(corretor|corretora|imobili[áa]ria|im[oó]veis|creci|cliente|lead)\b.*$/i, "")
     .trim();
   const primeiro = (limpo.split(/\s+/)[0] || "").trim();
@@ -10564,7 +10557,13 @@ function ui682PrimeiroNomeLead(lead){
 function ui682ProdutoCurto(valor, fallback='o imóvel'){
   const s=String(valor||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   if(!s) return fallback;
-  // v827 §7.1: sem lista fixa de empreendimentos; devolve o produto como veio da conversa.
+  if(/premium\s+office/i.test(s)) return 'a Premium Office';
+  if(/personalit[eé]/i.test(s)) return 'o Personalité';
+  if(/renaissance/i.test(s)) return 'o Renaissance';
+  if(/nova\s+vila\s+rica/i.test(s)) return 'o Nova Vila Rica III';
+  if(/evolutti/i.test(s)) return 'o Evolutti';
+  if(/quality/i.test(s)) return 'o Quality';
+  if(/boulevard/i.test(s)) return 'o Boulevard';
   return s;
 }
 function ui682ProdutoLead(lead, mc){
@@ -11396,7 +11395,7 @@ function ui670DetailRows(lead,mc){
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
         <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" autocomplete="off" inputmode="tel" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${esc(produtoIni)}" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:16px">
+        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${esc(produtoIni)}" value="${esc(produtoIni)}" placeholder="Ex.: Renaissance" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:16px">
         <datalist id="editLeadProdutoLista">${opcoesProdutos()}</datalist>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">Salvar alterações</button>
       </div>`;
@@ -11601,7 +11600,7 @@ function ui670DetailRows(lead,mc){
           <button type="button" id="ui685Fechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
         </div>
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento</label>
-        <input id="ui685Produto" list="ui685Produtos" value="${esc(produtoAtual(lead))}" placeholder="Ex.: nome do empreendimento" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
+        <input id="ui685Produto" list="ui685Produtos" value="${esc(produtoAtual(lead))}" placeholder="Ex.: Renaissance" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
         <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
         ${vendido ? `
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Unidade <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700">(opcional)</span></label>
@@ -11730,7 +11729,7 @@ function ui670DetailRows(lead,mc){
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
         <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" inputmode="tel" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px">
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:16px">
+        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" value="${esc(produtoIni)}" placeholder="Ex.: Renaissance" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:16px">
         <datalist id="editLeadProdutoLista">${produtosOptions()}</datalist>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:13px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:15px;font-weight:950;cursor:pointer">Salvar</button>
       </div>`;
