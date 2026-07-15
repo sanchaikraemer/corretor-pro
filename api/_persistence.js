@@ -170,13 +170,13 @@ function _cleanArquivoIdentity(value = "") {
     .trim();
 }
 
-function _nomeIdentity(value = "") {
+export function _nomeIdentity(value = "") {
   // Identidade interna pode ignorar apenas caixa, acentos e espaços. O nome visível
   // nunca é corrigido e palavras que também podem fazer parte do contato não são removidas.
   return _normNome(_cleanArquivoIdentity(value)).replace(/\s+/g, " ").trim();
 }
 
-function _nomeRuimIdentity(value = "") {
+export function _nomeRuimIdentity(value = "") {
   const s = String(value || "").trim();
   const d = _digitsIdentity(s);
   const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, "");
@@ -189,24 +189,6 @@ export function _nomesMesmoLead(aId = "", bId = "") {
   const a = String(aId || "").trim();
   const b = String(bId || "").trim();
   return !!a && !!b && a === b;
-}
-
-// v827-15 (plano de estabilização, item 1): telefone identifica o CONTATO, não a
-// NEGOCIAÇÃO. Um mesmo cliente pode ter mais de uma oportunidade (apartamento, sala
-// comercial, terreno) — cada uma precisa virar um registro próprio, nunca fundido só
-// porque o telefone (ou o nome) bate. Só bloqueia a fusão quando os DOIS lados já têm
-// produto identificado e são diferentes; sem produto identificado em algum lado, segue
-// como reimportação normal da mesma conversa.
-function _produtoIdentity(analysis = {}) {
-  const p = String(analysis?.produtoInteresse || analysis?.lead?.product || "").trim();
-  if (!p || /^(?:n[ãa]o identificado|produto n[ãa]o identificado)$/i.test(p)) return "";
-  return _normNome(p);
-}
-
-export function _produtosIncompativeis(analiseA = {}, analiseB = {}) {
-  const a = _produtoIdentity(analiseA);
-  const b = _produtoIdentity(analiseB);
-  return !!a && !!b && a !== b;
 }
 
 function _assinaturaTimelineV681(m) {
@@ -256,23 +238,23 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
-    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) {
-      if (_produtosIncompativeis(ra, analysis)) continue; // mesmo contato, produto diferente = outra oportunidade
-      return { row, via: "telefone" };
-    }
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return { row, via: "telefone" };
   }
   for (const row of data) {
     const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
     if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return { row, via: "arquivo" };
   }
+  // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
+  // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
+  // assunto o tempo todo (ex.: cliente pergunta de um empreendimento e, mais adiante na
+  // mesma conversa, de outro) e travar por produto fragmentava um único cliente em vários
+  // cadastros. Uma oportunidade genuinamente separada é criação manual do corretor, não
+  // detecção automática.
   if (nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo)) {
     for (const row of data) {
       const ra = row.resultado_analise || {};
       const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
-      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) {
-        if (_produtosIncompativeis(ra, analysis)) continue; // mesmo nome, produto diferente = outra oportunidade
-        return { row, via: "nome" };
-      }
+      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return { row, via: "nome" };
     }
   }
   return null;
@@ -685,23 +667,18 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const lastClientIso = lastClient?.iso || null;
     const daysSinceClientReply = diasCalendarioBR(lastClientIso);
 
-    // v827-15 (plano de estabilização, item 1 — "separar cliente de oportunidade"):
-    // o card da lista NUNCA pode juntar dois registros só porque o NOME bate — nome é o
-    // sinal menos confiável (mesmo nome, clientes diferentes; ou o mesmo cliente grafado
-    // diferente). O telefone identifica o CONTATO, não a negociação: dois registros do
-    // mesmo telefone só são a mesma oportunidade se também tratam do MESMO produto (ou
-    // nenhum dos dois tem produto identificado ainda). Produtos diferentes e identificados
-    // no mesmo telefone (ex.: apartamento e sala comercial do mesmo cliente) IMPORTA em
-    // registros distintos — nunca fundidos automaticamente.
+    // v827-16 (plano de estabilização, item 1 — "separar cliente de oportunidade"):
+    // o NOME é o identificador real do cliente neste app — é o que vem estável no export
+    // do WhatsApp. Uma conversa real muda de produto o tempo todo (cliente pergunta de um
+    // empreendimento e, mais adiante na mesma conversa, de outro); tentar separar
+    // automaticamente por produto identificado fragmentava o histórico de um único cliente
+    // em vários cadastros. Só o `oportunidadeId` explícito (criado manualmente pelo
+    // corretor, ex. "nova oportunidade") separa registros do mesmo nome — nunca uma
+    // adivinhação automática por produto.
     const oportunidadeId = String(analysis?.modeloComercial?.oportunidade?.id || analysis?.oportunidadeId || "").trim();
-    const produtoResolvido = productFrom(fileName, analysis, row);
-    const produtoIdentificado = produtoResolvido && !/^produto n[aã]o identificado$/i.test(produtoResolvido);
-    const produtoKey = produtoIdentificado ? normalizeKey(produtoResolvido) : "";
-    const phoneDigits = String(analysis?.lead?.phone || row.telefone || "").replace(/\D/g, "");
-    const phoneKey = phoneDigits.length >= 8 ? phoneDigits.slice(-8) : "";
-    const dedupeKey = oportunidadeId
-      ? `oportunidade:${oportunidadeId}`
-      : (phoneKey ? `contato:${phoneKey}:${produtoKey}` : String(row.id || ""));
+    const nomeKey = normalizeKey(nomeResolvido);
+    const nomeGenerico = !nomeKey || /^cliente importad[oa]$/i.test(String(nomeResolvido || "").trim());
+    const dedupeKey = oportunidadeId ? `oportunidade:${oportunidadeId}` : (nomeGenerico ? String(row.id || "") : nomeKey);
 
     // Só materializa as mensagens que realmente serão enviadas ao navegador.
     // O histórico completo continua intacto no banco e é retornado em action=detalhe.

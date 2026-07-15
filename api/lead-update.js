@@ -6,7 +6,7 @@
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { requireApiKey } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, _digitsIdentity, _produtosIncompativeis } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
@@ -1521,28 +1521,27 @@ async function acaoApagar(id, res, ids) {
   const alvoPrincipal = String(id || "");
   const alvosBrutos = [...new Set((Array.isArray(ids) ? ids : []).concat([alvoPrincipal]).map(v => String(v || "")).filter(Boolean))];
 
-  // v827-15 (plano de estabilização, item 1 — "a exclusão deve apagar apenas o registro
+  // v827-16 (plano de estabilização, item 1 — "a exclusão deve apagar apenas o registro
   // selecionado"): NUNCA confia cegamente na lista de "duplicados" que o front mandou — ela
-  // pode vir de um cache antigo do navegador, de antes desta correção. Antes de apagar em
-  // lote, confere no banco que cada id extra é de fato o MESMO contato (telefone) e, quando
-  // os dois lados têm produto identificado, o MESMO produto do registro pedido. Um id que não
-  // bate fica de fora e sobrevive à exclusão — evita apagar a oportunidade errada.
+  // pode vir de um cache antigo do navegador. Antes de apagar em lote, confere no banco que
+  // cada id extra tem o MESMO nome (a identidade real do cliente neste app) do registro
+  // pedido. Um id que não bate fica de fora e sobrevive à exclusão.
   let alvos = [alvoPrincipal];
   if (alvosBrutos.length > 1) {
     const { data: rows } = await supabase
       .from("whatsapp_processamentos")
-      .select("id,telefone,resultado_analise")
+      .select("id,nome_arquivo,arquivo_nome,resultado_analise")
       .in("id", alvosBrutos);
     if (Array.isArray(rows)) {
       const principal = rows.find(r => String(r.id) === alvoPrincipal);
-      const raPrincipal = principal?.resultado_analise || {};
-      const phonePrincipal = _digitsIdentity(raPrincipal?.lead?.phone || principal?.telefone || "").slice(-8);
+      const ra0 = principal?.resultado_analise || {};
+      const nomePrincipal = _nomeIdentity(ra0?.clientName || ra0?.lead?.clientName || principal?.nome_arquivo || principal?.arquivo_nome || "");
       for (const r of rows) {
         const rid = String(r.id);
-        if (rid === alvoPrincipal || !phonePrincipal || phonePrincipal.length < 8) continue;
+        if (rid === alvoPrincipal || !nomePrincipal || _nomeRuimIdentity(nomePrincipal)) continue;
         const ra = r.resultado_analise || {};
-        const phoneR = _digitsIdentity(ra?.lead?.phone || r.telefone || "").slice(-8);
-        if (phoneR.length >= 8 && phoneR === phonePrincipal && !_produtosIncompativeis(raPrincipal, ra)) alvos.push(rid);
+        const nomeR = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || r.nome_arquivo || r.arquivo_nome || "");
+        if (nomeR && !_nomeRuimIdentity(nomeR) && _nomesMesmoLead(nomeR, nomePrincipal)) alvos.push(rid);
       }
     }
   }

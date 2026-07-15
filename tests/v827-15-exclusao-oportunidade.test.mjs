@@ -1,45 +1,51 @@
 import http from "node:http";
 import assert from "node:assert/strict";
-import { _produtosIncompativeis, _buscarProcessamentoExistenteV681 } from "../api/_persistence.js";
+import { _buscarProcessamentoExistenteV681, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "../api/_persistence.js";
 
-// §v827-15 (plano de estabilização, item 1 — "separar cliente de oportunidade"):
-// telefone identifica o CONTATO, não a NEGOCIAÇÃO. Dois produtos diferentes e
-// identificados no mesmo telefone (ex.: apartamento e sala comercial do mesmo
-// cliente) são oportunidades distintas — nunca podem ser tratadas como o mesmo
-// registro só porque telefone ou nome batem.
-assert.equal(_produtosIncompativeis({ produtoInteresse: "Apartamento Renaissance" }, { produtoInteresse: "Sala Comercial Centro" }), true, "produtos diferentes e identificados são incompatíveis");
-assert.equal(_produtosIncompativeis({ produtoInteresse: "Apartamento Renaissance" }, { produtoInteresse: "Apartamento Renaissance" }), false, "mesmo produto não é incompatível");
-assert.equal(_produtosIncompativeis({ produtoInteresse: "Não identificado" }, { produtoInteresse: "Sala Comercial Centro" }), false, "sem produto identificado de um lado, não bloqueia (reimportação normal)");
-assert.equal(_produtosIncompativeis({}, {}), false, "sem produto identificado nos dois lados, não bloqueia");
-
-// Mesmo telefone, mas o cliente já negocia OUTRO produto identificado (ex.: já tem um
-// apartamento em andamento e agora fala de uma sala comercial): a reimportação/nova
-// análise não pode cair dentro do registro do apartamento — precisa virar um lead novo.
+// §v827-16 (plano de estabilização, item 1 — "separar cliente de oportunidade"):
+// o NOME é o identificador real do cliente neste app (é o que vem estável do export do
+// WhatsApp) — telefone é detectado varrendo o TEXTO da conversa e pode pegar qualquer
+// número citado no meio do papo, não é confiável como identidade. Uma versão anterior
+// (v827-15) tentou também barrar a fusão quando o "produto" identificado mudava entre
+// duas reimportações — mas uma conversa real muda de assunto o tempo todo (cliente
+// pergunta de um empreendimento e, mais adiante na MESMA conversa, de outro), então essa
+// trava fragmentava um único cliente em vários cadastros. Corrigido: reimportar pelo
+// mesmo nome SEMPRE atualiza o mesmo registro, não importa qual produto a IA
+// identificar naquela rodada.
 const supabaseFake = (rows) => ({
   from() {
     return { select() { return { order() { return { limit() { return Promise.resolve({ data: rows, error: null }); } }; } }; } };
   }
 });
-const rowApartamento = { id: "row-apto", telefone: "5511999998888", resultado_analise: { produtoInteresse: "Apartamento Renaissance", lead: { phone: "5511999998888" } } };
+const rowJoao = { id: "row-joao", telefone: "", resultado_analise: { produtoInteresse: "Personalité", clientName: "João Pedro" } };
 
-const mesmoProduto = await _buscarProcessamentoExistenteV681(supabaseFake([rowApartamento]), {
-  result: { analysis: { produtoInteresse: "Apartamento Renaissance", lead: { phone: "5511999998888" } }, lead: { phone: "5511999998888" } },
-  fileName: "Conversa do WhatsApp com Cliente X.zip"
+const mesmoProduto = await _buscarProcessamentoExistenteV681(supabaseFake([rowJoao]), {
+  result: { analysis: { produtoInteresse: "Personalité", clientName: "João Pedro" }, lead: { clientName: "João Pedro" } },
+  fileName: "Conversa do WhatsApp com João Pedro.zip"
 });
-assert.equal(mesmoProduto?.row?.id, "row-apto", "mesmo telefone + mesmo produto deve atualizar o registro existente");
+assert.equal(mesmoProduto?.row?.id, "row-joao", "mesmo nome + mesmo produto atualiza o registro existente");
 
-const produtoNovo = await _buscarProcessamentoExistenteV681(supabaseFake([rowApartamento]), {
-  result: { analysis: { produtoInteresse: "Sala Comercial Centro", lead: { phone: "5511999998888" } }, lead: { phone: "5511999998888" } },
-  fileName: "Conversa do WhatsApp com Cliente X.zip"
+// O caso que quebrava antes: a conversa evolui (cliente passa a falar de outro produto)
+// e o corretor reimporta pra atualizar. Tem que continuar sendo o MESMO registro.
+const produtoMudouNaMesmaConversa = await _buscarProcessamentoExistenteV681(supabaseFake([rowJoao]), {
+  result: { analysis: { produtoInteresse: "Quality", clientName: "João Pedro" }, lead: { clientName: "João Pedro" } },
+  fileName: "Conversa do WhatsApp com João Pedro.zip"
 });
-assert.equal(produtoNovo, null, "mesmo telefone + produto DIFERENTE e identificado deve virar oportunidade nova (não achar registro existente)");
+assert.equal(produtoMudouNaMesmaConversa?.row?.id, "row-joao", "reimportar pelo mesmo nome atualiza o mesmo registro mesmo se o produto identificado mudou");
 
-// Integração: apagar um lead não pode arrastar junto uma oportunidade diferente do
-// mesmo contato, mesmo que o front (com cache antigo) mande o id dela em `ids`.
+// Nome claramente diferente continua não casando (isso nunca mudou).
+const nomeDiferente = await _buscarProcessamentoExistenteV681(supabaseFake([rowJoao]), {
+  result: { analysis: { produtoInteresse: "Personalité", clientName: "Maria Clara" }, lead: { clientName: "Maria Clara" } },
+  fileName: "Conversa do WhatsApp com Maria Clara.zip"
+});
+assert.equal(nomeDiferente, null, "nome diferente não deve casar com o registro de outro cliente");
+
+// Integração: apagar um lead não pode arrastar junto um cliente DIFERENTE cujo id o
+// front tenha mandado por engano (cache antigo) — a exclusão em lote confere o nome.
 const registros = {
-  "lead-A": { id: "lead-A", telefone: "5511999998888", resultado_analise: { produtoInteresse: "Apartamento Renaissance", lead: { phone: "5511999998888" } } },
-  "lead-B": { id: "lead-B", telefone: "5511999998888", resultado_analise: { produtoInteresse: "Sala Comercial Centro", lead: { phone: "5511999998888" } } },
-  "lead-C": { id: "lead-C", telefone: "5511999998888", resultado_analise: { produtoInteresse: "Apartamento Renaissance", lead: { phone: "5511999998888" } } }
+  "lead-A": { id: "lead-A", resultado_analise: { clientName: "João Pedro" } },
+  "lead-B": { id: "lead-B", resultado_analise: { clientName: "Maria Clara" } },
+  "lead-C": { id: "lead-C", resultado_analise: { clientName: "João Pedro" } }
 };
 let deleteQuery = "";
 
@@ -85,10 +91,10 @@ try {
   assert.equal(statusCode, 200, response);
   assert.equal(payload.ok, true);
   assert.ok(payload.ids.includes("lead-A"), "apaga o alvo principal");
-  assert.ok(payload.ids.includes("lead-C"), "apaga o duplicado real (mesmo contato e mesmo produto)");
-  assert.ok(!payload.ids.includes("lead-B"), "NÃO apaga a oportunidade diferente do mesmo contato");
+  assert.ok(payload.ids.includes("lead-C"), "apaga o duplicado real (mesmo nome)");
+  assert.ok(!payload.ids.includes("lead-B"), "NÃO apaga o cliente diferente");
   assert.ok(deleteQuery.includes("lead-A") && deleteQuery.includes("lead-C"), "o DELETE de fato só pediu os ids validados");
-  assert.ok(!deleteQuery.includes("lead-B"), "o DELETE não pode incluir a oportunidade diferente");
+  assert.ok(!deleteQuery.includes("lead-B"), "o DELETE não pode incluir o cliente diferente");
 
   console.log("v827-15-exclusao-oportunidade: ok");
 } finally {
