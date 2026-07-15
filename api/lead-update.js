@@ -6,7 +6,7 @@
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { requireApiKey } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, _digitsIdentity, _produtosIncompativeis } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
 
@@ -1518,10 +1518,35 @@ async function acaoEditarDados(id, body, res) {
 async function acaoApagar(id, res, ids) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-  // Apaga TODAS as cópias do mesmo lead de uma vez. O front manda em `ids` os registros que a
-  // lista já tinha juntado como o mesmo cliente (duplicados). Sem isso, apagar tirava só uma
-  // cópia e o lead "voltava" — o corretor precisava apagar duas vezes.
-  const alvos = [...new Set((Array.isArray(ids) ? ids : []).concat([id]).map(v => String(v || "")).filter(Boolean))];
+  const alvoPrincipal = String(id || "");
+  const alvosBrutos = [...new Set((Array.isArray(ids) ? ids : []).concat([alvoPrincipal]).map(v => String(v || "")).filter(Boolean))];
+
+  // v827-15 (plano de estabilização, item 1 — "a exclusão deve apagar apenas o registro
+  // selecionado"): NUNCA confia cegamente na lista de "duplicados" que o front mandou — ela
+  // pode vir de um cache antigo do navegador, de antes desta correção. Antes de apagar em
+  // lote, confere no banco que cada id extra é de fato o MESMO contato (telefone) e, quando
+  // os dois lados têm produto identificado, o MESMO produto do registro pedido. Um id que não
+  // bate fica de fora e sobrevive à exclusão — evita apagar a oportunidade errada.
+  let alvos = [alvoPrincipal];
+  if (alvosBrutos.length > 1) {
+    const { data: rows } = await supabase
+      .from("whatsapp_processamentos")
+      .select("id,telefone,resultado_analise")
+      .in("id", alvosBrutos);
+    if (Array.isArray(rows)) {
+      const principal = rows.find(r => String(r.id) === alvoPrincipal);
+      const raPrincipal = principal?.resultado_analise || {};
+      const phonePrincipal = _digitsIdentity(raPrincipal?.lead?.phone || principal?.telefone || "").slice(-8);
+      for (const r of rows) {
+        const rid = String(r.id);
+        if (rid === alvoPrincipal || !phonePrincipal || phonePrincipal.length < 8) continue;
+        const ra = r.resultado_analise || {};
+        const phoneR = _digitsIdentity(ra?.lead?.phone || r.telefone || "").slice(-8);
+        if (phoneR.length >= 8 && phoneR === phonePrincipal && !_produtosIncompativeis(raPrincipal, ra)) alvos.push(rid);
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("whatsapp_processamentos")
     .delete()
