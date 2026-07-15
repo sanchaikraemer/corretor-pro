@@ -2546,31 +2546,34 @@ function capitalizarFrase(s) {
 // v827-12: garante que a mensagem termine com EXATAMENTE uma pergunta, sem
 // expressões proibidas do Cérebro e dentro dos limites de tamanho — as mesmas
 // regras objetivas que validarMensagensCerebro cobra da IA.
-function sanitizarMensagemDeterministica(msg, regras) {
-  let out = String(msg || "").replace(/\s+/g, " ").trim();
-  const partes = out.split("?");
-  if (partes.length > 2) out = partes.slice(0, -1).join(".").replace(/\.{2,}/g, ".") + "?";
-  if (!/\?\s*$/.test(out)) out = out.replace(/[.!\s]+$/, "") + "?";
+// A saudação NUNCA entra no texto recebido aqui — é adicionada uma única vez,
+// por último, depois de tudo sanitizado (evita duplicar e evita que a remoção
+// de proibidas corrompa a própria saudação, ex.: "oi" proibido cortando o
+// meio da palavra "noite").
+export function sanitizarMensagemDeterministica(corpo, regras, agora = new Date()) {
+  let out = String(corpo || "").replace(/\s+/g, " ").trim();
   for (const proibida of (regras?.proibidas || [])) {
     const p = String(proibida || "").trim();
     if (!p) continue;
-    const re = new RegExp(`${escaparRegExp(p).replace(/\\ /g, "\\s+")}`, "gi");
+    // Fronteira de palavra: remove só a expressão proibida como palavra/frase
+    // inteira, nunca como substring dentro de outra palavra.
+    const re = new RegExp(`(?:^|\\b)${escaparRegExp(p).replace(/\\ /g, "\\s+")}(?:\\b|$)`, "gi");
     out = out.replace(re, "").replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
   }
+  const partes = out.split("?");
+  if (partes.length > 2) out = partes.slice(0, -1).join(".").replace(/\.{2,}/g, ".") + "?";
   if (!/\?\s*$/.test(out)) out = out.replace(/[.!\s]+$/, "") + "?";
   if (regras?.maxCaracteres && out.length > regras.maxCaracteres) {
-    out = out.slice(0, Math.max(10, regras.maxCaracteres - 1)).replace(/[^.?!]*$/, "").trim() || out.slice(0, Math.max(10, regras.maxCaracteres - 1));
-    if (!/\?\s*$/.test(out)) out = out.slice(0, Math.max(9, regras.maxCaracteres - 1)).trim() + "?";
+    const corte = Math.max(10, regras.maxCaracteres - 1);
+    out = (out.slice(0, corte).replace(/[^.?!]*$/, "").trim() || out.slice(0, corte).trim());
+    if (!/\?\s*$/.test(out)) out = out.slice(0, corte).trim() + "?";
   }
   if (regras?.maxPalavras) {
     const palavras = out.split(/\s+/).filter(Boolean);
     if (palavras.length > regras.maxPalavras) out = palavras.slice(0, Math.max(3, regras.maxPalavras - 1)).join(" ").replace(/[.,!?]+$/, "") + "?";
   }
-  if (regras?.saudacaoObrigatoria) {
-    const esperada = regras.saudacaoEsperada;
-    if (!new RegExp(`^${escaparRegExp(esperada)}\\b`, "i").test(out)) out = `${esperada}! ${out}`;
-  }
-  return out.trim();
+  const saudacao = regras?.saudacaoObrigatoria ? regras.saudacaoEsperada : saudacaoBrasil(agora);
+  return `${saudacao}! ${capitalizarFrase(out)}`.trim();
 }
 
 // v827-12: rede de segurança final. Se a IA não conseguir cumprir as regras do
@@ -2581,24 +2584,32 @@ function sanitizarMensagemDeterministica(msg, regras) {
 // e a regra de uma única pergunta.
 export function construirMensagensDeterministicasCerebro({ contextoTemporal, timeline, diagnostico, produtoAtual, regras, agora = new Date() }) {
   const ancoras = ancorasDaConversa(timeline);
-  const saudacao = regras?.saudacaoObrigatoria ? regras.saudacaoEsperada : saudacaoBrasil(agora);
   const foco = (produtoAtual && produtoAtual !== "Não identificado") ? produtoAtual : (ancoras[0] || "o que conversamos");
-  const ancoraGarantida = ancoras.find(a => a && !normalizarBusca(foco).includes(a)) || ancoras[0] || "";
-  const proximoPasso = String(diagnostico?.proximoPasso || diagnostico?.quemDeveAgirAgora || "").trim();
-  const complemento = ancoraGarantida ? ` sobre ${ancoraGarantida}` : "";
+  const focoNorm = normalizarBusca(foco);
+  const ancoraGarantida = ancoras.find(a => a && !focoNorm.includes(a)) || "";
+  // Só usa "proximoPasso" quando é uma frase de fato (não um valor solto como
+  // "Cliente"/"Você", que vem de outro campo do diagnóstico e não forma uma
+  // cláusula com sentido em "Ficou combinado ___.").
+  const proximoPassoBruto = String(diagnostico?.proximoPasso || "").trim();
+  const proximoPassoPalavras = proximoPassoBruto.split(/\s+/).filter(Boolean);
+  // Só usa se for de fato uma cláusula (2+ palavras) — um valor solto como
+  // "Cliente"/"Você" (comum em outros campos do diagnóstico) não forma frase
+  // com sentido em "Ficou combinado ___.".
+  const proximoPasso = (proximoPassoPalavras.length >= 2 && !/^n[aã]o identificado$/i.test(proximoPassoBruto)) ? proximoPassoBruto : "";
+  const referencia = ancoraGarantida ? (foco.includes("(") ? `${foco}, ${ancoraGarantida}` : `${foco} (${ancoraGarantida})`) : foco;
 
-  const bases = [
-    `${saudacao}! Vi que ficamos de conversar sobre ${foco}${complemento}. Como você quer seguir a partir daqui?`,
-    `${saudacao}! Voltando ao assunto de ${foco}${complemento}, quero entender melhor sua situação atual. O que ainda falta pra decidirmos o próximo passo?`,
+  const corpos = [
+    `Vi que ficamos de conversar sobre ${referencia}. Como você quer seguir a partir daqui?`,
+    `Voltando ao assunto de ${referencia}, quero entender melhor sua situação atual. O que ainda falta pra decidirmos o próximo passo?`,
     proximoPasso
-      ? `${saudacao}! Ficou combinado ${proximoPasso}. Qual o melhor horário pra conversarmos sobre isso?`
-      : `${saudacao}! Sobre ${foco}${complemento}, vamos direto ao ponto: qual o melhor horário pra conversarmos?`
+      ? `Ficou combinado ${proximoPasso}. Qual o melhor horário pra conversarmos sobre isso?`
+      : `Sobre ${referencia}, vamos direto ao ponto: qual o melhor horário pra conversarmos?`
   ];
 
   return {
-    a: sanitizarMensagemDeterministica(capitalizarFrase(bases[0]), regras),
-    b: sanitizarMensagemDeterministica(capitalizarFrase(bases[1]), regras),
-    c: sanitizarMensagemDeterministica(capitalizarFrase(bases[2]), regras)
+    a: sanitizarMensagemDeterministica(corpos[0], regras, agora),
+    b: sanitizarMensagemDeterministica(corpos[1], regras, agora),
+    c: sanitizarMensagemDeterministica(corpos[2], regras, agora)
   };
 }
 

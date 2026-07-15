@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   validarMensagensCerebro,
   construirMensagensDeterministicasCerebro,
+  sanitizarMensagemDeterministica,
   compilarRegrasObjetivasCerebro
 } from '../api/_pipeline.js';
 
@@ -36,14 +37,26 @@ assert.notEqual(fallback.b, fallback.c);
 const validacao = validarMensagensCerebro(fallback, { modo: 'continuidade', dias: 1, limiar: 7 }, tl, cerebro, noite);
 assert.equal(validacao.ok, true, `fallback deveria passar na validação do Cérebro: ${JSON.stringify(validacao.motivos)}`);
 
-// Cada mensagem termina com exatamente uma pergunta.
+// Cada mensagem termina com exatamente uma pergunta, tem a saudação UMA única vez
+// e não pode conter a corrupção "nte" (era assim que "noite" saía quando a proibida
+// "oi" era removida como substring, sem respeitar fronteira de palavra — bug real
+// relatado em produção logo após esta versão entrar no ar).
 for (const chave of ['a', 'b', 'c']) {
   const msg = fallback[chave];
   assert.equal((msg.match(/\?/g) || []).length, 1, `${chave} deve ter exatamente uma pergunta`);
   assert.match(msg, /\?$/, `${chave} deve terminar com a pergunta`);
   assert.match(msg, /^Boa noite\b/i, `${chave} deve usar a saudação obrigatória do Cérebro`);
   assert.doesNotMatch(msg.toLowerCase(), /^oi\b|^ol[aá]\b/, `${chave} não pode usar saudação proibida`);
+  assert.equal((msg.match(/boa noite/gi) || []).length, 1, `${chave} não pode duplicar a saudação`);
+  assert.doesNotMatch(msg, /\bnte\b/i, `${chave} não pode corromper "noite" ao remover a proibida "oi"`);
 }
+
+// Regressão direta do bug: uma proibida curta ("oi") não pode corromper uma palavra
+// que só a contém como substring ("noite", "loiro", etc.) quando ela é removida do corpo.
+const regrasOi = { proibidas: ['oi'], saudacaoObrigatoria: true, saudacaoEsperada: 'Boa noite', maxCaracteres: null, maxPalavras: null };
+const sanitizado = sanitizarMensagemDeterministica('Falamos ontem à noite sobre o apartamento, tudo bem?', regrasOi, noite);
+assert.match(sanitizado, /\bnoite\b/i, 'a palavra "noite" não pode ser corrompida pela proibida "oi"');
+assert.equal((sanitizado.match(/boa noite/gi) || []).length, 1, 'a saudação não pode aparecer duplicada');
 
 // Modo retomada: o fallback precisa citar um fato real da conversa (âncora), não algo genérico.
 const retomada = construirMensagensDeterministicasCerebro({
@@ -56,5 +69,18 @@ const retomada = construirMensagensDeterministicasCerebro({
 });
 const validacaoRetomada = validarMensagensCerebro(retomada, { modo: 'retomada', dias: 30, limiar: 7 }, tl, {}, noite);
 assert.equal(validacaoRetomada.ok, true, `fallback de retomada deveria passar: ${JSON.stringify(validacaoRetomada.motivos)}`);
+
+// Regressão: "proximoPasso" com um valor solto (ex.: vindo por engano de outro campo do
+// diagnóstico, tipo "Cliente"/"Você") não pode virar "Ficou combinado Cliente." — só uma
+// cláusula de verdade (2+ palavras) pode ser usada nessa frase.
+const semClausula = construirMensagensDeterministicasCerebro({
+  contextoTemporal: { modo: 'continuidade', dias: 1, limiar: 7 },
+  timeline: tl,
+  diagnostico: { proximoPasso: 'Cliente' },
+  produtoAtual: 'Renaissance',
+  regras,
+  agora: noite
+});
+assert.doesNotMatch(semClausula.c, /ficou combinado cliente/i, 'não pode transformar um valor solto em cláusula sem sentido');
 
 console.log('v827-12-fallback-mensagens: ok');
