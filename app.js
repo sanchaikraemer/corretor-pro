@@ -693,12 +693,13 @@ function limpoBestTime(v){
 function limpoNome(v){
   if(!v) return "Cliente";
   let s = String(v);
-  // Nome que na verdade é o NOME DO ARQUIVO ("Conversa do com Fulano-enxuto.zip"):
-  // limpa pra mostrar o nome do cliente e pra o reconhecimento de duplicado funcionar.
-  if(/\.zip$/i.test(s) || /^conversa\s+d/i.test(s)){
-    s = s.replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa\s+(?:do\s+)?(?:whatsapp\s+)?com\s+/i,"").trim();
+  // Só desembrulha quando o valor recebido é claramente um nome de arquivo legado.
+  // Um nome já extraído do WhatsApp permanece exatamente como foi salvo, inclusive
+  // quando contém palavras que também podem ser nomes de empreendimentos.
+  if(/\.zip$/i.test(s) || /^conversa\s+(?:do\s+)?(?:whatsapp\s+)?com\s+/i.test(s)){
+    s = s.replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa\s+(?:do\s+)?(?:whatsapp\s+)?com\s+/i,"");
   }
-  return s.replace(PRODUTOS_RX, "").replace(/\s+/g," ").trim() || String(v);
+  return s.trim() || "Cliente";
 }
 function limparLead(l){
   if(!l || typeof l !== "object") return l;
@@ -6340,15 +6341,14 @@ async function runOpenAIDiagnostics(){
 
 // Etapas oficiais do Documento Mestre §30
 const ETAPAS_PROCESSAMENTO = [
-  "Recebendo arquivo",
-  "Validando ZIP",
-  "Lendo conversa",
-  "Separando áudios",
-  "Transcrevendo áudios",
-  "Montando linha do tempo",
-  "Analisando atendimento",
-  "Gerando mensagens",
-  "Finalizado"
+  "Recebendo",
+  "Enviando",
+  "Extraindo",
+  "Transcrevendo",
+  "Analisando",
+  "Salvando",
+  "Concluído",
+  "Falha recuperável"
 ];
 
 function renderEtapas(idxAtual, sub){
@@ -6356,40 +6356,27 @@ function renderEtapas(idxAtual, sub){
   if(!ol) return;
   ol.innerHTML = ETAPAS_PROCESSAMENTO.map((label, i) => {
     let icone = "", cor = "var(--muted)", peso = "400";
-    if(i < idxAtual){ icone = "✓"; cor = "var(--acao)"; peso = "600"; }
-    else if(i === idxAtual){ icone = ""; cor = "var(--lime)"; peso = "950"; }
+    if(i < idxAtual && idxAtual !== 7){ icone = "✓"; cor = "var(--acao)"; peso = "600"; }
+    else if(i === idxAtual){ icone = idxAtual === 7 ? "!" : ""; cor = idxAtual === 7 ? "var(--morno)" : "var(--lime)"; peso = "950"; }
     const extra = (i === idxAtual && sub) ? ` <span style="color:var(--muted);font-weight:400">— ${escapeHtml(sub)}</span>` : "";
     return `<li style="padding:4px 0;color:${cor};font-weight:${peso}"><span style="display:inline-block;width:18px">${icone}</span>${escapeHtml(label)}${extra}</li>`;
   }).join("");
-  const pct = Math.round(((idxAtual + 1) / ETAPAS_PROCESSAMENTO.length) * 100);
+  const pctPorEtapa = [8, 32, 48, 70, 86, 94, 100, 100];
+  const pct = pctPorEtapa[idxAtual] ?? 0;
   const bar = qs("#progressBar"); if(bar) bar.style.width = pct + "%";
-  const txt = qs("#processingText"); if(txt) txt.innerHTML = '<span class="spinner"></span>' + escapeHtml(ETAPAS_PROCESSAMENTO[idxAtual]) + ` <span style="opacity:.7">(${pct}%)</span>`;
+  const txt = qs("#processingText");
+  if(txt) txt.innerHTML = (idxAtual === 7 ? "" : '<span class="spinner"></span>') + escapeHtml(ETAPAS_PROCESSAMENTO[idxAtual]) + (sub ? ` — ${escapeHtml(sub)}` : "") + ` <span style="opacity:.7">(${pct}%)</span>`;
 }
 
-// Avança as etapas automaticamente em intervalos quando não temos sinal real do backend.
 function startProgresso(){
   const bar = qs("#progressBar");
   bar?.classList.add("busy");
-  let etapa = 0;
-  renderEtapas(etapa);
-  // Velocidade variável. PARA na etapa 7 (Gerando mensagens) — a 8 (Finalizado) só por chamada explícita.
-  const intervalos = [800, 800, 1500, 1500, 6000, 1500, 6000];
-  let timer = null;
-  function avancar(){
-    if(etapa < ETAPAS_PROCESSAMENTO.length - 2){ // limite: até "Gerando mensagens" (índice 7)
-      etapa++;
-      renderEtapas(etapa);
-      if(etapa < intervalos.length){
-        timer = setTimeout(avancar, intervalos[etapa] || 2000);
-      }
-    }
-  }
-  timer = setTimeout(avancar, intervalos[0]);
+  renderEtapas(0);
   return {
-    avancarPara: (idx, sub) => { etapa = idx; renderEtapas(etapa, sub); if(timer) clearTimeout(timer); },
-    atualizarSub: (sub) => renderEtapas(etapa, sub),
-    finalizar: () => { etapa = ETAPAS_PROCESSAMENTO.length - 1; renderEtapas(etapa); if(timer) clearTimeout(timer); bar?.classList.remove("busy"); },
-    parar: () => { if(timer) clearTimeout(timer); bar?.classList.remove("busy"); }
+    avancarPara: (idx, sub) => renderEtapas(idx, sub),
+    atualizarSub: (sub) => renderEtapas(0, sub),
+    finalizar: () => { renderEtapas(6); bar?.classList.remove("busy"); },
+    parar: () => bar?.classList.remove("busy")
   };
 }
 
@@ -6481,10 +6468,16 @@ function escolherPeriodoAudiosImportacao(){
   });
 }
 
+function criarImportId(){
+  try{ if(globalThis.crypto?.randomUUID) return "imp-" + globalThis.crypto.randomUUID(); }catch(_){}
+  return "imp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,12);
+}
+
 async function uploadLargeZipToSupabase(file, options = {}){
   state.ultimoArquivo = file;
-  qs("#processingText").textContent="Preparando upload seguro para ZIP grande...";
-  qs("#progressBar").style.width="18%";
+  const importId = String(options.importId || state.activeImportId || criarImportId());
+  state.activeImportId = importId;
+  renderEtapas(1, "preparando envio seguro");
 
   const metaRes = await fetch("./api/criar-upload-url", {
     method:"POST",
@@ -6492,7 +6485,8 @@ async function uploadLargeZipToSupabase(file, options = {}){
     body:JSON.stringify({
       fileName:file.name,
       size:file.size,
-      contentType:file.type || "application/zip"
+      contentType:file.type || "application/zip",
+      importId
     })
   });
 
@@ -6510,8 +6504,7 @@ async function uploadLargeZipToSupabase(file, options = {}){
     throw new Error(partesErro.join("\n") || "Não foi possível preparar o upload grande.");
   }
 
-  qs("#processingText").textContent="Enviando a conversa (arquivo grande)…";
-  qs("#progressBar").style.width="35%";
+  renderEtapas(1, "enviando a conversa");
 
   // Use a signed URL retornada pelo backend e faça PUT direto (compatível com Supabase).
   // Isso evita depender do cliente supabase-js no navegador para uploads assinados.
@@ -6545,13 +6538,13 @@ async function uploadLargeZipToSupabase(file, options = {}){
   });
 
   qs("#progressBar").style.width="80%";
-  state.ultimoUploadStorage = { bucket: meta.bucket, path: meta.path };
+  state.ultimoUploadStorage = { bucket: meta.bucket, path: meta.path, importId };
 
   // Processa em ETAPAS (cada chamada cabe nos 10s do servidor):
   // 1) preparar → 2) transcrever em lotes → 3) analisar
   let analysisData;
   try{
-    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90" });
+    analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId });
   }catch(err){
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
@@ -6560,16 +6553,16 @@ async function uploadLargeZipToSupabase(file, options = {}){
     qs("#resultBox").innerHTML =
       "<b>Não foi possível analisar a conversa agora.</b><br><br>" +
       escapeHtml(userFriendlyError(err, file)) +
-      `<div style="margin-top:14px;display:flex;gap:10px"><button type="button" class="btn" id="btnRetomarAnalise" style="flex:1">Tentar analisar novamente</button></div>`;
+      `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="btn" id="btnRetomarAnalise" style="flex:1;min-width:180px">Tentar analisar novamente</button><button type="button" class="btn secondary" id="btnDescartarUpload" style="flex:1;min-width:140px">Descartar importação</button></div>`;
     qs("#btnRetomarAnalise")?.addEventListener("click", async () => {
       const stored = state.ultimoUploadStorage;
       if(stored?.bucket && stored?.path){
         qs("#processingText").textContent = "Tentando de novo (sem reenviar o ZIP)...";
         try{
-          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90" });
+          const data = await processarStorageEmEtapas(stored.bucket, stored.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId: stored.importId || importId });
           qs("#progressBar").style.width="100%";
           qs("#processingText").textContent="Conversa processada.";
-          renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path });
+          renderProcessedResult(data, { fileName: file.name, fileSize: file.size, source:"storage-retry", bucket: stored.bucket, path: stored.path, importId: stored.importId || importId });
           // O ZIP compartilhado permanece pendente até o lead ser salvo, atualizado ou descartado.
           // Se o app fechar nesta tela, a conversa pode ser recuperada sem nova exportação.
           toast("Conversa processada. Confira e salve o lead.");
@@ -6578,155 +6571,101 @@ async function uploadLargeZipToSupabase(file, options = {}){
       }
       if(state.ultimoArquivo){ state.processing = false; processFile(state.ultimoArquivo); }
     });
+    qs("#btnDescartarUpload")?.addEventListener("click", async () => {
+      if(!confirm("Descartar esta importação e apagar os arquivos temporários?")) return;
+      const stored = state.ultimoUploadStorage;
+      if(stored) await finalizarImportacaoStorage(stored);
+      const shareId = String(state.pendingSharedRecordId || "");
+      if(shareId) await finalizarSharePendente(shareId);
+      state.ultimoUploadStorage = null;
+      state.activeImportId = null;
+      state.ultimoArquivo = null;
+      clearAnalysis();
+      toast("Importação descartada.");
+    });
     toast(ehTimeout ? "Tempo esgotado numa das etapas." : "Erro na análise.");
     return false;
   }
 
   qs("#progressBar").style.width="100%";
   qs("#processingText").textContent="Conversa processada.";
-  renderProcessedResult(analysisData, { fileName: file.name, fileSize: file.size, source: "storage", bucket: meta.bucket, path: meta.path });
+  renderProcessedResult(analysisData, { fileName: file.name, fileSize: file.size, source: "storage", bucket: meta.bucket, path: meta.path, importId });
   toast("ZIP processado. Confira e clique em Salvar lead.");
   return true;
 }
 
 // Orquestra o processamento em 3 etapas, cada chamada curta o suficiente pro servidor.
-// Na reimportação, reconhece o lead ANTES das APIs: reaproveita transcrições já salvas
-// e envia ao Cérebro somente as mensagens inéditas + contexto consolidado anterior.
+// O ZIP é baixado e extraído uma única vez; os lotes usam os áudios persistidos da extração.
 async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
+  const importId = String(options.importId || state.activeImportId || "");
+  if(!importId) throw new Error("Identificador da importação ausente.");
   async function chamar(payload, timeoutMs){
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), timeoutMs || 30000);
     try{
       const res = await fetch("./api/processar-storage", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ bucket, path, cerebroConfig: obterCerebroConfigParaAnalise(), ...payload }), signal: ctrl.signal
+        body: JSON.stringify({ bucket, path, importId, cerebroConfig: obterCerebroConfigParaAnalise(), ...payload }), signal: ctrl.signal
       });
       const data = await res.json().catch(() => ({ ok:false, error:"Resposta inválida do servidor." }));
       if(!res.ok || !data.ok){
         const partes = [data.error, data.details, data.hint].filter(Boolean);
-        const msg = partes.length ? partes.join("\n") : ("Erro HTTP "+res.status);
-        throw new Error(msg);
+        const erro = new Error(partes.length ? partes.join("\n") : ("Erro HTTP "+res.status));
+        erro.recoverable = data.recoverable === true;
+        throw erro;
       }
       return data;
     } finally { clearTimeout(to); }
   }
 
-  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
-  const extrairTextoAudioSalvo = (m) => {
-    const texto = String(m?.text || "");
-    const match = texto.match(/^\[Áudio transcrito\]\s*([\s\S]*)$/i);
-    if(match && match[1].trim()) return match[1].trim();
-    return "";
-  };
-
-  // ETAPA 1 — preparar
-  renderEtapas(2, "lendo conversa e identificando novidades");
-  qs("#progressBar").style.width="35%";
-  const prep = await chamar({ action: "preparar", audioWindowDays: options.audioWindowDays || "90" }, 58000);
-  const janela = prep.janelaConversa;
-
-  // Reconhece o lead antes de transcrever/analisar. Só reaproveita automaticamente
-  // quando a identidade é segura: mesmo telefone ou o mesmo arquivo de conversa.
-  let matchAntecipado = null;
-  let existingLeadId = null;
-  let timelineAnterior = [];
-  try{
-    // Antes da análise, usa somente a identidade estável do arquivo exportado. Não usa telefone
-    // achado no texto, porque a conversa pode citar o número de outra pessoa.
-    matchAntecipado = await acharLeadExistente("", "", fileName || prep.txtFile || "");
-    const seguro = matchAntecipado && matchAntecipado.via === "arquivo";
-    if(seguro && matchAntecipado.lead?.id){
-      existingLeadId = String(matchAntecipado.lead.id);
-      const resDet = await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(existingLeadId)}`, { cache:"no-store" });
-      const det = await resDet.json().catch(()=>({ok:false}));
-      if(resDet.ok && det?.ok && det.item){
-        timelineAnterior = Array.isArray(det.item.recentMessages) ? det.item.recentMessages : [];
-      }
-    }
-  }catch(err){
-    console.warn("Não consegui preparar o reaproveitamento incremental; seguindo processamento normal:", err?.message || err);
-    existingLeadId = null;
-    timelineAnterior = [];
-  }
-
-  // Mapa das transcrições que já foram pagas e estão salvas no histórico.
-  const transcriptionMap = {};
-  for(const m of timelineAnterior){
-    const nome = normalizarAudio(m?.mediaFile);
-    const texto = extrairTextoAudioSalvo(m);
-    if(nome && texto){
-      transcriptionMap[nome] = { status:"transcrito_reaproveitado", text:texto, reused:true };
-    }
-  }
-
+  renderEtapas(2, "baixando e extraindo uma única vez");
+  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000);
+  const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
-  const audios = audiosTodos.filter(nome => {
-    const salvo = transcriptionMap[normalizarAudio(nome)];
-    return !(salvo && salvo.text);
-  });
-  const audiosReaproveitados = Math.max(0, audiosTodos.length - audios.length);
+  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
+  const audios = audiosTodos.filter(nome => !transcriptionMap[normalizarAudio(nome)]?.text);
+  const audiosReaproveitados = audiosTodos.length - audios.length;
 
-  // ETAPA 2 — transcrever somente áudios inéditos (com retry automático)
   if(audios.length){
-    const detalhe = audiosReaproveitados
-      ? `${audios.length} novo(s); ${audiosReaproveitados} já reaproveitado(s)`
-      : `${audios.length} áudio(s)`;
-    renderEtapas(4, `transcrevendo ${detalhe}`);
     const LOTE = 3;
-    const TIMEOUT_LOTE = 55000;
     for(let i=0; i<audios.length; i+=LOTE){
-      const lote = audios.slice(i, i+LOTE);
-      let r = null;
-      let ultimoErr = null;
-      for(let tentativa = 1; tentativa <= 2 && !r; tentativa++){
-        try{
-          r = await chamar({ action: "transcrever", audioNames: lote }, TIMEOUT_LOTE);
-        }catch(e){
-          ultimoErr = e;
-          if(tentativa < 2) await new Promise(res => setTimeout(res, 1500));
-        }
+      const lote = audios.slice(i,i+LOTE);
+      renderEtapas(3, `${Math.min(i+LOTE,audios.length)}/${audios.length} novos · ${audiosReaproveitados} reaproveitados`);
+      let resposta = null, ultimoErro = null;
+      for(let tentativa=1; tentativa<=2 && !resposta; tentativa++){
+        try{ resposta = await chamar({ action:"transcrever", audioNames:lote }, 70000); }
+        catch(error){ ultimoErro=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
       }
-      if(!r){ throw ultimoErr || new Error("Falha ao transcrever lote"); }
-      Object.assign(transcriptionMap, r.transcriptions || {});
-      const feito = Math.min(audios.length, i+LOTE);
-      const pct = 35 + Math.round((feito/audios.length) * 40);
-      qs("#progressBar").style.width = pct + "%";
-      renderEtapas(4, `áudios novos (${feito}/${audios.length}) · reaproveitados ${audiosReaproveitados}`);
+      if(!resposta) throw ultimoErro || new Error("Falha recuperável ao transcrever os áudios.");
+      Object.assign(transcriptionMap, resposta.transcriptions || {});
     }
-  } else if(audiosReaproveitados){
-    renderEtapas(5, `${audiosReaproveitados} áudio(s) já transcrito(s) — sem nova cobrança`);
-  } else {
-    renderEtapas(5, "sem áudios no período escolhido");
+  }else{
+    renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} transcrição(ões) reaproveitada(s)` : "sem áudio para transcrever");
   }
 
-  // ETAPA 3 — o servidor busca o histórico anterior pelo ID e analisa somente as novidades.
-  renderEtapas(6, existingLeadId ? "analisando somente o que mudou" : "analisando atendimento com o Cérebro");
-  qs("#progressBar").style.width="85%";
+  renderEtapas(4, "validando as três mensagens pelo Cérebro");
   const result = await chamar({
-    action: "analisar",
-    txtFile: prep.txtFile,
-    messages: prep.messages,
-    audioFilesRelevantes: prep.audioFilesRelevantes,
-    audioFilesForaDaJanela: prep.audioFilesForaDaJanela,
+    action:"analisar",
+    txtFile:prep.txtFile,
+    messages:prep.messages,
+    audioFilesRelevantes:prep.audioFilesRelevantes,
+    audioFilesForaDaJanela:prep.audioFilesForaDaJanela,
     transcriptionMap,
-    janelaConversa: janela,
-    ignoredFilesCount: prep.ignoredFilesCount,
-    ignoredFiles: prep.ignoredFiles,
-    audiosTotalNoZip: prep.audiosTotalNoZip,
-    audiosDescartadosPorJanela: prep.audiosDescartadosPorJanela,
-    metricsBase: prep.metricsBase,
-    existingLeadId,
+    janelaConversa:prep.janelaConversa,
+    ignoredFilesCount:prep.ignoredFilesCount,
+    ignoredFiles:prep.ignoredFiles,
+    audiosTotalNoZip:prep.audiosTotalNoZip,
+    audiosDescartadosPorJanela:prep.audiosDescartadosPorJanela,
+    metricsBase:prep.metricsBase,
     audiosReaproveitados,
-    audiosNovosSolicitados: audios.length
-  }, 120000);
-  const analysis = result?.analysis || null;
-  const msgs = analysis?.messages || {};
-  const temTrio = [msgs.a, msgs.b, msgs.c].every(v => String(v || "").trim().length >= 10);
-  if(!analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !temTrio){
-    throw new Error(analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não concluiu a análise comercial nem gerou as 3 mensagens.");
+    audiosNovosSolicitados:audios.length
+  }, 150000);
+  const msgs = result?.analysis?.messages || {};
+  if(result?.analysis?.sugestoesPendentes === true || ![msgs.a,msgs.b,msgs.c].every(v=>String(v||"").trim().length>=10)){
+    throw new Error("A análise permanece pendente porque uma das três mensagens não passou pelas regras do Cérebro.");
   }
-  result._matchAntecipado = matchAntecipado ? { id: matchAntecipado.lead?.id || null, via: matchAntecipado.via || null } : null;
-  renderEtapas(8);
+  result.importId = importId;
+  renderEtapas(5, "aguardando confirmação para salvar");
   return result;
 }
 
@@ -6753,7 +6692,9 @@ async function renderProcessedResult(data, meta){
     fileSize: meta.fileSize,
     source: meta.source,
     bucket: meta.bucket || null,
-    path: meta.path || null
+    path: meta.path || null,
+    importId: meta.importId || data.importId || state.activeImportId || null,
+    cerebroConfig: obterCerebroConfigParaAnalise()
   };
 
   qs("#clientName").value = state.lead.name;
@@ -6768,56 +6709,21 @@ async function renderProcessedResult(data, meta){
   const inc = data.incrementalMeta || {};
   const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
 
-  // Já existe lead com mesmo TELEFONE (certeza = mesmo cliente) ou mesmo NOME (pode ser outra pessoa)?
-  const match = await acharLeadExistente(state.lead.name, lead.phone, meta.fileName || state.pendingSave?.fileName);
-  const existente = match ? match.lead : null;
+  // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
+  // quando o nome exportado coincide tecnicamente com um nome já salvo.
+  const match = await acharLeadExistente(state.lead.name);
+  const existente = match?.lead || null;
   state.pendingExistente = existente;
-  state.pendingViaTelefone = !!(match && match.via === "telefone"); // bateu pelo número = atualização automática
-  // RECONHECIMENTO POR NOME quando NÃO há telefone (pedido do dono): muito lead não traz número na
-  // exportação. Se o nome bate EXATAMENTE e não dá pra distinguir por telefone (o import novo OU o
-  // lead salvo está sem número), é o MESMO cliente → atualiza sozinho, sem perguntar. Só PERGUNTA
-  // quando pode ser OUTRA pessoa: produtos/empreendimentos claramente diferentes, ou os dois têm
-  // telefone e os números DIVERGEM (aí o nome igual vira coincidência).
-  let autoPorNome = false;
-  if(existente && match && match.via === "nome"){
-    const soDig = (s) => String(s||"").replace(/\D/g,"");
-    const foneNovo = soDig(lead.phone), foneExist = soDig(existente.phone);
-    const semTelefonePraDistinguir = foneNovo.length < 8 || foneExist.length < 8;
-    const ehNaoIdent = (p) => { const s = String(p||"").toLowerCase().trim(); return !s || /n[ãa]o identificad/.test(s); };
-    const prodExist = String(existente.product||"").toLowerCase().trim();
-    const prodNovo = String(state.lead.product||"").toLowerCase().trim();
-    const produtosDiferentes = !ehNaoIdent(prodExist) && !ehNaoIdent(prodNovo) && prodExist !== prodNovo;
-    autoPorNome = semTelefonePraDistinguir && !produtosDiferentes;
-  }
-  // Nome PARECIDO (ex.: "Elisandro Altman" x "Elisandro Altmann Altan") SEMPRE pergunta —
-  // nunca junta sozinho, porque a diferença pode ser outra pessoa.
-  const perguntarNome = (!!(match && match.via === "nome") && !autoPorNome) || !!(match && match.via === "nome-parecido");
+  const perguntarNome = !!existente;
   let acoesHtml;
-  if(existente && !perguntarNome){
-    // Mesmo cliente (telefone igual, OU nome igual sem telefone pra distinguir) → atualiza sozinho.
+  if(perguntarNome){
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Atualizando ${escapeHtml((existente.name||"este lead").split(" ")[0])}...</b> ${state.pendingViaTelefone ? "Mesmo telefone" : (match?.via === "arquivo" ? "Mesma conversa" : "Mesmo nome")} — atualizo o atual, sem duplicar.</div>` +
-      `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar ${escapeHtml((existente.name||"").split(" ")[0])}</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Descartar</button></div>`;
-  } else if(perguntarNome){
-    // Nome igual, telefone não confirma → PERGUNTA: é o mesmo cliente ou outro?
-    const prodExist = String(existente.product||"").trim();
-    const prodNovo = String(state.lead.product||"").trim();
-    const temProds = prodExist && prodNovo && !/não identificad/i.test(prodExist) && !/não identificad/i.test(prodNovo);
-    // Produtos diferentes = quase sempre outro cliente → sugere "criar novo" por padrão.
-    const produtosDiferentes = temProds && prodExist.toLowerCase() !== prodNovo.toLowerCase();
-    const btnAtualizar = `<button type="button" id="btnAtualizarLead" class="btn${produtosDiferentes ? " secondary" : ""}" style="flex:1;min-width:150px">É o mesmo — atualizar</button>`;
-    const btnNovo = `<button type="button" id="btnSalvarLead" class="btn${produtosDiferentes ? "" : " secondary"}" style="flex:1;min-width:150px">É outro — criar novo</button>`;
-    const ordemBtns = produtosDiferentes ? (btnNovo + btnAtualizar) : (btnAtualizar + btnNovo);
-    const dica = produtosDiferentes ? `<div class="small" style="margin-top:8px;color:var(--morno);font-size:11px">Produtos diferentes — provavelmente é outro cliente.</div>` : "";
-    acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Já existe "${escapeHtml(existente.name||"")}"${prodExist && !/não identificad/i.test(prodExist) ? " — "+escapeHtml(prodExist) : ""}.</b><br>Você está importando "${escapeHtml(state.lead.name||"")}"${prodNovo && !/não identificad/i.test(prodNovo) ? " — "+escapeHtml(prodNovo) : ""}.<br>É o mesmo cliente ou outra pessoa com o mesmo nome?</div>${dica}` +
-      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">${ordemBtns}</div>` +
-      `<div style="margin-top:8px;text-align:center"><button type="button" id="btnDescartarLead" style="background:transparent;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer">Descartar análise</button></div>`;
-  } else {
-    // Lead novo: importou = salvo. Sem passo manual — salva e abre sozinho (ver fim da função).
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Já existe um cliente chamado “${escapeHtml(existente.name || state.lead.name)}”.</b><br>O que deseja fazer?</div>` +
+      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar o cliente existente</button><button type="button" id="btnSalvarLead" class="btn secondary" style="flex:1;min-width:160px">Criar um novo cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
+  }else{
     acoesHtml =
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
-      `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnSalvarLead" class="btn" style="flex:1;min-width:160px">Salvar lead</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:160px">Descartar análise</button></div>`;
+      `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnSalvarLead" class="btn" style="flex:1;min-width:160px">Salvar lead</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:160px">Cancelar</button></div>`;
   }
 
   qs("#resultBox").className = "small";
@@ -6848,13 +6754,9 @@ async function renderProcessedResult(data, meta){
 
   renderLeads();
 
-  if(existente && !perguntarNome){
-    // Telefone confirma o mesmo cliente: atualiza automaticamente (compara e aprende a evolução).
-    atualizarLeadComEvolucao();
-  } else if(perguntarNome){
-    // Nome igual: NÃO faz nada automático — espera o usuário escolher (atualizar ou criar novo).
-  } else {
-    // Lead novo: importou = salvo. Salva e abre o lead automaticamente, sem clique.
+  if(perguntarNome){
+    // Mesmo nome: nunca funde automaticamente; aguarda a escolha explícita do usuário.
+  }else{
     salvarLeadPendente();
   }
  }catch(err){
@@ -6869,108 +6771,80 @@ async function renderProcessedResult(data, meta){
  }
 }
 
-// Acha um lead já salvo parecido (por TELEFONE ou NOME) pra reimportação virar atualização — nunca duplicar.
-// Procura na base INTEIRA (não só nos recentes), senão um lead antigo escaparia e duplicaria.
-async function acharLeadExistente(nome, telefone, arquivo){
-  const norm = (s) => String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g," ").trim();
-  // O corretor cola o nome do empreendimento no contato (ex.: "Katia ... Prime"). O nome do
-  // lead é salvo SEM o produto, então sem tirar isso a reimportação não casa e vira duplicado.
-  const PRODUTOS = ["renaissance","evolutti","boulevard","terrenos","premium office","quality","personalite","prime"];
-  const semProduto = (s) => { let o = norm(s); for(const p of PRODUTOS) o = o.replace(new RegExp("\\b"+p+"\\b","g")," "); return o.replace(/\s+/g," ").trim(); };
-  // Nome do arquivo da conversa = identidade estável do contato (mesmo export = mesmo cliente).
-  const normArquivo = (s) => norm(String(s||"").replace(/\.zip$/i,"").replace(/-enxuto$/i,"").replace(/\s*\(\d+\)\s*$/,"").replace(/^conversa (?:do )?(?:whatsapp )?com\s+/i,""));
-  const soDigitos = (s) => String(s||"").replace(/\D/g,"");
-  const alvoNome = norm(nome);
-  const alvoNomeSP = semProduto(nome);
-  const alvoArq = normArquivo(arquivo);
-  const digFone = soDigitos(telefone);
-  const foneAlvo = digFone.length >= 8 ? digFone.slice(-8) : ""; // últimos 8 dígitos (ignora DDI/DDD divergente)
-  if(alvoNome.length < 3 && !foneAlvo && alvoArq.length < 3) return null;
+// Procura na base inteira um lead com o mesmo nome técnico (maiúsculas, espaços e acentos ignorados).
+// Nomes apenas parecidos e telefone nunca decidem uma fusão automática.
+async function acharLeadExistente(nome){
+  const norm = (valor) => String(valor || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+  const alvo = norm(nome);
+  if(alvo.length < 2) return null;
   let leads = state.leads || [];
   try{
-    // SEMPRE fresco do servidor (força, sem cache de 60s) — assim um lead recém-apagado
-    // não aparece como "já existe" na hora de importar.
     const data = await getLeadsData(true);
     if(Array.isArray(data?.items)) leads = data.items.map(limparLead);
-  }catch(_){ /* se a rede falhar, usa o que já tem em memória */ }
-  // Distância de edição (Levenshtein) limitada — pra reconhecer nomes quase iguais
-  // (ex.: "Altman" x "Altmann") sem depender de igualdade perfeita.
-  const distEdicao = (a, b) => {
-    a = String(a||""); b = String(b||"");
-    if(a === b) return 0;
-    if(!a.length) return b.length;
-    if(!b.length) return a.length;
-    let prev = Array.from({length: b.length+1}, (_,i)=>i);
-    for(let i=1;i<=a.length;i++){
-      let cur = [i];
-      for(let j=1;j<=b.length;j++){
-        const custo = a[i-1] === b[j-1] ? 0 : 1;
-        cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+custo);
-      }
-      prev = cur;
-    }
-    return prev[b.length];
-  };
-  // "Parecido" = MESMO primeiro nome + segundo nome quase igual (1 ou 2 letras de diferença).
-  // Só serve pra PERGUNTAR ("é o mesmo?"), nunca pra juntar sozinho.
-  const tokens = (s) => semProduto(s).split(/\s+/).filter(Boolean);
-  const alvoTok = tokens(nome);
-  const nomeParecido = (nomeLead) => {
-    const b = tokens(nomeLead);
-    if(alvoTok.length < 2 || b.length < 2) return false;      // precisa de nome + sobrenome dos dois lados
-    if(alvoTok[0].length < 3 || alvoTok[0] !== b[0]) return false; // primeiro nome tem que bater
-    if(alvoTok[1] === b[1]) return true;
-    const d = distEdicao(alvoTok[1], b[1]);
-    return d <= 2 && Math.min(alvoTok[1].length, b[1].length) >= 4; // sobrenome quase igual
-  };
+  }catch(_){}
+  const encontrado = leads.find(l => l?.id && norm(l.name) === alvo);
+  return encontrado ? { lead:encontrado, via:"nome-exato" } : null;
+}
 
-  let candidatoParecido = null;
-  for(const l of leads){
-    if(!l.id) continue;
-    // 1) Telefone bate = mesmo lead (sinal mais forte → atualiza sozinho)
-    if(foneAlvo){
-      const lf = soDigitos(l.phone);
-      if(lf.length >= 8 && lf.slice(-8) === foneAlvo) return { lead: l, via: "telefone" };
-    }
-    // 2) Nome bate APENAS se for EXATAMENTE igual (depois de tirar o nome do empreendimento
-    // colado no contato). Nada de "um contém o outro": isso fundia clientes diferentes pelo
-    // primeiro nome (ex.: "Luciano" caía em "Luciano Bertani"). Como nome igual pode ser OUTRA
-    // pessoa, devolve via:"nome" pra PERGUNTAR antes.
-    if(alvoNomeSP.length >= 3){
-      const ln = semProduto(l.name);
-      if(ln && ln === alvoNomeSP) return { lead: l, via: "nome" };
-    }
-    // 3) Mesmo ARQUIVO de conversa = mesmo contato reexportado → é reimportação, atualiza (não
-    // duplica). Pega o caso em que a análise nova não extraiu o nome (vinha "Cliente importado").
-    if(alvoArq.length >= 3 && l.fileName){
-      if(normArquivo(l.fileName) === alvoArq) return { lead: l, via: "arquivo" };
-    }
-    // 4) Nome PARECIDO (ex.: "Elisandro Altman" x "Elisandro Altmann Altan"): guarda como
-    // candidato pra PERGUNTAR no fim, se nada exato tiver batido. Nunca junta sozinho.
-    if(!candidatoParecido && nomeParecido(l.name)) candidatoParecido = l;
+async function finalizarImportacaoStorage(pending){
+  const bucket = pending?.bucket, path = pending?.path, importId = pending?.importId;
+  if(!bucket || !path || !importId) return { ok:true, skipped:true };
+  try{
+    const res = await fetch("./api/processar-storage", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ action:"finalizar", bucket, path, importId })
+    });
+    const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida ao limpar a importação."}));
+    if(!res.ok || !data.ok) throw new Error(data.error || "Não foi possível limpar os arquivos temporários.");
+    return data;
+  }catch(error){
+    console.warn("Importação salva, mas limpeza temporária ficou pendente:", error?.message || error);
+    return { ok:false, pending:true, error:error?.message || String(error) };
   }
-  if(candidatoParecido) return { lead: candidatoParecido, via: "nome-parecido" };
-  return null;
+}
+
+async function limparImportacoesRemotasAntigas(){
+  const chave = "corretor_pro_import_cleanup_at";
+  const intervalo = 24 * 60 * 60 * 1000;
+  try{
+    const ultima = Number(localStorage.getItem(chave) || 0);
+    if(ultima && Date.now() - ultima < intervalo) return;
+  }catch(_){ }
+  try{
+    const res = await fetch("./api/processar-storage", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ action:"limpar-antigos", activeImportId:state.activeImportId || null })
+    });
+    const data = await res.json().catch(()=>({ok:false}));
+    if(!res.ok || !data.ok) throw new Error(data.error || "Falha na limpeza remota.");
+    try{ localStorage.setItem(chave, String(Date.now())); }catch(_){ }
+  }catch(error){
+    console.warn("Limpeza remota de importações antigas ignorada:", error?.message || error);
+  }
 }
 
 async function atualizarLeadComEvolucao(){
   const existente = state.pendingExistente;
-  const viaTelefone = !!state.pendingViaTelefone; // atualização automática por número (sem o usuário escolher)
   if(!existente?.id || !state.pendingSave){ toast("Nada pra atualizar."); return; }
   const btn = qs("#btnAtualizarLead");
   if(btn){ btn.disabled = true; btn.textContent = "Atualizando..."; }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action: "atualizar-com-evolucao", id: existente.id, result: state.pendingSave.result })
+      body: JSON.stringify({ action: "atualizar-com-evolucao", id: existente.id, result: state.pendingSave.result, importId: state.pendingSave.importId, cerebroConfig: state.pendingSave.cerebroConfig })
     });
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
     const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
+    const importacaoConcluida = state.pendingSave;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
+    const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
+    state.activeImportId = null;
+    state.ultimoUploadStorage = null;
     state.pendingExistente = null;
-    state.pendingViaTelefone = false;
     const ev = data.evolucao;
     const juntou = !incrementalMeta?.reimportacao && Number(data.preservadasDoAntigo||0) > 0; // no fluxo incremental, o servidor recebeu só as novidades de propósito
     const primeiroNome = (existente.name||"").split(" ")[0] || "o lead";
@@ -6979,11 +6853,7 @@ async function atualizarLeadComEvolucao(){
       pendingBox.style.background = "rgba(104,255,149,.08)";
       pendingBox.style.borderColor = "rgba(104,255,149,.32)";
       pendingBox.style.color = "#bdffd0";
-      // Quando bateu pelo número, deixa CLARO que reconheceu e atualizou o lead que já existia
-      // (não criou outro) — senão a importação parecia não ter feito nada.
-      let txt = viaTelefone
-        ? `<b>✓ Reconheci pelo número — atualizei ${escapeHtml(primeiroNome)} (não criei outro lead).</b> `
-        : "<b>Atualizado.</b> ";
+      let txt = "<b>Atualizado.</b> ";
       if(incrementalMeta?.reimportacao){
         const nMsg = Number(incrementalMeta.mensagensNovas)||0;
         const nAudio = Number(incrementalMeta.audiosNovosTranscritos)||0;
@@ -6997,22 +6867,19 @@ async function atualizarLeadComEvolucao(){
         if(ev.abordagemFuncionou && ev.abordagemFuncionou !== "sem-dados") txt += `Abordagem anterior: <b>${escapeHtml(ev.abordagemFuncionou)}</b>. `;
         if(ev.licao && ev.licao !== "sem lição clara ainda") txt += `Lição: ${escapeHtml(ev.licao)}`;
       }
+      if(!limpeza.ok) txt += " <b>O lead foi salvo; a limpeza temporária ficou programada para nova tentativa.</b>";
       pendingBox.innerHTML = txt;
     }
     toast(incrementalMeta?.reimportacao
       ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} mensagem(ns) nova(s).`
-      : (viaTelefone ? `✓ Atualizei ${primeiroNome} (mesmo número) — não dupliquei.` : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução.")));
+      : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução."));
     // Mesma correção do salvar: sem zerar o cache de 5 min, a Carteira seguia mostrando o
     // lead como estava ANTES da atualização (ainda em "preparação").
     invalidarLeadsCache();
     loadRecentLeads(true); refreshAllSections();
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
-    // A análise já foi atualizada durante a importação incremental. Não dispara uma segunda
-    // reanálise do histórico inteiro: isso repetiria custo de API e anularia a economia da v669.
     qs("#pendingActions")?.remove();
-    // Abre o lead atualizado NA HORA pra o corretor ver (pedido do dono) — tanto na atualização
-    // automática por número quanto na confirmada. Antes, no caso do número, ficava só um botão e
-    // parecia que tinha voltado pra home sem nada.
+    renderEtapas(6, "lead atualizado e importação confirmada");
     setTimeout(() => { if(existente.id) abrirLead(existente.id); }, 800);
   }catch(err){
     if(btn){ btn.disabled = false; btn.textContent = "Atualizar"; }
@@ -7039,14 +6906,18 @@ async function salvarLeadPendente(){
     }
     state.lead.id = data.persistence.processing.id;
     state.lead.status = "Conversa processada";
+    const importacaoConcluida = state.pendingSave;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
+    const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
+    state.activeImportId = null;
+    state.ultimoUploadStorage = null;
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
       pendingBox.style.background = "rgba(104,255,149,.08)";
       pendingBox.style.borderColor = "rgba(104,255,149,.32)";
       pendingBox.style.color = "#bdffd0";
-      pendingBox.innerHTML = "<b>Salvo no banco.</b> Lead disponível na Condução e na Home.";
+      pendingBox.innerHTML = "<b>Salvo no banco.</b> Lead disponível na Condução e na Home." + (!limpeza.ok ? " <b>A limpeza temporária ficou programada para nova tentativa.</b>" : "");
     }
     qs("#pendingActions")?.remove();
     toast("Lead salvo.");
@@ -7056,6 +6927,7 @@ async function salvarLeadPendente(){
     invalidarLeadsCache();
     loadRecentLeads(true); refreshAllSections();
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
+    renderEtapas(6, "lead salvo e importação confirmada");
     // Após salvar, abre o lead da home pra mostrar o card de foco completo (com badges, materiais, etc).
     setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id); }, 800);
   }catch(err){
@@ -7068,7 +6940,11 @@ async function salvarLeadPendente(){
 async function descartarLeadPendente(){
   if(!confirm("Descartar essa análise sem salvar no banco?")) return;
   const shareDescartadoId = String(state.pendingSharedRecordId || "");
+  const importacaoDescartada = state.pendingSave;
+  await finalizarImportacaoStorage(importacaoDescartada);
   state.pendingSave = null;
+  state.activeImportId = null;
+  state.ultimoUploadStorage = null;
   clearAnalysis();
   if(shareDescartadoId) await finalizarSharePendente(shareDescartadoId);
   toast("Análise descartada.");
@@ -7078,6 +6954,8 @@ async function processFile(file, options = {}){
   if(!file) return false;
   if(state.processing) return false;
   const pendingShareId = String(options.shareId || state.pendingSharedRecordId || "").trim();
+  const importId = String(options.importId || state.activeImportId || criarImportId());
+  state.activeImportId = importId;
   if(pendingShareId){
     state.pendingSharedRecordId = pendingShareId;
     window.__cpShareImportActive = true;
@@ -7089,8 +6967,7 @@ async function processFile(file, options = {}){
   qs("#fileName").textContent="Arquivo selecionado: "+file.name+" ("+(file.size/1024/1024).toFixed(1)+" MB)";
   qs("#fileName").classList.add("show");
   qs("#processingBox").classList.add("show");
-  qs("#processingText").textContent="Validando arquivo...";
-  qs("#progressBar").style.width="6%";
+  renderEtapas(0, "validando o arquivo recebido");
 
   if(!file.name.toLowerCase().endsWith(".zip")){
     qs("#processingText").textContent="Arquivo inválido.";
@@ -7103,35 +6980,32 @@ async function processFile(file, options = {}){
 
   try{
     const audioWindowDays = await escolherPeriodoAudiosImportacao();
-    qs("#processingText").textContent = "Áudios: transcrição limitada a " + rotuloJanelaAudio(audioWindowDays) + ". Mensagens escritas entram completas.";
+    renderEtapas(0, "áudios: " + rotuloJanelaAudio(audioWindowDays) + "; textos completos");
 
     // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
     let slimInfo = null;
     let working = file;
     try{
-      qs("#processingText").textContent="Removendo imagens, vídeos e documentos do ZIP no celular...";
+      renderEtapas(0, "preparando uma única cópia útil do ZIP");
       slimInfo = await slimZipKeepingTextAndAudio(file, ({processed,total,kept,dropped})=>{
-        const pct = Math.round((processed/total)*15) + 3;
-        qs("#progressBar").style.width = Math.min(18, pct) + "%";
-        qs("#processingText").textContent = "Enxugando ZIP: "+processed+"/"+total+" arquivos · mantidos "+kept+", descartados "+dropped;
+        renderEtapas(0, "preparando ZIP: "+processed+"/"+total+" · mantidos "+kept+", descartados "+dropped);
       });
       working = slimInfo.file;
       const oMb = (slimInfo.originalSize/1024/1024).toFixed(1);
       const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
-      qs("#processingText").textContent = "ZIP enxugado: "+oMb+" MB → "+sMb+" MB ("+slimInfo.kept+" arquivos úteis, "+slimInfo.dropped+" descartados).";
+      renderEtapas(0, "ZIP preparado: "+oMb+" MB → "+sMb+" MB");
     }catch(err){
-      qs("#processingText").textContent="Não enxuguei o ZIP ("+escapeHtml(String(err?.message||err))+"). Tentando subir o original.";
+      renderEtapas(0, "usando o ZIP original");
       working = file;
     }
 
-    const ok = await uploadLargeZipToSupabase(working, { audioWindowDays });
+    const ok = await uploadLargeZipToSupabase(working, { audioWindowDays, importId });
     if(!ok) return false;
     // Não elimina o ZIP ainda: a importação só termina quando o lead é salvo/atualizado
     // ou quando o corretor descarta explicitamente a análise.
     return true;
   }catch(err){
-    qs("#progressBar").style.width="100%";
-    qs("#processingText").textContent="Falha no processamento.";
+    renderEtapas(7, "a importação pode ser retomada sem perder o ZIP");
     showCard("resultCard", true);
     qs("#resultBox").className="notice error";
     state.ultimoArquivo = file;
@@ -7139,10 +7013,13 @@ async function processFile(file, options = {}){
       escapeHtml(userFriendlyError(err,file)).replace(/\n/g,"<br>") +
       `<div style="margin-top:14px;display:flex;gap:10px"><button type="button" class="btn" id="btnTentarNovamente" style="flex:1">Tentar novamente</button><button type="button" class="btn secondary" id="btnDescartarTentativa" style="flex:1">Descartar</button></div>`;
     qs("#btnTentarNovamente")?.addEventListener("click", async () => {
-      if(state.ultimoArquivo){ state.processing = false; await processFile(state.ultimoArquivo, { shareId: pendingShareId }); }
+      if(state.ultimoArquivo){ state.processing = false; await processFile(state.ultimoArquivo, { shareId: pendingShareId, importId }); }
     });
     qs("#btnDescartarTentativa")?.addEventListener("click", async () => {
+      if(state.ultimoUploadStorage) await finalizarImportacaoStorage(state.ultimoUploadStorage);
       if(pendingShareId) await descartarSharePendente(pendingShareId);
+      state.ultimoUploadStorage = null;
+      state.activeImportId = null;
       state.ultimoArquivo = null;
       showCard("resultCard", false);
     });
@@ -7308,6 +7185,38 @@ async function descartarSharePendente(id){
   toast('Importação descartada.');
 }
 window.descartarSharePendente=descartarSharePendente;
+
+async function limparSharesLocaisAntigos(){
+  const ativo = String(state.pendingSharedRecordId || "");
+  const limite = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  try{
+    const registros = await shareIdbList();
+    for(const registro of registros || []){
+      const id = String(registro?.id || "");
+      const ts = Date.parse(registro?.ts || registro?.createdAt || "");
+      if(!id || id === ativo || !ts || ts >= limite || registro?.status === "processing") continue;
+      await shareIdbDel(id);
+      await apagarShareDoCache(id);
+    }
+
+    if('caches' in window){
+      const nomes = await caches.keys();
+      const relevantes = nomes.filter(n => n === 'direciona-sharetarget-stable' || n.startsWith('direciona-sharetarget-'));
+      for(const nomeCache of relevantes){
+        const cache = await caches.open(nomeCache);
+        const requests = await cache.keys();
+        for(const request of requests){
+          if(!request.url.includes('/__direciona_shared_zip__')) continue;
+          const response = await cache.match(request);
+          const id = String(response?.headers?.get('X-Share-Id') || '');
+          const ts = Date.parse(response?.headers?.get('X-Shared-At') || '');
+          if((id && id === ativo) || !ts || ts >= limite) continue;
+          await cache.delete(request);
+        }
+      }
+    }
+  }catch(error){ console.warn("Limpeza de compartilhamentos antigos ignorada:", error?.message || error); }
+}
 
 async function localizarSharePendente(idPreferido){
   const pref=String(idPreferido||'').trim();
@@ -9127,7 +9036,11 @@ if("serviceWorker" in navigator){
       } else {
         setTimeout(checarVersaoServidor, 4000);
       }
-      setTimeout(() => { if(!state?.processing) checkShared(); }, 900);
+      setTimeout(async () => {
+        await limparSharesLocaisAntigos();
+        limparImportacoesRemotasAntigas();
+        if(!state?.processing) checkShared();
+      }, 900);
     }catch(e){
       console.warn("Falha ao registrar service worker do Corretor Pro", e);
     }

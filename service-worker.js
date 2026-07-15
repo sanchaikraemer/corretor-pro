@@ -192,26 +192,24 @@ async function handleShare(request) {
       debug.putError = 'IndexedDB: ' + (e && e.message ? e.message : String(e));
     }
 
-    // Fallback no Cache Storage, também separado por shareId. As chaves legadas são
-    // mantidas por compatibilidade, mas o app usa primeiro a chave exclusiva.
-    try {
-      const cache = await caches.open(SHARE_CACHE);
-      const headers = new Headers({
-        'Content-Type': file.type || 'application/zip',
-        'X-File-Name': encodeURIComponent(file.name || 'whatsapp.zip'),
-        'X-Shared-At': new Date().toISOString(),
-        'X-Share-Id': shareId,
-        'Cache-Control': 'no-store'
-      });
-      const uniqueKey = `/__direciona_shared_zip__/${encodeURIComponent(shareId)}`;
-      await cache.put(new Request(new URL(uniqueKey, self.location.origin).href, { method: 'GET' }), new Response(body.slice(0), { headers }));
-      for (const k of ZIP_KEYS) {
-        const requestUrl = new URL(k, self.location.origin).href;
-        await cache.put(new Request(requestUrl, { method: 'GET' }), new Response(body.slice(0), { headers }));
+    // Cache Storage é somente fallback. Quando o IndexedDB funcionou, não criamos
+    // uma segunda cópia integral do mesmo ZIP no aparelho.
+    if (!debug.idbSaved) {
+      try {
+        const cache = await caches.open(SHARE_CACHE);
+        const headers = new Headers({
+          'Content-Type': file.type || 'application/zip',
+          'X-File-Name': encodeURIComponent(file.name || 'whatsapp.zip'),
+          'X-Shared-At': new Date().toISOString(),
+          'X-Share-Id': shareId,
+          'Cache-Control': 'no-store'
+        });
+        const uniqueKey = `/__direciona_shared_zip__/${encodeURIComponent(shareId)}`;
+        await cache.put(new Request(new URL(uniqueKey, self.location.origin).href, { method: 'GET' }), new Response(body, { headers }));
+        debug.cacheSaved = true;
+      } catch (e) {
+        debug.putError = (debug.putError ? debug.putError + ' | ' : '') + 'Cache: ' + (e && e.message ? e.message : String(e));
       }
-      debug.cacheSaved = true;
-    } catch (e) {
-      debug.putError = (debug.putError ? debug.putError + ' | ' : '') + 'Cache: ' + (e && e.message ? e.message : String(e));
     }
 
     debug.step = (debug.idbSaved || debug.cacheSaved) ? 'saved-pending' : 'not-saved';
