@@ -3211,10 +3211,16 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
   const extractedFiles = {};
   if (options.includeExtractedFiles === true) {
+    // v827-4: extraia somente os áudios que realmente serão transcritos na janela escolhida.
+    // Antes o servidor descompactava TODOS os áudios do ZIP, mesmo os descartados pelo período,
+    // causando estouro de memória/tempo em conversas grandes (ex.: 100+ MB).
+    const nomesNecessarios = new Set(audiosParaTranscrever.map(normalizeName));
     for (const fullName of audioFiles) {
+      const base = normalizeName(fullName);
+      if (!nomesNecessarios.has(base)) continue;
       const entry = zip.files[fullName];
       if (!entry || entry.dir) continue;
-      extractedFiles[normalizeName(fullName)] = await entry.async("nodebuffer");
+      extractedFiles[base] = await entry.async("nodebuffer");
     }
   }
 
