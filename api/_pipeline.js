@@ -1259,18 +1259,62 @@ function perguntaRepeteRespostaExistente(msg, respondidas) {
   });
 }
 
-function fatosNumericos(texto) {
+// v827-14: valores numéricos batiam por SUBSTRING literal contra a conversa. Isso
+// bloqueava qualquer mensagem da IA que reformatasse um valor real já dito na conversa
+// (ex.: conversa tem "R$ 1.080.000,00" e a IA escreve "R$ 1,08 milhão" — mesmo valor,
+// formatação diferente) como se fosse dado inventado. Na prática isso derrubava quase
+// toda mensagem boa da IA e fazia o fallback genérico virar a regra, não a exceção.
+// Preço, percentual e metragem agora comparam o VALOR numérico (com tolerância pra
+// arredondamento), não o texto literal. Parcelas e datas continuam por igualdade exata
+// (menos chance de reformatação legítima, mais risco em inventar).
+function normalizarNumeroBR(str) {
+  const s = String(str || "").trim();
+  if (!s) return null;
+  const v = parseFloat(s.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(v) ? v : null;
+}
+
+function valorNumericoProximo(a, b, tolerancia = 0.02) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (a === b) return true;
+  return Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b), 1) * tolerancia;
+}
+
+function fatosMonetarios(texto) {
   const s = String(texto || "");
-  const matches = [
-    ...s.matchAll(/R\$\s*[\d.]+(?:,\d{1,2})?/gi),
-    ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*%/gi),
-    ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*m(?:²|2)\b/gi),
-    ...s.matchAll(/\b\d+\s*x\b/gi),
-    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g)
-    // Nota: NÃO bloquear "anos/meses/20xx" aqui. Isso rejeitava mensagens de retomada
-    // legítimas ("faz 2 meses que não nos falamos") e travava a conclusão da análise.
-  ];
-  return matches.map(m => normalizarBusca(m[0]).replace(/\s+/g, "")).filter(Boolean);
+  const out = [];
+  const somar = (digitos, sufixo) => {
+    let v = normalizarNumeroBR(digitos);
+    if (v == null) return;
+    if (/^milh/i.test(sufixo || "")) v *= 1_000_000;
+    else if (/^mil$/i.test(sufixo || "")) v *= 1_000;
+    out.push(v);
+  };
+  for (const m of s.matchAll(/R\$\s*([\d.,]+)\s*(milh[aã]o|milh[oõ]es|mil)?/gi)) somar(m[1], m[2]);
+  // Também aceita a variação sem "R$" na frente (ex.: "1080 mil", "1,08 milhão"),
+  // desde que junto de um número — evita casar "mil" solto sem valor associado.
+  for (const m of s.matchAll(/\b(\d+(?:[.,]\d+)?)\s*(milh[aã]o|milh[oõ]es|mil)\b/gi)) somar(m[1], m[2]);
+  return out;
+}
+
+function fatosPercentuais(texto) {
+  return [...String(texto || "").matchAll(/\b(\d+(?:[.,]\d+)?)\s*%/g)].map(m => normalizarNumeroBR(m[1])).filter(v => v != null);
+}
+
+function fatosMetragem(texto) {
+  return [...String(texto || "").matchAll(/\b(\d+(?:[.,]\d+)?)\s*m(?:²|2)\b/gi)].map(m => normalizarNumeroBR(m[1])).filter(v => v != null);
+}
+
+function fatosParcelas(texto) {
+  return [...String(texto || "").matchAll(/\b(\d+)\s*x\b/gi)].map(m => Number(m[1])).filter(Number.isFinite);
+}
+
+function fatosDatas(texto) {
+  // Data continua por igualdade literal — inventar um dia/mês específico é mais grave
+  // do que reformatar um valor já dito, então não recebe tolerância.
+  return [...String(texto || "").matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g)]
+    .map(m => normalizarBusca(m[0]).replace(/\s+/g, ""))
+    .filter(Boolean);
 }
 
 export function validarMensagensCerebro(mensagens, contextoTemporal, timeline, cerebroConfig = null, agora = new Date()) {
@@ -1280,7 +1324,12 @@ export function validarMensagensCerebro(mensagens, contextoTemporal, timeline, c
   const ancoras = ancorasDaConversa(timeline);
   const regras = compilarRegrasObjetivasCerebro(cerebroConfig || {}, agora);
   const respondidas = perguntasRespondidasNaTimeline(timeline);
-  const conversaNorm = normalizarBusca((Array.isArray(timeline) ? timeline : []).map(m => m?.text || "").join(" ")).replace(/\s+/g, "");
+  const conversaTexto = (Array.isArray(timeline) ? timeline : []).map(m => m?.text || "").join(" ");
+  const conversaNorm = normalizarBusca(conversaTexto).replace(/\s+/g, "");
+  const valoresConversa = fatosMonetarios(conversaTexto);
+  const percentuaisConversa = fatosPercentuais(conversaTexto);
+  const metragensConversa = fatosMetragem(conversaTexto);
+  const parcelasConversa = fatosParcelas(conversaTexto);
   if (trio.length !== 3 || trio.some(v => !v)) motivos.push("A análise deve conter exatamente três sugestões preenchidas.");
   if (new Set(trio.map(normalizarBusca)).size !== trio.filter(Boolean).length) motivos.push("As três sugestões não podem ser duplicadas.");
 
@@ -1303,7 +1352,12 @@ export function validarMensagensCerebro(mensagens, contextoTemporal, timeline, c
       }
     }
     if (perguntaRepeteRespostaExistente(msg, respondidas)) erros.push("repete pergunta já respondida na conversa");
-    const novosFatos = fatosNumericos(msg).filter(f => !conversaNorm.includes(f));
+    const novosFatos = [];
+    fatosMonetarios(msg).forEach(v => { if (!valoresConversa.some(vc => valorNumericoProximo(v, vc))) novosFatos.push(`R$${v}`); });
+    fatosPercentuais(msg).forEach(v => { if (!percentuaisConversa.some(vc => valorNumericoProximo(v, vc, 0.05))) novosFatos.push(`${v}%`); });
+    fatosMetragem(msg).forEach(v => { if (!metragensConversa.some(vc => valorNumericoProximo(v, vc, 0.05))) novosFatos.push(`${v}m²`); });
+    fatosParcelas(msg).forEach(v => { if (!parcelasConversa.includes(v)) novosFatos.push(`${v}x`); });
+    fatosDatas(msg).forEach(f => { if (!conversaNorm.includes(f)) novosFatos.push(f); });
     if (novosFatos.length) erros.push(`introduz dado numérico ausente da conversa: ${novosFatos.join(", ")}`);
     if (contextoTemporal?.modo === "retomada" && msg) {
       const generico = PADROES_GENERICOS_RETOMADA.find(re => re.test(msg));
