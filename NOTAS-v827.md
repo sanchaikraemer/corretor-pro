@@ -32,12 +32,46 @@ comercial fixo (§7.1) vem em seguida.
   vem do Cérebro e que a escolha na importação não vira padrão.
 - Suíte completa (27 conjuntos) e build (`versão=827`) sem erro.
 
-## Ainda dentro do Módulo 827 (próxima entrega)
+## Remoção total das informações comerciais fixas (§7.1) — versão 827-1
 
-- **Remoção das informações comerciais fixas (§7.1):** apagar preços, prazos, produtos,
-  empreendimentos e o catálogo (interno e o externo via GitHub Pages) cravados no código;
-  garantir que a ausência de informação vire cautela, não invenção; e manter as fontes
-  válidas (Cérebro, observações, análises e históricos reais) com detecção de conflito.
+Remoção radical de todo o catálogo comercial cravado no código. A IA passa a se apoiar
+**apenas** em fontes reais (Cérebro, observações, análises e histórico da conversa) e, na
+ausência de informação, tem **cautela em vez de inventar** (§7.2).
+
+Removido do código ativo:
+
+- **Catálogo interno** com preços e faixas (`CATALOGO_SENGER_FALLBACK`, `RENAISSANCE_LINHA`,
+  `DIFERENCIAIS_ENCANTAR`) e as funções que o liam (`tipoDoProduto`, `fatosDoProduto`,
+  `diferenciaisRelevantes`, `loadCatalogoSenger`).
+- **Catálogo externo** (tabela via GitHub Pages): removidas `nomesEmpreendimentosSenger`,
+  `parseSengerDataJs` e o módulo órfão `api/_cerebro-orquestrado.js` inteiro.
+- **Listas fixas de empreendimentos** usadas para detectar/normalizar produto
+  (`detectProduct`, `products` na persistência, `EMPS` na leitura de print, a lista de
+  autocomplete `EMPREENDIMENTOS_SENGER` e o regex `PRODUTOS_RX`).
+- **Rede de segurança que "completava" o produto** a partir do catálogo
+  (`empreendimentoDaConversa`): sem catálogo, o produto vem só da conversa; quando a IA não
+  identifica, fica "Não identificado".
+- **Instruções de prompt com dados fixos**: nomes de empreendimentos, condições e o nome de
+  uma pessoa foram substituídos por orientação genérica que remete ao Cérebro e aos fatos da
+  conversa. As referências fixas a empresa/cidade ("Construtora Senger — Carazinho/RS") nos
+  prompts e nos defaults viraram texto neutro.
+- Um valor default inventado ('Renaissance') e os normalizadores de nome de produto foram
+  neutralizados.
+
+### Validação
+
+- Novo teste `tests/v827-catalogo.test.mjs`: **busca automatizada** (§7.5) confirma que
+  nenhum preço, empreendimento, catálogo ou a tabela externa aparecem no código ativo, que
+  o módulo externo foi removido e que `detectProduct` não usa mais lista fixa.
+- `tests/v820-produto-empreendimento.test.mjs` removido (testava justamente o preenchimento
+  via catálogo fixo, agora eliminado — §11.4 do plano).
+- Suíte completa (27 conjuntos) e build (`versão=827-1`) sem erro.
+
+## Impacto esperado
+
+As mensagens deixam de citar preços/empreendimentos "de cabeça". O que a IA souber vem do
+**Cérebro** (método, tom, diferenciais, regras) e do que estiver **na própria conversa**.
+Para reintroduzir informação comercial, o caminho passa a ser o Cérebro — não o código.
 
 ## Como testar depois de publicar
 
