@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
+const storage = fs.readFileSync(new URL('../api/processar-storage.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const vercel = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+assert.match(pipeline, /const nomesNecessarios = new Set\(audiosParaTranscrever\.map\(normalizeName\)\)/);
+assert.match(pipeline, /if \(!nomesNecessarios\.has\(base\)\) continue/);
+assert.doesNotMatch(pipeline, /for \(const fullName of audioFiles\) \{\s*const entry = zip\.files\[fullName\]/);
+assert.match(storage, /CONCORRENCIA_UPLOAD = 4/);
+assert.match(storage, /Promise\.all\(Array\.from/);
+assert.match(app, /action:"preparar"[\s\S]{0,120}300000/);
+assert.equal(vercel.functions['api/processar-storage.js'].maxDuration, 300);
+console.log('v827-4 large ZIP regression: ok');
