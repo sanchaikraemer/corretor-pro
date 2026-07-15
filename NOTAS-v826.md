@@ -69,17 +69,45 @@ visível** em cada card:
 - O score interno virou apenas função do nível (degrau de 1000), com desempate factual
   por recência — a ordenação existente (`scoreRankingHoje`) continua funcionando.
 
-## Ainda dentro do Módulo 826 (próxima entrega)
+## Tela Atendimentos e "Copiar = atendimento" (§6.2/§6.5) — versão 826-2
 
-- **Tela Atendimentos (§6.5):** reconhecer todas as fontes reais de atendimento e
-  ordenar do mais recente para o mais antigo, com atualização imediata.
+Fecha o Módulo 826.
+
+### Copiar uma sugestão passa a contar (decisão do corretor)
+
+Reverte a decisão da v809: copiar uma sugestão significa que ela vai ser enviada, então:
+
+- **registra atendimento** (data/hora), entra em "Últimos atendimentos" e atualiza a
+  posição na fila (como o botão "Marcar atendimento");
+- **entra na linha do tempo** do cliente como "Mensagem enviada (você)", para constar
+  no histórico;
+- **nunca altera a etapa comercial**;
+- **não alimenta o aprendizado de estilo** (o texto é sugestão da própria IA);
+- não gera lembrete a partir do texto da sugestão e não é contada como resposta do
+  cliente; copiar a mesma mensagem de novo atualiza o horário em vez de duplicar.
+
+Vale para os botões "Copiar" das três sugestões (hero e detalhe do lead).
+
+### Último atendimento unificado e ordenação (§6.5)
+
+- Nova função `ultimoAtendimentoTs(lead)` reconhece **todas as fontes reais** de
+  atendimento: eventos de contato manual (botão e cópia), itens manuais na timeline
+  (observação, ligação, visita, proposta, mensagem enviada) e os campos históricos
+  `lastAttendanceAt`/`ultimoAtendimentoEm`.
+- A aba **"Últimos atendimentos"** passou a ordenar **pelo atendimento mais recente**
+  (antes ordenava pela última mensagem) e cada card mostra **"atendido agora / hoje /
+  ontem / há X dias"** (§6.5), ou "sem atendimento registrado".
 
 ## Validação da fila por fatos
 
 - Novo teste `tests/v826-fila-fatos.test.mjs`: executa a função pura e confere os 7
   níveis, a precedência entre eles, o mapa de grupos e as supressões (atendido, lembrete
   futuro, pediu tempo, trava externa), além de confirmar que os pesos antigos saíram.
-- Suíte completa (25 conjuntos) e build (`versão=826-1`) sem erro.
+- Novo teste `tests/v826-atendimentos.test.mjs`: executa `ultimoAtendimentoTs` e confere
+  o reconhecimento de todas as fontes e a ordenação da aba.
+- `tests/attendance-refresh.test.mjs` atualizado para o novo comportamento do "Copiar"
+  (§11.4 do plano: ajustar testes que conflitam com o comportamento aprovado).
+- Suíte completa (26 conjuntos) e build (`versão=826-2`) sem erro.
 
 ## Como testar depois de publicar
 

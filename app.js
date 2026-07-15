@@ -1826,6 +1826,40 @@ function ultimoAtendimentoDataHora(l){
   return e?.quando ? fmtUltimaAtualizacao(e.quando) : "";
 }
 
+// v826 §6.5 — Último ATENDIMENTO real, considerando TODAS as fontes: eventos de
+// contato manual (botão "Marcar atendimento" e cópia de mensagem), itens manuais
+// na timeline (observação, ligação, visita, proposta, mensagem enviada) e os campos
+// históricos de último atendimento já gravados na base. Retorna o timestamp (ms) do
+// atendimento mais recente, ou 0 se o lead nunca foi atendido.
+const TIPOS_ATENDIMENTO_TIMELINE = new Set(["atendimento","nota","ligacao","visita","presencial","proposta","observacao_manual","mensagem_enviada"]);
+function ultimoAtendimentoTs(l){
+  let maxTs = 0;
+  const eventos = l?.analysis?.aprendizado?.eventos || [];
+  for(const e of eventos){
+    if(e?.evento !== "contato_manual" || !e?.quando) continue;
+    const t = Date.parse(e.quando); if(!isNaN(t) && t > maxTs) maxTs = t;
+  }
+  for(const campo of [l?.lastAttendanceAt, l?.ultimoAtendimentoEm]){
+    const t = Date.parse(campo || ""); if(!isNaN(t) && t > maxTs) maxTs = t;
+  }
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  for(const m of msgs){
+    const src = String(m?.source || "");
+    if(src !== "manual" && src !== "corretor-pro-manual") continue;
+    if(!TIPOS_ATENDIMENTO_TIMELINE.has(String(m?.type || ""))) continue;
+    const t = Date.parse(m?.iso || ""); if(!isNaN(t) && t > maxTs) maxTs = t;
+  }
+  return maxTs || 0;
+}
+// Rótulo humano do atendimento: "agora", "hoje", "ontem" ou "há X dias" (§6.5).
+function rotuloTempoAtendimento(ts){
+  if(!ts) return "";
+  const dias = diasCalendarioBR(ts);
+  if(dias === 0) return ((Date.now() - ts) / 60000) < 60 ? "agora" : "hoje";
+  if(dias === 1) return "ontem";
+  return `há ${dias} dias`;
+}
+
 function diasDesdeAtendimentoManual(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   let maisRecente = null;
@@ -2323,12 +2357,36 @@ function renderHeroLead(l){
   </section>`;
 }
 // Copia a mensagem sugerida (direta, com saudação) de um lead — usada no botão do hero.
+// v826 §6.2/§6.5 — Copiar uma sugestão significa que ela VAI ser enviada. Então conta
+// como atendimento (data/hora, entra em Últimos atendimentos e na fila) E entra na
+// linha do tempo do cliente como "Mensagem enviada". Nunca altera a etapa comercial e
+// não alimenta o aprendizado de estilo (o texto é sugestão da própria IA).
+async function registrarMensagemEnviada(id, msg){
+  const texto = String(msg || "").trim();
+  if(!id || !texto) return;
+  const lead = (state.lead && String(state.lead.id) === String(id)) ? state.lead
+    : (state.itemsAtivos || []).find(x => String(x.id) === String(id)) || null;
+  // Feedback imediato (§6.7 / atualização sem reload): já marca como atendido agora.
+  try{
+    const quando = new Date().toISOString();
+    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+    if(lead) ui667AplicarAtendidoLocal(lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`);
+  }catch(_){}
+  try{
+    await fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
+  }catch(_){ /* a cópia já foi feita; o registro é best-effort */ }
+  invalidarLeadsCache();
+  try{ loadRecentLeads(false); }catch(_){}
+  if(state.lead && String(state.lead.id) === String(id)) try{ recarregarLeadFoco(id); }catch(_){}
+}
+
 window.copiarMensagemLead = function(id){
   const l = (state.itemsAtivos||[]).find(x => String(x.id) === String(id));
   if(!l) return;
   const a = l.analysis || {};
   const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
-  const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} };
+  const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} registrarMensagemEnviada(l.id, msg); };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
 };
@@ -3576,10 +3634,15 @@ async function carregarPipeline(){
       board.innerHTML = '<div class="empty">Nenhum lead encontrado.</div>';
       return;
     }
+    const ehAbaUltimos = pipelineTabAtiva === "ultimos" && (!pipelineOrdem || pipelineOrdem === "prioridade");
     const cardHtml = (l) => {
       const idJs = JSON.stringify(String(l.id||""));
       const nameJs = JSON.stringify(l.name||"");
-      const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "";
+      // Na aba "Últimos atendimentos" o rótulo mostra QUANDO foi o último atendimento
+      // real (agora/hoje/ontem/há X dias), não "dias parado" da última mensagem.
+      const dias = ehAbaUltimos
+        ? (ultimoAtendimentoTs(l) ? "atendido " + rotuloTempoAtendimento(ultimoAtendimentoTs(l)) : "sem atendimento registrado")
+        : (l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "");
       const tags = [];
       if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
       if(ehPermuta(l)) tags.push(tagPermutaHTML());
@@ -3594,10 +3657,13 @@ async function carregarPipeline(){
     if(pipelineOrdem && pipelineOrdem !== "prioridade"){
       ord = ordenarLeadsPor(items, pipelineOrdem);
     } else if(pipelineTabAtiva === "ultimos"){
+      // §6.5: ordena pelo ATENDIMENTO mais recente (todas as fontes), não pela última
+      // mensagem. Quem nunca foi atendido cai para o fim, por atividade recente.
       ord = items.slice().sort((a,b) => {
-        const ta = a.lastInteractionAt || a.createdAt || "";
-        const tb = b.lastInteractionAt || b.createdAt || "";
-        return tb.localeCompare(ta);
+        const ta = ultimoAtendimentoTs(a);
+        const tb = ultimoAtendimentoTs(b);
+        if(tb !== ta) return tb - ta;
+        return String(b.lastInteractionAt || b.createdAt || "").localeCompare(String(a.lastInteractionAt || a.createdAt || ""));
       });
     } else if(pipelineTabAtiva === "todos"){
       ord = items.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"", "pt-BR"));
@@ -4919,6 +4985,7 @@ function cp704Css(){
     const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
     try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
     catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
+    try{ registrarMensagemEnviada(state.lead?.id, msg); }catch(_){}
   };
   window.cp704OpenWhats=function(){
     const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);

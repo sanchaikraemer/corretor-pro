@@ -1555,6 +1555,10 @@ function mensagemPodeEnsinar(m) {
   // versão antiga a tenha gravado por engano na timeline. Algumas versões antigas
   // não preenchiam type/source, por isso o autor também faz parte da barreira.
   if (/sugest|recomenda[cç][aã]o|gerad[ao]-?ia|assistant|openai|chatgpt|ia do sistema/.test(`${tipo} ${fonte} ${autor}`)) return false;
+  // v826: uma sugestão copiada pelo corretor entra na timeline como "mensagem enviada"
+  // (registro do histórico), mas continua sendo texto gerado pela IA — não pode virar
+  // fonte de aprendizado de estilo.
+  if (tipo === "mensagem_enviada") return false;
   const texto = String(m.text || "").replace(/\s+/g, " ").trim();
   // Eventos operacionais do app não são condução comercial e não podem ensinar estilo.
   if (/^\[?(?:atendimento registrado|marcado como atendido|lembrete criado|status atualizado)\]?/i.test(texto)) return false;
