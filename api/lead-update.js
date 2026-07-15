@@ -124,7 +124,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     venda: anterior.venda || analysis.venda,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercial(merged, lead, timeline, "Sanchai");
+  merged = finalizarAnaliseComercial(merged, lead, timeline);
   merged._schemaComercial = 684;
   if (merged.modeloComercial) merged.modeloComercial.versao = 684;
 
