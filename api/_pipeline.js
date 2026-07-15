@@ -375,7 +375,7 @@ export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) 
   return parsed;
 }
 
-export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai") {
+export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "") {
   // v724-2: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
   return parsed;
 }
@@ -2773,7 +2773,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     hoje = _agoraDt.toISOString().slice(0, 10);
   }
   const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
-  const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
+  // v827 §7.4: o nome do corretor vem SEMPRE da configuração do Cérebro ("Seu nome
+  // como aparece no WhatsApp"). Sem nome fixo no código; na ausência, um rótulo genérico.
+  const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName) || "o corretor";
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
     nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),

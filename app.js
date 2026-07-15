@@ -6480,9 +6480,20 @@ function rotuloJanelaAudio(valor){
   return v === "all" ? "todo o período" : `últimos ${v} dias`;
 }
 
+// v827 §7.4 — Padrão persistente da janela de áudio. Vem do Cérebro ("dias de
+// importação"), com uma chave ESTÁVEL (sem número de versão, que antes zerava a cada
+// atualização) como reserva, e 90 como último recurso.
+function janelaAudioPadrao(){
+  try{
+    const cfg = typeof obterCerebroConfigParaAnalise === "function" ? obterCerebroConfigParaAnalise() : null;
+    if(cfg && Number(cfg.diasImportacao) > 0) return normalizarJanelaAudioCliente(String(cfg.diasImportacao));
+  }catch(_){}
+  try{ const s = localStorage.getItem("corretor_pro_audio_window_days"); if(s) return normalizarJanelaAudioCliente(s); }catch(_){}
+  return "90";
+}
+
 function escolherPeriodoAudiosImportacao(){
-  let salvo = "90";
-  try{ salvo = localStorage.getItem("corretor_pro_audio_window_days_v__VERSION__") || "90"; }catch(_){}
+  const salvo = janelaAudioPadrao();
   const opcoes = [
     { valor:"30", label:"30 dias" },
     { valor:"60", label:"60 dias" },
@@ -6506,7 +6517,8 @@ function escolherPeriodoAudiosImportacao(){
     overlay.querySelectorAll(".periodoAudioBtn").forEach(btn => {
       btn.addEventListener("click", () => {
         const final = normalizarJanelaAudioCliente(btn.dataset.valor);
-        try{ localStorage.setItem("corretor_pro_audio_window_days_v__VERSION__", final); }catch(_){}
+        // §7.4: a escolha na importação é exceção SÓ daquela importação — não vira o
+        // padrão persistente (esse é ajustado no Cérebro). Fica só na sessão atual.
         state.ultimaJanelaAudio = final;
         overlay.remove();
         resolve(final);
