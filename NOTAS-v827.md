@@ -73,6 +73,37 @@ As mensagens deixam de citar preços/empreendimentos "de cabeça". O que a IA so
 **Cérebro** (método, tom, diferenciais, regras) e do que estiver **na própria conversa**.
 Para reintroduzir informação comercial, o caminho passa a ser o Cérebro — não o código.
 
+## Consolidação de conhecimento com detecção de conflito (§7.3) — versão 827-2
+
+Fecha o Módulo 827.
+
+- **Prazos/datas de entrega protegidos**: a validação determinística das três mensagens
+  passou a bloquear **ano de entrega** ("entrega em 2028") e **prazo** ("em 3 anos") que
+  **não estejam na conversa** — somando-se ao bloqueio de preço, %, m² e parcelas que já
+  existia. Assim uma informação conflitante ou sem contexto **não é afirmada como certeza**.
+- **Regra manual do Cérebro vence o aprendizado**: expressões proibidas no Cérebro são
+  barradas na validação final independentemente de virem do histórico — o aprendizado antigo
+  não consegue reintroduzir comportamento proibido.
+- **Origem do aprendizado guardada**: cada item aprendido (tom, técnica, objeção,
+  produto×perfil, movimentos, follow-up) passou a registrar a **procedência** (lead, arquivo
+  e produto de onde veio), tornando o conhecimento rastreável e auditável.
+- Como os **valores comerciais não são mais aprendidos nem cravados** (§7.1), não há como
+  "misturar valores de empreendimentos diferentes": qualquer valor precisa estar na conversa
+  atual para poder aparecer.
+
+### Validação da §7.3
+
+- Novo teste `tests/v827-conhecimento.test.mjs`: bloqueio de ano/prazo inventado, permissão
+  quando o prazo está na conversa, regra do Cérebro vencendo expressão proibida do histórico
+  e registro da origem do aprendizado.
+- Suíte completa (28 conjuntos) e build (`versão=827-2`) sem erro.
+
+## Módulo 827 — completo
+
+- Nome do corretor via Cérebro + janela de áudio estável (827)
+- Remoção total do catálogo comercial fixo (827-1)
+- Consolidação de conhecimento com detecção de conflito (827-2)
+
 ## Como testar depois de publicar
 
 1. Ajustar o período de áudio numa importação e, depois de uma atualização de versão,

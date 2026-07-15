@@ -1266,7 +1266,11 @@ function fatosNumericos(texto) {
     ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*%/gi),
     ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*m(?:²|2)\b/gi),
     ...s.matchAll(/\b\d+\s*x\b/gi),
-    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g)
+    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g),
+    // v827 §7.3: prazos/datas de entrega. Bloqueia afirmar um ano de entrega ("entrega
+    // em 2028") ou um prazo ("em 3 anos") que não esteja na conversa — sem inventar prazo.
+    ...s.matchAll(/\b20\d{2}\b/g),
+    ...s.matchAll(/\b\d+\s*(?:anos?|meses|m[êe]s)\b/gi)
   ];
   return matches.map(m => normalizarBusca(m[0]).replace(/\s+/g, "")).filter(Boolean);
 }
@@ -1697,6 +1701,9 @@ export async function aprenderComHistoricoReal({ timeline, clientName = "", lead
   const intel = await extrairInteligenciaObservada(material, oa);
   if (intel?._erroIA) return { ok: false, error: intel._erroIA };
   if (!intel || typeof intel !== "object") return { ok: false, error: "A IA não devolveu aprendizado válido." };
+  // v827 §7.3: guarda a ORIGEM do que foi aprendido (de qual lead/arquivo veio), para
+  // o conhecimento ser rastreável e auditável — nunca uma "verdade" sem procedência.
+  intel.origem = { leadId: String(leadId || ""), arquivo: String(nomeArquivo || "").slice(0, 120), produto: String(produto || "").slice(0, 60) };
   // Mantém compatibilidade com a tela antiga de categorias e, em paralelo, grava
   // os casos estruturados que passam a guiar obrigatoriamente as sugestões.
   const legado = await registrarInteligenciaAprendida(intel);
@@ -1906,6 +1913,8 @@ export async function registrarInteligenciaAprendida(intel) {
       .maybeSingle();
     const valor = data?.valor || {};
     const agora = new Date().toISOString();
+    // v827 §7.3: procedência do aprendizado (de qual lead/arquivo/produto veio).
+    const origem = (intel.origem && typeof intel.origem === "object") ? intel.origem : null;
     const ia = valor.inteligenciaAprendida && typeof valor.inteligenciaAprendida === "object" ? valor.inteligenciaAprendida : {};
     ia.tons = Array.isArray(ia.tons) ? ia.tons : [];
     ia.tecnicas = Array.isArray(ia.tecnicas) ? ia.tecnicas : [];
@@ -1959,9 +1968,9 @@ export async function registrarInteligenciaAprendida(intel) {
       // Dedupe: se já existe tom com similaridade >= 0.7, atualiza timestamp em vez de adicionar
       const idx = ia.tons.findIndex(e => simTexto(e.texto, tom) >= 0.4);
       if (idx >= 0) {
-        ia.tons[idx] = { quando: agora, texto: tom.slice(0, 280) };
+        ia.tons[idx] = { quando: agora, origem, texto: tom.slice(0, 280) };
       } else {
-        ia.tons = push(ia.tons, { quando: agora, texto: tom.slice(0, 280) }, 20);
+        ia.tons = push(ia.tons, { quando: agora, origem, texto: tom.slice(0, 280) }, 20);
       }
     }
 
@@ -1973,9 +1982,9 @@ export async function registrarInteligenciaAprendida(intel) {
       // Dedupe leve: se já existe técnica muito parecida, atualiza
       const idx = ia.tecnicas.findIndex(e => simTexto(e.texto, txt) >= 0.5);
       if (idx >= 0) {
-        ia.tecnicas[idx] = { quando: agora, texto: txt.slice(0, 240) };
+        ia.tecnicas[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
       } else {
-        ia.tecnicas = push(ia.tecnicas, { quando: agora, texto: txt.slice(0, 240) }, 50);
+        ia.tecnicas = push(ia.tecnicas, { quando: agora, origem, texto: txt.slice(0, 240) }, 50);
       }
     }
     for (const o of (Array.isArray(intel.objecoes) ? intel.objecoes : [])) {
@@ -1994,7 +2003,7 @@ export async function registrarInteligenciaAprendida(intel) {
       if (padraoStatus.test(objNorm)) continue;
       // Dedupe: se já tem objeção muito parecida, atualiza
       const idx = ia.objecoes.findIndex(e => simTexto(e.objecao, objecao) >= 0.55);
-      const novaEntrada = { quando: agora, objecao: objecao.slice(0, 140), respostaUsada: resposta.slice(0, 240), funcionou: o.funcionou === true ? true : (o.funcionou === false ? false : null) };
+      const novaEntrada = { quando: agora, origem, objecao: objecao.slice(0, 140), respostaUsada: resposta.slice(0, 240), funcionou: o.funcionou === true ? true : (o.funcionou === false ? false : null) };
       if (idx >= 0) {
         ia.objecoes[idx] = novaEntrada;
       } else {
@@ -2012,9 +2021,9 @@ export async function registrarInteligenciaAprendida(intel) {
       const chave = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
       const idxExistente = ia.produtoVsPerfil.findIndex(e => chave(e.produto||"") === chave(prod) && chave(e.perfilCliente||"") === chave(perfil));
       if (idxExistente >= 0) {
-        ia.produtoVsPerfil[idxExistente] = { quando: agora, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) };
+        ia.produtoVsPerfil[idxExistente] = { quando: agora, origem, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) };
       } else {
-        ia.produtoVsPerfil = push(ia.produtoVsPerfil, { quando: agora, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) }, 40);
+        ia.produtoVsPerfil = push(ia.produtoVsPerfil, { quando: agora, origem, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) }, 40);
       }
     }
     for (const m of (Array.isArray(intel.movimentosQueAvancaram) ? intel.movimentosQueAvancaram : [])) {
@@ -2024,22 +2033,22 @@ export async function registrarInteligenciaAprendida(intel) {
       const dupTec = ia.tecnicas.findIndex(e => simTexto(e.texto, txt) >= 0.45);
       if (dupTec >= 0) continue;
       const idx = ia.movimentosOk.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.movimentosOk[idx] = { quando: agora, texto: txt.slice(0, 240) };
-      else ia.movimentosOk = push(ia.movimentosOk, { quando: agora, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.movimentosOk[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
+      else ia.movimentosOk = push(ia.movimentosOk, { quando: agora, origem, texto: txt.slice(0, 240) });
     }
     for (const m of (Array.isArray(intel.movimentosQueTravaram) ? intel.movimentosQueTravaram : [])) {
       const txt = String(m || "").trim();
       if (txt.length < 10 || !ehTextoValido(txt, 4)) continue;
       const idx = ia.movimentosTravaram.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.movimentosTravaram[idx] = { quando: agora, texto: txt.slice(0, 240) };
-      else ia.movimentosTravaram = push(ia.movimentosTravaram, { quando: agora, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.movimentosTravaram[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
+      else ia.movimentosTravaram = push(ia.movimentosTravaram, { quando: agora, origem, texto: txt.slice(0, 240) });
     }
     for (const f of (Array.isArray(intel.padroesFollowup) ? intel.padroesFollowup : [])) {
       const txt = String(f || "").trim();
       if (txt.length < 10 || !ehTextoValido(txt, 4)) continue;
       const idx = ia.padroesFollowup.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.padroesFollowup[idx] = { quando: agora, texto: txt.slice(0, 240) };
-      else ia.padroesFollowup = push(ia.padroesFollowup, { quando: agora, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.padroesFollowup[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
+      else ia.padroesFollowup = push(ia.padroesFollowup, { quando: agora, origem, texto: txt.slice(0, 240) });
     }
     valor.inteligenciaAprendida = ia;
     const up = await supabase
