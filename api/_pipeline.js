@@ -375,7 +375,7 @@ export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) 
   return parsed;
 }
 
-export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "") {
+export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "Sanchai") {
   // v724-2: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
   return parsed;
 }
@@ -850,9 +850,10 @@ function detectPhone(text = "") {
 }
 
 function detectProduct(fullText = "") {
-  // v827 §7.1: sem catálogo fixo de empreendimentos. O produto passa a vir só da análise
-  // da IA sobre a conversa; na importação inicial fica indefinido (cautela, não invenção).
-  return "Não identificado";
+  const products = ["Renaissance", "Evolutti", "Boulevard", "Terrenos", "Premium Office", "Quality", "Personalité", "Personalite", "Prime"];
+  const found = products.find(p => normalizeComparable(fullText).includes(normalizeComparable(p)));
+  if (!found) return "Não identificado";
+  return found === "Personalite" ? "Personalité" : found;
 }
 
 function pickClientName(authors = []) {
@@ -882,6 +883,62 @@ export function guessLeadData(timeline) {
   };
 }
 
+// Catálogo de fallback (usado se a leitura ao vivo da tabela falhar).
+const CATALOGO_SENGER_FALLBACK = `CATÁLOGO SENGER — STATUS, PAGAMENTO E FAIXAS (use pra decidir VISITA, FORMA DE PAGAMENTO e "outras opções"):
+- PRONTOS (pode sugerir visita ao decorado · FINANCIAMENTO BANCÁRIO): Quality (2-3 dorm, ~57-87m², ref. R$420k-580k), Prime (3 dorm/2 suítes 124m², ref. R$1,12mi), Personalité (3 suítes 172m², ref. R$1,26-1,45mi), Nova Vila Rica I e II (terrenos, ref. R$95k-305k).
+- NA PLANTA / EM OBRA / LANÇAMENTO (NÃO sugerir visita ao decorado · PARCELAMENTO DIRETO · gatilho: quem compra agora escolhe melhores unidades/vagas): Renaissance (pré-lançamento — Carazinho; 2 suítes ~86m² ref. R$730k-800k, 3 suítes 158-258m² ref. R$1,45mi-1,59mi; parcelamento direto), Evolutti (entrega 2028, ref. R$680k-1,13mi), Boulevard (entrega 2028 — Ibirubá, ref. R$800k-1,44mi), Premium Office (comercial, entrega 2029, ref. R$470k-1,12mi), Nova Vila Rica III (terrenos, entrega 2027, 20% entrada + direto, ref. R$75k-120k).
+As faixas são de REFERÊNCIA (preço exato muda — NÃO cite valor fechado sem ter certeza pela conversa). Ao oferecer "outras opções", escolha empreendimentos de FAIXAS e PRAZOS diferentes do que o cliente está vendo.`;
+
+// Bloco fixo do Renaissance (pré-lançamento — não está na tabela data.js).
+const RENAISSANCE_LINHA = "  • Renaissance (Carazinho — PRÉ-LANÇAMENTO/na planta): 2 suítes ~86m² (ref. R$730k–800k) e 3 suítes 158–258m² (ref. R$1,45mi–1,59mi); sala comercial térreo ~114m² (ref. R$1,14mi); 18 pavimentos; parcelamento direto.";
+
+// DIFERENCIAIS PRA ENCANTAR — pontos REAIS de cada empreendimento (fornecidos pelo corretor),
+// usados pra vender o SONHO nas mensagens. Cite só os do empreendimento que o cliente está vendo.
+const DIFERENCIAIS_ENCANTAR = `DIFERENCIAIS PRA ENCANTAR (pontos REAIS de cada empreendimento — use pra vender o SONHO/estilo de vida nas mensagens; cite SOMENTE os diferenciais do empreendimento que o cliente está vendo e NUNCA atribua diferencial de um a outro; não invente o que não estiver aqui):
+• RENAISSANCE (Carazinho/RS — pré-lançamento, alto padrão): conceito "Um novo ícone de alto padrão" — "morar no Renaissance é habitar uma obra de arte que respira contemporaneidade". 18 pavimentos, 11.810 m² de área construída, entrega prevista 2031, parcelamento direto com a construtora. ARQUITETURA QUE INSPIRA: marco arquitetônico em Carazinho, fachadas contemporâneas de linhas puras, brises em madeira, implantação que privilegia luz natural e VISTAS AMPLAS em cada unidade ("vista que transforma o cotidiano"). INTERIORES QUE ENCANTAM: pé-direito generoso (suítes superiores com PÉ-DIREITO DE 3 METROS), acabamentos em materiais nobres, plantas inteligentes que aproveitam cada m², generosas VARANDAS GOURMET, hall de entrada assinatura. LAZER COMPLETO de 568 m² ("seu refúgio particular de bem-estar, pra toda a família"): 2 PISCINAS (interna e externa), BEACH TENNIS, espaço gourmet & WINE BAR, salão de festas/salão gourmet, LOUNGE FIRE (lareira externa), PILATES studio, SAUNA, PLAYGROUND & área kids, paisagismo. Vantagem de comprar no pré-lançamento: personalizar a planta e escolher as melhores unidades, andares, vistas e vagas.
+• BOULEVARD RESIDENCE (IBIRUBÁ/RS — Construtora Senger; NÃO é em Carazinho): conceito "onde morar é sinônimo de bem-estar". EXCLUSIVIDADE: apenas 40 unidades; condomínio exclusivo com lindo hall de entrada e 2 ELEVADORES; arquitetura no estilo NEOCLÁSSICO CONTEMPORÂNEO; padrão Senger de qualidade. LOCALIZAÇÃO (a melhor da cidade): Rua Getúlio Vargas, EM FRENTE À PRAÇA GENERAL OSÓRIO, no centro de Ibirubá — perto de tudo. LAZER (a melhor estrutura de lazer da cidade, concentrada no 3º pavimento): PISCINA, ESTAR DO FOGO, ESPAÇO FITNESS, PLAYGROUND, ESPAÇO PUB integrado à piscina (área gourmet, churrasqueira e jogos) e SALÃO DE FESTAS com ESPAÇO KIDS integrado. PLANTAS: 2 dormitórios com 1 ou 2 suítes (área privativa 91 a 93 m² — Tipo 1: 1 suíte 91 m²; Tipo 2: 2 suítes 93 m²) e 3 dormitórios com 3 SUÍTES (150 m² privativos — Tipos 3 e 4); living integrado sala+cozinha, ampla SACADA/ESPAÇO GOURMET com CHURRASQUEIRA e POSIÇÃO SOLAR PRIVILEGIADA; as unidades de 3 suítes têm VISTA para a praça General Osório. ACABAMENTO padrão Senger: piso PORCELANATO de qualidade superior, FORRO EM GESSO em todo o apartamento, MEDIÇÃO INDIVIDUAL de gás, água e luz.`;
+
+// Devolve SÓ os diferenciais dos empreendimentos REALMENTE mencionados na conversa.
+// Evita a IA inventar/empurrar um empreendimento que ninguém citou (ex.: Boulevard).
+// Se nada foi citado, devolve "" (nenhuma munição de produto → o Cérebro qualifica).
+function diferenciaisRelevantes(texto) {
+  const t = String(texto || "").toLowerCase();
+  const partes = DIFERENCIAIS_ENCANTAR.split(/\n(?=•\s)/);
+  const cabecalho = partes[0];
+  const manter = partes.slice(1).filter(b => {
+    const m = b.match(/•\s*([A-Za-zÀ-ÿ]+)/);
+    const nome = m ? m[1].toLowerCase() : "";
+    return nome && t.includes(nome);
+  });
+  return manter.length ? (cabecalho + "\n" + manter.join("\n")) : "";
+}
+
+// Classifica o TIPO do produto (terreno/apartamento/comercial) a partir do catálogo, pra o
+// gerador de mensagens NUNCA inventar (ex.: chamar loteamento de "apartamento", como já aconteceu).
+function tipoDoProduto(catalogo, produto) {
+  const fatos = fatosDoProduto(catalogo, produto).toLowerCase();
+  if (!fatos) return "";
+  if (/(terreno|loteamento|\blote\b)/.test(fatos)) return "LOTEAMENTO/terrenos (é TERRENO — nunca chame de apartamento)";
+  if (/(comercial|\bsala|office)/.test(fatos)) return "salas comerciais";
+  if (/(su[íi]te|dormit|\bdorm\b|apartament|\bapto)/.test(fatos)) return "apartamentos";
+  return "";
+}
+
+// Puxa os FATOS REAIS do produto (o que é, cidade, entrega, condições, faixa) do catálogo, pra o
+// gerador responder quem pede informação como um corretor que conhece o produto (não com elogio vazio).
+function fatosDoProduto(catalogo, produto) {
+  const nome = String(produto || "").trim();
+  if (!nome || /identificad/i.test(nome)) return "";
+  const texto = String(catalogo || "");
+  const i = texto.toLowerCase().indexOf(nome.toLowerCase());
+  if (i < 0) return "";
+  let trecho = texto.slice(i).split("\n")[0];
+  const mParen = trecho.match(/^[^(]*\([^)]*\)/);
+  if (mParen && mParen[0].length < trecho.length && /terreno|su[íi]te|dorm|comercial|entrega|entrada/i.test(mParen[0])) {
+    trecho = mParen[0];
+  }
+  return trecho.replace(/^[•\s]+/, "").replace(/\s{2,}/g, " ").trim().slice(0, 220);
+}
 
 // Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
 // o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
@@ -901,6 +958,127 @@ function exemplosDoCorretor(timeline) {
   return [...new Set(out)].slice(-8).map(t => `- ${t}`).join("\n");
 }
 
+// Extrai EMPREENDIMENTOS e META do source data.js sem executar código remoto.
+// Percorre o texto char-a-char rastreando strings para não contar colchetes dentro de valores.
+function parseSengerDataJs(code) {
+  function extractValue(src, fromIdx, openCh, closeCh) {
+    const start = src.indexOf(openCh, fromIdx);
+    if (start < 0) return null;
+    let depth = 0, inStr = false, strCh = '';
+    for (let i = start; i < src.length; i++) {
+      const c = src[i];
+      if (inStr) {
+        if (c === '\\') { i++; continue; }
+        if (c === strCh) inStr = false;
+      } else if (c === '"' || c === "'") { inStr = true; strCh = c; }
+      else if (c === openCh) { depth++; }
+      else if (c === closeCh) { if (--depth === 0) return src.slice(start, i + 1); }
+    }
+    return null;
+  }
+  let emps = [], meta = {};
+  const empM = /\bEMPREENDIMENTOS\s*=\s*\[/.exec(code);
+  if (empM) { const raw = extractValue(code, empM.index, '[', ']'); if (raw) try { emps = JSON.parse(raw); } catch (_) {} }
+  const metaM = /\bMETA\s*=\s*\{/.exec(code);
+  if (metaM) { const raw = extractValue(code, metaM.index, '{', '}'); if (raw) try { meta = JSON.parse(raw); } catch (_) {} }
+  return { EMPREENDIMENTOS: emps, META: meta };
+}
+
+let _catalogoSengerCache = { ts: 0, texto: null };
+// Lê a tabela oficial da Senger AO VIVO (GitHub Pages) e monta um catálogo compacto
+// pro Cérebro: status (pronto×planta), pagamento e faixas de valor. Cache 24h + fallback.
+async function loadCatalogoSenger() {
+  const TTL = 24 * 60 * 60 * 1000;
+  if (_catalogoSengerCache.texto && (Date.now() - _catalogoSengerCache.ts) < TTL) return _catalogoSengerCache.texto;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch("https://raw.githubusercontent.com/direcionacorretor/tabelasenger/main/data.js", { signal: ctrl.signal });
+    clearTimeout(to);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const code = await resp.text();
+    const SENGER = parseSengerDataJs(code);
+    const emps = (SENGER && SENGER.EMPREENDIMENTOS) || [];
+    if (!emps.length) throw new Error("sem empreendimentos");
+    const faixaDe = (emp) => {
+      const vals = [];
+      const scan = (o, prof) => {
+        if (!o || typeof o !== "object" || prof > 5) return;
+        for (const k of Object.keys(o)) {
+          const v = o[k];
+          if (Array.isArray(v)) v.forEach(x => scan(x, prof + 1));
+          else if (v && typeof v === "object") scan(v, prof + 1);
+          else if (/valor|pre[cç]o|price/i.test(k)) {
+            // Formato BR "R$ 1.450.000,00": tira pontos (milhar), vírgula = decimal.
+            let t = String(v).replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".");
+            const n = parseFloat(t);
+            if (isFinite(n) && n >= 50000 && n <= 50000000) vals.push(n);
+          }
+        }
+      };
+      scan(emp, 0);
+      if (!vals.length) return "";
+      const fmt = (n) => n >= 1000000 ? "R$" + (n / 1000000).toFixed(2).replace(".", ",") + "mi" : "R$" + Math.round(n / 1000) + "k";
+      const min = Math.min(...vals), max = Math.max(...vals);
+      return min === max ? `ref. ${fmt(min)}` : `ref. ${fmt(min)}–${fmt(max)}`;
+    };
+    const ehPronto = (e) => /pronto/i.test(String(e.status || "") + " " + String(e.statusLabel || ""));
+    const linha = (e) => {
+      const faixa = faixaDe(e);
+      const entrega = e.entrega && !/pronto/i.test(e.entrega) ? ` · ${e.entrega}` : "";
+      return `  • ${e.nome}${e.cidade ? ` (${e.cidade})` : ""} — ${e.statusLabel || e.status || ""}${entrega}${faixa ? ` · ${faixa}` : ""}`;
+    };
+    const prontos = emps.filter(ehPronto).map(linha);
+    const planta = emps.filter(e => !ehPronto(e)).map(linha);
+    const data = (SENGER.META && SENGER.META.dataTabela) || "";
+    const texto = `CATÁLOGO SENGER AO VIVO (tabela ${data} — use pra decidir VISITA, FORMA DE PAGAMENTO e "outras opções"):
+- PRONTOS (pode sugerir visita ao decorado · FINANCIAMENTO BANCÁRIO):
+${prontos.join("\n")}
+- NA PLANTA / EM OBRA / LANÇAMENTO (NÃO sugerir visita ao decorado · PARCELAMENTO DIRETO com a construtora · gatilho: quem compra agora escolhe as melhores unidades/andares/vistas e vagas de garagem):
+${planta.join("\n")}
+${RENAISSANCE_LINHA}
+As faixas são de REFERÊNCIA (preço exato muda — NÃO cite valor fechado sem ter certeza pela conversa). Ao oferecer "outras opções", escolha empreendimentos de FAIXAS e PRAZOS diferentes do que o cliente está vendo.`;
+    _catalogoSengerCache = { ts: Date.now(), texto };
+    return texto;
+  } catch (e) {
+    console.warn("[direciona] catálogo Senger ao vivo falhou, usando fallback:", e?.message || e);
+    return _catalogoSengerCache.texto || CATALOGO_SENGER_FALLBACK;
+  }
+}
+
+// v820: rede de segurança pro produto. Quando a IA deixa o produto em branco, tentamos
+// pegar o empreendimento REALMENTE citado na conversa a partir do catálogo oficial (nomes
+// reais). Nunca inventa nada fora do catálogo. Função pura, testável isoladamente.
+export function empreendimentoDaConversa(texto, nomes) {
+  const t = String(texto || "").toLowerCase();
+  if (!t || !Array.isArray(nomes)) return "";
+  // Do nome mais longo pro mais curto, pra casar "Boulevard Residence" antes de "Boulevard".
+  const ordenados = [...nomes].filter(Boolean).sort((a, b) => String(b).length - String(a).length);
+  for (const nome of ordenados) {
+    const n = String(nome).trim().toLowerCase();
+    if (n.length >= 4 && t.includes(n)) return String(nome).trim();
+  }
+  return "";
+}
+
+let _nomesEmpCache = { ts: 0, nomes: null };
+// Lê só os NOMES dos empreendimentos da tabela oficial (cache 24h, fail-safe).
+async function nomesEmpreendimentosSenger() {
+  const TTL = 24 * 60 * 60 * 1000;
+  if (_nomesEmpCache.nomes && (Date.now() - _nomesEmpCache.ts) < TTL) return _nomesEmpCache.nomes;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch("https://raw.githubusercontent.com/direcionacorretor/tabelasenger/main/data.js", { signal: ctrl.signal });
+    clearTimeout(to);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const code = await resp.text();
+    const SENGER = parseSengerDataJs(code);
+    const nomes = ((SENGER && SENGER.EMPREENDIMENTOS) || []).map(e => String(e && e.nome || "").trim()).filter(Boolean);
+    if (nomes.length) _nomesEmpCache = { ts: Date.now(), nomes };
+    return nomes;
+  } catch (_) { return _nomesEmpCache.nomes || []; }
+}
 
 
 const CEREBRO_PROMPT_MINIMO = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
@@ -909,6 +1087,7 @@ function isLegacyCerebroText(v) {
   return /m[eé]todo corretor pro/.test(t)
     || /identifique a fase do cliente/.test(t)
     || /cite o produto espec[ií]fico/.test(t)
+    || /construtora senger \(sede em carazinho/.test(t)
     || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
 }
 function sanitizeCerebroConfig(valor = {}) {
@@ -1266,11 +1445,7 @@ function fatosNumericos(texto) {
     ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*%/gi),
     ...s.matchAll(/\b\d+(?:[.,]\d+)?\s*m(?:²|2)\b/gi),
     ...s.matchAll(/\b\d+\s*x\b/gi),
-    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g),
-    // v827 §7.3: prazos/datas de entrega. Bloqueia afirmar um ano de entrega ("entrega
-    // em 2028") ou um prazo ("em 3 anos") que não esteja na conversa — sem inventar prazo.
-    ...s.matchAll(/\b20\d{2}\b/g),
-    ...s.matchAll(/\b\d+\s*(?:anos?|meses|m[êe]s)\b/gi)
+    ...s.matchAll(/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/g)
   ];
   return matches.map(m => normalizarBusca(m[0]).replace(/\s+/g, "")).filter(Boolean);
 }
@@ -1701,9 +1876,6 @@ export async function aprenderComHistoricoReal({ timeline, clientName = "", lead
   const intel = await extrairInteligenciaObservada(material, oa);
   if (intel?._erroIA) return { ok: false, error: intel._erroIA };
   if (!intel || typeof intel !== "object") return { ok: false, error: "A IA não devolveu aprendizado válido." };
-  // v827 §7.3: guarda a ORIGEM do que foi aprendido (de qual lead/arquivo veio), para
-  // o conhecimento ser rastreável e auditável — nunca uma "verdade" sem procedência.
-  intel.origem = { leadId: String(leadId || ""), arquivo: String(nomeArquivo || "").slice(0, 120), produto: String(produto || "").slice(0, 60) };
   // Mantém compatibilidade com a tela antiga de categorias e, em paralelo, grava
   // os casos estruturados que passam a guiar obrigatoriamente as sugestões.
   const legado = await registrarInteligenciaAprendida(intel);
@@ -1778,7 +1950,7 @@ export async function atualizarConhecimentoCorretor(timelineText, openai) {
       .eq("chave", "corretor-conhecimento")
       .maybeSingle();
     const atual = String(data?.valor?.texto || "").trim();
-    const promptAtualizar = `Você mantém a base de conhecimento de um corretor de imóveis.
+    const promptAtualizar = `Você mantém a base de conhecimento de um corretor de imóveis da Construtora Senger (Carazinho/RS).
 
 CONHECIMENTO ATUAL:
 ${atual || "(vazio)"}
@@ -1913,8 +2085,6 @@ export async function registrarInteligenciaAprendida(intel) {
       .maybeSingle();
     const valor = data?.valor || {};
     const agora = new Date().toISOString();
-    // v827 §7.3: procedência do aprendizado (de qual lead/arquivo/produto veio).
-    const origem = (intel.origem && typeof intel.origem === "object") ? intel.origem : null;
     const ia = valor.inteligenciaAprendida && typeof valor.inteligenciaAprendida === "object" ? valor.inteligenciaAprendida : {};
     ia.tons = Array.isArray(ia.tons) ? ia.tons : [];
     ia.tecnicas = Array.isArray(ia.tecnicas) ? ia.tecnicas : [];
@@ -1968,9 +2138,9 @@ export async function registrarInteligenciaAprendida(intel) {
       // Dedupe: se já existe tom com similaridade >= 0.7, atualiza timestamp em vez de adicionar
       const idx = ia.tons.findIndex(e => simTexto(e.texto, tom) >= 0.4);
       if (idx >= 0) {
-        ia.tons[idx] = { quando: agora, origem, texto: tom.slice(0, 280) };
+        ia.tons[idx] = { quando: agora, texto: tom.slice(0, 280) };
       } else {
-        ia.tons = push(ia.tons, { quando: agora, origem, texto: tom.slice(0, 280) }, 20);
+        ia.tons = push(ia.tons, { quando: agora, texto: tom.slice(0, 280) }, 20);
       }
     }
 
@@ -1982,9 +2152,9 @@ export async function registrarInteligenciaAprendida(intel) {
       // Dedupe leve: se já existe técnica muito parecida, atualiza
       const idx = ia.tecnicas.findIndex(e => simTexto(e.texto, txt) >= 0.5);
       if (idx >= 0) {
-        ia.tecnicas[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
+        ia.tecnicas[idx] = { quando: agora, texto: txt.slice(0, 240) };
       } else {
-        ia.tecnicas = push(ia.tecnicas, { quando: agora, origem, texto: txt.slice(0, 240) }, 50);
+        ia.tecnicas = push(ia.tecnicas, { quando: agora, texto: txt.slice(0, 240) }, 50);
       }
     }
     for (const o of (Array.isArray(intel.objecoes) ? intel.objecoes : [])) {
@@ -2003,7 +2173,7 @@ export async function registrarInteligenciaAprendida(intel) {
       if (padraoStatus.test(objNorm)) continue;
       // Dedupe: se já tem objeção muito parecida, atualiza
       const idx = ia.objecoes.findIndex(e => simTexto(e.objecao, objecao) >= 0.55);
-      const novaEntrada = { quando: agora, origem, objecao: objecao.slice(0, 140), respostaUsada: resposta.slice(0, 240), funcionou: o.funcionou === true ? true : (o.funcionou === false ? false : null) };
+      const novaEntrada = { quando: agora, objecao: objecao.slice(0, 140), respostaUsada: resposta.slice(0, 240), funcionou: o.funcionou === true ? true : (o.funcionou === false ? false : null) };
       if (idx >= 0) {
         ia.objecoes[idx] = novaEntrada;
       } else {
@@ -2021,9 +2191,9 @@ export async function registrarInteligenciaAprendida(intel) {
       const chave = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
       const idxExistente = ia.produtoVsPerfil.findIndex(e => chave(e.produto||"") === chave(prod) && chave(e.perfilCliente||"") === chave(perfil));
       if (idxExistente >= 0) {
-        ia.produtoVsPerfil[idxExistente] = { quando: agora, origem, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) };
+        ia.produtoVsPerfil[idxExistente] = { quando: agora, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) };
       } else {
-        ia.produtoVsPerfil = push(ia.produtoVsPerfil, { quando: agora, origem, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) }, 40);
+        ia.produtoVsPerfil = push(ia.produtoVsPerfil, { quando: agora, produto: prod.slice(0,60), perfilCliente: perfil.slice(0,180), reacao: reacao.slice(0,140) }, 40);
       }
     }
     for (const m of (Array.isArray(intel.movimentosQueAvancaram) ? intel.movimentosQueAvancaram : [])) {
@@ -2033,22 +2203,22 @@ export async function registrarInteligenciaAprendida(intel) {
       const dupTec = ia.tecnicas.findIndex(e => simTexto(e.texto, txt) >= 0.45);
       if (dupTec >= 0) continue;
       const idx = ia.movimentosOk.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.movimentosOk[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
-      else ia.movimentosOk = push(ia.movimentosOk, { quando: agora, origem, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.movimentosOk[idx] = { quando: agora, texto: txt.slice(0, 240) };
+      else ia.movimentosOk = push(ia.movimentosOk, { quando: agora, texto: txt.slice(0, 240) });
     }
     for (const m of (Array.isArray(intel.movimentosQueTravaram) ? intel.movimentosQueTravaram : [])) {
       const txt = String(m || "").trim();
       if (txt.length < 10 || !ehTextoValido(txt, 4)) continue;
       const idx = ia.movimentosTravaram.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.movimentosTravaram[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
-      else ia.movimentosTravaram = push(ia.movimentosTravaram, { quando: agora, origem, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.movimentosTravaram[idx] = { quando: agora, texto: txt.slice(0, 240) };
+      else ia.movimentosTravaram = push(ia.movimentosTravaram, { quando: agora, texto: txt.slice(0, 240) });
     }
     for (const f of (Array.isArray(intel.padroesFollowup) ? intel.padroesFollowup : [])) {
       const txt = String(f || "").trim();
       if (txt.length < 10 || !ehTextoValido(txt, 4)) continue;
       const idx = ia.padroesFollowup.findIndex(e => simTexto(e.texto, txt) >= 0.55);
-      if (idx >= 0) ia.padroesFollowup[idx] = { quando: agora, origem, texto: txt.slice(0, 240) };
-      else ia.padroesFollowup = push(ia.padroesFollowup, { quando: agora, origem, texto: txt.slice(0, 240) });
+      if (idx >= 0) ia.padroesFollowup[idx] = { quando: agora, texto: txt.slice(0, 240) };
+      else ia.padroesFollowup = push(ia.padroesFollowup, { quando: agora, texto: txt.slice(0, 240) });
     }
     valor.inteligenciaAprendida = ia;
     const up = await supabase
@@ -2107,15 +2277,15 @@ const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE (sempre vale; aprend
 1) QUEM É O INTERLOCUTOR (decida pela INTENÇÃO da conversa, NUNCA pelo nome do contato — nome engana, ex.: "Fulano Vendas" pode ser corretor):
 - CLIENTE COMPRADOR: quer comprar pra si (morar ou investir). Fluxo de venda normal.
 - CORRETOR/PARCEIRO: fala em "meu cliente", traz cliente dele, pede chave/senha/condições "pra cliente", parceria, permuta entre imóveis. NÃO cobre venda dele nem trate como comprador; conduza como parceria (material, condições pro cliente dele, reunião conjunta). O lead de verdade é o cliente DELE.
-- OBRA DE TERCEIROS: pede orçamento de construção/ampliação. Não é venda de imóvel; encaminhar para a engenharia e acompanhar o orçamento.
+- OBRA DE TERCEIROS: pede orçamento de construção/ampliação. Não é venda de imóvel; encaminhar engenharia/Cristian e acompanhar o orçamento.
 
-2) QUALIFICAR antes de empurrar produto: morar ou investir? tipologia/dormitórios? faixa de valor? prazo (pronto x planta)? permuta (imóvel/carro) ou dinheiro/financiamento? Se o orçamento for menor que a faixa do produto pedido, redirecione para uma opção que caiba — SEMPRE com base no que existir no Cérebro e na conversa, nunca em produtos ou valores fixos.
+2) QUALIFICAR antes de empurrar produto: morar ou investir? tipologia/dormitórios? faixa de valor? prazo (pronto x planta)? permuta (imóvel/carro) ou dinheiro/financiamento? Se o orçamento for menor que a faixa do produto pedido, redirecione pro que cabe (ex.: pede Renaissance mas orçamento menor → ofereça Quality/Evolutti).
 
 3) ARGUMENTOS POR SITUAÇÃO (use o que casa com o sinal do cliente):
 - Acha caro o pronto / não tem pressa / investidor → planta de lançamento: "compra na planta, congela o preço e valoriza até a entrega; quanto mais cedo no lançamento, mais barato e maior o prazo".
-- Travado em pagamento → explore as formas de pagamento que a construtora realmente oferecer (entrada + saldo, parcelamento direto, condições de correção), sempre "ajustável pra ficar confortável" — sem prometer condição que não conste no Cérebro ou na conversa.
+- Travado em pagamento → entrada + saldo direto com a construtora (safra pro produtor rural, aporte anual reduz parcela, aceita veículo na análise, correção só INCC sem juros), "ajustável pra ficar confortável".
 - Quer dar imóvel na troca (permuta) → só vale imóvel LÍQUIDO e de MENOR valor que o comprado ("tem que virar dinheiro rápido"); não pegar bem que vale mais que o imóvel. Reenquadre: "entrada + financiamento, bota o imóvel à venda e quita quando vender — pega desconto e ainda vende o seu por mais depois".
-- Investidor → foque em opção comercial/de renda quando houver; para quem quer decidir depois (morar/alugar/revender), a opção mais flexível. Reative indeciso com comparativo histórico real de valorização. Cite apenas empreendimentos que apareçam no Cérebro ou na conversa.
+- Investidor → comercial/renda: Premium Office (saúde não tem crise, aluguel alto); quer decidir depois (mora/aluga/revende): Renaissance. Reative indeciso com comparativo histórico real de valorização.
 - Decisão conjunta (cônjuge/filho/mãe) → não pressione; ofereça café na construtora pra apresentar junto e mantenha contato leve até a novidade/material.
 - Não viu o decorado → insista com leveza: "sem ver o decorado não dá pra entender a planta"; ofereça visita/chave sem compromisso, horário flexível.
 
@@ -2246,7 +2416,7 @@ export async function extrairInteligenciaObservada(timelineText, openai) {
     : `${bruto.slice(0, 12000)}
 [... trechos intermediários preservados pelo preparador ...]
 ${bruto.slice(-35000)}`;
-  const prompt = `Você vai LER E ENTENDER uma conversa INTEIRA de WhatsApp entre um CORRETOR de imóveis e um cliente — TUDO que aconteceu: as PERGUNTAS, dúvidas e situações do CLIENTE e as RESPOSTAS e a condução do CORRETOR. Leia os dois lados, do começo ao fim, e entenda o que rolou.
+  const prompt = `Você vai LER E ENTENDER uma conversa INTEIRA de WhatsApp entre um CORRETOR da Construtora Senger (Carazinho/RS) e um cliente — TUDO que aconteceu: as PERGUNTAS, dúvidas e situações do CLIENTE e as RESPOSTAS e a condução do CORRETOR. Leia os dois lados, do começo ao fim, e entenda o que rolou.
 
 Seu objetivo: aprender COMO O CORRETOR AGE em cada situação — qual era a situação/pergunta do cliente, o que o corretor respondeu/fez, e qual foi o resultado — pra o Corretor Pro saber repetir isso em situações SEMELHANTES no futuro. Pense sempre em PARES: "quando o cliente faz/pergunta/objeta X → o corretor responde/conduz Y → deu resultado Z".
 
@@ -2523,7 +2693,7 @@ ${String(timelineText || "").slice(-16000)}`;
     prompt: usuario,
     model: modeloMensagens(),
     maxOutputTokens: 1100,
-    timeout: Number(process.env.DIRECIONA_MESSAGE_REWRITE_TIMEOUT_MS || 12000)
+    timeout: Number(process.env.DIRECIONA_MESSAGE_REWRITE_TIMEOUT_MS || 18000)
   });
   const m = r?.parsed?.mensagens || r?.parsed || {};
   return {
@@ -2603,9 +2773,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     hoje = _agoraDt.toISOString().slice(0, 10);
   }
   const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
-  // v827 §7.4: o nome do corretor vem SEMPRE da configuração do Cérebro ("Seu nome
-  // como aparece no WhatsApp"). Sem nome fixo no código; na ausência, um rótulo genérico.
-  const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName) || "o corretor";
+  const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName || "Sanchai") || "Sanchai";
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
     nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
@@ -2643,6 +2811,10 @@ ${instrucoesCerebroTexto}`;
   let casosAprendidos = "";
   try { casosAprendidos = await casosSemelhantesPrompt(timelineText); } catch (_) { casosAprendidos = ""; }
 
+  // v820: nomes reais dos empreendimentos, pra preencher o produto quando a IA deixar em
+  // branco (rede de segurança abaixo). Falha aqui nunca derruba a análise.
+  let nomesEmpSenger = [];
+  try { nomesEmpSenger = await nomesEmpreendimentosSenger(); } catch (_) { nomesEmpSenger = []; }
 
   const prompt = `Você é um corretor de imóveis experiente lendo a própria conversa de WhatsApp antes de responder. Leia com atenção quem falou por último e o que já foi perguntado, oferecido e respondido, para não repetir nada nem "recomeçar" a conversa. A conversa pode ter meses de intervalo e mudar de produto no meio — leia do início ao fim, não só o trecho mais recente: um fato importante dito há tempo (ex.: cliente ofereceu um terreno/imóvel próprio como parte do pagamento, uma condição financeira, uma restrição) continua valendo até o cliente dizer o contrário, mesmo que a conversa tenha mudado de assunto depois. Gere um diagnóstico comercial e três sugestões de mensagem para o corretor enviar ao cliente, usando apenas a conversa e os metadados de identificação — sem análise antiga, produto salvo, unidade salva ou qualquer contexto externo. NÃO invente, presuma ou generalize nada que o cliente não tenha dito de fato: cada campo do diagnóstico só pode ser preenchido se houver uma frase real do cliente (ou do corretor) na conversa que sustente aquela afirmação — se não houver, escreva "Não identificado". Quando algo não estiver claro, escreva "Não identificado". Antes de escrever as três mensagens, calcule quantos dias corridos se passaram entre a data da ÚLTIMA mensagem da conversa e a Data atual informada abaixo, considerando também o dia da semana. Regra do tempo (siga à risca): (a) MENOS de ${contextoTemporal.limiar} dias corridos — e QUALQUER intervalo que seja apenas um fim de semana — é normal: NÃO peça desculpa, NÃO diga "desculpa a demora" nem "faz tempo que não nos falamos"; escreva como continuação natural do assunto, dando sequência normal. (b) A partir de ${contextoTemporal.limiar} dias parado, trate como RETOMADA: reabra a conversa de forma natural e específica — retome o último assunto/pendência e proponha o próximo passo — sem soar genérico. ATENÇÃO: retomar NÃO é pedir desculpa. Reconheça o tempo apenas de leve, e só peça desculpa se o corretor tinha prometido um retorno e realmente não cumpriu. (c) Se o corretor combinou retornar num dia específico e esse dia ainda NÃO chegou, ele está no prazo ou adiantado — jamais peça desculpa por demora nesse caso. Nunca invente um atraso que não existe. As mensagens também não podem soar como se tivessem sido escritas no mesmo dia da última quando já se passaram vários dias. Regra de adiamento pedido pelo cliente: se o cliente disse de forma explícita que quer ESPERAR ou adiar (ex.: "vou esperar uns meses", "me chama daqui a um tempo", "quando sair o inventário / a herança / a venda do meu imóvel", "agora não é o momento"), você NÃO deve pressionar por informações (faixa de valor, número de dormitórios, planta ou pronto) nem empurrar imóvel. Nesse caso, as três mensagens têm que RESPEITAR o tempo dele: reconhecer o que ele falou, se colocar à disposição e, no máximo, combinar um retorno leve mais pra frente (retomar quando ele estiver pronto) — trate a urgência como baixa. Retorne somente JSON válido, sem markdown.
 
@@ -2703,7 +2875,7 @@ ${timelineText}`;
         prompt,
         model: modeloAnalise(),
         maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
-        timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 18000)
+        timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
       });
       parsedRaw = r.parsed; completion = r.response;
     } catch (primeiroErro) {
@@ -2719,7 +2891,7 @@ ${timelineText}`;
           prompt: promptRetry,
           model: modeloAnaliseRapida(),
           maxOutputTokens: 1800,
-          timeout: Number(process.env.DIRECIONA_ANALYSIS_RETRY_TIMEOUT_MS || 15000)
+          timeout: Number(process.env.DIRECIONA_ANALYSIS_RETRY_TIMEOUT_MS || 22000)
         });
         parsedRaw = r2.parsed; completion = r2.response;
       } catch (segundoErro) {
@@ -2739,7 +2911,7 @@ ${timelineText}`;
     let validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
     let mensagensCorrigidasPelaValidacao = false;
     let tentativasCorrecao = 0;
-    while (!validacaoMensagens.ok && tentativasCorrecao < 1) {
+    while (!validacaoMensagens.ok && tentativasCorrecao < 2) {
       tentativasCorrecao++;
       try {
         const corrigidas = await corrigirMensagensPelasRegras({
@@ -2766,9 +2938,14 @@ ${timelineText}`;
       }
     }
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10) && validacaoMensagens.ok;
-    // v827 §7.1: o produto vem só do que a IA leu na conversa. Sem catálogo fixo para
-    // "completar" — na ausência, fica "Não identificado" (cautela, não invenção).
-    const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
+    let produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
+    // v820: se a IA não identificou o produto, tenta o empreendimento citado na conversa a
+    // partir do catálogo (só nomes reais — nunca inventa). Resolve o "Não identificado"
+    // quando o cliente CLARAMENTE falou o empreendimento e a IA foi conservadora demais.
+    if (produtoAtual === "Não identificado") {
+      const empDetectado = empreendimentoDaConversa(timelineText, nomesEmpSenger);
+      if (empDetectado) produtoAtual = empDetectado;
+    }
 
     return {
       mode: "openai",
@@ -3211,16 +3388,10 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
   const extractedFiles = {};
   if (options.includeExtractedFiles === true) {
-    // v827-4: extraia somente os áudios que realmente serão transcritos na janela escolhida.
-    // Antes o servidor descompactava TODOS os áudios do ZIP, mesmo os descartados pelo período,
-    // causando estouro de memória/tempo em conversas grandes (ex.: 100+ MB).
-    const nomesNecessarios = new Set(audiosParaTranscrever.map(normalizeName));
     for (const fullName of audioFiles) {
-      const base = normalizeName(fullName);
-      if (!nomesNecessarios.has(base)) continue;
       const entry = zip.files[fullName];
       if (!entry || entry.dir) continue;
-      extractedFiles[base] = await entry.async("nodebuffer");
+      extractedFiles[normalizeName(fullName)] = await entry.async("nodebuffer");
     }
   }
 

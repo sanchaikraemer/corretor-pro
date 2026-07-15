@@ -517,6 +517,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   if (error) return { ok: false, items: [], error: error.message };
 
+  const products = ["Renaissance", "Evolutti", "Boulevard", "Terrenos", "Premium Office", "Quality", "Personalité", "Personalite", "Prime"];
+
   function cleanFileName(value = "") {
     return String(value || "")
       .replace(/\.zip$/i, "")
@@ -540,21 +542,33 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   }
 
   function productFrom(fileName = "", analysis = {}, row = {}) {
-    // v827 §7.1: o produto vem do que a IA leu na conversa (produtoInteresse) ou do valor
-    // já gravado no lead — sem lista fixa de empreendimentos para "normalizar" ou adivinhar.
+    // PRIORIDADE 1: produtoInteresse da IA (baseado nas mensagens mais recentes da janela)
     if (analysis?.produtoInteresse && analysis.produtoInteresse !== "Não identificado") {
-      return String(analysis.produtoInteresse).trim();
+      const ai = String(analysis.produtoInteresse).trim();
+      const normalized = products.find(p => ai.toLowerCase() === p.toLowerCase() || ai.toLowerCase().includes(p.toLowerCase()));
+      if (normalized) return normalized === "Personalite" ? "Personalité" : normalized;
+      return ai;
     }
-    return analysis?.product || analysis?.lead?.product || row.produto || "Produto não identificado";
+    // PRIORIDADE 2: substring match no fileName + outras fontes (modo legado)
+    const raw = `${fileName} ${analysis?.product || ""} ${analysis?.lead?.product || ""} ${row.produto || ""}`.toLowerCase();
+    const found = products.find(p => raw.includes(p.toLowerCase()));
+    if (!found) return analysis?.product || analysis?.lead?.product || row.produto || "Produto não identificado";
+    return found === "Personalite" ? "Personalité" : found;
   }
 
-  // Tira do nome o RUÍDO de como o contato costuma ser salvo no WhatsApp: palavras
-  // genéricas como "cell/celular/terreno/lote/apto/whatsapp/fone". Não mexe no nome real.
-  // v827 §7.1: sem lista fixa de empreendimentos aqui.
+  // Tira do nome o RUÍDO de como o contato costuma ser salvo no WhatsApp:
+  // empreendimento (Renaissance, Nova Vila Rica…), abreviações (NVR, NVRIII, VRIII) e palavras
+  // como "cell/celular/terreno/lote/apto/whatsapp/fone". Não mexe no nome real.
   function limparRuidoNome(s) {
     let out = String(s || "");
+    for (const product of products) out = out.replace(new RegExp(product, "ig"), " ");
     out = out
-      .replace(/\b(cel(?:ular)?|cell|whats?app?|whats|terrenos?|lotes?|aptos?|apartamentos?|fone|tel)\b/ig, " ")
+      .replace(/\bnova\s+vila\s+rica\b/ig, " ")
+      .replace(/\bvila\s+rica\b/ig, " ")
+      .replace(/\bN?VR\s*I{1,3}\b/ig, " ")
+      .replace(/\bNVR\b/ig, " ")
+      .replace(/\bNVRI{0,3}\b/ig, " ")
+      .replace(/\b(cel(?:ular)?|cell|whats?app?|whats|terrenos?|lotes?|aptos?|apartamentos?|fone|tel|eII|i{2,3}|iv)\b/ig, " ")
       .replace(/\s{2,}/g, " ")
       .replace(/^[\s\-–·.]+|[\s\-–·.]+$/g, "")
       .trim();

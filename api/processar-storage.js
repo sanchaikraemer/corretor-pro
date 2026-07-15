@@ -125,32 +125,23 @@ async function prepararExtracaoPersistente({ storage, storagePath, importId, aud
   const audioHashes = {};
   const transcriptions = {};
   const arquivosTemporarios = [];
-  const entradas = Object.entries(extracted);
-  // v827-4: uploads com concorrência limitada. Reduz muito o tempo da etapa sem
-  // abrir dezenas de conexões nem estourar memória da função serverless.
-  const CONCORRENCIA_UPLOAD = 4;
-  let cursor = 0;
-  async function workerUpload() {
-    while (cursor < entradas.length) {
-      const atual = cursor++;
-      const [base, audioBuffer] = entradas[atual];
-      const nome = normalizeName(base);
-      const audioPath = `${prefix}/audio/${String(atual + 1).padStart(4, "0")}-${nomeStorageSeguro(nome)}`;
-      const { error } = await storage.upload(audioPath, audioBuffer, {
-        contentType: contentTypeAudio(nome),
-        upsert: true,
-        cacheControl: "0"
-      });
-      if (error) throw new Error(`Não consegui guardar o áudio extraído ${nome}: ${error.message}`);
-      const hash = hashAudio(audioBuffer);
-      audioStorage[nome] = audioPath;
-      audioHashes[nome] = hash;
-      const cached = await carregarTranscricaoCache(storage, hash);
-      if (cached) transcriptions[nome] = cached;
-      arquivosTemporarios.push(audioPath);
-    }
+  let index = 0;
+  for (const [base, audioBuffer] of Object.entries(extracted)) {
+    const nome = normalizeName(base);
+    const audioPath = `${prefix}/audio/${String(++index).padStart(4, "0")}-${nomeStorageSeguro(nome)}`;
+    const { error } = await storage.upload(audioPath, audioBuffer, {
+      contentType: contentTypeAudio(nome),
+      upsert: true,
+      cacheControl: "0"
+    });
+    if (error) throw new Error(`Não consegui guardar o áudio extraído ${nome}: ${error.message}`);
+    const hash = hashAudio(audioBuffer);
+    audioStorage[nome] = audioPath;
+    audioHashes[nome] = hash;
+    const cached = await carregarTranscricaoCache(storage, hash);
+    if (cached) transcriptions[nome] = cached;
+    arquivosTemporarios.push(audioPath);
   }
-  await Promise.all(Array.from({ length: Math.min(CONCORRENCIA_UPLOAD, entradas.length) }, workerUpload));
 
   const manifest = {
     version: 1,

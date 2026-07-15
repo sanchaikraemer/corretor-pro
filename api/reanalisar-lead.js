@@ -625,7 +625,7 @@ async function reanalisarLeadHandler702(req, res) {
       messages: { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" }
     };
   }
-  novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal);
+  novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal, "Sanchai");
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   // v750: sem enriquecimento/fallback determinístico antigo.
   novoAnalysis._schemaComercial = 715;
@@ -658,7 +658,7 @@ async function reanalisarLeadHandler702(req, res) {
     aprendizado: freshPrevious.aprendizado || undefined,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal);
+  merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal, "Sanchai");
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   // v750: sem enriquecimento/fallback determinístico antigo.
   merged._schemaComercial = 715;
@@ -706,7 +706,7 @@ async function reanalisarLeadHandler702(req, res) {
       .single();
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
-    retryMerged = finalizarAnaliseComercial(retryMerged, leadModelo, timelineFinal);
+    retryMerged = finalizarAnaliseComercial(retryMerged, leadModelo, timelineFinal, "Sanchai");
     retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
     retryMerged._schemaComercial = 715;

@@ -124,7 +124,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     venda: anterior.venda || analysis.venda,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercial(merged, lead, timeline);
+  merged = finalizarAnaliseComercial(merged, lead, timeline, "Sanchai");
   merged._schemaComercial = 684;
   if (merged.modeloComercial) merged.modeloComercial.versao = 684;
 
@@ -261,10 +261,11 @@ async function acaoExtrairPrint(body, res) {
   if (!openai) return json(res, 200, { ok: false, error: "Leitura de print indisponível agora." });
   const dataUrl = String(body?.imagemBase64 || "");
   if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem não recebida no formato esperado." });
-  const instrucao = `Você lê o PRINT de uma conversa de WhatsApp ou formulário de um possível cliente (lead) de uma imobiliária. Extraia SÓ os dados do CLIENTE (nunca do corretor/da empresa).
+  const EMPS = ["Renaissance", "Quality", "Prime", "Personalité", "Boulevard", "Premium Office", "Evolutti", "Nova Vila Rica I", "Nova Vila Rica II", "Nova Vila Rica III", "Residencial GABRO", "Edifício Campos Elísios"];
+  const instrucao = `Você lê o PRINT de uma conversa de WhatsApp ou formulário de um possível cliente (lead) de uma imobiliária (Construtora Senger — Carazinho e Ibirubá/RS). Extraia SÓ os dados do CLIENTE (nunca do corretor/da empresa).
 
 REGRA CRÍTICA — separe o que o CLIENTE disse do que é ANÚNCIO/PROPAGANDA:
-- Em prints aparece muito um POST/ANÚNCIO compartilhado (card com imagem, título, legenda, link do Instagram/Facebook, slogan tipo "Seu terreno ficou possível", "Lotes em 60x"). Esse texto é PROPAGANDA do empreendimento — NÃO é fala do cliente.
+- Em prints aparece muito um POST/ANÚNCIO compartilhado (card com imagem, título, legenda, link do Instagram/Facebook, slogan tipo "Seu terreno em Carazinho ficou possível", "Lotes em 60x"). Esse texto é PROPAGANDA do empreendimento — NÃO é fala do cliente.
 - NUNCA escreva "o cliente mencionou/disse/falou que..." baseado em texto de anúncio. Só atribua ao cliente o que ELE realmente digitou/falou (balões de mensagem dele, campos do formulário que ele preencheu).
 - Se um anúncio foi compartilhado, registre assim: "Veio de um anúncio do [empreendimento]" — sem transformar o slogan em fala dele.
 
@@ -282,7 +283,7 @@ Campos:
   - Se não houver, "".
 - email: e-mail do cliente, se houver. Senão "".
 - nomeFonte: de ONDE você tirou o nome — "formulario" quando o nome veio de um campo de cadastro/formulário que o PRÓPRIO cliente preencheu (ex.: "full_name: Cleonir dos santos", "nome:"); "topo" quando veio do cabeçalho/perfil da conversa (nome do contato no topo da tela); "" se não houver nome. Se existir full_name no print, o nome DEVE vir dele e nomeFonte = "formulario".
-- produto: o empreendimento de interesse citado no anúncio compartilhado ou pelo próprio cliente, exatamente como aparece. Se não der pra saber, "".
+- produto: o empreendimento de interesse, quando der pra identificar (pelo anúncio compartilhado ou pelo texto do cliente). Use EXATAMENTE um destes nomes quando bater: ${EMPS.join(", ")}. Se não der pra saber, "".
 - observacao: um RESUMO ÚTIL e fiel do print, pra registrar como histórico/memória do lead. Inclua: de onde o lead veio (ex.: "veio de um anúncio do NVR III no Instagram", "formulário do Facebook", indicação), o que O CLIENTE de fato escreveu/pediu (pode usar as palavras dele), e dados pertinentes que ELE informou (cidade, prazo, valor, dúvidas, momento de vida etc.). DEIXE CLARO o que é fala do cliente e o que é anúncio. NÃO invente e NÃO atribua frase de propaganda ao cliente. Se ele só escreveu uma frase genérica de formulário, registre exatamente isso (sem inflar).
 - avatarBox: a posição da FOTO DE PERFIL REAL do cliente DENTRO do print — uma foto REDONDA com um ROSTO.
   - NUNCA use um CARD compartilhado (post/anúncio, prévia de link, vídeo): esses são RETANGULARES e têm botão de ▶ play, miniatura de mapa/imagem, logo do Facebook/Instagram, título, legenda e link tipo "fb.me". ISSO NÃO É A FOTO DO CLIENTE — jamais recorte daí.
@@ -403,7 +404,7 @@ async function acaoLerPrintsConversa(body, res) {
   const _ontemP = new Date(_nowP); _ontemP.setDate(_ontemP.getDate() - 1);
   const _ontemISO = _ontemP.toISOString().slice(0, 10);
   const instrucao = `HOJE é ${_hojeISO}. "Hoje" no print = ${_hojeISO}; "Ontem" = ${_ontemISO}; datas sem ano = ano ${_nowP.getFullYear()} (a não ser que o print mostre OUTRO ano claramente). NUNCA use um ano anterior só porque o ano não aparece — datas relativas (Ontem/Hoje) são RECENTES.
-Você recebe ${imgs.length} print(s) de uma conversa de WhatsApp entre um CORRETOR de imóveis e um CLIENTE. Leia cada imagem com MUITA ATENÇÃO e TRANSCREVA a conversa NA ÍNTEGRA, mensagem por mensagem, do jeito que está escrita. NÃO resuma, NÃO encurte, NÃO omita falas. Quero o diálogo completo dos dois lados.
+Você recebe ${imgs.length} print(s) de uma conversa de WhatsApp entre um CORRETOR (Construtora Senger — Carazinho e Ibirubá/RS) e um CLIENTE. Leia cada imagem com MUITA ATENÇÃO e TRANSCREVA a conversa NA ÍNTEGRA, mensagem por mensagem, do jeito que está escrita. NÃO resuma, NÃO encurte, NÃO omita falas. Quero o diálogo completo dos dois lados.
 COMO LER UM PRINT DE WHATSAPP:
 - Os balões à DIREITA (geralmente verdes/claros) são do CORRETOR (quem enviou). Marque essas falas como "Você:".
 - Os balões à ESQUERDA são do CLIENTE. Marque como "Cliente:".
@@ -415,7 +416,7 @@ FORMATO DA TRANSCRIÇÃO (siga à risca):
 - Transcreva o TEXTO LITERAL de cada balão, inclusive valores, links e números (ex.: "R$ 95.000,00", "26 RUA LARANJEIRA 290,00"). Pode manter emojis se ajudarem a entender.
 - Quando o separador de data muda no meio da conversa, pode colocar uma linha só com a data (ex.: "— 16 de maio de 2025 —") antes de seguir.
 - NÃO invente nada. O que estiver cortado/ilegível, pule (não chute). Se um balão estiver parcialmente cortado, transcreva só a parte legível.
-- Texto de ANÚNCIO/post compartilhado (card de propaganda, "LANÇAMENTO IMPERDÍVEL", "LOTEAMENTO — Entrada 10%...") NÃO é fala de ninguém — é PROPAGANDA. Marque numa linha como "[HORÁRIO] Você: (anúncio compartilhado: nome do loteamento)" e NÃO transcreva o panfleto inteiro nem atribua como fala do cliente.
+- Texto de ANÚNCIO/post compartilhado (card de propaganda, "LANÇAMENTO IMPERDÍVEL", "LOTEAMENTO NOVA VILA RICA III — Entrada 10%...") NÃO é fala de ninguém — é PROPAGANDA. Marque numa linha como "[HORÁRIO] Você: (anúncio compartilhado: Loteamento Nova Vila Rica III)" e NÃO transcreva o panfleto inteiro nem atribua como fala do cliente.
 - Português do Brasil, exatamente como escrito (não corrija a fala do cliente).
 DATA DA ÚLTIMA MENSAGEM: identifique a DATA da mensagem MAIS RECENTE que aparece no(s) print(s) (o último contato real, do cliente OU do corretor). Devolva em "dataUltimaISO" no formato AAAA-MM-DD, usando os separadores de data e horários visíveis. Se o ano não aparecer, deduza pelo contexto das outras datas. Se for IMPOSSÍVEL determinar a data com segurança, devolva "dataUltimaISO": "".
 Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por linha", "dataUltimaISO": "AAAA-MM-DD ou vazio" }.`;
@@ -942,7 +943,7 @@ async function acaoAtualizarComEvolucao(body, res) {
 
 
 
-  // Produto: queremos sempre um NOME PRÓPRIO do empreendimento, nunca uma descrição ("apartamento de 2 dormitórios").
+  // Produto: queremos sempre um NOME PRÓPRIO (Gabro, Renaissance), nunca uma descrição ("apartamento de 2 dormitórios").
   const semProduto = (p) => { const s = String(p || "").toLowerCase().trim(); return !s || s.includes("não identificado") || s.includes("nao identificado"); };
   // Heurística: descrição = começa com tipo de imóvel ou tem palavras de característica, sem cara de nome próprio.
   const ehDescricao = (p) => {
