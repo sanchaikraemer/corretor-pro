@@ -60,4 +60,51 @@ const incompleta = validarMensagensCerebro({ a:'Bom dia, Vera, qual planta você
 assert.equal(incompleta.ok, false);
 assert.ok(incompleta.motivos.some(x => /exatamente três/i.test(x)));
 
+// Regressão da tela do "Rudi" (21:16, sem saudação): a regra de saudação por horário
+// precisa ser reconhecida também na forma POSITIVA, não só na proibitiva "não use oi/olá".
+const noite = new Date('2026-07-15T00:16:00.000Z'); // 21:16 em São Paulo (UTC-3)
+for (const cfgPositivo of [
+  { metodo: 'Sempre comece a mensagem com bom dia, boa tarde ou boa noite conforme o horário.' },
+  { tom: 'Use uma saudação conforme o horário: bom dia, boa tarde ou boa noite.' },
+  { regras: [{ texto: 'Iniciar sempre com bom dia, boa tarde ou boa noite.' }] }
+]) {
+  const r = compilarRegrasObjetivasCerebro(cfgPositivo, noite);
+  assert.equal(r.saudacaoObrigatoria, true, 'a forma positiva da regra de saudação deve ser reconhecida');
+  assert.equal(r.saudacaoEsperada, 'Boa noite', 'às 21:16 a saudação é Boa noite');
+}
+// Menção solta a "boa noite" (sem virar regra) não pode disparar a exigência.
+assert.equal(compilarRegrasObjetivasCerebro({ diferenciais: 'O cliente disse boa noite ontem.' }, noite).saudacaoObrigatoria, false);
+// Com a regra positiva, as mensagens do Rudi recebem a saudação do horário.
+const cfgRudi = { metodo: 'Continue a conversa. Sempre comece com bom dia, boa tarde ou boa noite conforme o horário.' };
+const rudi = aplicarCorrecoesDeterministicasCerebro({
+  a: 'Rudi, conseguiu acessar a apresentação do Renaissance pelo link que enviei?',
+  b: 'Rudi, teve a oportunidade de ver algum diferencial que gostaria de entender melhor?',
+  c: 'Rudi, existe algum detalhe que gostaria de esclarecer ou prefere agendar uma visita?'
+}, cfgRudi, noite);
+assert.match(rudi.a, /^Boa noite, Rudi,/);
+assert.match(rudi.b, /^Boa noite, Rudi,/);
+assert.match(rudi.c, /^Boa noite, Rudi,/);
+
+// Regra do usuário real, tudo numa frase só: 'Não use "oi" ... use: bom dia, boa
+// tarde ou boa noite'. O parser NÃO pode marcar as saudações permitidas como
+// proibidas — senão o sistema rejeita a própria saudação que acabou de aplicar.
+const cfgFraseUnica = { metodo: 'Continue a conversa. Não use "oi" nas sugestões de resposta- use: bom dia, boa tarde ou boa noite, conforme horário da analise.' };
+const regrasFraseUnica = compilarRegrasObjetivasCerebro(cfgFraseUnica, noite);
+assert.equal(regrasFraseUnica.saudacaoObrigatoria, true);
+assert.ok(regrasFraseUnica.proibidas.some(p => /^oi$/i.test(p)), 'oi continua proibido');
+assert.ok(!regrasFraseUnica.proibidas.some(p => /boa\s+tarde|boa\s+noite|bom\s+dia/i.test(p)), 'as saudações permitidas nunca podem ser proibidas');
+const rudiFraseUnica = aplicarCorrecoesDeterministicasCerebro({
+  a: 'Rudi, conseguiu acessar a apresentação do Renaissance pelo link que enviei?',
+  b: 'Rudi, teve a oportunidade de ver algum diferencial que gostaria de entender melhor?',
+  c: 'Rudi, existe algum detalhe que gostaria de esclarecer ou prefere agendar uma visita?'
+}, cfgFraseUnica, noite);
+const valFraseUnica = validarMensagensCerebro(rudiFraseUnica, null, [
+  { author: 'Construtora Senger', text: 'te enviei a apresentação do Renaissance pelo link' },
+  { author: 'Rudi', text: 'obrigado, vou ver' }
+], cfgFraseUnica, noite);
+assert.equal(valFraseUnica.ok, true, 'a saudação aplicada não pode ser rejeitada como expressão proibida');
+// "Oi" ainda é corrigido de verdade.
+const corrigeOi = aplicarCorrecoesDeterministicasCerebro({ a: 'Oi Rudi, tudo bem por aí hoje?', b: rudiFraseUnica.b, c: rudiFraseUnica.c }, cfgFraseUnica, noite);
+assert.match(corrigeOi.a, /^Boa noite, Rudi,/);
+
 console.log('v825-cerebro-obrigatorio: ok');
