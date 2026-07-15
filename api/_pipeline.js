@@ -2523,7 +2523,7 @@ ${String(timelineText || "").slice(-16000)}`;
     prompt: usuario,
     model: modeloMensagens(),
     maxOutputTokens: 1100,
-    timeout: Number(process.env.DIRECIONA_MESSAGE_REWRITE_TIMEOUT_MS || 18000)
+    timeout: Number(process.env.DIRECIONA_MESSAGE_REWRITE_TIMEOUT_MS || 12000)
   });
   const m = r?.parsed?.mensagens || r?.parsed || {};
   return {
@@ -2703,7 +2703,7 @@ ${timelineText}`;
         prompt,
         model: modeloAnalise(),
         maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
-        timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
+        timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 18000)
       });
       parsedRaw = r.parsed; completion = r.response;
     } catch (primeiroErro) {
@@ -2719,7 +2719,7 @@ ${timelineText}`;
           prompt: promptRetry,
           model: modeloAnaliseRapida(),
           maxOutputTokens: 1800,
-          timeout: Number(process.env.DIRECIONA_ANALYSIS_RETRY_TIMEOUT_MS || 22000)
+          timeout: Number(process.env.DIRECIONA_ANALYSIS_RETRY_TIMEOUT_MS || 15000)
         });
         parsedRaw = r2.parsed; completion = r2.response;
       } catch (segundoErro) {
@@ -2739,7 +2739,7 @@ ${timelineText}`;
     let validacaoMensagens = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
     let mensagensCorrigidasPelaValidacao = false;
     let tentativasCorrecao = 0;
-    while (!validacaoMensagens.ok && tentativasCorrecao < 2) {
+    while (!validacaoMensagens.ok && tentativasCorrecao < 1) {
       tentativasCorrecao++;
       try {
         const corrigidas = await corrigirMensagensPelasRegras({
