@@ -6597,6 +6597,7 @@ async function uploadLargeZipToSupabase(file, options = {}){
   try{
     analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId });
   }catch(err){
+    renderEtapas(7, "a importação pode ser retomada sem reenviar o ZIP");
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
     qs("#processingText").textContent = ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.";
@@ -6670,7 +6671,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
 
   renderEtapas(2, "baixando e extraindo uma única vez");
-  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 300000);
+  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 75000);
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
   const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
@@ -7328,6 +7329,9 @@ async function _checkSharedImpl(){
   const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
   const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||state.pendingSharedRecordId||'').trim();
   const erroUrl=params.get('erro');
+  // Não recupere automaticamente uma tentativa antiga ao abrir o app normalmente.
+  // A retomada automática só é legítima quando a URL veio do Share Target ou traz o ID explícito.
+  if(!cameFromShare && !shareId) return {handled:false};
   if(cameFromShare){ window.__cpShareImportActive=true; mostrarRecebimentoShare(); }
 
   // No cold start, o documento pode montar alguns milissegundos antes da transação do
