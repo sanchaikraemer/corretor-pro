@@ -1299,18 +1299,27 @@ export function compilarRegrasObjetivasCerebro(cfg = {}, agora = new Date()) {
   const norm = normalizarBusca(integral);
   const proibidas = new Set();
   const adicionar = valor => {
-    const v = String(valor || "").replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, "").trim();
-    if (v && v.length <= 80) proibidas.add(v);
+    const v = String(valor || "").replace(/["'“”]/g, "").replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, "").trim();
+    if (!v || v.length > 40) return;
+    // Nunca proibir as próprias saudações sancionadas. Regras como
+    // 'Não use "oi" — use: bom dia, boa tarde ou boa noite' (tudo numa frase só)
+    // faziam o parser capturar "boa tarde"/"boa noite" como proibidas e o sistema
+    // passava a rejeitar a saudação que ele mesmo acabara de aplicar.
+    if (/^(?:bom\s+dia|boa\s+tarde|boa\s+noite)$/.test(normalizarBusca(v))) return;
+    proibidas.add(v);
   };
 
   for (const linha of linhas) {
     const n = normalizarBusca(linha);
     if (!/(nao\s+(?:use|usar)|evite|proibid|sem\s+["'“”]?)/.test(n)) continue;
     for (const m of linha.matchAll(/["“”']([^"“”']{1,80})["“”']/g)) adicionar(m[1]);
-    const clausula = linha.match(/(?:não|nao)\s+(?:use|usar)\s+([^.;\n]{1,100})/i)?.[1];
+    let clausula = linha.match(/(?:não|nao)\s+(?:use|usar)\s+([^.;\n]{1,100})/i)?.[1];
     if (clausula) {
+      // Corta antes de uma instrução positiva ("... use: bom dia") para não tratar
+      // as alternativas PERMITIDAS que vêm depois como se fossem proibidas.
+      clausula = clausula.split(/\b(?:use|usar|utilize|utilizar|prefira|troque|substitu\w*|diga|comece|inicie|iniciar)\b\s*:?/i)[0];
       clausula.split(/\s+(?:ou|e)\s+|,|\//i)
-        .map(v => v.replace(/\b(?:nas|nos|na|no|das|dos|da|do|mensagens?|sugest[oõ]es?)\b/gi, "").trim())
+        .map(v => v.replace(/\b(?:nas|nos|na|no|das|dos|da|do|de\s+resposta|mensagens?|sugest[oõ]es?)\b/gi, "").trim())
         .forEach(adicionar);
     }
   }

@@ -65,6 +65,13 @@ realmente governar a análise das três mensagens.
     na forma **positiva** que o corretor normalmente escreve ("sempre comece com
     bom dia, boa tarde ou boa noite", "iniciar com a saudação do horário") — antes
     só a forma proibitiva era detectada e as mensagens saíam sem saudação;
+    - **correção do parser de expressões proibidas:** quando a regra estava numa
+      frase só ('Não use "oi" ... use: bom dia, boa tarde ou boa noite'), o parser
+      capturava "boa tarde"/"boa noite" como **proibidas** e o sistema passava a
+      rejeitar a própria saudação que acabara de aplicar (contradição que travava a
+      análise). Agora a extração para antes da parte positiva ("use: ...") e as
+      saudações sancionadas nunca entram na lista de proibidas — "oi/olá" continuam
+      bloqueados normalmente;
   - impede repetir pergunta cuja resposta já existe na conversa;
   - impede introduzir preço, prazo ou número que não aparece na conversa;
   - valida tamanho/formato quando objetivamente verificável.
