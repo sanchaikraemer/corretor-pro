@@ -91,7 +91,7 @@ async function salvarTranscricaoCache(storage, hash, item) {
     createdAt: new Date().toISOString()
   }), "utf8");
   const { error } = await storage.upload(caminhoCacheTranscricao(hash), payload, {
-    contentType: "application/json; charset=utf-8",
+    contentType: "application/octet-stream",
     upsert: true,
     cacheControl: "31536000"
   });
@@ -101,14 +101,14 @@ async function salvarTranscricaoCache(storage, hash, item) {
 async function salvarManifesto(storage, manifestPath, manifest) {
   const buffer = Buffer.from(JSON.stringify(manifest), "utf8");
   const { error } = await storage.upload(manifestPath, buffer, {
-    contentType: "application/json; charset=utf-8",
+    contentType: "application/octet-stream",
     upsert: true,
     cacheControl: "0"
   });
   if (error) throw new Error(`Não consegui salvar o manifesto da importação: ${error.message}`);
 }
 
-async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays }) {
+export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays }) {
   const prefix = `imports/${importId}`;
   const manifestPath = `${prefix}/manifest.json`;
   const existente = await carregarManifesto(storage, manifestPath);

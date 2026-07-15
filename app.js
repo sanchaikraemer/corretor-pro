@@ -1131,13 +1131,13 @@ function sinaisPrioridadeComercial682(l){
   const objecaoKeywords = /(caro|pre[çc]o|valor|entrada|parcela|financiamento|renda|banco|caixa|aprov|or[çc]amento|teto|localiza[çc][ãa]o|prazo|entrega|permuta|vender meu|vender a casa|vender o apartamento|juros)/;
   const pendenciaKeywords = /(ficou de|promet|vou te mandar|vou te enviar|te envio|te mando|retorno|retornar|aguardando|esperando|preciso te passar|vou validar|vou ver|vou falar|proposta|simula[çc][ãa]o|condi[çc][ãa]o)/;
 
-  const compradorReal = compradorKeywords.test(txt) || ["Visita/Proposta","Negociação"].includes(e) || prob >= 68;
+  const compradorReal = compradorKeywords.test(txt) || ["Visita/Proposta","Negociação"].includes(e);
   const curioso = curiosoKeywords.test(txt) && !/(proposta|simula|entrada|parcela|visita|unidade|financi|reserva|fechar)/.test(txt);
   const urgencia = urgenciaKeywords.test(txt) || Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length > 0;
   const objecao = objecaoKeywords.test(txt);
   const pendencia = pendenciaKeywords.test(txt);
   // Caso tipo Isabela: muito sinal comercial espalhado na conversa, mas etapa ainda "Atendimento".
-  const quenteEscondido = compradorReal && !curioso && e === "Atendimento" && (diasDistintos >= 3 || prob >= 60) && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
+  const quenteEscondido = compradorReal && !curioso && e === "Atendimento" && diasDistintos >= 3 && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
 
   const motivos = [];
   if(quenteEscondido) motivos.push("lead quente escondido: conversa forte mesmo ainda em Atendimento");

@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const BUCKET_MAX_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES) || 2147483648;
 const ALLOWED_MIME_TYPES = [
-  "application/zip", "application/x-zip-compressed", "application/octet-stream",
+  "application/zip", "application/x-zip-compressed", "application/octet-stream", "application/json",
   "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
   "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
 ];
