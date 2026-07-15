@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../api/reanalisar-lead.js', import.meta.url), 'utf8');
 const persistence = fs.readFileSync(new URL('../api/_persistence.js', import.meta.url), 'utf8');
+const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
 
 const markStart = app.indexOf('window.ui667MarcarAtendido=async function(btn)');
 const markEnd = app.indexOf('// Atualização #724-2: wrapper antigo', markStart);
@@ -29,10 +30,24 @@ assert.match(app, /const last=cp705FormatDateTime\(lead\.lastInteractionAt/, 'Ú
 assert.doesNotMatch(app, /lastInteraction \|\| a\.reanalisadoEm/, 'data da análise não pode ser exibida como data da última mensagem');
 assert.match(persistence, /source === "corretor-pro-manual"/, 'observação manual não pode substituir a data da última mensagem real');
 assert.match(persistence, /"observacao_manual"/, 'tipo de observação manual deve ser excluído da última mensagem real');
-assert.doesNotMatch(app, /function registrarMensagemEnviada/, 'copiar sugestão não pode registrar atendimento automaticamente');
-const copyStart = app.indexOf('window.ui631CopyResponse = async function()', app.indexOf('#683 FECHAMENTO'));
-const copyEnd = app.indexOf('async function ui683MoverEtapaComEvento', copyStart);
-const copyBlock = app.slice(copyStart, copyEnd);
-assert.doesNotMatch(copyBlock, /contato_manual|novoAtendimento|registrarMensagemEnviada/, 'botão copiar não pode alterar atendimento, timeline ou status');
+// v826 §6.2/§6.5: copiar uma sugestão AGORA registra atendimento e entra na timeline
+// como "Mensagem enviada" — mas nunca altera a etapa comercial (reverte a decisão v809,
+// conforme aprovação do corretor).
+assert.match(app, /async function registrarMensagemEnviada\(id, msg\)/, 'copiar sugestão deve registrar atendimento + mensagem enviada');
+const envStart = app.indexOf('async function registrarMensagemEnviada(id, msg)');
+const envEnd = app.indexOf('window.copiarMensagemLead = function', envStart);
+const envBlock = app.slice(envStart, envEnd);
+assert.match(envBlock, /tipoManual:"mensagem_enviada"/, 'entra na timeline como mensagem enviada');
+assert.match(envBlock, /registrarAtendimento:true/, 'conta como atendimento');
+assert.doesNotMatch(envBlock, /etapa/, 'copiar nunca altera a etapa comercial');
+assert.match(app, /done = \(\) => \{ toast\("Mensagem copiada"\);[\s\S]*?registrarMensagemEnviada\(l\.id, msg\)/, 'o botão Copiar do hero chama o registro');
+assert.match(app, /cp704CopyMsg=async function[\s\S]*?registrarMensagemEnviada\(state\.lead\?\.id, msg\)/, 'o botão Copiar do detalhe chama o registro');
+// Backend: copiar registra o evento de atendimento (contato_manual), sem tocar na etapa.
+assert.match(api, /body\?\.registrarAtendimento === true/, 'backend registra atendimento ao copiar');
+assert.match(api, /de: "copiar_msg"/, 'evento de atendimento marcado como cópia de mensagem');
+const apenasSalvarBlock = api.slice(api.indexOf('if (apenasSalvar) {'), api.indexOf('// ORDEM CORRETA'));
+assert.doesNotMatch(apenasSalvarBlock, /update\.etapa|\.etapa =/, 'copiar nunca altera a etapa comercial no backend');
+// A mensagem copiada é sugestão da IA: não pode virar fonte de aprendizado de estilo.
+assert.match(pipeline, /if \(tipo === "mensagem_enviada"\) return false/, 'mensagem enviada não alimenta o aprendizado de estilo');
 
 console.log('attendance-refresh: ok');

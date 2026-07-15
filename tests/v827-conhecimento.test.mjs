@@ -13,18 +13,14 @@ const trio = extra => ({
   c: 'Boa noite, Vera, posso te enviar mais detalhes?'
 });
 
-// §7.3 — Prazo/ano NÃO confirmado na conversa não pode ser afirmado como certeza.
-const anoInventado = validarMensagensCerebro(trio('Boa noite, Vera, quer garantir sua unidade com entrega em 2028?'), null, tl, {}, noite);
-assert.equal(anoInventado.ok, false);
-assert.ok(anoInventado.motivos.some(m => /ausente/.test(m)), 'ano de entrega inventado deve ser bloqueado');
+// §7.3 — Preço inventado (não presente na conversa) é bloqueado; mensagens de retomada
+// que citam tempo ("faz 2 meses") continuam válidas (não bloqueamos anos/meses).
+const precoInventado = validarMensagensCerebro(trio('Boa noite, Vera, consigo por R$ 450.000, quer garantir?'), null, tl, {}, noite);
+assert.equal(precoInventado.ok, false);
+assert.ok(precoInventado.motivos.some(m => /ausente/.test(m)), 'preço inventado deve ser bloqueado');
 
-const prazoInventado = validarMensagensCerebro(trio('Boa noite, Vera, a entrega é em 3 anos, quer aproveitar?'), null, tl, {}, noite);
-assert.equal(prazoInventado.ok, false, 'prazo em anos inventado deve ser bloqueado');
-
-// Quando o prazo ESTÁ na conversa, pode ser usado.
-const tlComAno = [...tl, { author: 'Vera', text: 'Soube que a entrega é em 2028, confere?' }];
-const anoOk = validarMensagensCerebro(trio('Boa noite, Vera, isso mesmo, quer garantir agora?'), null, tlComAno, {}, noite);
-assert.ok(!anoOk.motivos.some(m => /ausente/.test(m)), 'ano presente na conversa é permitido');
+const retomadaComTempo = validarMensagensCerebro(trio('Boa noite, Vera, faz uns 2 meses que não conversamos, quer retomar?'), null, tl, {}, noite);
+assert.ok(!retomadaComTempo.motivos.some(m => /ausente/.test(m)), 'retomada citando tempo não pode ser bloqueada como dado inventado');
 
 // §7.3 — Regra manual do Cérebro vence conhecimento aprendido: uma expressão proibida
 // (mesmo que o histórico "ensine" a usá-la) é barrada na validação final.
