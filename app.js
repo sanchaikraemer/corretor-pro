@@ -1116,6 +1116,10 @@ function sinaisPrioridadeComercial682(l){
   const a = l?.analysis || {};
   const txt = textoSinais(l);
   const e = normalizarEtapa(l?.etapa);
+  // A probabilidade da IA foi removida na v809. Referências antigas a `prob` ficaram e
+  // davam ReferenceError ("prob is not defined") em certos leads, quebrando o dashboard.
+  // Mantém 0 (sem sinal de probabilidade) — os sinais por palavra/etapa seguem valendo.
+  const prob = Number(a?.probabilidade ?? a?.chanceVenda ?? 0) || 0;
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   const diasDistintos = (() => {
     const set = new Set();
@@ -6601,9 +6605,13 @@ async function uploadLargeZipToSupabase(file, options = {}){
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
     qs("#processingText").textContent = ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.";
     qs("#resultBox").className="notice error";
+    // §8.1: mostra também o erro técnico REAL do servidor (não só a mensagem amigável),
+    // pra o problema ser diagnosticável na hora em vez de ficar silencioso.
+    const detalheTecnico = String(err?.message || err || "").trim();
     qs("#resultBox").innerHTML =
       "<b>Não foi possível analisar a conversa agora.</b><br><br>" +
       escapeHtml(userFriendlyError(err, file)) +
+      (detalheTecnico ? `<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:12px">Detalhe técnico (toque para ver/copiar)</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px;color:var(--soft)">${escapeHtml(detalheTecnico)}</pre></details>` : "") +
       `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="btn" id="btnRetomarAnalise" style="flex:1;min-width:180px">Tentar analisar novamente</button><button type="button" class="btn secondary" id="btnDescartarUpload" style="flex:1;min-width:140px">Descartar importação</button></div>`;
     qs("#btnRetomarAnalise")?.addEventListener("click", async () => {
       const stored = state.ultimoUploadStorage;
