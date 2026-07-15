@@ -475,18 +475,10 @@ async function reanalisarLeadHandler702(req, res) {
     };
     // Proposta gerada: guarda o snapshot completo dos campos pra reabrir/editar depois.
     if (body?.proposta && typeof body.proposta === "object") itemManual.proposta = body.proposta;
-    // v826: mensagem copiada. Se a última coisa na timeline já é a MESMA mensagem enviada,
-    // atualiza o horário em vez de empilhar duplicata (copiar de novo não polui o histórico).
-    const ultimoTl = timeline[timeline.length - 1];
-    const mesmaMsgEnviada = tipoManual === "mensagem_enviada" && ultimoTl && ultimoTl.type === "mensagem_enviada" &&
-      String(ultimoTl.text || "").trim() === novoAtendimento.slice(0, 12000).trim();
-    timelineFinal = mesmaMsgEnviada ? [...timeline.slice(0, -1), { ...ultimoTl, ...itemManual, id: ultimoTl.id, order: ultimoTl.order }] : [...timeline, itemManual];
-    // A mensagem enviada NÃO entra nas observações (não é uma anotação do corretor).
-    if (tipoManual !== "mensagem_enviada") {
-      // Observação CRUA primeiro (SEM IA) — assim dá pra SALVAR a anotação antes de qualquer reanálise.
-      stampAtend = `[${dataBR} ${horaBR}] `;
-      observacoesFinais = (observacoesBase ? observacoesBase + "\n" : "") + stampAtend + novoAtendimento.slice(0, 280);
-    }
+    timelineFinal = [...timeline, itemManual];
+    // Observação CRUA primeiro (SEM IA) — assim dá pra SALVAR a anotação antes de qualquer reanálise.
+    stampAtend = `[${dataBR} ${horaBR}] `;
+    observacoesFinais = (observacoesBase ? observacoesBase + "\n" : "") + stampAtend + novoAtendimento.slice(0, 280);
   }
 
   // Lembrete: NUNCA inventado. Só existe quando alguém (corretor OU cliente) escreveu
@@ -519,9 +511,7 @@ async function reanalisarLeadHandler702(req, res) {
     }
     return null;
   }
-  // Mensagem copiada não pode gerar lembrete a partir do próprio texto da sugestão
-  // (ela pode conter "podemos agendar..."). Só anotações reais do corretor detectam lembrete.
-  const lembreteNovo = (novoAtendimento && tipoManual !== "mensagem_enviada") ? lembreteDoTexto(novoAtendimento, null) : null;
+  const lembreteNovo = novoAtendimento ? lembreteDoTexto(novoAtendimento, null) : null;
   function aplicarLembrete(obj) {
     if (lembreteNovo) {
       obj.lembrete = fazerLembrete(lembreteNovo.dias, lembreteNovo.motivo, null);
@@ -554,25 +544,11 @@ async function reanalisarLeadHandler702(req, res) {
       memoria: { ...(previous.memoria || {}), observacoes: observacoesFinais }
     };
     aplicarLembrete(merged);
-    // v826 §6.2: copiar uma sugestão conta como ATENDIMENTO (registra data/hora e entra
-    // na fila como "atendido"), mas NUNCA altera a etapa comercial. Reaproveita o mesmo
-    // evento contato_manual usado pelo botão "Marcar atendimento".
-    if (body?.registrarAtendimento === true) {
-      const aprend = { ...(merged.aprendizado || {}) };
-      const evs = Array.isArray(aprend.eventos) ? [...aprend.eventos] : [];
-      const quando = new Date().toISOString();
-      const brA = agoraBR(new Date(quando));
-      const jaHoje = evs.findIndex(e => e?.evento === "contato_manual" && e?.detalhes?.de === "copiar_msg" && e?.quando && agoraBR(new Date(e.quando)).dataBR === brA.dataBR);
-      const ev = { evento: "contato_manual", estilo: null, detalhes: { tipo: "Mensagem enviada", de: "copiar_msg" }, quando };
-      if (jaHoje >= 0) evs[jaHoje] = ev; else evs.push(ev);
-      aprend.eventos = evs.slice(-50);
-      merged.aprendizado = aprend;
-    }
     const update = { resultado_analise: merged, atualizado_em: new Date().toISOString() };
     if (novoAtendimento) update.timeline_json = timelineFinal;
     const { error: upErr } = await supabase.from("whatsapp_processamentos").update(update).eq("id", id);
     if (upErr) return json(res, 500, { ok: false, error: upErr.message });
-    return json(res, 200, { ok: true, apenasSalvar: true, atendimentoRegistrado: body?.registrarAtendimento === true, quando: new Date().toISOString() });
+    return json(res, 200, { ok: true, apenasSalvar: true });
   }
 
   // ORDEM CORRETA: 1º SALVA a observação nova (timeline + nota crua). Só DEPOIS reanalisa.

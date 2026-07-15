@@ -1293,32 +1293,6 @@ function linhasCerebro(cfg = {}) {
   ].map(v => String(v || "").trim()).filter(Boolean);
 }
 
-// v826 — Guarda determinística do "Negociando".
-// A etapa comercial só pode ser "Negociação" quando há evidência concreta de
-// negociação na conversa. Pedir informação, receber apresentação, fazer uma visita
-// ou ficar sem responder NÃO bastam (plano §6.3 e caso Maria Clarisse §6.4).
-export function temEvidenciaNegociacao(timeline = []) {
-  const txt = normalizarBusca((Array.isArray(timeline) ? timeline : []).map(m => m?.text || "").join(" "));
-  return [
-    /proposta|contraproposta/,
-    /desconto|abatimento|abater|baixar (?:o )?(?:valor|preco)|reduzir (?:o )?(?:valor|preco)/,
-    /\bentrada\b|parcel|financi|forma de pagamento|fluxo de pagamento|\bsinal\b|simula(?:c|ç)/,
-    /reserv(?:a|ar|ei|amos|ou)/,
-    /condi(?:c|ç)(?:a|ã)o(?:es)? (?:comercial|especial|de pagamento)|ultima condi|melhor condi|ajust(?:e|ar|amos) (?:o )?(?:valor|preco|condi)/,
-    /escolh\w+ (?:a )?unidade[^.]*(?:valor|preco|condi|parcel|entrada|negocia)/
-  ].some(re => re.test(txt));
-}
-
-export function ajustarEtapaNegociacao(etapaSugerida, timeline = []) {
-  const bruta = String(etapaSugerida || "");
-  if (!/negocia/.test(normalizarBusca(bruta))) return bruta; // só age sobre Negociação/Negociando
-  if (temEvidenciaNegociacao(timeline)) return bruta;         // evidência real → mantém
-  // Sem evidência concreta: rebaixa para a etapa que os fatos realmente justificam.
-  const txt = normalizarBusca((Array.isArray(timeline) ? timeline : []).map(m => m?.text || "").join(" "));
-  const teveVisitaOuApresentacao = /visit(?:a|ou|amos|aram|ando)|decorado|apresenta|mostrei|mostramos|conheceu|plant(?:a|as)|passou no|foi (?:no|ao|conhecer)/.test(txt);
-  return teveVisitaOuApresentacao ? "Visita/Proposta" : "Atendimento";
-}
-
 export function compilarRegrasObjetivasCerebro(cfg = {}, agora = new Date()) {
   const linhas = linhasCerebro(cfg);
   const integral = linhas.join("\n");
@@ -1555,10 +1529,6 @@ function mensagemPodeEnsinar(m) {
   // versão antiga a tenha gravado por engano na timeline. Algumas versões antigas
   // não preenchiam type/source, por isso o autor também faz parte da barreira.
   if (/sugest|recomenda[cç][aã]o|gerad[ao]-?ia|assistant|openai|chatgpt|ia do sistema/.test(`${tipo} ${fonte} ${autor}`)) return false;
-  // v826: uma sugestão copiada pelo corretor entra na timeline como "mensagem enviada"
-  // (registro do histórico), mas continua sendo texto gerado pela IA — não pode virar
-  // fonte de aprendizado de estilo.
-  if (tipo === "mensagem_enviada") return false;
   const texto = String(m.text || "").replace(/\s+/g, " ").trim();
   // Eventos operacionais do app não são condução comercial e não podem ensinar estilo.
   if (/^\[?(?:atendimento registrado|marcado como atendido|lembrete criado|status atualizado)\]?/i.test(texto)) return false;
@@ -2966,7 +2936,7 @@ ${timelineText}`;
         quemDeveAgirAgora: clean(d.quemDeveAgirAgora, "Não identificado"),
         proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
-        etapaFunil: ajustarEtapaNegociacao(clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"), timelineArr),
+        etapaFunil: clean(d.etapaFunil || raw.etapaSugerida, "Não identificado"),
         mensagemQueEuEnviariaHoje: clean(msgA || d.mensagemQueEuEnviariaHoje),
         percepcaoTodaConversa: clean(raw.summary)
       },
@@ -2975,7 +2945,7 @@ ${timelineText}`;
       prioridadeLead: clean(raw.prioridadeLead),
       produtoInteresse: produtoAtual,
       produtosInteresse: arr(raw.produtosInteresse).length ? arr(raw.produtosInteresse) : (produtoAtual && produtoAtual !== "Não identificado" ? [produtoAtual] : []),
-      etapaSugerida: ajustarEtapaNegociacao(clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"), timelineArr),
+      etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
       clientProfile: clean(raw.clientProfile),
       nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
       messages: {
