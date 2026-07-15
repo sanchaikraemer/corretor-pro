@@ -1153,30 +1153,6 @@ function sinaisPrioridadeComercial682(l){
 function scoreLead(l){
   return scorePrioridadeAtendimento(l);
 }
-// v826 §6.6 — PRECEDÊNCIA DETERMINÍSTICA DA FILA (função pura, sem estado).
-// Recebe só FATOS (booleanos) e devolve o nível (1..7), o grupo e o título. Não há
-// pesos nem notas subjetivas: a posição é decidida pela ordem dos fatos. Isolada
-// assim para poder ser testada diretamente (tests/v826-fila-fatos.test.mjs).
-// Níveis: 1 cliente respondeu e não recebeu resposta · 2 compromisso vencido ·
-// 3 retorno para hoje · 4 negociação real aguardando você · 5 atendimento programado ·
-// 6 retomada por tempo sem contato · 7 aguardando resposta do cliente.
-function filaPorFatos(f = {}){
-  if(f.atendidoRecente && !f.clienteAguardandoVoce && !f.lembreteAtrasado && !f.retornoParaHoje && !f.negociacaoAguardando)
-    return { nivel:0, grupo:"tratado-hoje", titulo: f.contatadoHoje ? "Tratado hoje" : "Atendido recentemente" };
-  if(f.lembreteFuturo && !f.clienteAguardandoVoce && !f.retornoParaHoje && !f.negociacaoAguardando)
-    return { nivel:0, grupo:"pode-aguardar", titulo:"Tem lembrete futuro" };
-  if(f.clienteAguardandoVoce) return { nivel:1, grupo:"acao-hoje", titulo:"Cliente aguardando" };
-  if(f.lembreteAtrasado)      return { nivel:2, grupo:"acao-hoje", titulo:"Compromisso vencido" };
-  if(f.retornoParaHoje)       return { nivel:3, grupo:"acao-hoje", titulo:"Retorno para hoje" };
-  if(f.negociacaoAguardando)  return { nivel:4, grupo:"acao-hoje", titulo:"Negociação aguardando você" };
-  if(f.compromissoProgramado) return { nivel:5, grupo:"acao-hoje", titulo:"Atendimento programado" };
-  if(f.clientePediuTempo)     return { nivel:0, grupo:"pode-aguardar", titulo:"Cliente pediu para aguardar" };
-  if(f.emJanela)              return { nivel:7, grupo:"pode-aguardar", titulo:"Aguardando resposta" };
-  if(f.travaExterna && !f.pendenciaCorretor) return { nivel:0, grupo:"boa-sem-urgencia", titulo:"Boa oportunidade, sem urgência" };
-  if(f.retomadaPorTempo)      return { nivel:6, grupo:"retomar-cuidado", titulo:"Retomar com cuidado" };
-  return { nivel:0, grupo:"baixa-prioridade", titulo:"Baixa prioridade" };
-}
-
 // PRIORIDADE DE ATENDIMENTO — separada da chance de venda.
 // Chance de venda responde: "esse lead pode comprar?"
 // Prioridade de atendimento responde: "vale falar com ele AGORA?"
@@ -1215,64 +1191,108 @@ function prioridadeAtendimento(l){
   const ctxIA = contextoPrioridadeIA(l);
   const negociacaoAguardandoRetorno = !!(ctxIA.retornoProposta && (ctxIA.propostaAtiva || etapaAvancada));
   const parceiroComClienteFinal = !!(ctxIA.contatoParceiro && ctxIA.aguardandoTerceiro && ctxIA.propostaAtiva);
-  // v826 §6.6 — FILA POR FATOS. Sem pesos subjetivos (+120, +92, -38 etc.): a posição
-  // vem de uma precedência DETERMINÍSTICA e cada card mostra o motivo factual.
-  // Ordem: 1) cliente respondeu e não recebeu resposta; 2) compromisso do corretor
-  // vencido; 3) retorno marcado para hoje; 4) negociação real aguardando você;
-  // 5) atendimento programado; 6) retomada por tempo sem contato; 7) aguardando o cliente.
-  const _lembreteTs = lembreteTs(l);
-  const diasLembrete = isNaN(_lembreteTs) ? null
-    : ui671DiasAte(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(_lembreteTs)));
-  const lembreteAtrasado = diasLembrete != null && diasLembrete < 0;
-  const retornoParaHoje = diasLembrete === 0;
-  const compromissoProgramado = temAgenda ||
-    (Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando || "").toLowerCase())));
-  const retomadaPorTempo = Number.isFinite(diasContato) && diasContato >= limiarRetomada(l);
-  // "Cliente respondeu e ainda não recebeu resposta": o cliente falou por último.
-  const clienteAguardandoVoce = ultimoCliente;
-  const fmtDias = n => n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`;
+  const sc682 = sinaisPrioridadeComercial682(l);
 
-  const { nivel, grupo, titulo } = filaPorFatos({
-    atendidoRecente: protegidoPosAtendimento(l),
-    contatadoHoje: !!ehContatadoHoje(l),
-    lembreteFuturo: lembreteFuturo(l),
-    clienteAguardandoVoce,
-    lembreteAtrasado,
-    retornoParaHoje,
-    negociacaoAguardando: negociacaoAguardandoRetorno,
-    compromissoProgramado,
-    clientePediuTempo: clientePediuPraAguardar,
-    emJanela: emJanelaDeEspera(l),
-    travaExterna,
-    pendenciaCorretor,
-    retomadaPorTempo
-  });
+  let score = 0;
+  const motivos = [];
 
-  // Motivo factual visível em cada card (§6.6), montado a partir do nível/grupo.
-  let motivo;
-  if(nivel === 1) motivo = `cliente respondeu e ainda não recebeu sua resposta${Number.isFinite(diasResposta) ? ` (respondeu ${fmtDias(diasResposta)})` : ""}`;
-  else if(nivel === 2) motivo = `compromisso combinado está vencido${diasLembrete != null ? ` (${fmtDias(Math.abs(diasLembrete))})` : ""}`;
-  else if(nivel === 3) motivo = "retorno combinado para hoje";
-  else if(nivel === 4) motivo = ctxIA.contatoParceiro ? "contraproposta aguardando retorno do cliente final" : "proposta/condição em aberto aguardando você";
-  else if(nivel === 5) motivo = "há atendimento ou visita programado";
-  else if(nivel === 6) motivo = `sem contato ${fmtDias(diasContato)} — hora de retomar`;
-  else if(nivel === 7) motivo = "você chamou por último — aguardando a resposta do cliente";
-  else if(grupo === "tratado-hoje") motivo = ehContatadoHoje(l) ? "você já atendeu este lead hoje" : "você atendeu este lead nos últimos dias";
-  else if(titulo === "Tem lembrete futuro") motivo = diasLembrete != null ? `retorno agendado para daqui a ${diasLembrete} dia(s)` : "tem lembrete futuro — não antecipar";
-  else if(grupo === "pode-aguardar") motivo = "cliente pediu tempo ou ficou de avaliar";
-  else if(grupo === "boa-sem-urgencia") motivo = "boa oportunidade, mas depende de evento externo";
-  else motivo = (!msgsCli.length && !sinalCompra && !pendenciaCorretor && !temAgenda) ? "ainda não houve conversa comercial real" : "sem fato urgente no momento";
+  if(lembreteVencido(l)){ score += 120; motivos.push("lembrete vencido ou marcado para hoje"); }
+  if(negociacaoAguardandoRetorno){
+    score += 92;
+    motivos.push(ctxIA.contatoParceiro ? "contraproposta com corretor parceiro aguardando retorno do cliente final" : "proposta/condição apresentada aguardando retorno");
+  } else if(parceiroComClienteFinal){
+    score += 72;
+    motivos.push("corretor parceiro ficou de validar com o cliente final");
+  }
+  if(temAgenda){ score += 50; motivos.push("tem compromisso ou agenda identificada"); }
+  if(ultimoCliente){ score += 45; motivos.push("cliente falou por último — falta resposta sua"); }
+  if(pendenciaCorretor){ score += 55; motivos.push("cliente está esperando um retorno seu"); }
+  if(sinalCompra){ score += 24; motivos.push("há sinal concreto de compra"); }
+  if(esforcoCliente){ score += 22; motivos.push("cliente já se movimentou no processo"); }
+  if(etapaAvancada){ score += 18; motivos.push("negociação já saiu da curiosidade"); }
 
-  // Score determinístico: o NÍVEL manda (gap de 1000 entre níveis, imune ao tempero
-  // de conversão de ±24). Dentro do mesmo nível, desempate factual por recência —
-  // quem está esperando há mais tempo sobe um pouco.
-  const desempate = Number.isFinite(diasResposta) ? Math.min(120, Math.max(0, diasResposta)) : 0;
-  const scoreGrupoSemNivel = grupo === "boa-sem-urgencia" ? 200
-    : grupo === "pode-aguardar" ? 120
-    : grupo === "tratado-hoje" ? 60 : 0;
-  const score = nivel ? (8 - nivel) * 1000 + desempate : scoreGrupoSemNivel;
+  // v682: comprador real não pode ficar escondido por falta de lembrete ou por etapa baixa.
+  if(sc682.quenteEscondido){ score += 46; motivos.unshift("lead quente escondido — priorizar antes que esfrie"); }
+  else if(sc682.compradorReal && !sc682.curioso){ score += 24; motivos.push("sinais de comprador real"); }
+  if(sc682.urgencia){ score += 28; motivos.push("urgência/compromisso próximo"); }
+  if(sc682.objecao){ score += 12; motivos.push("objeção clara para tratar"); }
+  if(sc682.pendencia){ score += 18; motivos.push("pendência aberta na conversa"); }
+  if(sc682.curioso && !sc682.compradorReal){ score -= 34; motivos.push("parece curioso/pesquisa inicial"); }
 
-  return { score, grupo, titulo, motivo, nivel };
+  if(Number.isFinite(diasResposta)){
+    if(diasResposta >= 3 && diasResposta <= 14){ score += 16; motivos.push("tempo bom para retomar"); }
+    else if(diasResposta > 30){ score -= 12; motivos.push("conversa fria"); }
+  } else if(Number.isFinite(dias) && dias >= 3 && dias <= 14){
+    score += 8;
+  }
+
+  // Chance de venda entra como tempero, não como dono da fila.
+
+  if(tipo === "quente-fechar") score += 25;
+  else if(tipo === "morno-confirmar") score += 12;
+  else if(tipo === "objecao-tratar") score += 10;
+  else if(tipo === "frio-reaquecer") score -= 5;
+  else if(tipo === "stand-by") score -= 14;
+  else if(tipo === "primeiro-contato") score -= 12;
+
+  // Corretor parceiro só derruba prioridade quando é conversa solta.
+  // Se existe proposta/contraproposta com cliente final, ele vira canal de fechamento e sobe prioridade.
+  if(/parceir|corretor/i.test(String(a.tipoContato||"")) && !pendenciaCorretor && !ultimoCliente && !negociacaoAguardandoRetorno && !parceiroComClienteFinal){
+    score -= 12;
+    motivos.push("contato parece parceiro/corretor — tratar pelo cliente final");
+  }
+
+  if(travaExterna && !negociacaoAguardandoRetorno){ score -= 38; motivos.push("boa oportunidade, mas depende de evento externo"); }
+  if(clientePediuPraAguardar && !negociacaoAguardandoRetorno && !parceiroComClienteFinal){ score -= 22; motivos.push("cliente pediu tempo ou ficou de avaliar"); }
+  if(emJanelaDeEspera(l)){
+    if(negociacaoAguardandoRetorno && ultimoCliente) score -= 10;
+    else if(negociacaoAguardandoRetorno) score -= 25;
+    else { score -= 90; motivos.unshift("você chamou recentemente — aguarde resposta"); }
+  }
+  if(lembreteFuturo(l)){ score -= 140; motivos.unshift("tem lembrete futuro — não antecipar"); }
+  if(protegidoPosAtendimento(l)){
+    if(negociacaoAguardandoRetorno && ultimoCliente) score -= 10;
+    else if(negociacaoAguardandoRetorno) score -= 35;
+    else { score -= 300; motivos.unshift(ehContatadoHoje(l) ? "você já falou com esse lead hoje" : "você já falou com esse lead recentemente"); }
+  }
+
+  if(!msgsCli.length && !sinalCompra && !pendenciaCorretor && !temAgenda){
+    score -= 28;
+    motivos.push("ainda não houve conversa comercial real");
+  }
+
+  // SINAL URGENTE: ao menos um desses é necessário para entrar em "acao-hoje".
+  // Sem sinal urgente, o maior grupo possível é "retomar-cuidado".
+  const temSinalUrgente = lembreteVencido(l) || temAgenda || ultimoCliente ||
+    pendenciaCorretor || negociacaoAguardandoRetorno || parceiroComClienteFinal || sc682.quenteEscondido || sc682.urgencia || sc682.pendencia;
+
+  let grupo, titulo;
+  if(protegidoPosAtendimento(l)){
+    grupo = "tratado-hoje"; titulo = ehContatadoHoje(l) ? "Tratado hoje" : "Atendido recentemente";
+  } else if(lembreteFuturo(l)){
+    grupo = "pode-aguardar"; titulo = "Tem lembrete futuro";
+  } else if(emJanelaDeEspera(l) && !negociacaoAguardandoRetorno && !ultimoCliente){
+    grupo = "pode-aguardar"; titulo = "Aguardar resposta";
+  } else if(clientePediuPraAguardar && !negociacaoAguardandoRetorno && !lembreteVencido(l)){
+    grupo = "pode-aguardar"; titulo = "Cliente pediu para aguardar";
+  } else if(travaExterna && !pendenciaCorretor && !ultimoCliente && !lembreteVencido(l)){
+    grupo = "boa-sem-urgencia"; titulo = "Boa oportunidade, sem urgência";
+  } else if(temSinalUrgente && score >= 70){
+    grupo = "acao-hoje"; titulo = "Atender agora";
+  } else if(temSinalUrgente && score >= 40){
+    grupo = "acao-hoje"; titulo = "Atender hoje";
+  } else if(score >= 40){
+    grupo = "retomar-cuidado"; titulo = "Retomar com cuidado";
+  } else {
+    grupo = "baixa-prioridade"; titulo = "Baixa prioridade";
+  }
+
+  return {
+    score,
+    grupo,
+    titulo,
+    motivo: motivos.filter(Boolean).slice(0, 2).join(" · ") || "prioridade calculada pela conversa"
+  };
 }
 
 function scorePrioridadeAtendimento(l){
@@ -1826,40 +1846,6 @@ function ultimoAtendimentoDataHora(l){
   return e?.quando ? fmtUltimaAtualizacao(e.quando) : "";
 }
 
-// v826 §6.5 — Último ATENDIMENTO real, considerando TODAS as fontes: eventos de
-// contato manual (botão "Marcar atendimento" e cópia de mensagem), itens manuais
-// na timeline (observação, ligação, visita, proposta, mensagem enviada) e os campos
-// históricos de último atendimento já gravados na base. Retorna o timestamp (ms) do
-// atendimento mais recente, ou 0 se o lead nunca foi atendido.
-const TIPOS_ATENDIMENTO_TIMELINE = new Set(["atendimento","nota","ligacao","visita","presencial","proposta","observacao_manual","mensagem_enviada"]);
-function ultimoAtendimentoTs(l){
-  let maxTs = 0;
-  const eventos = l?.analysis?.aprendizado?.eventos || [];
-  for(const e of eventos){
-    if(e?.evento !== "contato_manual" || !e?.quando) continue;
-    const t = Date.parse(e.quando); if(!isNaN(t) && t > maxTs) maxTs = t;
-  }
-  for(const campo of [l?.lastAttendanceAt, l?.ultimoAtendimentoEm]){
-    const t = Date.parse(campo || ""); if(!isNaN(t) && t > maxTs) maxTs = t;
-  }
-  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
-  for(const m of msgs){
-    const src = String(m?.source || "");
-    if(src !== "manual" && src !== "corretor-pro-manual") continue;
-    if(!TIPOS_ATENDIMENTO_TIMELINE.has(String(m?.type || ""))) continue;
-    const t = Date.parse(m?.iso || ""); if(!isNaN(t) && t > maxTs) maxTs = t;
-  }
-  return maxTs || 0;
-}
-// Rótulo humano do atendimento: "agora", "hoje", "ontem" ou "há X dias" (§6.5).
-function rotuloTempoAtendimento(ts){
-  if(!ts) return "";
-  const dias = diasCalendarioBR(ts);
-  if(dias === 0) return ((Date.now() - ts) / 60000) < 60 ? "agora" : "hoje";
-  if(dias === 1) return "ontem";
-  return `há ${dias} dias`;
-}
-
 function diasDesdeAtendimentoManual(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   let maisRecente = null;
@@ -2357,36 +2343,12 @@ function renderHeroLead(l){
   </section>`;
 }
 // Copia a mensagem sugerida (direta, com saudação) de um lead — usada no botão do hero.
-// v826 §6.2/§6.5 — Copiar uma sugestão significa que ela VAI ser enviada. Então conta
-// como atendimento (data/hora, entra em Últimos atendimentos e na fila) E entra na
-// linha do tempo do cliente como "Mensagem enviada". Nunca altera a etapa comercial e
-// não alimenta o aprendizado de estilo (o texto é sugestão da própria IA).
-async function registrarMensagemEnviada(id, msg){
-  const texto = String(msg || "").trim();
-  if(!id || !texto) return;
-  const lead = (state.lead && String(state.lead.id) === String(id)) ? state.lead
-    : (state.itemsAtivos || []).find(x => String(x.id) === String(id)) || null;
-  // Feedback imediato (§6.7 / atualização sem reload): já marca como atendido agora.
-  try{
-    const quando = new Date().toISOString();
-    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
-    if(lead) ui667AplicarAtendidoLocal(lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`);
-  }catch(_){}
-  try{
-    await fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
-  }catch(_){ /* a cópia já foi feita; o registro é best-effort */ }
-  invalidarLeadsCache();
-  try{ loadRecentLeads(false); }catch(_){}
-  if(state.lead && String(state.lead.id) === String(id)) try{ recarregarLeadFoco(id); }catch(_){}
-}
-
 window.copiarMensagemLead = function(id){
   const l = (state.itemsAtivos||[]).find(x => String(x.id) === String(id));
   if(!l) return;
   const a = l.analysis || {};
   const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
-  const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} registrarMensagemEnviada(l.id, msg); };
+  const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
 };
@@ -3634,15 +3596,10 @@ async function carregarPipeline(){
       board.innerHTML = '<div class="empty">Nenhum lead encontrado.</div>';
       return;
     }
-    const ehAbaUltimos = pipelineTabAtiva === "ultimos" && (!pipelineOrdem || pipelineOrdem === "prioridade");
     const cardHtml = (l) => {
       const idJs = JSON.stringify(String(l.id||""));
       const nameJs = JSON.stringify(l.name||"");
-      // Na aba "Últimos atendimentos" o rótulo mostra QUANDO foi o último atendimento
-      // real (agora/hoje/ontem/há X dias), não "dias parado" da última mensagem.
-      const dias = ehAbaUltimos
-        ? (ultimoAtendimentoTs(l) ? "atendido " + rotuloTempoAtendimento(ultimoAtendimentoTs(l)) : "sem atendimento registrado")
-        : (l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "");
+      const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "";
       const tags = [];
       if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
       if(ehPermuta(l)) tags.push(tagPermutaHTML());
@@ -3657,13 +3614,10 @@ async function carregarPipeline(){
     if(pipelineOrdem && pipelineOrdem !== "prioridade"){
       ord = ordenarLeadsPor(items, pipelineOrdem);
     } else if(pipelineTabAtiva === "ultimos"){
-      // §6.5: ordena pelo ATENDIMENTO mais recente (todas as fontes), não pela última
-      // mensagem. Quem nunca foi atendido cai para o fim, por atividade recente.
       ord = items.slice().sort((a,b) => {
-        const ta = ultimoAtendimentoTs(a);
-        const tb = ultimoAtendimentoTs(b);
-        if(tb !== ta) return tb - ta;
-        return String(b.lastInteractionAt || b.createdAt || "").localeCompare(String(a.lastInteractionAt || a.createdAt || ""));
+        const ta = a.lastInteractionAt || a.createdAt || "";
+        const tb = b.lastInteractionAt || b.createdAt || "";
+        return tb.localeCompare(ta);
       });
     } else if(pipelineTabAtiva === "todos"){
       ord = items.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"", "pt-BR"));
@@ -4985,7 +4939,6 @@ function cp704Css(){
     const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
     try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
     catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
-    try{ registrarMensagemEnviada(state.lead?.id, msg); }catch(_){}
   };
   window.cp704OpenWhats=function(){
     const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
