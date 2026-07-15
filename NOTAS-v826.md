@@ -47,12 +47,39 @@ marcou atendimento. Resultado correto, agora garantido:
   confirmar que a guarda não rebaixa outras etapas.
 - Suíte completa (24 conjuntos) e build (`versão=826`) concluídos sem erro.
 
-## Ainda dentro do Módulo 826 (próximas entregas)
+## Fila por fatos (§6.6) — versão 826-1
 
-- **Fila por fatos (§6.6):** trocar os pesos subjetivos (+120, +92, −34, …) pela
-  precedência determinística de 7 níveis, com o motivo factual em cada card.
+A ordem da fila deixou de vir de pesos subjetivos ocultos (+120, +92, −34, −300, …) e
+passou a seguir uma **precedência determinística de 7 níveis**, com o **motivo factual
+visível** em cada card:
+
+1. Cliente respondeu e ainda não recebeu resposta.
+2. Compromisso do corretor está vencido.
+3. Retorno está marcado para hoje.
+4. Negociação real aguarda ação do corretor.
+5. Atendimento está programado.
+6. Retomada é necessária pelo tempo sem contato.
+7. Lead está aguardando resposta do cliente.
+
+- A decisão foi isolada numa função pura `filaPorFatos(fatos)` em `app.js`, que recebe
+  apenas fatos (booleanos) e devolve nível/grupo/título — testável diretamente.
+- As supressões factuais foram preservadas: lead **atendido recentemente** sai da fila
+  de ação imediata (§6.7) e **volta** assim que o cliente fala de novo; **lembrete
+  futuro**, **cliente pediu tempo** e **trava externa** continuam segurando o lead.
+- O score interno virou apenas função do nível (degrau de 1000), com desempate factual
+  por recência — a ordenação existente (`scoreRankingHoje`) continua funcionando.
+
+## Ainda dentro do Módulo 826 (próxima entrega)
+
 - **Tela Atendimentos (§6.5):** reconhecer todas as fontes reais de atendimento e
   ordenar do mais recente para o mais antigo, com atualização imediata.
+
+## Validação da fila por fatos
+
+- Novo teste `tests/v826-fila-fatos.test.mjs`: executa a função pura e confere os 7
+  níveis, a precedência entre eles, o mapa de grupos e as supressões (atendido, lembrete
+  futuro, pediu tempo, trava externa), além de confirmar que os pesos antigos saíram.
+- Suíte completa (25 conjuntos) e build (`versão=826-1`) sem erro.
 
 ## Como testar depois de publicar
 
