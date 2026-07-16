@@ -379,12 +379,8 @@
       <!-- BASE DE REGRAS COMERCIAIS -->
       <div class="card compact">
         <div class="label">Regras comerciais</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Situação → como agir. Ex.: "Cliente sumiu depois de receber o valor → reconstruir percepção de valor antes de falar preço de novo." A IA segue estas regras toda vez que gera mensagem.</div>
-        <div id="cerebroRegrasList"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <input type="text" id="cerebroNovaRegra" placeholder="Escreva uma regra e toque em +" style="flex:1;min-width:200px">
-          <button type="button" class="btn" id="cerebroAddRegra" style="padding:12px 18px">+ Regra</button>
-        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as regras em um único bloco, no mesmo padrão dos demais campos do Cérebro. A IA recebe o conteúdo integralmente em cada análise.</div>
+        <textarea id="cerebroRegrasTexto" rows="14" placeholder="Cole aqui todas as regras comerciais..."></textarea>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
           <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Ensinar por áudio</div>
           <div class="small" style="color:var(--muted);margin-bottom:8px">Grave/escolha um áudio explicando sua abordagem. O app transcreve e vira uma regra (você revisa antes de salvar).</div>
@@ -429,13 +425,8 @@
       <!-- BIBLIOTECA OBJEÇÃO → RESPOSTA -->
       <div class="card compact">
         <div class="label">Sinais de objeção → como conduzir</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Objeção raramente vem na frase ("ninguém diz 'tá caro'"). Descreva o <b>sinal/comportamento</b> que você reconhece na conversa e como você costuma conduzir. A IA identifica esses sinais pelo <b>sentido</b>, não pela palavra exata.</div>
-        <div id="cerebroObjecoesList"></div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
-          <input type="text" id="cerebroNovaObjecao" placeholder="Sinal (ex.: some depois que mando o valor / 'vou pensar' / enrola no financiamento)">
-          <textarea id="cerebroNovaResposta" rows="2" placeholder="Como você conduz quando percebe esse sinal"></textarea>
-          <button type="button" class="btn" id="cerebroAddObjecao" style="align-self:flex-start;padding:12px 18px">+ Sinal</button>
-        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as objeções e as respectivas formas de condução em um único bloco. A IA identifica os sinais pelo sentido da conversa e recebe o texto integralmente.</div>
+        <textarea id="cerebroObjecoesTexto" rows="18" placeholder="Cole aqui todas as objeções e como conduzir cada uma..."></textarea>
       </div>
       </div><!--/icCerebro-->
     </section>

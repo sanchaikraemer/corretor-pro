@@ -25,9 +25,26 @@ const DEFAULTS = {
   diferenciais: "",
   evitar: "",
   diasImportacao: 90,
+  regrasTexto: "",
+  objecoesTexto: "",
   regras: [],
   objecoes: []
 };
+
+function regrasLegadasParaTexto(arr) {
+  if (!Array.isArray(arr)) return "";
+  return arr.map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim()).filter(Boolean).join("\n\n");
+}
+function objecoesLegadasParaTexto(arr) {
+  if (!Array.isArray(arr)) return "";
+  return arr.map(o => {
+    const sinal = String(o?.objecao || o?.titulo || "").trim();
+    const conducao = String(o?.resposta || o?.texto || "").trim();
+    if (!sinal && !conducao) return "";
+    if (sinal && conducao) return `SINAL: ${sinal}\nCOMO CONDUZIR: ${conducao}`;
+    return sinal || conducao;
+  }).filter(Boolean).join("\n\n");
+}
 
 function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
@@ -38,6 +55,8 @@ function sanitizeCerebroConfig(valor = {}) {
     diferenciais: typeof v.diferenciais === "string" ? v.diferenciais : "",
     evitar: typeof v.evitar === "string" ? v.evitar : "",
     diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
+    regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? v.regrasTexto : regrasLegadasParaTexto(v.regras),
+    objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? v.objecoesTexto : objecoesLegadasParaTexto(v.objecoes),
     regras: Array.isArray(v.regras) ? v.regras : [],
     objecoes: Array.isArray(v.objecoes) ? v.objecoes : [],
     inteligenciaAprendida: v.inteligenciaAprendida && typeof v.inteligenciaAprendida === "object" ? v.inteligenciaAprendida : undefined
@@ -342,18 +361,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Limpa e limita arrays de regras e objeções
-    const sanitizarRegras = (arr) => Array.isArray(arr) ? arr
-      .map(r => (typeof r === "string" ? { texto: r } : r))
-      .filter(r => r && String(r.texto || "").trim())
-      .slice(0, 100)
-      .map(r => ({ texto: String(r.texto).slice(0, 600), origem: r.origem || "manual", criadoEm: r.criadoEm || new Date().toISOString() }))
-      : [];
-    const sanitizarObjecoes = (arr) => Array.isArray(arr) ? arr
-      .filter(o => o && (String(o.objecao || "").trim() || String(o.resposta || "").trim()))
-      .slice(0, 100)
-      .map(o => ({ objecao: String(o.objecao || "").slice(0, 300), resposta: String(o.resposta || "").slice(0, 800), criadoEm: o.criadoEm || new Date().toISOString() }))
-      : [];
+    // Regras e objeções são salvas como blocos únicos de texto. O fallback converte
+    // o formato antigo em lista para não perder conteúdo ao atualizar.
+    const sanitizarBloco = (texto, limite = 60000) => String(texto || "").replace(/\u0000/g, "").slice(0, limite);
+    const regrasTextoEntrada = Object.prototype.hasOwnProperty.call(body, "regrasTexto")
+      ? body.regrasTexto
+      : regrasLegadasParaTexto(body.regras);
+    const objecoesTextoEntrada = Object.prototype.hasOwnProperty.call(body, "objecoesTexto")
+      ? body.objecoesTexto
+      : objecoesLegadasParaTexto(body.objecoes);
 
     // Action específico: atualizar APENAS a inteligenciaAprendida (preserva o resto do Cérebro).
     if (body.action === "intel-update") {
@@ -377,8 +393,10 @@ export default async function handler(req, res) {
       diferenciais: typeof body.diferenciais === "string" ? body.diferenciais : DEFAULTS.diferenciais,
       evitar: typeof body.evitar === "string" ? body.evitar : DEFAULTS.evitar,
       diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? Math.round(diasN) : 90,
-      regras: sanitizarRegras(body.regras),
-      objecoes: sanitizarObjecoes(body.objecoes),
+      regrasTexto: sanitizarBloco(regrasTextoEntrada),
+      objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
+      regras: [],
+      objecoes: [],
       inteligenciaAprendida: baseAprend.inteligenciaAprendida || {},
       estiloHistorico: Array.isArray(baseAprend.estiloHistorico) ? baseAprend.estiloHistorico : undefined
     };

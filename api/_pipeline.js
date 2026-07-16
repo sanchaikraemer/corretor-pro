@@ -1502,11 +1502,14 @@ export async function obterExportacaoAprendizado(inteligenciaAprendida = {}, cer
       tom: String(cerebro.tom || ""),
       diferenciais: String(cerebro.diferenciais || ""),
       evitar: String(cerebro.evitar || ""),
-      regras: Array.isArray(cerebro.regras) ? cerebro.regras.map(r => String(r?.texto || r || "")).filter(Boolean) : [],
-      objecoes: Array.isArray(cerebro.objecoes) ? cerebro.objecoes.map(o => ({
-        objecao: String(o?.objecao || o?.titulo || ""),
-        resposta: String(o?.resposta || o?.texto || "")
-      })).filter(o => o.objecao || o.resposta) : []
+      regrasTexto: typeof cerebro.regrasTexto === "string" ? cerebro.regrasTexto : (Array.isArray(cerebro.regras) ? cerebro.regras.map(r => String(r?.texto || r || "")).filter(Boolean).join("\n\n") : ""),
+      objecoesTexto: typeof cerebro.objecoesTexto === "string" ? cerebro.objecoesTexto : (Array.isArray(cerebro.objecoes) ? cerebro.objecoes.map(o => {
+        const sinal = String(o?.objecao || o?.titulo || "").trim();
+        const conducao = String(o?.resposta || o?.texto || "").trim();
+        return sinal && conducao ? `SINAL: ${sinal}\nCOMO CONDUZIR: ${conducao}` : (sinal || conducao);
+      }).filter(Boolean).join("\n\n") : ""),
+      regras: [],
+      objecoes: []
     },
     casos,
     observacoes
@@ -1991,21 +1994,17 @@ function montarOrientacoes(config, contextoCliente = "") {
   if (config.tom) partes.push("TOM DE VOZ:\n" + config.tom);
   if (config.diferenciais) partes.push("DIFERENCIAIS:\n" + config.diferenciais);
   if (config.evitar) partes.push("EVITAR:\n" + config.evitar);
-  // Base de regras comerciais (situação → como agir)
-  if (Array.isArray(config.regras) && config.regras.length) {
-    const linhas = config.regras
-      .map(r => (typeof r === "string" ? r : r?.texto) || "")
-      .filter(t => t.trim())
-      .map(t => "- " + t.trim());
-    if (linhas.length) partes.push("REGRAS COMERCIAIS (siga estas regras de condução ao decidir abordagem e mensagens):\n" + linhas.join("\n"));
-  }
-  // Biblioteca de sinais de objeção → como conduzir
-  if (Array.isArray(config.objecoes) && config.objecoes.length) {
-    const linhas = config.objecoes
-      .filter(o => o && (o.objecao || o.resposta))
-      .map(o => `- Sinal: "${(o.objecao || "").trim()}" → conduzir assim: ${(o.resposta || "").trim()}`);
-    if (linhas.length) partes.push("SINAIS DE OBJEÇÃO E COMO CONDUZIR (objeção quase nunca é dita na frase literal — reconheça o sinal pelo SENTIDO/comportamento na conversa, não por palavra exata; quando identificar o sinal, conduza conforme indicado):\n" + linhas.join("\n"));
-  }
+  // Regras comerciais em bloco único, editável por copiar e colar.
+  const regrasTexto = typeof config.regrasTexto === "string" && config.regrasTexto.trim()
+    ? config.regrasTexto.trim()
+    : (Array.isArray(config.regras) ? config.regras.map(r => (typeof r === "string" ? r : r?.texto) || "").filter(t => t.trim()).join("\n") : "");
+  if (regrasTexto) partes.push("REGRAS COMERCIAIS (siga integralmente ao decidir abordagem e mensagens):\n" + regrasTexto);
+
+  // Objeções e formas de condução também em bloco único.
+  const objecoesTexto = typeof config.objecoesTexto === "string" && config.objecoesTexto.trim()
+    ? config.objecoesTexto.trim()
+    : (Array.isArray(config.objecoes) ? config.objecoes.filter(o => o && (o.objecao || o.resposta)).map(o => `SINAL: ${(o.objecao || "").trim()}\nCOMO CONDUZIR: ${(o.resposta || "").trim()}`).join("\n\n") : "");
+  if (objecoesTexto) partes.push("SINAIS DE OBJEÇÃO E COMO CONDUZIR (reconheça o sinal pelo sentido e siga integralmente o bloco):\n" + objecoesTexto);
   // INTELIGÊNCIA COMERCIAL APRENDIDA — observada conversa a conversa
   // Aprendizado automático gerado por análises anteriores fica DESLIGADO por padrão.
   // Ele pode carregar conclusões ruins de uma análise antiga para um caso novo. Só entra

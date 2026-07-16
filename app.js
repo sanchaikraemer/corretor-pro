@@ -5516,8 +5516,24 @@ async function carregarAgenda(){
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
 let cerebroFormularioCarregado = false;
 
+function regrasLegadasParaTexto(arr) {
+  if(!Array.isArray(arr)) return "";
+  return arr.map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim()).filter(Boolean).join("\n\n");
+}
+function objecoesLegadasParaTexto(arr) {
+  if(!Array.isArray(arr)) return "";
+  return arr.map(o => {
+    const sinal = String(o?.objecao || o?.titulo || "").trim();
+    const conducao = String(o?.resposta || o?.texto || "").trim();
+    if(!sinal && !conducao) return "";
+    if(sinal && conducao) return `SINAL: ${sinal}\nCOMO CONDUZIR: ${conducao}`;
+    return sinal || conducao;
+  }).filter(Boolean).join("\n\n");
+}
 function sanitizeCerebroConfigV762(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
+  const temRegrasTexto = Object.prototype.hasOwnProperty.call(c, "regrasTexto");
+  const temObjecoesTexto = Object.prototype.hasOwnProperty.call(c, "objecoesTexto");
   return {
     corretorNome: typeof c.corretorNome === "string" ? c.corretorNome : "",
     metodo: typeof c.metodo === "string" ? c.metodo : "",
@@ -5525,6 +5541,8 @@ function sanitizeCerebroConfigV762(cfg) {
     diferenciais: typeof c.diferenciais === "string" ? c.diferenciais : "",
     evitar: typeof c.evitar === "string" ? c.evitar : "",
     diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
+    regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
+    objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
     objecoes: Array.isArray(c.objecoes) ? c.objecoes : []
   };
@@ -5545,8 +5563,10 @@ function obterCerebroConfigParaAnalise() {
       diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
       diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
-      regras: Array.isArray(cerebroRegras) ? cerebroRegras : (Array.isArray(cfg?.regras) ? cfg.regras : []),
-      objecoes: Array.isArray(cerebroObjecoes) ? cerebroObjecoes : (Array.isArray(cfg?.objecoes) ? cfg.objecoes : [])
+      regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
+      objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
+      regras: [],
+      objecoes: []
     };
   }
   return sanitizeCerebroConfigV762(cfg || { metodo: "", diasImportacao: 90 });
@@ -5823,8 +5843,8 @@ function cpTextoCerebroAtual(cerebro){
   linhas.push(["Tom","1",cerebro?.tom||""]);
   linhas.push(["Diferenciais","1",cerebro?.diferenciais||""]);
   linhas.push(["O que evitar","1",cerebro?.evitar||""]);
-  (cerebro?.regras||[]).forEach((r,i)=>linhas.push(["Regras",String(i+1),r]));
-  (cerebro?.objecoes||[]).forEach((o,i)=>linhas.push(["Objeções",String(i+1),`${o.objecao||""}${o.resposta?` → ${o.resposta}`:""}`]));
+  linhas.push(["Regras","1",cerebro?.regrasTexto || regrasLegadasParaTexto(cerebro?.regras)]);
+  linhas.push(["Objeções","1",cerebro?.objecoesTexto || objecoesLegadasParaTexto(cerebro?.objecoes)]);
   return linhas;
 }
 async function exportarAprendizadoExcel(botao){
@@ -6296,7 +6316,7 @@ async function carregarCerebro(){
     try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
   }
   if(!config){
-    config = { metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regras:[], objecoes:[] };
+    config = { metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regrasTexto:"", objecoesTexto:"", regras:[], objecoes:[] };
   }
   config = sanitizeCerebroConfigV762(config);
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
@@ -6307,47 +6327,22 @@ async function carregarCerebro(){
   qs("#cerebroEvitar").value = config.evitar || "";
   const inpDias = qs("#cerebroDiasImportacao");
   if(inpDias) inpDias.value = (config.diasImportacao && Number(config.diasImportacao) > 0) ? config.diasImportacao : 90;
-  // Regras e objeções
-  cerebroRegras = Array.isArray(config.regras) ? config.regras.map(r => typeof r === "string" ? { texto: r } : r) : [];
-  cerebroObjecoes = Array.isArray(config.objecoes) ? config.objecoes : [];
-  renderCerebroRegras();
-  renderCerebroObjecoes();
+  // Regras e objeções em blocos únicos de texto.
+  if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
+  if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
   cerebroFormularioCarregado = true;
   if(!status.innerHTML) status.textContent = "Configuração carregada.";
 }
 
-let cerebroRegras = [];
-let cerebroObjecoes = [];
-
-function renderCerebroRegras(){
-  const box = qs("#cerebroRegrasList");
-  if(!box) return;
-  if(!cerebroRegras.length){ box.innerHTML = '<div class="small" style="color:var(--muted)">Nenhuma regra ainda.</div>'; return; }
-  box.innerHTML = cerebroRegras.map((r, i) => {
-    const origem = r.origem === "audio" ? "" : r.origem === "video" ? "" : r.origem === "link" ? "" : r.origem === "pdf" ? "" : "";
-    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:rgba(196,92,255,.05);border:1px solid rgba(196,92,255,.18);border-radius:10px;margin-bottom:6px">
-      <div style="flex:1;font-size:13px;line-height:1.4">${origem ? origem+" " : ""}${escapeHtml(r.texto||"")}</div>
-      <button type="button" onclick="removerRegraCerebro(${i})" style="background:transparent;border:0;color:var(--risco);cursor:pointer;font-size:16px;line-height:1">×</button>
-    </div>`;
-  }).join("");
+function acrescentarRegraAoBloco(texto) {
+  const campo = qs("#cerebroRegrasTexto");
+  const novo = String(texto || "").trim();
+  if(!campo || !novo) return false;
+  const atual = String(campo.value || "").trimEnd();
+  campo.value = atual ? `${atual}\n\n${novo}` : novo;
+  campo.dispatchEvent(new Event("input", { bubbles:true }));
+  return true;
 }
-function removerRegraCerebro(i){ cerebroRegras.splice(i,1); renderCerebroRegras(); salvarCerebro(); toast("Regra removida."); }
-window.removerRegraCerebro = removerRegraCerebro;
-
-function renderCerebroObjecoes(){
-  const box = qs("#cerebroObjecoesList");
-  if(!box) return;
-  if(!cerebroObjecoes.length){ box.innerHTML = '<div class="small" style="color:var(--muted)">Nenhuma objeção cadastrada ainda.</div>'; return; }
-  box.innerHTML = cerebroObjecoes.map((o, i) => `
-    <div style="padding:8px 10px;background:rgba(255,155,59,.05);border:1px solid rgba(255,155,59,.2);border-radius:10px;margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;gap:8px">
-        <div style="flex:1"><b style="color:var(--morno);font-size:13px">"${escapeHtml(o.objecao||"")}"</b><div style="font-size:13px;line-height:1.4;margin-top:3px">${escapeHtml(o.resposta||"")}</div></div>
-        <button type="button" onclick="removerObjecaoCerebro(${i})" style="background:transparent;border:0;color:var(--risco);cursor:pointer;font-size:16px;line-height:1">×</button>
-      </div>
-    </div>`).join("");
-}
-function removerObjecaoCerebro(i){ cerebroObjecoes.splice(i,1); renderCerebroObjecoes(); salvarCerebro(); toast("Objeção removida."); }
-window.removerObjecaoCerebro = removerObjecaoCerebro;
 
 let ultimoSqlCerebro = "";
 function copiarSqlCerebro(){
@@ -6369,8 +6364,10 @@ async function salvarCerebro(){
     diferenciais: qs("#cerebroDiferenciais").value,
     evitar: qs("#cerebroEvitar").value,
     diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
-    regras: cerebroRegras,
-    objecoes: cerebroObjecoes
+    regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
+    objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
+    regras: [],
+    objecoes: []
   };
   const configSanitizado = sanitizeCerebroConfigV762(config);
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(configSanitizado)); }catch(_){}
@@ -6396,7 +6393,7 @@ async function salvarCerebro(){
 }
 
 function resetarCerebro(){
-  const padrao = sanitizeCerebroConfigV762({ metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regras:[], objecoes:[] });
+  const padrao = sanitizeCerebroConfigV762({ metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regrasTexto:"", objecoesTexto:"", regras:[], objecoes:[] });
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(padrao)); }catch(_){}
   carregarCerebro();
   toast("Cérebro limpo.");
@@ -6414,7 +6411,7 @@ async function zerarCerebroTudo(){
       metodo: "", tom: "", evitar: "",
       diferenciais: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-      regras: [], objecoes: []
+      regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"intel-update", inteligenciaAprendida:{} }) });
@@ -7556,29 +7553,7 @@ qsa(".msg-tab").forEach(btn => btn.addEventListener("click", () => setMsgStyle(b
 qs("#cerebroSalvar")?.addEventListener("click", salvarCerebro);
 qs("#cerebroResetar")?.addEventListener("click", resetarCerebro);
 qs("#cerebroZerar")?.addEventListener("click", zerarCerebroTudo);
-// Adicionar regra
-function addRegraCerebro(){
-  const inp = qs("#cerebroNovaRegra");
-  const t = (inp?.value || "").trim();
-  if(!t) return;
-  cerebroRegras.push({ texto: t, origem: "manual", criadoEm: new Date().toISOString() });
-  inp.value = "";
-  renderCerebroRegras();
-  toast("Regra adicionada. Não esqueça de Salvar.");
-}
-qs("#cerebroAddRegra")?.addEventListener("click", addRegraCerebro);
-qs("#cerebroNovaRegra")?.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); addRegraCerebro(); } });
-// Adicionar objeção
-qs("#cerebroAddObjecao")?.addEventListener("click", () => {
-  const obj = (qs("#cerebroNovaObjecao")?.value || "").trim();
-  const resp = (qs("#cerebroNovaResposta")?.value || "").trim();
-  if(!obj && !resp) return;
-  cerebroObjecoes.push({ objecao: obj, resposta: resp, criadoEm: new Date().toISOString() });
-  qs("#cerebroNovaObjecao").value = "";
-  qs("#cerebroNovaResposta").value = "";
-  renderCerebroObjecoes();
-  toast("Objeção adicionada. Não esqueça de Salvar.");
-});
+// Regras e objeções são editadas diretamente nos campos de texto únicos.
 // Aprender de vídeo / link
 qs("#cerebroLinkBtn")?.addEventListener("click", async () => {
   const url = (qs("#cerebroLinkInput")?.value || "").trim();
@@ -7598,8 +7573,7 @@ qs("#cerebroLinkBtn")?.addEventListener("click", async () => {
       sug.innerHTML = '<div class="small" style="color:var(--muted);margin-bottom:6px">Toque pra adicionar as que fizerem sentido:</div>' +
         data.regras.map((r,i) => `<button type="button" class="cerebroSugBtn" data-origem="${data.fonte==='vídeo'?'video':'link'}" data-texto="${escapeHtml(r)}" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:5px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.22);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">+ ${escapeHtml(r)}</button>`).join("");
       sug.querySelectorAll(".cerebroSugBtn").forEach(b => b.addEventListener("click", () => {
-        cerebroRegras.push({ texto: b.dataset.texto, origem: b.dataset.origem, criadoEm: new Date().toISOString() });
-        renderCerebroRegras();
+        acrescentarRegraAoBloco(b.dataset.texto);
         b.style.opacity = "0.4"; b.style.pointerEvents = "none"; b.textContent = "✓ adicionada";
         toast("Regra adicionada. Não esqueça de Salvar.");
       }));
@@ -7694,8 +7668,7 @@ function mostrarSugestoesCerebro(container, regras, origem){
   container.innerHTML = '<div class="small" style="color:var(--muted);margin-bottom:6px">Toque pra adicionar as que fizerem sentido:</div>' +
     regras.map(r => `<button type="button" class="cerebroSugBtn" data-origem="${escapeHtml(origem)}" data-texto="${escapeHtml(r)}" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:5px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.22);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">+ ${escapeHtml(r)}</button>`).join("");
   container.querySelectorAll(".cerebroSugBtn").forEach(b => b.addEventListener("click", () => {
-    cerebroRegras.push({ texto: b.dataset.texto, origem: b.dataset.origem, criadoEm: new Date().toISOString() });
-    renderCerebroRegras();
+    acrescentarRegraAoBloco(b.dataset.texto);
     b.style.opacity = "0.4"; b.style.pointerEvents = "none"; b.textContent = "✓ adicionada";
     toast("Regra adicionada. Não esqueça de Salvar.");
   }));
@@ -7744,8 +7717,7 @@ qs("#cerebroAudioInput")?.addEventListener("change", async (e) => {
     const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"transcrever-audio", audioBase64: b64, ext }) });
     const data = await res.json();
     if(data?.ok && data.texto){
-      cerebroRegras.push({ texto: data.texto, origem: "audio", criadoEm: new Date().toISOString() });
-      renderCerebroRegras();
+      acrescentarRegraAoBloco(data.texto);
       st.innerHTML = '<span style="color:var(--acao)">Transcrito e adicionado como regra. Revise e Salve.</span>';
     } else {
       st.innerHTML = '<span style="color:var(--risco)">' + escapeHtml(data?.error || "Não foi possível transcrever.") + '</span>';
