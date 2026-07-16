@@ -448,7 +448,6 @@ ${texto}`;
   const completion = await openai.chat.completions.create({
     model: modeloTarefasSimples(),
     messages: [{ role: "user", content: prompt }],
-    temperature: 0.3,
     response_format: { type: "json_object" }
   });
   const parsed = JSON.parse(completion.choices[0].message.content);
@@ -467,7 +466,6 @@ async function extrairLicoesDeImagem(dataUrl, openai) {
         { type: "image_url", image_url: { url: dataUrl } }
       ]
     }],
-    temperature: 0.3,
     response_format: { type: "json_object" }
   });
   const parsed = JSON.parse(completion.choices[0].message.content);

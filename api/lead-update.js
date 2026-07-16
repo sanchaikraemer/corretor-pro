@@ -321,7 +321,6 @@ Responda APENAS JSON: { "nome":"", "nomeFonte":"", "telefone":"", "email":"", "p
             { type: "image_url", image_url: { url: dataUrl, detail: "high" } }
           ]
         }],
-        temperature: 0.1,
         max_tokens: 900,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 32000 : 22000, maxRetries: 0 });
@@ -383,7 +382,6 @@ Responda APENAS JSON: { "faceBox": null }.`;
             { type: "image_url", image_url: { url: dataUrl, detail: "high" } }
           ]
         }],
-        temperature: 0.1,
         max_tokens: 200,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 28000 : 20000, maxRetries: 0 });
@@ -442,7 +440,6 @@ Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por 
       const completion = await openai.chat.completions.create({
         model: modelos[i],
         messages: [{ role: "user", content }],
-        temperature: 0.1,
         max_tokens: 4096,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 44000 : 30000, maxRetries: 0 });

@@ -91,7 +91,6 @@ async function modoOpenAI(res) {
     testes.push(await timed(`OpenAI · análise e mensagens (${summary.analysisModel})`, () => oaRaw.chat.completions.create({
       model: summary.analysisModel,
       messages: [{ role: "user", content: "Responda apenas: ok" }],
-      temperature: 0,
       max_tokens: 16
     })));
   } else {
