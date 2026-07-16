@@ -1,5 +1,5 @@
 import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
 
 // Bloqueia URLs que apontem para endereços privados, loopback ou link-local (SSRF).
 function validarUrlSegura(urlStr) {
@@ -99,6 +99,19 @@ export default async function handler(req, res) {
 
   if (req.method === "POST" || req.method === "PUT") {
     const body = await readJsonBody(req).catch(() => ({}));
+
+    // Exporta os casos e observações aprendidos para um Excel gerado no navegador.
+    // Não chama a IA, não altera o Cérebro e não ativa o uso automático do aprendizado.
+    if (body.action === "exportar-aprendizado") {
+      try {
+        const atual = await loadConfig(supabase);
+        const config = atual?.valor && typeof atual.valor === "object" ? atual.valor : { ...DEFAULTS };
+        const exportacao = await obterExportacaoAprendizado(config.inteligenciaAprendida || {}, config);
+        return json(res, 200, { ok: true, exportacao });
+      } catch (e) {
+        return json(res, 500, { ok: false, error: e?.message || "Não foi possível preparar o aprendizado para exportação." });
+      }
+    }
 
     // AÇÃO v808: só confirma que a varredura inicial terminou DEPOIS que o front
     // também recuperou eventuais conversas que falharam. Assim nenhuma conversa

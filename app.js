@@ -5757,6 +5757,124 @@ async function carregarRelatorioSemana(){
   }catch(_){ box.innerHTML = '<div class="small" style="color:var(--muted)">Não foi possível carregar.</div>'; }
 }
 // Tela "O que o Corretor Pro aprendeu" — mostra o banco de inteligência comercial acumulado
+// Exportação manual do aprendizado para auditoria e construção assistida do Cérebro.
+// Usa o JSZip já embarcado no app para montar um .xlsx localmente, sem nova chamada de IA.
+function cpXmlEscape(valor){
+  return String(valor ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+}
+function cpColunaExcel(numero){
+  let n = Number(numero) || 1, out = "";
+  while(n > 0){ const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  return out;
+}
+function cpCelulaXlsx(valor, ref, estilo=3){
+  if(typeof valor === "number" && Number.isFinite(valor)) return `<c r="${ref}" s="${estilo}" t="n"><v>${valor}</v></c>`;
+  if(typeof valor === "boolean") return `<c r="${ref}" s="${estilo}" t="b"><v>${valor?1:0}</v></c>`;
+  const texto = String(valor ?? "").slice(0, 30000);
+  return `<c r="${ref}" s="${estilo}" t="inlineStr"><is><t xml:space="preserve">${cpXmlEscape(texto)}</t></is></c>`;
+}
+function cpPlanilhaXml({ linhas=[], larguras=[], congelar=1, filtro=true, estilosLinhas={} }={}){
+  const totalCols = Math.max(1, ...linhas.map(r => Array.isArray(r) ? r.length : 0));
+  const totalRows = Math.max(1, linhas.length);
+  const cols = larguras.length ? `<cols>${larguras.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${Math.max(8,Math.min(60,Number(w)||14))}" customWidth="1"/>`).join("")}</cols>` : "";
+  const pane = congelar > 0 ? `<pane ySplit="${congelar}" topLeftCell="A${congelar+1}" activePane="bottomLeft" state="frozen"/>` : "";
+  const rowsXml = linhas.map((linha, idx) => {
+    const r = idx + 1;
+    const estiloLinha = Number(estilosLinhas[r] || (r === 1 ? 2 : 3));
+    const cells = (Array.isArray(linha) ? linha : []).map((valor, cidx) => cpCelulaXlsx(valor, `${cpColunaExcel(cidx+1)}${r}`, estiloLinha)).join("");
+    return `<row r="${r}">${cells}</row>`;
+  }).join("");
+  const auto = filtro && linhas.length > 1 ? `<autoFilter ref="A1:${cpColunaExcel(totalCols)}${totalRows}"/>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${cpColunaExcel(totalCols)}${totalRows}"/><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>${cols}<sheetData>${rowsXml}</sheetData>${auto}<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/></worksheet>`;
+}
+function cpLimparNomeAba(nome, usados){
+  let base = String(nome || "Planilha").replace(/[\\/*?:\[\]]/g," ").replace(/\s+/g," ").trim().slice(0,31) || "Planilha";
+  let atual = base, n = 2;
+  while(usados.has(atual)){ const suf=` ${n++}`; atual=(base.slice(0,31-suf.length)+suf); }
+  usados.add(atual); return atual;
+}
+async function cpGerarXlsx(abas){
+  if(!window.JSZip) throw new Error("Gerador de arquivos indisponível. Atualize a página e tente novamente.");
+  const zip = new window.JSZip();
+  const usados = new Set();
+  const sheets = (abas || []).map(a => ({...a, nome:cpLimparNomeAba(a.nome, usados)}));
+  const contentSheets = sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${contentSheets}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
+  zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
+  const agora = new Date().toISOString();
+  zip.folder("docProps").file("core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Aprendizado Corretor Pro</dc:title><dc:creator>Corretor Pro</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${agora}</dcterms:created></cp:coreProperties>`);
+  zip.folder("docProps").file("app.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Corretor Pro</Application><TitlesOfParts><vt:vector size="${sheets.length}" baseType="lpstr">${sheets.map(s=>`<vt:lpstr>${cpXmlEscape(s.nome)}</vt:lpstr>`).join("")}</vt:vector></TitlesOfParts></Properties>`);
+  const workbookSheets = sheets.map((s,i)=>`<sheet name="${cpXmlEscape(s.nome)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("");
+  zip.folder("xl").file("workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>${workbookSheets}</sheets><calcPr calcId="191029"/></workbook>`);
+  const rels = sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("") + `<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
+  zip.folder("xl").folder("_rels").file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`);
+  zip.folder("xl").file("styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="16"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF073642"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFF6257"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD9E2E7"/></left><right style="thin"><color rgb="FFD9E2E7"/></right><top style="thin"><color rgb="FFD9E2E7"/></top><bottom style="thin"><color rgb="FFD9E2E7"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+  const ws = zip.folder("xl").folder("worksheets");
+  sheets.forEach((aba,i)=>ws.file(`sheet${i+1}.xml`, cpPlanilhaXml(aba)));
+  return await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}, mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function cpBaixarArquivo(blob, nome){
+  const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function cpTextoCerebroAtual(cerebro){
+  const linhas = [["Setor","Item","Conteúdo atual"]];
+  linhas.push(["Método","1",cerebro?.metodo||""]);
+  linhas.push(["Tom","1",cerebro?.tom||""]);
+  linhas.push(["Diferenciais","1",cerebro?.diferenciais||""]);
+  linhas.push(["O que evitar","1",cerebro?.evitar||""]);
+  (cerebro?.regras||[]).forEach((r,i)=>linhas.push(["Regras",String(i+1),r]));
+  (cerebro?.objecoes||[]).forEach((o,i)=>linhas.push(["Objeções",String(i+1),`${o.objecao||""}${o.resposta?` → ${o.resposta}`:""}`]));
+  return linhas;
+}
+async function exportarAprendizadoExcel(botao){
+  const btn = botao || qs("#exportarAprendizado");
+  const original = btn?.innerHTML || "Exportar aprendizado";
+  if(btn){ btn.disabled=true; btn.innerHTML="Preparando arquivo…"; }
+  try{
+    const res = await fetch("./api/cerebro-config", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"exportar-aprendizado"})});
+    const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
+    if(!res.ok || !data?.ok || !data.exportacao) throw new Error(data?.error || "Não foi possível exportar o aprendizado.");
+    const ex = data.exportacao;
+    const casos = Array.isArray(ex.casos) ? ex.casos : [];
+    const obs = Array.isArray(ex.observacoes) ? ex.observacoes : [];
+    const prompt = `Analise integralmente este arquivo exportado do Corretor Pro. Use os casos e observações apenas para identificar padrões recorrentes do atendimento. Não copie nomes, telefones, frases circunstanciais, valores, produtos ou fatos específicos como regras gerais. Compare o aprendizado com o Cérebro atual e entregue seis blocos prontos para revisão e cópia: 1) Método; 2) Tom; 3) Diferenciais; 4) O que evitar; 5) Regras; 6) Objeções e formas de condução. Em cada bloco, separe o que deve ser mantido, ajustado ou acrescentado e informe quantos casos sustentam cada conclusão. Regras manuais atuais têm prioridade. Não altere nada automaticamente.`;
+    const comoUsar = [
+      ["EXPORTAÇÃO DO APRENDIZADO — CORRETOR PRO"],
+      ["Gerado em", ex.geradoEm||""],
+      ["Finalidade", "Analisar o aprendizado acumulado e preparar sugestões manuais para cada setor do Cérebro Comercial."],
+      ["COMO USAR"],
+      ["1", "Envie este arquivo em um novo chat."],
+      ["2", "Cole o prompt sugerido abaixo."],
+      ["3", "Revise os seis blocos antes de copiar qualquer texto para o Cérebro."],
+      ["4", "O arquivo não altera o Cérebro e não executa nenhuma nova análise de IA no Corretor Pro."],
+      ["PROMPT SUGERIDO"],
+      ["", prompt]
+    ];
+    const resumo = [["Indicador","Valor"],["Casos comerciais reais",ex.resumo?.casosComerciais||0],["Históricos processados",ex.resumo?.historicosProcessados||0],["Observações de estilo e técnica",ex.resumo?.observacoesEstiloTecnica||0],["Aprendizado atualizado em",ex.resumo?.atualizadoEm||""],["Exportação gerada em",ex.geradoEm||""]];
+    const casosLinhas = [["Caso","Histórico anônimo","Situação","Sinal do cliente","Impedimento","Condução do corretor","Resultado","Evidência do resultado","Regra extraída","Produto","Etapa","Aprendido em"],...casos.map(c=>[c.caso,c.historico,c.situacao,c.sinalCliente,c.impedimento,c.conducaoCorretor,c.resultado,c.evidenciaResultado,c.regraExtraida,c.produto,c.etapa,c.aprendidoEm])];
+    const tomTecnicas = [["ID","Categoria","Texto aprendido","Aprendido em"],...obs.filter(o=>o.categoria==="Tom"||o.categoria==="Técnica").map(o=>[o.id,o.categoria,o.texto,o.aprendidoEm])];
+    const objecoes = [["ID","Objeção","Resposta usada","Funcionou","Aprendido em"],...obs.filter(o=>o.categoria==="Objeção").map(o=>[o.id,o.objecao,o.respostaUsada,o.funcionou,o.aprendidoEm])];
+    const produtos = [["ID","Produto","Perfil do cliente","Reação","Aprendido em"],...obs.filter(o=>o.categoria==="Produto × perfil").map(o=>[o.id,o.produto,o.perfilCliente,o.reacao,o.aprendidoEm])];
+    const movimentos = [["ID","Categoria","Texto aprendido","Aprendido em"],...obs.filter(o=>!["Tom","Técnica","Objeção","Produto × perfil"].includes(o.categoria)).map(o=>[o.id,o.categoria,o.texto,o.aprendidoEm])];
+    const blob = await cpGerarXlsx([
+      {nome:"Como usar",linhas:comoUsar,larguras:[18,60],congelar:0,filtro:false,estilosLinhas:{1:1,4:4,9:4}},
+      {nome:"Resumo",linhas:resumo,larguras:[32,28]},
+      {nome:"Cérebro atual",linhas:cpTextoCerebroAtual(ex.cerebroAtual||{}),larguras:[20,10,60]},
+      {nome:"Casos comerciais",linhas:casosLinhas,larguras:[12,16,40,32,30,45,18,36,42,22,18,20]},
+      {nome:"Tom e técnicas",linhas:tomTecnicas,larguras:[16,18,60,20]},
+      {nome:"Objeções",linhas:objecoes,larguras:[16,40,55,16,20]},
+      {nome:"Produto e perfil",linhas:produtos,larguras:[16,24,45,40,20]},
+      {nome:"Movimentos",linhas:movimentos,larguras:[16,26,60,20]}
+    ]);
+    const dataNome = new Date().toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"}).split("/").reverse().join("-");
+    cpBaixarArquivo(blob, `corretor-pro-aprendizado-${dataNome}.xlsx`);
+    toast(`Aprendizado exportado: ${casos.length} casos e ${obs.length} observações.`);
+  }catch(err){ toast("Erro ao exportar aprendizado: " + (err?.message||err)); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML=original; } }
+}
+window.exportarAprendizadoExcel = exportarAprendizadoExcel;
+
 // no Cérebro a partir das análises dos ZIPs. Permite editar (apagar) itens errados.
 const APRENDIZADO_CATS = [
   { key:"tons", label:"Tom das suas mensagens", cor:"var(--lime)", render: e => e.texto, vazio:"Importe ZIPs com várias mensagens suas pra eu observar seu estilo." },
@@ -5805,6 +5923,15 @@ async function carregarAprendizado(){
         <div style="font-size:24px;font-weight:950;margin-top:5px">${historicos} históricos</div>
         <div class="small" style="color:var(--muted);font-size:11px;margin-top:3px">${escapeHtml(autoStatus)}</div>
         <div class="small" style="color:var(--soft);font-size:10px;margin-top:5px">${total} observações de estilo e técnica também preservadas</div>
+      </div>
+      <div style="grid-column:1/-1;padding:14px 16px;background:linear-gradient(135deg,rgba(55,232,255,.06),rgba(255,98,87,.05));border:1px solid var(--dados);border-radius:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="min-width:200px;flex:1">
+            <div style="font-size:12px;font-weight:950">Exportar aprendizado</div>
+            <div class="small" style="color:var(--muted);font-size:11px;margin-top:3px">Gera um Excel anônimo com casos, estilo, técnicas, objeções e o Cérebro atual. Não altera nenhuma configuração e não chama a IA.</div>
+          </div>
+          <button type="button" id="exportarAprendizado" onclick="exportarAprendizadoExcel(this)" style="padding:11px 16px;background:var(--dados);color:#001E2B;border:0;border-radius:10px;font-size:12px;font-weight:950;cursor:pointer;white-space:nowrap">Exportar aprendizado (.xlsx)</button>
+        </div>
       </div>
     </div>`;
     const blocos = APRENDIZADO_CATS.map(cat => {

@@ -1377,6 +1377,142 @@ async function salvarCasosAprendidos(casos, meta = {}) {
   } catch (e) { return { ok: false, error: e?.message || String(e) }; }
 }
 
+
+function aliasesPrivadosDoArquivo(sourceFile = "", produto = "") {
+  let nome = String(sourceFile || "")
+    .replace(/\.(zip|txt)$/i, "")
+    .replace(/^conversa\s+do\s+whatsapp\s+com\s+/i, "")
+    .replace(/^conversa\s+com\s+/i, "")
+    .replace(/\+?55\s*\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}/g, " ")
+    .trim();
+  const prod = String(produto || "").trim();
+  if (prod) {
+    const seguro = prod.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    nome = nome.replace(new RegExp(seguro, "gi"), " ");
+  }
+  nome = nome.replace(/\s+/g, " ").trim();
+  if (!nome || nome.length < 3) return [];
+  const aliases = [nome];
+  for (const parte of nome.split(/\s+/)) {
+    if (parte.length >= 4 && !/^(whatsapp|conversa|cliente|contato)$/i.test(parte)) aliases.push(parte);
+  }
+  return [...new Set(aliases)].sort((a, b) => b.length - a.length);
+}
+
+export function anonimizarTextoAprendizadoExportacao(valor, aliases = []) {
+  let texto = String(valor ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[e-mail removido]")
+    .replace(/\b(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-\s]?\d{4}\b/g, "[telefone removido]")
+    .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[documento removido]")
+    .replace(/https?:\/\/\S+/gi, "[link]");
+  for (const alias of aliases || []) {
+    const limpo = String(alias || "").trim();
+    if (limpo.length < 3) continue;
+    const seguro = limpo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    texto = texto.replace(new RegExp(`\\b${seguro}\\b`, "gi"), "[cliente]");
+  }
+  return texto.replace(/\s+/g, " ").trim().slice(0, 30000);
+}
+
+function dataExportacaoAprendizado(valor) {
+  if (!valor) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(new Date(valor));
+  } catch (_) { return String(valor || ""); }
+}
+
+function observarCategoriaExportacao(ia, key, label, aliasesGlobais) {
+  const arr = Array.isArray(ia?.[key]) ? ia[key] : [];
+  return arr.map((item, indice) => {
+    const origem = item?.origem && typeof item.origem === "object" ? item.origem : {};
+    const aliases = [...aliasesGlobais, ...aliasesPrivadosDoArquivo(origem.arquivo || "", origem.produto || "")];
+    return {
+      id: `${label} ${String(indice + 1).padStart(3, "0")}`,
+      categoria: label,
+      texto: anonimizarTextoAprendizadoExportacao(item?.texto || "", aliases),
+      objecao: anonimizarTextoAprendizadoExportacao(item?.objecao || "", aliases),
+      respostaUsada: anonimizarTextoAprendizadoExportacao(item?.respostaUsada || "", aliases),
+      funcionou: item?.funcionou === true ? "Sim" : item?.funcionou === false ? "Não" : "Inconclusivo",
+      produto: anonimizarTextoAprendizadoExportacao(item?.produto || origem.produto || "", aliases),
+      perfilCliente: anonimizarTextoAprendizadoExportacao(item?.perfilCliente || "", aliases),
+      reacao: anonimizarTextoAprendizadoExportacao(item?.reacao || "", aliases),
+      aprendidoEm: dataExportacaoAprendizado(item?.quando || "")
+    };
+  });
+}
+
+// Exportação manual para auditoria fora do sistema. Não chama IA, não altera o
+// Cérebro e não habilita o aprendizado automático na geração das mensagens.
+export async function obterExportacaoAprendizado(inteligenciaAprendida = {}, cerebroAtual = {}) {
+  const memoria = await loadMemoriaComercialV2(true);
+  const aliasesGlobais = [];
+  for (const caso of memoria.casos || []) {
+    aliasesGlobais.push(...aliasesPrivadosDoArquivo(caso?.sourceFile || "", caso?.produto || ""));
+  }
+  const aliasesUnicos = [...new Set(aliasesGlobais)].sort((a, b) => b.length - a.length);
+  const historicos = new Map();
+  let sequenciaHistorico = 0;
+  const casos = (Array.isArray(memoria.casos) ? memoria.casos : []).map((caso, indice) => {
+    const fonte = String(caso?.sourceLeadId || caso?.sourceFile || `fonte-${indice}`);
+    if (!historicos.has(fonte)) historicos.set(fonte, `Histórico ${String(++sequenciaHistorico).padStart(3, "0")}`);
+    const aliases = [...aliasesUnicos, ...aliasesPrivadosDoArquivo(caso?.sourceFile || "", caso?.produto || "")];
+    return {
+      caso: `Caso ${String(indice + 1).padStart(4, "0")}`,
+      historico: historicos.get(fonte),
+      situacao: anonimizarTextoAprendizadoExportacao(caso?.situacao || "", aliases),
+      sinalCliente: anonimizarTextoAprendizadoExportacao(caso?.sinalCliente || "", aliases),
+      impedimento: anonimizarTextoAprendizadoExportacao(caso?.impedimento || "", aliases),
+      conducaoCorretor: anonimizarTextoAprendizadoExportacao(caso?.conducaoCorretor || "", aliases),
+      resultado: String(caso?.resultado || "observada"),
+      evidenciaResultado: anonimizarTextoAprendizadoExportacao(caso?.evidenciaResultado || "", aliases),
+      regraExtraida: anonimizarTextoAprendizadoExportacao(caso?.regra || "", aliases),
+      produto: anonimizarTextoAprendizadoExportacao(caso?.produto || "", aliases),
+      etapa: anonimizarTextoAprendizadoExportacao(caso?.etapa || "", aliases),
+      aprendidoEm: dataExportacaoAprendizado(caso?.aprendidoEm || "")
+    };
+  });
+
+  const ia = inteligenciaAprendida && typeof inteligenciaAprendida === "object" ? inteligenciaAprendida : {};
+  const observacoes = [
+    ...observarCategoriaExportacao(ia, "tons", "Tom", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "tecnicas", "Técnica", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "objecoes", "Objeção", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "produtoVsPerfil", "Produto × perfil", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "movimentosOk", "Movimento que avançou", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "movimentosTravaram", "Movimento que travou", aliasesUnicos),
+    ...observarCategoriaExportacao(ia, "padroesFollowup", "Follow-up", aliasesUnicos)
+  ];
+
+  const cerebro = cerebroAtual && typeof cerebroAtual === "object" ? cerebroAtual : {};
+  return {
+    geradoEm: dataExportacaoAprendizado(new Date().toISOString()),
+    versaoAprendizado: 2,
+    resumo: {
+      casosComerciais: casos.length,
+      historicosProcessados: Object.keys(memoria.fontes || {}).length,
+      observacoesEstiloTecnica: observacoes.length,
+      atualizadoEm: dataExportacaoAprendizado(memoria.atualizadoEm || "")
+    },
+    cerebroAtual: {
+      metodo: String(cerebro.metodo || ""),
+      tom: String(cerebro.tom || ""),
+      diferenciais: String(cerebro.diferenciais || ""),
+      evitar: String(cerebro.evitar || ""),
+      regras: Array.isArray(cerebro.regras) ? cerebro.regras.map(r => String(r?.texto || r || "")).filter(Boolean) : [],
+      objecoes: Array.isArray(cerebro.objecoes) ? cerebro.objecoes.map(o => ({
+        objecao: String(o?.objecao || o?.titulo || ""),
+        resposta: String(o?.resposta || o?.texto || "")
+      })).filter(o => o.objecao || o.resposta) : []
+    },
+    casos,
+    observacoes
+  };
+}
+
 export async function obterStatusAprendizadoAutomatico() {
   const mem = await loadMemoriaComercialV2(true);
   let pendentes = 0;
