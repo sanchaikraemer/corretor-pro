@@ -6380,7 +6380,10 @@ const ETAPAS_PROCESSAMENTO = [
 function renderEtapas(idxAtual, sub){
   const ol = qs("#processingSteps");
   if(!ol) return;
-  ol.innerHTML = ETAPAS_PROCESSAMENTO.map((label, i) => {
+  const etapasVisiveis = idxAtual === 7
+    ? ETAPAS_PROCESSAMENTO
+    : ETAPAS_PROCESSAMENTO.slice(0, 7);
+  ol.innerHTML = etapasVisiveis.map((label, i) => {
     let icone = "", cor = "var(--muted)", peso = "400";
     if(i < idxAtual && idxAtual !== 7){ icone = "✓"; cor = "var(--acao)"; peso = "600"; }
     else if(i === idxAtual){ icone = idxAtual === 7 ? "!" : ""; cor = idxAtual === 7 ? "var(--morno)" : "var(--lime)"; peso = "950"; }
