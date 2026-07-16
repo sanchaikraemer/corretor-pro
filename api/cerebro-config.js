@@ -18,11 +18,9 @@ function validarUrlSegura(urlStr) {
 
 const CONFIG_KEY = "direciona-cerebro";
 
-const CEREBRO_PROMPT_MINIMO = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
-
 const DEFAULTS = {
   corretorNome: "",
-  metodo: CEREBRO_PROMPT_MINIMO,
+  metodo: "",
   tom: "",
   diferenciais: "",
   evitar: "",
@@ -31,22 +29,14 @@ const DEFAULTS = {
   objecoes: []
 };
 
-function isLegacyCerebroText(v) {
-  const t = String(v || "").toLowerCase();
-  return /m[eé]todo corretor pro/.test(t)
-    || /identifique a fase do cliente/.test(t)
-    || /cite o produto espec[ií]fico/.test(t)
-    || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
-}
-
 function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
   return {
     corretorNome: typeof v.corretorNome === "string" ? v.corretorNome.slice(0, 80).trim() : "",
-    metodo: typeof v.metodo === "string" ? (isLegacyCerebroText(v.metodo) ? CEREBRO_PROMPT_MINIMO : v.metodo) : CEREBRO_PROMPT_MINIMO,
-    tom: typeof v.tom === "string" ? (isLegacyCerebroText(v.tom) ? "" : v.tom) : "",
-    diferenciais: typeof v.diferenciais === "string" ? (isLegacyCerebroText(v.diferenciais) ? "" : v.diferenciais) : "",
-    evitar: typeof v.evitar === "string" ? (isLegacyCerebroText(v.evitar) ? "" : v.evitar) : "",
+    metodo: typeof v.metodo === "string" ? v.metodo : "",
+    tom: typeof v.tom === "string" ? v.tom : "",
+    diferenciais: typeof v.diferenciais === "string" ? v.diferenciais : "",
+    evitar: typeof v.evitar === "string" ? v.evitar : "",
     diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
     regras: Array.isArray(v.regras) ? v.regras : [],
     objecoes: Array.isArray(v.objecoes) ? v.objecoes : [],
@@ -484,4 +474,4 @@ async function extrairLicoesDeImagem(dataUrl, openai) {
   return { resumo: parsed.resumo || "", regras: Array.isArray(parsed.regras) ? parsed.regras.filter(r => typeof r === "string" && r.trim()).slice(0, 6) : [] };
 }
 
-export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY, CEREBRO_PROMPT_MINIMO, sanitizeCerebroConfig };
+export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY, sanitizeCerebroConfig };

@@ -1,96 +1,56 @@
 import assert from "node:assert/strict";
-import { calcularContextoTemporalMensagens, validarMensagensCerebro } from "../api/_pipeline.js";
+import { analyzeWithBrain, calcularContextoTemporalMensagens, validarFormatoMensagens } from "../api/_pipeline.js";
 
-const cfg = { metodo: "Retome de forma natural o assunto após 7 dias desde a última mensagem." };
 const timeline = [
-  { date: "09/05/2026", time: "18:30", author: "Daniele", text: "Gostei do Renaissance, mas não tenho entrada agora. Queria entender o apartamento 604 e as condições." }
+  { date: "09/05/2026", time: "18:30", author: "Daniele", text: "Gostei do apartamento e quero entender as condições." }
 ];
 const agora = new Date("2026-07-13T15:00:00-03:00");
-const contexto = calcularContextoTemporalMensagens(timeline, cfg, agora);
-assert.equal(contexto.limiar, 7);
+const contexto = calcularContextoTemporalMensagens(timeline, { metodo: "qualquer regra" }, agora);
 assert.equal(contexto.dias, 65);
-assert.equal(contexto.modo, "retomada");
+assert.equal(contexto.ultimaData, "09/05/2026");
+assert.equal("modo" in contexto, false, "o código não deve classificar continuidade/retomada");
+assert.equal("limiar" in contexto, false, "o código não deve extrair limiar comercial do Cérebro");
 
-const ruins = validarMensagensCerebro({
-  a: "Oi Daniele, tudo certo? Passando pra saber se pensou com carinho no Renaissance. Só me chamar!",
-  b: "Olá Daniele! Espero que esteja bem. Fico à disposição se quiser retomar a conversa sobre o 604.",
-  c: "Daniele, conseguiu analisar as condições do Renaissance? Posso tentar negociar algo especial pra você."
-}, contexto, timeline);
-assert.equal(ruins.ok, false);
-assert.ok(ruins.motivos.some(x => /genérica/.test(x)));
-assert.ok(ruins.motivos.some(x => /não termina com pergunta/.test(x)));
+assert.equal(validarFormatoMensagens({ a: "A", b: "B", c: "C" }).ok, true);
+assert.equal(validarFormatoMensagens({ a: "A", b: "", c: "C" }).ok, false);
 
-const boas = validarMensagensCerebro({
-  a: "Daniele, naquela condição do Renaissance sem entrada, o ponto principal era deixar a parcela confortável. Qual valor mensal ficaria viável para você hoje?",
-  b: "Daniele, sobre o apartamento 604 que você tinha gostado, vale eu recalcular uma condição sem entrada para você comparar?",
-  c: "Daniele, a dificuldade no Renaissance era a entrada. Você quer que eu tente uma composição priorizando parcelas menores?"
-}, contexto, timeline);
-assert.equal(boas.ok, true);
-
-const recente = calcularContextoTemporalMensagens([
-  { date: "12/07/2026", time: "10:00", text: "Pode me mandar a planta do 604?" }
-], cfg, agora);
-assert.equal(recente.modo, "continuidade");
-assert.equal(recente.dias, 1);
+const chamadas = [];
+const resposta = {
+  summary: "Resumo",
+  diagnostico: { produtoPrincipal: "Produto", etapaFunil: "Atendimento" },
+  mensagens: {
+    recomendada: "Bom dia, Daniele, mensagem um?",
+    maisSuave: "Bom dia, Daniele, mensagem dois?",
+    maisDireta: "Bom dia, Daniele, mensagem três?"
+  },
+  produtoInteresse: "Produto",
+  produtosInteresse: ["Produto"],
+  etapaSugerida: "Atendimento",
+  clientProfile: "Perfil",
+  nextAction: "Ação"
+};
+const openaiMock = {
+  chat: { completions: { create: async payload => {
+    chamadas.push(payload);
+    return { model: "mock-gpt", choices: [{ message: { content: JSON.stringify(resposta) } }] };
+  } } }
+};
+const cerebro = {
+  metodo: 'Não use "faz x dias que conversamos"; então diga "faz alguns dias que conversamos".',
+  tom: "Tom definido pelo corretor.",
+  regras: [{ texto: "Regra editável de teste." }]
+};
+const resultado = await analyzeWithBrain({
+  lead: { clientName: "Daniele" }, timeline, openai: openaiMock, cerebroConfig: cerebro
+});
+assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
+const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
+assert.match(system, /única autoridade/i);
+assert.match(system, /Respeite integralmente todas as regras do Cérebro Comercial/i);
+assert.match(system, /Não use "faz x dias que conversamos"; então diga "faz alguns dias que conversamos"\./);
+assert.equal(resultado.messages.a, resposta.mensagens.recomendada);
+assert.equal(resultado.messages.b, resposta.mensagens.maisSuave);
+assert.equal(resultado.messages.c, resposta.mensagens.maisDireta);
+assert.equal(resultado.sugestoesPendentes, false);
 
 console.log("retomada-validator: ok");
-
-// Teste integrado: a primeira resposta viola o Cérebro; o motor deve chamar a
-// correção dedicada e só liberar o trio após a segunda validação.
-const chamadas = [];
-const respostas = [
-  {
-    summary: "Daniele quer o Renaissance 604, mas não tem entrada.",
-    diagnostico: {
-      ultimaPessoaFalar: "Cliente",
-      produtoPrincipal: "Renaissance 604",
-      objecaoPrincipal: "Sem entrada",
-      quemDeveAgirAgora: "Corretor",
-      etapaFunil: "Negociação"
-    },
-    mensagens: {
-      recomendada: "Oi Daniele, passando pra saber se pensou com carinho no Renaissance. Só me chamar!",
-      maisSuave: "Olá Daniele, fico à disposição se quiser retomar a conversa sobre o 604.",
-      maisDireta: "Daniele, conseguiu analisar o Renaissance? Posso negociar algo especial pra você."
-    },
-    produtoInteresse: "Renaissance 604",
-    produtosInteresse: ["Renaissance 604"],
-    etapaSugerida: "Negociação",
-    clientProfile: "Busca apartamento sem entrada",
-    nextAction: "Reabrir a negociação"
-  },
-  {
-    mensagens: {
-      recomendada: "Daniele, naquela condição do Renaissance sem entrada, qual parcela ficaria confortável para você hoje?",
-      maisSuave: "Daniele, sobre o apartamento 604 que você tinha gostado, vale eu recalcular uma condição sem entrada para você comparar?",
-      maisDireta: "Daniele, a dificuldade no Renaissance era a entrada. Você quer que eu tente uma composição priorizando parcelas menores?"
-    }
-  }
-];
-const openaiMock = {
-  chat: {
-    completions: {
-      create: async (payload) => {
-        chamadas.push(payload);
-        const data = respostas.shift();
-        return { model: "mock-gpt", choices: [{ message: { content: JSON.stringify(data) } }] };
-      }
-    }
-  }
-};
-const { analyzeWithBrain } = await import("../api/_pipeline.js");
-const integrada = await analyzeWithBrain({
-  lead: { clientName: "Daniele" },
-  timeline,
-  openai: openaiMock,
-  cerebroConfig: cfg
-});
-assert.equal(chamadas.length, 2);
-assert.equal(chamadas[0].messages[0].role, "system");
-assert.equal(integrada.mensagensCorrigidasPelaValidacao, true);
-assert.equal(integrada.sugestoesPendentes, false);
-assert.match(integrada.messages.a, /\?$/);
-assert.match(integrada.messages.b, /\?$/);
-assert.match(integrada.messages.c, /\?$/);
-
-console.log("retomada-validator-integrado: ok");

@@ -5098,7 +5098,6 @@ function renderLeadFoco(lead){
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
-            ${(messagesReady && a.mensagensGeradasPorFallback)?`<div class="small" style="margin:-4px 0 10px;padding:8px 10px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:8px;color:#ffd9ad">⚠️ Sugestão gerada automaticamente (a IA não passou nas regras do Cérebro nesta rodada)${Array.isArray(a.motivoFallbackMensagens)&&a.motivoFallbackMensagens.length?`: ${escapeHtml(a.motivoFallbackMensagens.join(' · '))}`:''}</div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
             <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
           </section>
@@ -5516,22 +5515,14 @@ async function carregarAgenda(){
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
 
-const CEREBRO_PROMPT_MINIMO_V762 = "Leia toda a conversa de WhatsApp.\n\nIdentifique:\n1. qual foi a última pergunta ou pendência real;\n2. o que o cliente já respondeu;\n3. o que o corretor não deve perguntar de novo;\n4. qual é o próximo passo comercial mais natural.\n\nGere 3 mensagens curtas de WhatsApp que continuem exatamente de onde a conversa parou.\n\nNão seja genérico.\nNão reinicie a venda.\nNão pergunte o que já foi respondido.";
-function cerebroTextoEhLegadoV762(v) {
-  const t = String(v || "").toLowerCase();
-  return /m[eé]todo corretor pro/.test(t)
-    || /identifique a fase do cliente/.test(t)
-    || /cite o produto espec[ií]fico/.test(t)
-    || /sem ['’]faz sentido['’].*sem ['’]t[oô] retomando contato/.test(t);
-}
 function sanitizeCerebroConfigV762(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
   return {
     corretorNome: typeof c.corretorNome === "string" ? c.corretorNome : "",
-    metodo: typeof c.metodo === "string" ? (cerebroTextoEhLegadoV762(c.metodo) ? CEREBRO_PROMPT_MINIMO_V762 : c.metodo) : CEREBRO_PROMPT_MINIMO_V762,
-    tom: typeof c.tom === "string" ? (cerebroTextoEhLegadoV762(c.tom) ? "" : c.tom) : "",
-    diferenciais: typeof c.diferenciais === "string" ? (cerebroTextoEhLegadoV762(c.diferenciais) ? "" : c.diferenciais) : "",
-    evitar: typeof c.evitar === "string" ? (cerebroTextoEhLegadoV762(c.evitar) ? "" : c.evitar) : "",
+    metodo: typeof c.metodo === "string" ? c.metodo : "",
+    tom: typeof c.tom === "string" ? c.tom : "",
+    diferenciais: typeof c.diferenciais === "string" ? c.diferenciais : "",
+    evitar: typeof c.evitar === "string" ? c.evitar : "",
     diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
     regras: Array.isArray(c.regras) ? c.regras : [],
     objecoes: Array.isArray(c.objecoes) ? c.objecoes : []
@@ -5546,7 +5537,7 @@ function obterCerebroConfigParaAnalise() {
     cfg = {
       ...(cfg || {}),
       corretorNome: qs("#cerebroCorretorNome")?.value || cfg?.corretorNome || "",
-      metodo: qs("#cerebroMetodo")?.value ?? cfg?.metodo ?? CEREBRO_PROMPT_MINIMO_V762,
+      metodo: qs("#cerebroMetodo")?.value ?? cfg?.metodo ?? "",
       tom: qs("#cerebroTom")?.value ?? cfg?.tom ?? "",
       diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
@@ -5555,7 +5546,7 @@ function obterCerebroConfigParaAnalise() {
       objecoes: Array.isArray(cerebroObjecoes) ? cerebroObjecoes : (Array.isArray(cfg?.objecoes) ? cfg.objecoes : [])
     };
   }
-  return sanitizeCerebroConfigV762(cfg || { metodo: CEREBRO_PROMPT_MINIMO_V762, diasImportacao: 90 });
+  return sanitizeCerebroConfigV762(cfg || { metodo: "", diasImportacao: 90 });
 }
 function payloadComCerebro(obj = {}) { return { ...obj, cerebroConfig: obterCerebroConfigParaAnalise() }; }
 window.payloadComCerebro = payloadComCerebro;
@@ -6175,13 +6166,7 @@ async function carregarCerebro(){
     try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
   }
   if(!config){
-    config = {
-      metodo: "Método Corretor Pro:\\n1. Identifique a fase do cliente.\\n2. Mostre que entendeu o contexto.\\n3. Cite o produto que combina.\\n4. Termine com pergunta curta ou próximo passo.",
-      tom: "Direto, próximo, profissional.",
-      diferenciais: "",
-      evitar: "Não usar 'faz sentido', 'retomando contato'.",
-      diasImportacao: 90
-    };
+    config = { metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regras:[], objecoes:[] };
   }
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
   qs("#cerebroMetodo").value = config.metodo || "";
@@ -6278,10 +6263,10 @@ async function salvarCerebro(){
 }
 
 function resetarCerebro(){
-  const padrao = sanitizeCerebroConfigV762({ metodo: CEREBRO_PROMPT_MINIMO_V762, diasImportacao: 90 });
+  const padrao = sanitizeCerebroConfigV762({ metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regras:[], objecoes:[] });
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(padrao)); }catch(_){}
   carregarCerebro();
-  toast("Padrão mínimo restaurado.");
+  toast("Cérebro limpo.");
 }
 
 // Zera o Cérebro (método/tom/o-que-evitar/regras/objeções) E todo o Aprendizado, pra a
