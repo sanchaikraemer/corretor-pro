@@ -6,13 +6,17 @@
 `service-worker.js`, suba a versão em `package.json` (`version` e `displayVersion`) antes
 de finalizar o trabalho.** Não pule essa etapa e não pergunte se deve fazer — é sempre sim.
 
-Convenção de versão já usada no projeto:
-- `displayVersion` segue o padrão `NNN` ou `NNN-M` (ex.: `827-11`, `827-12`).
-- `version` (semver) segue `7.NNN.M` acompanhando o `displayVersion`.
+Convenção de versão a partir de agora (chega de fração `-M`):
+- A série antiga `827-N` está encerrada. A próxima atualização começa em **846** e cada
+  atualização seguinte incrementa **1 número inteiro** (`846`, `847`, `848`, ...) —
+  sem sufixo `-M` nunca mais.
+- `displayVersion` é só o número inteiro (ex.: `846`).
+- `version` (semver) segue `7.NNN.0` acompanhando o `displayVersion` (ex.: `7.846.0`).
 - Depois de mudar `package.json`, rode `npm install --package-lock-only` pra sincronizar
   o `package-lock.json`.
-- Crie um `NOTAS-vNNN-M.md` descrevendo o que mudou e por quê, seguindo o formato dos
-  arquivos `NOTAS-v*.md` já existentes no repositório.
+- Crie um `NOTAS-vNNN.md` descrevendo o que mudou e por quê, seguindo o formato dos
+  arquivos `NOTAS-v*.md` já existentes no repositório (as notas antigas `NOTAS-v827-N.md`
+  continuam valendo como histórico, só não usam mais esse padrão de nome).
 - `build.js` lê a versão exibida direto do `package.json` (`displayVersion`, ou calculada
   de `version`) e substitui `__VERSION__` nos arquivos publicados — não crave versão em
   nenhum outro lugar do código.
