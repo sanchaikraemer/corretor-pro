@@ -45,14 +45,19 @@ try {
 
 const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
-  "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png"
+  "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png",
+  "js/state.js", "js/dom.js", "js/proposta.js"
 ];
-const textFiles = new Set(["index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js"]);
+const textFiles = new Set([
+  "index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js",
+  "js/state.js", "js/dom.js", "js/proposta.js"
+]);
 
 for (const file of files) {
   const src = path.join(__dirname, file);
   if (!fs.existsSync(src)) throw new Error(`Arquivo obrigatório ausente no build: ${file}`);
   const dest = path.join(publicDir, file);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
   if (textFiles.has(file)) {
     const content = fs.readFileSync(src, "utf8")
       .replace(/__BUILD_ID__/g, buildId)

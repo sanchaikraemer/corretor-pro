@@ -4,6 +4,7 @@ const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
 const CORE_ASSETS = [
   '/', '/index.html', '/styles.css?v=__VERSION__', '/app.js?v=__VERSION__', '/vendor/jszip.min.js?v=__VERSION__',
+  '/js/state.js?v=__VERSION__', '/js/dom.js?v=__VERSION__', '/js/proposta.js?v=__VERSION__',
   '/share.html', '/manifest.json', '/service-worker.js', '/icon-192.png?v=__VERSION__', '/logo-cp.png?v=__VERSION__',
   '/icon-512.png?v=__VERSION__', '/favicon.png?v=__VERSION__'
 ];
