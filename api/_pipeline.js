@@ -2600,12 +2600,16 @@ function capitalizarFrase(s) {
 // v827-12: garante que a mensagem termine com EXATAMENTE uma pergunta, sem
 // expressões proibidas do Cérebro e dentro dos limites de tamanho — as mesmas
 // regras objetivas que validarMensagensCerebro cobra da IA.
-// A saudação NUNCA entra no texto recebido aqui — é adicionada uma única vez,
-// por último, depois de tudo sanitizado (evita duplicar e evita que a remoção
-// de proibidas corrompa a própria saudação, ex.: "oi" proibido cortando o
-// meio da palavra "noite").
+// A saudação é sempre adicionada uma única vez, por último, depois de tudo
+// sanitizado (evita duplicar e evita que a remoção de proibidas corrompa a
+// própria saudação, ex.: "oi" proibido cortando o meio da palavra "noite").
+// v827-18: como esta função agora também "conserta" rascunhos reais da IA (que
+// já podem vir com uma saudação própria, certa ou errada), a primeira coisa que
+// faz é remover essa saudação inicial antes de reaplicar a correta — sem isso,
+// um rascunho da IA que já começa com "Boa noite" viraria "Boa noite! Boa noite...".
 export function sanitizarMensagemDeterministica(corpo, regras, agora = new Date()) {
   let out = String(corpo || "").replace(/\s+/g, " ").trim();
+  out = out.replace(/^(bom\s*dia|boa\s*tarde|boa\s*noite|oi|ol[aá])[\s,!.\-–—]*/i, "").trim();
   for (const proibida of (regras?.proibidas || [])) {
     const p = String(proibida || "").trim();
     if (!p) continue;
@@ -2614,9 +2618,14 @@ export function sanitizarMensagemDeterministica(corpo, regras, agora = new Date(
     const re = new RegExp(`(?:^|\\b)${escaparRegExp(p).replace(/\\ /g, "\\s+")}(?:\\b|$)`, "gi");
     out = out.replace(re, "").replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
   }
-  const partes = out.split("?");
-  if (partes.length > 2) out = partes.slice(0, -1).join(".").replace(/\.{2,}/g, ".") + "?";
-  if (!/\?\s*$/.test(out)) out = out.replace(/[.!\s]+$/, "") + "?";
+  // v827-18: garante exatamente UMA pergunta, sempre no final — qualquer "?" (seja no
+  // meio da frase, sejam várias) vira "." e uma única "?" é reaposta no fim. Cobre o
+  // caso (novo desde que esta função passou a "consertar" rascunhos reais da IA, não só
+  // os templates do fallback) de a única pergunta do texto não estar no final: a versão
+  // antiga só cortava quando havia MAIS de uma "?", então "A? B." (uma pergunta, fora do
+  // final) escapava ileso e ganhava uma segunda "?" ao final — virando duas.
+  if (out.includes("?")) out = out.replace(/\?/g, ".").replace(/\.{2,}/g, ".");
+  out = out.replace(/[.!\s]+$/, "").trim() + "?";
   if (regras?.maxCaracteres && out.length > regras.maxCaracteres) {
     const corte = Math.max(10, regras.maxCaracteres - 1);
     out = (out.slice(0, corte).replace(/[^.?!]*$/, "").trim() || out.slice(0, corte).trim());
@@ -2908,17 +2917,42 @@ ${timelineText}`;
     let motivoFallbackMensagens = [];
     if (!validacaoMensagens.ok) {
       motivoFallbackMensagens = [...(validacaoMensagens.motivos || [])];
-      const detOut = construirMensagensDeterministicasCerebro({
-        contextoTemporal, timeline: timelineArr, diagnostico: d, produtoAtual,
-        regras: validacaoMensagens.regrasObjetivas || compilarRegrasObjetivasCerebro(configCerebro, new Date())
-      });
-      msgA = detOut.a; msgB = detOut.b; msgC = detOut.c;
-      const validacaoDet = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
-      mensagensGeradasPorFallback = true;
-      mensagensCorrigidasPelaValidacao = true;
-      // O fallback sempre libera a análise: os motivos residuais (se sobrar algum,
-      // ex. pergunta parecida com uma já respondida) viram aviso, não bloqueio.
-      validacaoMensagens = { ok: true, motivos: [], porMensagem: [], regrasObjetivas: validacaoMensagens.regrasObjetivas, avisos: validacaoDet.motivos || [] };
+      const regrasObjetivas = validacaoMensagens.regrasObjetivas || compilarRegrasObjetivasCerebro(configCerebro, new Date());
+      // v827-18: antes de jogar fora o conteúdo real da IA (que já leu a conversa e
+      // referenciou fatos/pendências específicas), tenta só CONSERTAR a formatação do
+      // próprio rascunho — pergunta única no final, sem proibida, saudação certa, dentro
+      // do tamanho. Isso resolve o caso mais comum de reprovação (ex.: "não termina com
+      // pergunta ou contém quantidade diferente de uma pergunta") sem descartar o texto
+      // específico da IA pelo texto genérico do fallback determinístico. Só recorre ao
+      // fallback 100% mecânico se o reparo de formatação não bastar (ex.: mensagem vazia,
+      // duplicada ou com dado inventado — problemas de conteúdo, não de formatação).
+      const reparadas = {
+        a: sanitizarMensagemDeterministica(msgA, regrasObjetivas, new Date()),
+        b: sanitizarMensagemDeterministica(msgB, regrasObjetivas, new Date()),
+        c: sanitizarMensagemDeterministica(msgC, regrasObjetivas, new Date())
+      };
+      const validacaoReparo = validarMensagensCerebro(reparadas, contextoTemporal, timelineArr, configCerebro, new Date());
+      if (validacaoReparo.ok) {
+        // Reparo de formatação bastou: o conteúdo continua sendo da IA, não do fallback
+        // genérico — não marca mensagensGeradasPorFallback e descarta o motivo original,
+        // já que ele deixou de se aplicar (a mensagem exibida não é mais a reprovada).
+        msgA = reparadas.a; msgB = reparadas.b; msgC = reparadas.c;
+        mensagensCorrigidasPelaValidacao = true;
+        motivoFallbackMensagens = [];
+        validacaoMensagens = { ok: true, motivos: [], porMensagem: [], regrasObjetivas: validacaoReparo.regrasObjetivas, avisos: [] };
+      } else {
+        const detOut = construirMensagensDeterministicasCerebro({
+          contextoTemporal, timeline: timelineArr, diagnostico: d, produtoAtual,
+          regras: regrasObjetivas
+        });
+        msgA = detOut.a; msgB = detOut.b; msgC = detOut.c;
+        const validacaoDet = validarMensagensCerebro({ a: msgA, b: msgB, c: msgC }, contextoTemporal, timelineArr, configCerebro, new Date());
+        mensagensGeradasPorFallback = true;
+        mensagensCorrigidasPelaValidacao = true;
+        // O fallback sempre libera a análise: os motivos residuais (se sobrar algum,
+        // ex. pergunta parecida com uma já respondida) viram aviso, não bloqueio.
+        validacaoMensagens = { ok: true, motivos: [], porMensagem: [], regrasObjetivas: validacaoMensagens.regrasObjetivas, avisos: validacaoDet.motivos || [] };
+      }
     }
     const trioOk = [msgA, msgB, msgC].every(v => clean(v).length >= 10) && validacaoMensagens.ok;
 
