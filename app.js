@@ -1383,14 +1383,26 @@ function scoreConversaoHoje(l){
   return Math.round(score);
 }
 
-// Ranking do "Quem atender agora" agora é PRIORIDADE DE ATENDIMENTO primeiro.
-// Conversão/chance de venda entra só como desempate/tempero, para não esconder uma
-// pendência aberta real atrás de um lead com score comercial alto porém sem ação imediata.
+// v861 — MISTURA venda + urgência (pedido do dono). Antes a urgência mandava sozinha,
+// com degraus de 1000 pontos entre níveis, e a chance de venda era só um tempero de ±24 —
+// então lead frio parado flutuava pro topo e comprador quente afundava. Agora a urgência
+// factual entra em FAIXAS MODERADAS (sem o degrau gigante) e a chance de fechar ganha
+// PESO REAL, podendo reordenar de verdade e até promover um comprador forte acima de um
+// lead só um pouco mais urgente porém frio. Os dois pesos abaixo são a calibragem inicial —
+// fáceis de ajustar depois de ver o resultado com leads reais.
+const RANKING_PESO_VENDA = 12;       // multiplicador da chance de venda (scoreConversaoHoje)
+const RANKING_BANDA_URGENCIA = 120;  // separação entre níveis de urgência factual (era 1000)
 function scoreRankingHoje(l){
   const atendimento = scorePrioridadeAtendimento(l);
   const conversao = scoreConversaoHoje(l);
-  const temperoConversao = Math.max(-18, Math.min(24, conversao * 0.12));
-  return Math.round(atendimento + temperoConversao);
+  // Urgência factual (níveis 1..7 => atendimento 1000..7120) vira uma base moderada.
+  // Grupos brandos (boa-sem-urgencia/pode-aguardar/tratado-hoje: 60..200) passam direto.
+  const urgencia = atendimento >= 1000
+    ? 1000 + Math.floor(atendimento / 1000) * RANKING_BANDA_URGENCIA
+    : atendimento;
+  // Chance de venda com peso real, limitada para um único lead não estourar a escala.
+  const venda = Math.max(-140, Math.min(200, conversao)) * RANKING_PESO_VENDA;
+  return Math.round(urgencia + venda);
 }
 
 
