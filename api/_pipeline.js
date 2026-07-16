@@ -2901,7 +2901,13 @@ ${timelineText}`;
     // determinístico (fatos reais + regras aplicadas) para nunca deixar o corretor
     // sem diagnóstico só porque as 3 sugestões de mensagem vieram fora das regras.
     let mensagensGeradasPorFallback = false;
+    // v827-17: guarda o motivo ORIGINAL (por que a IA não passou na validação) antes de
+    // qualquer sobrescrita — sem isso, uma vez que o fallback "resolve" a análise, o motivo
+    // real de ter caído no texto genérico se perdia, e não dava pra diagnosticar por que
+    // o fallback disparou tanto mais do que devia.
+    let motivoFallbackMensagens = [];
     if (!validacaoMensagens.ok) {
+      motivoFallbackMensagens = [...(validacaoMensagens.motivos || [])];
       const detOut = construirMensagensDeterministicasCerebro({
         contextoTemporal, timeline: timelineArr, diagnostico: d, produtoAtual,
         regras: validacaoMensagens.regrasObjetivas || compilarRegrasObjetivasCerebro(configCerebro, new Date())
@@ -2983,6 +2989,7 @@ ${timelineText}`;
       mensagensValidadasEm: nowIso,
       mensagensCorrigidasPelaValidacao,
       mensagensGeradasPorFallback,
+      motivoFallbackMensagens,
       tentativasCorrecaoMensagens: tentativasCorrecao,
       regrasObjetivasCerebro: validacaoMensagens.regrasObjetivas || null,
       contextoTemporalMensagens: contextoTemporal,
