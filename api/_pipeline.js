@@ -2264,13 +2264,25 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   }
 
   const _agoraDt = new Date();
-  // Data atual no fuso do corretor (Brasil), fornecida apenas como contexto técnico da análise.
-  let hoje, hojeSemana = "";
+  // Data e hora atuais no fuso do corretor, fornecidas apenas como contexto técnico da análise.
+  const fusoAnalise = "America/Sao_Paulo";
+  let hoje, hojeSemana = "", dataHoraAtualAnalise = "";
   try {
-    hoje = _agoraDt.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-    hojeSemana = _agoraDt.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" });
+    hoje = _agoraDt.toLocaleDateString("en-CA", { timeZone: fusoAnalise });
+    hojeSemana = _agoraDt.toLocaleDateString("pt-BR", { weekday: "long", timeZone: fusoAnalise });
+    dataHoraAtualAnalise = _agoraDt.toLocaleString("pt-BR", {
+      timeZone: fusoAnalise,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
   } catch (_) {
     hoje = _agoraDt.toISOString().slice(0, 10);
+    dataHoraAtualAnalise = _agoraDt.toISOString();
   }
   const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
   if (!hasCerebroInstructions(configCerebro)) {
@@ -2316,7 +2328,8 @@ Responda somente com JSON válido no formato solicitado.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial recebido no prompt de sistema e os dados abaixo.
 
-Data atual no Brasil: ${hoje}${hojeSemana ? ` (${hojeSemana})` : ""}
+Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
+Fuso horário da análise: ${fusoAnalise}
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Corretor: ${corretorNome}
