@@ -903,8 +903,30 @@ function exemplosDoCorretor(timeline) {
 
 
 
+function _regrasLegadasParaTextoPipeline(arr) {
+  if (!Array.isArray(arr)) return "";
+  return arr
+    .map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function _objecoesLegadasParaTextoPipeline(arr) {
+  if (!Array.isArray(arr)) return "";
+  return arr.map(o => {
+    if (typeof o === "string") return String(o).trim();
+    const sinal = String(o?.objecao || o?.titulo || "").trim();
+    const conducao = String(o?.resposta || o?.texto || "").trim();
+    if (!sinal && !conducao) return "";
+    if (sinal && conducao) return `SINAL: ${sinal}\nCOMO CONDUZIR: ${conducao}`;
+    return sinal || conducao;
+  }).filter(Boolean).join("\n\n");
+}
+
 function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
+  const temRegrasTexto = Object.prototype.hasOwnProperty.call(v, "regrasTexto");
+  const temObjecoesTexto = Object.prototype.hasOwnProperty.call(v, "objecoesTexto");
   return {
     corretorNome: typeof v.corretorNome === "string" ? v.corretorNome.slice(0, 80).trim() : "",
     metodo: typeof v.metodo === "string" ? v.metodo : "",
@@ -912,6 +934,12 @@ function sanitizeCerebroConfig(valor = {}) {
     diferenciais: typeof v.diferenciais === "string" ? v.diferenciais : "",
     evitar: typeof v.evitar === "string" ? v.evitar : "",
     diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
+    regrasTexto: temRegrasTexto && typeof v.regrasTexto === "string"
+      ? v.regrasTexto
+      : _regrasLegadasParaTextoPipeline(v.regras),
+    objecoesTexto: temObjecoesTexto && typeof v.objecoesTexto === "string"
+      ? v.objecoesTexto
+      : _objecoesLegadasParaTextoPipeline(v.objecoes),
     regras: Array.isArray(v.regras) ? v.regras : [],
     objecoes: Array.isArray(v.objecoes) ? v.objecoes : []
   };
@@ -921,7 +949,8 @@ function sanitizeCerebroConfig(valor = {}) {
 // análise e mensagens é obrigatório existir ao menos uma instrução editável.
 function hasCerebroInstructions(cfg) {
   if (!cfg || typeof cfg !== "object") return false;
-  return [cfg.metodo, cfg.tom, cfg.evitar].some(v => String(v || "").trim())
+  return [cfg.metodo, cfg.tom, cfg.diferenciais, cfg.evitar, cfg.regrasTexto, cfg.objecoesTexto]
+    .some(v => String(v || "").trim())
     || (Array.isArray(cfg.regras) && cfg.regras.some(r => String(typeof r === "string" ? r : r?.texto || "").trim()))
     || (Array.isArray(cfg.objecoes) && cfg.objecoes.some(o => {
       if (typeof o === "string") return String(o).trim();
@@ -931,24 +960,18 @@ function hasCerebroInstructions(cfg) {
 
 function formatCerebroPrompt(cfg) {
   const c = sanitizeCerebroConfig(cfg || {});
-  const regras = (Array.isArray(c.regras) ? c.regras : [])
-    .map(r => typeof r === "string" ? r : r?.texto)
-    .filter(Boolean)
-    .map(r => `- ${String(r)}`)
-    .join("\n");
-  const objecoes = (Array.isArray(c.objecoes) ? c.objecoes : [])
-    .map(o => typeof o === "string" ? o : `${o?.objecao || ""} => ${o?.resposta || ""}`)
-    .filter(Boolean)
-    .map(r => `- ${String(r)}`)
-    .join("\n");
+  const regrasTexto = String(c.regrasTexto || "").trim()
+    || _regrasLegadasParaTextoPipeline(c.regras);
+  const objecoesTexto = String(c.objecoesTexto || "").trim()
+    || _objecoesLegadasParaTextoPipeline(c.objecoes);
   return [
     c.corretorNome ? `NOME DO CORRETOR:\n${c.corretorNome}` : "",
     c.metodo ? `MÉTODO DO CÉREBRO:\n${c.metodo}` : "",
     c.tom ? `TOM DE VOZ:\n${c.tom}` : "",
     c.diferenciais ? `DIFERENCIAIS/FATOS DO CORRETOR:\n${c.diferenciais}` : "",
     c.evitar ? `O QUE EVITAR:\n${c.evitar}` : "",
-    regras ? `REGRAS COMERCIAIS SALVAS:\n${regras}` : "",
-    objecoes ? `RESPOSTAS A OBJEÇÕES SALVAS:\n${objecoes}` : ""
+    regrasTexto ? `REGRAS COMERCIAIS SALVAS:\n${regrasTexto}` : "",
+    objecoesTexto ? `RESPOSTAS A OBJEÇÕES SALVAS:\n${objecoesTexto}` : ""
   ].filter(Boolean).join("\n\n");
 }
 
