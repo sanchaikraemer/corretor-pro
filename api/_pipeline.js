@@ -24,7 +24,7 @@ const MODELOS_PADRAO = {
   orquestrador: "gpt-4.1"
 };
 
-export const ARQUITETURA_MENSAGENS_ATUAL = "v808-aprendizado-continuo-real";
+export const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -917,11 +917,16 @@ function sanitizeCerebroConfig(valor = {}) {
   };
 }
 
-function hasCerebroContent(cfg) {
+// O nome do corretor, sozinho, não constitui um Cérebro Comercial. Para gerar
+// análise e mensagens é obrigatório existir ao menos uma instrução editável.
+function hasCerebroInstructions(cfg) {
   if (!cfg || typeof cfg !== "object") return false;
-  return [cfg.corretorNome, cfg.metodo, cfg.tom, cfg.diferenciais, cfg.evitar].some(v => String(v || "").trim())
-    || (Array.isArray(cfg.regras) && cfg.regras.length)
-    || (Array.isArray(cfg.objecoes) && cfg.objecoes.length);
+  return [cfg.metodo, cfg.tom, cfg.evitar].some(v => String(v || "").trim())
+    || (Array.isArray(cfg.regras) && cfg.regras.some(r => String(typeof r === "string" ? r : r?.texto || "").trim()))
+    || (Array.isArray(cfg.objecoes) && cfg.objecoes.some(o => {
+      if (typeof o === "string") return String(o).trim();
+      return String(o?.objecao || o?.resposta || "").trim();
+    }));
 }
 
 function formatCerebroPrompt(cfg) {
@@ -1032,19 +1037,28 @@ export function validarFormatoMensagens(mensagens) {
 }
 
 async function loadCerebroConfig(frontendConfig = null) {
-  if (hasCerebroContent(frontendConfig)) return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-localStorage" };
+  // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
+  // localStorage desatualizado não pode substituir silenciosamente o conteúdo
+  // completo que já está persistido.
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from("direciona_config")
-      .select("valor")
-      .eq("chave", "direciona-cerebro")
-      .maybeSingle();
-    if (error || !data?.valor) return null;
-    return { ...sanitizeCerebroConfig(data.valor), _fonte: "banco" };
-  } catch (_) { return null; }
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("direciona_config")
+        .select("valor")
+        .eq("chave", "direciona-cerebro")
+        .maybeSingle();
+      if (!error && hasCerebroInstructions(data?.valor)) {
+        return { ...sanitizeCerebroConfig(data.valor), _fonte: "banco" };
+      }
+    }
+  } catch (_) { /* tenta o conteúdo enviado pelo navegador abaixo */ }
+
+  if (hasCerebroInstructions(frontendConfig)) {
+    return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-localStorage" };
+  }
+  return null;
 }
 
 // Carrega SÓ o banco de inteligência aprendida (as observações extraídas de "Aprender de
@@ -2155,7 +2169,7 @@ export async function resumirAtendimento(texto, openai) {
   }
 }
 
-// As mensagens são geradas numa segunda chamada dedicada (gpt-4.1), com base no diagnóstico.
+// A análise e as três mensagens são geradas na mesma chamada, já com o Cérebro completo.
 
 function textoDaRespostaResponses(resp) {
   if (resp && typeof resp.output_text === "string" && resp.output_text.trim()) return resp.output_text.trim();
@@ -2259,6 +2273,26 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     hoje = _agoraDt.toISOString().slice(0, 10);
   }
   const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
+  if (!hasCerebroInstructions(configCerebro)) {
+    return {
+      mode: "cerebro_ausente",
+      error: "O Cérebro Comercial não foi carregado com instruções. A análise não foi gerada para evitar sugestões genéricas.",
+      summary: "Análise não gerada: carregue e salve o Cérebro Comercial.",
+      clientProfile: "—",
+      bestTime: "—",
+      objections: [],
+      risk: "—",
+      produtoInteresse: null,
+      produtosInteresse: [],
+      etapaSugerida: null,
+      nextAction: null,
+      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      sugestoesPendentes: true,
+      validacaoSugestoes: ["Cérebro Comercial sem instruções carregadas."],
+      messages: emptyMessages,
+      _cerebroFonte: configCerebro?._fonte || "ausente"
+    };
+  }
   // v827 §7.4: o nome do corretor vem SEMPRE da configuração do Cérebro ("Seu nome
   // como aparece no WhatsApp"). Sem nome fixo no código; na ausência, um rótulo genérico.
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName) || "o corretor";
@@ -2269,19 +2303,16 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   };
 
   const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
-  const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro) || "(Cérebro Comercial sem conteúdo configurado)";
+  const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro);
 
-  const systemPromptAnalise = `O conteúdo abaixo é o Cérebro Comercial editável do corretor e é a única autoridade sobre análise, estratégia e criação das mensagens.
-
-Respeite integralmente todas as regras do Cérebro Comercial, sem ignorar, reinterpretar, suavizar, substituir ou acrescentar regras comerciais próprias.
-
-Antes de entregar o resultado, revise silenciosamente toda a análise e as três sugestões. Se qualquer parte desrespeitar alguma regra do Cérebro Comercial, corrija dentro desta mesma execução antes de responder.
-
-Responda somente com JSON válido no formato solicitado.
-
-=== INÍCIO DO CÉREBRO COMERCIAL ===
+  const systemPromptAnalise = `=== INÍCIO DO CÉREBRO COMERCIAL ===
 ${instrucoesCerebroTexto}
-=== FIM DO CÉREBRO COMERCIAL ===`;
+=== FIM DO CÉREBRO COMERCIAL ===
+
+INSTRUÇÃO OPERACIONAL ÚNICA:
+O Cérebro Comercial acima é a única autoridade sobre análise, estratégia e criação das mensagens. Respeite integralmente todas as regras do Cérebro Comercial. Antes de entregar o resultado, revise silenciosamente a análise e as três sugestões e corrija, nesta mesma execução, qualquer parte que desrespeite o Cérebro.
+
+Responda somente com JSON válido no formato solicitado.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial recebido no prompt de sistema e os dados abaixo.
 

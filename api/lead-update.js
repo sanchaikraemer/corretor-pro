@@ -8,7 +8,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial } from "./_pipeline.js";
+import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -507,7 +507,6 @@ async function acaoCriarManual(body, res) {
       source: "manual",
       order: 1
     }] : [];
-    const primeiroNome = nome.split(/\s+/)[0];
     // Perfil: característica curta extraída da observação (ou genérica)
     const perfilCurto = observacao
       ? observacao.slice(0, 120) + (observacao.length > 120 ? "…" : "")
@@ -516,10 +515,6 @@ async function acaoCriarManual(body, res) {
     const porQue = produto
       ? `Cliente novo demonstrou interesse no ${produto} (sem conversa no WhatsApp ainda). Iniciar contato pra qualificar.`
       : `Cliente novo entrou em contato (sem conversa no WhatsApp ainda). Iniciar abordagem pra qualificar interesse.`;
-    // Mensagem direta pré-rascunhada — sempre tem (telefone pode estar vazio)
-    const msgDireta = `Oi ${primeiroNome}, tudo bem? Aqui é da Senger.${produto ? ` Vi que você demonstrou interesse no ${produto}.` : " Tudo bem por aí?"} Posso te passar mais info ou tirar alguma dúvida?`;
-    const msgConsultiva = `Oi ${primeiroNome}, tudo certo? Aqui é da Senger.${produto ? ` Soube do seu interesse no ${produto}.` : ""} Antes de te passar material, queria entender melhor o que você busca — é pra morar, investir, ou algo específico em mente?`;
-    const msgRetomada = `Oi ${primeiroNome}, tudo bem? Aqui é da Senger${produto ? `, sobre o ${produto}` : ""}. Me conta o que você gostaria de saber primeiro — pode mandar suas dúvidas que eu te respondo.`;
     const result = {
       lead: { clientName: nome, phone: telefone, etapa: "Novo" },
       analysis: {
@@ -553,10 +548,12 @@ async function acaoCriarManual(body, res) {
         permutaResumo: "",
         bestTime: "hoje",
         melhorHorarioContato: "",
+        arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+        sugestoesPendentes: true,
+        aprovada: false,
         messages: {
-          direta: msgDireta,
-          consultiva: msgConsultiva,
-          retomada: msgRetomada
+          a: "", b: "", c: "",
+          aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
         }
       },
       timeline: timelineInicial,
@@ -619,9 +616,6 @@ async function acaoNovaOportunidadeParceiro(body, res) {
   const contatoId = String(mcOrigem?.contato?.id || mcOrigem?.oportunidade?.contatoId || idOrigem);
   const obsLinha = observacao ? ` Observação: ${observacao}` : "";
   const motivo = `Nova oportunidade indicada por ${nomeParceiro} para ${compradorFinal}, com interesse em ${produto}.`;
-  const mensagemA = `Sobre ${compradorFinal} e o ${produto}, me passa o que ele procura e a faixa de investimento para eu separar as opções mais adequadas?`;
-  const mensagemB = `Para eu conduzir bem essa nova oportunidade no ${produto}, o que já está definido sobre perfil, prazo e forma de pagamento de ${compradorFinal}?`;
-  const mensagemC = `Me atualiza sobre ${compradorFinal}: qual é a principal prioridade dele no ${produto} neste momento?`;
 
   const result = {
     lead: { clientName: nomeParceiro, phone: telefone, product: produto, etapa: "Novo" },
@@ -684,10 +678,12 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       memoriaSugerida: {},
       objections: [],
       confirmedAppointments: [],
+      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      sugestoesPendentes: true,
+      aprovada: false,
       messages: {
-        a: mensagemA, b: mensagemB, c: mensagemC,
-        aLabel: "Qualificar perfil", bLabel: "Mapear condições", cLabel: "Definir prioridade", recomendada: "a",
-        direta: mensagemA, consultiva: mensagemB, retomada: mensagemC
+        a: "", b: "", c: "",
+        aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
       }
     },
     timeline: [{

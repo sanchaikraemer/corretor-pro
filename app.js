@@ -987,7 +987,7 @@ function limparAutorAtend(autor){
 // Única arquitetura aceita para sugestões comerciais. Leads antigos precisam ser reanalisados.
 // IMPORTANTE: precisa ser IDÊNTICA à ARQUITETURA_MENSAGENS_ATUAL do backend (api/_pipeline.js).
 // Se ficarem diferentes, toda análise recém-gerada é tratada como "antiga" e a tela pede reanálise em loop.
-const ARQUITETURA_MENSAGENS_ATUAL = "v808-aprendizado-continuo-real";
+const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
 
 function analiseAtualValida752(a){
   return !!(a && typeof a === "object" &&
@@ -5514,6 +5514,7 @@ async function carregarAgenda(){
 
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
+let cerebroFormularioCarregado = false;
 
 function sanitizeCerebroConfigV762(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
@@ -5531,8 +5532,10 @@ function sanitizeCerebroConfigV762(cfg) {
 function obterCerebroConfigParaAnalise() {
   let cfg = null;
   try { cfg = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); } catch(_) { cfg = null; }
-  const temCampos = qs("#cerebroMetodo") || qs("#cerebroTom") || qs("#cerebroDiferenciais") || qs("#cerebroEvitar");
-  if (temCampos) {
+  // Os campos existem no HTML mesmo antes de a tela do Cérebro ser carregada.
+  // Ler esses campos vazios nesse momento apagava o Método salvo no localStorage
+  // e enviava um Cérebro parcial/sem instruções para a análise.
+  if (cerebroFormularioCarregado) {
     const diasRaw = qs("#cerebroDiasImportacao")?.value;
     cfg = {
       ...(cfg || {}),
@@ -6168,6 +6171,8 @@ async function carregarCerebro(){
   if(!config){
     config = { metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regras:[], objecoes:[] };
   }
+  config = sanitizeCerebroConfigV762(config);
+  try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(config)); }catch(_){}
   if(qs("#cerebroCorretorNome")) qs("#cerebroCorretorNome").value = config.corretorNome || "";
   qs("#cerebroMetodo").value = config.metodo || "";
   qs("#cerebroTom").value = config.tom || "";
@@ -6180,6 +6185,7 @@ async function carregarCerebro(){
   cerebroObjecoes = Array.isArray(config.objecoes) ? config.objecoes : [];
   renderCerebroRegras();
   renderCerebroObjecoes();
+  cerebroFormularioCarregado = true;
   if(!status.innerHTML) status.textContent = "Configuração carregada.";
 }
 

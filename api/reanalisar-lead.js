@@ -231,8 +231,8 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   const estrategia = normalizarTextoV684(ac.estrategiaRecomendada || out.estrategia || lc.oQueDestravar || out.nextAction || "");
   const leitura = normalizarTextoV684(ac.leituraAlemDoObvio || diag.percepcaoTodaConversa || out.summary || "");
   const lacuna = normalizarTextoV684(ac.lacunaCentral || lc.oQueDestravar || diag.objecaoPrincipal || "");
-  const evitar = normalizarTextoV684(ac.oQueEvitar || "Não conduzir por mensagem genérica nem repetir pergunta já respondida.");
-  const proximaAcao = normalizarTextoV684(out.nextAction || estrategia || "Conduzir pelo ponto comercial identificado na análise.");
+  const evitar = normalizarTextoV684(ac.oQueEvitar || "");
+  const proximaAcao = normalizarTextoV684(out.nextAction || estrategia || "");
   const produto = normalizarTextoV684(diag.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || "");
 
   out.iaComercialV2 = {
@@ -250,7 +250,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
     sinaisPositivos: [],
     alertas: lacuna ? [lacuna] : [],
     riscoPerda: { nivel: "qualitativo", motivo: normalizarTextoV684(out.risk || evitar), fatores: [], protecao: [] },
-    regraAntiAlucinacao: "Não inventar prazo, valor, compromisso, visita, produto ou objeção. Toda conclusão deve vir do histórico real.",
+    regraAntiAlucinacao: "",
     geradoEm: new Date().toISOString()
   };
   return out;
@@ -611,19 +611,19 @@ async function reanalisarLeadHandler702(req, res) {
     avisoReanalise = "Análise por IA não configurada no servidor.";
   }
 
-  // v750: se a IA falhar, NÃO restaurar análise/mensagem antiga.
-  // Antigo era exatamente o que contaminava produto, unidade e próximo passo.
-  if (!novoAnalysis || typeof novoAnalysis !== "object" || novoAnalysis.mode === "erro_api") {
-    avisoReanalise = avisoReanalise || novoAnalysis?.error || "O provedor de análise não respondeu.";
-    novoAnalysis = {
-      mode: "erro_api",
-      avisoReanalise,
-      summary: "Reanálise não gerada. Tente novamente.",
-      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
-      sugestoesPendentes: true,
-      aprovada: false,
-      messages: { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" }
-    };
+  // Sem Cérebro carregado, falha de API ou retorno incompleto, a reanálise não
+  // sobrescreve o lead e não informa sucesso. Isso impede que sugestões genéricas
+  // ou antigas reapareçam como se tivessem obedecido ao Cérebro.
+  const trioNovo = [novoAnalysis?.messages?.a, novoAnalysis?.messages?.b, novoAnalysis?.messages?.c]
+    .every(v => String(v || "").trim());
+  if (!novoAnalysis || typeof novoAnalysis !== "object" || novoAnalysis.mode !== "openai" || novoAnalysis.sugestoesPendentes === true || !trioNovo) {
+    avisoReanalise = avisoReanalise || novoAnalysis?.error || (novoAnalysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as três sugestões.";
+    return json(res, 422, {
+      ok: false,
+      error: "A reanálise não foi concluída e nenhuma sugestão foi salva.",
+      detail: avisoReanalise,
+      mode: novoAnalysis?.mode || "erro_api"
+    });
   }
   novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal);
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
