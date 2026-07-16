@@ -880,7 +880,6 @@ function diagnosticoClienteHTML(a){
   const leituraLinhas = [
     ["Onde parou", lc.ondeParou],
     ["Próximo passo", lc.quemDeveProximoPasso],
-    ["Temperatura", lc.temperatura],
     ["O que destravar", lc.oQueDestravar],
     ["Mensagem com mais chance", lc.mensagemCurtaChance]
   ].filter(([_,v]) => String(v||"").trim());
@@ -1134,7 +1133,7 @@ function sinaisPrioridadeComercial682(l){
   const quenteEscondido = compradorReal && !curioso && e === "Atendimento" && diasDistintos >= 3 && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
 
   const motivos = [];
-  if(quenteEscondido) motivos.push("lead quente escondido: conversa forte mesmo ainda em Atendimento");
+  if(quenteEscondido) motivos.push("oportunidade com sinais fortes: conversa forte mesmo ainda em Atendimento");
   if(compradorReal && !curioso) motivos.push("sinais de comprador real");
   if(curioso) motivos.push("parece curioso/pesquisa inicial");
   if(urgencia) motivos.push("há urgência ou compromisso próximo");
@@ -1464,7 +1463,7 @@ function motivoPrioridade(l){
   const dias = Number(l.daysSinceLastInteraction);
   const partes = [];
   const sc682 = sinaisPrioridadeComercial682(l);
-  if(sc682.quenteEscondido) partes.push("lead quente escondido: há sinais fortes de compra mesmo sem etapa avançada");
+  if(sc682.quenteEscondido) partes.push("oportunidade com sinais fortes: há sinais fortes de compra mesmo sem etapa avançada");
   else if(sc682.compradorReal && !sc682.curioso) partes.push("sinais de comprador real");
   if(sc682.curioso && !sc682.compradorReal) partes.push("parece curioso/pesquisa inicial");
   if(sc682.urgencia) partes.push("há urgência ou compromisso próximo");
@@ -1505,7 +1504,7 @@ function motivoPrioridade(l){
       partes.push("você já retomou, sem resposta — vale um lembrete leve");
       jaFalouDoTempo = true;
     } else
-      partes.push("cliente ficou de te retornar — dá um toque pra não esfriar");
+      partes.push("cliente ficou de te retornar — dá um toque pra manter o ritmo");
   }
   else if(quemDeve === "corretor" || (quemDeve !== "cliente" && /promet|ficou de (te |lhe )?(enviar|mandar|passar|retornar)|enviar (a |uma )?simula|preparar (a |uma )?(proposta|simula)|montar (a |uma )?(proposta|simula)|mandar (o |os |as )?(material|plantas?|tabela)|aguard(a|ando) (o |um |meu |nosso )?retorno|cliente (aguarda|espera|esperando)|devo (enviar|mandar|retornar)/.test(txt)))
     partes.push("você ficou de retornar algo — cliente te esperando");
@@ -1526,8 +1525,8 @@ function motivoPrioridade(l){
     if(dias === 0) partes.push("último contato hoje");
     else if(dias === 1) partes.push("último contato ontem");
     else if(dias <= 7) partes.push(`${dias} dias parado`);
-    else if(dias <= 30) partes.push(`${dias} dias parado — janela esfriando`);
-    else partes.push(`${dias} dias parado — frio`);
+    else if(dias <= 30) partes.push(`${dias} dias parado — janela fechando`);
+    else partes.push(`${dias} dias parado`);
   }
 
   // Etapa como contexto adicional
@@ -1627,7 +1626,7 @@ window.recarregarLeadFoco = recarregarLeadFoco;
 const TIPO_RETOMADA_CURTO = {
   "quente-fechar": "Pronto pra fechar",
   "morno-confirmar": "Confirmar próximo passo",
-  "frio-reaquecer": "Precisa reaquecer",
+  "frio-reaquecer": "Precisa reativar",
   "objecao-tratar": "Tratar objeção",
   "informacao-enviar": "Enviar material",
   "primeiro-contato": "Primeiro contato",
@@ -1664,7 +1663,7 @@ function formatarQuandoLead(quandoStr){
 function motivoCurto(l){
   try{
     const sc682 = sinaisPrioridadeComercial682(l);
-    if(sc682.quenteEscondido) return "lead quente escondido — agir antes que esfrie";
+    if(sc682.quenteEscondido) return "oportunidade com sinais fortes — agir enquanto o interesse está ativo";
     if(sc682.compradorReal && sc682.urgencia) return "comprador real com urgência";
     if(sc682.compradorReal && sc682.objecao) return "comprador real — tratar objeção";
     if(sc682.curioso && !sc682.compradorReal) return "curioso/pesquisa inicial — baixa prioridade";
@@ -1699,7 +1698,7 @@ function ehEsfriando(l){
   if(!isNaN(lembreteTs(l))) return false;
   const dias = Number(l.daysSinceLastInteraction) || 0;
   const tipo = String(l?.analysis?.tipoRetomada || "").toLowerCase();
-  const interesse = String(l?.analysis?.diagnostico?.interesse || l?.analysis?.leituraComercial?.temperatura || "").toLowerCase();
+  const interesse = String(l?.analysis?.diagnostico?.interesse || "").toLowerCase();
   const avancado = ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l?.etapa));
   return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente" || avancado);
 }
@@ -1720,7 +1719,7 @@ function tagSumicoPrecoHTML(){
   return `<span title="Provável sumiço após o preço — bom retomar com outras opções" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">💸</span>`;
 }
 function tagEsfriandoHTML(){
-  return `<span title="Esfriando — sem resposta há alguns dias" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">❄️</span>`;
+  return `<span title="Parando — sem resposta há alguns dias" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">⏳</span>`;
 }
 function tagPermutaHTML(){
   return `<span title="Envolve permuta/troca de imóvel" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">🏠</span>`;
@@ -2454,8 +2453,8 @@ function insightFocoHTML(items, esquecidos){
   if(etapaG && nG >= 2){
     const frase = {
       "Atendimento": `<b>${nG} clientes</b> travaram na conversa sem avançar pra visita — qualifique e proponha o próximo passo. É aí que sua energia rende mais.`,
-      "Visita/Proposta": `<b>${nG} clientes</b> já visitaram ou receberam proposta e sumiram — é seu dinheiro mais quente parado. Reaqueça antes de buscar lead novo.`,
-      "Negociação": `<b>${nG} clientes</b> em negociação esfriando — corra pra fechar antes que esfriem de vez.`
+      "Visita/Proposta": `<b>${nG} clientes</b> já visitaram ou receberam proposta e sumiram — é seu dinheiro mais valioso parado. Retome antes de buscar lead novo.`,
+      "Negociação": `<b>${nG} clientes</b> em negociação perdendo força — corra pra fechar antes de perder o cliente.`
     };
     linhas.push(frase[etapaG]);
   }
@@ -2529,7 +2528,7 @@ function renderBotoesHome(){
     const motivo = motivoCurto(l);
     const tags = [];
     if(lembreteVencido(l)) tags.push(`<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:9px;font-weight:950;color:var(--on-accent);background:var(--lime);border:1px solid var(--lime);letter-spacing:.04em">⏰ LEMBRETE DE HOJE</span>`);
-    else if(ehReaquecerUrgente(l)) tags.push(`<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:950;color:var(--timing);background:rgba(255,45,155,.12);border:1px solid var(--timing);letter-spacing:.04em;white-space:nowrap">⚠ REAQUECER</span>`);
+    else if(ehReaquecerUrgente(l)) tags.push(`<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:950;color:var(--timing);background:rgba(255,45,155,.12);border:1px solid var(--timing);letter-spacing:.04em;white-space:nowrap">⚠ REATIVAR</span>`);
     else if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
     if(ehPermuta(l)) tags.push(tagPermutaHTML());
     if(ehSumicoPosPreco(l)) tags.push(tagSumicoPrecoHTML());
@@ -2561,7 +2560,7 @@ function renderBotoesHome(){
     // Nenhum urgente: todos foram atendidos recentemente. Sugere retomadas proativas.
     top3Html = `<div style="padding:14px 16px;border:1px dashed var(--lime);border-radius:12px;background:rgba(255,107,92,.05);margin-bottom:12px">
       <div style="font-size:14px;font-weight:950;color:var(--lime);margin-bottom:4px">✅ Nenhum lead urgente agora</div>
-      <div class="small" style="color:var(--soft)">Ótimo momento pra fazer retomadas proativas — leads que esfriaram mas ainda têm potencial.</div>
+      <div class="small" style="color:var(--soft)">Ótimo momento pra fazer retomadas proativas — leads que pararam mas ainda têm potencial.</div>
     </div>`
       + `<div class="fila-head"><h3>Retomadas sugeridas</h3><span>Leads parados há 3+ dias que valem um toque</span></div>`
       + retomada.map((l, i) => filaRowHTML(l, i+1)).join("");
@@ -2576,7 +2575,7 @@ function renderBotoesHome(){
   const esquecidos = leadsEsquecidos(items);
   const esquecidosHtml = esquecidos.length ? `
     <div class="radar-card">
-      <div class="radar-tit">⏳ Oportunidades esquecidas <span class="radar-sub">valiosas e esfriando — resgate antes de perder</span></div>
+      <div class="radar-tit">⏳ Oportunidades esquecidas <span class="radar-sub">valiosas e paradas — resgate antes de perder</span></div>
       ${esquecidos.map(radarRowHTML).join("")}
     </div>` : "";
 
@@ -4492,7 +4491,7 @@ function badgeTipoContato(t){
 const TIPO_RETOMADA_LABEL = {
   "quente-fechar": { txt:"Pronto pra fechar", cor:"var(--acao)", bg:"rgba(104,255,149,.14)" },
   "morno-confirmar": { txt:"Confirmar próximo passo", cor:"var(--timing)", bg:"rgba(255,45,155,.14)" },
-  "frio-reaquecer": { txt:"Reaquecer", cor:"var(--dados)", bg:"rgba(55,232,255,.12)" },
+  "frio-reaquecer": { txt:"Reativar", cor:"var(--dados)", bg:"rgba(55,232,255,.12)" },
   "objecao-tratar": { txt:"Tratar objeção", cor:"var(--morno)", bg:"rgba(255,155,59,.14)" },
   "informacao-enviar": { txt:"Enviar material", cor:"var(--cerebro)", bg:"rgba(196,92,255,.14)" },
   "primeiro-contato": { txt:"Primeiro contato", cor:"var(--lime)", bg:"rgba(255,107,92,.12)" },
@@ -4536,7 +4535,7 @@ function formatarTempoRelativo(iso){
 const EVOLUIU_LABEL = {
   "avancou": { txt:"Avançou", cor:"var(--acao)" },
   "estagnou": { txt:"➖ Estagnou", cor:"var(--muted)" },
-  "esfriou": { txt:"Esfriou", cor:"var(--risco)" },
+  "esfriou": { txt:"Parou", cor:"var(--risco)" },
   "fechou": { txt:"Fechou", cor:"var(--acao)" },
   "perdeu": { txt:"Perdeu", cor:"var(--risco)" }
 };
@@ -8573,7 +8572,7 @@ async function carregarCarteira(force){
 window.carregarCarteira = carregarCarteira;
 
 // ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Quentes"],["reaquecer","Reaquecer"],["geladeira","Arquivados"]];
+const CART_FILTROS = [["todos","Todos"],["quentes","Agora"],["reaquecer","Reativar"],["geladeira","Arquivados"]];
 const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
 const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
 function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
@@ -8693,7 +8692,7 @@ async function exportarLeadsCSV(btn){
     const esc = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const colunas = [
       "NOME","TELEFONE","PRODUTO DE INTERESSE","ETAPA",
-      "PRIORIDADE","TEMPERATURA",
+      "PRIORIDADE",
       "PERFIL DO CLIENTE","POR QUE ESTE LEAD",
       "PREFERÊNCIAS","OBSERVAÇÕES DO CORRETOR","O QUE PESA CONTRA",
       "HISTÓRICO DE CONVERSAS"
@@ -8707,8 +8706,6 @@ async function exportarLeadsCSV(btn){
       const produto = (typeof produtosLabel === "function" ? produtosLabel(l) : "") || l.product || "";
       const etapa = l.etapa || "";
       const prioridade = (typeof prioridadeTituloCurto === "function") ? prioridadeTituloCurto(l) : "";
-      const intNorm = String(diag.interesse||"").toLowerCase();
-      const temperatura = lc.temperatura || (intNorm === "alto" ? "Quente" : intNorm === "medio" ? "Morno" : "");
       const perfil = a.clientProfile && a.clientProfile !== "—" ? a.clientProfile : "";
       const porque = a.summary || l.summary || "";
       const preferencias = mem.preferencias || "";
@@ -8725,7 +8722,7 @@ async function exportarLeadsCSV(btn){
       const hist = msgs.map(m => `[${String(m.date||"").trim()} ${String(m.time||"").trim()}] ${limparAutorAtend(m.author||"").trim()}: ${String(m.text||"").replace(/\r?\n/g, " ").trim()}`).join("\n");
       linhas.push([
         esc(l.name||""), esc(l.phone||""), esc(produto), esc(etapa),
-        esc(prioridade), esc(temperatura),
+        esc(prioridade),
         esc(perfil), esc(porque),
         esc(preferencias), esc(observacoes), esc(pesaContra),
         esc(hist || "(sem mensagens registradas)")
@@ -9314,10 +9311,9 @@ function leadEhAtivo(l){
 function leadEhQuente(l){
   if(!leadEhAtivo(l)) return false;
   const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
-  const temp = String(l?.analysis?.leituraComercial?.temperatura||"").toLowerCase();
   const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
   const etapa = normalizarEtapa(l?.etapa);
-  return tipo === "quente-fechar" || temp === "quente" || interesse === "alto" || etapa === "Negociação";
+  return tipo === "quente-fechar" || interesse === "alto" || etapa === "Negociação";
 }
 function leadEhReaquecer(l){
   return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
@@ -9737,14 +9733,14 @@ carregarPipeline = async function(){
     const etapas=["Novo","Atendimento","Visita/Proposta","Negociação","Standby"];
     const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
     all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
-    const tabs=[["todos","Todos"],["quentes","Quentes"],["esfriando","Esfriando"],["compromisso","Agenda"],["reaquecer","Reaquecer"]];
-    const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Quente':'Retomar';
+    const tabs=[["todos","Todos"],["quentes","Agora"],["esfriando","Parando"],["compromisso","Agenda"],["reaquecer","Reativar"]];
+    const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Agora':'Retomar';
     board.innerHTML=`
       <div class="ui-pipeline-kpis">
         <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-        <div class="ui-kpi active"><span>Quentes</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
+        <div class="ui-kpi active"><span>Agora</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
         <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${ui631Icon('compromisso')}</i></div></div>
-        <div class="ui-kpi"><span>Reaquecer</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
+        <div class="ui-kpi"><span>Reativar</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
       </div>
       <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
       <div class="ui-pipeline-grid">
@@ -11892,16 +11888,16 @@ function ui670DetailRows(lead,mc){
         const etapas=['Novo','Atendimento','Visita/Proposta','Negociação','Standby'];
         const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
         all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
-        const tabs=[['todos','Todos'],['quentes','Quentes'],['esfriando','Esfriando'],['compromisso','Agenda'],['reaquecer','Reaquecer']];
-        const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Quente':'Retomar';
+        const tabs=[['todos','Todos'],['quentes','Agora'],['esfriando','Parando'],['compromisso','Agenda'],['reaquecer','Reativar']];
+        const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Agora':'Retomar';
         const listHtml = virtualHtml('pipeline', listaPrioritaria, l=>ui631LeadRow(l, acaoRow(l)), '<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>', {viewport:620});
         const r = state.pipelineRendered || {};
         board.innerHTML=`
           <div class="ui-pipeline-kpis">
             <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-            <div class="ui-kpi active"><span>Quentes</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
+            <div class="ui-kpi active"><span>Agora</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
             <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${ui631Icon('compromisso')}</i></div></div>
-            <div class="ui-kpi"><span>Reaquecer</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
+            <div class="ui-kpi"><span>Reativar</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
           </div>
           <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
           <div class="ui-pipeline-grid">
