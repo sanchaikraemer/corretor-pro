@@ -33,12 +33,11 @@ assert.equal(
   `título de Atendimentos (${tituloAtendimentos}px) precisa igualar o de "Fazer agora" (${tituloFazerAgora}px)`
 );
 
-// 3) A cor verde continua SÓ na etiqueta "Atendido há X min" (.cp788-att-time).
+// 3) v867: o verde (#68ff95) foi REMOVIDO desta tela — o dono achou que não combinava com a
+// identidade. A etiqueta ficou neutra e o prédio coral virou o destaque da tela.
 const regraTag = css.match(/\.cp788-att-time\{[^}]*\}/);
 assert.ok(regraTag, 'a etiqueta .cp788-att-time precisa existir');
-assert.match(regraTag[0], /#68ff95/i, 'o verde precisa continuar na etiqueta de status');
-
-// E o verde do card em si (fundo/borda da linha) não pode reaparecer fora da etiqueta.
+assert.doesNotMatch(regraTag[0], /#68ff95/i, 'o verde não pode mais estar na etiqueta de status');
 const regraRow = css.match(/\.cp788-att-row\{[^}]*\}/);
 assert.ok(regraRow, 'a linha .cp788-att-row precisa existir');
 assert.doesNotMatch(regraRow[0], /#68ff95/i, 'o card em si não pode ter verde');
