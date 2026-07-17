@@ -16,10 +16,33 @@ function mostrarOpcoesInstalar(){
   if(localStorage.getItem(BANNER_INSTALAR_KEY) !== "1"){
     const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "block";
   }
+  // iPhone/iPad não instala por 1 clique — já mostra o passo a passo no banner e ajusta o
+  // rótulo do botão pra não parecer que "baixa" sozinho.
+  if(ehIOS()){
+    const bb = qs("#bannerInstalarBtn"); if(bb) bb.textContent = "Como instalar";
+    const dica = qs("#bannerInstalarDica"); if(dica){ dica.innerHTML = textoDicaInstalar(); dica.style.display = "block"; }
+  }
 }
 function esconderOpcoesInstalar(){
   const btn = qs("#btnInstalarApp"); if(btn) btn.style.display = "none";
   const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "none";
+}
+// iOS (iPhone/iPad) não tem instalação por 1 clique — só o caminho manual pelo Safari.
+function ehIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function ehSafariIOS(){
+  return ehIOS() && !/crios|fxios|edgios|opios|opt\//i.test(navigator.userAgent);
+}
+function textoDicaInstalar(){
+  if(ehIOS()){
+    if(ehSafariIOS()){
+      return 'No iPhone/iPad: toque em <b>Compartilhar</b> (o ícone de quadrado com a seta ↑, na barra do Safari) e depois em <b>“Adicionar à Tela de Início”</b>.';
+    }
+    return 'No iPhone/iPad a instalação só funciona pelo <b>Safari</b>. Abra este site no Safari, toque em <b>Compartilhar</b> e em <b>“Adicionar à Tela de Início”</b>.';
+  }
+  return 'No celular: toque no menu do navegador (⋮) e em <b>“Adicionar à tela inicial”</b> / <b>“Instalar app”</b>.';
 }
 async function dispararInstalacao(){
   const convite = deferredInstallPrompt || window.__deferredInstallPrompt;
@@ -30,9 +53,11 @@ async function dispararInstalacao(){
     window.__deferredInstallPrompt = null;
     return;
   }
-  // Navegador não ofereceu instalação automática (iPhone, ou já registrado) — mostra o passo a passo.
-  const d1 = qs("#instalarDica"); if(d1) d1.style.display = "block";
-  const d2 = qs("#bannerInstalarDica"); if(d2) d2.style.display = "block";
+  // Sem instalação automática (iPhone, ou já registrado) — mostra o passo a passo certo pro aparelho.
+  const dicaHtml = textoDicaInstalar();
+  const d1 = qs("#instalarDica"); if(d1){ d1.innerHTML = dicaHtml; d1.style.display = "block"; }
+  const d2 = qs("#bannerInstalarDica"); if(d2){ d2.innerHTML = dicaHtml; d2.style.display = "block"; }
+  if(ehIOS() && typeof toast === "function") toast("No iPhone é pelo Safari: Compartilhar → Adicionar à Tela de Início.");
 }
 
 window.addEventListener("beforeinstallprompt", (e) => {
@@ -54,10 +79,14 @@ if(deferredInstallPrompt){
 }
 qs("#btnInstalarApp")?.addEventListener("click", dispararInstalacao);
 qs("#bannerInstalarBtn")?.addEventListener("click", dispararInstalacao);
-qs("#bannerInstalarFechar")?.addEventListener("click", () => {
+function fecharBannerInstalar(){
   localStorage.setItem(BANNER_INSTALAR_KEY, "1");
   const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "none";
-});
+}
+// "✕" e "Continuar na web" dispensam o convite (útil no iPhone, onde não há instalação por
+// 1 clique — o usuário segue usando pelo navegador sem ficar preso no banner).
+qs("#bannerInstalarFechar")?.addEventListener("click", fecharBannerInstalar);
+qs("#bannerInstalarWeb")?.addEventListener("click", fecharBannerInstalar);
 
 // Onboarding: dispensar (lembra via localStorage) e abrir de novo pelo Menu.
 // Fica neste módulo porque estava fisicamente dentro do mesmo bloco no app.js original
