@@ -4724,7 +4724,7 @@ function cp704Css(){
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
       .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.08)}.cp704-empty-analysis{border:1px solid rgba(255,201,107,.35);background:rgba(255,201,107,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:#ffd28a}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(255,201,107,.45);background:rgba(255,255,255,.04);color:#ffd28a;border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
-      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
+      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,107,92,.55);background:rgba(255,107,92,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,107,92,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,107,92,.55)!important;color:#ff7f74!important;background:rgba(255,107,92,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
       .cp704-stale{border-color:rgba(255,201,107,.45);background:rgba(255,201,107,.08)}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.50);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:12px;font-weight:950}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
@@ -4918,9 +4918,24 @@ function cp704Css(){
     const faltam = Math.max(0, total - msgs.length);
     const btn = faltam>0 ? `<button type="button" class="cp704-full-btn" onclick="cp704HistoryToggle()">Ver conversa completa (${total} mensagens)</button>` : '';
     return msgs.map((m,i)=>{
-      const cliente=(typeof ehMsgDoCliente==='function') ? ehMsgDoCliente(m,pn) : false;
-      const who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
-      return `<div class="cp704-tmsg"><span class="cp704-dot ${cliente?'':'you'}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,520))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
+      // O histórico é a CONVERSA (você × cliente pelo WhatsApp). O que foi acrescentado como
+      // observação/atendimento manual NÃO é fala do cliente — é etiquetado "Observação" pra
+      // não parecer que o cliente disse. (Antes, ehMsgDoCliente tratava qualquer autor
+      // desconhecido como cliente e a observação aparecia com o nome dele.)
+      const tipo=String(m?.type||'').toLowerCase();
+      const ehObs = tipo==='observacao_manual' || tipo==='atendimento' || tipo==='nota';
+      const ehEnviada = tipo==='mensagem_enviada';
+      const ehResumo = tipo==='resumo' || String(m?.source||'')==='incremental';
+      let who, dotCls='', wrapCls='';
+      if(ehObs){ who='Observação'; dotCls='obs'; wrapCls=' cp704-tmsg-obs'; }
+      else if(ehEnviada){ who='Você'; dotCls='you'; }
+      else if(ehResumo){ who='Resumo'; dotCls='sys'; wrapCls=' cp704-tmsg-sys'; }
+      else {
+        const cliente=(typeof ehMsgDoCliente==='function') ? ehMsgDoCliente(m,pn) : false;
+        who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
+        dotCls=cliente?'':'you';
+      }
+      return `<div class="cp704-tmsg${wrapCls}"><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,520))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
     }).join('') + btn;
   }
   function cp704DetailRows(lead,mc){
@@ -13122,6 +13137,25 @@ function ui670DetailRows(lead,mc){
     return leads;
   }
 
+  // Meta do dia gamificada: um prédio que "sobe" (enche de coral, de baixo pra cima) conforme
+  // os atendimentos do dia, completando a imagem ao bater a META (10). Coral = identidade do app.
+  const CP788_META_DIA = 10;
+  function cp788PredioSVG(count, meta){
+    const p = Math.min(Math.max(Number(count)||0, 0) / meta, 1);
+    const topY = 16, botY = 176, H = botY - topY;
+    const yStart = (botY - p*H).toFixed(1), h = (p*H).toFixed(1);
+    const cols = [44,58,72], rows = [26,40,54,68,82,96,110,124,138];
+    let wins = '';
+    for(const y of rows) for(const x of cols) wins += `<rect x="${x}" y="${y}" width="9" height="9" rx="1.5" fill="#eef4f6" opacity=".9"/>`;
+    const body = '<rect x="36" y="16" width="48" height="146" rx="5"/><rect x="22" y="160" width="76" height="16" rx="3"/>';
+    const id = 'cp788pd' + Math.random().toString(36).slice(2,7);
+    return `<svg class="cp788-predio${count>=meta?' cheio':''}" width="112" height="178" viewBox="0 0 120 190" aria-hidden="true">`
+      + `<defs><clipPath id="${id}"><rect x="0" y="${yStart}" width="120" height="${h}"/></clipPath></defs>`
+      + `<g fill="rgba(255,255,255,.09)">${body}</g>`
+      + `<g fill="var(--accent)" clip-path="url(#${id})">${body}</g>`
+      + wins + `</svg>`;
+  }
+
   function cp788RenderAtendimentos(leads){
     const box=document.querySelector('#carteiraBody');
     if(!box) return;
@@ -13134,14 +13168,36 @@ function ui670DetailRows(lead,mc){
     const limite=Math.max(80,Number(state.cp788AtendimentosVisible||80));
     const visiveis=registros.slice(0,limite);
     const faltam=Math.max(0,registros.length-visiveis.length);
-    const hoje=registros.filter(x=>{try{return typeof diasCalendarioBR==='function'&&diasCalendarioBR(new Date(x.ts))===0;}catch(_){return false;}}).length;
-    box.innerHTML=`<section class="cp788-att-page">
-      <header class="cp788-att-head">
-        <div><h2>Atendimentos</h2><p>${registros.length} cliente${registros.length===1?'':'s'} atendido${registros.length===1?'':'s'} · mais recentes primeiro</p></div>
-        <span>${hoje} hoje</span>
-      </header>
-      ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui pela ordem dos atendimentos.</span></div>`}
-      ${faltam?`<button type="button" class="cp788-att-more" onclick="cp788MostrarMaisAtendimentos()">Mostrar mais ${Math.min(80,faltam)} atendimentos</button>`:''}
+    // Contagem por dia (hoje / ontem / 2 dias / 3+ dias) — resumo ao lado do prédio.
+    const bd=[0,0,0,0];
+    for(const x of registros){
+      let d=null; try{ d = (typeof diasCalendarioBR==='function') ? diasCalendarioBR(new Date(x.ts)) : null; }catch(_){ d=null; }
+      if(d===0) bd[0]++; else if(d===1) bd[1]++; else if(d===2) bd[2]++; else if(d!=null&&d>=3) bd[3]++;
+    }
+    const hoje=bd[0];
+    const bateu=hoje>=CP788_META_DIA;
+    box.innerHTML=`<section class="cp788-att-page cp788-att-layout">
+      <div class="cp788-att-main">
+        <header class="cp788-att-head">
+          <div><h2>Atendimentos</h2><p>${registros.length} cliente${registros.length===1?'':'s'} atendido${registros.length===1?'':'s'} · mais recentes primeiro</p></div>
+        </header>
+        ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui pela ordem dos atendimentos.</span></div>`}
+        ${faltam?`<button type="button" class="cp788-att-more" onclick="cp788MostrarMaisAtendimentos()">Mostrar mais ${Math.min(80,faltam)} atendimentos</button>`:''}
+      </div>
+      <aside class="cp788-att-side">
+        <div class="cp788-meta-card">
+          <div class="cp788-meta-title">Meta do dia</div>
+          ${cp788PredioSVG(hoje, CP788_META_DIA)}
+          <div class="cp788-meta-count"><b>${hoje}</b> / ${CP788_META_DIA} hoje</div>
+          <div class="cp788-meta-status${bateu?' done':''}">${bateu?'🏢 Meta batida!':'atendimentos de hoje'}</div>
+        </div>
+        <div class="cp788-meta-breakdown">
+          <div class="cp788-bd-row"><span>Hoje</span><b>${bd[0]}</b></div>
+          <div class="cp788-bd-row"><span>Ontem</span><b>${bd[1]}</b></div>
+          <div class="cp788-bd-row"><span>2 dias atrás</span><b>${bd[2]}</b></div>
+          <div class="cp788-bd-row"><span>3+ dias atrás</span><b>${bd[3]}</b></div>
+        </div>
+      </aside>
     </section>`;
   }
 
