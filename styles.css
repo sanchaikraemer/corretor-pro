@@ -2112,3 +2112,35 @@ html[data-theme="light"] [style*="color: #ffc"]{
 /* Trilho escuro translúcido mantido nos dois temas pra o texto branco ficar legível
    tanto sobre o gradiente quanto sobre a parte ainda não preenchida. */
 html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important;border-color:rgba(0,0,0,.14)!important}
+
+/* v866 — Desempenho legível no desktop. O painel "Visão geral da carteira" (cp-dashboard)
+   estava com fontes de 6–8px, quase ilegíveis. Este bloco só afeta o desktop (min-width:1000px;
+   o mobile é max-width:999px e mantém seus próprios tamanhos). Cards passam a crescer
+   (min-height) em vez de cortar o conteúdo maior. */
+@media(min-width:1000px){
+  .cp-panorama-head h2{font-size:20px!important}
+  .cp-panorama-head p{font-size:12px!important}
+  .cp-period{font-size:12px!important;height:32px!important}
+  .cp-metric b{font-size:23px!important}
+  .cp-metric small{font-size:12.5px!important}
+  .cp-metric em{font-size:11px!important}
+  .cp-metric-revenue b{font-size:21px!important}
+  .cp-card-head h3{font-size:14px!important}
+  .cp-card-head p{font-size:11px!important}
+  .cp-card-head button,.cp-card-link{font-size:11.5px!important}
+  .cp-appointment strong{font-size:12.5px!important}
+  .cp-appointment small{font-size:11px!important}
+  .cp-time{font-size:11px!important}
+  .cp-status{font-size:9.5px!important;padding:4px 7px!important}
+  .cp-donut b{font-size:20px!important}
+  .cp-donut small{font-size:9.5px!important}
+  .cp-legend-row,.cp-legend-row b{font-size:11.5px!important}
+  .cp-stage-row{font-size:11.5px!important}
+  .cp-stage-row b{font-size:13px!important}
+  .cp-table-head{font-size:10.5px!important}
+  .cp-running-row{font-size:11.5px!important}
+  .cp-running-lead strong{font-size:12.5px!important}
+  .cp-running-lead small{font-size:10px!important}
+  .cp-chip,.cp-priority{font-size:9.5px!important;padding:4px 7px!important}
+  .cp-appointments-card,.cp-performance-card,.cp-stages-card,.cp-running-card{height:auto!important;min-height:230px!important}
+}

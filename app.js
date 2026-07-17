@@ -142,7 +142,10 @@ let _leadsCache = { ts: 0, data: null, inflight: null };
 // Depois de uma mutação (salvar/editar/apagar/mudar etapa), a próxima busca precisa vir
 // FRESCA do servidor — senão o cache de 30s do backend devolve a lista velha (lead apagado
 // continua aparecendo, nome editado não muda). invalidarLeadsCache liga esse sinal.
-let _leadsForceFresh = false;
+// Começa LIGADO: a PRIMEIRA busca depois de abrir/recarregar a página (Ctrl+Shift+R) sempre
+// força fresh=1, senão o PC pega o snapshot de 30s do backend (que pode viver em várias
+// instâncias warm da Vercel) e não mostra o que acabou de ser importado em outro aparelho.
+let _leadsForceFresh = true;
 async function getLeadsData(force){
   const agora = Date.now();
   if(!force && _leadsCache.data && (agora - _leadsCache.ts) < LEADS_CACHE_TTL){ state.performance.cacheHits = Number(state.performance.cacheHits||0)+1; return _leadsCache.data; }
@@ -2328,7 +2331,6 @@ function renderHeroLead(l){
   const respN  = resposta==null ? "—" : resposta===0 ? "hoje" : resposta===1 ? "ontem" : resposta+" dias";
   const interesse = produtosLabel(l) || "—";
   const proxima = a.nextAction || motivoCurto(l) || "Retomar o contato";
-  const waLink = linkWhatsAppDireta(l);
   return `<section class="hero-real" onclick='abrirLead(${idJs})'>
     <div class="h-top">
       <span class="h-badge max">Prioridade agora</span>
@@ -2350,10 +2352,6 @@ function renderHeroLead(l){
       <div class="l">PRÓXIMA AÇÃO</div>
       <div class="x">${escapeHtml(proxima)}</div>
       <div class="h-acts">
-        ${waLink
-          ? `<a class="h-wa" href="${escapeHtml(waLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">WhatsApp</a>
-             <button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>`
-          : `<button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>`}
         <button type="button" class="h-out" onclick='event.stopPropagation();abrirLead(${idJs})'>Ver histórico</button>
         <button type="button" class="h-out" onclick='event.stopPropagation();jaFaleiLead(${idJs})' title="Marca que você já falou — sai da fila de hoje">✓ Já falei</button>
       </div>
@@ -2390,6 +2388,7 @@ window.copiarMensagemLead = function(id){
   if(!l) return;
   const a = l.analysis || {};
   const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
+  if(!msg){ toast("Sem mensagem pronta pra este lead. Abra o lead e reanalise pra gerar."); return; }
   const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} registrarMensagemEnviada(l.id, msg); };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
@@ -4708,7 +4707,11 @@ function cp704Css(){
     css.textContent=`
       .cp704-lead{display:flex;flex-direction:column;gap:14px;padding-bottom:20px;width:100%;max-width:1180px;margin:0 auto;color:var(--text)}.cp704-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,.82fr);gap:14px;align-items:start}.cp704-primary,.cp704-secondary{display:flex;flex-direction:column;gap:14px;min-width:0}.cp704-secondary .cp704-accordions{width:100%}.cp704-herorow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr);gap:14px;align-items:stretch}.cp704-obscard{gap:6px}.cp704-obscard textarea{width:100%;box-sizing:border-box}.cp704-tools-open .cp704-card-title{margin-bottom:12px}.cp704-tools-row{display:flex;flex-wrap:wrap;gap:8px}.cp704-tools-row button{flex:1 1 150px;min-width:130px;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:13px;cursor:pointer}.cp704-tools-row button.good{border-color:rgba(104,255,149,.5);background:rgba(104,255,149,.1);color:#68ff95}.cp704-tools-row button.cp704-danger{border-color:rgba(255,107,92,.45);background:rgba(255,107,92,.08);color:#ff7f74}.cp704-hist-inline{flex:1 1 160px;min-width:140px;align-self:flex-start;padding:0;border:0;background:transparent}.cp704-hist-inline[open]{flex-basis:100%}.cp704-hist-inline>summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap}.cp704-hist-inline>summary::-webkit-details-marker{display:none}.cp704-hist-inline[open]>summary .cp704-hist-arrow{transform:rotate(180deg)}.cp704-hist-inline .cp704-body{margin-top:10px;max-height:340px;overflow:auto;width:100%}
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
-      .cp704-back{border:0;background:transparent;color:var(--muted);font-weight:900;font-size:14px;padding:4px 0;cursor:pointer}
+      .cp704-reanalyse-destaque{background:linear-gradient(135deg,rgba(86,199,242,.22),rgba(86,199,242,.09))!important;border-color:rgba(86,199,242,.6)!important;color:#d3efff!important;box-shadow:0 0 0 1px rgba(86,199,242,.18),0 6px 16px rgba(86,199,242,.12)}
+      .cp704-reanalyse-destaque:hover{background:linear-gradient(135deg,rgba(86,199,242,.30),rgba(86,199,242,.14))!important;border-color:rgba(86,199,242,.85)!important}
+      .cp704-back{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font-weight:800;font-size:13px;padding:8px 15px;border-radius:999px;cursor:pointer;line-height:1;transition:background .15s,border-color .15s,color .15s,transform .05s}
+.cp704-back:hover{background:rgba(255,107,92,.12);border-color:rgba(255,107,92,.45);color:var(--text)}
+.cp704-back:active{transform:translateY(1px)}
       .cp704-attended{border:1px solid rgba(104,255,149,.55);background:rgba(104,255,149,.10);color:#68ff95;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
       .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:.96}
       .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
@@ -4729,7 +4732,7 @@ function cp704Css(){
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-herorow{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:15px;padding:2px 0 0}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:14px;padding:9px 16px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -5112,7 +5115,7 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button type="button" class="cp704-reanalyse" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-reanalyse" type="button" onclick="ui670Reanalisar(this)">Reanalisar</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button></div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse cp704-reanalyse-destaque" type="button" onclick="ui670Reanalisar(this)">↻ Reanalisar</button><button type="button" class="cp704-reanalyse" style="color:#ffd28a;border-color:rgba(255,201,107,.4)" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button></div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
