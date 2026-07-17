@@ -2328,7 +2328,9 @@ function renderHeroLead(l){
   const respN  = resposta==null ? "—" : resposta===0 ? "hoje" : resposta===1 ? "ontem" : resposta+" dias";
   const interesse = produtosLabel(l) || "—";
   const proxima = a.nextAction || motivoCurto(l) || "Retomar o contato";
-  const waLink = linkWhatsAppDireta(l);
+  // Só mostra "Copiar mensagem" quando existe MESMO uma mensagem pronta pra este lead —
+  // senão o botão copiava vazio e mentia "Mensagem copiada".
+  const msgHero = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta || "");
   return `<section class="hero-real" onclick='abrirLead(${idJs})'>
     <div class="h-top">
       <span class="h-badge max">Prioridade agora</span>
@@ -2350,10 +2352,7 @@ function renderHeroLead(l){
       <div class="l">PRÓXIMA AÇÃO</div>
       <div class="x">${escapeHtml(proxima)}</div>
       <div class="h-acts">
-        ${waLink
-          ? `<a class="h-wa" href="${escapeHtml(waLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">WhatsApp</a>
-             <button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>`
-          : `<button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>`}
+        ${msgHero ? `<button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>` : ""}
         <button type="button" class="h-out" onclick='event.stopPropagation();abrirLead(${idJs})'>Ver histórico</button>
         <button type="button" class="h-out" onclick='event.stopPropagation();jaFaleiLead(${idJs})' title="Marca que você já falou — sai da fila de hoje">✓ Já falei</button>
       </div>
@@ -2390,6 +2389,7 @@ window.copiarMensagemLead = function(id){
   if(!l) return;
   const a = l.analysis || {};
   const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
+  if(!msg){ toast("Sem mensagem pronta pra este lead. Abra o lead e reanalise pra gerar."); return; }
   const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} registrarMensagemEnviada(l.id, msg); };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
