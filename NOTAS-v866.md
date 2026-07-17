@@ -30,10 +30,26 @@ mudanças até o dono mandar subir.
   sessão voltam a usar o cache normal. (Não deu pra validar em produção nesta sessão; se ainda
   falhar, a causa é mais profunda — ex.: a importação não commitou de fato no banco compartilhado.)
 
+- **Desempenho sem painel duplicado**: a tela mostrava os mesmos números em dois painéis
+  ("Visão geral da carteira" + "Ritmo comercial"). O de baixo (`#relatorioBody`, renderizado
+  por `renderDesempenhoDash`) foi removido do HTML; `carregarRelatorio` vira no-op (o `qs`
+  devolve null). Ficou só o painel completo de cima.
+- **Menu (Configurações) sem repetir o menu lateral**: saíram os cards que apontavam pro mesmo
+  destino de um item da barra lateral — Condução do atendimento (Condução), Agenda, Gerador de
+  proposta (Propostas), Cérebro Comercial (Inteligência Comercial), Relatório (Desempenho) e
+  Arquivados. Ficaram os que a lateral não tem: Importar conversa, Como usar, O que a IA
+  aprendeu, Vendas registradas, Instalar app.
+- **Reanalisar em destaque**: no topo do lead, o "Reanalisar" virou o PRIMEIRO botão e ganhou
+  um realce ciano (cor de "análise/dados" do app), destacando-se dos demais (âmbar/verde).
+
 ## Verificação
 
 - Novo teste `tests/v866-hero-acoes`: garante que o `.h-wa`/botão WhatsApp e o "Copiar
   mensagem" saíram do hero, e que sobraram "Ver histórico" e "Já falei".
 - Novo teste `tests/v866-botao-voltar`: garante que o "‹ Voltar" virou pill (borda,
   border-radius, sem fundo transparente) e ganhou hover.
+- Novo teste `tests/v866-cold-load-fresh`: carga fria força fresh=1.
+- Novo teste `tests/v866-desempenho-legivel`: fontes do Desempenho >= legíveis.
+- Novo teste `tests/v866-ui-limpeza`: painel duplicado removido, Menu sem repetir a lateral,
+  Reanalisar em destaque e como primeiro botão. `v823-topo-acoes` atualizado pra nova ordem.
 - `npm test`: suíte completa verde.
