@@ -142,7 +142,10 @@ let _leadsCache = { ts: 0, data: null, inflight: null };
 // Depois de uma mutação (salvar/editar/apagar/mudar etapa), a próxima busca precisa vir
 // FRESCA do servidor — senão o cache de 30s do backend devolve a lista velha (lead apagado
 // continua aparecendo, nome editado não muda). invalidarLeadsCache liga esse sinal.
-let _leadsForceFresh = false;
+// Começa LIGADO: a PRIMEIRA busca depois de abrir/recarregar a página (Ctrl+Shift+R) sempre
+// força fresh=1, senão o PC pega o snapshot de 30s do backend (que pode viver em várias
+// instâncias warm da Vercel) e não mostra o que acabou de ser importado em outro aparelho.
+let _leadsForceFresh = true;
 async function getLeadsData(force){
   const agora = Date.now();
   if(!force && _leadsCache.data && (agora - _leadsCache.ts) < LEADS_CACHE_TTL){ state.performance.cacheHits = Number(state.performance.cacheHits||0)+1; return _leadsCache.data; }

@@ -21,6 +21,15 @@ mudanças até o dono mandar subir.
   apagado (transparente, cor `--muted`, sem borda). Virou um pill: borda, fundo sutil, cantos
   arredondados, cor mais viva e hover com um toque coral. Mesmos tokens do app (dois temas).
 
+- **Importação some entre aparelhos (Ctrl+Shift+R não resolve)**: importar uma conversa num
+  aparelho atualizava nele, mas no PC não aparecia nem com hard refresh. Causa: `leads-recentes`
+  tem cache de 30s por instância no backend; a carga fria da página buscava SEM `fresh=1` e
+  aceitava o snapshot velho (e a Vercel pode ter várias instâncias warm, cada uma com seu
+  snapshot). Correção: `_leadsForceFresh` começa `true`, então a PRIMEIRA busca após abrir/
+  recarregar a página força `fresh=1` e ignora o cache do servidor. As buscas seguintes na
+  sessão voltam a usar o cache normal. (Não deu pra validar em produção nesta sessão; se ainda
+  falhar, a causa é mais profunda — ex.: a importação não commitou de fato no banco compartilhado.)
+
 ## Verificação
 
 - Novo teste `tests/v866-hero-acoes`: garante que o `.h-wa`/botão WhatsApp e o "Copiar
