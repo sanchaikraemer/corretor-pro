@@ -11,15 +11,14 @@ mudanças até o dono mandar subir.
   card continua funcionando; o WhatsApp segue disponível dentro do lead e nas linhas de
   "Próximos atendimentos".
 
-- **"Copiar mensagem" só aparece quando há mensagem pronta**: o botão era mostrado sempre e,
-  quando o lead não tinha mensagem gerada, copiava string vazia e ainda dava o toast
-  "Mensagem copiada". Agora o hero calcula `msgHero` e só mostra o botão se existir mensagem.
-  Como reforço, `copiarMensagemLead` passou a avisar ("Sem mensagem pronta pra este lead.
-  Abra o lead e reanalise pra gerar.") em vez de fingir que copiou.
+- **"Copiar mensagem" removido do hero**: não fazia sentido — no hero a mensagem nem é
+  exibida, então copiar "às cegas" (ainda por cima às vezes vazia) confundia. O botão saiu do
+  hero; sobraram "Ver histórico" e "✓ Já falei". Pra ver/copiar mensagem, é dentro do lead.
+  (A guarda defensiva em `copiarMensagemLead` — avisar em vez de copiar vazio — ficou, mas a
+  função não é mais chamada pelo hero.)
 
 ## Verificação
 
-- Novo teste `tests/v866-hero-acoes`: garante que o `.h-wa`/botão WhatsApp saiu do hero, que
-  "Copiar mensagem" é condicionado a `msgHero` e que `copiarMensagemLead` avisa quando não há
-  mensagem.
+- Novo teste `tests/v866-hero-acoes`: garante que o `.h-wa`/botão WhatsApp e o "Copiar
+  mensagem" saíram do hero, e que sobraram "Ver histórico" e "Já falei".
 - `npm test`: suíte completa verde.

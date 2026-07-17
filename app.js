@@ -2328,9 +2328,6 @@ function renderHeroLead(l){
   const respN  = resposta==null ? "—" : resposta===0 ? "hoje" : resposta===1 ? "ontem" : resposta+" dias";
   const interesse = produtosLabel(l) || "—";
   const proxima = a.nextAction || motivoCurto(l) || "Retomar o contato";
-  // Só mostra "Copiar mensagem" quando existe MESMO uma mensagem pronta pra este lead —
-  // senão o botão copiava vazio e mentia "Mensagem copiada".
-  const msgHero = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta || "");
   return `<section class="hero-real" onclick='abrirLead(${idJs})'>
     <div class="h-top">
       <span class="h-badge max">Prioridade agora</span>
@@ -2352,7 +2349,6 @@ function renderHeroLead(l){
       <div class="l">PRÓXIMA AÇÃO</div>
       <div class="x">${escapeHtml(proxima)}</div>
       <div class="h-acts">
-        ${msgHero ? `<button type="button" class="h-copy" onclick='event.stopPropagation();copiarMensagemLead(${idJs})'>Copiar mensagem</button>` : ""}
         <button type="button" class="h-out" onclick='event.stopPropagation();abrirLead(${idJs})'>Ver histórico</button>
         <button type="button" class="h-out" onclick='event.stopPropagation();jaFaleiLead(${idJs})' title="Marca que você já falou — sai da fila de hoje">✓ Já falei</button>
       </div>
