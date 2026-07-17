@@ -2064,11 +2064,10 @@ html[data-theme="light"] [style*="color: #ffc"]{
 .cp788-att-head p{margin:9px 0 0;color:var(--muted);font-size:14px;line-height:1.4}
 .cp788-att-head>span{flex:0 0 auto;padding:7px 11px;border:1px solid rgba(104,255,149,.28);border-radius:999px;background:rgba(104,255,149,.07);color:#68ff95;font-size:12px;font-weight:950}
 .cp788-att-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);overflow:hidden}
-.cp788-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;min-height:78px;padding:12px 12px 12px 18px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}
+.cp788-att-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 12px;gap:10px;align-items:center;min-height:78px;padding:12px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}
 .cp788-att-row:last-child{border-bottom:0}
-.cp788-att-row:before{content:'';position:absolute;left:0;top:13px;bottom:13px;width:4px;border-radius:0 999px 999px 0;background:#68ff95}
 .cp788-att-copy{min-width:0;display:flex;flex-direction:column;gap:3px}
-.cp788-att-copy strong{font-size:18px;line-height:1.1;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp788-att-copy strong{font-size:14px;line-height:1.1;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cp788-att-copy small{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cp788-att-time{max-width:132px;padding:7px 10px;border:1px solid rgba(104,255,149,.30);border-radius:999px;background:rgba(104,255,149,.06);color:#68ff95;font-size:11px;line-height:1.15;font-weight:950;text-align:center;white-space:nowrap}
 .cp788-att-chevron{color:var(--muted);font-size:22px;line-height:1}
@@ -2081,8 +2080,8 @@ html[data-theme="light"] [style*="color: #ffc"]{
 @media(max-width:760px){
   .cp788-att-page{padding-bottom:calc(145px + env(safe-area-inset-bottom,0px))}
   .cp788-att-head{align-items:flex-start}.cp788-att-head h2{font-size:30px}.cp788-att-head p{font-size:13px}.cp788-att-head>span{font-size:11px;padding:6px 9px}
-  .cp788-att-row{grid-template-columns:minmax(0,1fr) auto 10px;min-height:70px;padding:11px 8px 11px 17px;gap:7px}
-  .cp788-att-copy strong{font-size:17px}.cp788-att-copy small{font-size:12.5px}.cp788-att-time{max-width:122px;padding:7px 8px;font-size:10.5px}
+  .cp788-att-row{grid-template-columns:minmax(0,1fr) auto 10px;min-height:70px;padding:11px 8px;gap:7px}
+  .cp788-att-copy strong{font-size:14px}.cp788-att-copy small{font-size:12.5px}.cp788-att-time{max-width:122px;padding:7px 8px;font-size:10.5px}
 }
 
 
