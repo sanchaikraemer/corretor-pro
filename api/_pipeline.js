@@ -2494,6 +2494,20 @@ Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == 
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
+AS TRÊS MENSAGENS PRECISAM SER TRÊS CAMINHOS DIFERENTES — NÃO a mesma ideia reescrita.
+Cada uma segue uma estratégia distinta, com um próximo passo diferente, pra o corretor
+escolher a abordagem:
+- "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
+  diagnóstico e pelo Cérebro). É a que você mandaria se só pudesse mandar uma.
+- "maisSuave": ângulo consultivo, de baixa pressão. Em vez de empurrar o mesmo passo,
+  QUALIFIQUE ou destrave o que trava — faça a pergunta que falta, trate a objeção/impedimento
+  principal ou ofereça ajuda sem cobrar decisão. Precisa abrir uma porta DIFERENTE da recomendada.
+- "maisDireta": objetiva, com UM próximo passo concreto e um convite claro (propor o envio,
+  marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
+Se as três acabarem propondo a MESMA ação (ex.: as três só perguntam "quer que eu te mande as
+propostas?"), reescreva até virarem três caminhos realmente distintos. Todas seguem o Cérebro,
+usam só fatos da conversa e mantêm o jeito de escrever do corretor.
+
 Formato JSON obrigatório:
 {
   "summary":"texto",

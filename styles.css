@@ -2095,15 +2095,17 @@ html[data-theme="light"] [style*="color: #ffc"]{
    branco marca a borda do avanço e pulsa nos passos 1..5; no passo 6 fica parado. */
 .cp704-etapa-prog{position:relative;overflow:hidden;isolation:isolate;padding:7px 12px;
   border:1px solid rgba(255,255,255,.16)!important;background:rgba(9,30,38,.55)!important;color:#fff!important}
-.cp704-etapa-prog .cp704-etapa-fill{position:absolute;inset:0;z-index:0;border-radius:inherit;
-  background:linear-gradient(90deg,var(--cyan) 0%,var(--accent) 55%,#68ff95 100%);
-  clip-path:inset(0 calc(100% - var(--cp-etapa-pct,0%)) 0 0)}
+/* Mesmo comportamento da barra de importação (.progress-bar): o gradiente ciano→coral
+   preenche a fatia atual (width = X/6), sempre limpo, sem revelar só um pedaço de um
+   gradiente fixo (o que deixava os passos do meio com um tom lavado). */
+.cp704-etapa-prog .cp704-etapa-fill{position:absolute;left:0;top:0;bottom:0;z-index:0;border-radius:inherit;
+  width:var(--cp-etapa-pct,0%);background:linear-gradient(90deg,var(--morno),var(--lime))}
 .cp704-etapa-prog .cp704-etapa-edge{position:absolute;z-index:2;top:50%;left:var(--cp-etapa-pct,0%);
   width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fff;
   box-shadow:0 0 0 2px rgba(255,255,255,.28),0 0 7px rgba(255,255,255,.65);
   animation:cp704EtapaPulse 1.4s ease-in-out infinite}
 .cp704-etapa-prog.is-completo .cp704-etapa-edge{animation:none}
-.cp704-etapa-prog .cp704-etapa-label{position:relative;z-index:3;font-weight:950;color:#fff;
+.cp704-etapa-prog .cp704-etapa-label{position:relative;z-index:3;font-weight:400;color:#fff;
   text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
 @keyframes cp704EtapaPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.28)}}
 @media(prefers-reduced-motion:reduce){.cp704-etapa-prog .cp704-etapa-edge{animation:none}}

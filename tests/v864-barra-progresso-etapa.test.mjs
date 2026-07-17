@@ -73,10 +73,22 @@ assert.match(p6, /Decidindo · passo 6 de 6/, 'passo 6 deveria rotular "Decidind
 const regraFill = css.match(/\.cp704-etapa-prog \.cp704-etapa-fill\{[^}]*\}/);
 assert.ok(regraFill, 'a camada de gradiente precisa existir no CSS');
 assert.match(regraFill[0], /linear-gradient/, 'o preenchimento precisa ser um gradiente');
-assert.match(regraFill[0], /var\(--cyan\)/, 'a ponta fria precisa reusar var(--cyan)');
-assert.match(regraFill[0], /var\(--accent\)/, 'o coral precisa reusar var(--accent) (botão Anexar)');
-assert.match(regraFill[0], /#68ff95/i, 'o verde precisa reusar #68ff95 (etiqueta Atendido)');
-assert.match(regraFill[0], /clip-path:inset\(/, 'a fatia precisa ser revelada por clip-path');
+// v865: a barra usa o MESMO gradiente da barra de progresso da reanálise
+// (.ui682ProgressBar): var(--morno) (âmbar) → var(--lime) (coral). Nada de verde nem ciano.
+assert.match(regraFill[0], /var\(--morno\)/, 'o início precisa reusar var(--morno) (âmbar, igual à barra de cima)');
+assert.match(regraFill[0], /var\(--lime\)/, 'o fim precisa reusar var(--lime) (coral, igual à barra de cima)');
+assert.doesNotMatch(regraFill[0], /#68ff95/i, 'o verde não pode mais estar na barra de etapa');
+assert.doesNotMatch(regraFill[0], /var\(--cyan\)/, 'não usa mais ciano — segue a paleta quente da barra de cima');
+// v865: o preenchimento agora usa width=X/6 (igual à .progress-bar), não clip-path — assim
+// cada passo mostra um ciano→coral limpo, sem tom lavado no meio.
+assert.match(regraFill[0], /width:var\(--cp-etapa-pct/, 'a fatia precisa ser preenchida por width (igual à barra de importação)');
+assert.doesNotMatch(regraFill[0], /clip-path/, 'não usa mais clip-path (que lavava as cores do meio)');
+
+// O texto da barra fica em peso normal (não negrito): sobre o gradiente o negritão
+// pesado ficava com aparência borrada.
+const regraLabel = css.match(/\.cp704-etapa-prog \.cp704-etapa-label\{[^}]*\}/);
+assert.ok(regraLabel, 'a regra do texto da barra precisa existir');
+assert.match(regraLabel[0], /font-weight:400/, 'o texto da barra precisa ficar em peso normal (400)');
 
 assert.match(css, /@keyframes cp704EtapaPulse/, 'o pulso do pontinho precisa existir');
 assert.match(
