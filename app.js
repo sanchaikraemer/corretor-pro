@@ -10656,6 +10656,12 @@ window.ui670Reanalisar=async function(btn){
       throw new Error("O servidor respondeu em formato inválido. A API foi corrigida para retornar JSON; publique a versão 704 completa.");
     }
     if(!res.ok||!data?.ok){
+      const rawErr = String(data?.error||"");
+      // Erro específico e comum: o lead não tem a CONVERSA salva (timeline vazia) — reanalisar
+      // não tem o que reprocessar. Troca o texto técnico por uma orientação clara.
+      if(/sem timeline/i.test(rawErr)){
+        throw new Error("Este lead não tem a conversa do WhatsApp salva, então não há o que reanalisar. Importe o ZIP da conversa deste cliente (ou registre uma observação acima) e tente de novo.");
+      }
       const erroServidor = data?.detail ? `${data.error || "Não foi possível atualizar a análise."} — ${data.detail}` : (data?.error||"Não foi possível atualizar a análise.");
       throw new Error(erroServidor);
     }
