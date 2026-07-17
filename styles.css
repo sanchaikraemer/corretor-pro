@@ -2163,3 +2163,17 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
   .cp-chip,.cp-priority{font-size:9.5px!important;padding:4px 7px!important}
   .cp-appointments-card,.cp-performance-card,.cp-stages-card,.cp-running-card{height:auto!important;min-height:230px!important}
 }
+
+/* v870 — banner "Baixar app" no topo da Hoje, aparece já ao abrir o link (quando não está
+   instalado). Preenche o #bannerInstalar, que antes vinha vazio. */
+.cp-install-banner{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:12px 14px;border:1px solid rgba(255,107,92,.45);border-radius:14px;background:linear-gradient(135deg,rgba(255,107,92,.15),rgba(255,107,92,.05))}
+.cp-install-ico{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;background:var(--accent);color:#fff;font-size:19px;font-weight:900}
+.cp-install-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.cp-install-txt b{color:var(--text);font-size:14px}
+.cp-install-txt span{color:var(--soft);font-size:12px;line-height:1.35}
+.cp-install-dica{margin-top:6px;color:var(--soft);font-size:12px;line-height:1.4}
+.cp-install-btn{flex:none;border:0;border-radius:10px;padding:10px 16px;background:var(--accent);color:#fff;font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap}
+.cp-install-btn:hover{filter:brightness(1.07)}
+.cp-install-x{flex:none;width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer}
+.cp-install-x:hover{background:rgba(255,255,255,.06);color:var(--text)}
+@media(max-width:560px){.cp-install-banner{flex-wrap:wrap;gap:10px}.cp-install-btn{order:3;flex:1}}
