@@ -80,6 +80,7 @@ h1{font-size:28px;line-height:1;margin:0;letter-spacing:-.05em}
 .btns{display:grid;gap:10px;margin-top:14px}
 .btn{width:100%;border:0;border-radius:12px;padding:14px;font-weight:700;font-size:15px;color:var(--on-accent);background:var(--accent);box-shadow:none;cursor:pointer}
 .btn.secondary{background:rgba(255,255,255,.055);color:var(--text);border:1px solid var(--line);box-shadow:none}
+.btn:disabled,.btn[disabled]{opacity:.45!important;cursor:not-allowed!important;filter:grayscale(.35);pointer-events:none}
 .btn.cyan{background:var(--accent)}
 .btn.danger{background:rgba(255,91,122,.12);color:#ffdbe2;border:1px solid rgba(255,91,122,.25);box-shadow:none}
 .foco-acao{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:950;text-decoration:none;color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent);border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);transition:background .15s,transform .1s;white-space:nowrap}

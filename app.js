@@ -6512,7 +6512,23 @@ const ETAPAS_PROCESSAMENTO = [
   "Falha recuperável"
 ];
 
+// Bloqueia/reabilita os botões "Nova análise" e "Diagnóstico" da tela de
+// importação. Durante o processamento (Recebendo…Salvando) eles não podem ser
+// clicados; voltam a ficar ativos só quando a etapa chega em "Concluído" (ou
+// numa falha recuperável, pra permitir recomeçar/diagnosticar).
+function setBotoesImportacao(desabilitados){
+  ["#clearAnalysis", "#diagnoseOpenAI"].forEach(sel => {
+    const btn = qs(sel);
+    if(!btn) return;
+    btn.disabled = !!desabilitados;
+    btn.classList.toggle("is-processando", !!desabilitados);
+  });
+}
+
 function renderEtapas(idxAtual, sub){
+  // Etapas 0..5 (Recebendo…Salvando) = em andamento → botões travados.
+  // Etapa 6 (Concluído) e 7 (Falha recuperável) → botões liberados.
+  setBotoesImportacao(idxAtual >= 0 && idxAtual <= 5);
   const ol = qs("#processingSteps");
   if(!ol) return;
   const etapasVisiveis = idxAtual === 7
@@ -6722,6 +6738,10 @@ async function uploadLargeZipToSupabase(file, options = {}){
   try{
     analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId });
   }catch(err){
+    // Falha terminal desta etapa: libera de novo "Nova análise" e "Diagnóstico"
+    // pra o corretor poder recomeçar ou diagnosticar (este ramo não passa por
+    // renderEtapas, então precisa reabilitar os botões explicitamente).
+    setBotoesImportacao(false);
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
     qs("#processingText").textContent = ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.";
