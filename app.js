@@ -2282,7 +2282,6 @@ function filaRowHTML(l, pos){
   const waLink = l.phone ? whatsappLink(l.phone, "") : "";
   return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
     <div class="fila-rank">${pos}</div>
-    ${avatarLead(l, "")}
     <div class="fila-info">
       <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
       <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
@@ -3179,7 +3178,6 @@ function renderFilaPrioridade(ordenados){
       const etapa = normalizarEtapa(l.etapa);
       return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
         <div class="fila-rank">${pos}</div>
-        ${avatarInicial(l.name, "")}
         <div class="fila-info">
           <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
           <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
