@@ -2174,6 +2174,8 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
 .cp-install-dica{margin-top:6px;color:var(--soft);font-size:12px;line-height:1.4}
 .cp-install-btn{flex:none;border:0;border-radius:10px;padding:10px 16px;background:var(--accent);color:#fff;font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap}
 .cp-install-btn:hover{filter:brightness(1.07)}
+.cp-install-web{flex:none;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:10px 14px;background:transparent;color:var(--soft);font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap}
+.cp-install-web:hover{border-color:rgba(255,255,255,.32);color:var(--text)}
 .cp-install-x{flex:none;width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer}
 .cp-install-x:hover{background:rgba(255,255,255,.06);color:var(--text)}
-@media(max-width:560px){.cp-install-banner{flex-wrap:wrap;gap:10px}.cp-install-btn{order:3;flex:1}}
+@media(max-width:560px){.cp-install-banner{flex-wrap:wrap;gap:10px}.cp-install-ico{order:1}.cp-install-txt{order:2;flex:1 1 60%}.cp-install-x{order:3;margin-left:auto}.cp-install-btn{order:4;flex:1}.cp-install-web{order:5;flex:1}}
