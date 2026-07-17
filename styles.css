@@ -2088,3 +2088,25 @@ html[data-theme="light"] [style*="color: #ffc"]{
 /* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno */
 #home .home-grid{grid-template-columns:minmax(0,1fr)!important}
 #home .home-right{display:none!important}
+
+/* v864 — chip de etapa vira barra de progresso em gradiente (mesmo pill).
+   Gradiente único frio(ciano)→coral(--accent)→verde(#68ff95), todas cores já usadas no
+   app; o clip-path revela só a fatia X/6 do gradiente de comprimento fixo. O pontinho
+   branco marca a borda do avanço e pulsa nos passos 1..5; no passo 6 fica parado. */
+.cp704-etapa-prog{position:relative;overflow:hidden;isolation:isolate;padding:7px 12px;
+  border:1px solid rgba(255,255,255,.16)!important;background:rgba(9,30,38,.55)!important;color:#fff!important}
+.cp704-etapa-prog .cp704-etapa-fill{position:absolute;inset:0;z-index:0;border-radius:inherit;
+  background:linear-gradient(90deg,var(--cyan) 0%,var(--accent) 55%,#68ff95 100%);
+  clip-path:inset(0 calc(100% - var(--cp-etapa-pct,0%)) 0 0)}
+.cp704-etapa-prog .cp704-etapa-edge{position:absolute;z-index:2;top:50%;left:var(--cp-etapa-pct,0%);
+  width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 2px rgba(255,255,255,.28),0 0 7px rgba(255,255,255,.65);
+  animation:cp704EtapaPulse 1.4s ease-in-out infinite}
+.cp704-etapa-prog.is-completo .cp704-etapa-edge{animation:none}
+.cp704-etapa-prog .cp704-etapa-label{position:relative;z-index:3;font-weight:950;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
+@keyframes cp704EtapaPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.28)}}
+@media(prefers-reduced-motion:reduce){.cp704-etapa-prog .cp704-etapa-edge{animation:none}}
+/* Trilho escuro translúcido mantido nos dois temas pra o texto branco ficar legível
+   tanto sobre o gradiente quanto sobre a parte ainda não preenchida. */
+html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important;border-color:rgba(0,0,0,.14)!important}

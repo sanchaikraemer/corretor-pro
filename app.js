@@ -4870,8 +4870,23 @@ function cp704Css(){
   }
   function cp704JornadaBadge(lead, mc){
     const j = cp704Jornada(lead, mc);
-    const passo = (j.passo>=1 && j.passo<=6) ? ` · passo ${j.passo} de 6` : '';
-    return `<span class="cp704-pill cp704-etapa" style="background:${j.bg}!important;border-color:${j.br}!important;color:var(--text)!important"><i class="cp704-etapa-dot" style="background:${j.cor}"></i>${escapeHtml(j.label + passo)}</span>`;
+    const temPasso = j.passo>=1 && j.passo<=6;
+    const rotulo = j.label + (temPasso ? ` · passo ${j.passo} de 6` : '');
+    // Perdido / Arquivado (passo 0) não é um passo da jornada: pill simples, sem barra.
+    if(!temPasso){
+      return `<span class="cp704-pill cp704-etapa cp704-etapa-plain" style="background:${j.bg}!important;border-color:${j.br}!important;color:var(--text)!important">${escapeHtml(rotulo)}</span>`;
+    }
+    // Barra de progresso em gradiente no mesmo pill: um único gradiente frio→coral→verde
+    // (cores já usadas no app) com comprimento fixo; cada card revela só a fatia X/6 via
+    // clip-path. O pontinho branco marca a borda do avanço — pulsa nos passos 1..5 e fica
+    // parado no passo 6 (venda concluída).
+    const pct = (j.passo/6*100).toFixed(2) + '%';
+    const completo = j.passo===6;
+    return `<span class="cp704-pill cp704-etapa cp704-etapa-prog${completo?' is-completo':''}" style="--cp-etapa-pct:${pct}">`
+      + `<span class="cp704-etapa-fill"></span>`
+      + `<span class="cp704-etapa-edge"></span>`
+      + `<span class="cp704-etapa-label">${escapeHtml(rotulo)}</span>`
+      + `</span>`;
   }
   function cp704Impedimento(lead, mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
