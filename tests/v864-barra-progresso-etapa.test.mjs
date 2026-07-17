@@ -78,6 +78,12 @@ assert.match(regraFill[0], /var\(--accent\)/, 'o coral precisa reusar var(--acce
 assert.match(regraFill[0], /#68ff95/i, 'o verde precisa reusar #68ff95 (etiqueta Atendido)');
 assert.match(regraFill[0], /clip-path:inset\(/, 'a fatia precisa ser revelada por clip-path');
 
+// O texto da barra fica em peso normal (não negrito): sobre o gradiente o negritão
+// pesado ficava com aparência borrada.
+const regraLabel = css.match(/\.cp704-etapa-prog \.cp704-etapa-label\{[^}]*\}/);
+assert.ok(regraLabel, 'a regra do texto da barra precisa existir');
+assert.match(regraLabel[0], /font-weight:400/, 'o texto da barra precisa ficar em peso normal (400)');
+
 assert.match(css, /@keyframes cp704EtapaPulse/, 'o pulso do pontinho precisa existir');
 assert.match(
   css,

@@ -2103,7 +2103,7 @@ html[data-theme="light"] [style*="color: #ffc"]{
   box-shadow:0 0 0 2px rgba(255,255,255,.28),0 0 7px rgba(255,255,255,.65);
   animation:cp704EtapaPulse 1.4s ease-in-out infinite}
 .cp704-etapa-prog.is-completo .cp704-etapa-edge{animation:none}
-.cp704-etapa-prog .cp704-etapa-label{position:relative;z-index:3;font-weight:950;color:#fff;
+.cp704-etapa-prog .cp704-etapa-label{position:relative;z-index:3;font-weight:400;color:#fff;
   text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 3px rgba(0,0,0,.45)}
 @keyframes cp704EtapaPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.28)}}
 @media(prefers-reduced-motion:reduce){.cp704-etapa-prog .cp704-etapa-edge{animation:none}}
