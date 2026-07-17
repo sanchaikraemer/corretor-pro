@@ -17,8 +17,14 @@ mudanças até o dono mandar subir.
   (A guarda defensiva em `copiarMensagemLead` — avisar em vez de copiar vazio — ficou, mas a
   função não é mais chamada pelo hero.)
 
+- **Botão "‹ Voltar" repaginado**: o `.cp704-back` (o botão mais usado no lead) era só texto
+  apagado (transparente, cor `--muted`, sem borda). Virou um pill: borda, fundo sutil, cantos
+  arredondados, cor mais viva e hover com um toque coral. Mesmos tokens do app (dois temas).
+
 ## Verificação
 
 - Novo teste `tests/v866-hero-acoes`: garante que o `.h-wa`/botão WhatsApp e o "Copiar
   mensagem" saíram do hero, e que sobraram "Ver histórico" e "Já falei".
+- Novo teste `tests/v866-botao-voltar`: garante que o "‹ Voltar" virou pill (borda,
+  border-radius, sem fundo transparente) e ganhou hover.
 - `npm test`: suíte completa verde.
