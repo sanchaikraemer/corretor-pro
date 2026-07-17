@@ -45,6 +45,10 @@ assert.match(s3, /fill="var\(--accent\)"/, 'o prédio precisa encher com o coral
 const rend = app.slice(fim, fim + 4000);
 assert.match(rend, /cp788-att-layout/, 'a tela precisa usar o layout de duas colunas');
 assert.match(rend, /cp788-meta-card/, 'precisa ter o card da meta com o prédio');
-assert.match(rend, /2 dias atrás/, 'precisa ter o resumo por dia (hoje/ontem/2 dias/3+)');
+// v868: resumo passou a ser DIA A DIA dos últimos 7 dias (Hoje, Ontem, e os demais com
+// dia da semana + data).
+assert.match(rend, /for\(let i=0;i<7;i\+\+\)/, 'o resumo precisa cobrir os 7 dias, dia a dia');
+assert.match(rend, /CP788_DIAS_SEM/, 'precisa usar os nomes dos dias da semana');
+assert.match(rend, /i===1\?'Ontem'/, 'precisa rotular Hoje/Ontem');
 
 console.log('v867-predio-atendimentos: ok');
