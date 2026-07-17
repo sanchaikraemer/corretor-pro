@@ -13257,13 +13257,12 @@ function ui670DetailRows(lead,mc){
       'tratado-hoje':ativos.filter(l=>typeof ehContatadoHoje==='function'&&ehContatadoHoje(l))
     };
     if(state.grupoAtivo||state.focoLeadId||state.lead?.id) return;
-    foco.innerHTML=`<div class="ui-home-content">
-      ${typeof ui677ToolbarHTML==='function'?ui677ToolbarHTML('home'):''}
-      <section class="ui-priority-card">
-        <div class="ui-section-head"><div><h3>${grupos.agora.length?'Ações prioritárias para hoje':'Próximas prioridades'}</h3><p>${grupos.agora.length?'Somente quem exige uma ação sua agora.':'Nenhuma ação vencida; veja quem está programado ou aguardando.'}</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
-        <div class="ui-priority-list">${prioritarios.length?prioritarios.map(l=>cp788LinhaConducao(l)).join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
-      </section>
-    </div>`;
+    // v865: a tela inicial volta a ser a "rica" (renderBotoesHome: hero "Prioridade agora",
+    // fila de próximos e "Top conversão"), no lugar da lista enxuta — que causava o PISCAR:
+    // a rica era pintada no boot e o carregarDashboard chamava esta função, que a substituía
+    // pela enxuta. Agora as duas pintam a mesma coisa. renderBotoesHome usa exatamente o
+    // state.gruposHome montado logo acima (mesmas chaves acao-hoje/retomar-cuidado/retomada).
+    if(typeof renderBotoesHome==='function') renderBotoesHome();
   };
   try{ renderListasHome=window.renderListasHome; }catch(_){ }
 

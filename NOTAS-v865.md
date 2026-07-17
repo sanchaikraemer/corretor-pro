@@ -1,6 +1,6 @@
-# v865 — ajustes finos na barra de etapa (em andamento)
+# v865 — ajustes de UI + mensagens distintas + fim do piscar da Home
 
-Versão que agrupa ajustes pedidos depois da v864 (barra de progresso em gradiente).
+Versão que agrupa vários ajustes pedidos depois da v864 (barra de progresso em gradiente).
 
 ## Mudanças
 
@@ -32,6 +32,16 @@ Versão que agrupa ajustes pedidos depois da v864 (barra de progresso em gradien
   distintos (recomendada = melhor jogada; maisSuave = consultiva, qualifica/destrava;
   maisDireta = CTA concreto) e manda reescrever se as três propuserem a mesma ação.
   Observação: só dá pra confirmar o efeito em produção (IA), reanalisando um lead.
+
+- **Fim do piscar da tela inicial**: existiam dois desenhos de Home. No boot, a versão "rica"
+  (`renderBotoesHome`: hero "Prioridade agora", fila de próximos, "Top conversão") era pintada
+  a partir do cache; logo depois o `carregarDashboard` chamava `renderListasHome` (override do
+  cp788/v788), que substituía tudo pela lista enxuta "Ações prioritárias para hoje" — daí o
+  flash. A pedido do dono (ficar com a rica), o `renderListasHome` do cp788 agora chama
+  `renderBotoesHome()` em vez de montar a enxuta. Ele reaproveita o mesmo `state.gruposHome`
+  que já montava (chaves `acao-hoje`/`retomar-cuidado`/`retomada`/…), então boot e dashboard
+  pintam a MESMA tela rica — sem piscar. (Reverte a simplificação visual do v788 por escolha
+  do dono; a lógica de condução/atendimentos separados continua intacta.)
 
 ## Verificação
 
