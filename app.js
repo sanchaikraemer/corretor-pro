@@ -13168,13 +13168,21 @@ function ui670DetailRows(lead,mc){
     const limite=Math.max(80,Number(state.cp788AtendimentosVisible||80));
     const visiveis=registros.slice(0,limite);
     const faltam=Math.max(0,registros.length-visiveis.length);
-    // Contagem por dia (hoje / ontem / 2 dias / 3+ dias) — resumo ao lado do prédio.
-    const bd=[0,0,0,0];
+    // Resumo DIA A DIA dos últimos 7 dias (Hoje, Ontem e os demais com dia da semana + data).
+    const CP788_DIAS_SEM=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const hoje0=(typeof inicioDoDiaBR==='function')?inicioDoDiaBR():new Date(new Date().setHours(0,0,0,0));
+    const perDay=[];
+    for(let i=0;i<7;i++){
+      const d=new Date(hoje0); d.setDate(d.getDate()-i);
+      const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0');
+      const label=i===0?'Hoje':i===1?'Ontem':`${CP788_DIAS_SEM[d.getDay()]} ${dd}/${mm}`;
+      perDay.push({ n:0, label });
+    }
     for(const x of registros){
       let d=null; try{ d = (typeof diasCalendarioBR==='function') ? diasCalendarioBR(new Date(x.ts)) : null; }catch(_){ d=null; }
-      if(d===0) bd[0]++; else if(d===1) bd[1]++; else if(d===2) bd[2]++; else if(d!=null&&d>=3) bd[3]++;
+      if(d!=null && d>=0 && d<7) perDay[d].n++;
     }
-    const hoje=bd[0];
+    const hoje=perDay[0].n;
     const bateu=hoje>=CP788_META_DIA;
     box.innerHTML=`<section class="cp788-att-page cp788-att-layout">
       <div class="cp788-att-main">
@@ -13192,10 +13200,7 @@ function ui670DetailRows(lead,mc){
           <div class="cp788-meta-status${bateu?' done':''}">${bateu?'🏢 Meta batida!':'atendimentos de hoje'}</div>
         </div>
         <div class="cp788-meta-breakdown">
-          <div class="cp788-bd-row"><span>Hoje</span><b>${bd[0]}</b></div>
-          <div class="cp788-bd-row"><span>Ontem</span><b>${bd[1]}</b></div>
-          <div class="cp788-bd-row"><span>2 dias atrás</span><b>${bd[2]}</b></div>
-          <div class="cp788-bd-row"><span>3+ dias atrás</span><b>${bd[3]}</b></div>
+          ${perDay.map(p=>`<div class="cp788-bd-row"><span>${escapeHtml(p.label)}</span><b>${p.n}</b></div>`).join('')}
         </div>
       </aside>
     </section>`;
