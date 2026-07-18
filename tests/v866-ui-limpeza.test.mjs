@@ -8,15 +8,20 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // ("Ritmo comercial", renderizado em #relatorioBody) foi removido.
 assert.doesNotMatch(html, /id="relatorioBody"/, 'o painel duplicado (#relatorioBody) precisa sair da tela Desempenho');
 
-// v866 #7: o Menu (Configurações) repetia itens que já estão no menu lateral. Esses cards saíram.
-for(const titulo of ['Condução do atendimento', 'Gerador de proposta', 'Cérebro Comercial', 'Relatório', 'Arquivados']){
-  assert.doesNotMatch(
+// v866 #7 / v873: o Menu não pode DUPLICAR o menu lateral no DESKTOP — mas no MOBILE (que não
+// tem menu lateral) essas funções PRECISAM estar no Menu. Solução: os cards existem com a classe
+// menu-nav-item e um CSS os esconde no desktop (min-width:1000px). Aqui garantimos as duas coisas.
+for(const titulo of ['Condução do atendimento', 'Gerador de proposta', 'Cérebro Comercial', 'Desempenho', 'Arquivados']){
+  assert.match(
     html,
-    new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    `o card "${titulo}" precisa sair do Menu (já está no menu lateral)`
+    new RegExp('menu-card menu-nav-item[^>]*>\\s*<div class="menu-card-ico">[^<]*</div><div class="menu-card-txt"><div class="menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `o card "${titulo}" precisa existir no Menu como menu-nav-item (mobile)`
   );
 }
-// Os que NÃO estão na lateral continuam no Menu.
+const cssLimpeza = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+assert.match(cssLimpeza, /@media\(min-width:1000px\)\{\s*\.menu-nav-item\{\s*display:none!important/, 'no desktop os itens do Menu que repetem a lateral precisam ficar escondidos');
+
+// Os que NÃO estão na lateral continuam no Menu (em qualquer tela).
 for(const titulo of ['Importar conversa', 'Como usar', 'O que a IA aprendeu', 'Vendas registradas', 'Instalar app']){
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
