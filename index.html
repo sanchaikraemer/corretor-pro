@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" id="themeColorMeta" content="#001E2B">
+<meta name="theme-color" id="themeColorMeta" content="#052B36">
 <title>Corretor Pro</title>
 <link rel="manifest" href="/manifest.json">
 <script>
@@ -38,19 +38,19 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=__VERSION__">
 <link rel="apple-touch-icon" href="/icon-192.png?v=__VERSION__">
 <style>
-  html,body{margin:0;min-height:100%;background:#001E2B;color:#F4F7FB;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-  body::before{content:"";position:fixed;inset:0;background:#001E2B;z-index:-1;}
+  html,body{margin:0;min-height:100%;background:#052B36;color:#F4F7FB;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  body::before{content:"";position:fixed;inset:0;background:#052B36;z-index:-1;}
 </style>
 <link rel="stylesheet" href="/styles.css?v=__VERSION__">
 
 <script>
   // v682: pinta fundo escuro imediatamente e remove qualquer branco ao reabrir aba descartada.
-  try{ document.documentElement.style.background="#001E2B"; }catch(_){}
+  try{ document.documentElement.style.background="#052B36"; }catch(_){}
 </script>
 </head>
 <body data-app-version="__VERSION__">
-<div id="bootPaint" style="position:fixed;inset:0;background:#001E2B;color:#F4F7FB;z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
-  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#ff6257">Pro</span></div><div style="margin-top:8px;color:#8fb1bf;font-size:14px">Carregando sua carteira...</div></div>
+<div id="bootPaint" style="position:fixed;inset:0;background:#052B36;color:#F4F7FB;z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
+  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:#8fb1bf;font-size:14px">Carregando sua carteira...</div></div>
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
 
@@ -330,7 +330,7 @@
 
     <section id="cerebro" class="screen">
       <div style="display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap">
-        <button type="button" id="icTabCerebro" onclick="icTab('cerebro')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--lime);background:rgba(255,107,92,.15);color:var(--lime)">Cérebro</button>
+        <button type="button" id="icTabCerebro" onclick="icTab('cerebro')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--lime);background:rgba(255,98,88,.15);color:var(--lime)">Cérebro</button>
         <button type="button" id="icTabAprend" onclick="icTab('aprendizado')" style="padding:6px 16px;border-radius:999px;font-size:12px;font-weight:950;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted)">Aprendizado</button>
       </div>
       <div id="icAprendizado" style="display:none">
@@ -567,7 +567,7 @@
               <button type="button" class="prop-btn ghost" id="pf-registrar" onclick="registrarPropostaNoLead()">📌 Registrar no lead</button>
               <button type="button" class="prop-btn ghost" onclick="propClear()">Limpar</button>
             </div>
-            <div id="pf-salvo-msg" style="display:none;margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,107,92,.1);border:1px solid var(--lime);color:var(--lime);font-weight:950;font-size:13px;text-align:center"></div>
+            <div id="pf-salvo-msg" style="display:none;margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,98,88,.1);border:1px solid var(--lime);color:var(--lime);font-weight:950;font-size:13px;text-align:center"></div>
           </div>
 
           <div id="prop-preview-area">
@@ -609,7 +609,7 @@
         .menu-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
         @media(min-width:760px){.menu-grid{grid-template-columns:repeat(2,1fr)}}
         .menu-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));cursor:pointer;transition:transform .15s,box-shadow .2s,border-color .2s;text-align:left;color:var(--text)}
-        .menu-card:hover{transform:translateY(-2px);border-color:rgba(255,107,92,.4);box-shadow:0 8px 24px rgba(0,0,0,.25),0 0 0 1px rgba(255,107,92,.15)}
+        .menu-card:hover{transform:translateY(-2px);border-color:rgba(255,98,88,.4);box-shadow:0 8px 24px rgba(0,0,0,.25),0 0 0 1px rgba(255,98,88,.15)}
         .menu-card-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;font-size:20px;font-weight:950;background:rgba(255,255,255,.04);color:var(--soft);border:1px solid var(--line)}
         .menu-card-ico svg{width:20px;height:20px;display:block}
         .menu-card-txt{flex:1;min-width:0}
@@ -715,7 +715,7 @@
 </nav>
 <div id="menuDrawerBackdrop" onclick="fecharMenuGaveta()"></div>
 <div id="toast" class="toast"></div>
-<button type="button" id="btnVoltarTopo" title="Voltar ao topo" aria-label="Voltar ao topo" style="position:fixed;bottom:80px;right:18px;width:46px;height:46px;border-radius:50%;background:rgba(11,16,24,.92);color:var(--lime);border:1px solid var(--lime);font-size:20px;font-weight:950;cursor:pointer;z-index:998;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(255,107,92,.18);backdrop-filter:blur(6px);transition:transform .2s,opacity .2s">↑</button>
+<button type="button" id="btnVoltarTopo" title="Voltar ao topo" aria-label="Voltar ao topo" style="position:fixed;bottom:80px;right:18px;width:46px;height:46px;border-radius:50%;background:rgba(11,16,24,.92);color:var(--lime);border:1px solid var(--lime);font-size:20px;font-weight:950;cursor:pointer;z-index:998;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(255,98,88,.18);backdrop-filter:blur(6px);transition:transform .2s,opacity .2s">↑</button>
 
 <script src="/vendor/jszip.min.js?v=__VERSION__"></script>
 <script type="module" src="/app.js?v=__VERSION__"></script>
