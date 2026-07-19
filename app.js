@@ -3020,7 +3020,7 @@ async function reanalisarTudo(){
       <div class="small" style="color:var(--soft);font-size:11px;margin-bottom:16px;line-height:1.5">💡 Só precisa fazer isso quando muda algo grande. No dia a dia, cada lead já reanalisa sozinho quando você importa a conversa. Dá pra cancelar no meio.</div>
       <div style="display:flex;gap:10px">
         <button type="button" id="reanalNao" style="flex:1;padding:11px;background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--soft);font-weight:950;cursor:pointer">Cancelar</button>
-        <button type="button" id="reanalSim" style="flex:1;padding:11px;background:linear-gradient(135deg,var(--lime),var(--cyan));border:0;border-radius:10px;color:var(--on-accent);font-weight:950;cursor:pointer">Reanalisar agora</button>
+        <button type="button" id="reanalSim" style="flex:1;padding:11px;background:var(--accent);border:0;border-radius:10px;color:var(--on-accent);font-weight:950;cursor:pointer">Reanalisar agora</button>
       </div>
     </div>`;
   document.body.appendChild(cm);
@@ -3041,7 +3041,7 @@ async function executarReanaliseTudo(items){
       <div style="font-size:16px;font-weight:950;margin-bottom:6px">Reanalisando todos os leads…</div>
       <div id="reanalProgresso" class="small" style="color:var(--muted);margin-bottom:14px">0 de ${total}</div>
       <div style="height:8px;background:rgba(255,255,255,.05);border-radius:999px;overflow:hidden;margin-bottom:14px">
-        <div id="reanalBarra" style="width:0%;height:100%;background:linear-gradient(90deg,var(--lime),var(--acao));transition:width .3s"></div>
+        <div id="reanalBarra" style="width:0%;height:100%;background:var(--accent);transition:width .3s"></div>
       </div>
       <div id="reanalAtual" class="small" style="color:var(--soft);font-size:11px;margin-bottom:12px;min-height:14px"></div>
       <div id="reanalErros" class="small" style="color:var(--risco);font-size:11px;margin-bottom:14px;display:none"></div>
@@ -3818,7 +3818,7 @@ function abrirEditarLead(id, nome, telefone){
           <textarea id="editLeadObsAnexar" rows="4" placeholder="Anote algo importante sem apagar o histórico." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box;resize:vertical;line-height:1.35"></textarea>
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Essa observação entra como memória comercial do lead.</div>
         </div>
-        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
+        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
         <div style="border-top:1px solid var(--line);padding-top:12px">
           <div style="color:var(--risco);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:6px">Zona perigosa</div>
           <button type="button" id="editLeadExcluir" style="width:100%;padding:10px;background:transparent;color:var(--risco);border:1px solid var(--risco);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">Excluir este lead</button>
@@ -5142,7 +5142,7 @@ function renderLeadFoco(lead){
           <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
-            <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:linear-gradient(135deg,var(--lime),var(--cyan));border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
+            <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
           <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
         </section>
@@ -6688,7 +6688,7 @@ function escolherPeriodoAudiosImportacao(){
         <div style="font-size:17px;font-weight:950;margin-bottom:4px">Período dos áudios</div>
         <div class="small" style="color:var(--muted);margin-bottom:16px">Áudios fora do período não são transcritos. As mensagens escritas entram completas em qualquer opção.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          ${opcoes.map(o => `<button type="button" class="periodoAudioBtn" data-valor="${o.valor}" style="padding:14px 8px;background:${o.valor===salvo?'linear-gradient(135deg,var(--lime),var(--cyan))':'transparent'};border:1px solid ${o.valor===salvo?'transparent':'var(--line)'};border-radius:10px;color:${o.valor===salvo?'var(--on-accent)':'var(--text)'};font-weight:950;cursor:pointer">${escapeHtml(o.label)}</button>`).join("")}
+          ${opcoes.map(o => `<button type="button" class="periodoAudioBtn" data-valor="${o.valor}" style="padding:14px 8px;background:${o.valor===salvo?'var(--accent)':'transparent'};border:1px solid ${o.valor===salvo?'transparent':'var(--line)'};border-radius:10px;color:${o.valor===salvo?'var(--on-accent)':'var(--text)'};font-weight:950;cursor:pointer">${escapeHtml(o.label)}</button>`).join("")}
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -11235,7 +11235,7 @@ function ui670DetailRows(lead,mc){
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
         <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${esc(produtoIni)}" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:16px">
         <datalist id="editLeadProdutoLista">${opcoesProdutos()}</datalist>
-        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">Salvar alterações</button>
+        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">Salvar alterações</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e=>{ if(e.target===overlay) fecharEditarLead(); });
@@ -11315,7 +11315,7 @@ function ui670DetailRows(lead,mc){
             <option value="outro">Outro</option>
           </select>
         `}
-        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'linear-gradient(135deg,var(--lime),var(--acao))':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
+        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'var(--acao)':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
@@ -11464,7 +11464,7 @@ function ui670DetailRows(lead,mc){
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação</label>
         <textarea id="ui685Observacao" rows="3" placeholder="Anote o que pesou nesse desfecho" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px;resize:vertical"></textarea>
         <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px">O sistema calculará tempo até o desfecho, quantidade de contatos e registrará isso no aprendizado do lead.</div>
-        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'linear-gradient(135deg,var(--lime),var(--acao))':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
+        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'var(--acao)':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
@@ -11569,7 +11569,7 @@ function ui670DetailRows(lead,mc){
         <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
         <input type="text" id="editLeadProduto" list="editLeadProdutoLista" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:16px">
         <datalist id="editLeadProdutoLista">${produtosOptions()}</datalist>
-        <button type="button" id="editLeadSalvar" style="width:100%;padding:13px;background:linear-gradient(135deg,var(--lime),var(--acao));color:var(--on-accent);border:0;border-radius:12px;font-size:15px;font-weight:950;cursor:pointer">Salvar</button>
+        <button type="button" id="editLeadSalvar" style="width:100%;padding:13px;background:var(--accent);color:var(--on-accent);border:0;border-radius:12px;font-size:15px;font-weight:950;cursor:pointer">Salvar</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if(e.target === overlay) fecharEditarLead(); });

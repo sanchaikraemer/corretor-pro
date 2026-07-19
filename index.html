@@ -16,8 +16,23 @@
       var salvo = localStorage.getItem("direciona_tema");
       if(salvo === "light" || salvo === "dark") tema = salvo;
     }catch(_){ }
-    document.documentElement.dataset.theme = tema;
-    document.documentElement.style.colorScheme = tema;
+    var r = document.documentElement;
+    r.dataset.theme = tema;
+    r.style.colorScheme = tema;
+    // Boot no-flash coerente com o tema salvo (paleta oficial v2.0):
+    // dark = petróleo #052B36, light = branco-gelo #F3F6F7. Evita flash escuro no tema claro.
+    var boot = tema === "light"
+      ? { bg:"#F3F6F7", fg:"#102A34", sub:"#5E7A85" }
+      : { bg:"#052B36", fg:"#F4F7FB", sub:"#8FB1BF" };
+    r.style.setProperty("--boot-bg", boot.bg);
+    r.style.setProperty("--boot-fg", boot.fg);
+    r.style.setProperty("--boot-sub", boot.sub);
+    r.style.background = boot.bg;
+    try{
+      var m = document.getElementById("themeColorMeta");
+      if(m) m.setAttribute("content", boot.bg);
+    }catch(_){ }
+    window.__bootPalette = boot;
   })();
 </script>
 <script>
@@ -38,19 +53,19 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=__VERSION__">
 <link rel="apple-touch-icon" href="/icon-192.png?v=__VERSION__">
 <style>
-  html,body{margin:0;min-height:100%;background:#052B36;color:#F4F7FB;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-  body::before{content:"";position:fixed;inset:0;background:#052B36;z-index:-1;}
+  html,body{margin:0;min-height:100%;background:var(--boot-bg,#052B36);color:var(--boot-fg,#F4F7FB);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  body::before{content:"";position:fixed;inset:0;background:var(--boot-bg,#052B36);z-index:-1;}
 </style>
 <link rel="stylesheet" href="/styles.css?v=__VERSION__">
 
 <script>
-  // v682: pinta fundo escuro imediatamente e remove qualquer branco ao reabrir aba descartada.
-  try{ document.documentElement.style.background="#052B36"; }catch(_){}
+  // v682: pinta o fundo do tema imediatamente e remove qualquer branco ao reabrir aba descartada.
+  try{ document.documentElement.style.background=(window.__bootPalette&&window.__bootPalette.bg)||"#052B36"; }catch(_){}
 </script>
 </head>
 <body data-app-version="__VERSION__">
-<div id="bootPaint" style="position:fixed;inset:0;background:#052B36;color:#F4F7FB;z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
-  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:#8fb1bf;font-size:14px">Carregando sua carteira...</div></div>
+<div id="bootPaint" style="position:fixed;inset:0;background:var(--boot-bg,#052B36);color:var(--boot-fg,#F4F7FB);z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
+  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:var(--boot-sub,#8FB1BF);font-size:14px">Carregando sua carteira...</div></div>
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
 
