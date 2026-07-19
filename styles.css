@@ -117,6 +117,17 @@ label{display:block;color:var(--muted);font-size:14px;margin:14px 0 7px}
 .analysis-row{padding:7px 0}.analysis-row b{font-size:10px}.analysis-row span{font-size:14px}
 .kanban{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;overflow-x:auto}.kanban .col{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:120px}.kanban .col h4{margin:0 0 8px;font-size:11px;font-weight:950;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}.kanban .col h4 .count{background:rgba(55,232,255,.14);color:#bdf8ff;padding:2px 8px;border-radius:999px;font-size:10px}.kanban .lead-card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;font-size:13px}.kanban .lead-card .name{font-weight:950;margin-bottom:3px}.kanban .lead-card .meta{font-size:11px;color:var(--muted);margin:3px 0}.kanban .lead-card select{width:100%;margin-top:6px;background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:12px}
 .agenda-item{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:14px;padding:12px;margin-bottom:10px;display:flex;gap:12px;justify-content:space-between;align-items:flex-start}.agenda-item .urgency{padding:4px 9px;border-radius:999px;font-weight:950;font-size:11px;white-space:nowrap}.agenda-item .urgency.alto{background:rgba(255,91,122,.18);color:#ffdbe2;border:1px solid rgba(255,91,122,.32)}.agenda-item .urgency.medio{background:rgba(255,79,216,.14);color:#ffc4f4;border:1px solid rgba(255,79,216,.28)}.agenda-item .urgency.baixo{background:rgba(55,232,255,.14);color:#bdf8ff;border:1px solid rgba(55,232,255,.28)}
+/* Agenda: desktop mantém as ações em coluna à direita. */
+.agenda-acoes{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+/* Mobile (Identidade v2.0, seção 25): conteúdo em largura total, ações abaixo — nada de
+   coluna lateral estreita. "Ver análise" (principal) ocupa a linha; secundárias em linha. */
+@media(max-width:760px){
+  .agenda-item{flex-direction:column;align-items:stretch}
+  .agenda-acoes{flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:12px}
+  .agenda-acoes>button,.agenda-acoes>a{flex:1 1 40%;min-height:44px;display:inline-flex;align-items:center;justify-content:center;font-size:12px!important;padding:11px 12px!important;box-sizing:border-box}
+  .agenda-acoes>button:first-child,.agenda-acoes>a:first-child{flex-basis:100%}
+  .agenda-acoes>div[id^="reagbox_"]{flex-basis:100%;align-items:stretch}
+}
 @media(max-width:899px){
   .kanban{grid-template-columns:1fr;gap:8px}
   .kanban .col{min-height:auto;padding:8px 10px}
