@@ -1224,6 +1224,8 @@ html[data-theme="dark"] .cp-topbar{background:#002633!important}
 .card{background:var(--cp-panel)!important;border-color:var(--cp-border)!important;box-shadow:var(--cp-card-shadow)!important}
 input,textarea,select{background:var(--cp-panel-2)!important;color:var(--cp-text)!important;border-color:var(--cp-border)!important}
 .btn{background:var(--cp-coral)!important;color:#fff!important}.btn.secondary{background:var(--cp-panel-2)!important;color:var(--cp-text)!important;border:1px solid var(--cp-border)!important}
+/* Perigo nunca parece ação comum (Identidade v2.0, seção 12): contorno vermelho, sem preenchimento coral. */
+.btn.danger{background:transparent!important;color:var(--risco)!important;border:1px solid color-mix(in srgb,var(--risco) 42%,transparent)!important}
 .kanban .col,.lead,.menu-item,.agenda-item{background:var(--cp-panel-2)!important;border-color:var(--cp-border)!important}
 
 /* BOTTOM NAV */
@@ -1775,7 +1777,7 @@ html[data-theme="light"] .cp704-quickbar{
 html[data-theme="light"] .cp704-copy:hover,
 html[data-theme="light"] .cp704-full-btn:hover,
 html[data-theme="light"] .cp704-reanalyse:hover{background:#f8fbfc!important;border-color:var(--cp-border-strong)!important}
-html[data-theme="light"] .cp704-attended{background:rgba(34,184,103,.08)!important;border-color:rgba(34,184,103,.38)!important;color:#138348!important}
+html[data-theme="light"] .cp704-attended:disabled{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.4)!important;color:#138348!important}
 html[data-theme="light"] .cp704-pill{background:rgba(255,163,45,.12)!important;border-color:rgba(255,163,45,.42)!important;color:#9b5b00!important}
 html[data-theme="light"] .cp704-pill.green{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.40)!important;color:#138348!important}
 html[data-theme="light"] .cp704-pill.red{background:rgba(255,98,88,.10)!important;border-color:rgba(255,98,88,.38)!important;color:#c93a32!important}
