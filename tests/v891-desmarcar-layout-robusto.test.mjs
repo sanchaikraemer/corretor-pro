@@ -9,7 +9,9 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 //    ocupa a linha inteira embaixo do grid 2x2.
 assert.match(app, /class="cp704-desmarcar" onclick="ui667DesmarcarAtendido/, 'Desmarcar usa a classe de link discreto');
 assert.match(app, /\.cp704-desmarcar\{[^}]*text-decoration:underline/, 'estilo de link (sublinhado) para o Desmarcar');
-assert.match(app, /\.cp704-desmarcar\{grid-column:1\/-1/, 'no mobile o Desmarcar ocupa a linha inteira (não vira 5º pill torto)');
+// v892: discreto, sem ocupar a linha toda (o dono não quer tanto destaque).
+assert.match(app, /\.cp704-desmarcar\{justify-self:start;width:auto/, 'no mobile o Desmarcar é discreto (não ocupa a linha inteira)');
+assert.doesNotMatch(app, /\.cp704-desmarcar\{grid-column:1\/-1/, 'não deve mais esticar na linha inteira');
 
 // 2. Robustez: otimista (desmarca na tela antes da rede), timeout generoso (cold start) e
 //    reverte se a API falhar.
