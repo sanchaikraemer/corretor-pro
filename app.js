@@ -2484,22 +2484,18 @@ function insightFocoHTML(items, esquecidos){
       "Visita/Proposta": `<b>${nG} clientes</b> já visitaram ou receberam proposta e sumiram — é seu dinheiro mais valioso parado. Retome antes de buscar lead novo.`,
       "Negociação": `<b>${nG} clientes</b> em negociação perdendo força — corra pra fechar antes de perder o cliente.`
     };
-    linhas.push(frase[etapaG]);
+    const titulo = { "Atendimento":"Travados na conversa", "Visita/Proposta":"Visitaram e sumiram", "Negociação":"Em negociação parada" }[etapaG];
+    linhas.push({ html: frase[etapaG], onclick: `abrirRaioX('gargalo',${JSON.stringify(etapaG)},${JSON.stringify(titulo)})` });
   }
 
   // (R4) ATIVIDADE x RESULTADO — conversas longas (30+ mensagens) sem NENHUMA visita/atendimento
   // marcado. Muita mensagem e pouco avanço: o sinal de "atividade não é resultado".
-  const temVisita = (l) => {
-    const a = l.analysis || {};
-    if(Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length) return true;
-    if(temAtendimentoManual(l)) return true;
-    return ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l.etapa));
-  };
-  const longas = ativos.filter(l => totalMensagensLead(l) >= 30 && !temVisita(l)).length;
+  const longas = ativos.filter(l => totalMensagensLead(l) >= 30 && !temVisitaLead(l)).length;
   if(longas >= 1){
-    linhas.push(longas === 1
+    linhas.push({ html: longas === 1
       ? `<b>1 conversa longa</b> sem nenhuma visita marcada — muita mensagem, pouco avanço. Hora de propor a visita.`
-      : `<b>${longas} conversas longas</b> sem nenhuma visita marcada — muita mensagem, pouco avanço. Hora de propor a visita.`);
+      : `<b>${longas} conversas longas</b> sem nenhuma visita marcada — muita mensagem, pouco avanço. Hora de propor a visita.`,
+      onclick: `abrirRaioX('longas','',${JSON.stringify("Conversas longas sem visita")})` });
   }
 
   // (R9/R1) PARADA DE MAIOR VALOR — a oportunidade esquecida de maior potencial (topo do radar).
@@ -2514,15 +2510,58 @@ function insightFocoHTML(items, esquecidos){
     if(etapa === "Negociação") oque = "negociação aberta";
     else if(etapa === "Visita/Proposta") oque = "visita/proposta em jogo";
     else if(teveProposta) oque = "recebeu proposta";
-    linhas.push(`<b>Parada de maior valor:</b> ${escapeHtml(l.name || "Cliente")} — ${oque}, parado há ${dias <= 0 ? "hoje" : dias + "d"}.`);
+    linhas.push({ html: `<b>Parada de maior valor:</b> ${escapeHtml(l.name || "Cliente")} — ${oque}, parado há ${dias <= 0 ? "hoje" : dias + "d"}.`,
+      onclick: `abrirLead(${JSON.stringify(String(l.id||""))})` });
   }
 
   if(!linhas.length) return "";
+  // Cada linha vira um botão quando tem leads por trás (drill-down): abre a lista exata de
+  // quem são aqueles números, pra o corretor agir — não fica só diagnóstico sem saída.
+  const linhaHTML = (o) => {
+    const bullet = `<span style="color:var(--lime);font-weight:950;line-height:1.55">•</span>`;
+    const texto = `<span style="flex:1">${o.html}</span>`;
+    if(o.onclick){
+      return `<button type="button" class="raiox-linha" onclick='${o.onclick}' style="display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;background:transparent;border:0;padding:7px 4px;border-radius:8px;cursor:pointer;color:inherit;font:inherit">${bullet}${texto}<span aria-hidden="true" style="color:var(--soft);font-weight:950;opacity:.55;align-self:center">›</span></button>`;
+    }
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 4px">${bullet}${texto}</div>`;
+  };
   return `<div class="insight-foco">
     <div style="font-weight:950;color:var(--lime);text-transform:uppercase;letter-spacing:.1em;font-size:11px;margin-bottom:8px">📊 Raio-X da carteira</div>
-    <div style="display:flex;flex-direction:column;gap:6px">${linhas.map(t => `<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--lime);font-weight:950;line-height:1.55">•</span><span style="flex:1">${t}</span></div>`).join("")}</div>
+    <div style="display:flex;flex-direction:column;gap:2px">${linhas.map(linhaHTML).join("")}</div>
   </div>`;
 }
+
+// Conversa avançou pra visita/atendimento? (usado pelo Raio-X: "conversas longas sem visita").
+function temVisitaLead(l){
+  const a = l.analysis || {};
+  if(Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length) return true;
+  if(temAtendimentoManual(l)) return true;
+  return ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l.etapa));
+}
+// Leads por trás de uma linha do Raio-X, recalculados na hora do clique (mesmos critérios
+// usados para MONTAR o texto do Raio-X, pra a lista bater com o número).
+function leadsRaioX(tipo, etapa){
+  const ativos = (state.itemsAtivos || []).filter(l => l && l.id && !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
+  if(tipo === "gargalo"){
+    return ativos
+      .filter(l => normalizarEtapa(l.etapa) === etapa && (() => { const d = diasParado(l); return Number.isFinite(d) && d >= 5; })())
+      .sort((a,b) => (Number.isFinite(diasParado(b))?diasParado(b):0) - (Number.isFinite(diasParado(a))?diasParado(a):0));
+  }
+  if(tipo === "longas"){
+    return ativos
+      .filter(l => totalMensagensLead(l) >= 30 && !temVisitaLead(l))
+      .sort((a,b) => totalMensagensLead(b) - totalMensagensLead(a));
+  }
+  return [];
+}
+function abrirRaioX(tipo, etapa, titulo){
+  const leads = leadsRaioX(tipo, etapa);
+  const sub = tipo === "gargalo"
+    ? "Parados há 5+ dias nesta etapa — é o dinheiro mais valioso parado. Retome antes de buscar lead novo."
+    : "Muita mensagem e nenhuma visita marcada — hora de propor a visita presencial.";
+  abrirGrupoHome("__raiox", { meta: { titulo: titulo || "Raio-X da carteira", sub }, leads });
+}
+window.abrirRaioX = abrirRaioX;
 
 function renderBotoesHome(){
   const foco = qs("#leadFocoArea");
@@ -2926,7 +2965,11 @@ function cardLeadHTML(l, opts){
 // ações rápidas (WhatsApp). Pro grupo com mais de 10 leads, divide em
 // "ataca agora — top 10" e o restante colapsado.
 function abrirGrupoHome(grupo, options={}){
-  if(!options.fromHistory && !cpApplyingHistory){
+  // Lista "avulsa": um conjunto de leads passado direto (ex.: as linhas do Raio-X), sem
+  // depender de uma chave fixa em GRUPOS_HOME nem virar rota de histórico (o "‹ Voltar"
+  // volta pra home montada por renderBotoesHome).
+  const avulsa = Array.isArray(options.leads);
+  if(!avulsa && !options.fromHistory && !cpApplyingHistory){
     cpPushRoute({...cpRouteForScreen("home"),screen:"home",grupoAtivo:grupo});
   }
   const foco = qs("#leadFocoArea");
@@ -2935,8 +2978,8 @@ function abrirGrupoHome(grupo, options={}){
   state.grupoAtivo = grupo;
   const saud = qs("#saudacao");
   if(saud) saud.style.display = "none";
-  const meta = GRUPOS_HOME[grupo];
-  const arr = (state.gruposHome && state.gruposHome[grupo]) || [];
+  const meta = options.meta || GRUPOS_HOME[grupo] || { titulo: String(grupo||"Leads"), sub: "" };
+  const arr = avulsa ? options.leads : ((state.gruposHome && state.gruposHome[grupo]) || []);
 
   const cardHtml = (l) => {
     const idStr = String(l.id||"");
