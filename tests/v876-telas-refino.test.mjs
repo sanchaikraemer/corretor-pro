@@ -14,12 +14,13 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), "..");
 const app = readFileSync(join(raiz, "app.js"), "utf8");
 
 // 1. KPI "Fazer agora" (home) não é mais sempre coral: usa active condicional ao valor.
+// (v884: o onclick passou a abrir a lista de ação do dia via abrirFazerAgora().)
 assert.ok(
-  app.includes(`class="ui-kpi${"${fazerAgora>0?' active':''}"}" onclick="cp786AbrirConducao('agora')"`),
+  app.includes(`class="ui-kpi${"${fazerAgora>0?' active':''}"}" onclick="abrirFazerAgora()"`),
   "KPI 'Fazer agora' deveria ficar coral (active) só quando fazerAgora>0"
 );
 assert.ok(
-  !/class="ui-kpi active" onclick="cp786AbrirConducao\('agora'\)"/.test(app),
+  !/class="ui-kpi active" onclick="abrirFazerAgora\(\)"/.test(app),
   "KPI 'Fazer agora' ainda está fixo como active (coral mesmo com 0)"
 );
 

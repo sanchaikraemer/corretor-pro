@@ -23,16 +23,16 @@ const ini = app.indexOf("function renderSaudacao(items){");
 assert.ok(ini !== -1, "renderSaudacao não foi encontrada em app.js");
 const corpo = app.slice(ini, app.indexOf("\nfunction ", ini + 1));
 
-// 1. A saudação conta a categoria "agora" — mesma base do card "Fazer agora".
+// 1. A saudação usa a MESMA base do card "Fazer agora" (cpPrecisaAcaoHoje) — v884.
 assert.ok(
-  /cp786Categoria\(l\)\s*===\s*["']agora["']/.test(corpo),
-  "renderSaudacao deveria contar acaoMostrada via cp786Categoria(l) === 'agora'"
+  /cpPrecisaAcaoHoje\(l\)/.test(corpo),
+  "renderSaudacao deveria contar acaoMostrada via cpPrecisaAcaoHoje(l), mesma base do card"
 );
 
-// 2. Some o cálculo antigo divergente dentro da saudação (chamada a entraEmRetomada + meta de 12).
+// 2. Não conta mais a categoria crua nem o cálculo antigo (meta de 12) direto na saudação.
 assert.ok(
-  !/entraEmRetomada\s*\(/.test(corpo),
-  "renderSaudacao ainda chama entraEmRetomada — volta a divergir do card 'Fazer agora'"
+  !/cp786Categoria\(l\)\s*===\s*["']agora["']/.test(corpo),
+  "renderSaudacao não deve mais contar cp786Categoria==='agora' cru (some do card real)"
 );
 assert.ok(
   !/META_DIA/.test(corpo),
