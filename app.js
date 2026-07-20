@@ -9582,24 +9582,22 @@ function cp786TemCompromisso(l){
   }
   return false;
 }
-// v885 — PRIORIDADE por FATOS reais (decisão do dono): não existe valor R$ nem etapa/funil
-// nem marco de proposta pra ranquear. Sobram dois fatos que TODO lead tem + um desempate:
-//   Engajamento (nº de mensagens = interesse/probabilidade) + Abandono (dias sem toque real)
-//   + desempate "cliente falou por último" (a bola está com você).
-// Pesos iniciais, fáceis de calibrar depois de ver com leads reais.
+// v885/v886 — PRIORIDADE por FATOS reais (decisão do dono): não existe valor R$ nem etapa/funil
+// nem marco de proposta pra ranquear. Sobram dois fatos que TODO lead tem:
+//   Engajamento (nº de mensagens = interesse/probabilidade) + Abandono (dias sem toque real).
+// v886: removido o bônus "cliente falou por último" (o dono nunca deixa o cliente sem resposta,
+// e a última msg do cliente costuma ser só "obrigado/ok" — não diz prioridade). Pesos calibráveis.
 const CP_PESO_ENGAJAMENTO = 2;     // por mensagem (com teto pra thread gigante não dominar)
 const CP_TETO_ENGAJAMENTO = 120;   // satura o engajamento
 const CP_PESO_ABANDONO = 1;        // por dia parado
 const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não vence só pela idade)
-const CP_BONUS_BOLA = 25;          // cliente falou por último = deve resposta
 const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
+const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens = prospecção rasa, não entra na fila (vai p/ aguardando)
 function cpNotaPrioridade(l){
   const msgs = Math.min(totalMensagensLead(l), CP_TETO_ENGAJAMENTO);
   const dParado = diasParado(l);
   const dias = Math.min(Number.isFinite(dParado) ? dParado : 0, CP_TETO_ABANDONO);
-  let nota = msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
-  if(typeof cp786UltimoFoiCliente === 'function' && cp786UltimoFoiCliente(l)) nota += CP_BONUS_BOLA;
-  return nota;
+  return msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
 }
 // Fila completa de "Fazer agora" (todos que precisam de ação), ranqueada — mais prioritário
 // primeiro. A DOSE do dia é o slice(0, CP_DOSE_DIA); o resto é backlog (não some).
@@ -9614,8 +9612,8 @@ window.cpFilaFazerAgora = cpFilaFazerAgora;
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
 //   'programados' (Agenda): tem compromisso/lembrete marcado.
-//   'aguardando' : atendido recentemente (descansa), lead cru (0-2 msgs = prospecção) OU a bola
-//                  está legitimamente com o cliente e no prazo (entraEmRetomada = false).
+//   'aguardando' : atendido recentemente (descansa), lead cru (<CP_MIN_MSGS_PRIORIDADE msgs =
+//                  prospecção) OU a bola está legitimamente com o cliente e no prazo.
 //   'agora'      : precisa de VOCÊ — responder ou RETOMAR (parado 5+ dias, retorno/lembrete
 //                  vencido, cliente falou por último, quente-fechar...).
 function cp786Categoria(l,modelo=null,ultimaReal=null){
@@ -9623,7 +9621,7 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(cp786TemCompromisso(l)) return 'programados';
   if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return 'aguardando'; // atendi hoje
   if(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento(l)) return 'aguardando'; // atendido há <5d, descansa
-  if(totalMensagensLead(l) < 3) return 'aguardando'; // conversa rasa = prospecção, não prioridade
+  if(totalMensagensLead(l) < CP_MIN_MSGS_PRIORIDADE) return 'aguardando'; // conversa rasa = prospecção, não prioridade
   return entraEmRetomada(l) ? 'agora' : 'aguardando';
 }
 function cp786CategoriaLabel(c){
