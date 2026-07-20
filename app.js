@@ -3316,17 +3316,15 @@ function renderSaudacao(items){
   else if(h < 18) saud = "Boa tarde";
   else saud = "Boa noite";
   const corretorNome = (state.cerebroCfg?.corretorNome || "").trim().split(/\s+/)[0] || "";
-  // O número da saudação precisa BATER com o card "Fazer agora" e com a lista abaixo.
-  // Toda a home (card "Fazer agora", KPIs e "Top conversão") é calculada por cp786Categoria
-  // (via cp788Grupos). Antes, esta saudação usava um cálculo próprio (entraEmRetomada + meta
-  // de 12) que divergia: contava leads de reativação parados 5+ dias como "pra atender hoje",
-  // então o cabeçalho laranja mostrava "10 leads pra atender hoje" com o card "Fazer agora" em
-  // 0 e a lista dizendo "Tudo em dia". Agora conta exatamente os leads da categoria "agora".
+  // O número da saudação precisa BATER com o card "Fazer agora" — usa a MESMA base
+  // (cpPrecisaAcaoHoje): leads que valem uma ação hoje (responder ou retomar), fora quem já
+  // foi atendido hoje e quem tem compromisso futuro (Agenda). Assim o cabeçalho laranja e o
+  // card mostram o mesmo número real, sem aquela divergência do print (10 no topo x 0 no card).
   let tratadosHoje = 0, acaoMostrada = 0;
   for(const l of items){
     if(!leadEhAtivo(l)) continue;
     if(ehContatadoHoje(l)) tratadosHoje++;
-    if(cp786Categoria(l) === "agora") acaoMostrada++;
+    if(cpPrecisaAcaoHoje(l)) acaoMostrada++;
   }
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   const title = qs("#homePageTitle");
@@ -9748,21 +9746,44 @@ window.cp786Badge=cp786Badge;
 window.cp786AbrirConducao=cp786AbrirConducao;
 window.cp786AbrirPrioridadePrincipal=cp786AbrirPrioridadePrincipal;
 
+// "Fazer agora" = a AÇÃO real do dia, não só "precisa responder AGORA". Numa carteira de
+// imports antigos quase nada é resposta pendente (categoria 'agora'), então o card vivia em
+// 0 e sem serventia. Agora conta também as RETOMADAS que valem hoje (entraEmRetomada: parado
+// 5+ dias, lembrete vencido, compromisso pra hoje/amanhã, quente-fechar...). Fica de fora
+// quem já foi atendido hoje e quem tem compromisso futuro (esse é da Agenda). É a MESMA base
+// da saudação lá do topo, pra o número laranja e o card baterem.
+function cpPrecisaAcaoHoje(l){
+  if(!leadEhAtivo(l)) return false;
+  if(typeof ehContatadoHoje==='function' && ehContatadoHoje(l)) return false; // já atendi hoje
+  if(typeof cp786TemCompromisso==='function' && cp786TemCompromisso(l)) return false; // é da Agenda
+  if(cp786Categoria(l)==='agora') return true;             // precisa responder
+  if(typeof entraEmRetomada==='function' && entraEmRetomada(l)) return true; // vale retomar hoje
+  return false;
+}
+function abrirFazerAgora(){
+  const ativos=(state.itemsAtivos||[]).filter(leadEhAtivo);
+  let leads=ativos.filter(cpPrecisaAcaoHoje);
+  if(typeof cp786OrdenarConducao==='function') leads=cp786OrdenarConducao(leads);
+  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub:'Leads que valem uma ação sua hoje — responder ou retomar, do mais quente pro mais frio.'},leads});
+}
+window.cpPrecisaAcaoHoje=cpPrecisaAcaoHoje;
+window.abrirFazerAgora=abrirFazerAgora;
+
 renderResumoDia = function(items){
   const box = qs("#resumoDia");
   if(!box) return;
   if(!items?.length){ box.style.display="none"; box.innerHTML=""; return; }
   const ativos=items.filter(leadEhAtivo);
-  const categorias=ativos.map(cp786Categoria);
-  const fazerAgora=categorias.filter(c=>c==='agora').length;
-  const compromissos=categorias.filter(c=>c==='programados').length;
-  const aguardando=categorias.filter(c=>c==='aguardando').length;
-  // Total de leads ativos (soma de todas as categorias). Substitui o card "Cliente respondeu"
-  // a pedido do corretor: quando o cliente responde, ele já dá seguimento por fora.
+  // Três lentes que particionam a carteira ativa: ação hoje (responder/retomar), Agenda
+  // (compromisso marcado) e o resto aguardando o cliente. cpPrecisaAcaoHoje já exclui quem
+  // tem compromisso, então não há sobreposição entre "Fazer agora" e "Agenda".
+  const fazerAgora=ativos.filter(cpPrecisaAcaoHoje).length;
+  const compromissos=ativos.filter(l=>typeof cp786TemCompromisso==='function'&&cp786TemCompromisso(l)).length;
+  const aguardando=Math.max(0, ativos.length - fazerAgora - compromissos);
   const totalLeads=ativos.length;
   box.style.display="grid";
   box.innerHTML = `
-    <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="cp786AbrirConducao('agora')"><span>Fazer agora</span><div><b>${fazerAgora}</b><i>${ui631Icon('resposta')}</i></div></div>
+    <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div><b>${fazerAgora}</b><i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('programados')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
