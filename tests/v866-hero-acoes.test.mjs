@@ -22,8 +22,10 @@ assert.doesNotMatch(hero, />WhatsApp</, 'não pode sobrar botão "WhatsApp" no h
 assert.doesNotMatch(hero, /Copiar mensagem/, '"Copiar mensagem" precisa sair do hero');
 assert.doesNotMatch(hero, /copiarMensagemLead/, 'o hero não pode mais chamar copiarMensagemLead');
 
-// As ações que sobram são "Ver histórico" e "Já falei".
-assert.match(hero, /Ver histórico/, 'o hero mantém "Ver histórico"');
-assert.match(hero, /Já falei/, 'o hero mantém "Já falei"');
+// v890: "Ver histórico" e "Já falei" saíram do hero — pra agir você abre o lead (o card
+// inteiro já é clicável e abre o lead). Sem botões redundantes no hero.
+assert.doesNotMatch(hero, /Ver histórico/, '"Ver histórico" saiu do hero');
+assert.doesNotMatch(hero, /Já falei/, '"Já falei" saiu do hero');
+assert.doesNotMatch(hero, /h-acts/, 'a barra de ações do hero foi removida');
 
 console.log('v866-hero-acoes: ok');
