@@ -13,7 +13,7 @@ const consts = app.match(/const CP_PESO_ENGAJAMENTO[\s\S]*?const CP_DOSE_DIA = 1
 const fnNota = app.match(/function cpNotaPrioridade\(l\)\{[\s\S]*?\n\}/);
 assert.ok(consts && fnNota, 'cpNotaPrioridade + constantes precisam existir');
 const cpNotaPrioridade = eval(`
-  const totalMensagensLead = l => l.msgs || 0;
+  const mensagensDoCliente = l => l.msgs || 0;
   const diasParado = l => (l.dias == null ? Infinity : l.dias);
   ${consts[0]}
   ${fnNota[0]}
@@ -29,7 +29,7 @@ assert.equal(app.match(/const CP_DOSE_DIA = (\d+);/)[1], '10', 'a dose do dia de
 // --- 2. cp786Categoria classifica pela SITUAÇÃO REAL (não pelo campo de status da IA). ---
 const cat = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
 assert.match(cat, /if\(cp786TemCompromisso\(l\)\) return 'programados'/, 'compromisso => Agenda');
-assert.match(cat, /totalMensagensLead\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/, 'lead cru não é prioridade');
+assert.match(cat, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/, 'lead cru (cliente engajou pouco) não é prioridade');
 assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'aguardando'/, 'precisa de retomada => Fazer agora');
 assert.doesNotMatch(cat, /responder-agora|precisaCorretor|responsavel==='corretor'/,
   'não deve mais depender do campo de status/responsavel da IA (o balde-lixo)');
