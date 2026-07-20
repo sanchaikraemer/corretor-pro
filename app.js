@@ -3254,15 +3254,18 @@ function renderSaudacao(items){
   else if(h < 18) saud = "Boa tarde";
   else saud = "Boa noite";
   const corretorNome = (state.cerebroCfg?.corretorNome || "").trim().split(/\s+/)[0] || "";
-  // Meta do dia = 12 menos os já atendidos hoje, limitada pelos que podem entrar em retomada.
-  // Calcula igual à lista, pra o número da saudação bater com o que aparece embaixo.
-  const META_DIA = 12;
-  let tratadosHoje = 0, disponiveisHoje = 0;
+  // O número da saudação precisa BATER com o card "Fazer agora" e com a lista abaixo.
+  // Toda a home (card "Fazer agora", KPIs e "Top conversão") é calculada por cp786Categoria
+  // (via cp788Grupos). Antes, esta saudação usava um cálculo próprio (entraEmRetomada + meta
+  // de 12) que divergia: contava leads de reativação parados 5+ dias como "pra atender hoje",
+  // então o cabeçalho laranja mostrava "10 leads pra atender hoje" com o card "Fazer agora" em
+  // 0 e a lista dizendo "Tudo em dia". Agora conta exatamente os leads da categoria "agora".
+  let tratadosHoje = 0, acaoMostrada = 0;
   for(const l of items){
-    if(ehContatadoHoje(l)){ tratadosHoje++; continue; }
-    if(entraEmRetomada(l)) disponiveisHoje++;
+    if(!leadEhAtivo(l)) continue;
+    if(ehContatadoHoje(l)) tratadosHoje++;
+    if(cp786Categoria(l) === "agora") acaoMostrada++;
   }
-  const acaoMostrada = Math.min(Math.max(0, META_DIA - tratadosHoje), disponiveisHoje);
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   const title = qs("#homePageTitle");
   if(title) title.textContent = head;
