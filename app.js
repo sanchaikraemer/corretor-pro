@@ -5200,7 +5200,11 @@ function renderLeadFoco(lead){
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
-    const last=cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
+    // "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do histórico),
+    // pra não divergir: lead.lastInteractionAt vinha como ISO/UTC e a conversão pra São Paulo
+    // deslocava 3h (histórico 03:32 x cabeçalho 00:32). Fallback pro campo antigo quando não há msg.
+    const ultimaMsgReal=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(lead):null;
+    const last=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const atendimento=ultimoAtendimentoDataHora(lead);
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
@@ -5212,7 +5216,9 @@ function renderLeadFoco(lead){
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704JornadaBadge(lead,mc)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:''}
-          <div class="cp704-metaline">${escapeHtml([last?`Última mensagem — ${last}`:'',atendimento?`Último atendimento — ${atendimento}`:''].filter(Boolean).join(' · ')||'Sem data registrada')}</div>
+          ${last?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${last}`)}</div>`:''}
+          ${atendimento?`<div class="cp704-metaline">${escapeHtml(`Último atendimento — ${atendimento}`)}</div>`:''}
+          ${(!analiseEm&&!last&&!atendimento)?`<div class="cp704-metaline">Sem data registrada</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
