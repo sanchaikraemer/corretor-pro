@@ -793,6 +793,13 @@ body{
 ::selection{background:var(--accent);color:#fff}
 button{color:inherit}
 a{color:var(--accent)}
+/* Acessibilidade (Identidade v2.0, seção 35): foco visível para teclado — anel coral que
+   nunca é removido. Só aparece na navegação por teclado (:focus-visible), não no clique/toque,
+   então vence os vários `outline:none` sem poluir o uso normal. */
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid var(--accent)!important;
+  outline-offset:2px!important;
+}
 
 /* Marca */
 .logo,.sb-logo{
