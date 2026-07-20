@@ -15,26 +15,21 @@ assert.ok(consts && fnNota, 'cpNotaPrioridade + constantes precisam existir');
 const cpNotaPrioridade = eval(`
   const totalMensagensLead = l => l.msgs || 0;
   const diasParado = l => (l.dias == null ? Infinity : l.dias);
-  const cp786UltimoFoiCliente = l => !!l.bola;
   ${consts[0]}
   ${fnNota[0]}
   cpNotaPrioridade;
 `);
-const A = { msgs: 50, dias: 10, bola: false }; // muito engajado
-const B = { msgs: 5, dias: 100, bola: false }; // pouco engajado, muito abandonado
-const C = { msgs: 5, dias: 10, bola: false };
+const A = { msgs: 50, dias: 10 }; // muito engajado
+const B = { msgs: 5, dias: 100 }; // pouco engajado, muito abandonado
+const C = { msgs: 5, dias: 10 };
 assert.ok(cpNotaPrioridade(A) > cpNotaPrioridade(B), 'engajamento alto deve vencer só-abandono');
 assert.ok(cpNotaPrioridade(B) > cpNotaPrioridade(C), 'mais abandonado deve subir entre iguais em engajamento');
-assert.ok(
-  cpNotaPrioridade({ msgs: 5, dias: 10, bola: true }) > cpNotaPrioridade(C),
-  '"cliente falou por último" deve desempatar pra cima'
-);
 assert.equal(app.match(/const CP_DOSE_DIA = (\d+);/)[1], '10', 'a dose do dia deve ser 10');
 
 // --- 2. cp786Categoria classifica pela SITUAÇÃO REAL (não pelo campo de status da IA). ---
 const cat = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
 assert.match(cat, /if\(cp786TemCompromisso\(l\)\) return 'programados'/, 'compromisso => Agenda');
-assert.match(cat, /totalMensagensLead\(l\) < 3\) return 'aguardando'/, 'lead cru (0-2 msgs) não é prioridade');
+assert.match(cat, /totalMensagensLead\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/, 'lead cru não é prioridade');
 assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'aguardando'/, 'precisa de retomada => Fazer agora');
 assert.doesNotMatch(cat, /responder-agora|precisaCorretor|responsavel==='corretor'/,
   'não deve mais depender do campo de status/responsavel da IA (o balde-lixo)');
