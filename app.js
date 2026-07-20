@@ -1858,6 +1858,21 @@ function ultimoAtendimentoTs(l){
   }
   return maxTs || 0;
 }
+// Dias realmente "parado" na negociação: desde o último toque REAL — considera tanto a
+// última mensagem (WhatsApp) quanto o último ATENDIMENTO manual do corretor. Sem isto, um
+// lead atendido HOJE continuava aparecendo "parado 144d" e caindo em "Oportunidades
+// esquecidas"/Raio-X, porque só a idade da última mensagem era levada em conta. Retorna
+// Infinity quando não há nenhum sinal de data (nunca tocado).
+function diasParado(l){
+  let dias = Number(l?.daysSinceClientReply != null ? l.daysSinceClientReply : l?.daysSinceLastInteraction);
+  if(!Number.isFinite(dias)) dias = Infinity;
+  const atTs = ultimoAtendimentoTs(l);
+  if(atTs){
+    const dAt = diasCalendarioBR(atTs);
+    if(dAt != null && Number.isFinite(dAt)) dias = Math.min(dias, dAt);
+  }
+  return dias;
+}
 // Rótulo humano do atendimento: "agora", "hoje", "ontem" ou "há X dias" (§6.5).
 function rotuloTempoAtendimento(ts){
   if(!ts) return "";
@@ -2407,8 +2422,10 @@ function leadsEsquecidos(items){
     const teveProposta = leadTemProposta(l);
     const passoChave = ["Visita/Proposta","Negociação"].includes(etapa) || teveProposta || temAtendimentoManual(l);
     if(!passoChave) continue;
-    const parado = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction);
-    if(!(parado >= 7)) continue; // ainda quente/recente não é "esquecido"
+    // "parado" considera o último ATENDIMENTO, não só a última mensagem: um lead atendido
+    // hoje tem parado=0 e sai da lista de esquecidos (era o bug do "atendi agora e continua 144d").
+    const parado = diasParado(l);
+    if(!(parado >= 7)) continue; // ainda quente/recente (ou atendido agora) não é "esquecido"
     let pesoRecuperacao = 0;
     if(etapa === "Negociação") pesoRecuperacao += 40;
     else if(etapa === "Visita/Proposta") pesoRecuperacao += 30;
@@ -2422,7 +2439,8 @@ function leadsEsquecidos(items){
 }
 function radarRowHTML(l){
   const idJs = JSON.stringify(String(l.id || ""));
-  const parado = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction) || 0;
+  const paradoRaw = diasParado(l);
+  const parado = Number.isFinite(paradoRaw) ? paradoRaw : 0;
   const etapa = normalizarEtapa(l.etapa);
   const teveProposta = leadTemProposta(l);
   const rec = (etapa === "Negociação" || teveProposta)
@@ -2455,7 +2473,7 @@ function insightFocoHTML(items, esquecidos){
   const linhas = [];
 
   // (R5) GARGALO — a fase onde mais clientes ficaram parados (5+ dias). É onde a energia rende mais.
-  const parado = (l) => { const d = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction); return Number.isFinite(d) && d >= 5; };
+  const parado = (l) => { const d = diasParado(l); return Number.isFinite(d) && d >= 5; };
   const cont = {};
   for(const l of ativos){ if(!parado(l)) continue; const e = normalizarEtapa(l.etapa); cont[e] = (cont[e] || 0) + 1; }
   let etapaG = null, nG = 0;
@@ -2488,7 +2506,8 @@ function insightFocoHTML(items, esquecidos){
   const esq = Array.isArray(esquecidos) ? esquecidos : leadsEsquecidos(items);
   if(esq && esq[0]){
     const l = esq[0];
-    const dias = Number(l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction) || 0;
+    const diasRaw = diasParado(l);
+    const dias = Number.isFinite(diasRaw) ? diasRaw : 0;
     const etapa = normalizarEtapa(l.etapa);
     const teveProposta = leadTemProposta(l);
     let oque = "atendimento feito";
