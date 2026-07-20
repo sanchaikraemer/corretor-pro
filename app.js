@@ -269,6 +269,22 @@ function totalMensagensLead(l){
   const n = Number(l?.messageCount);
   return Number.isFinite(n) ? n : (Array.isArray(l?.recentMessages) ? l.recentMessages.length : 0);
 }
+// Nº de mensagens REAIS do CLIENTE (não as minhas explicando, nem itens manuais/atendimento).
+// É o proxy de INTERESSE: cliente que responde muito está mais engajado. Alimenta a barra de
+// "Interesse do cliente" e o ranking do "Fazer agora" (mesma régua, decisão do dono).
+function mensagensDoCliente(l){
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  if(!msgs.length) return 0;
+  const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
+  let n = 0;
+  for(const m of msgs){
+    if(!m || !String(m.text||"").trim()) continue;
+    const src = String(m.source||"").toLowerCase(), type = String(m.type||"").toLowerCase();
+    if(src==='manual'||src==='crm'||src==='corretor-pro-manual'||type==='print-whatsapp'||['atendimento','nota','ligacao','visita','presencial','proposta','observacao_manual','mensagem_enviada'].includes(type)) continue;
+    if(typeof ehMsgDoCliente==='function' && ehMsgDoCliente(m, pn)) n++;
+  }
+  return n;
+}
 function leadTemProposta(l){
   return l?.hasProposal === true || (Array.isArray(l?.recentMessages) && l.recentMessages.some(m => m && m.proposta));
 }
@@ -4967,6 +4983,24 @@ function cp704Css(){
       + `<span class="cp704-etapa-label">${escapeHtml(rotulo)}</span>`
       + `</span>`;
   }
+  // v889 — no lugar do "passo X de 6" (funil que o dono mandou tirar): barra de INTERESSE do
+  // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=30
+  // cheia). Mede engajamento real, não etapa. Largura total.
+  function cp704BarraInteresse(lead){
+    const n = (typeof mensagensDoCliente==='function') ? mensagensDoCliente(lead) : 0;
+    const teto = (typeof CP_TETO_BARRA_INTERESSE==='number') ? CP_TETO_BARRA_INTERESSE : 30;
+    const pct = Math.max(0, Math.min(100, Math.round(n/teto*100)));
+    const label = n===1 ? '1 mensagem do cliente' : `${n} mensagens do cliente`;
+    return `<div class="cp704-interesse" style="width:100%;margin:2px 0 6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px">
+          <span style="font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Interesse do cliente</span>
+          <b style="font-size:12px;font-weight:950;color:var(--text)">${escapeHtml(label)}</b>
+        </div>
+        <div style="height:9px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden">
+          <i style="display:block;height:100%;width:${pct}%;border-radius:999px;background:linear-gradient(90deg,var(--morno),var(--acao))"></i>
+        </div>
+      </div>`;
+  }
   function cp704Impedimento(lead, mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
     if(!analiseAtualValida752(a)) return 'Análise comercial pendente nesta versão. Reanalise para evitar informação antiga.';
@@ -5214,7 +5248,7 @@ function renderLeadFoco(lead){
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
-          <div class="cp704-mainrow"><div class="cp704-situation">${cp704JornadaBadge(lead,mc)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
+          <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:''}
           ${last?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${last}`)}</div>`:''}
           ${atendimento?`<div class="cp704-metaline">${escapeHtml(`Último atendimento — ${atendimento}`)}</div>`:''}
@@ -9593,14 +9627,17 @@ function cp786TemCompromisso(l){
 //   Engajamento (nº de mensagens = interesse/probabilidade) + Abandono (dias sem toque real).
 // v886: removido o bônus "cliente falou por último" (o dono nunca deixa o cliente sem resposta,
 // e a última msg do cliente costuma ser só "obrigado/ok" — não diz prioridade). Pesos calibráveis.
-const CP_PESO_ENGAJAMENTO = 2;     // por mensagem (com teto pra thread gigante não dominar)
+const CP_PESO_ENGAJAMENTO = 2;     // por mensagem DO CLIENTE (com teto pra thread gigante não dominar)
 const CP_TETO_ENGAJAMENTO = 120;   // satura o engajamento
 const CP_PESO_ABANDONO = 1;        // por dia parado
 const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não vence só pela idade)
 const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
-const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens = prospecção rasa, não entra na fila (vai p/ aguardando)
+const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens DO CLIENTE = prospecção rasa, não entra na fila
+const CP_TETO_BARRA_INTERESSE = 30;// barra "Interesse do cliente" cheia em 30 mensagens do cliente
+// v889: engajamento passa a contar só as mensagens DO CLIENTE (não as minhas explicando) —
+// mesma régua da barra de interesse (decisão do dono).
 function cpNotaPrioridade(l){
-  const msgs = Math.min(totalMensagensLead(l), CP_TETO_ENGAJAMENTO);
+  const msgs = Math.min(mensagensDoCliente(l), CP_TETO_ENGAJAMENTO);
   const dParado = diasParado(l);
   const dias = Math.min(Number.isFinite(dParado) ? dParado : 0, CP_TETO_ABANDONO);
   return msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
@@ -9627,7 +9664,7 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(cp786TemCompromisso(l)) return 'programados';
   if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return 'aguardando'; // atendi hoje
   if(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento(l)) return 'aguardando'; // atendido há <5d, descansa
-  if(totalMensagensLead(l) < CP_MIN_MSGS_PRIORIDADE) return 'aguardando'; // conversa rasa = prospecção, não prioridade
+  if(mensagensDoCliente(l) < CP_MIN_MSGS_PRIORIDADE) return 'aguardando'; // cliente engajou pouco = prospecção, não prioridade
   return entraEmRetomada(l) ? 'agora' : 'aguardando';
 }
 function cp786CategoriaLabel(c){

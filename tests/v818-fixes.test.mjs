@@ -23,7 +23,9 @@ for(const rotulo of ['Conhecendo','Interessado','Comparando opções','Vendo se 
 }
 assert.match(app, /function cp704JornadaBadge\(lead, mc\)/, 'badge de jornada deve existir');
 assert.match(app, /passo \$\{j\.passo\} de 6/, 'badge deve mostrar "passo X de 6"');
-assert.match(app, /cp704JornadaBadge\(lead,mc\)/, 'o hero do lead deve usar o badge de jornada');
+// v889: o hero do lead NÃO usa mais o funil "passo X de 6" — usa a barra de interesse do cliente.
+assert.match(app, /cp704BarraInteresse\(lead\)\}<p>/, 'o hero do lead deve usar a barra de interesse do cliente');
+assert.doesNotMatch(app, /cp704-situation">\$\{cp704JornadaBadge\(lead,mc\)\}/, 'o funil "passo X de 6" saiu do hero');
 // Verde no fim da jornada (Decidindo/Vendido) e neutro no começo (Conhecendo).
 assert.ok(app.includes("label:'Decidindo',              passo:6, cor:'#2fe27a'"), 'Decidindo deve ser verde vivo');
 assert.ok(app.includes("label:'Conhecendo',             passo:1, cor:'#9fb1bd'"), 'Conhecendo deve ser cinza frio');

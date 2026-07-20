@@ -22,8 +22,8 @@ assert.match(app, /const CP_DOSE_DIA = 10;/, 'F: dose do dia = 10');
 
 // G: lead cru agora precisa de 5+ mensagens pra entrar na fila.
 assert.match(app, /const CP_MIN_MSGS_PRIORIDADE = 5;/, 'G: mínimo de mensagens = 5');
-assert.match(app, /totalMensagensLead\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/,
-  'cp786Categoria deve usar o corte de mensagens calibrado');
+assert.match(app, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/,
+  'cp786Categoria deve usar o corte de mensagens do cliente calibrado');
 
 // H: proteção pós-atendimento continua em 5 dias.
 assert.match(app, /const PRAZO_PROTECAO_ATENDIDO = 5;/, 'H: proteção pós-atendimento = 5 dias');
