@@ -1853,6 +1853,27 @@ html[data-theme="light"] .cp697-row{
   border-color:#d9e4e8!important;
   color:#102631!important;
 }
+/* Atendimentos (cp788) no tema claro: superfícies claras em vez do petróleo translúcido
+   (rgba(7,52,64,.58)), que virava um véu cinza sobre o fundo branco — corrige o contraste (seção 26). */
+html[data-theme="light"] .cp788-att-list,
+html[data-theme="light"] .cp788-att-empty,
+html[data-theme="light"] .cp788-att-loading,
+html[data-theme="light"] .cp788-meta-card,
+html[data-theme="light"] .cp788-meta-breakdown{
+  background:#FFFFFF!important;
+  border-color:#D7E0E4!important;
+  box-shadow:0 8px 22px rgba(15,45,60,.06)!important;
+}
+html[data-theme="light"] .cp788-att-row{background:transparent!important;border-color:#E4EBEE!important;color:#102A34!important}
+html[data-theme="light"] .cp788-att-row:hover{background:#F5F8FA!important}
+html[data-theme="light"] .cp788-att-copy strong{color:#102A34!important}
+html[data-theme="light"] .cp788-att-copy small,
+html[data-theme="light"] .cp788-att-empty span,
+html[data-theme="light"] .cp788-meta-status,
+html[data-theme="light"] .cp788-meta-title{color:#596A72!important;opacity:1!important}
+html[data-theme="light"] .cp788-att-time{background:#EEF3F5!important;color:#33454E!important}
+html[data-theme="light"] .cp788-att-more{background:#F3F6F7!important;color:#33454E!important;border-color:#D7E0E4!important}
+html[data-theme="light"] .cp788-att-chevron{color:#7E8D94!important}
 html[data-theme="light"] .cp697-row:hover{background:#f8fbfc!important}
 html[data-theme="light"] .cp697-tabs button{
   background:#ffffff!important;
