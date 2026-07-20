@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-// --- Item 1: atendimento recente descansa o lead mesmo com lembrete vencido ---
-assert.match(app, /atendimentoAposLembrete\s*=\s*!!atendimentoTs&&\(!lembTs\|\|isNaN\(lembTs\)\|\|atendimentoTs>=lembTs\)/,
-  'cp786Categoria deve considerar se o atendimento foi depois do lembrete');
-assert.match(app, /if\(descansoAtendimento&&\(!lembreteVencido\(l\)\|\|atendimentoAposLembrete\)\) return 'aguardando'/,
-  'lembrete vencido não pode mais furar a proteção de atendimento recente');
+// --- Item 1: atendimento recente descansa o lead (não volta pra fila de ação) ---
+// v885: cp786Categoria foi reescrita (classifica pela situação real). O "descanso" pós-
+// atendimento agora é explícito: atendido hoje OU protegido (<5 dias) => 'aguardando'.
+assert.match(app, /if\(typeof ehContatadoHoje === 'function' && ehContatadoHoje\(l\)\) return 'aguardando'/,
+  'lead atendido hoje deve descansar em aguardando');
+assert.match(app, /if\(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento\(l\)\) return 'aguardando'/,
+  'lead atendido nos últimos 5 dias deve descansar (proteção pós-atendimento)');
 
 // --- Item 2: resumo do lead sem corte (sem cp705Short no hero) ---
 assert.doesNotMatch(app, /cp705Short\(cp705SanitizeFactText\(imped,lead\),\s*180\)/,

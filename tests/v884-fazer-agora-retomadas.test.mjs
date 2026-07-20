@@ -3,31 +3,26 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-// v884 — o card "Fazer agora" vivia em 0 (numa carteira de imports antigos quase nada é
-// "responder AGORA"), sem serventia. O dono pediu pra ele FUNCIONAR (não remover): passa a
-// contar a ação real do dia = responder + RETOMAR, batendo com a saudação laranja do topo.
+// v884/v885 — "Fazer agora" não é mais 0 (rígido) nem 207 (backlog inteiro): é a DOSE do dia
+// (top CP_DOSE_DIA da fila ranqueada). O clique abre a dose + a fila de retomada (backlog).
 
-// 1. cpPrecisaAcaoHoje existe e combina "precisa responder" + "vale retomar", excluindo
-//    quem já foi atendido hoje e quem tem compromisso futuro (Agenda).
-const fn = app.match(/function cpPrecisaAcaoHoje\(l\)\{[\s\S]*?\n\}/);
-assert.ok(fn, 'cpPrecisaAcaoHoje precisa existir');
-const corpo = fn[0];
-assert.match(corpo, /ehContatadoHoje\(l\)\)?\s*return false/, 'quem foi atendido hoje sai de "Fazer agora"');
-assert.match(corpo, /cp786TemCompromisso\(l\)\)?\s*return false/, 'quem tem compromisso vai pra Agenda, não "Fazer agora"');
-assert.match(corpo, /cp786Categoria\(l\)==='agora'\)?\s*return true/, 'quem precisa responder entra em "Fazer agora"');
-assert.match(corpo, /entraEmRetomada\(l\)\)?\s*return true/, 'retomadas do dia entram em "Fazer agora"');
+// 1. cpPrecisaAcaoHoje = a categoria de ação (a fila do "Fazer agora").
+assert.match(app, /function cpPrecisaAcaoHoje\(l\)\{ return cp786Categoria\(l\)==='agora'; \}/,
+  'cpPrecisaAcaoHoje deve ser o alias de cp786Categoria==="agora"');
 
-// 2. O card usa cpPrecisaAcaoHoje e abre a lista de ação de verdade (não mais o filtro 'agora'
-//    do pipeline, que dava 0).
+// 2. O card usa a DOSE (min(fila, CP_DOSE_DIA)) e abre a lista real.
 const rd = app.match(/renderResumoDia = function\(items\)\{[\s\S]*?\n\};/)[0];
-assert.match(rd, /ativos\.filter\(cpPrecisaAcaoHoje\)\.length/, 'fazerAgora deve contar cpPrecisaAcaoHoje');
-assert.match(rd, /onclick="abrirFazerAgora\(\)"/, 'o card "Fazer agora" deve abrir abrirFazerAgora()');
-assert.doesNotMatch(rd, /onclick="cp786AbrirConducao\('agora'\)"/, 'o card não deve mais abrir o filtro vazio do pipeline');
+assert.match(rd, /const fila=cpFilaFazerAgora\(ativos\);/, 'renderResumoDia deve montar a fila ranqueada');
+assert.match(rd, /Math\.min\(fila\.length, CP_DOSE_DIA\)/, 'fazerAgora deve ser a dose (teto CP_DOSE_DIA)');
+assert.match(rd, /onclick="abrirFazerAgora\(\)"/, 'o card "Fazer agora" abre abrirFazerAgora()');
+assert.doesNotMatch(rd, /onclick="cp786AbrirConducao\('agora'\)"/, 'não abre mais o filtro vazio do pipeline');
 
-// 3. abrirFazerAgora abre a lista avulsa (reaproveita abrirGrupoHome) e está no window.
+// 3. abrirFazerAgora mostra a dose e o backlog (resto) — nada some.
 const af = app.match(/function abrirFazerAgora\(\)\{[\s\S]*?\n\}/)[0];
-assert.match(af, /ativos\.filter\(cpPrecisaAcaoHoje\)/, 'a lista aberta usa o mesmo critério do número');
-assert.match(af, /abrirGrupoHome\('__fazeragora'/, 'abrirFazerAgora deve abrir a lista via abrirGrupoHome');
-assert.match(app, /window\.abrirFazerAgora ?= ?abrirFazerAgora/, 'abrirFazerAgora precisa estar no window (onclick inline)');
+assert.match(af, /cpFilaFazerAgora\(ativos\)/, 'abrirFazerAgora usa a fila ranqueada');
+assert.match(af, /slice\(0, CP_DOSE_DIA\)/, 'a dose é o top CP_DOSE_DIA');
+assert.match(af, /slice\(CP_DOSE_DIA\)/, 'o resto (backlog) continua acessível');
+assert.match(af, /abrirGrupoHome\('__fazeragora'/, 'abre a lista via abrirGrupoHome');
+assert.match(app, /window\.abrirFazerAgora ?= ?abrirFazerAgora/, 'abrirFazerAgora precisa estar no window');
 
 console.log('v884-fazer-agora-retomadas: ok');
