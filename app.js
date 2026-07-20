@@ -4801,6 +4801,8 @@ function cp704Css(){
 .cp704-back:active{transform:translateY(1px)}
       /* Marcar atendimento = ação principal do bloco (coral). Verde só quando já atendido (concluído). */
       .cp704-attended{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
+      .cp704-desmarcar{background:transparent;border:0;color:var(--muted);font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:4px 8px;white-space:nowrap}
+      .cp704-desmarcar:hover{color:var(--text)}
       .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:1;background:rgba(104,255,149,.12);border-color:rgba(104,255,149,.5);color:#68ff95}
       .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
       .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
@@ -4820,7 +4822,7 @@ function cp704Css(){
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-herorow{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:14px;padding:9px 16px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:14px;padding:9px 16px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{grid-column:1/-1;justify-self:center;width:auto;padding:8px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -5240,7 +5242,7 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse cp704-reanalyse-destaque" type="button" onclick="ui670Reanalisar(this)">↻ Reanalisar</button><button type="button" class="cp704-reanalyse" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button>${attended?`<button type="button" class="cp704-reanalyse" onclick="ui667DesmarcarAtendido(this)" title="Clicou sem querer? Desfaz o atendimento de hoje">Desmarcar</button>`:''}</div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse cp704-reanalyse-destaque" type="button" onclick="ui670Reanalisar(this)">↻ Reanalisar</button><button type="button" class="cp704-reanalyse" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button>${attended?`<button type="button" class="cp704-desmarcar" onclick="ui667DesmarcarAtendido(this)" title="Clicou sem querer? Desfaz o atendimento de hoje">Desmarcar atendimento de hoje</button>`:''}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
@@ -10073,26 +10075,32 @@ function ui667RemoverAtendidoLocal(lead){
 window.ui667DesmarcarAtendido=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
-  if(btn){btn.disabled=true;btn.textContent="Desmarcando...";}
+  // OTIMISTA: desmarca na tela na hora (não faz o corretor esperar a rede). Se a API falhar,
+  // reverte. O timeout é generoso (30s) porque a função serverless pode ter cold start.
+  const snapshot=Array.isArray(lead.analysis?.aprendizado?.eventos)
+    ? lead.analysis.aprendizado.eventos.map(e=>({...e})) : null;
+  ui667RemoverAtendidoLocal(lead);
+  for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+    const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
+    if(item&&item!==lead) ui667RemoverAtendidoLocal(item);
+  }
+  state.analysis=lead.analysis||null;
+  renderLeadFoco(lead);
   try{
-    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"desmarcar-atendido"}))});
+    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"desmarcar-atendido"}))},30000);
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao desmarcar");
-    ui667RemoverAtendidoLocal(lead);
-    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
-      const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
-      if(item&&item!==lead) ui667RemoverAtendidoLocal(item);
-    }
-    state.analysis=lead.analysis||null;
-    renderLeadFoco(lead);
     invalidarLeadsCache();
     carregarAgendaTopo?.();
     loadRecentLeads(false);
-    recarregarLeadFoco(lead.id);
     toast("Atendimento de hoje desmarcado.");
   }catch(err){
-    if(btn){btn.disabled=false;btn.textContent="Desmarcar";}
-    toast("Não consegui desmarcar: "+(err?.message||err));
+    // Reverte a tela: não deu pra salvar no servidor.
+    if(snapshot && lead.analysis?.aprendizado){ lead.analysis.aprendizado.eventos=snapshot; }
+    const ts=(typeof ultimoAtendimentoTs==='function')?ultimoAtendimentoTs(lead):0;
+    lead.lastAttendanceAt=ts?new Date(ts).toISOString():null; lead.ultimoAtendimentoEm=lead.lastAttendanceAt;
+    renderLeadFoco(lead);
+    toast("Não consegui desmarcar agora — tente de novo.");
   }
 };
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.

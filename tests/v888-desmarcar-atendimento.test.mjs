@@ -13,8 +13,8 @@ assert.match(bloco, /e\?\.detalhes\?\.de !== "botao_atendido"/, 'só mexe nos ev
 assert.match(bloco, /agoraBR\(d\)\.dataBR !== br\.dataBR/, 'remove apenas os do dia de hoje');
 assert.match(bloco, /removido: true/, 'confirma a remoção');
 
-// 2. Front: botão "Desmarcar" só aparece quando o lead está atendido hoje.
-assert.match(app, /\$\{attended\?`<button type="button" class="cp704-reanalyse" onclick="ui667DesmarcarAtendido\(this\)"/,
+// 2. Front: botão "Desmarcar" só aparece quando o lead está atendido hoje (link discreto).
+assert.match(app, /\$\{attended\?`<button type="button" class="cp704-desmarcar" onclick="ui667DesmarcarAtendido\(this\)"/,
   'o botão Desmarcar deve aparecer só quando attended');
 
 // 3. Front: ui667DesmarcarAtendido chama a API e limpa o atendimento local.
