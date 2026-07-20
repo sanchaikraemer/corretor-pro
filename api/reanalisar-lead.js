@@ -329,6 +329,32 @@ async function reanalisarLeadHandler702(req, res) {
     return json(res, 200, { ok: true, marcado: indiceHoje < 0, atualizado: indiceHoje >= 0, dataBR: br.dataBR, horaBR: br.horaBR, quando: agora.toISOString() });
   }
 
+  // Desfaz a marcação de atendimento feita pelo BOTÃO hoje (clicou sem querer). Remove só os
+  // eventos contato_manual de "botao_atendido" do dia — não mexe em atendimentos de outros dias
+  // nem em outros tipos (mensagem copiada, observação etc.).
+  if (body?.action === "desmarcar-atendido") {
+    const agora = new Date();
+    const br = agoraBR(agora);
+    const prev = row.resultado_analise || {};
+    const aprendizado = { ...(prev.aprendizado || {}) };
+    const eventos = Array.isArray(aprendizado.eventos) ? [...aprendizado.eventos] : [];
+    const antes = eventos.length;
+    const restantes = eventos.filter((e) => {
+      if (e?.evento !== "contato_manual" || e?.detalhes?.de !== "botao_atendido" || !e?.quando) return true;
+      const d = new Date(e.quando);
+      return isNaN(d.getTime()) || agoraBR(d).dataBR !== br.dataBR; // mantém o que NÃO é do dia
+    });
+    if (restantes.length === antes) return json(res, 200, { ok: true, removido: false });
+    aprendizado.eventos = restantes;
+    const merged = { ...prev, aprendizado };
+    const { error: dErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ resultado_analise: merged, atualizado_em: agora.toISOString() })
+      .eq("id", id);
+    if (dErr) return json(res, 500, { ok: false, error: dErr.message });
+    return json(res, 200, { ok: true, removido: true });
+  }
+
   // Reagendar (mudar a data) do lembrete manualmente — rápido, sem reanalisar.
   if (body?.action === "reagendar-lembrete") {
     const dataStr = String(body?.data || ""); // formato yyyy-mm-dd do seletor de data
