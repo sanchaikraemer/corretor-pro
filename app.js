@@ -2604,10 +2604,13 @@ function renderBotoesHome(){
     return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
   };
 
-  // Fila urgente = todos os que precisam de ação agora (sem teto).
+  // Fila urgente = quem precisa de ação agora, RANQUEADA pela nota (engajamento + abandono +
+  // bola com você) — a mesma do card "Fazer agora". A Home mostra só a DOSE do dia; o resto
+  // fica num expansor "fila de retomada" (não some).
   // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (continuam
   // nas prioridades, só não ficam em foco agora). state.pulados é por sessão (zera ao recarregar).
   let urgentes = (grupos["acao-hoje"] || []).concat(grupos["retomar-cuidado"] || []);
+  if(typeof cpNotaPrioridade === 'function') urgentes = urgentes.slice().sort((a,b)=>cpNotaPrioridade(b)-cpNotaPrioridade(a));
   {
     const pulados = state.pulados instanceof Set ? state.pulados : null;
     if(pulados && pulados.size){
@@ -2615,14 +2618,20 @@ function renderBotoesHome(){
     }
   }
   const retomada = (grupos["retomada"] || []);
+  const DOSE_HOME = (typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
   let top3Html;
   if(urgentes.length){
-    // O nº1 já está no card "Prioridade agora" acima — a fila lista só os DEMAIS (sem repetir).
-    const resto = urgentes.slice(1);
-    top3Html = renderHeroLead(urgentes[0])
-      + (resto.length
-          ? `<div class="fila-head"><h3>Próximos atendimentos</h3><span>Ordenados por prioridade de atendimento</span></div>`
-            + resto.map((l, i) => filaRowHTML(l, i+2)).join("")
+    // Dose do dia (hero + próximos); o resto vira "fila de retomada" num expansor (não some).
+    const dose = urgentes.slice(0, DOSE_HOME);
+    const backlog = urgentes.slice(DOSE_HOME);
+    const filaDose = dose.slice(1); // sem o nº1 (já é o hero)
+    top3Html = renderHeroLead(dose[0])
+      + (filaDose.length
+          ? `<div class="fila-head"><h3>Próximos atendimentos</h3><span>Prioridade: engajamento + tempo parado</span></div>`
+            + filaDose.map((l, i) => filaRowHTML(l, i+2)).join("")
+          : "")
+      + (backlog.length
+          ? `<details style="margin-top:12px"><summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${backlog.length}</summary><div style="margin-top:10px">${backlog.map((l, i) => filaRowHTML(l, i+2+filaDose.length)).join("")}</div></details>`
           : "");
   } else if(retomada.length){
     // Nenhum urgente: todos foram atendidos recentemente. Sugere retomadas proativas.
@@ -2670,7 +2679,7 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
     </style>
     <div class="home-saud">
-      <div class="home-saud-sub"><span class="home-saud-titulo">Top conversão de hoje.</span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirTodosLeads()'>Ver todos</button><button type="button" class="seq-link" onclick='setPipelineTab("ultimos");show("pipeline")'>Últimos atendimentos</button><button type="button" class="seq-link" onclick='reanalisarTudo()'>↻ Reanalisar todos</button>${btnPularHtml}</div></div>
+      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirTodosLeads()'>Ver todos</button><button type="button" class="seq-link" onclick='setPipelineTab("ultimos");show("pipeline")'>Últimos atendimentos</button><button type="button" class="seq-link" onclick='reanalisarTudo()'>↻ Reanalisar todos</button>${btnPularHtml}</div></div>
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
@@ -3014,7 +3023,17 @@ function abrirGrupoHome(grupo, options={}){
          <div class="lista-leads-grid" style="margin-top:10px">${resto.map(cardHtml).join("")}</div>
        </details>`;
   } else {
-    listaHtml = arr.length ? `<div class="lista-leads-grid">${arr.map(cardHtml).join("")}</div>` : vazio;
+    // options.resto = backlog (ex.: a fila de retomada além da dose de 10 do "Fazer agora").
+    // Fica num expansor pra não sumir, sem poluir a dose principal.
+    const restoArr = Array.isArray(options.resto) ? options.resto : [];
+    const gridPrincipal = arr.length ? `<div class="lista-leads-grid">${arr.map(cardHtml).join("")}</div>` : vazio;
+    const backlog = restoArr.length
+      ? `<details style="margin-top:14px">
+           <summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${restoArr.length}</summary>
+           <div class="lista-leads-grid" style="margin-top:10px">${restoArr.map(cardHtml).join("")}</div>
+         </details>`
+      : "";
+    listaHtml = gridPrincipal + backlog;
   }
 
   foco.innerHTML =
@@ -3316,16 +3335,11 @@ function renderSaudacao(items){
   else if(h < 18) saud = "Boa tarde";
   else saud = "Boa noite";
   const corretorNome = (state.cerebroCfg?.corretorNome || "").trim().split(/\s+/)[0] || "";
-  // O número da saudação precisa BATER com o card "Fazer agora" — usa a MESMA base
-  // (cpPrecisaAcaoHoje): leads que valem uma ação hoje (responder ou retomar), fora quem já
-  // foi atendido hoje e quem tem compromisso futuro (Agenda). Assim o cabeçalho laranja e o
-  // card mostram o mesmo número real, sem aquela divergência do print (10 no topo x 0 no card).
-  let tratadosHoje = 0, acaoMostrada = 0;
-  for(const l of items){
-    if(!leadEhAtivo(l)) continue;
-    if(ehContatadoHoje(l)) tratadosHoje++;
-    if(cpPrecisaAcaoHoje(l)) acaoMostrada++;
-  }
+  // O número da saudação BATE com o card "Fazer agora": é a DOSE do dia (top CP_DOSE_DIA da
+  // fila ranqueada), não o backlog inteiro. Cabeçalho laranja e card mostram o mesmo número.
+  let tratadosHoje = 0;
+  for(const l of items){ if(leadEhAtivo(l) && ehContatadoHoje(l)) tratadosHoje++; }
+  const acaoMostrada = Math.min(cpFilaFazerAgora(items).length, CP_DOSE_DIA);
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   const title = qs("#homePageTitle");
   if(title) title.textContent = head;
@@ -9568,39 +9582,49 @@ function cp786TemCompromisso(l){
   }
   return false;
 }
+// v885 — PRIORIDADE por FATOS reais (decisão do dono): não existe valor R$ nem etapa/funil
+// nem marco de proposta pra ranquear. Sobram dois fatos que TODO lead tem + um desempate:
+//   Engajamento (nº de mensagens = interesse/probabilidade) + Abandono (dias sem toque real)
+//   + desempate "cliente falou por último" (a bola está com você).
+// Pesos iniciais, fáceis de calibrar depois de ver com leads reais.
+const CP_PESO_ENGAJAMENTO = 2;     // por mensagem (com teto pra thread gigante não dominar)
+const CP_TETO_ENGAJAMENTO = 120;   // satura o engajamento
+const CP_PESO_ABANDONO = 1;        // por dia parado
+const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não vence só pela idade)
+const CP_BONUS_BOLA = 25;          // cliente falou por último = deve resposta
+const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
+function cpNotaPrioridade(l){
+  const msgs = Math.min(totalMensagensLead(l), CP_TETO_ENGAJAMENTO);
+  const dParado = diasParado(l);
+  const dias = Math.min(Number.isFinite(dParado) ? dParado : 0, CP_TETO_ABANDONO);
+  let nota = msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
+  if(typeof cp786UltimoFoiCliente === 'function' && cp786UltimoFoiCliente(l)) nota += CP_BONUS_BOLA;
+  return nota;
+}
+// Fila completa de "Fazer agora" (todos que precisam de ação), ranqueada — mais prioritário
+// primeiro. A DOSE do dia é o slice(0, CP_DOSE_DIA); o resto é backlog (não some).
+function cpFilaFazerAgora(items){
+  const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
+  return ativos.filter(l => cp786Categoria(l) === 'agora')
+    .sort((a,b) => cpNotaPrioridade(b) - cpNotaPrioridade(a));
+}
+window.cpNotaPrioridade = cpNotaPrioridade;
+window.cpFilaFazerAgora = cpFilaFazerAgora;
+
+// v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
+// e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
+//   'programados' (Agenda): tem compromisso/lembrete marcado.
+//   'aguardando' : atendido recentemente (descansa), lead cru (0-2 msgs = prospecção) OU a bola
+//                  está legitimamente com o cliente e no prazo (entraEmRetomada = false).
+//   'agora'      : precisa de VOCÊ — responder ou RETOMAR (parado 5+ dias, retorno/lembrete
+//                  vencido, cliente falou por último, quente-fechar...).
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
-  // Quando usada como callback de Array.map, o segundo argumento é o índice.
-  // Só aceita os caches opcionais quando são objetos válidos de verdade.
-  const modeloValido=modelo&&typeof modelo==='object'&&!Array.isArray(modelo)?modelo:null;
-  const ultimaValida=ultimaReal&&typeof ultimaReal==='object'&&!Array.isArray(ultimaReal)&&'falante' in ultimaReal?ultimaReal:null;
-  const mc=modeloValido||cp786Modelo(l), ultima=ultimaValida||cp786UltimaMensagemReal(l);
-  // A categoria "Cliente respondeu" foi extinta a pedido do corretor: ela só indicava que a
-  // última mensagem importada era do cliente (muitas vezes só um "ok"/"até"), inflando um número
-  // sem valor de decisão. Sem esse atalho, o lead é classificado pela AÇÃO real (agora / programados
-  // / aguardando), então o que precisa de resposta cai em "Fazer agora" e o resto em "Aguardando".
   if(cp786TemCompromisso(l)) return 'programados';
-  const acao=mc?.acao||{}, status=String(acao.status||''), responsavel=String(acao.responsavel||'');
-  const msgTs=cp786UltimaMensagemTs(l,ultima), atendimentoTs=cp786UltimoAtendimentoTs(l);
-  const mensagemTratada=!!atendimentoTs&&(!msgTs||atendimentoTs>=msgTs);
-  const precisaCorretor=responsavel==='corretor'||['responder-agora','retomar'].includes(status)||lembreteVencido(l);
-  if(precisaCorretor){
-    if(status==='responder-agora'&&mensagemTratada) return 'aguardando';
-    // v818: um atendimento recente (marcado pelo corretor) faz o lead descansar, inclusive
-    // quando há lembrete vencido — desde que o atendimento tenha acontecido DEPOIS que o
-    // lembrete venceu. Sem isto, um lembrete antigo furava a proteção de 5 dias e o lead
-    // voltava pra fila no dia seguinte ao atendimento.
-    const lembTs=lembreteTs(l);
-    const atendimentoAposLembrete=!!atendimentoTs&&(!lembTs||isNaN(lembTs)||atendimentoTs>=lembTs);
-    const descansoAtendimento=ehContatadoHoje(l)||(mensagemTratada&&typeof protegidoPosAtendimento==='function'&&protegidoPosAtendimento(l));
-    if(descansoAtendimento&&(!lembreteVencido(l)||atendimentoAposLembrete)) return 'aguardando';
-    return 'agora';
-  }
-  if(status==='aguardando-resposta'||responsavel==='contato') return 'aguardando';
-  // A interface trabalha com apenas quatro visões. Um atendimento ativo sem ação
-  // imediata permanece em “Aguardando cliente”, em vez de criar uma quinta categoria oculta.
-  if(status==='sem-acao-urgente'||responsavel==='ninguem') return 'aguardando';
-  return 'aguardando';
+  if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return 'aguardando'; // atendi hoje
+  if(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento(l)) return 'aguardando'; // atendido há <5d, descansa
+  if(totalMensagensLead(l) < 3) return 'aguardando'; // conversa rasa = prospecção, não prioridade
+  return entraEmRetomada(l) ? 'agora' : 'aguardando';
 }
 function cp786CategoriaLabel(c){
   return ({agora:'Fazer agora',respondeu:'Cliente respondeu',programados:'Agenda',aguardando:'Aguardando cliente','sem-acao':'Sem ação agora'})[c]||'Sem ação agora';
@@ -9752,19 +9776,16 @@ window.cp786AbrirPrioridadePrincipal=cp786AbrirPrioridadePrincipal;
 // 5+ dias, lembrete vencido, compromisso pra hoje/amanhã, quente-fechar...). Fica de fora
 // quem já foi atendido hoje e quem tem compromisso futuro (esse é da Agenda). É a MESMA base
 // da saudação lá do topo, pra o número laranja e o card baterem.
-function cpPrecisaAcaoHoje(l){
-  if(!leadEhAtivo(l)) return false;
-  if(typeof ehContatadoHoje==='function' && ehContatadoHoje(l)) return false; // já atendi hoje
-  if(typeof cp786TemCompromisso==='function' && cp786TemCompromisso(l)) return false; // é da Agenda
-  if(cp786Categoria(l)==='agora') return true;             // precisa responder
-  if(typeof entraEmRetomada==='function' && entraEmRetomada(l)) return true; // vale retomar hoje
-  return false;
-}
+function cpPrecisaAcaoHoje(l){ return cp786Categoria(l)==='agora'; } // "precisa de ação" = fila do Fazer agora
 function abrirFazerAgora(){
   const ativos=(state.itemsAtivos||[]).filter(leadEhAtivo);
-  let leads=ativos.filter(cpPrecisaAcaoHoje);
-  if(typeof cp786OrdenarConducao==='function') leads=cp786OrdenarConducao(leads);
-  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub:'Leads que valem uma ação sua hoje — responder ou retomar, do mais quente pro mais frio.'},leads});
+  const fila=cpFilaFazerAgora(ativos);
+  const dose=fila.slice(0, CP_DOSE_DIA);
+  const resto=fila.slice(CP_DOSE_DIA);
+  const sub=resto.length
+    ? `As ${dose.length} de maior prioridade pra hoje — e mais ${resto.length} na fila de retomada, logo abaixo.`
+    : 'Leads que valem uma ação sua hoje, do mais prioritário pro menos.';
+  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:dose,resto});
 }
 window.cpPrecisaAcaoHoje=cpPrecisaAcaoHoje;
 window.abrirFazerAgora=abrirFazerAgora;
@@ -9774,12 +9795,13 @@ renderResumoDia = function(items){
   if(!box) return;
   if(!items?.length){ box.style.display="none"; box.innerHTML=""; return; }
   const ativos=items.filter(leadEhAtivo);
-  // Três lentes que particionam a carteira ativa: ação hoje (responder/retomar), Agenda
-  // (compromisso marcado) e o resto aguardando o cliente. cpPrecisaAcaoHoje já exclui quem
-  // tem compromisso, então não há sobreposição entre "Fazer agora" e "Agenda".
-  const fazerAgora=ativos.filter(cpPrecisaAcaoHoje).length;
-  const compromissos=ativos.filter(l=>typeof cp786TemCompromisso==='function'&&cp786TemCompromisso(l)).length;
-  const aguardando=Math.max(0, ativos.length - fazerAgora - compromissos);
+  // "Fazer agora" = a DOSE do dia (top CP_DOSE_DIA da fila ranqueada), não o backlog inteiro —
+  // era o 207 que travava. Agenda = compromisso marcado. Aguardando = bola legitimamente com o
+  // cliente (ou lead cru). O backlog além da dose fica acessível na lista do "Fazer agora".
+  const fila=cpFilaFazerAgora(ativos);
+  const fazerAgora=Math.min(fila.length, CP_DOSE_DIA);
+  const compromissos=ativos.filter(l=>cp786Categoria(l)==='programados').length;
+  const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
   box.style.display="grid";
   box.innerHTML = `
@@ -12158,8 +12180,8 @@ function ui670DetailRows(lead,mc){
     badge.textContent = '';
     bell.classList.toggle('tem-alerta', n > 0);
     const label = n > 0
-      ? `${n} compromisso${n===1?'':'s'} na agenda de hoje — toque para abrir`
-      : 'Agenda';
+      ? `Central de atenção — ${n} compromisso${n===1?'':'s'} na agenda de hoje`
+      : 'Central de atenção';
     bell.setAttribute('title', label);
     bell.setAttribute('aria-label', label);
   }
@@ -13362,18 +13384,37 @@ function ui670DetailRows(lead,mc){
       const validos=['agora','programados','aguardando','todos'];
       const filtro=validos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
-      const lista=grupos[filtro]||[];
-      const tabs=[['agora','Fazer agora'],['programados','Agenda'],['aguardando','Aguardando cliente']];
-      const titulos={agora:['Quem precisa de ação','Somente atendimentos sob sua responsabilidade agora.'],respondeu:['Clientes que responderam','Dê continuidade a quem voltou para a conversa.'],programados:['Agenda','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','Não faça nova cobrança antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
+      // v885 — mesma régua da Home: "Fazer agora" ranqueado por prioridade (engajamento +
+      // abandono + bola com você); a DOSE é o top CP_DOSE_DIA, o resto é backlog (não some).
+      const doseMax=(typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
+      const filaAgora=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(leads):(grupos.agora||[]);
+      const doseCount=Math.min(filaAgora.length,doseMax);
+      // v885 — o H1 da tela acompanha a visão: chegar por "Total de leads" (filtro 'todos')
+      // mostra "Carteira ativa", não "Condução / o que fazer agora" (confundia o dono).
+      const pageT=document.querySelector('.pipeline-page-title'), pageS=document.querySelector('.pipeline-page-sub');
+      if(pageT&&pageS){
+        if(filtro==='todos'){ pageT.textContent='Carteira ativa'; pageS.textContent='Todos os seus leads ativos.'; }
+        else { pageT.textContent='Condução'; pageS.textContent='O que fazer agora, em ordem de prioridade'; }
+      }
+      const titulos={agora:['Fazer agora','As de maior prioridade primeiro — engajamento + tempo parado.'],programados:['Agenda','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','A bola está com o cliente — não cobre antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
       const [titulo,sub]=titulos[filtro]||titulos.agora;
+      // Lista da visão atual. No "Fazer agora", dose em cima + divisor + fila de retomada.
+      let listaHtml;
+      if(filtro==='agora'){
+        const dose=filaAgora.slice(0,doseCount), resto=filaAgora.slice(doseCount);
+        const divisor=resto.length?`<div style="margin:14px 4px 8px;color:var(--muted);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Fila de retomada — mais ${resto.length}</div>`:'';
+        listaHtml=(dose.length?dose.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>')+divisor+resto.map(cp788LinhaConducao).join('');
+      }else{
+        const lista=grupos[filtro]||[];
+        listaHtml=lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>';
+      }
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
-          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${doseCount}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Agenda</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
-        <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><button type="button" onclick="${filtro==='todos'?"setPipelineVisualFiltro('agora')":"cp788AbrirCarteiraAtiva()"}">${filtro==='todos'?'Voltar às prioridades':'Ver clientes ativos'}</button></div><div class="ui-priority-list cp695-list">${lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>'}</div></section>`;
+        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><button type="button" onclick="${filtro==='todos'?"setPipelineVisualFiltro('agora')":"cp788AbrirCarteiraAtiva()"}">${filtro==='todos'?'Voltar às prioridades':'Ver clientes ativos'}</button></div><div class="ui-priority-list cp695-list">${listaHtml}</div></section>`;
     };
     const memoria=[state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
     if(memoria) render(memoria);

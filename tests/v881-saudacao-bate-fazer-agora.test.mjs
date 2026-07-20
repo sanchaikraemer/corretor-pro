@@ -23,10 +23,10 @@ const ini = app.indexOf("function renderSaudacao(items){");
 assert.ok(ini !== -1, "renderSaudacao não foi encontrada em app.js");
 const corpo = app.slice(ini, app.indexOf("\nfunction ", ini + 1));
 
-// 1. A saudação usa a MESMA base do card "Fazer agora" (cpPrecisaAcaoHoje) — v884.
+// 1. A saudação = DOSE do dia, mesma base do card "Fazer agora" (cpFilaFazerAgora + teto) — v885.
 assert.ok(
-  /cpPrecisaAcaoHoje\(l\)/.test(corpo),
-  "renderSaudacao deveria contar acaoMostrada via cpPrecisaAcaoHoje(l), mesma base do card"
+  /cpFilaFazerAgora\(items\)\.length/.test(corpo) && /CP_DOSE_DIA/.test(corpo),
+  "renderSaudacao deveria contar acaoMostrada = min(cpFilaFazerAgora(items).length, CP_DOSE_DIA)"
 );
 
 // 2. Não conta mais a categoria crua nem o cálculo antigo (meta de 12) direto na saudação.

@@ -12,7 +12,8 @@ assert.doesNotMatch(app, /function renderHomeFallbackSeguro\(items\)\{[\s\S]*?\.
   'o fallback não pode mais usar os 4 primeiros leads sem filtro de prioridade');
 
 // A proteção de 5 dias (que joga o lead atendido para "aguardando") continua ligada.
-assert.match(app, /if\(descansoAtendimento&&\(!lembreteVencido\(l\)\|\|atendimentoAposLembrete\)\) return 'aguardando'/,
+// v885: agora via protegidoPosAtendimento dentro de cp786Categoria.
+assert.match(app, /if\(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento\(l\)\) return 'aguardando'/,
   'a proteção de 5 dias deve continuar em cp786Categoria');
 
 console.log('v824-fallback-prioridade: ok');
