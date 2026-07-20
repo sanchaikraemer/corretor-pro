@@ -5210,7 +5210,7 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse cp704-reanalyse-destaque" type="button" onclick="ui670Reanalisar(this)">↻ Reanalisar</button><button type="button" class="cp704-reanalyse" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button></div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-top-actions"><button class="cp704-reanalyse cp704-reanalyse-destaque" type="button" onclick="ui670Reanalisar(this)">↻ Reanalisar</button><button type="button" class="cp704-reanalyse" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')">Agendar retorno</button><button type="button" class="cp704-reanalyse" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})'>Editar lead</button><button class="cp704-attended" onclick="ui667MarcarAtendido(this)" ${attended?'disabled':''}>${attended?'Atendido hoje':'Marcar atendimento'}</button>${attended?`<button type="button" class="cp704-reanalyse" onclick="ui667DesmarcarAtendido(this)" title="Clicou sem querer? Desfaz o atendimento de hoje">Desmarcar</button>`:''}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
@@ -10019,6 +10019,47 @@ window.ui667MarcarAtendido=async function(btn){
   }catch(err){
     if(btn){btn.disabled=false;btn.textContent=original;}
     toast("Não consegui marcar: "+(err?.message||err));
+  }
+};
+
+// Desfaz localmente o atendimento do BOTÃO de HOJE (espelha a API): remove os eventos
+// contato_manual "botao_atendido" do dia e recalcula o último atendimento pelo que sobrou.
+function ui667RemoverAtendidoLocal(lead){
+  const evs=lead?.analysis?.aprendizado?.eventos;
+  if(!Array.isArray(evs)) return;
+  const hojeBR=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+  lead.analysis.aprendizado.eventos=evs.filter(e=>{
+    if(e?.evento!=='contato_manual'||e?.detalhes?.de!=='botao_atendido'||!e?.quando) return true;
+    const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(e.quando));
+    return iso!==hojeBR;
+  });
+  const ts=(typeof ultimoAtendimentoTs==='function')?ultimoAtendimentoTs(lead):0;
+  lead.lastAttendanceAt=ts?new Date(ts).toISOString():null;
+  lead.ultimoAtendimentoEm=lead.lastAttendanceAt;
+}
+window.ui667DesmarcarAtendido=async function(btn){
+  const lead=state.lead;
+  if(!lead?.id){toast("Não consegui identificar este lead.");return;}
+  if(btn){btn.disabled=true;btn.textContent="Desmarcando...";}
+  try{
+    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"desmarcar-atendido"}))});
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao desmarcar");
+    ui667RemoverAtendidoLocal(lead);
+    for(const lista of [state.itemsAtivos,state.todosLeads,state.leads]){
+      const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
+      if(item&&item!==lead) ui667RemoverAtendidoLocal(item);
+    }
+    state.analysis=lead.analysis||null;
+    renderLeadFoco(lead);
+    invalidarLeadsCache();
+    carregarAgendaTopo?.();
+    loadRecentLeads(false);
+    recarregarLeadFoco(lead.id);
+    toast("Atendimento de hoje desmarcado.");
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent="Desmarcar";}
+    toast("Não consegui desmarcar: "+(err?.message||err));
   }
 };
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
