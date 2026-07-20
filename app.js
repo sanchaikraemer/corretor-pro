@@ -1544,11 +1544,11 @@ function motivoPrioridade(l){
   else if(/visit(ou|a feita)|decorado|colocou (a |o )?(casa|im[óo]vel) (à|a) venda|escolheu (as |a )?unidade|aprov(ou|ado) (o )?cr[ée]dito/.test(txt))
     partes.push("cliente já se esforçou — comprometido");
 
-  // Contexto real da conversa (resumo da IA) — curto, sem cortar palavra no meio.
+  // Contexto real da conversa (resumo da IA). v890: mostra o resumo INTEIRO — o dono não quer
+  // corte "..." no "POR QUE ATENDER" (motivoPrioridade só é usado no hero da Home).
   const resumoReal = (a.summary || l.summary || "").trim();
   if(resumoReal && resumoReal.length > 10 && !/importada com sucesso|análise disponível|importado do histórico/i.test(resumoReal)){
-    const frase = resumoReal.split(/[.!?]/)[0].trim();
-    if(frase.length > 8) partes.push(_cortarFrase(frase, 85));
+    partes.push(resumoReal);
   }
 
   // Timing como complemento (pulado quando já contei o tempo na frase de retomada — não repetir)
@@ -2381,10 +2381,6 @@ function renderHeroLead(l){
     <div class="h-next">
       <div class="l">PRÓXIMA AÇÃO</div>
       <div class="x">${escapeHtml(proxima)}</div>
-      <div class="h-acts">
-        <button type="button" class="h-out" onclick='event.stopPropagation();abrirLead(${idJs})'>Ver histórico</button>
-        <button type="button" class="h-out" onclick='event.stopPropagation();jaFaleiLead(${idJs})' title="Marca que você já falou — sai da fila de hoje">✓ Já falei</button>
-      </div>
     </div>
   </section>`;
 }
