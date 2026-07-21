@@ -4824,6 +4824,10 @@ function cp704Css(){
       .cp704-ico svg{width:19px;height:19px}
       .cp704-ico:hover{color:var(--text);border-color:var(--muted)}
       .cp704-ico.done{background:rgba(112,212,157,.14);border-color:rgba(112,212,157,.5);color:var(--acao)}
+      .cp704-ico-loading{opacity:.6;pointer-events:none}
+      .cp704-ico-loading svg{animation:cp704-spin 1s linear infinite}
+      @keyframes cp704-spin{to{transform:rotate(360deg)}}
+      @media (prefers-reduced-motion:reduce){.cp704-ico-loading svg{animation:none}}
       .cp704-attended:not(:disabled){cursor:pointer}.cp704-attended:disabled{opacity:1;background:rgba(104,255,149,.12);border-color:rgba(104,255,149,.5);color:#68ff95}
       .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
       .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
@@ -10056,8 +10060,7 @@ function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
 window.ui667MarcarAtendido=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
-  const original=btn?.textContent||"✓ Atendido";
-  if(btn){btn.disabled=true;btn.textContent="Marcando...";}
+  if(btn){btn.disabled=true;btn.classList.add('cp704-ico-loading');}
   try{
     const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))});
     const d=await res.json().catch(()=>({}));
@@ -10071,7 +10074,7 @@ window.ui667MarcarAtendido=async function(btn){
       const item=Array.isArray(lista)?lista.find(x=>String(x.id)===String(lead.id)):null;
       if(item&&item!==lead) ui667AplicarAtendidoLocal(item,quando,dataLocal,horaLocal);
     }
-    if(btn){btn.classList.add("is-done");btn.textContent=`✓ Atendido ${horaLocal}`;btn.disabled=true;}
+    if(btn){btn.disabled=true;} // renderLeadFoco reconstrói a toolbar com o ícone "Atendido"
     state.analysis=lead.analysis||null;
     renderLeadFoco(lead);
     invalidarLeadsCache();
@@ -10080,7 +10083,7 @@ window.ui667MarcarAtendido=async function(btn){
     recarregarLeadFoco(lead.id);
     toast(d.atualizado?`Atendimento atualizado às ${horaLocal}.`:`Atendimento marcado às ${horaLocal}.`);
   }catch(err){
-    if(btn){btn.disabled=false;btn.textContent=original;}
+    if(btn){btn.disabled=false;btn.classList.remove('cp704-ico-loading');}
     toast("Não consegui marcar: "+(err?.message||err));
   }
 };
@@ -10847,8 +10850,9 @@ window.cp7ObsSalvar = async function(btn){
 window.ui670Reanalisar=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
-  const original=btn?.textContent||"Atualizar análise comercial";
-  if(btn){btn.disabled=true;btn.textContent="Atualizando análise...";}
+  // Não troca o texto do botão: agora é um ícone pequeno (66px) e "Atualizando análise..."
+  // estourava pra fora do card. O progresso já aparece na barra grande. Só gira o ícone.
+  if(btn){btn.disabled=true;btn.classList.add('cp704-ico-loading');}
   const progresso = ui682ProgressReanalise(btn);
   progresso.set(8, "Lendo histórico do lead...");
   let etapaFake = 0;
@@ -10948,7 +10952,7 @@ window.ui670Reanalisar=async function(btn){
     try{ progresso.fail("Não foi possível concluir a análise."); }catch(_){}
     const msg=err?.name==="AbortError"?"A atualização demorou demais. Tente novamente.":(err?.message||String(err));
     toast("Não foi possível atualizar: "+msg);
-    if(btn){btn.disabled=false;btn.textContent=original;}
+    if(btn){btn.disabled=false;btn.classList.remove('cp704-ico-loading');}
   }
 };
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
