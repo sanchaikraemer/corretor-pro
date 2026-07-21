@@ -29,7 +29,7 @@ const lead = { name: 'Claudia', recentMessages: [
 assert.equal(mensagensDoCliente(lead), 2, 'conta só as 2 mensagens reais da cliente');
 
 // 2. A barra usa mensagensDoCliente e o teto de 30, no lugar do badge de jornada.
-assert.match(app, /const CP_TETO_BARRA_INTERESSE = 30;/, 'teto da barra = 30 mensagens do cliente');
+assert.match(app, /const CP_TETO_BARRA_INTERESSE = 100;/, 'teto da barra = 100 mensagens do cliente');
 const barra = app.match(/function cp704BarraInteresse\(lead\)\{[\s\S]*?\n  \}/)[0];
 assert.match(barra, /mensagensDoCliente\(lead\)/, 'a barra conta mensagens do cliente');
 assert.match(barra, /Interesse do cliente/, 'a barra tem o rótulo "Interesse do cliente"');
