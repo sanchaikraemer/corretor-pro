@@ -26,14 +26,12 @@ for(const titulo of ['Importar conversa', 'Como usar', 'O que a IA aprendeu', 'V
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
 
-// v866 #8: "Reanalisar" ganhou destaque e virou o primeiro botão do topo do lead.
-assert.match(app, /cp704-reanalyse cp704-reanalyse-destaque/, 'o Reanalisar precisa ter a classe de destaque');
-assert.match(app, /\.cp704-reanalyse-destaque\{/, 'o CSS de destaque do Reanalisar precisa existir');
-const acoes = app.match(/<div class="cp704-top-actions">[\s\S]*?<\/div>/);
-assert.ok(acoes, 'não achei a barra de ações do topo do lead');
+// v894: o topo do lead virou a barra de ícones (Modelo 2); Reanalisar continua sendo o 1º.
+const acoes = app.match(/cp704-toolbar">[\s\S]{0,1700}/);
+assert.ok(acoes, 'não achei a barra de ícones do topo do lead');
 assert.ok(
-  acoes[0].indexOf('Reanalisar') < acoes[0].indexOf('Agendar retorno'),
-  'o Reanalisar precisa vir antes de "Agendar retorno" (primeiro/acesso rápido)'
+  acoes[0].indexOf('Reanalisar') < acoes[0].indexOf('Agendar'),
+  'o Reanalisar precisa vir antes de "Agendar" (primeiro/acesso rápido)'
 );
 
 console.log('v866-ui-limpeza: ok');

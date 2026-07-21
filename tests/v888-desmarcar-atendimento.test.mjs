@@ -14,9 +14,9 @@ assert.match(bloco, /e\?\.evento !== "contato_manual" \|\| !e\?\.quando/, 'consi
 assert.match(bloco, /agoraBR\(d\)\.dataBR !== br\.dataBR/, 'remove apenas os do dia de hoje');
 assert.match(bloco, /removido: true/, 'confirma a remoção');
 
-// 2. Front: botão "Desmarcar" só aparece quando o lead está atendido hoje (link discreto).
-assert.match(app, /\$\{attended\?`<button type="button" class="cp704-desmarcar" onclick="ui667DesmarcarAtendido\(this\)"/,
-  'o botão Desmarcar deve aparecer só quando attended');
+// 2. Front (v894): desmarcar é o interruptor do ícone "Atendido" (toca de novo = desmarca).
+assert.match(app, /\$\{attended\?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido\(this\)"/,
+  'quando atendido, o ícone "Atendido" chama ui667DesmarcarAtendido (interruptor)');
 
 // 3. Front: ui667DesmarcarAtendido chama a API e limpa o atendimento local.
 assert.match(app, /window\.ui667DesmarcarAtendido=async function\(btn\)/, 'handler de desmarcar precisa existir');

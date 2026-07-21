@@ -3,12 +3,10 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-// v823: as ações Agendar retorno e Editar lead subiram pro topo (cp704-top-actions),
-// junto de Reanalisar e Marcar atendimento.
-// v866: o Reanalisar ganhou destaque e passou a ser o PRIMEIRO botão (acesso rápido),
-// então a ordem agora é: Reanalisar, Agendar retorno, Editar lead, Marcar atendimento.
-assert.match(app, /cp704-top-actions">[\s\S]*?Reanalisar[\s\S]*?Agendar retorno[\s\S]*?Editar lead[\s\S]*?Atendido hoje':'Marcar atendimento/,
-  'ordem esperada no topo: Reanalisar, Agendar retorno, Editar lead, Marcar atendimento');
+// v823/v894: as ações ficam no topo do lead — agora na barra de ÍCONES (Modelo 2), na ordem
+// Reanalisar, Agendar retorno, Editar lead, Atendido/Marcar (o último é o interruptor).
+assert.match(app, /cp704-toolbar">[\s\S]*?title="Reanalisar"[\s\S]*?title="Agendar retorno"[\s\S]*?title="Editar lead"[\s\S]*?ui667DesmarcarAtendido[\s\S]*?ui667MarcarAtendido/,
+  'ordem esperada no topo: Reanalisar, Agendar, Editar, Atendido/Marcar');
 
 // A barra de ações antiga do lado direito (cp704-quickbar) foi removida — sem
 // "Marcar atendimento" duplicado.
