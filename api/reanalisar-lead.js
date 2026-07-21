@@ -339,10 +339,13 @@ async function reanalisarLeadHandler702(req, res) {
     const aprendizado = { ...(prev.aprendizado || {}) };
     const eventos = Array.isArray(aprendizado.eventos) ? [...aprendizado.eventos] : [];
     const antes = eventos.length;
+    // Remove TODO contato_manual de HOJE (não só o do botão): "Atendido hoje" liga com qualquer
+    // contato manual do dia, então pra o estado voltar a "não atendido" tem que limpar todos os
+    // do dia. Mantém intactos os de outros dias.
     const restantes = eventos.filter((e) => {
-      if (e?.evento !== "contato_manual" || e?.detalhes?.de !== "botao_atendido" || !e?.quando) return true;
+      if (e?.evento !== "contato_manual" || !e?.quando) return true;
       const d = new Date(e.quando);
-      return isNaN(d.getTime()) || agoraBR(d).dataBR !== br.dataBR; // mantém o que NÃO é do dia
+      return isNaN(d.getTime()) || agoraBR(d).dataBR !== br.dataBR;
     });
     if (restantes.length === antes) return json(res, 200, { ok: true, removido: false });
     aprendizado.eventos = restantes;
