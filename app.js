@@ -2707,7 +2707,7 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
     </style>
     <div class="home-saud">
-      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirTodosLeads()'>Ver todos</button><button type="button" class="seq-link" onclick='setPipelineTab("ultimos");show("pipeline")'>Últimos atendimentos</button><button type="button" class="seq-link" onclick='reanalisarTudo()'>↻ Reanalisar todos</button>${btnPularHtml}</div></div>
+      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirTodosLeads()'>Ver todos</button><button type="button" class="seq-link" onclick='abrirUltimosAtendimentos()'>Últimos atendimentos</button><button type="button" class="seq-link" onclick='reanalisarTudo()'>↻ Reanalisar todos</button>${btnPularHtml}</div></div>
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
@@ -3082,6 +3082,25 @@ function voltarDaListaHome(){
 window.voltarDaListaHome=voltarDaListaHome;
 window.abrirGrupoHome = abrirGrupoHome;
 window.renderBotoesHome = renderBotoesHome;
+
+// "Últimos atendimentos" (link da home): antes chamava setPipelineTab("ultimos"), função do
+// pipeline ANTIGO que o Condução (cp788) não usa mais — o resultado era cair no filtro padrão
+// "Fazer agora" e o dono via "atender agora" no lugar dos atendimentos. Agora abre de fato a
+// lista de quem foi atendido, do mais recente pro mais antigo, como grupo avulso.
+function abrirUltimosAtendimentos(){
+  const base = [state?.gruposHome?.todos, state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads]
+    .find(a => Array.isArray(a) && a.length) || [];
+  const leads = base
+    .map(l => ({ l, ts: ultimoAtendimentoTs(l) }))
+    .filter(x => x.ts > 0)
+    .sort((a, b) => b.ts - a.ts)
+    .map(x => x.l);
+  abrirGrupoHome("__ultimos", {
+    meta: { titulo: "Últimos atendimentos", sub: "Clientes que você atendeu, do mais recente para o mais antigo." },
+    leads
+  });
+}
+window.abrirUltimosAtendimentos = abrirUltimosAtendimentos;
 
 // Atalho "Todos" da barra de baixo: abre a tela Hoje já dentro da lista completa
 // de leads ativos, do mais quente pro mais frio (chance de venda).
