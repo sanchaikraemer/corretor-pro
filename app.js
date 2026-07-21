@@ -5003,11 +5003,11 @@ function cp704Css(){
       + `</span>`;
   }
   // v889 — no lugar do "passo X de 6" (funil que o dono mandou tirar): barra de INTERESSE do
-  // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=30
+  // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=100
   // cheia). Mede engajamento real, não etapa. Largura total.
   function cp704BarraInteresse(lead){
     const n = (typeof mensagensDoCliente==='function') ? mensagensDoCliente(lead) : 0;
-    const teto = (typeof CP_TETO_BARRA_INTERESSE==='number') ? CP_TETO_BARRA_INTERESSE : 30;
+    const teto = (typeof CP_TETO_BARRA_INTERESSE==='number') ? CP_TETO_BARRA_INTERESSE : 100;
     const pct = Math.max(0, Math.min(100, Math.round(n/teto*100)));
     const label = n===1 ? '1 mensagem do cliente' : `${n} mensagens do cliente`;
     return `<div class="cp704-interesse" style="width:100%;margin:2px 0 6px">
@@ -9654,7 +9654,7 @@ const CP_PESO_ABANDONO = 1;        // por dia parado
 const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não vence só pela idade)
 const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
 const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens DO CLIENTE = prospecção rasa, não entra na fila
-const CP_TETO_BARRA_INTERESSE = 30;// barra "Interesse do cliente" cheia em 30 mensagens do cliente
+const CP_TETO_BARRA_INTERESSE = 100;// barra "Interesse do cliente" cheia em 100 mensagens do cliente
 const CP_JANELA_INTERESSE_DIAS = 90;// só conta mensagens do cliente dos últimos 90 dias (interesse atual)
 // v889: engajamento passa a contar só as mensagens DO CLIENTE (não as minhas explicando) —
 // mesma régua da barra de interesse (decisão do dono).
