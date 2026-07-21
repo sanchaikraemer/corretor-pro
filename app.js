@@ -1646,6 +1646,16 @@ async function recarregarLeadFoco(id){
       atualizado.ultimoAtendimentoEm=localAntes.ultimoAtendimentoEm||localAntes.lastAttendanceAt;
       atualizado.lastAttendanceText=localAntes.lastAttendanceText||atualizado.lastAttendanceText;
     }
+    // A LISTA traz só um recorte das mensagens. Marcar/desmarcar atendimento não muda a conversa,
+    // então preserva o histórico completo já carregado — senão a barra de "Interesse do cliente"
+    // (conta mensagens) despencava ao recarregar (ex.: 108 -> 4).
+    const msgsLocal=Array.isArray(localAntes?.recentMessages)?localAntes.recentMessages:[];
+    const msgsFresh=Array.isArray(atualizado?.recentMessages)?atualizado.recentMessages:[];
+    if(msgsLocal.length>msgsFresh.length){
+      atualizado.recentMessages=msgsLocal;
+      if(localAntes.historyLoaded) atualizado.historyLoaded=localAntes.historyLoaded;
+      if(Number.isFinite(Number(localAntes.messageCount))) atualizado.messageCount=localAntes.messageCount;
+    }
     state.lead = atualizado; state.analysis = atualizado.analysis || null;
     renderLeadFoco(atualizado);
   }catch(_){
