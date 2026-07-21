@@ -22,7 +22,8 @@ const cssLimpeza = fs.readFileSync(new URL('../styles.css', import.meta.url), 'u
 assert.match(cssLimpeza, /@media\(min-width:1000px\)\{\s*\.menu-nav-item\{\s*display:none!important/, 'no desktop os itens do Menu que repetem a lateral precisam ficar escondidos');
 
 // Os que NÃO estão na lateral continuam no Menu (em qualquer tela).
-for(const titulo of ['Importar conversa', 'Como usar', 'O que a IA aprendeu', 'Vendas registradas', 'Instalar app']){
+// (v904: o card "Vendas registradas" foi removido — só "Arquivar" existe como desfecho.)
+for(const titulo of ['Importar conversa', 'Como usar', 'O que a IA aprendeu', 'Instalar app']){
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
 
