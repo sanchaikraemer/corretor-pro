@@ -5006,17 +5006,21 @@ function cp704Css(){
   // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=100
   // cheia). Mede engajamento real, não etapa. Largura total.
   function cp704BarraInteresse(lead){
-    const n = (typeof mensagensDoCliente==='function') ? mensagensDoCliente(lead) : 0;
     const teto = (typeof CP_TETO_BARRA_INTERESSE==='number') ? CP_TETO_BARRA_INTERESSE : 100;
-    const pct = Math.max(0, Math.min(100, Math.round(n/teto*100)));
-    const label = n===1 ? '1 mensagem do cliente' : `${n} mensagens do cliente`;
+    // Só conta com o histórico COMPLETO carregado. Ao abrir, o lead vem com um recorte de
+    // mensagens da lista; o número real chega ~700ms depois (getLeadDetail). Sem isto, a barra
+    // "piscava" (ex.: 4 -> 19). Enquanto não chega, mostra "contando…" em vez de um número falso.
+    const pronto = !!(lead && lead.historyLoaded);
+    const n = (pronto && typeof mensagensDoCliente==='function') ? mensagensDoCliente(lead) : 0;
+    const pct = pronto ? Math.max(0, Math.min(100, Math.round(n/teto*100))) : 0;
+    const label = pronto ? (n===1 ? '1 mensagem do cliente' : `${n} mensagens do cliente`) : 'contando mensagens…';
     return `<div class="cp704-interesse" style="width:100%;margin:2px 0 6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px">
           <span style="font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Interesse do cliente</span>
-          <b style="font-size:12px;font-weight:950;color:var(--text)">${escapeHtml(label)}</b>
+          <b style="font-size:12px;font-weight:950;color:${pronto?'var(--text)':'var(--muted)'}">${escapeHtml(label)}</b>
         </div>
         <div style="height:9px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden">
-          <i style="display:block;height:100%;width:${pct}%;border-radius:999px;background:linear-gradient(90deg,var(--morno),var(--acao))"></i>
+          <i style="display:block;height:100%;width:${pct}%;border-radius:999px;background:linear-gradient(90deg,var(--morno),var(--acao));transition:width .35s ease${pronto?'':';opacity:.5'}"></i>
         </div>
       </div>`;
   }
