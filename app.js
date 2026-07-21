@@ -276,11 +276,17 @@ function mensagensDoCliente(l){
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return 0;
   const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
+  // v896: só conta as mensagens do cliente dentro da JANELA (90 dias) — mede o interesse ATUAL,
+  // não engajamento antigo. Mensagem sem data legível entra (benefício da dúvida = recente).
+  const janelaDias = (typeof CP_JANELA_INTERESSE_DIAS==='number'?CP_JANELA_INTERESSE_DIAS:90);
+  const limite = Date.now() - janelaDias*86400000;
   let n = 0;
   for(const m of msgs){
     if(!m || !String(m.text||"").trim()) continue;
     const src = String(m.source||"").toLowerCase(), type = String(m.type||"").toLowerCase();
     if(src==='manual'||src==='crm'||src==='corretor-pro-manual'||type==='print-whatsapp'||['atendimento','nota','ligacao','visita','presencial','proposta','observacao_manual','mensagem_enviada'].includes(type)) continue;
+    const t = m?.iso ? Date.parse(m.iso) : (m?.date ? Date.parse(m.date) : NaN);
+    if(Number.isFinite(t) && t < limite) continue; // fora da janela de 90 dias
     if(typeof ehMsgDoCliente==='function' && ehMsgDoCliente(m, pn)) n++;
   }
   return n;
@@ -5222,9 +5228,11 @@ function cp717MudancasHtml(a){
 // os carimbos da própria análise (reanálise > geração) e, só na falta deles, usa a última
 // atualização do lead.
 function cp865UltimaAnaliseISO(lead, a){
-  const primarios = [a?.reanalisadoEm, a?.geradoEm, a?.analisadoEm];
+  // Só carimbos da PRÓPRIA análise. NÃO usa updatedAt/atualizadoEm: marcar/desmarcar atendimento
+  // atualiza a linha e isso fazia a "Última análise" mudar de horário sem ter reanalisado (v896).
+  const primarios = [a?.reanalisadoEm, a?.geradoEm, a?.analisadoEm, a?.iaComercialV2?.geradoEm];
   for(const c of primarios){ if(c && Number.isFinite(Date.parse(c))) return c; }
-  const fallback = [lead?.analysisReadyAt, lead?.updatedAt, lead?.atualizadoEm, lead?.criadoEm];
+  const fallback = [lead?.analysisReadyAt, lead?.criadoEm];
   for(const c of fallback){ if(c && Number.isFinite(Date.parse(c))) return c; }
   return '';
 }
@@ -9647,6 +9655,7 @@ const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não v
 const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
 const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens DO CLIENTE = prospecção rasa, não entra na fila
 const CP_TETO_BARRA_INTERESSE = 30;// barra "Interesse do cliente" cheia em 30 mensagens do cliente
+const CP_JANELA_INTERESSE_DIAS = 90;// só conta mensagens do cliente dos últimos 90 dias (interesse atual)
 // v889: engajamento passa a contar só as mensagens DO CLIENTE (não as minhas explicando) —
 // mesma régua da barra de interesse (decisão do dono).
 function cpNotaPrioridade(l){
