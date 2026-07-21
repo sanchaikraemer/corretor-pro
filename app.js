@@ -5013,18 +5013,17 @@ function cp704Css(){
     if(/analise|finance/.test(st)) return 'Análise financeira';
     if(/compar/.test(st)) return 'Em comparação';
     if(/interesse/.test(st)) return 'Com interesse';
-    if(/perdid|encerr/.test(st)) return 'Perdido';
-    if(/ganh|vend/.test(st)) return 'Vendido';
-    if(/geladeira/.test(st)) return 'Arquivado';
+    // v904: só existe "Arquivado" como desfecho — Vendido/Perdido/Geladeira viram Arquivado.
+    if(/perdid|encerr|ganh|vend|geladeira/.test(st)) return 'Arquivado';
     return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
   }
   // v818: etapa da jornada em linguagem simples, com passo (1..6) e cor que esquenta pro
   // verde conforme aproxima o fechamento. Fonte: status da oportunidade / etapa do lead.
   function cp704Jornada(lead, mc){
     const normal = (typeof normalizarEtapa==='function') ? normalizarEtapa(lead?.etapa) : String(lead?.etapa||'');
-    if(normal==='Vendido')   return { label:'Vendido',   passo:6, cor:'#2fe27a', bg:'rgba(47,226,122,.16)',  br:'rgba(47,226,122,.55)' };
-    if(normal==='Perdido')   return { label:'Perdido',   passo:0, cor:'#ff7f74', bg:'rgba(255,127,116,.12)', br:'rgba(255,127,116,.45)' };
-    if(normal==='Geladeira') return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
+    // v904: Vendido/Perdido/Geladeira não existem mais como desfecho separado — todos "Arquivado".
+    if(normal==='Vendido' || normal==='Perdido' || normal==='Geladeira')
+      return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
     const st = String(mc?.oportunidade?.status || lead?.etapa || 'descoberta').toLowerCase();
     const etapas = [
       { re:/decis|fecha|ganho|vend/, label:'Decidindo',              passo:6, cor:'#2fe27a', bg:'rgba(47,226,122,.14)',  br:'rgba(47,226,122,.50)' },
@@ -5254,16 +5253,16 @@ function cp704Css(){
   };
   function cp704QuickActions(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
+    // Só "Arquivar" como desfecho (v904): sem Vendido/Perdido/Geladeira. "Excluir" fica no Perigo.
     return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button></div></div>
     <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
-    <div class="cp704-actions-group"><h3>Encerramento</h3><div class="cp704-actions-grid"><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
   // v822: versão "aberta" das ferramentas — todos os botões lado a lado, no rodapé do lead.
   // (Editar lead fica só na barra de ações acima, pra não duplicar.)
   function cp704ToolsFlat(lead,mc){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    return `<button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" class="good" onclick='(typeof marcarVendido==="function")?marcarVendido(${id},${name}):abrirPropostaComLead(${name},${prod},${id})'>Vendido</button><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button>`;
+    return `<button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button>`;
   }
 
 // Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
@@ -11229,7 +11228,6 @@ function ui670DetailRows(lead,mc){
       <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
       <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
       <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
-      <button type="button" onclick="abrirVenda(${id},${nome})">Vendido</button>
       <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
     if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
     else { wrap.prepend(actions); wrap.prepend(last); }

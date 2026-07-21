@@ -206,17 +206,6 @@
       </div>
     </section>
 
-    <section id="vendas" class="screen">
-      <div class="card compact">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div class="label">Vendas registradas</div>
-          <button type="button" class="btn secondary" id="vendasRefresh" style="padding:6px 10px;font-size:12px">Atualizar</button>
-        </div>
-        <div class="small" style="color:var(--muted);margin-bottom:8px">Clientes que viraram venda. Não aparecem mais na condução ativa.</div>
-        <div id="vendasList"></div>
-      </div>
-    </section>
-
     <section id="perdidos" class="screen">
       <div id="arqGeladeira">
         <div class="card compact">
@@ -262,10 +251,6 @@
           <button type="button" class="cp-metric" onclick="cp786AbrirConducao('aguardando')">
             <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"/><path d="M5 20c.5-5 2.8-7 7-7s6.5 2 7 7"/></svg></span>
             <b id="cpProposals">0</b><small>Aguardando cliente</small><em>no tempo de resposta</em>
-          </button>
-          <button type="button" class="cp-metric cp-metric-revenue" onclick="show('relatorio')">
-            <span class="cp-revenue-copy"><b id="cpRevenue">R$ 0</b><small>Vendas registradas</small><em>valor do mês</em></span>
-            <span class="cp-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
           </button>
         </div>
 
@@ -659,9 +644,6 @@
           </button>
           <button type="button" class="menu-card" onclick="show('cerebro');icTab('aprendizado')">
             <div class="menu-card-ico">⌁</div><div class="menu-card-txt"><div class="menu-card-titulo">O que a IA aprendeu</div><div class="menu-card-desc">Veja aprendizados e padrões identificados.</div></div><div class="menu-card-seta">›</div>
-          </button>
-          <button type="button" class="menu-card go" data-target="vendas">
-            <div class="menu-card-ico">$</div><div class="menu-card-txt"><div class="menu-card-titulo">Vendas registradas</div><div class="menu-card-desc">Histórico de vendas e valores fechados.</div></div><div class="menu-card-seta">›</div>
           </button>
           <button type="button" class="menu-card" id="btnInstalarApp" style="display:none">
             <div class="menu-card-ico">↓</div><div class="menu-card-txt"><div class="menu-card-titulo">Instalar app</div><div class="menu-card-desc">Instale o Corretor Pro no seu dispositivo.</div></div><div class="menu-card-seta">›</div>
