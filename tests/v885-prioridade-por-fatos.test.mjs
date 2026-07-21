@@ -29,8 +29,10 @@ assert.equal(app.match(/const CP_DOSE_DIA = (\d+);/)[1], '10', 'a dose do dia de
 // --- 2. cp786Categoria classifica pela SITUAÇÃO REAL (não pelo campo de status da IA). ---
 const cat = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
 assert.match(cat, /if\(cp786TemCompromisso\(l\)\) return 'programados'/, 'compromisso => Agenda');
-assert.match(cat, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'aguardando'/, 'lead cru (cliente engajou pouco) não é prioridade');
-assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'aguardando'/, 'precisa de retomada => Fazer agora');
+// v906: "Aguardando cliente" = atendi e o cliente não respondeu (não é mais balde de lead cru).
+assert.match(cat, /if\(cpAguardandoResposta\(l\)\) return 'aguardando'/, 'aguardando = atendi e cliente não respondeu');
+assert.match(cat, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'sem-acao'/, 'lead cru sai dos cards (sem-acao)');
+assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'sem-acao'/, 'precisa de retomada => Fazer agora; senão sem-acao');
 assert.doesNotMatch(cat, /responder-agora|precisaCorretor|responsavel==='corretor'/,
   'não deve mais depender do campo de status/responsavel da IA (o balde-lixo)');
 

@@ -9439,13 +9439,32 @@ window.cpFilaFazerAgora = cpFilaFazerAgora;
 //                  prospecção) OU a bola está legitimamente com o cliente e no prazo.
 //   'agora'      : precisa de VOCÊ — responder ou RETOMAR (parado 5+ dias, retorno/lembrete
 //                  vencido, cliente falou por último, quente-fechar...).
+// v906 — "Aguardando cliente" passou a ter UM significado só (pedido do dono): VOCÊ já atendeu
+// (copiou a mensagem ou marcou atendimento) e o cliente AINDA NÃO respondeu — a bola está com
+// ele. Antes era um balde de sobra (caía todo lead raso/parado) e o número não dizia nada.
+function ultimaMsgClienteTs(l){
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
+  let max = 0;
+  for(const m of msgs){
+    if(!String(m?.text||"").trim()) continue;
+    if(!ehMsgDoCliente(m, pn)) continue;
+    const t = Date.parse(m?.iso || "");
+    if(!isNaN(t) && t > max) max = t;
+  }
+  return max;
+}
+function cpAguardandoResposta(l){
+  const at = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
+  if(!at) return false;                 // nunca atendido pelo app → não é "aguardando cliente"
+  return ultimaMsgClienteTs(l) <= at;   // cliente não respondeu DEPOIS do meu atendimento
+}
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
   if(cp786TemCompromisso(l)) return 'programados';
-  if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return 'aguardando'; // atendi hoje
-  if(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento(l)) return 'aguardando'; // atendido há <5d, descansa
-  if(mensagensDoCliente(l) < CP_MIN_MSGS_PRIORIDADE) return 'aguardando'; // cliente engajou pouco = prospecção, não prioridade
-  return entraEmRetomada(l) ? 'agora' : 'aguardando';
+  if(cpAguardandoResposta(l)) return 'aguardando';                     // atendi e o cliente não respondeu (bola com ele)
+  if(mensagensDoCliente(l) < CP_MIN_MSGS_PRIORIDADE) return 'sem-acao'; // lead raso: prospecção, fora dos cards de destaque
+  return entraEmRetomada(l) ? 'agora' : 'sem-acao';                    // vale um toque? Fazer agora; senão, só em "Total de leads"
 }
 function cp786CategoriaLabel(c){
   return ({agora:'Fazer agora',respondeu:'Cliente respondeu',programados:'Agenda',aguardando:'Aguardando cliente','sem-acao':'Sem ação agora'})[c]||'Sem ação agora';
