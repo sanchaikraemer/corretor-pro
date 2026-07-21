@@ -5045,8 +5045,19 @@ function cp704Css(){
     const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
     return msgs.filter(m=>cp704Text(m?.text)).slice(-max).reverse();
   }
+  // Chave cronológica a partir do HORÁRIO EXIBIDO (date+time BR) — consistente entre mensagens
+  // importadas e manuais/copiadas. Antes a ordem vinha do `iso`, que nas manuais é UTC e não
+  // batia com o horário mostrado, embaralhando a linha do tempo (ex.: 11:56, 12:24, 11:58, 11:58).
+  function cp704MsgTsCronologico(m){
+    const d=String(m?.date||'').trim(), t=String(m?.time||'').trim();
+    const br=d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if(br){ const ano=br[3].length===2?2000+Number(br[3]):Number(br[3]); const hm=t.match(/^(\d{1,2}):(\d{2})/);
+      return Date.UTC(ano,Number(br[2])-1,Number(br[1]),hm?Number(hm[1]):0,hm?Number(hm[2]):0); }
+    const ts=Date.parse(String(m?.iso||'')); return Number.isFinite(ts)?ts:0;
+  }
   function cp704TimelineHtml(lead){
-    const all=Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>cp704Text(m?.text)):[];
+    const all=(Array.isArray(lead?.recentMessages)?lead.recentMessages.filter(m=>cp704Text(m?.text)):[])
+      .slice().sort((a,b)=>cp704MsgTsCronologico(a)-cp704MsgTsCronologico(b) || (Number(a?.order||0)-Number(b?.order||0)));
     const total=all.length;
     const limite = state.cp704HistoryFull ? total : Math.max(4, Math.min(Number(state.timelineVisibleCount||4), total || 4));
     const msgs=all.slice(-limite).reverse();
