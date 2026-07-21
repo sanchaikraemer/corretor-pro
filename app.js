@@ -362,6 +362,37 @@ function removerLeadDosCaches(id){
   if(typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
 }
 window.invalidarLeadsCache = invalidarLeadsCache;
+window.removerLeadDosCaches = removerLeadDosCaches;
+
+// Confirmação em-app (no lugar do confirm() nativo do navegador — a "tela feia" com a URL
+// "corretor-pro-zeta.vercel.app diz"). Retorna Promise<boolean>. Enter confirma, Esc/clique
+// fora cancela. Usado no arquivar/perder pra ficar dentro da identidade do app.
+function cp903Confirm(opts){
+  const o = opts || {};
+  return new Promise(resolve => {
+    document.querySelectorAll('.cp903-backdrop').forEach(n => n.remove());
+    const back = document.createElement('div');
+    back.className = 'cp903-backdrop';
+    back.innerHTML =
+      `<div class="cp903-modal" role="dialog" aria-modal="true">
+         ${o.titulo ? `<h3>${escapeHtml(o.titulo)}</h3>` : ''}
+         <p>${escapeHtml(o.mensagem || '')}</p>
+         <div class="cp903-acoes">
+           <button type="button" class="cp903-cancel">${escapeHtml(o.cancelar || 'Cancelar')}</button>
+           <button type="button" class="cp903-ok${o.perigo ? ' perigo' : ''}">${escapeHtml(o.ok || 'OK')}</button>
+         </div>
+       </div>`;
+    const fechar = (v) => { document.removeEventListener('keydown', onKey); back.remove(); resolve(v); };
+    const onKey = (e) => { if(e.key === 'Escape') fechar(false); else if(e.key === 'Enter') fechar(true); };
+    back.addEventListener('click', e => { if(e.target === back) fechar(false); });
+    back.querySelector('.cp903-cancel').onclick = () => fechar(false);
+    back.querySelector('.cp903-ok').onclick = () => fechar(true);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    requestAnimationFrame(() => { back.classList.add('show'); back.querySelector('.cp903-ok')?.focus(); });
+  });
+}
+window.cp903Confirm = cp903Confirm;
 const MSG_STYLE_HINTS = {
   direta: "Direta: vai direto ao ponto, propõe próximo passo.",
   consultiva: "Consultiva: tira dúvida do cliente, traz informação, gera valor.",
@@ -11292,20 +11323,41 @@ function ui670DetailRows(lead,mc){
 
   async function ui683MoverEtapaComEvento(id, etapa, label, evento){
     if(!id) return toast('Lead não identificado.');
+    // Estados "de saída" (Arquivado/Perdido/Vendido) tiram o lead das listas ativas e da
+    // busca. Depois do OK o lead deve SUMIR da tela e voltar pra home — "arquivou, acabou".
+    const saiDaLista = etapa === 'Geladeira' || etapa === 'Perdido' || etapa === 'Vendido';
     // Dois destinos "de saída" (Geladeira e Perdido) explicados na hora, pra ninguém
     // confundir "guardar pra depois" com "encerrar sem venda".
     const confirmMsg = etapa === 'Geladeira'
-      ? 'Arquivar este lead? Ele sai das prioridades, mas fica guardado para você reativar depois.'
+      ? 'Arquivar este lead? Ele sai das prioridades e da busca, mas fica guardado nos arquivados pra você reativar depois.'
       : etapa === 'Perdido'
         ? 'Marcar este lead como Perdido? Ele sai das listas ativas e da busca (dá pra reabrir depois).'
         : `Marcar este lead como ${label || etapa}?`;
-    if(!confirm(confirmMsg)) return;
+    const okConfirm = (typeof cp903Confirm === 'function')
+      ? await cp903Confirm({
+          titulo: etapa === 'Geladeira' ? 'Arquivar lead' : (label || etapa),
+          mensagem: confirmMsg,
+          ok: etapa === 'Geladeira' ? 'Arquivar' : (etapa === 'Perdido' ? 'Marcar perdido' : (label || 'OK')),
+          perigo: etapa === 'Perdido'
+        })
+      : confirm(confirmMsg);
+    if(!okConfirm) return;
     try{
       const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
       const data = await res.json().catch(()=>({}));
       if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
       await ui683RegistrarEvento(id, evento || 'etapa_alterada', { etapa, label: label || etapa, de:'botao_rapido' });
       invalidarLeadsCache();
+      if(saiDaLista){
+        // Some da busca/listas na hora (sem esperar refresh) e volta pra home. "Acabou."
+        try{ removerLeadDosCaches(id); }catch(_){}
+        state.lead = null; state.focoLeadId = null; state.grupoAtivo = null;
+        document.body.classList.remove('lead-foco-aberto');
+        toast(etapa === 'Geladeira' ? 'Lead arquivado.' : etapa === 'Perdido' ? 'Lead marcado como perdido.' : 'Venda registrada.');
+        try{ if(typeof show === 'function') show('home'); }catch(_){}
+        try{ await carregarDashboard(); }catch(_){}
+        return;
+      }
       toast(`${label || etapa} registrado.`);
       try{ await carregarDashboard(); }catch(_){}
       try{ if(state.active === 'pipeline') carregarPipeline(); }catch(_){}
