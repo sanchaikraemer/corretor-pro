@@ -200,8 +200,32 @@ function _assinaturaTimelineV681(m) {
 }
 
 function _mesclarTimelinesV681(antiga, nova) {
-  const a = Array.isArray(antiga) ? antiga : [];
+  const a0 = Array.isArray(antiga) ? antiga : [];
   const b = Array.isArray(nova) ? nova : [];
+  // v900: uma "mensagem enviada" (type:"mensagem_enviada") é a SUGESTÃO copiada — apenas uma
+  // aproximação do que foi realmente mandado (o corretor pode editar antes de enviar). Se a
+  // reimportação trouxe a mensagem REAL correspondente (mensagem não-manual da conversa, com o
+  // mesmo início de texto), a REAL vence: descarta a cópia pra não exibir texto que não foi o
+  // enviado. A mensagem real permanece; só a cópia provisória sai.
+  const _norm = m => String(m?.text || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const _ehCopiaEnviada = m => String(m?.type || "").toLowerCase() === "mensagem_enviada";
+  const _ehImportadaReal = m => {
+    const src = String(m?.source || "").toLowerCase(), type = String(m?.type || "").toLowerCase();
+    if (src === "manual" || src === "crm" || src === "corretor-pro-manual") return false;
+    if (["mensagem_enviada", "print-whatsapp", "atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual"].includes(type)) return false;
+    return _norm(m).length >= 40;
+  };
+  const reaisImportadas = b.filter(_ehImportadaReal);
+  const _substituidaPelaReal = m => {
+    if (!_ehCopiaEnviada(m)) return false;
+    const tm = _norm(m); if (tm.length < 40) return false;
+    return reaisImportadas.some(r => {
+      const tr = _norm(r);
+      const n = Math.min(tm.length, tr.length, 60);
+      return n >= 40 && tm.slice(0, n) === tr.slice(0, n); // mesmo começo forte = mesma mensagem
+    });
+  };
+  const a = a0.filter(m => !_substituidaPelaReal(m));
   const vistos = new Set();
   const out = [];
   for (const m of [...a, ...b]) {
@@ -216,7 +240,7 @@ function _mesclarTimelinesV681(antiga, nova) {
   const chavesAntigas = new Set(a.map(_assinaturaTimelineV681).filter(Boolean));
   const novasUnicas = b.filter(m => { const k = _assinaturaTimelineV681(m); return k && !chavesAntigas.has(k); }).length;
   const preservadasDoAntigo = a.filter(m => { const k = _assinaturaTimelineV681(m); return k && !new Set(b.map(_assinaturaTimelineV681).filter(Boolean)).has(k); }).length;
-  return { timeline: out, novasUnicas, preservadasDoAntigo, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
+  return { timeline: out, novasUnicas, preservadasDoAntigo, substituidasPelaReal: a0.length - a.length, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
 }
 
 export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path }) {
