@@ -11,9 +11,10 @@ assert.match(app, /function renderHomeFallbackSeguro\(items\)\{[\s\S]*?cp786Cate
 assert.doesNotMatch(app, /function renderHomeFallbackSeguro\(items\)\{[\s\S]*?\.filter\(l => l && typeof l === "object" && \(l\.id != null \|\| l\.name\)\)\s*\.slice\(0, 4\)/,
   'o fallback não pode mais usar os 4 primeiros leads sem filtro de prioridade');
 
-// A proteção de 5 dias (que joga o lead atendido para "aguardando") continua ligada.
-// v885: agora via protegidoPosAtendimento dentro de cp786Categoria.
-assert.match(app, /if\(typeof protegidoPosAtendimento === 'function' && protegidoPosAtendimento\(l\)\) return 'aguardando'/,
-  'a proteção de 5 dias deve continuar em cp786Categoria');
+// v906: o lead que você atendeu e que o cliente ainda NÃO respondeu fica em "aguardando"
+// (não volta pra fila "Fazer agora" enquanto a bola está com o cliente). A proteção agora é
+// "esperar a resposta do cliente", não um prazo cego de 5 dias.
+assert.match(app, /if\(cpAguardandoResposta\(l\)\) return 'aguardando'/,
+  'lead atendido sem resposta do cliente fica em aguardando (não em Fazer agora)');
 
 console.log('v824-fallback-prioridade: ok');
