@@ -2738,7 +2738,7 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
     </style>
     <div class="home-saud">
-      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirTodosLeads()'>Ver todos</button><button type="button" class="seq-link" onclick='abrirUltimosAtendimentos()'>Últimos atendimentos</button><button type="button" class="seq-link" onclick='reanalisarTudo()'>↻ Reanalisar todos</button>${btnPularHtml}</div></div>
+      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirUltimosAtendimentos()'>Últimos atendimentos</button>${btnPularHtml}</div></div>
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
@@ -3909,7 +3909,6 @@ function parecePhone(txt){
 
 function abrirEditarLead(id, nome, telefone){
   if(!id) return;
-  editLeadAvatarFoto = null;
   // Nome só fica preenchido quando há nome REAL salvo. Se o que tá ali é número
   // de telefone (fallback do sistema), limpa o campo Nome. O número vai pro
   // campo Telefone se ainda não tiver.
@@ -3940,20 +3939,6 @@ function abrirEditarLead(id, nome, telefone){
           <button type="button" id="editLeadFechar" style="background:transparent;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">✕</button>
         </div>
         ${dica}
-        <div style="margin-bottom:14px">
-          <button type="button" id="editLeadPrint" style="width:100%;padding:10px;background:rgba(255,255,255,.04);color:var(--soft);border:1px dashed var(--line);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">📷 Atualizar por print da conversa</button>
-          <input type="file" id="editLeadPrintInput" accept="image/*" style="display:none">
-          <div id="editLeadFotoWrap" style="display:none;align-items:center;gap:10px;margin-top:8px"><div id="editLeadFotoPrev"></div><button type="button" id="editLeadFotoRemover" style="background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--muted);font-size:11px;font-weight:900;cursor:pointer">Remover foto</button></div>
-          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Lê o print e completa nome/telefone que faltam + anexa o conteúdo na observação. Se houver foto de perfil no print, ela é recortada automaticamente.</div>
-        </div>
-        <div style="margin-bottom:14px">
-          <div style="display:flex;gap:8px">
-            <button type="button" id="editLeadAvatarBtn" style="flex:1;padding:10px;background:rgba(255,98,88,.08);color:var(--lime);border:1px dashed var(--lime);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">🖼️ Anexar foto</button>
-            <button type="button" id="editLeadAvatarColar" style="flex:1;padding:10px;background:rgba(255,98,88,.08);color:var(--lime);border:1px dashed var(--lime);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">📋 Colar imagem</button>
-          </div>
-          <input type="file" id="editLeadAvatarInput" accept="image/*" style="display:none">
-          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Anexe uma imagem OU copie a foto (Ctrl+C) e clique em Colar. O Corretor Pro recorta o rosto para o avatar.</div>
-        </div>
         <div style="margin-bottom:12px">
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
           <input type="text" id="editLeadNome" value="${escapeHtml(nomeIni)}" placeholder="Nome do cliente" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
@@ -3968,11 +3953,6 @@ function abrirEditarLead(id, nome, telefone){
           <datalist id="editLeadProdutoLista">${EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Escolha da lista ou digite. Deixe em branco se ainda não souber.</div>
         </div>
-        <div style="margin-bottom:12px">
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação interna</label>
-          <textarea id="editLeadObsAnexar" rows="4" placeholder="Anote algo importante sem apagar o histórico." style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box;resize:vertical;line-height:1.35"></textarea>
-          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Essa observação entra como memória comercial do lead.</div>
-        </div>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
         <div style="border-top:1px solid var(--line);padding-top:12px">
           <div style="color:var(--risco);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:6px">Zona perigosa</div>
@@ -3984,25 +3964,7 @@ function abrirEditarLead(id, nome, telefone){
   overlay.addEventListener("click", (e) => { if(e.target === overlay) fecharEditarLead(); });
   qs("#editLeadFechar")?.addEventListener("click", fecharEditarLead);
   qs("#editLeadSalvar")?.addEventListener("click", () => salvarEditarLead(String(id)));
-  qs("#editLeadPrint")?.addEventListener("click", () => qs("#editLeadPrintInput")?.click());
-  qs("#editLeadPrintInput")?.addEventListener("change", lerPrintEditarLead);
-  qs("#editLeadAvatarBtn")?.addEventListener("click", () => qs("#editLeadAvatarInput")?.click());
-  qs("#editLeadAvatarInput")?.addEventListener("change", (e) => editarAvatarLead(e, String(id)));
-  qs("#editLeadAvatarColar")?.addEventListener("click", () => colarAvatarLead(String(id)));
-  qs("#editLeadFotoRemover")?.addEventListener("click", () => { editLeadAvatarFoto = null; mostrarPreviaFotoEditar(); });
   qs("#editLeadExcluir")?.addEventListener("click", () => excluirLeadDoModal(String(id), nome || ""));
-  // Carrega a observação atual pra dentro do campo (editável). Guarda a memória
-  // inteira pra não apagar os outros campos no salvar, e o valor original pra
-  // saber se mudou.
-  fetch(`./api/lead-update?id=${encodeURIComponent(id)}&action=memoria-get`)
-    .then(r => r.json())
-    .then(g => {
-      const mem = (g && g.memoria) ? g.memoria : {};
-      state._editMem = mem;
-      const ta = qs("#editLeadObsAnexar");
-      if(ta){ ta.value = mem.observacoes || ""; ta.dataset.orig = mem.observacoes || ""; ta.placeholder = "Sem observação ainda."; }
-    })
-    .catch(() => { const ta = qs("#editLeadObsAnexar"); if(ta) ta.placeholder = "Não consegui carregar a observação."; });
   setTimeout(() => qs(parecePhone(nomeIni) ? "#editLeadTelefone" : "#editLeadNome")?.focus(), 100);
 }
 function fecharEditarLead(){ qs("#editarLeadModal")?.remove(); }
@@ -4026,64 +3988,8 @@ async function pedirExtracaoPrint(dataUrl){
     return { ok:false, error: e?.message || "falha de rede" };
   }finally{ clearTimeout(t); }
 }
-async function lerPrintEditarLead(ev){
-  const file = ev.target.files?.[0];
-  if(!file){ return; }
-  const btn = qs("#editLeadPrint");
-  const orig = btn ? btn.textContent : "";
-  if(btn){ btn.disabled = true; btn.textContent = "⏳ Lendo o print..."; }
-  try{
-    const dataUrl = await fileParaDataUrlRedim(file, 1900, 0.88);
-    const d = await pedirExtracaoPrint(dataUrl);
-    if(d?.ok){
-      // Só completa o que estiver vazio — não sobrescreve dado já cadastrado.
-      // Exceção: nome vindo de FORMULÁRIO (full_name que o cliente preencheu) vale mais
-      // que o apelido do contato salvo pelo corretor — então substitui e avisa.
-      let nomeTrocado = "";
-      const elNome = qs("#editLeadNome");
-      if(d.nome && elNome){
-        const atual = elNome.value.trim();
-        if(!atual){ elNome.value = d.nome; }
-        else if(d.nomeFonte === "formulario" && d.nome.trim().toLowerCase() !== atual.toLowerCase()){
-          elNome.value = d.nome; nomeTrocado = atual;
-        }
-      }
-      if(d.telefone && qs("#editLeadTelefone") && !qs("#editLeadTelefone").value.trim()) qs("#editLeadTelefone").value = d.telefone;
-      // Empreendimento lido do print (ex.: do card do anúncio) vai PRO CAMPO Empreendimento —
-      // assim o produto fica identificado de verdade (e as mensagens usam ele), não só na observação.
-      if(d.produto){
-        const elProd = qs("#editLeadProduto");
-        if(elProd && !elProd.value.trim()) elProd.value = d.produto;
-      }
-      const extras = [d.email ? ("E-mail: " + d.email) : "", d.observacao || ""].filter(Boolean).join(" · ");
-      if(extras){
-        const obs = qs("#editLeadObsAnexar");
-        const carimbo = new Date().toLocaleDateString("pt-BR");
-        if(obs) obs.value = (obs.value ? (obs.value.trim() + "\n\n") : "") + `[${carimbo}] (via print) ${extras}`;
-      }
-      // Tenta recortar a foto do cliente do print (a IA devolve onde ela está).
-      editLeadAvatarFoto = d.avatarBox ? await recortarAvatar(file, d.avatarBox) : null;
-      mostrarPreviaFotoEditar();
-      if(d.telefoneSuspeito && d.telefone){
-        toast("⚠️ Print lido, mas confira o TELEFONE — pode ter vindo com um dígito a menos.");
-      } else if(nomeTrocado){
-        toast(`✓ Print lido. Troquei o nome pelo do formulário (era "${nomeTrocado}"). Confira e salve.`);
-      } else {
-        toast(editLeadAvatarFoto ? "✓ Print lido (com foto). Confira e salve." : "✓ Print lido. Confira e salve.");
-      }
-      // Depois de preencher pelo print, traz o botão SALVAR pra vista (senão ele fica
-      // escondido lá embaixo e parece que travou).
-      setTimeout(() => qs("#editLeadSalvar")?.scrollIntoView({ behavior:"smooth", block:"center" }), 120);
-    } else {
-      toast("Não consegui ler: " + (d?.error || "tenta outro print"));
-    }
-  }catch(err){
-    toast("Erro ao ler o print: " + (err?.message || err));
-  }finally{
-    if(btn){ btn.disabled = false; btn.textContent = orig; }
-    if(ev.target) ev.target.value = "";
-  }
-}
+// (v905) lerPrintEditarLead removida junto com o "Atualizar por print" do modal Editar lead.
+// (O print-reader do lead MANUAL segue existindo no fluxo de abrirNovoLead.)
 
 // Modal pra criar lead manualmente (alguém ligou, comentou pessoalmente, indicação)
 const EMPREENDIMENTOS_SENGER = []; // v827 §7.1: sem catálogo fixo de empreendimentos (autocomplete fica livre)
@@ -4147,7 +4053,6 @@ function fileParaDataUrlRedim(file, maxDim, quality){
 }
 // Foto do cliente recortada do print (dataURL), pra salvar com o lead manual / na edição.
 let novoLeadAvatarFoto = null;
-let editLeadAvatarFoto = null;
 // Recorta a região da foto (caixa normalizada 0–1 que a IA devolveu) do print original,
 // em quadrado ~200px. Roda no navegador. Devolve dataURL JPEG ou null se falhar.
 // Detecta se o recorte é uma "foto" sem rosto (avatar padrão do WhatsApp): mede o desvio
@@ -4414,44 +4319,20 @@ async function salvarEditarLead(id){
   const produto = (qs("#editLeadProduto")?.value || "").trim();
   const produtoOrig = (qs("#editLeadProduto")?.dataset.orig || "").trim();
   const produtoMudou = !!produto && produto.toLowerCase() !== produtoOrig.toLowerCase();
-  const obsField = qs("#editLeadObsAnexar");
-  const obsNova = (obsField?.value || "").trim();
-  const obsOrig = (obsField?.dataset.orig || "").trim();
-  const obsMudou = obsNova !== obsOrig;
-  if(!nome && !telefone && !produto && !obsMudou && !editLeadAvatarFoto){ toast("Nada pra salvar."); return; }
+  if(!nome && !telefone && !produto){ toast("Nada pra salvar."); return; }
   const btn = qs("#editLeadSalvar");
   if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
   try{
-    if(nome || telefone || produto || editLeadAvatarFoto){
+    {
       const res = await fetch("./api/lead-update", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id, action:"editar-dados", nome, telefone, produto, avatarFoto: editLeadAvatarFoto || "" })
+        body: JSON.stringify({ id, action:"editar-dados", nome, telefone, produto })
       });
       const data = await res.json();
       if(!data?.ok){ toast("Erro: " + (data?.error || "falhou")); if(btn){ btn.disabled=false; btn.textContent="Salvar"; } return; }
     }
-    if(obsMudou){
-      // Salva a observação já (fallback instantâneo, sem apagar os outros campos da memória)...
-      const mem = state._editMem || {};
-      const resMem = await fetch("./api/lead-update", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ id, action:"memoria-set", preferencias: mem.preferencias||"", pessoasDecisao: mem.pessoasDecisao||"", pontosSensiveis: mem.pontosSensiveis||"", observacoes: obsNova })
-      }).catch(() => null);
-      if(!resMem?.ok){ toast("Erro ao salvar observação — tente de novo."); if(btn){ btn.disabled=false; btn.textContent="Salvar"; } return; }
-    }
     fecharEditarLead();
-    if(obsMudou){
-      // ...e CONSERTA A FONTE: troca a nota antiga da linha do tempo pelo texto corrigido
-      // e reanalisa, pra "Por quê este lead" parar de repetir o texto errado.
-      toast("Corrigindo e reanalisando…");
-      const r = await fetch("./api/reanalisar-lead", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify(payloadComCerebro({ id, action:"corrigir-observacao", texto: obsNova }))
-      });
-      const dr = await r.json().catch(() => ({ ok:false }));
-      if(dr?.ok){ toast("Análise corrigida."); }
-      else { toast("Observação salva, mas a reanálise falhou: " + (dr?.error||"erro")); }
-    } else if(produtoMudou){
+    if(produtoMudou){
       // Mudou o empreendimento → as 3 mensagens em cache estão velhas (genéricas). Reanalisa pra
       // elas saírem certeiras, citando o produto agora identificado.
       toast("Empreendimento salvo. Atualizando as mensagens…");
@@ -4474,17 +4355,8 @@ async function salvarEditarLead(id){
     // patch otimista vem POR ÚLTIMO, DEPOIS de todos os refetches — senão o carregarDashboard
     // recarregava por cima e o lead reabria com o nome/telefone antigo (o bug do "precisa atualizar o app").
     await getLeadsData(true).catch(()=>{});
-    const fotoNova = editLeadAvatarFoto;
-    patchLeadCache(id, { name: nome, phone: telefone, avatarFoto: fotoNova });
+    patchLeadCache(id, { name: nome, phone: telefone });
     await abrirLead(id);
-    // Garante que a foto recém-salva apareça NA HORA (sem depender do cache/lag do banco) —
-    // reforça o avatar direto no lead em foco, igual ao fluxo do "Editar avatar".
-    if(fotoNova && state.lead && String(state.lead.id) === String(id)){
-      state.lead.avatarFoto = fotoNova;
-      state.analysis = state.analysis || {};
-      state.analysis.avatarFoto = fotoNova;
-      renderLeadFoco({ ...state.lead, analysis: state.analysis });
-    }
   }catch(err){
     toast("Erro: " + (err?.message||err));
     if(btn){ btn.disabled=false; btn.textContent="Salvar"; }
@@ -4862,8 +4734,9 @@ function cp704Css(){
       .cp704-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 4px}.cp704-top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.cp704-reanalyse{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap;cursor:pointer}
       .cp704-reanalyse-destaque{background:var(--surface-soft)!important;border-color:var(--line2)!important;color:var(--text)!important;box-shadow:none}
       .cp704-reanalyse-destaque:hover{background:var(--surface-hover)!important;border-color:var(--line2)!important}
-      .cp704-back{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font-weight:800;font-size:13px;padding:8px 15px;border-radius:999px;cursor:pointer;line-height:1;transition:background .15s,border-color .15s,color .15s,transform .05s}
-.cp704-back:hover{background:rgba(255,98,88,.12);border-color:rgba(255,98,88,.45);color:var(--text)}
+      .cp704-back{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font-weight:850;font-size:10.5px;line-height:1.1;white-space:nowrap;cursor:pointer;min-width:66px;transition:color .15s,border-color .15s,transform .05s}
+.cp704-back svg{width:19px;height:19px}
+.cp704-back:hover{color:var(--text);border-color:var(--muted)}
 .cp704-back:active{transform:translateY(1px)}
       /* Marcar atendimento = ação principal do bloco (coral). Verde só quando já atendido (concluído). */
       .cp704-attended{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:999px;padding:8px 12px;font-weight:950;font-size:12px;white-space:nowrap}
@@ -4897,7 +4770,7 @@ function cp704Css(){
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-herorow{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start;font-size:14px;padding:9px 16px}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%;flex-wrap:nowrap;justify-content:stretch}.cp704-ico{flex:1;min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%;flex-wrap:nowrap;justify-content:stretch}.cp704-ico{flex:1;min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -5333,7 +5206,7 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()">‹ Voltar</button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
@@ -5346,8 +5219,8 @@ function renderLeadFoco(lead){
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
           <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
-          <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:76px;margin-bottom:8px"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:120px;margin-bottom:16px"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
             <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
@@ -8059,7 +7932,8 @@ qs("#cerebroVideoInput")?.addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
-// ============ IMPORTAR LEADS DE CSV ============
+// ============ PARSER DE CSV (compartilhado) ============
+// Usado pela Importar telefones (CSV). A antiga importação de LEADS por CSV foi removida na v905.
 function parseCsvDireciona(t){
   const rows=[]; let row=[], cur="", q=false;
   for(let i=0;i<t.length;i++){const c=t[i];
@@ -8069,193 +7943,9 @@ function parseCsvDireciona(t){
   if(cur.length||row.length){row.push(cur);rows.push(row);}
   return rows;
 }
-const CSV_ETAPA_MAP = { "PERDIDO":"Perdido","ATENDIMENTO":"Atendimento","NOVO / INICIAL":"Novo","NOVO/INICIAL":"Novo","STAND BY":"Standby","STANDBY":"Standby","VISITA / PROPOSTA":"Visita/Proposta","NEGOCIAÇÃO":"Negociação","NEGOCIACAO":"Negociação" };
-function crmDataBR(iso){ try{ const d=new Date(iso); if(isNaN(d))return ""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; } }
+// (v905) Importação de LEADS por CSV removida — não era mais usada e a UI dela nem existia mais
+// no HTML. parseCsvDireciona (acima) permanece: a Importar telefones (CSV) usa.
 
-qs("#crmImportBtn")?.addEventListener("click", () => qs("#crmCsvInput")?.click());
-qs("#crmCsvInput")?.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if(!file){ return; }
-  const st = qs("#crmImportStatus");
-  const wrap = qs("#crmImportProgressWrap"), bar = qs("#crmImportProgress");
-  try{
-    const texto = await file.text();
-    const rows = parseCsvDireciona(texto);
-    if(rows.length < 2){ st.textContent = "CSV vazio ou inválido."; e.target.value=""; return; }
-    // Cabeçalho sem diferenciar maiúsculas/acentos: aceita "Nome", "NOME", "nome" etc.
-    const head = rows[0].map(h=>h.trim().toLowerCase());
-    const ix = {}; head.forEach((h,i)=>ix[h]=i);
-    // Só o NOME é obrigatório. O "id" é opcional: se o arquivo não trouxer, geramos um
-    // código estável a partir do nome+telefone (assim reimportar não duplica). O interesse
-    // pode vir como "interesse" OU "empreendimento".
-    if(ix["nome"] === undefined){ st.textContent = "Esse arquivo precisa ter pelo menos uma coluna 'Nome'. Confira o arquivo."; e.target.value=""; return; }
-    const idEstavel = (get) => {
-      const bruto = get("id");
-      if(bruto) return bruto.slice(0,8);
-      const base = (get("nome")+"|"+get("telefone").replace(/\D/g,"")).toLowerCase();
-      let h = 0; for(let i=0;i<base.length;i++){ h = (h*31 + base.charCodeAt(i)) >>> 0; }
-      return ("0000000"+h.toString(16)).slice(-8);
-    };
-    const data = rows.slice(1).filter(r => ((r[ix["nome"]]||"").trim()));
-    const leads = data.map(r => {
-      const get = (k) => (ix[k] !== undefined ? (r[ix[k]] ?? "") : "").trim();
-      const etapaMap = CSV_ETAPA_MAP[get("etapa").toUpperCase()] || "Novo";
-      return {
-        nome: get("nome") || "Cliente",
-        telefone: get("telefone"),
-        empreendimento: get("empreendimento") || get("interesse"),
-        etapaMap,
-        ativo: etapaMap !== "Perdido",
-        origem: get("origem"),
-        observacao: get("observacao"),
-        criado: get("criado_em") || new Date().toISOString(),
-        idShort: idEstavel(get)
-      };
-    });
-
-    // Quem já foi importado antes? Evita duplicar e deixa rodar de novo pra completar o que faltou.
-    // Também monta o mapa de TELEFONES já existentes (de qualquer origem: WhatsApp, sistema antigo, etc)
-    // pra juntar no lead existente em vez de duplicar.
-    st.textContent = "Conferindo o que já está importado…";
-    const jaImportados = new Set();
-    const porTelefone = new Map(); // ultimos 8 dígitos -> { id, obs }
-    try{
-      const dl = await getLeadsData(true);
-      (dl.items||[]).forEach(it => {
-        const m = String(it.fileName||"").match(/\[(?:SISTEMA|CSV)\s+([A-Za-z0-9]{1,8})\]/);
-        if(m) jaImportados.add(m[1].toLowerCase());
-        const fone = String(it.phone||"").replace(/\D/g,"");
-        if(fone.length >= 8 && it.id){
-          const k = fone.slice(-8);
-          if(!porTelefone.has(k)) porTelefone.set(k, { id: it.id, obs: String(it.analysis?.memoria?.observacoes||"") });
-        }
-      });
-    }catch(_){ /* sem conferência o backend ainda dedupa por nome+id */ }
-
-    const aImportar = leads.filter(L => !jaImportados.has((L.idShort||"").toLowerCase()));
-    const jaTinha = leads.length - aImportar.length;
-    if(aImportar.length === 0){
-      st.innerHTML = `<span style="color:var(--acao)">Todos os ${leads.length} leads desse arquivo já estão importados. Nada a fazer.</span>`;
-      e.target.value=""; return;
-    }
-    const ativosCount = aImportar.filter(l=>l.ativo).length;
-    if(!confirm(`Importar ${aImportar.length} leads do CSV?${jaTinha?`\n\n(${jaTinha} já estavam importados — vou pular esses, sem duplicar.)`:""}\n\n• Todos entram agora, na hora.\n• ${ativosCount} ativos serão analisados pelo Corretor Pro em seguida (isso demora, mas os leads JÁ ficam salvos — se a aba fechar, é só rodar de novo pra continuar de onde parou).`)){ e.target.value=""; return; }
-
-    qs("#crmImportBtn").disabled = true;
-    wrap.style.display = "block";
-    bar.style.width = "0%";
-    let criados = 0, falhas = 0, mesclados = 0;
-    const ativosIds = [];
-
-    // Junta a observação da lista DENTRO de um lead que já existe (mesmo telefone), sem duplicar.
-    async function mesclarNoExistente(L, alvo){
-      const obs = String(L.observacao||"").trim();
-      if(!obs) return "vazio"; // nada pra acrescentar
-      const trecho = obs.slice(0, 60);
-      if(trecho && String(alvo.obs||"").includes(trecho)) return "ja-tinha"; // já está lá
-      try{
-        const res = await fetch("./api/reanalisar-lead", {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify(payloadComCerebro({ id: alvo.id, novoAtendimento: obs.slice(0,4000), apenasSalvar:true, autorManual:"Anotação importada", tipoManual:"nota" }))
-        });
-        const d = await res.json().catch(()=>({}));
-        if(d?.ok){ alvo.obs = (alvo.obs ? alvo.obs+"\n" : "") + obs; return "mesclado"; }
-        return "falha";
-      }catch(_){ return "falha"; }
-    }
-
-    // 1) CRIAR todos os registros — rápido, sem IA. 1 tentativa extra se a primeira falhar.
-    let ultimoErroServidor = ""; // guarda o motivo real quando o servidor recusa a gravação
-    async function criarUm(L){
-      const analysis = {
-        clientName: L.nome,
-        lead: { clientName: L.nome, name: L.nome, phone: L.telefone, product: L.empreendimento },
-        produtoInteresse: L.empreendimento || "Não identificado",
-        produtosInteresse: L.empreendimento ? [L.empreendimento] : [],
-        etapaSugerida: L.etapaMap,
-        memoria: { observacoes: L.observacao || "" },
-        origemCrm: L.origem || ""
-      };
-      const dataBR = crmDataBR(L.criado);
-      const timeline = L.observacao ? [{ id:1, date:dataBR, time:"", iso:L.criado, author:"Anotação importada", text:L.observacao, type:"nota", source:"crm", order:1 }] : [];
-      const result = { rawText: L.observacao || "", timeline, analysis, lead: { clientName:L.nome, phone:L.telefone, product:L.empreendimento }, audiosEncontrados:0, audiosTranscritos:0 };
-      const fileName = `${L.nome} [CSV ${L.idShort}]`;
-      const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"salvar-novo", result, fileName, source:"crm-import" }) });
-      const d = await res.json().catch(()=>({}));
-      const id = d?.persistence?.processing?.id || null;
-      if(!id){
-        const p = d?.persistence || {};
-        ultimoErroServidor = p.reason || (Array.isArray(p.attempts) && p.attempts[0]?.error) || d?.error || `o servidor respondeu ${res.status} sem salvar`;
-      }
-      return id;
-    }
-    for(let i=0;i<aImportar.length;i++){
-      const L = aImportar[i];
-      const foneL = String(L.telefone||"").replace(/\D/g,"");
-      const foneKey = foneL.length >= 8 ? foneL.slice(-8) : "";
-      const alvo = foneKey ? porTelefone.get(foneKey) : null;
-      if(alvo){
-        // Já existe um lead com esse telefone — junta a observação nele, sem duplicar.
-        const r = await mesclarNoExistente(L, alvo);
-        if(r === "falha") falhas++; else mesclados++;
-      } else {
-        let newId = null;
-        for(let tent=0; tent<2 && !newId; tent++){
-          try{ newId = await criarUm(L); }catch(_){ newId = null; }
-          if(!newId && tent===0) await new Promise(r=>setTimeout(r,800));
-        }
-        if(newId){
-          criados++;
-          if(L.ativo && L.observacao) ativosIds.push(newId);
-          // registra no mapa pra não duplicar telefone repetido dentro da própria lista
-          if(foneKey) porTelefone.set(foneKey, { id:newId, obs:L.observacao||"" });
-        } else falhas++;
-      }
-      bar.style.width = Math.round(((i+1)/aImportar.length)*100) + "%";
-      st.textContent = `Importando: ${i+1}/${aImportar.length}${mesclados?` · ${mesclados} juntados`:""}${falhas?` (${falhas} a refazer)`:""}`;
-    }
-
-    // IMPORTAÇÃO concluída aqui — os leads já estão salvos no banco.
-    await loadRecentLeads();
-    await carregarDashboard();
-    await carregarAgendaTopo();
-    if(criados === 0 && falhas > 0){
-      st.innerHTML = `<span style="color:var(--risco)"><b>Nenhum lead foi salvo.</b> O servidor recusou a gravação${ultimoErroServidor?`: <b>${escapeHtml(String(ultimoErroServidor))}</b>`:"."} Tira um print desta mensagem — é esse o problema a resolver.</span>`;
-    } else {
-      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${criados} leads novos${mesclados?`, ${mesclados} juntados em leads que já existiam (mesmo telefone)`:""}${jaTinha?`, ${jaTinha} já importados antes`:""}${falhas?`, ${falhas} a refazer (rode de novo)`:""}. Já aparecem em Hoje e na Condução.</span>`;
-    }
-
-    // 2) ANALISAR os ativos — em segundo plano, em paralelo. Não trava: os leads já estão salvos.
-    if(ativosIds.length){
-      bar.style.width = "0%";
-      let an = 0;
-      const total = ativosIds.length;
-      const CONC = 3;
-      let idx = 0;
-      async function worker(){
-        while(idx < total){
-          const myId = ativosIds[idx++];
-          try{
-            const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 60000);
-            await fetch("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payloadComCerebro({ id: myId })), signal: ctrl.signal });
-            clearTimeout(to);
-          }catch(_){ /* segue; dá pra reanalisar o lead depois pela tela dele */ }
-          an++;
-          bar.style.width = Math.round((an/total)*100) + "%";
-          st.innerHTML = `<span style="color:var(--cerebro)">Analisando ativos em segundo plano: ${an}/${total} (pode usar o app normalmente)</span>`;
-        }
-      }
-      await Promise.all(Array.from({length:Math.min(CONC,total)}, worker));
-      await loadRecentLeads();
-      st.innerHTML = `<span style="color:var(--acao)">Tudo pronto! ${criados} leads importados e ${total} ativos analisados.</span>`;
-    }
-  }catch(err){
-    st.innerHTML = '<span style="color:var(--risco)">Erro na importação: ' + escapeHtml(String(err?.message||err)) + '</span>';
-  }finally{
-    qs("#crmImportBtn").disabled = false;
-    e.target.value = "";
-  }
-});
 // ============ IMPORTAR CONVERSAS EM LOTE (ZIP de ZIPs) ============
 // Recebe um .zip que contém vários .zip de conversas do WhatsApp (um por cliente,
 // cada um no formato normal de exportação: um .txt dentro). Cada um passa pelo
@@ -10595,7 +10285,9 @@ function ui670ModeloComercial(lead){
   mc.versao=Number(mc.versao||a._schemaComercial||0);
   mc.contato=mc.contato||{};
   mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
-  mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"Contato principal da oportunidade");
+  // v905: removido o texto-filler do papel do contato (era desnecessário). Vazio some da
+  // lista de detalhes; a descrição de parceiro (informativa) continua.
+  mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"");
   mc.oportunidade=mc.oportunidade||{};
   mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
   mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
