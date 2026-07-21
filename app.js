@@ -10057,14 +10057,16 @@ window.ui667MarcarAtendido=async function(btn){
   }
 };
 
-// Desfaz localmente o atendimento do BOTÃO de HOJE (espelha a API): remove os eventos
-// contato_manual "botao_atendido" do dia e recalcula o último atendimento pelo que sobrou.
+// Desfaz localmente o "Atendido hoje" (espelha a API): remove TODO contato_manual do dia e
+// recalcula o último atendimento pelo que sobrou.
 function ui667RemoverAtendidoLocal(lead){
   const evs=lead?.analysis?.aprendizado?.eventos;
   if(!Array.isArray(evs)) return;
   const hojeBR=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+  // Remove TODO contato_manual de HOJE (não só o do botão): senão o "Atendido hoje" continua
+  // ligado por outro contato do dia e o botão não volta pra "Marcar atendimento".
   lead.analysis.aprendizado.eventos=evs.filter(e=>{
-    if(e?.evento!=='contato_manual'||e?.detalhes?.de!=='botao_atendido'||!e?.quando) return true;
+    if(e?.evento!=='contato_manual'||!e?.quando) return true;
     const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(e.quando));
     return iso!==hojeBR;
   });
