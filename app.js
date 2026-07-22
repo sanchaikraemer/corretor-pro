@@ -2531,7 +2531,7 @@ function renderBotoesHome(){
     return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
   };
 
-  // v922 — Fila urgente = a DOSE FIXA de hoje (sorteada uma vez, só diminui conforme atende —
+  // v922 — Fila urgente = a DOSE FIXA de hoje (escolhida uma vez, só diminui conforme atende —
   // ver cpDoseFixaHoje). Quem é elegível mas não entrou nos 10 de hoje vira "fila de retomada"
   // (não some, só não conta pro "Fazer agora" nem entra sozinho no meio do dia).
   // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (continuam
@@ -9003,9 +9003,10 @@ function cpFilaFazerAgora(items){
 // v922 — "Fazer agora" reclamado pelo dono: os 10 escolhidos de manhã ficavam sendo REPOSTOS
 // pelo próximo da fila assim que um era atendido (a fila bruta é recalculada toda hora e o
 // atendido simplesmente sai, deixando o 11º entrar) — o card nunca baixava de 10 no dia, mesmo
-// atendendo vários. Agora os IDs de hoje são sorteados UMA VEZ (persistidos) e ficam FIXOS o dia
+// atendendo vários. Agora os IDs de hoje são ESCOLHIDOS UMA VEZ (mesma régua de sempre: mais
+// mensagens do cliente, desempate por mais tempo parado — nada de aleatório) e ficam FIXOS o dia
 // inteiro: atender um faz o card baixar (10→9→8...), sem reposição automática. Só amanhã
-// (data BR diferente) é que a dose é sorteada de novo. "Atender +1" continua disponível pra quem
+// (data BR diferente) é que a dose é escolhida de novo. "Atender +1" continua disponível pra quem
 // QUISER puxar mais um da fila de propósito (cpAdicionarNaDoseHoje), e esse extra também fica
 // fixo (não é substituído por outro).
 const CP_DOSE_STORAGE_KEY = "cpDoseFazerAgoraV1";
@@ -9022,9 +9023,10 @@ function cpLerDoseSalva(){
 function cpGravarDoseSalva(ids){
   try{ localStorage.setItem(CP_DOSE_STORAGE_KEY, JSON.stringify({ data: cpHojeBR(), ids: ids.map(String) })); }catch(_){}
 }
-// IDs fixos da dose de hoje: lê o que já foi sorteado; se ainda não tem (primeiro carregamento do
-// dia), sorteia do topo da fila bruta e persiste. Sem dados carregados ainda, não persiste vazio
-// (senão travaria a dose em 0 pro resto do dia assim que os leads chegassem).
+// IDs fixos da dose de hoje: lê o que já foi escolhido; se ainda não tem (primeiro carregamento
+// do dia), pega o topo da fila bruta (ranqueada por prioridade, não aleatória) e persiste. Sem
+// dados carregados ainda, não persiste vazio (senão travaria a dose em 0 pro resto do dia assim
+// que os leads chegassem).
 function cpDoseIdsHoje(items){
   if(cpFimDeSemana()) return [];
   const salva = cpLerDoseSalva();

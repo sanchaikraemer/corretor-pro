@@ -28,12 +28,13 @@ encolher.
 ## O que mudou
 
 - **`cpDoseIdsHoje`/`cpDoseFixaHoje`/`cpFazerAgoraDose`** (`app.js`): os IDs dos "leads de hoje"
-  agora são sorteados **uma única vez por dia** (persistidos em `localStorage`, chave
-  `cpDoseFazerAgoraV1`, escopados pela data BR) a partir do topo da fila ranqueada de sempre
-  (`cpFilaFazerAgora`). Depois de sorteados, ficam **fixos o dia inteiro** — não importa quantos
-  novos candidatos melhores apareçam na carteira. `cpFazerAgoraDose`/o card/a saudação agora
-  contam só quantos desses IDs fixos **ainda não foram atendidos hoje**: atender 1 → 10 vira 9;
-  atender 3 → vira 7. Sem reposição automática.
+  agora são escolhidos **uma única vez por dia** — pela MESMA régua de prioridade de sempre (mais
+  mensagens do cliente, desempate por mais tempo parado; nada de aleatório) — e persistidos em
+  `localStorage` (chave `cpDoseFazerAgoraV1`, escopados pela data BR) a partir do topo da fila
+  ranqueada de sempre (`cpFilaFazerAgora`). Depois de escolhidos, ficam **fixos o dia inteiro** —
+  não importa quantos novos candidatos melhores apareçam na carteira. `cpFazerAgoraDose`/o
+  card/a saudação agora contam só quantos desses IDs fixos **ainda não foram atendidos hoje**:
+  atender 1 → 10 vira 9; atender 3 → vira 7. Sem reposição automática.
 - **"Atender +1"** (`abrirFazerAgora`): continua existindo pra quem QUISER puxar mais um da fila
   além dos 10 — mas agora, ao puxar, o extra também é **fixado** na dose do dia
   (`cpAdicionarNaDoseHoje`), em vez de só revelar mais um item de uma janela deslizante.
@@ -45,16 +46,16 @@ encolher.
   (`cpDoseFixaHoje().pendentes`); quem é elegível mas não entrou nos 10 de hoje some pra dentro do
   expansor "Fila de retomada" — não desaparece, só não conta como urgência de hoje nem entra
   sozinho no meio do dia.
-- No dia seguinte (data BR diferente do que está salvo), a dose é sorteada de novo do zero —
+- No dia seguinte (data BR diferente do que está salvo), a dose é escolhida de novo do zero —
   mantendo o "carryover" entre DIAS (quem não foi atendido ontem tende a reaparecer no topo, pela
   régua de sempre), só não repõe mais DENTRO do mesmo dia.
 
 ## Verificação
 
-- `tests/v922-fazer-agora-dose-fixa.test.mjs` (novo): sorteio inicial determinístico (top 10 por
+- `tests/v922-fazer-agora-dose-fixa.test.mjs` (novo): escolha inicial determinística (top 10 por
   engajamento), confirma que um novo candidato mais forte não reordena nem entra na dose já
-  sorteada, que atender 3 de 10 derruba o pendente pra 7 sem repor, que "Atender +1" fixa o extra
-  puxado, e que uma dose salva com data antiga é descartada e ressorteada.
+  fixada, que atender 3 de 10 derruba o pendente pra 7 sem repor, que "Atender +1" fixa o extra
+  puxado, e que uma dose salva com data antiga é descartada e escolhida de novo.
 - `tests/v914-fazer-agora-dose-e-fds.test.mjs` e `tests/v884-fazer-agora-retomadas.test.mjs`
   ajustados: a asserção exata do antigo `cpFazerAgoraDose`/`abrirFazerAgora` (carryover
   automático, "10 + extra") foi trocada pela nova assinatura (dose fixa).
