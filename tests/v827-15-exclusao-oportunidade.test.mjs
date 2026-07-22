@@ -52,13 +52,39 @@ let deleteQuery = "";
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   res.setHeader("Content-Type", "application/json");
+  if (url.pathname === "/storage/v1/object/list/whatsapp-zips" && req.method === "POST") {
+    res.statusCode = 200;
+    res.end("[]");
+    return;
+  }
   if (url.pathname === "/rest/v1/whatsapp_processamentos" && req.method === "GET") {
+    const select = url.searchParams.get("select") || "";
+    if (select.includes("timeline_json")) {
+      res.statusCode = 200;
+      res.end("[]");
+      return;
+    }
     res.statusCode = 200;
     res.end(JSON.stringify(Object.values(registros)));
     return;
   }
   if (url.pathname === "/rest/v1/whatsapp_processamentos" && req.method === "DELETE") {
     deleteQuery = url.search;
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+  if (url.pathname === "/rest/v1/direciona_config" && req.method === "GET") {
+    res.statusCode = 200;
+    res.end("[]");
+    return;
+  }
+  if (url.pathname === "/rest/v1/direciona_config" && ["DELETE", "POST"].includes(req.method)) {
+    res.statusCode = req.method === "POST" ? 201 : 204;
+    res.end(req.method === "POST" ? "[]" : "");
+    return;
+  }
+  if (["/rest/v1/leads", "/rest/v1/direciona_leads"].includes(url.pathname) && req.method === "DELETE") {
     res.statusCode = 204;
     res.end();
     return;

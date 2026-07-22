@@ -1,4 +1,5 @@
 import { state } from './js/state.js?v=__VERSION__';
+import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commercial-schema.js?v=__VERSION__';
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
 import './js/pwa-install.js?v=__VERSION__';
@@ -635,16 +636,6 @@ function icTab(which, dadosJaCarregados=false){
   if(!cer && !dadosJaCarregados) carregarAprendizado();
 }
 window.icTab = icTab;
-// Abas internas do menu "Arquivo": Perdidos x Geladeira (congelados).
-function arqTab(which){
-  const perd = which !== "geladeira";
-  const gp = qs("#arqPerdidos"), gg = qs("#arqGeladeira");
-  if(gp) gp.style.display = perd ? "" : "none";
-  if(gg) gg.style.display = perd ? "none" : "";
-  const bp = qs("#arqTabPerdidos"), bg = qs("#arqTabGeladeira");
-  [[bp,perd],[bg,!perd]].forEach(([b,on])=>{ if(!b) return; b.style.borderColor = on?"var(--lime)":"var(--line)"; b.style.background = on?"rgba(255,98,88,.15)":"transparent"; b.style.color = on?"var(--lime)":"var(--muted)"; });
-}
-window.arqTab = arqTab;
 // Celular: gaveta do menu = a mesma lista lateral do PC (mesma linguagem/conteúdo).
 // Atualização #724-2: a seta física fecha a gaveta antes de sair da tela atual.
 function abrirMenuGaveta(){
@@ -663,30 +654,6 @@ function fecharMenuGaveta(options={}){
 }
 window.abrirMenuGaveta = abrirMenuGaveta;
 window.fecharMenuGaveta = fecharMenuGaveta;
-function renderLeads(){
-  const baseLead = state.lead || state.leads[0] || null;
-  let html = '<div class="empty">Nenhum atendimento real carregado ainda.<br>Importe uma conversa do WhatsApp para começar.</div>';
-  if(state.leads.length){
-    const selId = state.lead?.id ? String(state.lead.id) : null;
-    html = state.leads.slice(0,8).map(item => {
-      const idStr = String(item.id||"");
-      const ehSel = selId && idStr === selId;
-      const idJs = JSON.stringify(idStr);
-      const novo = "";
-      const contato = ehContatadoHoje(item) ? ` <span style="color:var(--acao);font-size:11px">✓</span>` : "";
-      const esfri = !ehContatadoHoje(item) && ehEsfriando(item) ? ` <span style="color:var(--risco);font-size:11px"></span>` : "";
-      return `<div class="lead" ${idStr ? `onclick='abrirLead(${idJs})' style="cursor:pointer${ehSel?";border-color:var(--lime);background:rgba(255,98,88,.06)":""}"`:""}>
-        <div style="flex:1;min-width:0">
-          <strong>${escapeHtml(item.name||"Cliente importado")}${novo}${contato}${esfri}</strong>
-          <div class="small">${escapeHtml(produtosLabel(item))}${item.daysSinceLastInteraction!=null?" · "+item.daysSinceLastInteraction+"d":""}</div>
-        </div>
-      </div>`;
-    }).join("");
-  }
-  const el1 = qs("#leadList"); if(el1) el1.innerHTML=html;
-  const el2 = qs("#mobileLeadList"); if(el2) el2.innerHTML=html;
-  const elTime = qs("#bestTime"); if(elTime) elTime.textContent=baseLead?baseLead.bestTime:"--";
-}
 function clearAnalysis(){
   state.lead=null;
   state.focoLeadId=null;
@@ -710,7 +677,6 @@ function clearAnalysis(){
   qsa(".msg-tab").forEach(b => b.classList.toggle("active", b.dataset.style === "direta"));
   qs("#msgStyleHint").textContent = MSG_STYLE_HINTS.direta;
   showCard("resultCard", false); showCard("analysisCard", false); showCard("msgCard", false); showCard("memoriaCard", false); showCard("timelineCard", false); showCard("goToTimelineCard", false);
-  renderLeads();
   toast("Análise limpa.");
 }
 // Limpa nomes longos com sufixo de produto + textos de erro técnico
@@ -773,7 +739,6 @@ async function loadRecentLeads(force = false){
     if(data?.ok && Array.isArray(data.items)){
       state.todosLeads = data.items.map(limparLead);
       state.leads = state.todosLeads.slice(0, 8);
-      renderLeads();
     }
   }catch(_){
     // Não bloqueia o app se o banco ainda não responder.
@@ -6949,9 +6914,6 @@ async function renderProcessedResult(data, meta){
   qs("#btnSalvarLead")?.addEventListener("click", salvarLeadPendente);
   qs("#btnDescartarLead")?.addEventListener("click", descartarLeadPendente);
   qs("#btnAtualizarLead")?.addEventListener("click", atualizarLeadComEvolucao);
-
-  renderLeads();
-
   if(perguntarNome){
     // Mesmo nome: só permite atualizar o cadastro existente; criar duplicata não é oferecido.
   }else{
@@ -7761,54 +7723,6 @@ qs("#cerebroAudioInput")?.addEventListener("change", async (e) => {
     e.target.value = "";
   }
 });
-// Ensinar por vídeo (sobe pro armazenamento e transcreve de lá — contorna o limite de envio direto)
-qs("#cerebroVideoBtn")?.addEventListener("click", () => qs("#cerebroVideoInput")?.click());
-qs("#cerebroVideoInput")?.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if(!file) return;
-  const st = qs("#cerebroVideoStatus");
-  if(file.size > 25*1024*1024){ st.textContent = "Vídeo maior que 25 MB. Mande um trecho mais curto."; e.target.value = ""; return; }
-  const ext = "." + (file.name.split(".").pop() || "mp4").toLowerCase();
-  try{
-    st.textContent = "Enviando vídeo...";
-    // 1) pede URL de upload e envia o arquivo direto pro armazenamento
-    const metaRes = await fetch("./api/criar-upload-url", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ fileName: file.name, size: file.size, contentType: file.type || "video/mp4" }) });
-    const meta = await metaRes.json().catch(()=>({ ok:false }));
-    if(!metaRes.ok || !meta.ok || !(meta.signedUrl || meta.signed_url)){ st.innerHTML = '<span style="color:var(--risco)">Não consegui preparar o envio do vídeo.</span>'; e.target.value=""; return; }
-    const signedUrl = meta.signedUrl || meta.signed_url;
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", signedUrl, true);
-      // O bucket #621 permite somente os formatos de ZIP, áudio e vídeo previstos.
-      xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
-      xhr.setRequestHeader("x-upsert", "true");
-      xhr.upload.onprogress = (evt) => { if(evt.lengthComputable){ st.textContent = "Enviando vídeo... " + Math.round((evt.loaded/evt.total)*100) + "%"; } };
-      xhr.onload = () => {
-        if(xhr.status>=200 && xhr.status<300){ resolve(); return; }
-        let det = (xhr.responseText||"").slice(0,200);
-        try{ const p = JSON.parse(xhr.responseText); det = p.message || p.error || det; }catch(_){}
-        reject(new Error("armazenamento recusou (HTTP "+xhr.status+") "+det));
-      };
-      xhr.onerror = () => reject(new Error("falha de rede no envio"));
-      xhr.send(file);
-    });
-    // 2) manda transcrever a partir do armazenamento e extrair lições curtas
-    st.textContent = "Transcrevendo e extraindo lições... (pode levar alguns segundos)";
-    const sug = qs("#cerebroVideoSugestoes"); if(sug) sug.innerHTML = "";
-    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"transcrever-storage", bucket: meta.bucket, path: meta.path, ext }) });
-    const data = await res.json().catch(()=>({ ok:false, error:"Resposta inválida do servidor." }));
-    if(data?.ok && Array.isArray(data.regras) && data.regras.length){
-      st.innerHTML = '<span style="color:var(--acao)">Vídeo transcrito. ' + (data.resumo?escapeHtml(data.resumo):'') + '</span>';
-      mostrarSugestoesCerebro(sug, data.regras, "video");
-    } else {
-      st.innerHTML = '<span style="color:var(--risco)">' + escapeHtml(data?.error || "Não consegui extrair lições do vídeo.") + '</span>';
-    }
-  }catch(err){
-    st.innerHTML = '<span style="color:var(--risco)">Erro ao enviar o vídeo: ' + escapeHtml(String(err?.message||err)) + '</span>';
-  }finally{
-    e.target.value = "";
-  }
-});
 // ============ PARSER DE CSV (compartilhado) ============
 // Usado pela Importar telefones (CSV). A antiga importação de LEADS por CSV foi removida na v905.
 function parseCsvDireciona(t){
@@ -7822,141 +7736,6 @@ function parseCsvDireciona(t){
 }
 // (v905) Importação de LEADS por CSV removida — não era mais usada e a UI dela nem existia mais
 // no HTML. parseCsvDireciona (acima) permanece: a Importar telefones (CSV) usa.
-
-// ============ IMPORTAR CONVERSAS EM LOTE (ZIP de ZIPs) ============
-// Recebe um .zip que contém vários .zip de conversas do WhatsApp (um por cliente,
-// cada um no formato normal de exportação: um .txt dentro). Cada um passa pelo
-// mesmo caminho de uma importação manual (upload -> processar -> salvar), só que
-// em lote e sem precisar abrir tela por tela. O backend já deduplica por
-// telefone/nome (persistProcessingResult), então rodar de novo nunca duplica —
-// só atualiza. Guardamos localmente quais arquivos já entraram com sucesso pra
-// não gastar chamada de IA de novo à toa se o corretor rodar o mesmo pacote outra vez.
-const BULK_ZIP_IMPORT_RESUME_KEY = "corretor_pro_bulk_zip_import_done_v1";
-function bulkZipImportResumeSet(){
-  try{ return new Set(JSON.parse(localStorage.getItem(BULK_ZIP_IMPORT_RESUME_KEY) || "[]")); }
-  catch(_){ return new Set(); }
-}
-function bulkZipImportMarkDone(nome){
-  try{
-    const s = bulkZipImportResumeSet();
-    s.add(nome);
-    localStorage.setItem(BULK_ZIP_IMPORT_RESUME_KEY, JSON.stringify([...s]));
-  }catch(_){}
-}
-
-async function bulkZipImportUm(master, nomeZip){
-  const blob = await master.files[nomeZip].async("blob");
-  const nomeArquivo = nomeZip.split("/").pop();
-  const fileZip = new File([blob], nomeArquivo, { type: "application/zip" });
-
-  const metaRes = await fetch("./api/criar-upload-url", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ fileName: nomeArquivo, size: fileZip.size, contentType: "application/zip" })
-  });
-  const meta = await metaRes.json().catch(() => ({}));
-  if(!metaRes.ok || !meta.ok) throw new Error(meta.error || meta.details || "Não consegui preparar o upload.");
-
-  const signedUrl = meta.signedUrl || meta.signedurl || meta.signed_url;
-  if(!signedUrl) throw new Error("Upload sem URL assinada.");
-  const putRes = await fetch(signedUrl, {
-    method:"PUT",
-    headers:{ "Content-Type":"application/zip", "x-upsert":"true" },
-    body: fileZip
-  });
-  if(!putRes.ok) throw new Error("Falha ao enviar o arquivo pro armazenamento.");
-
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 55000);
-  let procRes, proc;
-  try{
-    procRes = await fetch("./api/processar-storage", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ bucket: meta.bucket, path: meta.path, action:"completo", cerebroConfig: (typeof obterCerebroConfigParaAnalise === "function" ? obterCerebroConfigParaAnalise() : null) }),
-      signal: ctrl.signal
-    });
-    proc = await procRes.json().catch(() => ({}));
-  } finally { clearTimeout(to); }
-  if(!procRes.ok || !proc.ok) throw new Error(proc.error || proc.details || `Erro ${procRes.status} ao analisar.`);
-
-  const saveRes = await fetch("./api/lead-update", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ action:"salvar-novo", result: proc, fileName: nomeArquivo, source:"bulk-import-planilha", bucket: meta.bucket, path: meta.path })
-  });
-  const saved = await saveRes.json().catch(() => ({}));
-  if(!saveRes.ok || !saved.ok || !saved?.persistence?.processing?.id) throw new Error(saved.error || "Servidor não confirmou a gravação.");
-  return saved;
-}
-
-qs("#crmZipImportBtn")?.addEventListener("click", () => qs("#crmZipInput")?.click());
-qs("#crmZipInput")?.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if(!file) return;
-  const st = qs("#crmZipImportStatus");
-  const wrap = qs("#crmZipImportProgressWrap"), bar = qs("#crmZipImportProgress");
-  const btn = qs("#crmZipImportBtn");
-  btn.disabled = true;
-  wrap.style.display = "block"; bar.style.width = "0%";
-  st.textContent = "Lendo o pacote...";
-  try{
-    const JSZip = await ensureJSZip();
-    const master = await JSZip.loadAsync(file);
-    const todasEntradas = Object.keys(master.files).filter(name => !master.files[name].dir && name.toLowerCase().endsWith(".zip"));
-    if(!todasEntradas.length){
-      st.innerHTML = '<span style="color:var(--risco)">Não encontrei nenhum .zip de conversa dentro do pacote.</span>';
-      return;
-    }
-    const jaFeitos = bulkZipImportResumeSet();
-    const entries = todasEntradas.filter(n => !jaFeitos.has(n.split("/").pop()));
-    const puladas = todasEntradas.length - entries.length;
-    if(!entries.length){
-      st.innerHTML = `<span style="color:var(--acao)">Todas as ${todasEntradas.length} conversas desse pacote já foram importadas antes. Nada a fazer.</span>`;
-      return;
-    }
-    if(!confirm(`Encontrei ${todasEntradas.length} conversa(s) no pacote${puladas ? ` (${puladas} já importadas antes, vou pular)` : ""}.\n\n• Cada uma é enviada, analisada pela IA e salva sozinha.\n• Se já existir lead com o mesmo telefone/nome, ele é atualizado — não duplica.\n• Usa a API da OpenAI (tem custo) e pode levar alguns minutos.\n\nImportar ${entries.length} conversa(s) agora?`)) return;
-
-    let ok = 0, falhas = 0, feitos = 0;
-    const total = entries.length;
-    const erros = [];
-    const CONC = 3;
-    let idx = 0;
-
-    async function worker(){
-      while(idx < entries.length){
-        const nomeZip = entries[idx++];
-        const nomeCurto = nomeZip.split("/").pop();
-        try{
-          await bulkZipImportUm(master, nomeZip);
-          bulkZipImportMarkDone(nomeCurto);
-          ok++;
-        }catch(err){
-          falhas++;
-          erros.push(`${nomeCurto}: ${err?.message || err}`);
-        }
-        feitos++;
-        bar.style.width = Math.round((feitos/total)*100) + "%";
-        st.textContent = `Importando: ${feitos}/${total} · ${ok} ok${falhas ? `, ${falhas} falharam` : ""}`;
-      }
-    }
-    await Promise.all(Array.from({length:Math.min(CONC, total)}, worker));
-
-    invalidarLeadsCache?.();
-    await loadRecentLeads();
-    await carregarDashboard();
-    await carregarAgendaTopo?.();
-
-    if(falhas){
-      st.innerHTML = `<span style="color:${ok ? 'var(--acao)' : 'var(--risco)'}">${ok} importada(s)/atualizada(s), ${falhas} falharam. Selecione o mesmo ZIP de novo pra tentar só as que faltaram.</span>` +
-        `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted)">Ver erros</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--risco)">${escapeHtml(erros.join("\n"))}</pre></details>`;
-    } else {
-      st.innerHTML = `<span style="color:var(--acao)">Pronto! ${ok} conversa(s) importada(s)/atualizada(s)${puladas ? ` (${puladas} já vinham de antes)` : ""}. Já aparecem em Hoje e na Condução.</span>`;
-    }
-  }catch(err){
-    st.innerHTML = '<span style="color:var(--risco)">Erro na importação: ' + escapeHtml(String(err?.message || err)) + '</span>';
-  }finally{
-    btn.disabled = false;
-    e.target.value = "";
-  }
-});
 
 // Busca global
 let buscaGlobalTimer = null;
@@ -8191,7 +7970,6 @@ qs("#wipeAll").addEventListener("click", async ()=>{
     if(data.ok && (data.resumo?.linhasApagadas||0) > 0){
       state.lead = null; state.focoLeadId = null;
       state.leads = [];
-      renderLeads();
       loadRecentLeads();
       toast("App zerado.");
     }
@@ -9668,14 +9446,7 @@ function ui631UltimoFalante(lead){
   for(let i=msgs.length-1;i>=0;i--){if(!msgs[i]||!String(msgs[i].text||"").trim())continue;return ehMsgDoCliente(msgs[i],pn)?"cliente":"você";}
   return "—";
 }
-window.ui631SelectResponse=function(k){
-  const map=state._ui631Responses||{}; state._ui631ResponseKey=k;
-  const el=qs("#ui631ResponseText"); if(el) el.textContent=map[k]||"";
-  qsa(".ui-response-tab").forEach(b=>b.classList.toggle("active",b.dataset.response===k));
-  const legacy=qs("#msgFocoText"); if(legacy) legacy.textContent=map[k]||"";
-};
 window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
-window.ui631OpenWhats=function(){const t=qs("#ui631ResponseText")?.textContent||"";const p=state._ui631LeadPhone||"";if(!p){toast("Este lead está sem telefone.");return;}window.open(whatsappLink(p,t),"_blank","noopener")};
 
 // Atualização #724-2: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
@@ -9799,7 +9570,6 @@ async function iniciarDireciona(){
   // inicial pode trocar a tela nem disparar recarga automática.
   const compartilhado = await checkShared().catch(() => ({ handled:false }));
   if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
-  renderLeads();
   // Se o app RECARREGOU enquanto o corretor estava vendo um lead (atualização de versão,
   // troca de service worker ou o Android reabrindo o PWA depois de ir pro WhatsApp), o
   // history.state sobrevive ao reload e ainda guarda a rota do lead. Sem isto, todo reload
@@ -9829,7 +9599,6 @@ async function iniciarDireciona(){
     if(data?.ok && Array.isArray(data.items)){
       state.todosLeads = data.items;
       state.leads = data.items.slice(0,8);
-      renderLeads();
     }
   }catch(err){ console.warn("iniciarDireciona", err); }
 }
@@ -10327,26 +10096,6 @@ function ui682ProgressReanalise(btn){
     fail(txt){ set(100, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; }
   };
 }
-window.ui670SelectMessage=function(k){
-  const map=state._ui670Messages||{};state._ui670MessageKey=k;
-  const el=qs("#ui670MessageText");if(el)el.textContent=map[k]||"";
-  qsa(".ui670-msg-option").forEach(b=>b.classList.toggle("active",b.dataset.key===k));
-};
-window.ui670CopyMessage=async function(){
-  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
-  if(!t){toast("Nenhuma mensagem necessária agora.");return;}
-  try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.");}catch(_){toast("Não consegui copiar.");}
-};
-window.ui670OpenWhats=function(){
-  const t=String(qs("#ui670MessageText")?.innerText||"").trim();
-  const p=String(state._ui670LeadPhone||"");
-  if(!p){toast("Este contato está sem telefone.");return;}
-  window.open(whatsappLink(p,t),"_blank","noopener");
-};
-window.ui670OpenWhatsLivre=function(){
-  const p=String(state._ui670LeadPhone||"");if(!p){toast("Este contato está sem telefone.");return;}
-  window.open(whatsappLink(p,""),"_blank","noopener");
-};
 function ui675AnaliseDeterministica(lead, baseAnalysis){
   // v756: fallback comercial local DESATIVADO.
   // Se a IA/API falhar ou vier incompleta, a tela deve pedir reanálise, não inventar produto, unidade, simulação ou mensagem.
@@ -10359,7 +10108,7 @@ function ui675AnaliseDeterministica(lead, baseAnalysis){
   out.aprovada=false;
   out.messages={a:"",b:"",c:"",aLabel:"Reanalisar",bLabel:"Reanalisar",cLabel:"Reanalisar",recomendada:"a"};
   out.validacaoSugestoes=["v756: fallback comercial local desativado."];
-  out._schemaComercial=715;
+  out._schemaComercial=COMMERCIAL_SCHEMA_VERSION;
   return out;
 }
 async function ui675BuscarDetalhe(id){
@@ -10555,7 +10304,7 @@ window.ui670Reanalisar=async function(btn){
         const detalhe=await ui675BuscarDetalhe(lead.id).catch(()=>null);
         const aDetalhe=detalhe?.analysis||null;
         const sDetalhe=Number(aDetalhe?._schemaComercial||aDetalhe?.modeloComercial?.versao||0);
-        if(aDetalhe&&sDetalhe>=682){analysis=aDetalhe;schema=sDetalhe;break;}
+        if(aDetalhe&&sDetalhe>=COMMERCIAL_SCHEMA_VERSION){analysis=aDetalhe;schema=sDetalhe;break;}
         if(aDetalhe&&!analysis)analysis=aDetalhe;
       }
     }
@@ -10574,7 +10323,7 @@ window.ui670Reanalisar=async function(btn){
     }
     invalidarLeadsCache();
     _leadDetailCache.set(String(lead.id),{ts:Date.now(),data:atualizado,inflight:null});
-    renderLeadFoco(atualizado);renderLeads();
+    renderLeadFoco(atualizado);
     const mc=analysis.modeloComercial||{};
     const semAcao=mc?.acao?.status==="sem-acao-urgente";
     const aviso=data?.warning||"";
@@ -10589,8 +10338,7 @@ window.ui670Reanalisar=async function(btn){
           state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
-          if(fresco&&freshSchema>=682){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
-          renderLeads();
+          if(fresco&&freshSchema>=COMMERCIAL_SCHEMA_VERSION){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
         }
       }catch(_){}
     },600);
@@ -10890,7 +10638,6 @@ function ui670DetailRows(lead,mc){
     else toast('Campo de observação não encontrado neste lead.');
   };
 
-  const antigoCopy = window.ui631CopyResponse;
   window.ui631CopyResponse = async function(){
     const txt = document.querySelector('#ui631ResponseText')?.textContent || document.querySelector('#msgFocoText')?.textContent || '';
     if(!txt.trim()) return toast('Nenhuma mensagem disponível.');
@@ -10902,7 +10649,6 @@ function ui670DetailRows(lead,mc){
         try{ await ui683RegistrarEvento(lead.id, 'mensagem_copiada', { de:'botao_rapido', preview: txt.slice(0,240) }); }catch(_){}
       }
     }catch(_){
-      if(typeof antigoCopy === 'function') return antigoCopy();
       toast('Não consegui copiar.');
     }
   };
@@ -11024,7 +10770,7 @@ function ui670DetailRows(lead,mc){
     const diag=(a.diagnostico&&typeof a.diagnostico==='object')?a.diagnostico:{};
     const lc=(a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
     return {
-      versao:684,
+      versao:COMMERCIAL_SCHEMA_VERSION,
       perfilCliente:a.clientProfile||'Perfil ainda em leitura; reanalise para a IA Comercial 2.0 aprofundar.',
       etapaComercial:diag.etapa||lc.etapa||normalizarEtapa(lead?.etapa)||'Não definida',
       mudancaComportamento:'Reanalise este lead para detectar mudança de comportamento com mais precisão.',
@@ -11042,7 +10788,7 @@ function ui670DetailRows(lead,mc){
     const fatoresProtecao=Array.isArray(risco.fatoresProtecao)?risco.fatoresProtecao:[];
     const proximaPratica = ui684TextoAcaoPratica(ia.proximaAcaoIdeal);
     return `<section id="ui684IAComercial" class="ui684-card">
-      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v684-final</span></div>
+      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v${COMMERCIAL_SCHEMA_VERSION}</span></div>
       <div class="ui684-grid">
         <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
         <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(proximaPratica)}</div></div>
@@ -11084,7 +10830,7 @@ function ui670DetailRows(lead,mc){
     if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
   }
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = '684-final';
+  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
 })();
 
 

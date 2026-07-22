@@ -46,11 +46,11 @@ try {
 const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
   "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png",
-  "js/state.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
 ];
 const textFiles = new Set([
   "index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js",
-  "js/state.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
 ]);
 
 for (const file of files) {

@@ -1,11 +1,13 @@
 import { requireApiKey } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 
-const BUCKET_MAX_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES) || 2147483648;
+const DEFAULT_MAX_ZIP_BYTES = 150 * 1024 * 1024;
+const CONFIGURED_MAX_ZIP_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES);
+const BUCKET_MAX_BYTES = Number.isFinite(CONFIGURED_MAX_ZIP_BYTES) && CONFIGURED_MAX_ZIP_BYTES > 0
+  ? Math.min(CONFIGURED_MAX_ZIP_BYTES, 300 * 1024 * 1024)
+  : DEFAULT_MAX_ZIP_BYTES;
 const ALLOWED_MIME_TYPES = [
-  "application/zip", "application/x-zip-compressed", "application/octet-stream", "application/json",
-  "video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp", "video/x-m4v",
-  "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav", "audio/aac", "audio/webm", "audio/opus"
+  "application/zip", "application/x-zip-compressed", "application/octet-stream"
 ];
 
 let bucketConfigured = false;
@@ -73,8 +75,8 @@ async function ensureBucketReady(supabase, bucket) {
     }
   }
 
-  // A configuração de 2 GB pode ser recusada pelo plano do Supabase. Isso não deve
-  // impedir arquivos pequenos de serem enviados; por isso a falha vira aviso.
+  // A configuração do limite pode variar por plano do Supabase. Uma falha aqui vira aviso;
+  // a autorização do upload continua protegida pelo limite validado acima.
   let warning = null;
   try {
     const { error } = await supabase.storage.updateBucket(bucket, {
@@ -154,8 +156,19 @@ export default async function handler(req, res) {
   if (!body?.probe && !importId) {
     return json(res, 400, { ok: false, error: "Identificador da importação não informado." });
   }
-  if (!/\.(zip|mp4|webm|mov|m4v|mkv|mp3|m4a|ogg|oga|opus|wav|aac)$/i.test(fileName)) {
-    return json(res, 400, { ok: false, error: "Tipo de arquivo não suportado (envie ZIP do WhatsApp ou um vídeo/áudio)." });
+  if (!body?.probe && !/\.zip$/i.test(fileName)) {
+    return json(res, 400, { ok: false, error: "Tipo de arquivo não suportado. Envie somente o ZIP exportado pelo WhatsApp." });
+  }
+  const declaredSize = Number(body?.size || 0);
+  if (!body?.probe && (!Number.isFinite(declaredSize) || declaredSize <= 0)) {
+    return json(res, 400, { ok: false, error: "Tamanho do ZIP não informado." });
+  }
+  if (!body?.probe && declaredSize > BUCKET_MAX_BYTES) {
+    return json(res, 413, {
+      ok: false,
+      error: `ZIP maior que o limite permitido de ${Math.round(BUCKET_MAX_BYTES / 1024 / 1024)} MB.`,
+      maxBytes: BUCKET_MAX_BYTES
+    });
   }
 
   try {

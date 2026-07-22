@@ -32,7 +32,7 @@ export function requireApiKey(req, res) {
     authJson(res, 500, { ok: false, error: "API bloqueada por segurança: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel ou defina ALLOW_UNPROTECTED_API=true conscientemente." });
     return false;
   }
-  const received = req.headers?.["x-corretor-pro-key"] || req.headers?.["x-api-key"] || req.query?.apiKey || "";
+  const received = req.headers?.["x-corretor-pro-key"] || req.headers?.["x-api-key"] || "";
   if (!received || !safeEqualSecret(received, expected)) {
     authJson(res, 401, { ok: false, error: "Acesso bloqueado. Informe a chave de segurança do Corretor Pro." });
     return false;
@@ -64,6 +64,20 @@ function diasCalendarioBR(iso) {
 function compact(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
+}
+
+export function mergeStorageRefs(...refsList) {
+  const refs = refsList.filter(v => v && typeof v === "object" && !Array.isArray(v));
+  if (!refs.length) return undefined;
+  const uniq = (key) => [...new Set(refs.flatMap(r => Array.isArray(r[key]) ? r[key] : []).map(String).filter(Boolean))];
+  const bucket = refs.map(r => String(r.bucket || "").trim()).find(Boolean) || undefined;
+  return {
+    version: 1,
+    ...(bucket ? { bucket } : {}),
+    importIds: uniq("importIds"),
+    sourceZipPaths: uniq("sourceZipPaths"),
+    transcriptionCachePaths: uniq("transcriptionCachePaths")
+  };
 }
 
 function defaultFor(col) {
@@ -311,6 +325,8 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   anterior = _semScoreComercial(anterior || {});
   nova = _semScoreComercial(nova || {});
   const merged = { ...anterior, ...nova };
+  const storageRefs = mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs);
+  if (storageRefs) merged._storageRefs = storageRefs;
   merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
   for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "lembrete", "avatarFoto"]) {
     if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];

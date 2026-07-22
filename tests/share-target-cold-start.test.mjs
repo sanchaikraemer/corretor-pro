@@ -29,7 +29,8 @@ assert.match(finalBlock, /apagarShareDoCache\(id\)/, 'ZIP só deve sair do cache
 const bootStart = app.indexOf('async function iniciarDireciona()');
 const bootEnd = app.indexOf('requestAnimationFrame\(iniciarDireciona\)', bootStart);
 const boot = app.slice(bootStart, bootEnd);
-assert.ok(boot.indexOf('await checkShared()') < boot.indexOf('renderLeads()'), 'Share Target precisa ser tratado antes da Home');
+assert.ok(boot.indexOf('await checkShared()') < boot.indexOf('carregarDashboard()'), 'Share Target precisa ser tratado antes da Home');
+assert.ok(boot.indexOf('await checkShared()') < boot.indexOf('getLeadsData(false)'), 'Share Target precisa ser tratado antes da leitura da carteira');
 assert.match(app, /if\(window\.__cpShareImportActive \|\| state\?\.processing \|\| state\?\.pendingSharedRecordId\) return;/, 'checagem de versão não pode recarregar durante importação');
 assert.match(app, /if\(window\.__cpShareImportActive \|\| state\?\.processing \|\| state\?\.pendingSharedRecordId\)\{/, 'controllerchange não pode interromper a importação');
 

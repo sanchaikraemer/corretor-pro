@@ -2,9 +2,7 @@ import { requireApiKey } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import {
-  processZipBuffer,
   prepararConversaDoZip,
-  transcreverLoteDoZip,
   transcreverArquivosExtraidos,
   finalizarAnaliseDaConversa,
   normalizeName
@@ -195,12 +193,20 @@ export default async function handler(req, res) {
   try { body = await readJsonBody(req); }
   catch (_) { return json(res, 400, { ok: false, error: "Não foi possível ler o corpo da requisição." }); }
 
-  const bucket = body?.bucket || defaultBucket;
-  const storagePath = body?.path;
-  const action = body?.action || "completo";
+  const bucket = defaultBucket;
+  const storagePath = String(body?.path || "").trim();
+  const action = String(body?.action || "").trim();
   const importId = importIdSeguro(body?.importId);
-  if (!["analisar", "limpar-antigos"].includes(action) && !storagePath) {
-    return json(res, 400, { ok: false, error: "Informe o caminho do arquivo no Storage no campo 'path'." });
+  const actions = new Set(["preparar", "transcrever", "analisar", "finalizar", "limpar-antigos"]);
+  if (!actions.has(action)) return json(res, 400, { ok: false, error: "Ação de processamento inválida." });
+  if (action !== "limpar-antigos" && !importId) {
+    return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
+  }
+  if (action !== "limpar-antigos") {
+    const prefixoEsperado = `whatsapp/imports/${importId}/`;
+    if (!storagePath.startsWith(prefixoEsperado) || !/\.zip$/i.test(storagePath)) {
+      return json(res, 400, { ok: false, error: "Caminho do ZIP não pertence à importação informada." });
+    }
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -281,13 +287,23 @@ export default async function handler(req, res) {
         cerebroConfig: body?.cerebroConfig || null
       });
       const analysis = result?.analysis || null;
+      const manifestPath = importId ? `imports/${importId}/manifest.json` : "";
+      const manifest = importId ? await carregarManifesto(storage, manifestPath) : null;
+      if (analysis && typeof analysis === "object") {
+        const cachePaths = [...new Set(Object.values(manifest?.audioHashes || {}).filter(Boolean).map(caminhoCacheTranscricao))];
+        analysis._storageRefs = {
+          version: 1,
+          bucket,
+          importIds: importId ? [importId] : [],
+          sourceZipPaths: storagePath ? [storagePath] : [],
+          transcriptionCachePaths: cachePaths
+        };
+      }
       const mensagens = analysis?.messages || {};
       const temTrio = [mensagens.a, mensagens.b, mensagens.c].every(v => String(v || "").trim().length >= 10);
       const falhou = !analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !temTrio;
       if (falhou) return json(res, 502, { ok: false, error: "A conversa foi lida, mas a análise comercial não foi concluída.", details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as 3 mensagens.", recoverable: true, bucket, path: storagePath, importId });
-      if (importId) {
-        const manifestPath = `imports/${importId}/manifest.json`;
-        const manifest = await carregarManifesto(storage, manifestPath);
+      if (importId && manifest) {
         if (manifest) {
           manifest.status = "analysis-ready";
           manifest.analysisReadyAt = new Date().toISOString();
@@ -333,15 +349,7 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, removidas });
     }
 
-    // Compatibilidade para clientes antigos. O fluxo 825 não usa este modo.
-    const buffer = await baixarBuffer(storage, storagePath);
-    if (action === "transcrever-legado") {
-      const audioNames = Array.isArray(body?.audioNames) ? body.audioNames : [];
-      const result = await transcreverLoteDoZip(buffer, audioNames);
-      return json(res, 200, { ok: true, ...result });
-    }
-    const result = await processZipBuffer(buffer, { audioWindowDays: body?.audioWindowDays, cerebroConfig: body?.cerebroConfig || null });
-    return json(res, 200, { ok: true, bucket, path: storagePath, sizeBytes: buffer.length, autoSaved: false, ...result });
+    return json(res, 400, { ok: false, error: "Ação de processamento inválida." });
   } catch (error) {
     if (importId && ["preparar", "transcrever", "analisar"].includes(action)) {
       try {

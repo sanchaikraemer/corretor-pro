@@ -255,30 +255,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Transcreve um arquivo grande (ex.: vídeo) já enviado pro armazenamento, contornando o limite do envio direto.
-    if (body.action === "transcrever-storage") {
-      const openai = getOpenAI();
-      if (!openai) return json(res, 200, { ok: false, error: "Transcrição não configurada — não dá para transcrever agora." });
-      try {
-        const bucket = String(body.bucket || "");
-        const path = String(body.path || "");
-        if (!bucket || !path) return json(res, 400, { ok: false, error: "Arquivo não recebido (sem bucket/path)." });
-        const { data, error } = await supabase.storage.from(bucket).download(path);
-        if (error || !data) return json(res, 200, { ok: false, error: "Não consegui baixar o arquivo do armazenamento." });
-        const buffer = Buffer.from(await data.arrayBuffer());
-        if (buffer.length > 25 * 1024 * 1024) return json(res, 200, { ok: false, error: "Arquivo maior que 25 MB — mande um trecho mais curto." });
-        const ext = String(body.ext || ".mp4").toLowerCase();
-        const texto = await transcreverBuffer(buffer, ext, openai);
-        try { await supabase.storage.from(bucket).remove([path]); } catch (_) {}
-        if (!texto || texto.trim().length < 20) return json(res, 200, { ok: false, error: "Não consegui ouvir fala no vídeo (sem áudio ou só ruído)." });
-        // Condensa a fala em lições curtas (em vez de um textão que estoura o limite de regra)
-        const licoes = await extrairLicoesComIA(texto.slice(0, 12000), openai);
-        return json(res, 200, { ok: true, regras: licoes.regras || [], resumo: licoes.resumo || "", texto });
-      } catch (e) {
-        return json(res, 200, { ok: false, error: e?.message || "Falha ao transcrever o vídeo." });
-      }
-    }
-
     // AÇÃO: aprender de TODA a carteira que JÁ está no Direciona (os leads já salvos).
     // Roda em LOTES (o front chama de novo com a próxima posição até concluir), pra não estourar
     // o tempo da função. Devolve quanto aprendeu e — sem ser silencioso — quantos não salvaram.

@@ -1,6 +1,7 @@
 import { requireApiKey } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
 import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, marcarAprendizadoPendente, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
+import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR, commercialSchemaFrom, stampCommercialSchema } from "../js/commercial-schema.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
 // nome_arquivo pode trazer uma tag interna de deduplicação (ex.: "Fulana [CSV a1b2c3]"),
@@ -236,7 +237,7 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
   const produto = normalizarTextoV684(diag.produtoPrincipalInteresse || out.produtoInteresse || lead?.product || "");
 
   out.iaComercialV2 = {
-    versao: "715-motor-comercial-v2-layout-mobile",
+    versao: COMMERCIAL_SCHEMA_MINOR,
     perfilCliente: normalizarTextoV684(out.clientProfile || ""),
     etapaComercial: normalizarTextoV684(diag.etapaFunil || out.etapaSugerida || ""),
     mudancaComportamento: normalizarTextoV684(ac.mudancaDeIntencao || ""),
@@ -657,9 +658,7 @@ async function reanalisarLeadHandler702(req, res) {
   novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal);
   novoAnalysis = garantirMensagensMotorComercialV714(novoAnalysis, leadModelo);
   // v750: sem enriquecimento/fallback determinístico antigo.
-  novoAnalysis._schemaComercial = 715;
-  novoAnalysis._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-  if (novoAnalysis.modeloComercial) novoAnalysis.modeloComercial.versao = 715;
+  novoAnalysis = stampCommercialSchema(novoAnalysis);
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
   if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
@@ -690,9 +689,7 @@ async function reanalisarLeadHandler702(req, res) {
   merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal);
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   // v750: sem enriquecimento/fallback determinístico antigo.
-  merged._schemaComercial = 715;
-  merged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-  if (merged.modeloComercial) merged.modeloComercial.versao = 715;
+  merged = stampCommercialSchema(merged);
   const sigFinal6863 = assinaturaTimeline6863(timelineFinal);
   merged._iaIncremental = {
     ...(freshPrevious._iaIncremental || {}),
@@ -738,9 +735,7 @@ async function reanalisarLeadHandler702(req, res) {
     retryMerged = finalizarAnaliseComercial(retryMerged, leadModelo, timelineFinal);
     retryMerged = garantirMensagensMotorComercialV714(retryMerged, leadModelo);
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
-    retryMerged._schemaComercial = 715;
-    retryMerged._schemaComercialMinor = "715-motor-comercial-v2-layout-mobile";
-    if (retryMerged.modeloComercial) retryMerged.modeloComercial.versao = 715;
+    retryMerged = stampCommercialSchema(retryMerged);
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
@@ -759,10 +754,9 @@ async function reanalisarLeadHandler702(req, res) {
     .single();
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
-  let persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (!persisted || persistedSchema < 715) {
-    const forced = enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, _schemaComercial: 715, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal);
-    if (forced.modeloComercial) forced.modeloComercial.versao = 715;
+  let persistedSchema = commercialSchemaFrom(persisted);
+  if (!persisted || persistedSchema < COMMERCIAL_SCHEMA_VERSION) {
+    const forced = stampCommercialSchema(enriquecerIAComercialV684(garantirMensagensMotorComercialV714({ ...merged, reanalisadoEm: new Date().toISOString() }, leadModelo), leadModelo, timelineFinal));
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
@@ -770,8 +764,8 @@ async function reanalisarLeadHandler702(req, res) {
       .select("resultado_analise");
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
-    persistedSchema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-    if (persistedSchema < 715) return json(res, 500, { ok:false, error:"A análise foi gerada, mas o banco não confirmou a gravação no schema 715." });
+    persistedSchema = commercialSchemaFrom(persisted);
+    if (persistedSchema < COMMERCIAL_SCHEMA_VERSION) return json(res, 500, { ok:false, error:`A análise foi gerada, mas o banco não confirmou a gravação no schema ${COMMERCIAL_SCHEMA_VERSION}.` });
   }
 
   // v808: a reanálise registra uma fila rápida; a leitura comercial roda em outra
@@ -779,7 +773,7 @@ async function reanalisarLeadHandler702(req, res) {
   const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id || ""), motivo: "reanalisado" })
     .catch(e => ({ ok:false, error:e?.message || String(e) }));
 
-  return json(res, 200, { ok: true, analysis: persisted, aprendizadoAutomatico, warning: avisoReanalise || null, schemaComercial: 715, apiVersion: "715-motor-comercial-v2-layout-mobile" });
+  return json(res, 200, { ok: true, analysis: persisted, aprendizadoAutomatico, warning: avisoReanalise || null, schemaComercial: COMMERCIAL_SCHEMA_VERSION, apiVersion: COMMERCIAL_SCHEMA_MINOR });
 }
 
 export default async function handler(req, res) {

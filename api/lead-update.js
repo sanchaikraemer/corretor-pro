@@ -1,3 +1,4 @@
+import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema } from "../js/commercial-schema.js";
 // Endpoint unificado que substitui lead-etapa, lead-memoria, aprendizado e
 // apagar-lead. Foi consolidado pra caber no limite de 12 Serverless Functions
 // do plano Vercel Hobby.
@@ -6,9 +7,12 @@
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { requireApiKey } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
-import { getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
+import {
+  getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial,
+  ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache
+} from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -139,9 +143,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     venda: anterior.venda || analysis.venda,
     reanalisadoEm: new Date().toISOString()
   };
-  merged = finalizarAnaliseComercial(merged, lead, timeline);
-  merged._schemaComercial = 684;
-  if (merged.modeloComercial) merged.modeloComercial.versao = 684;
+  merged = stampCommercialSchema(finalizarAnaliseComercial(merged, lead, timeline));
 
   const { data: saved, error: putErr } = await supabase
     .from("whatsapp_processamentos")
@@ -151,9 +153,9 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
   const persisted = saved[0]?.resultado_analise || merged;
-  const schema = Number(persisted?._schemaComercial || persisted?.modeloComercial?.versao || 0);
-  if (schema < 684) return json(res, 500, { ok: false, error: "A análise foi gerada, mas o banco não confirmou a gravação no schema 684." });
-  return json(res, 200, { ok: true, analysis: persisted, schemaComercial: 684 });
+  const schema = commercialSchemaFrom(persisted);
+  if (schema < COMMERCIAL_SCHEMA_VERSION) return json(res, 500, { ok: false, error: `A análise foi gerada, mas o banco não confirmou a gravação no schema ${COMMERCIAL_SCHEMA_VERSION}.` });
+  return json(res, 200, { ok: true, analysis: persisted, schemaComercial: COMMERCIAL_SCHEMA_VERSION });
 }
 
 // ============ LEMBRETE (snooze manual) ============
@@ -525,9 +527,9 @@ async function acaoCriarManual(body, res) {
         etapaSugerida: "Novo",
         tipoRetomada: "primeiro-contato",
         tipoContato: "cliente-final",
-        _schemaComercial: 684,
+        _schemaComercial: COMMERCIAL_SCHEMA_VERSION,
         modeloComercial: {
-          versao: 684,
+          versao: COMMERCIAL_SCHEMA_VERSION,
           contato: { tipo: "comprador-direto", papel: "Contato principal da oportunidade", compradorFinal: "" },
           oportunidade: { status: "descoberta", resultado: "em-andamento", produto: produto || "Não identificado", motivo: porQue },
           relacionamento: { status: "ativo", potencial: "não avaliado", motivo: "Contato recém-cadastrado." },
@@ -629,9 +631,9 @@ async function acaoNovaOportunidadeParceiro(body, res) {
       etapaSugerida: "Novo",
       tipoRetomada: "primeiro-contato",
       tipoContato: "corretor-parceiro",
-      _schemaComercial: 684,
+      _schemaComercial: COMMERCIAL_SCHEMA_VERSION,
       modeloComercial: {
-        versao: 684,
+        versao: COMMERCIAL_SCHEMA_VERSION,
         contato: {
           id: contatoId,
           tipo: "corretor-parceiro",
@@ -940,6 +942,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     _historicoAnalises: historicoAnalises,
     _historicoImportacoes: historicoImportacoes,
     _ultimaImportacao: eventoImportacao,
+    _storageRefs: mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs),
     _atualizadoEm: concluidaEm
   };
   delete merged._importacaoPendente;
@@ -1508,41 +1511,217 @@ async function acaoEditarDados(id, body, res) {
   return json(res, 200, { ok: true, nome, telefone, produto });
 }
 
+function erroTabelaAusente(error) {
+  const msg = String(error?.message || error || "").toLowerCase();
+  return /relation .* does not exist|table .* does not exist|could not find the table|schema cache/.test(msg);
+}
+
+async function apagarTabelaAuxiliar(supabase, tabela, ids) {
+  if (!ids.length) return { tabela, apagados: 0 };
+  const { error } = await supabase.from(tabela).delete().in("id", ids);
+  if (!error || erroTabelaAusente(error)) return { tabela, apagados: error ? 0 : ids.length, ausente: !!error };
+  throw new Error(`${tabela}: ${error.message}`);
+}
+
+async function listarArquivosStorage(storage, prefixo, saida, visitados = new Set()) {
+  const prefix = String(prefixo || "").replace(/^\/+|\/+$/g, "");
+  if (visitados.has(prefix)) return;
+  visitados.add(prefix);
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await storage.list(prefix, {
+      limit: 1000,
+      offset,
+      sortBy: { column: "name", order: "asc" }
+    });
+    if (error) {
+      // Prefixo inexistente já está limpo.
+      if (/not found|does not exist/i.test(String(error.message || ""))) return;
+      throw new Error(`Storage ${prefix || "/"}: ${error.message}`);
+    }
+    const itens = data || [];
+    for (const item of itens) {
+      const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+      if (item.id || item.metadata) saida.add(fullPath);
+      else await listarArquivosStorage(storage, fullPath, saida, visitados);
+    }
+    if (itens.length < 1000) break;
+    offset += itens.length;
+  }
+}
+
+function idsImportacaoDoRegistro(row) {
+  const analysis = row?.resultado_analise || {};
+  const refs = analysis?._storageRefs && typeof analysis._storageRefs === "object" ? analysis._storageRefs : {};
+  const ids = new Set();
+  for (const value of refs.importIds || []) if (value) ids.add(String(value));
+  for (const evt of analysis?._historicoImportacoes || []) if (evt?.importId) ids.add(String(evt.importId));
+  if (analysis?._ultimaImportacao?.importId) ids.add(String(analysis._ultimaImportacao.importId));
+  const path = String(row?.storage_path || "");
+  const match = path.match(/(?:^|\/)whatsapp\/imports\/([^/]+)\//i);
+  if (match?.[1]) ids.add(match[1]);
+  return [...ids].filter(v => /^[a-zA-Z0-9][a-zA-Z0-9._-]{7,120}$/.test(v));
+}
+
+async function apagarStorageDosLeads(supabase, rows) {
+  const defaultBucket = String(process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips").trim() || "whatsapp-zips";
+  const porBucket = new Map();
+  let precisaLimparCacheLegado = false;
+  for (const row of rows) {
+    const analysis = row?.resultado_analise || {};
+    const refs = analysis?._storageRefs && typeof analysis._storageRefs === "object" ? analysis._storageRefs : null;
+    const bucket = String(refs?.bucket || row?.storage_bucket || defaultBucket).trim() || defaultBucket;
+    if (!porBucket.has(bucket)) porBucket.set(bucket, { paths: new Set(), prefixes: new Set(), caches: new Set() });
+    const alvo = porBucket.get(bucket);
+    if (row?.storage_path) alvo.paths.add(String(row.storage_path));
+    for (const path of refs?.sourceZipPaths || []) if (path) alvo.paths.add(String(path));
+    for (const path of refs?.transcriptionCachePaths || []) if (path) alvo.caches.add(String(path));
+    const importIds = idsImportacaoDoRegistro(row);
+    for (const importId of importIds) {
+      alvo.prefixes.add(`imports/${importId}`);
+      alvo.prefixes.add(`whatsapp/imports/${importId}`);
+    }
+    // v911 e anteriores não guardavam a relação hash → lead. Para garantir a exclusão
+    // de dados pessoais antigos, limpa o cache compartilhado uma vez quando faltar essa referência.
+    if (!refs || !Array.isArray(refs.transcriptionCachePaths)) precisaLimparCacheLegado = true;
+  }
+
+  let removidos = 0;
+  const detalhes = [];
+  for (const [bucket, refs] of porBucket) {
+    const storage = supabase.storage.from(bucket);
+    const paths = new Set([...refs.paths, ...refs.caches]);
+    for (const prefix of refs.prefixes) await listarArquivosStorage(storage, prefix, paths);
+    if (precisaLimparCacheLegado) await listarArquivosStorage(storage, "transcription-cache", paths);
+    const lista = [...paths].filter(Boolean);
+    for (let i = 0; i < lista.length; i += 100) {
+      const lote = lista.slice(i, i + 100);
+      const { data, error } = await storage.remove(lote);
+      if (error && !/not found|does not exist/i.test(String(error.message || ""))) {
+        throw new Error(`Storage ${bucket}: ${error.message}`);
+      }
+      removidos += Array.isArray(data) ? data.length : lote.length;
+    }
+    detalhes.push({ bucket, solicitados: lista.length });
+  }
+  return { removidos, detalhes, cacheLegadoGlobalLimpo: precisaLimparCacheLegado };
+}
+
+async function limparAprendizadoDosLeads(supabase, ids) {
+  for (const id of ids) {
+    const chaves = [
+      `corretor-memoria-caso-v2:${String(id).slice(0, 180)}`,
+      `corretor-aprendizado-pendente-v2:${String(id).slice(0, 180)}`
+    ];
+    const { error } = await supabase.from("direciona_config").delete().in("chave", chaves);
+    if (error && !erroTabelaAusente(error)) throw new Error(`direciona_config: ${error.message}`);
+  }
+
+  // Bases antigas não registravam a origem de todo aprendizado. Para não manter frases ou
+  // conhecimento derivados do lead apagado, remove apenas os blocos automáticos e preserva
+  // método, tom, regras, diferenciais e demais campos digitados pelo corretor.
+  const { data: cerebroRow, error: cerebroErr } = await supabase
+    .from("direciona_config")
+    .select("valor")
+    .eq("chave", "direciona-cerebro")
+    .maybeSingle();
+  if (cerebroErr && !erroTabelaAusente(cerebroErr)) throw new Error(`direciona_config: ${cerebroErr.message}`);
+  if (cerebroRow?.valor && typeof cerebroRow.valor === "object") {
+    const valor = { ...cerebroRow.valor };
+    delete valor.inteligenciaAprendida;
+    const { error } = await supabase.from("direciona_config").upsert({
+      chave: "direciona-cerebro",
+      valor,
+      atualizado_em: new Date().toISOString()
+    }, { onConflict: "chave" });
+    if (error) throw new Error(`direciona-cerebro: ${error.message}`);
+  }
+  const { error: conhecimentoErr } = await supabase.from("direciona_config").delete().eq("chave", "corretor-conhecimento");
+  if (conhecimentoErr && !erroTabelaAusente(conhecimentoErr)) throw new Error(`corretor-conhecimento: ${conhecimentoErr.message}`);
+  invalidarMemoriaComercialCache();
+}
+
+async function removerVinculosComLeadsApagados(supabase, ids) {
+  const alvo = new Set(ids.map(String));
+  const { data: rows, error } = await supabase
+    .from("whatsapp_processamentos")
+    .select("id,resultado_analise")
+    .limit(5000);
+  if (error) throw new Error(`Vínculos: ${error.message}`);
+  let atualizados = 0;
+  for (const row of rows || []) {
+    const analysis = row?.resultado_analise;
+    if (!analysis || typeof analysis !== "object" || !Array.isArray(analysis.oportunidadesVinculadas)) continue;
+    const filtradas = analysis.oportunidadesVinculadas.filter(item => !alvo.has(String(item?.leadId || "")) && !alvo.has(String(item?.id || "")));
+    if (filtradas.length === analysis.oportunidadesVinculadas.length) continue;
+    const atualizado = { ...analysis, oportunidadesVinculadas: filtradas };
+    const { error: updateErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ resultado_analise: atualizado, atualizado_em: new Date().toISOString() })
+      .eq("id", row.id);
+    if (updateErr) throw new Error(`Vínculo ${row.id}: ${updateErr.message}`);
+    atualizados++;
+  }
+  return atualizados;
+}
+
 async function acaoApagar(id, res, ids) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
   const alvoPrincipal = String(id || "");
   const alvosBrutos = [...new Set((Array.isArray(ids) ? ids : []).concat([alvoPrincipal]).map(v => String(v || "")).filter(Boolean))];
 
-  // v827-16 (plano de estabilização, item 1 — "a exclusão deve apagar apenas o registro
-  // selecionado"): NUNCA confia cegamente na lista de "duplicados" que o front mandou — ela
-  // pode vir de um cache antigo do navegador. Antes de apagar em lote, confere no banco que
-  // cada id extra tem o MESMO nome (a identidade real do cliente neste app) do registro
-  // pedido. Um id que não bate fica de fora e sobrevive à exclusão.
   let alvos = [alvoPrincipal];
+  const { data: rowsCandidatas, error: buscaErr } = await supabase
+    .from("whatsapp_processamentos")
+    .select("*")
+    .in("id", alvosBrutos);
+  if (buscaErr) return json(res, 500, { ok: false, error: buscaErr.message });
+  const rows = Array.isArray(rowsCandidatas) ? rowsCandidatas : [];
+  const principal = rows.find(r => String(r.id) === alvoPrincipal);
+  if (!principal) return json(res, 404, { ok: false, error: "Lead não encontrado." });
+
   if (alvosBrutos.length > 1) {
-    const { data: rows } = await supabase
-      .from("whatsapp_processamentos")
-      .select("id,nome_arquivo,arquivo_nome,resultado_analise")
-      .in("id", alvosBrutos);
-    if (Array.isArray(rows)) {
-      const principal = rows.find(r => String(r.id) === alvoPrincipal);
-      const ra0 = principal?.resultado_analise || {};
-      const nomePrincipal = _nomeIdentity(ra0?.clientName || ra0?.lead?.clientName || principal?.nome_arquivo || principal?.arquivo_nome || "");
-      for (const r of rows) {
-        const rid = String(r.id);
-        if (rid === alvoPrincipal || !nomePrincipal || _nomeRuimIdentity(nomePrincipal)) continue;
-        const ra = r.resultado_analise || {};
-        const nomeR = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || r.nome_arquivo || r.arquivo_nome || "");
-        if (nomeR && !_nomeRuimIdentity(nomeR) && _nomesMesmoLead(nomeR, nomePrincipal)) alvos.push(rid);
-      }
+    const ra0 = principal?.resultado_analise || {};
+    const nomePrincipal = _nomeIdentity(ra0?.clientName || ra0?.lead?.clientName || principal?.nome_arquivo || principal?.arquivo_nome || "");
+    for (const r of rows) {
+      const rid = String(r.id);
+      if (rid === alvoPrincipal || !nomePrincipal || _nomeRuimIdentity(nomePrincipal)) continue;
+      const ra = r.resultado_analise || {};
+      const nomeR = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || r.nome_arquivo || r.arquivo_nome || "");
+      if (nomeR && !_nomeRuimIdentity(nomeR) && _nomesMesmoLead(nomeR, nomePrincipal)) alvos.push(rid);
     }
   }
+  alvos = [...new Set(alvos)];
+  const registros = rows.filter(r => alvos.includes(String(r.id)));
 
-  const { error } = await supabase
-    .from("whatsapp_processamentos")
-    .delete()
-    .in("id", alvos);
-  if (error) return json(res, 500, { ok: false, error: error.message });
-  return json(res, 200, { ok: true, id, ids: alvos, apagados: alvos.length });
+  try {
+    const storage = await apagarStorageDosLeads(supabase, registros);
+    await limparAprendizadoDosLeads(supabase, alvos);
+    const vinculosAtualizados = await removerVinculosComLeadsApagados(supabase, alvos);
+    const auxiliares = [];
+    for (const tabela of ["leads", "direciona_leads"]) auxiliares.push(await apagarTabelaAuxiliar(supabase, tabela, alvos));
+
+    const { error } = await supabase.from("whatsapp_processamentos").delete().in("id", alvos);
+    if (error) throw new Error(error.message);
+
+    // Recria o banco de exemplos apenas com as conversas que continuam na carteira.
+    const respostas = await aprenderRespostasDaCarteira().catch(error => ({ ok: false, error: error?.message || String(error) }));
+    return json(res, 200, {
+      ok: true,
+      id,
+      ids: alvos,
+      apagados: alvos.length,
+      storage,
+      tabelasAuxiliares: auxiliares,
+      vinculosAtualizados,
+      respostasReconstruidas: respostas
+    });
+  } catch (error) {
+    return json(res, 500, {
+      ok: false,
+      error: `A exclusão total não foi concluída: ${error?.message || String(error)}`,
+      ids: alvos
+    });
+  }
 }

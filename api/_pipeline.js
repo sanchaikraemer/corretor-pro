@@ -1232,6 +1232,10 @@ const MEMORIA_CASO_V2_PREFIX = "corretor-memoria-caso-v2:";
 export const APRENDIZADO_PENDENTE_V2_PREFIX = "corretor-aprendizado-pendente-v2:";
 let _memoriaComercialCacheV2 = { ts: 0, valor: null };
 
+export function invalidarMemoriaComercialCache() {
+  _memoriaComercialCacheV2 = { ts: 0, valor: null };
+}
+
 function memoriaComercialVazia() {
   return { versao: 2, casos: [], fontes: {}, atualizadoEm: null, bootstrapConcluidoEm: null, totalCarteiraNoBootstrap: null };
 }
@@ -2889,80 +2893,6 @@ function montarPlanoJanelaAudios(messagesAll, audioFiles, audioWindowDays) {
   };
 }
 
-export async function processZipBuffer(buffer, options = {}) {
-  const zip = await JSZip.loadAsync(buffer);
-  const allNames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
-  const txtName = allNames.find(name => name.toLowerCase().endsWith(".txt"));
-  const audioFiles = allNames.filter(name => AUDIO_EXT.test(name));
-  const ignoredFiles = allNames.filter(name => IMAGE_EXT.test(name) || VIDEO_EXT.test(name) || DOC_EXT.test(name) || (!AUDIO_EXT.test(name) && !name.toLowerCase().endsWith(".txt")));
-
-  if (!txtName) {
-    const err = new Error("Não encontrei o arquivo .txt da conversa dentro do ZIP.");
-    err.filesFound = allNames.slice(0, 80);
-    throw err;
-  }
-
-  const txt = await zip.files[txtName].async("string");
-  const messagesAll = parseWhatsappTxt(txt);
-
-  // v725: o texto SEMPRE entra completo na análise. A janela limita somente quais áudios serão transcritos.
-  const planoAudio = montarPlanoJanelaAudios(messagesAll, audioFiles, options.audioWindowDays ?? await getDiasJanelaConfig());
-  const messages = planoAudio.messages;
-  const audioFilesRelevantes = planoAudio.audioFilesTimeline;
-  const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
-  const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
-  const filtroInfo = planoAudio.janelaInfo;
-
-  const openai = getOpenAI();
-  const { timeline, audioTranscriptions, transcriptionEnabled } = await buildTimeline({
-    zip,
-    messages,
-    audioFiles: audioFilesRelevantes,
-    audioFilesParaTranscrever: audiosParaTranscrever,
-    audioFilesForaDaJanela,
-    openai
-  });
-  const lead = guessLeadData(timeline);
-  const analysis = await analyzeWithBrain({ lead, timeline, openai, cerebroConfig: options.cerebroConfig || null });
-  const audioValues = Object.values(audioTranscriptions || {});
-  const audiosTranscritos = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
-  const audiosComErro = audioValues.filter(item => item?.status === "erro_transcricao").length;
-  const primeiroErroAudio = audioValues.find(item => item?.status === "erro_transcricao")?.error || null;
-
-  return {
-    txtFile: txtName,
-    rawText: txt,
-    ignoredFilesCount: ignoredFiles.length,
-    ignoredFiles: ignoredFiles.slice(0, 120).map(normalizeName),
-    ignoredRule: "Imagens, vídeos, documentos, emojis e figurinhas não alimentam a análise. O Corretor Pro usa texto e áudios transcritos.",
-    audioFiles: audioFilesRelevantes.map(normalizeName),
-    audiosEncontrados: audioFilesRelevantes.length,
-    audiosTotalNoZip: audioFiles.length,
-    audiosDescartadosPorJanela: audioFilesForaDaJanela.length,
-    audiosTranscritos,
-    audiosComErro,
-    primeiroErroAudio,
-    transcriptionEnabled,
-    audioTranscriptions,
-    janelaConversa: filtroInfo,
-    lead,
-    timeline,
-    analysis,
-    metrics: {
-      totalFiles: allNames.length,
-      totalMessagesParsed: messages.length,
-      totalMensagensOriginais: messagesAll.length,
-      timelineItems: timeline.length,
-      audioFiles: audioFilesRelevantes.length,
-      audiosParaTranscrever: audiosParaTranscrever.length,
-      audiosForaDoPeriodo: audioFilesForaDaJanela.length,
-      audiosTranscritos,
-      audiosComErro,
-      ignoredFiles: ignoredFiles.length
-    }
-  };
-}
-
 // ========================================================================
 // PROCESSAMENTO EM ETAPAS (pra conversas grandes não estourarem o limite de
 // 10s do servidor). O front orquestra: prepara → transcreve em lotes → analisa.
@@ -2971,9 +2901,18 @@ export async function processZipBuffer(buffer, options = {}) {
 // ETAPA 1 — Prepara: lê o ZIP, separa o TXT, preserva o histórico completo e lista
 // os áudios que precisam de transcrição. Um recorte por dias só existe se ativado por env. Rápido,
 // não chama OpenAI.
+const MAX_ZIP_ENTRIES = 2500;
+const MAX_TXT_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
+const MAX_SELECTED_AUDIO_BYTES = 180 * 1024 * 1024;
+
+function zipEntrySize(entry) {
+  return Number(entry?._data?.uncompressedSize || entry?._data?.compressedSize || 0);
+}
+
 export async function prepararConversaDoZip(buffer, options = {}) {
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await JSZip.loadAsync(buffer, { checkCRC32: false });
   const allNames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+  if (allNames.length > MAX_ZIP_ENTRIES) throw new Error(`ZIP com arquivos demais (${allNames.length}; máximo ${MAX_ZIP_ENTRIES}).`);
   const txtName = allNames.find(name => name.toLowerCase().endsWith(".txt"));
   const audioFiles = allNames.filter(name => AUDIO_EXT.test(name));
   const ignoredFiles = allNames.filter(name => IMAGE_EXT.test(name) || VIDEO_EXT.test(name) || DOC_EXT.test(name) || (!AUDIO_EXT.test(name) && !name.toLowerCase().endsWith(".txt")));
@@ -2983,6 +2922,8 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     err.filesFound = allNames.slice(0, 80);
     throw err;
   }
+  const txtSize = zipEntrySize(zip.files[txtName]);
+  if (txtSize > MAX_TXT_UNCOMPRESSED_BYTES) throw new Error("O arquivo de texto da conversa é grande demais.");
 
   const txt = await zip.files[txtName].async("string");
   const messagesAll = parseWhatsappTxt(txt);
@@ -3006,6 +2947,8 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     // escolhida. Os demais ficam registrados como fora da janela, sem ocupar memória
     // nem gerar upload à toa — o que travava a extração de ZIPs com muitos áudios.
     const nomesNecessarios = new Set(audiosParaTranscrever.map(normalizeName));
+    const totalSelecionado = audioFiles.reduce((sum, fullName) => nomesNecessarios.has(normalizeName(fullName)) ? sum + zipEntrySize(zip.files[fullName]) : sum, 0);
+    if (totalSelecionado > MAX_SELECTED_AUDIO_BYTES) throw new Error("Os áudios selecionados para transcrição excedem o limite seguro da importação.");
     for (const fullName of audioFiles) {
       const base = normalizeName(fullName);
       if (!nomesNecessarios.has(base)) continue;
@@ -3041,33 +2984,6 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     }
   };
 }
-
-// ETAPA 2 — Transcreve um lote de áudios (chamada curta). Recebe o buffer do
-// ZIP e a lista de nomes desse lote. Roda em paralelo, devolve as transcrições.
-export async function transcreverLoteDoZip(buffer, audioNames) {
-  const zip = await JSZip.loadAsync(buffer);
-  const openai = getOpenAI();
-  const cache = {};
-  const resultado = {};
-  if (!openai) {
-    for (const nome of audioNames) resultado[normalizeName(nome)] = { status: "api_nao_configurada", text: "" };
-    return { transcriptions: resultado, transcriptionEnabled: false };
-  }
-  // Acha o caminho completo dentro do ZIP a partir do nome base
-  const allNames = Object.keys(zip.files).filter(name => !zip.files[name].dir);
-  await Promise.all(audioNames.map(async (nomeBase) => {
-    const base = normalizeName(nomeBase);
-    const fullName = allNames.find(n => normalizeName(n) === base) || base;
-    try {
-      const r = await transcribeAudioOnce({ zip, audioName: fullName, openai, cache });
-      resultado[base] = { status: r.status, text: r.text || "", error: r.error || null };
-    } catch (error) {
-      resultado[base] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
-    }
-  }));
-  return { transcriptions: resultado, transcriptionEnabled: true };
-}
-
 
 export async function transcreverArquivosExtraidos(arquivos = []) {
   const openai = getOpenAI();
