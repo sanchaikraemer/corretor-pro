@@ -556,8 +556,15 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     return q;
   };
 
-  let { data, error } = await montarQuery("criado_em");
+  // Atualizações importadas precisam subir imediatamente na lista em qualquer aparelho.
+  // Ordenar por criação fazia um cliente antigo continuar escondido entre registros velhos,
+  // mesmo depois de receber uma conversa nova. Usa a última alteração como ordem principal.
+  let { data, error } = await montarQuery("atualizado_em");
+  if (error) ({ data, error } = await montarQuery("updated_at"));
+  if (error) ({ data, error } = await montarQuery("criado_em"));
   if (error) ({ data, error } = await montarQuery("created_at"));
+  if (error) ({ data, error } = await montarQuery("atualizado_em", "*"));
+  if (error) ({ data, error } = await montarQuery("updated_at", "*"));
   if (error) ({ data, error } = await montarQuery("criado_em", "*"));
   if (error) ({ data, error } = await montarQuery("created_at", "*"));
 

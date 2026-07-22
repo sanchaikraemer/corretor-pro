@@ -1,6 +1,6 @@
 import { requireApiKey, getSupabaseAdmin, listRecentProcessings } from "./_persistence.js";
 
-const CACHE_TTL_MS = 30000;
+const CACHE_TTL_MS = 5000; // no máximo 5 s; sincronização entre celular e PC tem prioridade
 const responseCache = new Map();
 
 

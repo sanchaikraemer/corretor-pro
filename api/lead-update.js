@@ -1010,11 +1010,29 @@ async function acaoAtualizarComEvolucao(body, res) {
   if (result.audiosEncontrados != null) updatePayload.audios_encontrados = result.audiosEncontrados;
   if (result.audiosTranscritos != null) updatePayload.audios_transcritos = result.audiosTranscritos;
 
-  const { error: putErr } = await supabase
+  const { data: persistedRow, error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update(updatePayload)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id,resultado_analise,timeline_json,atualizado_em,updated_at")
+    .maybeSingle();
   if (putErr) return json(res, 500, { ok: false, recoverable: true, conversationSaved: true, error: putErr.message });
+  if (!persistedRow?.id) {
+    return json(res, 409, { ok:false, recoverable:true, conversationSaved:true, error:"O banco não confirmou a atualização do cliente." });
+  }
+  const persistedAnalysis = persistedRow.resultado_analise || {};
+  const persistedImportId = String(persistedAnalysis?._ultimaImportacao?.importId || "");
+  const persistedTimeline = Array.isArray(persistedRow.timeline_json) ? persistedRow.timeline_json : [];
+  if ((importId && persistedImportId !== importId) || persistedTimeline.length < novaTimeline.length) {
+    return json(res, 409, {
+      ok:false,
+      recoverable:true,
+      conversationSaved:persistedTimeline.length >= novaTimeline.length,
+      error:"A atualização não foi confirmada integralmente no banco. Tente novamente; o arquivo temporário foi mantido.",
+      esperado:{ importId, mensagens:novaTimeline.length },
+      confirmado:{ importId:persistedImportId || null, mensagens:persistedTimeline.length }
+    });
+  }
 
   // A timeline já está persistida. A leitura pela IA entra numa fila separada para
   // não atrasar nem fazer a reimportação expirar. O app processa essa fila na sequência.
@@ -1026,7 +1044,10 @@ async function acaoAtualizarComEvolucao(body, res) {
     aprendizadoAutomatico,
     // Quantas mensagens vieram só da conversa antiga (que o arquivo novo não trazia).
     // Se > 0, o frontend reanalisa em segundo plano pra a análise refletir tudo que foi juntado.
-    preservadasDoAntigo, totalMensagens: novaTimeline.length
+    preservadasDoAntigo,
+    totalMensagens: persistedTimeline.length,
+    persistedAt: persistedRow.atualizado_em || persistedRow.updated_at || concluidaEm,
+    importIdConfirmado: persistedImportId || null
   });
 }
 
