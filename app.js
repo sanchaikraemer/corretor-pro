@@ -9758,19 +9758,27 @@ function renderCorretorProDashboard(items, all){
     }).join(""):`<div class="cp-empty cp-empty-compact"><strong>Nenhum compromisso registrado</strong><span>Visitas, reuniões e lembretes aparecerão aqui.</span></div>`;
   }
 
-  const counts={agora:0,respondeu:0,programados:0,aguardando:0};
-  for(const l of items){ const c=categoriaDe(l); if(counts[c]!==undefined) counts[c]++; }
-  const totalConduzido=counts.agora+counts.respondeu+counts.programados+counts.aguardando;
-  const total=Math.max(1,totalConduzido);
-  const hp=cpPct(counts.agora,total), rp=cpPct(counts.respondeu,total), pp=cpPct(counts.programados,total);
+  // v927 — o donut só somava agora+agenda+aguardando (ex.: 98) enquanto "Clientes ativos" mostra
+  // a carteira inteira (ex.: 241) logo acima — números que não batem confundem mais do que
+  // ajudam. Agora entra também "Prospecção" (sem-acao: conversa ainda rasa, <5 msgs do cliente),
+  // e o total do gráfico passa a fechar com items.length (a carteira toda).
+  const counts={agora:0,respondeu:0,programados:0,aguardando:0,semAcao:0};
+  for(const l of items){
+    const c=categoriaDe(l);
+    if(c==='sem-acao') counts.semAcao++;
+    else if(counts[c]!==undefined) counts[c]++;
+  }
+  const total=Math.max(1, items.length);
+  const hp=cpPct(counts.agora,total), rp=cpPct(counts.respondeu,total), pp=cpPct(counts.programados,total), ap=cpPct(counts.aguardando,total);
   const donut=qs("#cpTempDonut");
-  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+pp)}%,var(--cp-slate) ${Math.min(100,hp+rp+pp)}% 100%)`;
-  cpSetText("cpTotalAtendimentos",totalConduzido);
+  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+pp)}%,var(--cp-slate) ${Math.min(100,hp+rp+pp)}% ${Math.min(100,hp+rp+pp+ap)}%,var(--cp-muted) ${Math.min(100,hp+rp+pp+ap)}% 100%)`;
+  cpSetText("cpTotalAtendimentos", items.length);
   const legend=qs("#cpTempLegend");
   if(legend) legend.innerHTML=[
     ["Fazer agora",counts.agora,cpPct(counts.agora,total),"var(--cp-coral)"],
     ["Agenda",counts.programados,cpPct(counts.programados,total),"var(--cp-blue)"],
-    ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"]
+    ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"],
+    ["Prospecção",counts.semAcao,cpPct(counts.semAcao,total),"var(--cp-muted)"]
   ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[3]}"></i><span>${x[0]}</span><b>${x[2]}%</b></div>`).join("");
 
   const stageDefs=[
