@@ -6317,16 +6317,6 @@ async function carregarCerebro(){
   if(!status.innerHTML) status.textContent = "Configuração carregada.";
 }
 
-function acrescentarRegraAoBloco(texto) {
-  const campo = qs("#cerebroRegrasTexto");
-  const novo = String(texto || "").trim();
-  if(!campo || !novo) return false;
-  const atual = String(campo.value || "").trimEnd();
-  campo.value = atual ? `${atual}\n\n${novo}` : novo;
-  campo.dispatchEvent(new Event("input", { bubbles:true }));
-  return true;
-}
-
 let ultimoSqlCerebro = "";
 function copiarSqlCerebro(){
   if(!ultimoSqlCerebro){ toast("Nada para copiar."); return; }
@@ -7625,48 +7615,6 @@ qs("#cerebroSalvar")?.addEventListener("click", salvarCerebro);
 qs("#cerebroResetar")?.addEventListener("click", resetarCerebro);
 qs("#cerebroZerar")?.addEventListener("click", zerarCerebroTudo);
 // Regras e objeções são editadas diretamente nos campos de texto únicos.
-// Aprender de vídeo / link
-qs("#cerebroLinkBtn")?.addEventListener("click", async () => {
-  const url = (qs("#cerebroLinkInput")?.value || "").trim();
-  const st = qs("#cerebroLinkStatus");
-  const sug = qs("#cerebroLinkSugestoes");
-  if(!/^https?:\/\//i.test(url)){ st.textContent = "Cole um link válido (começa com http)."; return; }
-  st.textContent = "Lendo o conteúdo e extraindo lições... (pode levar 10-30s)";
-  sug.innerHTML = "";
-  try{
-    const ctrl = new AbortController();
-    const to = setTimeout(()=>ctrl.abort(), 60000);
-    const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ action:"aprender-link", url }), signal: ctrl.signal });
-    clearTimeout(to);
-    const data = await res.json();
-    if(data?.ok && Array.isArray(data.regras) && data.regras.length){
-      st.innerHTML = '<span style="color:var(--acao)">' + escapeHtml(data.fonte==="vídeo"?"Vídeo lido":"Link lido") + '. ' + (data.resumo?escapeHtml(data.resumo):'') + '</span>';
-      sug.innerHTML = '<div class="small" style="color:var(--muted);margin-bottom:6px">Toque pra adicionar as que fizerem sentido:</div>' +
-        data.regras.map((r,i) => `<button type="button" class="cerebroSugBtn" data-origem="${data.fonte==='vídeo'?'video':'link'}" data-texto="${escapeHtml(r)}" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:5px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.22);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">+ ${escapeHtml(r)}</button>`).join("");
-      sug.querySelectorAll(".cerebroSugBtn").forEach(b => b.addEventListener("click", () => {
-        acrescentarRegraAoBloco(b.dataset.texto);
-        b.style.opacity = "0.4"; b.style.pointerEvents = "none"; b.textContent = "✓ adicionada";
-        toast("Regra adicionada. Não esqueça de Salvar.");
-      }));
-    } else {
-      st.innerHTML = '<span style="color:var(--risco)">' + escapeHtml(data?.error || "Não consegui extrair lições desse link.") + '</span>';
-    }
-  }catch(err){
-    const ehTimeout = err?.name === "AbortError";
-    st.innerHTML = '<span style="color:var(--risco)">' + (ehTimeout ? "Demorou demais. Tente um vídeo mais curto ou cole o texto como regra." : "Erro: " + escapeHtml(String(err?.message||err))) + '</span>';
-  }
-});
-// Mostra lições sugeridas (de link/vídeo/print) como botões pra adicionar
-function mostrarSugestoesCerebro(container, regras, origem){
-  if(!container) return;
-  container.innerHTML = '<div class="small" style="color:var(--muted);margin-bottom:6px">Toque pra adicionar as que fizerem sentido:</div>' +
-    regras.map(r => `<button type="button" class="cerebroSugBtn" data-origem="${escapeHtml(origem)}" data-texto="${escapeHtml(r)}" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:5px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.22);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">+ ${escapeHtml(r)}</button>`).join("");
-  container.querySelectorAll(".cerebroSugBtn").forEach(b => b.addEventListener("click", () => {
-    acrescentarRegraAoBloco(b.dataset.texto);
-    b.style.opacity = "0.4"; b.style.pointerEvents = "none"; b.textContent = "✓ adicionada";
-    toast("Regra adicionada. Não esqueça de Salvar.");
-  }));
-}
 // ============ PARSER DE CSV (compartilhado) ============
 // Usado pela Importar telefones (CSV). A antiga importação de LEADS por CSV foi removida na v905.
 function parseCsvDireciona(t){

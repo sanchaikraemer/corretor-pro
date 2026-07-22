@@ -14,17 +14,14 @@ for(const texto of ['Ensinar por áudio', 'Aprender de um print', 'Reprocessamen
   assert.doesNotMatch(html, new RegExp(texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `"${texto}" precisa ter saído do index.html`);
 }
 
-// 2. "Aprender de vídeo / link" NÃO foi pedido pra sair — continua intacto.
-assert.match(html, /Aprender de vídeo \/ link/, 'Aprender de vídeo/link não deve ser removido (não foi pedido)');
-assert.match(html, /id="cerebroLinkBtn"/, 'botão de aprender por link continua no HTML');
+// 2. Nesta versão (v919), "Aprender de vídeo / link" não tinha sido pedido pra sair — o dono
+// só decidiu remover esse quarto também depois, em v920 (ver tests/v920-*), quando confirmou
+// com um vídeo real que a extração de legenda do YouTube falha mesmo com legenda disponível.
 
 // 3. Os handlers/IDs específicos dos 3 recursos removidos não sobraram em app.js.
 for(const id of ['cerebroAudioBtn', 'cerebroAudioInput', 'cerebroImgBtn', 'cerebroImgInput', 'cerebroCarteiraBtn']){
   assert.doesNotMatch(app, new RegExp(id), `resquício de #${id} não pode sobrar em app.js`);
 }
-
-// 4. O handler de link (mantido) continua funcionando — prova que a remoção foi cirúrgica.
-assert.match(app, /qs\("#cerebroLinkBtn"\)/, 'handler de "Aprender de vídeo/link" precisa continuar');
 
 // 5. Backend: a ação "aprender-imagem" (usada só pelo "Aprender de um print") e a função que
 // ela chamava saíram; "transcrever-audio" e "aprender-carteira" continuam — são compartilhadas

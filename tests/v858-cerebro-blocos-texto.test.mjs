@@ -14,7 +14,9 @@ assert.doesNotMatch(html, /id="cerebroNovaRegra"/);
 assert.doesNotMatch(html, /id="cerebroNovaObjecao"/);
 assert.match(app, /regrasTexto:\s*qs\("#cerebroRegrasTexto"\)/);
 assert.match(app, /objecoesTexto:\s*qs\("#cerebroObjecoesTexto"\)/);
-assert.match(app, /function acrescentarRegraAoBloco/);
+// acrescentarRegraAoBloco existia só pra alimentar as sugestões de áudio/print/vídeo-link —
+// todas removidas (v919/v920), então a função virou órfã e saiu junto.
+assert.doesNotMatch(app, /function acrescentarRegraAoBloco/);
 assert.doesNotMatch(app, /cerebroRegras\.push/);
 assert.match(api, /regrasTexto:/);
 assert.match(api, /objecoesTexto:/);
