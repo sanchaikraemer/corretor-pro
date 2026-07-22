@@ -10,7 +10,9 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // 1. A barra de ícones existe e substituiu os pills antigos.
 assert.match(app, /<div class="cp704-toolbar">/, 'topo do lead usa a barra de ícones (cp704-toolbar)');
 assert.doesNotMatch(app, /<div class="cp704-top-actions">/, 'os pills antigos (cp704-top-actions) saíram do lead');
-assert.match(app, /\.cp704-toolbar\{display:flex/, 'CSS da toolbar existe');
+// v917 trocou o flex-wrap por um grid fixo de 4 colunas (ver tests/v917-*), mas a barra de
+// ícones em si continua existindo — só confere que a classe está definida no CSS.
+assert.match(app, /\.cp704-toolbar\{/, 'CSS da toolbar existe');
 assert.match(app, /\.cp704-ico\{/, 'CSS dos ícones existe');
 assert.match(app, /\.cp704-ico\.done\{[^}]*112,212,157/, 'estado "Atendido" (done) fica verde');
 
