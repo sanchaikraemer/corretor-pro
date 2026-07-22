@@ -6878,13 +6878,23 @@ async function renderProcessedResult(data, meta){
   const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
 
   // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
-  // quando o nome exportado coincide tecnicamente com um nome já salvo.
+  // quando o nome exportado coincide (ou se parece) com um nome já salvo.
   const match = await acharLeadExistente(state.lead.name);
   const existente = match?.lead || null;
   state.pendingExistente = existente;
   const perguntarNome = !!existente;
+  const nomeSoParecido = perguntarNome && match.via === "nome-parecido";
   let acoesHtml;
-  if(perguntarNome){
+  if(nomeSoParecido){
+    // Nome mudou entre importações (ex.: contato editado no celular) mas não é idêntico ao
+    // salvo — NUNCA funde sozinho aqui (ver nomesParecemMesmoCliente). Antes disso, esse caso
+    // caía direto no "senão" abaixo e criava um cadastro novo em silêncio, sem avisar o
+    // corretor, gerando duplicata (o cliente ficava com dois cadastros e o mais antigo parado
+    // "esquecido" enquanto o novo tinha a conversa atualizada).
+    acoesHtml =
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
+      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
+  }else if(perguntarNome){
     acoesHtml =
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
@@ -6917,10 +6927,12 @@ async function renderProcessedResult(data, meta){
   qs("#timeline").innerHTML = timeline || '<div class="event"><b>Conversa recebida</b><p>Arquivo processado.</p></div>';
 
   qs("#btnSalvarLead")?.addEventListener("click", salvarLeadPendente);
+  qs("#btnSalvarComoNovo")?.addEventListener("click", salvarLeadPendente);
   qs("#btnDescartarLead")?.addEventListener("click", descartarLeadPendente);
   qs("#btnAtualizarLead")?.addEventListener("click", atualizarLeadComEvolucao);
   if(perguntarNome){
-    // Mesmo nome: só permite atualizar o cadastro existente; criar duplicata não é oferecido.
+    // Nome exato: só permite atualizar o cadastro existente, criar duplicata não é oferecido.
+    // Nome só parecido: espera o corretor confirmar se é o mesmo cliente ou outro (ver acima).
   }else{
     salvarLeadPendente();
   }
@@ -6936,8 +6948,37 @@ async function renderProcessedResult(data, meta){
  }
 }
 
-// Procura na base inteira um lead com o mesmo nome técnico (maiúsculas, espaços e acentos ignorados).
-// Nomes apenas parecidos e telefone nunca decidem uma fusão automática.
+// Divide um nome em palavras normalizadas (sem acento/maiúscula/pontuação) pra comparação.
+function _palavrasNome(valor){
+  return String(valor || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()
+    .split(" ").filter(Boolean);
+}
+
+// Detecta nome "quase igual" a um lead já salvo: acontece quando o corretor edita o nome
+// do contato no celular entre uma importação e outra (ex.: acrescenta o empreendimento —
+// "Fulano" vira "Fulano Empreendimento Tal"). Exige que as DUAS primeiras palavras (nome +
+// sobrenome) sejam idênticas e que todas as palavras do nome mais curto apareçam, na mesma
+// ordem, dentro do nome mais longo — só palavras A MAIS no meio/fim são toleradas. Isso NUNCA
+// decide fusão sozinho (ver acharLeadExistente/renderProcessedResult): só sinaliza a dúvida
+// pro corretor confirmar, porque nome parecido pode muito bem ser outra pessoa.
+function nomesParecemMesmoCliente(nomeA, nomeB){
+  const a = _palavrasNome(nomeA);
+  const b = _palavrasNome(nomeB);
+  if(a.length < 2 || b.length < 2) return false;
+  if(a[0] !== b[0] || a[1] !== b[1]) return false;
+  const [menor, maior] = a.length <= b.length ? [a, b] : [b, a];
+  let i = 0;
+  for(const palavra of maior){
+    if(i < menor.length && palavra === menor[i]) i++;
+  }
+  return i >= menor.length;
+}
+
+// Procura na base inteira um lead com o mesmo nome técnico (maiúsculas, espaços e acentos ignorados)
+// e, na ausência desse, um lead com nome só PARECIDO (ver nomesParecemMesmoCliente acima).
+// Nomes apenas parecidos e telefone nunca decidem uma fusão automática — só levantam a pergunta.
 async function acharLeadExistente(nome){
   const norm = (valor) => String(valor || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -6949,8 +6990,10 @@ async function acharLeadExistente(nome){
     const data = await getLeadsData(true);
     if(Array.isArray(data?.items)) leads = data.items.map(limparLead);
   }catch(_){}
-  const encontrado = leads.find(l => l?.id && norm(l.name) === alvo);
-  return encontrado ? { lead:encontrado, via:"nome-exato" } : null;
+  const exato = leads.find(l => l?.id && norm(l.name) === alvo);
+  if(exato) return { lead:exato, via:"nome-exato" };
+  const parecido = leads.find(l => l?.id && nomesParecemMesmoCliente(nome, l.name));
+  return parecido ? { lead:parecido, via:"nome-parecido" } : null;
 }
 
 async function finalizarImportacaoStorage(pending){
