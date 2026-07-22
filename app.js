@@ -138,7 +138,7 @@ async function fetchComTimeout(url, opts = {}, timeoutMs = 15000){
 // Sem cache, abrir a Hoje dispara 3-4 buscas pesadas ao mesmo tempo. Aqui guardamos o
 // resultado por um tempo curto e DEDUPLICAMOS chamadas simultâneas (uma rajada = 1 busca).
 // Mutações (salvar, mudar etapa, etc.) invalidam o cache pra não mostrar dado velho.
-const LEADS_CACHE_TTL = 300000; // 5 min
+const LEADS_CACHE_TTL = 15000; // 15 s: evita leitura velha entre celular e PC
 let _leadsCache = { ts: 0, data: null, inflight: null };
 // Depois de uma mutação (salvar/editar/apagar/mudar etapa), a próxima busca precisa vir
 // FRESCA do servidor — senão o cache de 30s do backend devolve a lista velha (lead apagado
@@ -6985,6 +6985,30 @@ async function limparImportacoesRemotasAntigas(){
   }
 }
 
+async function confirmarAtualizacaoPersistida(id, importId, totalMensagensEsperado){
+  const leadId = String(id || "").trim();
+  if(!leadId) throw new Error("O servidor não devolveu o cadastro atualizado.");
+  const token = String(importId || "").trim();
+  let ultimoErro = null;
+  for(let tentativa = 0; tentativa < 3; tentativa++){
+    if(tentativa) await new Promise(r => setTimeout(r, 450 * tentativa));
+    try{
+      invalidarLeadDetail(leadId);
+      const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(leadId)}&_=${Date.now()}`, { cache:"no-store" }, 20000);
+      const data = await res.json().catch(()=>({ok:false}));
+      if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "O banco não confirmou a atualização.");
+      const item = limparLead(data.item);
+      const salvoToken = String(item?.analysis?._ultimaImportacao?.importId || "").trim();
+      const totalSalvo = Number(item?.messageCount || item?.recentMessages?.length || 0);
+      const tokenOk = !token || salvoToken === token;
+      const timelineOk = !Number.isFinite(Number(totalMensagensEsperado)) || totalSalvo >= Number(totalMensagensEsperado || 0);
+      if(tokenOk && timelineOk) return item;
+      ultimoErro = new Error(`A atualização ainda não foi confirmada no banco (${totalSalvo} de ${Number(totalMensagensEsperado||0)} mensagens).`);
+    }catch(error){ ultimoErro = error; }
+  }
+  throw ultimoErro || new Error("O banco não confirmou a atualização. O ZIP foi mantido para tentar novamente.");
+}
+
 async function atualizarLeadComEvolucao(){
   const existente = state.pendingExistente;
   if(!existente?.id || !state.pendingSave){ toast("Nada pra atualizar."); return; }
@@ -6997,8 +7021,10 @@ async function atualizarLeadComEvolucao(){
     });
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
-    const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     const importacaoConcluida = state.pendingSave;
+    const totalEsperado = Number(data.totalMensagens || importacaoConcluida?.result?.timeline?.length || 0);
+    const confirmado = await confirmarAtualizacaoPersistida(existente.id, importacaoConcluida?.importId, totalEsperado);
+    const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
     const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
@@ -7036,7 +7062,9 @@ async function atualizarLeadComEvolucao(){
     // Mesma correção do salvar: sem zerar o cache de 5 min, a Carteira seguia mostrando o
     // lead como estava ANTES da atualização (ainda em "preparação").
     invalidarLeadsCache();
-    loadRecentLeads(true); refreshAllSections();
+    state.lead = confirmado;
+    state.analysis = confirmado.analysis || null;
+    await loadRecentLeads(true); refreshAllSections();
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     qs("#pendingActions")?.remove();
     renderEtapas(6, "lead atualizado e importação confirmada");
@@ -9604,28 +9632,31 @@ async function iniciarDireciona(){
 }
 requestAnimationFrame(iniciarDireciona);
 
-// Auto-refresh leve do dashboard a cada 3 min se o usuário está na home e a aba está visível
+// Sincronização entre aparelhos: consulta o banco a cada 30 s quando a Home está visível.
+// A chamada força leitura nova; o cache local continua servindo só para navegação imediata.
 setInterval(() => {
   // v818: não atualizar a Home enquanto um lead está aberto. O detalhe do lead é
   // renderizado DENTRO da Home (#leadFocoArea), então state.active continua "home".
   // Sem esta trava, o refresh reescrevia a área e jogava o corretor de volta pra lista.
   if(state.active === "home" && document.visibilityState === "visible" && !state.focoLeadId && !state.lead?.id){
-    loadRecentLeads(false);
-    carregarDashboard();
+    invalidarLeadsCache();
+    loadRecentLeads(true);
+    carregarDashboard(true);
     carregarAgendaTopo();
   }
-}, 3 * 60 * 1000);
+}, 30 * 1000);
 // Refresh quando a aba volta a ficar visível (depois de mudar pra outra aba)
 let __lastVisibleRefresh = 0;
 document.addEventListener("visibilitychange", () => {
   // v818: mesma trava do interval — não refazer a Home com um lead aberto.
   if(document.visibilityState === "visible" && state.active === "home" && !state.focoLeadId && !state.lead?.id){
     const agora = Date.now();
-    if(agora - __lastVisibleRefresh < 45000) return;
+    if(agora - __lastVisibleRefresh < 5000) return;
     __lastVisibleRefresh = agora;
     setTimeout(() => {
-      loadRecentLeads(false);
-      carregarDashboard();
+      invalidarLeadsCache();
+      loadRecentLeads(true);
+      carregarDashboard(true);
       carregarAgendaTopo();
     }, 250);
   }
