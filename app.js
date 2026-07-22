@@ -1966,9 +1966,22 @@ function temAtendimentoManual(l){
   });
 }
 const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
+// Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
+// visita etc.) — NUNCA é uma fala real na conversa, mesmo tendo texto e data.
+function ehMsgManualTimeline(m){
+  const src = String(m?.source||"").toLowerCase(), type = String(m?.type||"").toLowerCase();
+  return src==='manual'||src==='crm'||src==='corretor-pro-manual'||type==='print-whatsapp'||
+    ['atendimento','nota','ligacao','visita','presencial','proposta','observacao_manual','mensagem_enviada'].includes(type);
+}
 // "Corretor", "Imobiliária" e "Imóveis" podem fazer parte do NOME do contato parceiro.
 // Por isso não podem, sozinhos, transformar a fala dele em mensagem da empresa.
 function ehMsgDoCliente(m, primeiroNomeCliente){
+  // Um registro manual (ex.: autor "Mensagem enviada (você)" ao copiar uma sugestão) não bate
+  // nem com BUSINESS_RE nem com o nome do cliente — sem este corte, caía no padrão "qualquer
+  // outro autor é o cliente" logo abaixo e lia SUA PRÓPRIA mensagem copiada como se o cliente
+  // tivesse respondido. Isso fazia o lead virar "Cliente aguardando" (prioridade máxima) e pular
+  // a proteção de 5 dias pós-atendimento, mesmo o cliente em silêncio há semanas.
+  if(ehMsgManualTimeline(m)) return false;
   const autor = String(m?.author || "").trim();
   if(!autor || autor === "Sistema") return false;
   const autorNorm = autor.toLowerCase();
