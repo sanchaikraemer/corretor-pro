@@ -9282,12 +9282,17 @@ function cp786OrdenarConducao(lista,metaPronto=null){
     let score=Number(l?._score);
     if(!Number.isFinite(score)){try{score=scoreRankingHoje(l);}catch(_){score=0;}}
     const categoria=metaPronto?.get?.(l)?.categoria||cp786Categoria(l);
-    meta.set(l,{categoria,ordem:ordem[categoria]??9,score:Number.isFinite(score)?score:0,compromisso:categoria==='programados'?cp786CompromissoOrdemTs(l):Number.MAX_SAFE_INTEGER});
+    // v916 (pedido do dono): dentro de "Aguardando cliente" a ordem é por quem VOCÊ atendeu
+    // mais recentemente primeiro (quem acabou de ser atendido sobe pro topo) — não por chance
+    // de venda. ultimoAtendimentoTs cobre atendimento manual, cópia de mensagem e observação.
+    const atendimentoTs = categoria==='aguardando' && typeof ultimoAtendimentoTs==='function' ? ultimoAtendimentoTs(l) : 0;
+    meta.set(l,{categoria,ordem:ordem[categoria]??9,score:Number.isFinite(score)?score:0,compromisso:categoria==='programados'?cp786CompromissoOrdemTs(l):Number.MAX_SAFE_INTEGER,atendimentoTs});
   }
   return arr.sort((a,b)=>{
     const ma=meta.get(a),mb=meta.get(b);
     if(ma.ordem!==mb.ordem) return ma.ordem-mb.ordem;
     if(ma.categoria==='programados'&&ma.compromisso!==mb.compromisso) return ma.compromisso-mb.compromisso;
+    if(ma.categoria==='aguardando'&&ma.atendimentoTs!==mb.atendimentoTs) return mb.atendimentoTs-ma.atendimentoTs;
     if(ma.score!==mb.score) return mb.score-ma.score;
     return String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR');
   });
