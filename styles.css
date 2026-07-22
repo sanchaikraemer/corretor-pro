@@ -2171,19 +2171,33 @@ html[data-theme="light"] [style*="color: #ffc"]{
 .cp788-bd-row b{color:var(--text);font-variant-numeric:tabular-nums;font-weight:900}
 @media(max-width:820px){.cp788-att-layout{grid-template-columns:1fr}.cp788-att-side{position:static;flex-direction:row;flex-wrap:wrap}.cp788-meta-card{flex:1;min-width:180px}.cp788-meta-breakdown{flex:1;min-width:180px;align-self:stretch;display:flex;flex-direction:column;justify-content:center}}
 
-/* v908 — Atendimentos por dia: colunas (últimos 7 dias) com prédio da meta + clientes do dia */
-.cp788-days{display:grid;grid-template-columns:repeat(7,minmax(122px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px;align-items:start}
-.cp788-day{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(7,52,64,.58);min-width:122px}
-.cp788-day.done{border-color:rgba(255,98,88,.5)}
+/* v910 — Atendimentos por dia: colunas LIMPAS (sem caixa/fundo), prédio maior, divisória sutil */
+.cp788-days{display:flex;gap:2px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.cp788-day{flex:1 1 0;min-width:132px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 10px 10px}
+.cp788-day:not(:last-child){border-right:1px solid rgba(255,255,255,.07)}
 .cp788-day-head{text-align:center;line-height:1.2}.cp788-day-head b{display:block;font-size:13px;color:var(--text)}.cp788-day-head span{font-size:11px;color:var(--muted)}
-.cp788-day .cp788-predio{width:78px;height:auto}
-.cp788-day-count{font-size:13px;font-weight:900;color:var(--muted)}.cp788-day-count b{color:var(--text)}.cp788-day-count.done,.cp788-day-count.done b{color:var(--accent)}
+.cp788-day .cp788-predio{width:100%;max-width:110px;height:auto;display:block}
+.cp788-day-count{font-size:14px;font-weight:900;color:var(--muted)}.cp788-day-count b{color:var(--text)}.cp788-day.done .cp788-day-count,.cp788-day.done .cp788-day-count b{color:var(--accent)}
 .cp788-day-list{width:100%;display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.cp788-day-name{width:100%;text-align:left;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.03);color:var(--text);font:inherit;font-size:12px;font-weight:800;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cp788-day-name:hover{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.06)}
-.cp788-day-empty{color:var(--muted);font-size:12px;padding:6px 0}
-html[data-theme="light"] .cp788-day{background:#fff!important;border-color:#E4EBEE!important}
+.cp788-day-name{width:100%;text-align:center;padding:7px 9px;border:1px solid rgba(255,255,255,.10);border-radius:10px;background:rgba(255,255,255,.04);color:var(--text);font:inherit;font-size:12px;font-weight:800;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp788-day-name:hover{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08)}
+.cp788-day-empty{color:var(--muted);font-size:12px;padding:6px 0;opacity:.55}
+html[data-theme="light"] .cp788-day:not(:last-child){border-right-color:#E4EBEE}
 html[data-theme="light"] .cp788-day-name{background:#F4F8F9!important;border-color:#E4EBEE!important;color:#102A34!important}
+/* v910 — no CELULAR as 7 colunas lado a lado forçavam rolagem horizontal (feio). Vira uma pilha
+   vertical: cada dia é uma faixa (prédio pequeno + dia + contagem em cima; nomes em chips embaixo). */
+@media(max-width:720px){
+  .cp788-days{flex-direction:column;gap:0;overflow-x:visible}
+  .cp788-day{flex:none;width:100%;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 2px;border-right:0}
+  .cp788-day:not(:last-child){border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .cp788-day .cp788-predio{order:-2;width:46px;max-width:46px}
+  .cp788-day-head{order:-1;text-align:left}.cp788-day-head b{font-size:15px}.cp788-day-head span{font-size:12px}
+  .cp788-day-count{margin-left:auto;font-size:15px}
+  .cp788-day-list{flex-basis:100%;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .cp788-day-name{width:auto;max-width:100%;flex:0 1 auto}
+  .cp788-day-empty{flex-basis:100%;text-align:left}
+  html[data-theme="light"] .cp788-day:not(:last-child){border-bottom-color:#E4EBEE}
+}
 
 
 /* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno */

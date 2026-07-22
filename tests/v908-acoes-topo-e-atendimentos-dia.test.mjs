@@ -25,7 +25,7 @@ assert.match(app, /class="cp788-day-name"/, 'cada cliente é um nome clicável n
 assert.match(app, /perDay\[d\]\.itens\.push\(x\)/, 'agrupa atendimentos por dia');
 assert.doesNotMatch(app, /function cp788LinhaAtendimento/, 'linha antiga (com "atendido há X" + produto) removida');
 assert.doesNotMatch(app, /function cp788TempoAtendimento/, '"atendido há X" removido');
-assert.match(css, /\.cp788-days\{[^}]*grid-template-columns:repeat\(7/, 'CSS: 7 colunas (últimos 7 dias)');
-assert.match(css, /\.cp788-day \.cp788-predio\{width:78px/, 'prédio menor dentro da coluna do dia');
+assert.match(css, /\.cp788-days\{display:flex/, 'CSS: colunas por dia (linha rolável)');
+assert.match(css, /\.cp788-day \.cp788-predio\{width:100%;max-width:110px/, 'prédio grande, ocupando a coluna');
 
 console.log('v908-acoes-topo-e-atendimentos-dia: ok');
