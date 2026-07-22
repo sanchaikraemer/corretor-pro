@@ -13,22 +13,26 @@ const fimRBH = app.indexOf('\nfunction ', iniRBH + 1);
 assert.ok(iniRBH !== -1 && fimRBH !== -1, 'renderBotoesHome não encontrada em app.js');
 const rbh = app.slice(iniRBH, fimRBH);
 
-// 1. A meta efetiva de hoje soma o extra pedido na sessão (mesma variável do abrirFazerAgora).
+// 1. O extra pedido na sessão (mesma variável do abrirFazerAgora) é puxado da FILA RANQUEADA
+// completa (cpFilaFazerAgora — a mesma que alimenta o número e o "Atender +1"), não só do balde
+// categorizado "acao-hoje" (que pode estar vazio com tudo "aguardando cliente" — v926).
 assert.match(rbh, /const extraHoje ?= ?Math\.max\(0, ?Number\(state\.fazerAgoraExtra\|\|0\)\)/,
-  'renderBotoesHome deve somar state.fazerAgoraExtra na meta efetiva de hoje');
-assert.match(rbh, /const metaEfetiva ?= ?metaHoje ?\+ ?extraHoje/,
-  'a meta efetiva = meta de hoje + o extra pedido');
-assert.match(rbh, /urgentesRanqueados\.slice\(0, ?metaEfetiva\)/, 'a dose mostrada usa a meta efetiva (não só a meta crua)');
+  'renderBotoesHome deve ler state.fazerAgoraExtra');
+assert.match(rbh, /const filaCompleta ?= ?typeof cpFilaFazerAgora ?=== ?'function' ?\? ?cpFilaFazerAgora\(items\) ?: ?\[\]/,
+  'o extra deve vir da fila ranqueada completa (cpFilaFazerAgora), não só do balde categorizado');
+assert.match(rbh, /const urgentes ?= ?doseBase\.concat\(extrasPuxados\)/, 'a dose mostrada = base categorizada + extras puxados da fila completa');
 
-// 2. Quando a meta bate (urgentes vazio) mas ainda tem gente na fila, convida a continuar.
-assert.match(rbh, /backlogAlemDaDose\.length/, 'checa se sobrou gente na fila além da meta batida');
+// 2. Quando a meta bate (urgentes vazio) mas ainda tem gente na fila COMPLETA, convida a continuar.
+assert.match(rbh, /const disponiveisParaPuxar ?= ?filaCompleta\.filter\(l ?=> ?!idsNaDoseBase\.has\(String\(l\.id\)\)\)/,
+  'disponibilidade pra puxar mais deve vir da fila completa, não só do balde categorizado (v926)');
+assert.match(rbh, /else if\(disponiveisParaPuxar\.length\)/, 'o convite aparece quando sobra gente na fila completa');
 assert.match(rbh, /Meta de hoje batida/i, 'mensagem de meta batida presente');
 assert.match(rbh, /Vamos atender mais um\?/, 'texto do convite "Vamos atender mais um?"');
 assert.match(rbh, /onclick="cpAtenderMaisUmHoje\(\)"/, 'o botão chama cpAtenderMaisUmHoje()');
 
-// 3. "Ver todas as oportunidades" continua acessível mesmo nesse estado (temLista considera o backlog).
-assert.match(rbh, /const temLista ?= ?urgentes\.length ?> ?0 ?\|\| ?retomada\.length ?> ?0 ?\|\| ?backlogAlemDaDose\.length ?> ?0/,
-  'temLista deve considerar também o backlog além da dose');
+// 3. "Ver todas as oportunidades" continua acessível mesmo nesse estado (temLista considera a fila completa).
+assert.match(rbh, /const temLista ?= ?urgentes\.length ?> ?0 ?\|\| ?retomada\.length ?> ?0 ?\|\| ?disponiveisParaPuxar\.length ?> ?0/,
+  'temLista deve considerar disponiveisParaPuxar (fila completa), não só o balde categorizado');
 
 // 4. cpAtenderMaisUmHoje existe, soma o extra e re-renderiza a Home, exposta no window.
 const fnSrc = app.match(/function cpAtenderMaisUmHoje\(\)\{[\s\S]*?\n\}/);

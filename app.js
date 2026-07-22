@@ -2546,13 +2546,21 @@ function renderBotoesHome(){
     }
   }
   const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
+  const doseBase = urgentesRanqueados.slice(0, metaHoje);
   // v925 — bater a meta de hoje não fecha a porta: "Vamos atender mais um?" deixa o corretor
-  // puxar mais gente da fila de propósito, sem esperar o dia seguinte (mesmo mecanismo do botão
-  // "Atender +1" de abrirFazerAgora, via state.fazerAgoraExtra — a mesma variável dos dois lugares).
+  // puxar mais gente, sem esperar o dia seguinte (mesmo mecanismo do botão "Atender +1" de
+  // abrirFazerAgora, via state.fazerAgoraExtra — a mesma variável dos dois lugares). O extra
+  // vem da FILA RANQUEADA completa (cpFilaFazerAgora — a mesma que alimenta o número e o
+  // "Atender +1"), não só do balde categorizado "acao-hoje": esse balde pode estar vazio (ex.:
+  // tudo que sobra está "aguardando cliente") mesmo com gente disponível pra puxar de propósito.
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
-  const metaEfetiva = metaHoje + extraHoje;
-  const urgentes = urgentesRanqueados.slice(0, metaEfetiva);
-  const backlogAlemDaDose = urgentesRanqueados.slice(metaEfetiva);
+  const idsNaDoseBase = new Set(doseBase.map(l => String(l.id)));
+  const filaCompleta = typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : [];
+  const extrasPuxados = filaCompleta.filter(l => !idsNaDoseBase.has(String(l.id))).slice(0, extraHoje);
+  extrasPuxados.forEach(l => idsNaDoseBase.add(String(l.id)));
+  const urgentes = doseBase.concat(extrasPuxados);
+  const backlogAlemDaDose = urgentesRanqueados.slice(metaHoje).filter(l => !idsNaDoseBase.has(String(l.id)));
+  const disponiveisParaPuxar = filaCompleta.filter(l => !idsNaDoseBase.has(String(l.id)));
   const retomada = (grupos["retomada"] || []);
   let top3Html;
   if(urgentes.length){
@@ -2569,12 +2577,13 @@ function renderBotoesHome(){
       + (backlog.length
           ? `<details style="margin-top:12px"><summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${backlog.length}</summary><div style="margin-top:10px">${backlog.map((l, i) => filaRowHTML(l, i+2+filaDose.length)).join("")}</div></details>`
           : "");
-  } else if(backlogAlemDaDose.length){
-    // v925 — bateu a meta de hoje, mas ainda tem gente esperando prioridade: convida a continuar
-    // em vez de só dizer "tudo em dia" (o objetivo é converter venda, não só bater um número).
+  } else if(disponiveisParaPuxar.length){
+    // v925 — bateu a meta de hoje, mas ainda tem gente na fila ranqueada (a mesma que alimenta o
+    // número e o "Atender +1" — não só o balde categorizado "acao-hoje", que pode estar vazio
+    // com tudo "aguardando cliente"): convida a continuar em vez de só dizer "tudo em dia".
     top3Html = `<div style="padding:16px 18px;border:1px solid var(--lime);border-radius:14px;background:rgba(104,255,149,.06);margin-bottom:12px;text-align:center">
       <div style="font-size:15px;font-weight:950;color:var(--lime);margin-bottom:6px">🎉 Meta de hoje batida!</div>
-      <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda tem ${backlogAlemDaDose.length} lead${backlogAlemDaDose.length>1?"s":""} esperando prioridade. Cada atendimento a mais é uma venda mais perto.</div>
+      <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda tem ${disponiveisParaPuxar.length} lead${disponiveisParaPuxar.length>1?"s":""} esperando prioridade. Cada atendimento a mais é uma venda mais perto.</div>
       <button type="button" class="primary" onclick="cpAtenderMaisUmHoje()">Vamos atender mais um?</button>
     </div>`;
   } else if(retomada.length){
@@ -2589,7 +2598,7 @@ function renderBotoesHome(){
     top3Html = `<div class="small" style="color:var(--muted);opacity:.7;padding:18px;border:1px dashed var(--line);border-radius:10px;text-align:center">Tudo em dia! Nenhum lead pendente agora. Bom momento pra importar conversas novas.</div>`;
   }
 
-  const temLista = urgentes.length > 0 || retomada.length > 0 || backlogAlemDaDose.length > 0;
+  const temLista = urgentes.length > 0 || retomada.length > 0 || disponiveisParaPuxar.length > 0;
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
   const btnPularHtml = urgentes.length > 1 ? `<button type="button" class="seq-link" onclick='pularProximo()'>⏭ Pular próximo</button>` : "";
 
