@@ -10,18 +10,18 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 assert.match(app, /function cpPrecisaAcaoHoje\(l\)\{ return cp786Categoria\(l\)==='agora'; \}/,
   'cpPrecisaAcaoHoje deve ser o alias de cp786Categoria==="agora"');
 
-// 2. O card usa a DOSE (min(fila, CP_DOSE_DIA)) e abre a lista real.
+// 2. O card usa a DOSE (v914: cpFazerAgoraDose — até 10, 0 no fim de semana) e abre a lista real.
 const rd = app.match(/renderResumoDia = function\(items\)\{[\s\S]*?\n\};/)[0];
-assert.match(rd, /const fila=cpFilaFazerAgora\(ativos\);/, 'renderResumoDia deve montar a fila ranqueada');
-assert.match(rd, /Math\.min\(fila\.length, CP_DOSE_DIA\)/, 'fazerAgora deve ser a dose (teto CP_DOSE_DIA)');
+assert.match(rd, /cpFazerAgoraDose\(ativos\)/, 'renderResumoDia usa a dose do dia');
+assert.match(rd, /cpFimDeSemana\(\)/, 'trata o fim de semana ("Final de semana")');
 assert.match(rd, /onclick="abrirFazerAgora\(\)"/, 'o card "Fazer agora" abre abrirFazerAgora()');
 assert.doesNotMatch(rd, /onclick="cp786AbrirConducao\('agora'\)"/, 'não abre mais o filtro vazio do pipeline');
 
-// 3. abrirFazerAgora mostra a dose e o backlog (resto) — nada some.
+// 3. abrirFazerAgora mostra a dose (10 + os "Atender +1").
 const af = app.match(/function abrirFazerAgora\(\)\{[\s\S]*?\n\}/)[0];
 assert.match(af, /cpFilaFazerAgora\(ativos\)/, 'abrirFazerAgora usa a fila ranqueada');
-assert.match(af, /slice\(0, CP_DOSE_DIA\)/, 'a dose é o top CP_DOSE_DIA');
-assert.match(af, /slice\(CP_DOSE_DIA\)/, 'o resto (backlog) continua acessível');
+assert.match(af, /CP_DOSE_DIA \+ extra/, 'a dose é 10 + os "Atender +1"');
+assert.match(af, /Atender \+1/, 'tem o botão "Atender +1"');
 assert.match(af, /abrirGrupoHome\('__fazeragora'/, 'abre a lista via abrirGrupoHome');
 assert.match(app, /window\.abrirFazerAgora ?= ?abrirFazerAgora/, 'abrirFazerAgora precisa estar no window');
 

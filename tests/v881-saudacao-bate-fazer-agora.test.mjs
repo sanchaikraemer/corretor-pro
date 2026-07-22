@@ -23,10 +23,10 @@ const ini = app.indexOf("function renderSaudacao(items){");
 assert.ok(ini !== -1, "renderSaudacao não foi encontrada em app.js");
 const corpo = app.slice(ini, app.indexOf("\nfunction ", ini + 1));
 
-// 1. A saudação = DOSE do dia, mesma base do card "Fazer agora" (cpFilaFazerAgora + teto) — v885.
+// 1. A saudação = DOSE do dia (v914: cpFazerAgoraDose — até 10, 0 no fim de semana).
 assert.ok(
-  /cpFilaFazerAgora\(items\)\.length/.test(corpo) && /CP_DOSE_DIA/.test(corpo),
-  "renderSaudacao deveria contar acaoMostrada = min(cpFilaFazerAgora(items).length, CP_DOSE_DIA)"
+  /cpFazerAgoraDose\(items\)/.test(corpo),
+  "renderSaudacao deveria contar acaoMostrada = cpFazerAgoraDose(items)"
 );
 
 // 2. Não conta mais a categoria crua nem o cálculo antigo (meta de 12) direto na saudação.

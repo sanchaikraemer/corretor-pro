@@ -34,8 +34,17 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/rest/v1/whatsapp_processamentos" && req.method === "PATCH") {
     patchCount++;
     if (url.searchParams.get("select")) {
+      // Ecoa de volta o que foi escrito, como um UPDATE ... RETURNING real faria — o handler
+      // agora confere a escrita (resultado_analise/timeline_json) pra garantir que persistiu.
+      const written = JSON.parse(body || "{}");
       res.statusCode = 200;
-      res.end(JSON.stringify({ id:"lead-1" }));
+      res.end(JSON.stringify({
+        id: "lead-1",
+        resultado_analise: written.resultado_analise ?? null,
+        timeline_json: written.timeline_json ?? null,
+        atualizado_em: written.atualizado_em ?? null,
+        updated_at: written.updated_at ?? null
+      }));
     } else {
       res.statusCode = 204;
       res.end();

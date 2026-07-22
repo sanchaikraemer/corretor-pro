@@ -13,7 +13,7 @@ assert.match(css, /\.cp788-day:not\(:last-child\)\{border-right:1px solid/, 'só
 assert.match(css, /\.cp788-day \.cp788-predio\{width:100%;max-width:110px;height:auto/, 'prédio grande (ocupa a coluna)');
 
 // No celular, empilha por dia na vertical (sem rolagem horizontal das 7 colunas).
-assert.match(css, /@media\(max-width:720px\)\{[\s\S]*?\.cp788-days\{flex-direction:column/, 'mobile: dias empilhados na vertical');
+assert.match(css, /@media\(max-width:720px\)\{[\s\S]*?\.cp788-days\{[^}]*flex-direction:column/, 'mobile: dias empilhados na vertical');
 assert.match(css, /@media\(max-width:720px\)\{[\s\S]*?\.cp788-day-list\{flex-basis:100%;flex-direction:row;flex-wrap:wrap/, 'mobile: nomes viram chips que quebram linha');
 
 console.log('v910-atendimentos-limpo: ok');

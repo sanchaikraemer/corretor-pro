@@ -2436,12 +2436,13 @@ window.copiarMensagemLead = function(id){
 // registrado) e ESFRIARAM — escaparam da fila urgente de hoje. É "dinheiro parado": o
 // corretor já investiu e está prestes a perder por esquecimento. (ideia do podcast do Airton)
 function leadsEsquecidos(items){
-  const acaoHoje = new Set((state.gruposHome?.["acao-hoje"] || []).map(l => String(l.id)));
+  // v914 — não repete quem já está na dose de "Fazer agora" de hoje (top 10 por mensagens).
+  const doseHoje = new Set((typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items).slice(0, CP_DOSE_DIA) : []).map(l => String(l.id)));
   const out = [];
   for(const l of (items || [])){
     const etapa = normalizarEtapa(l.etapa);
     if(["Vendido","Perdido","Geladeira"].includes(etapa)) continue;
-    if(acaoHoje.has(String(l.id))) continue; // já está na fila de hoje = não está esquecido
+    if(doseHoje.has(String(l.id))) continue; // já está no "Fazer agora" de hoje = não está esquecido
     // v911 — só FATO real (o app não sabe etapa/proposta/visita, que o dono mandou tirar): entra
     // quem VOCÊ já atendeu (dinheiro investido) OU teve conversa real (5+ mensagens do cliente).
     const investido = temAtendimentoManual(l) || mensagensDoCliente(l) >= CP_MIN_MSGS_PRIORIDADE;
@@ -3254,12 +3255,16 @@ function renderSaudacao(items){
   // você arquivou depois (antes o filtro leadEhAtivo tirava o arquivado e a home dava menos que a Meta).
   let tratadosHoje = 0;
   for(const l of items){ if(ehContatadoHoje(l)) tratadosHoje++; }
-  const acaoMostrada = Math.min(cpFilaFazerAgora(items).length, CP_DOSE_DIA);
+  const acaoMostrada = cpFazerAgoraDose(items);
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   const title = qs("#homePageTitle");
   if(title) title.textContent = head;
   let html;
-  if(acaoMostrada > 0){
+  if(cpFimDeSemana()){
+    html = tratadosHoje > 0
+      ? `<span class="destaque">Final de semana!</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje — o "Fazer agora" volta na segunda.`
+      : `<span class="destaque">Final de semana!</span> Fila de "Fazer agora" pausada — volta na segunda.`;
+  } else if(acaoMostrada > 0){
     html = `<span class="destaque">${acaoMostrada} lead${acaoMostrada>1?"s":""} pra atender hoje</span>, de cima pra baixo.`;
   } else if(tratadosHoje > 0){
     html = `<span class="destaque">Mandou bem!</span> ${tratadosHoje} lead${tratadosHoje>1?"s":""} atendidos hoje.`;
@@ -9105,15 +9110,26 @@ function cpNotaPrioridade(l){
   const dias = Math.min(Number.isFinite(dParado) ? dParado : 0, CP_TETO_ABANDONO);
   return msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
 }
-// Fila completa de "Fazer agora" (todos que precisam de ação), ranqueada — mais prioritário
-// primeiro. A DOSE do dia é o slice(0, CP_DOSE_DIA); o resto é backlog (não some).
+// Sábado e domingo: sem "Fazer agora" (o dono não trabalha fila no fim de semana).
+function cpFimDeSemana(){ const d = new Date().getDay(); return d === 0 || d === 6; }
+// v914 — "Fazer agora": todo DIA ÚTIL tem até 10 leads pra atender, escolhidos pela MAIOR
+// probabilidade de venda = mais MENSAGENS DO CLIENTE (interesse). Entram só os NÃO atendidos hoje
+// e com engajamento real (cliente já falou). Desempate: mais tempo parado (retomar o mais antigo).
+// Carryover é automático: quem não foi atendido hoje continua no topo amanhã, e novos completam 10.
 function cpFilaFazerAgora(items){
+  if(cpFimDeSemana()) return [];
   const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
-  return ativos.filter(l => cp786Categoria(l) === 'agora')
-    .sort((a,b) => cpNotaPrioridade(b) - cpNotaPrioridade(a));
+  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l));
+  const dParado = l => { const d = diasParado(l); return Number.isFinite(d) ? d : 0; };
+  pool.sort((a,b) => mensagensDoCliente(b) - mensagensDoCliente(a) || dParado(b) - dParado(a));
+  return pool;
 }
+// Dose do dia (o número do card "Fazer agora"): até CP_DOSE_DIA; 0 no fim de semana.
+function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.min(cpFilaFazerAgora(items).length, CP_DOSE_DIA); }
 window.cpNotaPrioridade = cpNotaPrioridade;
 window.cpFilaFazerAgora = cpFilaFazerAgora;
+window.cpFimDeSemana = cpFimDeSemana;
+window.cpFazerAgoraDose = cpFazerAgoraDose;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
@@ -9303,12 +9319,25 @@ function cpPrecisaAcaoHoje(l){ return cp786Categoria(l)==='agora'; } // "precisa
 function abrirFazerAgora(){
   const ativos=(state.itemsAtivos||[]).filter(leadEhAtivo);
   const fila=cpFilaFazerAgora(ativos);
-  const dose=fila.slice(0, CP_DOSE_DIA);
-  const resto=fila.slice(CP_DOSE_DIA);
-  const sub=resto.length
-    ? `As ${dose.length} de maior prioridade pra hoje — e mais ${resto.length} na fila de retomada, logo abaixo.`
-    : 'Leads que valem uma ação sua hoje, do mais prioritário pro menos.';
-  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:dose,resto});
+  // Dose = 10 + os "+1" que o dono for pedindo (revela mais um por vez, no mesmo dia).
+  const extra=Math.max(0, Number(state.fazerAgoraExtra||0));
+  const mostrar=Math.min(fila.length, CP_DOSE_DIA + extra);
+  const dose=fila.slice(0, mostrar);
+  const sub = cpFimDeSemana()
+    ? 'Final de semana — sem fila de "Fazer agora" hoje.'
+    : `Os ${dose.length} de maior probabilidade de venda (quem mais te mandou mensagem).`;
+  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:dose});
+  // Botão "Atender +1": mostra mais um lead da fila enquanto quiser atender no mesmo dia.
+  if(fila.length > mostrar){
+    const foco=qs('#leadFocoArea');
+    if(foco){
+      const b=document.createElement('button');
+      b.type='button'; b.className='cp-atender-mais';
+      b.textContent=`Atender +1 (faltam ${fila.length - mostrar})`;
+      b.onclick=()=>{ state.fazerAgoraExtra=extra+1; abrirFazerAgora(); };
+      foco.appendChild(b);
+    }
+  }
 }
 window.cpPrecisaAcaoHoje=cpPrecisaAcaoHoje;
 window.abrirFazerAgora=abrirFazerAgora;
@@ -9321,14 +9350,15 @@ renderResumoDia = function(items){
   // "Fazer agora" = a DOSE do dia (top CP_DOSE_DIA da fila ranqueada), não o backlog inteiro —
   // era o 207 que travava. Agenda = compromisso marcado. Aguardando = bola legitimamente com o
   // cliente (ou lead cru). O backlog além da dose fica acessível na lista do "Fazer agora".
-  const fila=cpFilaFazerAgora(ativos);
-  const fazerAgora=Math.min(fila.length, CP_DOSE_DIA);
+  const fds=cpFimDeSemana();
+  const fazerAgora=cpFazerAgoraDose(ativos);
+  const faB=fds?'<b class="cp-fds">Final de semana</b>':`<b>${fazerAgora}</b>`;
   const compromissos=ativos.filter(l=>cp786Categoria(l)==='programados').length;
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
   box.style.display="grid";
   box.innerHTML = `
-    <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div><b>${fazerAgora}</b><i>${ui631Icon('resposta')}</i></div></div>
+    <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('programados')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
@@ -9748,11 +9778,11 @@ function renderCorretorProDashboard(items, all){
 
   const categorias786=new Map(items.map(l=>[l,cp786Categoria(l)]));
   const categoriaDe=l=>categorias786.get(l)||cp786Categoria(l);
-  const fazerAgora=items.filter(l=>categoriaDe(l)==='agora').length;
+  const fazerAgora=cpFazerAgoraDose(items);
   const compromissos=items.filter(l=>categoriaDe(l)==='programados').length;
   const aguardandoN=items.filter(l=>categoriaDe(l)==='aguardando').length;
   cpSetText("cpNewLeads",items.length);
-  cpSetText("cpActiveDeals",fazerAgora);
+  cpSetText("cpActiveDeals",cpFimDeSemana()?"Final de semana":fazerAgora);
   cpSetText("cpVisits",compromissos);
   cpSetText("cpProposals",aguardandoN);
   cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
@@ -12107,6 +12137,9 @@ function ui670DetailRows(lead,mc){
       const all = (data?.items || []).map(typeof limparLead === 'function' ? limparLead : (x=>x)).filter(typeof leadEhAtivo === 'function' ? leadEhAtivo : (()=>true));
       const grupos = {agora:[],respondeu:[],programados:[],aguardando:[]};
       for(const l of all){ const c=cp786Categoria(l); if(grupos[c]) grupos[c].push(l); }
+      // v914 — "Fazer agora" na Condução = a MESMA dose da home (top 10 por mensagens do cliente,
+      // fim de semana vazio), pra o número e a lista baterem com o card.
+      grupos.agora = cpFilaFazerAgora(all).slice(0, CP_DOSE_DIA);
       const filtrosValidos=['agora','programados','aguardando'];
       const filtro = filtrosValidos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
@@ -12115,7 +12148,7 @@ function ui670DetailRows(lead,mc){
       const listRows = lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhuma ação pendente nesta visão.</div>';
       board.innerHTML=`
         <div class="ui-pipeline-kpis cp786-action-kpis">
-          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${grupos.agora.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
+          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div>${cpFimDeSemana()?'<b class="cp-fds">Final de semana</b>':`<b>${grupos.agora.length}</b>`}<i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Agenda</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
