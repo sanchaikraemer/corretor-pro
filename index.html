@@ -392,13 +392,6 @@
         <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as regras em um único bloco, no mesmo padrão dos demais campos do Cérebro. A IA recebe o conteúdo integralmente em cada análise.</div>
         <textarea id="cerebroRegrasTexto" rows="14" placeholder="Cole aqui todas as regras comerciais..."></textarea>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Ensinar por áudio</div>
-          <div class="small" style="color:var(--muted);margin-bottom:8px">Grave/escolha um áudio explicando sua abordagem. O app transcreve e vira uma regra (você revisa antes de salvar).</div>
-          <input type="file" id="cerebroAudioInput" accept="audio/*,.opus,.ogg,.m4a,.mp3,.wav,.aac" style="display:none">
-          <button type="button" class="btn secondary" id="cerebroAudioBtn" style="width:100%">Enviar áudio pra transcrever</button>
-          <div class="small" id="cerebroAudioStatus" style="margin-top:6px;color:var(--muted)"></div>
-        </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
           <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Aprender de vídeo / link</div>
           <div class="small" style="color:var(--muted);margin-bottom:8px">Cole o link de um vídeo do YouTube ou de um artigo. O app lê/transcreve, extrai as lições de venda e te mostra pra você escolher quais viram regra.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -407,20 +400,6 @@
           </div>
           <div class="small" id="cerebroLinkStatus" style="margin-top:6px;color:var(--muted)"></div>
           <div id="cerebroLinkSugestoes" style="margin-top:8px"></div>
-        </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Aprender de um print</div>
-          <div class="small" style="color:var(--muted);margin-bottom:8px">Mande um print (screenshot de um post, slide, conselho de um mentor). A IA lê a imagem e extrai as lições pra você escolher.</div>
-          <input type="file" id="cerebroImgInput" accept="image/*" style="display:none">
-          <button type="button" class="btn secondary" id="cerebroImgBtn" style="width:100%">Enviar print pra ler</button>
-          <div class="small" id="cerebroImgStatus" style="margin-top:6px;color:var(--muted)"></div>
-          <div id="cerebroImgSugestoes" style="margin-top:8px"></div>
-        </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-          <div class="small" style="color:var(--cerebro);font-weight:950;margin-bottom:6px">Reprocessamento manual da carteira</div>
-          <div class="small" style="color:var(--muted);margin-bottom:8px">O aprendizado normal é automático após importar mensagens ou salvar observações. Use este botão apenas para recuperação ou para mandar o sistema reler toda a carteira do zero.</div>
-          <button type="button" class="btn secondary" id="cerebroCarteiraBtn" style="width:100%">Reprocessar toda a carteira</button>
-          <div class="small" id="cerebroCarteiraStatus" style="margin-top:6px;color:var(--muted)"></div>
         </div>
       </div>
 
