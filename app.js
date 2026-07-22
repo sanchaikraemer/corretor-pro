@@ -2419,11 +2419,11 @@ function renderHeroLead(l){
       </div>
     </div>
     ${porqueU.length ? `<div class="h-why"><div class="t">POR QUE ATENDER</div><ul>${porqueU.slice(0,3).map((p)=>`<li><span>${escapeHtml(p)}</span></li>`).join("")}</ul></div>` : ""}
-    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;font-weight:800;line-height:1;margin:2px 0 2px">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:13px;font-weight:800;line-height:1;margin:2px 0 2px">
       <span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:7px;vertical-align:middle"></span><span style="color:var(--lime)">${escapeHtml(toqueN)}</span> <span style="color:var(--muted);font-weight:600">de contato</span></span>
       <span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:7px;vertical-align:middle"></span><span style="color:#ef4444">${escapeHtml(respN)}</span> <span style="color:var(--muted);font-weight:600">sem resposta</span></span>
+      ${fmtUltimaAtualizacao(l.updatedAt) ? `<span style="white-space:nowrap;margin-left:auto;color:var(--muted);font-weight:600;font-size:12px">Atualizado em ${escapeHtml(fmtUltimaAtualizacao(l.updatedAt))}</span>` : ""}
     </div>
-    ${fmtUltimaAtualizacao(l.updatedAt) ? `<div style="font-size:11px;color:var(--muted);margin:1px 0 1px">Atualizado em ${escapeHtml(fmtUltimaAtualizacao(l.updatedAt))}</div>` : ""}
     ${fmtUltimaAtualizacao(a.reanalisadoEm) ? `<div style="font-size:11px;color:var(--muted);opacity:.85;margin:0 0 4px">Reanalisado em ${escapeHtml(fmtUltimaAtualizacao(a.reanalisadoEm))}</div>` : ""}
     <div class="h-next">
       <div class="l">PRÓXIMA AÇÃO</div>
@@ -5208,6 +5208,7 @@ function renderLeadFoco(lead){
     const last=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const atendimento=ultimoAtendimentoDataHora(lead);
+    const atualizadoEm=(typeof fmtUltimaAtualizacao==='function' && lead?.updatedAt)?fmtUltimaAtualizacao(lead.updatedAt):'';
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
@@ -5219,7 +5220,8 @@ function renderLeadFoco(lead){
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:''}
           ${last?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${last}`)}</div>`:''}
           ${atendimento?`<div class="cp704-metaline">${escapeHtml(`Último atendimento — ${atendimento}`)}</div>`:''}
-          ${(!analiseEm&&!last&&!atendimento)?`<div class="cp704-metaline">Sem data registrada</div>`:''}
+          ${atualizadoEm?`<div class="cp704-metaline">${escapeHtml(`Última atualização — ${atualizadoEm}`)}</div>`:''}
+          ${(!analiseEm&&!last&&!atendimento&&!atualizadoEm)?`<div class="cp704-metaline">Sem data registrada</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
