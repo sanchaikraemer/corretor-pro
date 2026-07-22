@@ -39,7 +39,10 @@ if(ehFds){
 }
 
 // 2. Dose helper + botão Atender +1 + fim de semana no card.
-assert.match(app, /function cpFazerAgoraDose\(items\)\{ return cpFimDeSemana\(\) \? 0 : Math\.min\(cpFilaFazerAgora\(items\)\.length, CP_DOSE_DIA\); \}/, 'dose = min(fila,10), 0 no fds');
+// v922: a dose deixou de ser "min(fila recalculada, 10)" (que reponha automaticamente quem
+// era atendido) — agora é cpDoseFixaHoje().pendentes, fixa o dia todo. Ver
+// tests/v922-fazer-agora-dose-fixa.test.mjs pra cobertura completa do comportamento novo.
+assert.match(app, /function cpFazerAgoraDose\(items\)\{ return cpFimDeSemana\(\) \? 0 : cpDoseFixaHoje\(items\)\.pendentes\.length; \}/, 'dose = pendentes da dose fixa de hoje, 0 no fds');
 assert.match(app, /Atender \+1/, 'botão "Atender +1"');
 assert.match(app, /Final de semana/, 'card mostra "Final de semana"');
 assert.match(css, /\.cp-atender-mais\{/, 'CSS do botão Atender +1');

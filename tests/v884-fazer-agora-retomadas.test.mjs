@@ -17,10 +17,10 @@ assert.match(rd, /cpFimDeSemana\(\)/, 'trata o fim de semana ("Final de semana")
 assert.match(rd, /onclick="abrirFazerAgora\(\)"/, 'o card "Fazer agora" abre abrirFazerAgora()');
 assert.doesNotMatch(rd, /onclick="cp786AbrirConducao\('agora'\)"/, 'não abre mais o filtro vazio do pipeline');
 
-// 3. abrirFazerAgora mostra a dose (10 + os "Atender +1").
+// 3. abrirFazerAgora mostra a dose (v922: fixa do dia, só diminui + "Atender +1" sob pedido).
 const af = app.match(/function abrirFazerAgora\(\)\{[\s\S]*?\n\}/)[0];
-assert.match(af, /cpFilaFazerAgora\(ativos\)/, 'abrirFazerAgora usa a fila ranqueada');
-assert.match(af, /CP_DOSE_DIA \+ extra/, 'a dose é 10 + os "Atender +1"');
+assert.match(af, /cpDoseFixaHoje\(ativos\)/, 'abrirFazerAgora usa a dose fixa de hoje (v922)');
+assert.match(af, /cpFilaFazerAgora\(ativos\)/, 'abrirFazerAgora ainda consulta a fila ranqueada (pro "Atender +1")');
 assert.match(af, /Atender \+1/, 'tem o botão "Atender +1"');
 assert.match(af, /abrirGrupoHome\('__fazeragora'/, 'abre a lista via abrirGrupoHome');
 assert.match(app, /window\.abrirFazerAgora ?= ?abrirFazerAgora/, 'abrirFazerAgora precisa estar no window');
