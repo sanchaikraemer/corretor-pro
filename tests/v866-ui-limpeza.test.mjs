@@ -27,12 +27,13 @@ for(const titulo of ['Importar conversa', 'Como usar', 'O que a IA aprendeu', 'I
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
 
-// v894: o topo do lead virou a barra de ícones (Modelo 2); Reanalisar continua sendo o 1º.
-const acoes = app.match(/cp704-toolbar">[\s\S]{0,1700}/);
+// v894: o topo do lead é a barra de ícones. v908 adicionou mais ícones (Proposta/Arquivar/
+// Mensagens/Excluir), então a barra ficou maior — janela ampliada. Reanalisar segue antes de Agendar.
+const acoes = app.match(/cp704-toolbar">[\s\S]{0,4000}/);
 assert.ok(acoes, 'não achei a barra de ícones do topo do lead');
 assert.ok(
   acoes[0].indexOf('Reanalisar') < acoes[0].indexOf('Agendar'),
-  'o Reanalisar precisa vir antes de "Agendar" (primeiro/acesso rápido)'
+  'o Reanalisar precisa vir antes de "Agendar"'
 );
 
 console.log('v866-ui-limpeza: ok');

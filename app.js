@@ -4749,6 +4749,8 @@ function cp704Css(){
       .cp704-ico svg{width:19px;height:19px}
       .cp704-ico:hover{color:var(--text);border-color:var(--muted)}
       .cp704-ico.done{background:rgba(112,212,157,.14);border-color:rgba(112,212,157,.5);color:var(--acao)}
+.cp704-ico-danger{color:#ff8a80;border-color:rgba(255,98,88,.4)}.cp704-ico-danger:hover{color:#ff8a80;border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.08)}
+.cp704-hist-card .cp704-hist-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.cp704-hist-card .cp704-copy-history{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--soft);border-radius:10px;padding:7px 12px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
       .cp704-ico-loading{opacity:.6;pointer-events:none}
       .cp704-ico-loading svg{animation:cp704-spin 1s linear infinite}
       @keyframes cp704-spin{to{transform:rotate(360deg)}}
@@ -4772,7 +4774,7 @@ function cp704Css(){
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
       @media(max-width:999px){.cp704-lead{max-width:760px}.cp704-workspace{grid-template-columns:minmax(0,1fr)}.cp704-herorow{grid-template-columns:minmax(0,1fr)}.cp704-primary,.cp704-secondary{gap:12px}}
-      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%;flex-wrap:nowrap;justify-content:stretch}.cp704-ico{flex:1;min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
+      @media(max-width:560px){.cp704-lead{gap:12px;padding:0 0 18px}.cp704-top{display:grid;grid-template-columns:1fr;align-items:start;gap:10px;margin:0 0 2px}.cp704-back{justify-self:start}.cp704-top-actions{max-width:none;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-reanalyse,.cp704-attended{font-size:12px;padding:10px 10px;width:100%;min-width:0;border-radius:999px}.cp704-desmarcar{justify-self:start;width:auto;padding:6px 4px}.cp704-toolbar{width:100%;flex-wrap:wrap;justify-content:stretch}.cp704-ico{flex:1 1 calc(25% - 6px);min-width:0;padding:9px 4px}.cp704-hero h1{font-size:27px}.cp704-mainrow{grid-template-columns:1fr;gap:12px}.cp704-metrics{grid-template-columns:1fr 1fr}.cp704-msg-item{grid-template-columns:1fr;position:relative}.cp704-copy{justify-self:end}.cp704-actions-grid{grid-template-columns:1fr 1fr}.cp704-card{padding:13px}.cp704-quickbar{grid-template-columns:1fr 1fr;position:sticky;bottom:10px;z-index:5;background:rgba(3,34,43,.78);backdrop-filter:blur(10px);padding:6px;border-radius:14px}.cp704-actions-grid button,.cp704-quickbar button{min-height:46px}.cp704-body{font-size:13px}.cp704-row{padding:8px 0}}
     `;
     document.head.appendChild(css);
   }
@@ -5133,12 +5135,13 @@ function cp704Css(){
     <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
-  // v822: versão "aberta" das ferramentas — todos os botões lado a lado, no rodapé do lead.
-  // (Editar lead fica só na barra de ações acima, pra não duplicar.)
-  function cp704ToolsFlat(lead,mc){
-    const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    return `<button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button>`;
-  }
+  // v908: as ações (Proposta/Arquivar/Excluir/Mensagens) subiram pra barra de ícones do topo.
+  // O histórico ("Últimas mensagens") abre num card recolhível, alternado pelo ícone "Mensagens".
+  window.cp704ToggleHistorico=function(){
+    const s=document.querySelector('#cp704HistCard'); if(!s) return;
+    s.hidden=!s.hidden;
+    if(!s.hidden) s.scrollIntoView({behavior:'smooth',block:'start'});
+  };
 
 // Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
@@ -5208,7 +5211,7 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico cp704-ico-danger" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Excluir definitivamente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span class="lb">Excluir</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
@@ -5248,9 +5251,9 @@ function renderLeadFoco(lead){
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
         </aside>
       </div>
-      <section class="cp704-card cp704-tools-open">
-        <div class="cp704-card-title"><h2>Ferramentas e ações</h2></div>
-        <div class="cp704-tools-row">${cp704ToolsFlat(lead,mc)}<details class="cp704-details cp704-hist-inline"><summary>Últimas mensagens ${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''} <span class="cp704-hist-arrow">▾</span></summary><div class="cp704-body"><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button type="button" class="cp704-copy-history" onclick="event.preventDefault();event.stopPropagation();copiarHistoricoLead()">Copiar histórico</button></div><div class="cp704-timeline">${cp704TimelineHtml(lead)}</div></div></details></div>
+      <section class="cp704-card cp704-hist-card" id="cp704HistCard" hidden>
+        <div class="cp704-card-title cp704-hist-title"><h2>Últimas mensagens ${Number((typeof totalMensagensLead==='function')?totalMensagensLead(lead):0)||''}</h2><button type="button" class="cp704-copy-history" onclick="copiarHistoricoLead()">Copiar histórico</button></div>
+        <div class="cp704-timeline">${cp704TimelineHtml(lead)}</div>
       </section>
     </div>`;
   return null;
@@ -13126,30 +13129,8 @@ function ui670DetailRows(lead,mc){
     return melhor;
   }
 
-  function cp788TempoAtendimento(ts){
-    const d=new Date(ts);
-    if(!Number.isFinite(d.getTime())) return '';
-    const diff=Math.max(0,Date.now()-d.getTime());
-    const min=Math.floor(diff/60000);
-    let dias=null;
-    try{ dias=typeof diasCalendarioBR==='function'?diasCalendarioBR(d):null; }catch(_){ dias=null; }
-    if(min<1) return 'Atendido agora';
-    if(min<60) return `Atendido há ${min} min`;
-    if(dias===0) return 'Atendido hoje';
-    if(dias===1) return 'Atendido ontem';
-    if(dias!=null&&dias<7) return `Atendido há ${dias} dias`;
-    return `Atendido em ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'})}`;
-  }
-
-  function cp788LinhaAtendimento(item){
-    const l=item.lead, id=JSON.stringify(String(l?.id||''));
-    const produto=(typeof produtosLabel==='function'?produtosLabel(l):'')||'Produto não identificado';
-    const tempo=cp788TempoAtendimento(item.ts);
-    return `<button type="button" class="cp788-att-row" onclick='abrirLead(${id})'>
-      <span class="cp788-att-copy"><strong>${esc(l?.name||'Cliente')}</strong><small>${esc(produto)}</small></span>
-      <span class="cp788-att-time">${esc(tempo)}</span><span class="cp788-att-chevron">›</span>
-    </button>`;
-  }
+  // (v908) cp788TempoAtendimento / cp788LinhaAtendimento removidas: a tela Atendimentos virou
+  // colunas por dia (o nome não mostra mais "atendido há X" nem o produto — o dia é a coluna).
 
   async function cp788CarregarBase(force=false){
     let data=null;
@@ -13191,52 +13172,43 @@ function ui670DetailRows(lead,mc){
       if(ultimo) registros.push({lead,evento:ultimo.evento,ts:ultimo.ts});
     }
     registros.sort((a,b)=>b.ts-a.ts||String(a.lead?.name||'').localeCompare(String(b.lead?.name||''),'pt-BR'));
-    const limite=Math.max(80,Number(state.cp788AtendimentosVisible||80));
-    const visiveis=registros.slice(0,limite);
-    const faltam=Math.max(0,registros.length-visiveis.length);
-    // Resumo DIA A DIA dos últimos 7 dias (Hoje, Ontem e os demais com dia da semana + data).
+    // v908 — tela reorganizada POR DIA (últimos 7 dias): cada coluna tem o prediozinho da meta em
+    // cima e, embaixo, os clientes atendidos naquele dia (só o nome — sem "atendido há X" nem produto,
+    // porque o dia já está na coluna).
     const CP788_DIAS_SEM=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     const hoje0=(typeof inicioDoDiaBR==='function')?inicioDoDiaBR():new Date(new Date().setHours(0,0,0,0));
     const perDay=[];
     for(let i=0;i<7;i++){
       const d=new Date(hoje0); d.setDate(d.getDate()-i);
       const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0');
-      const label=i===0?'Hoje':i===1?'Ontem':`${CP788_DIAS_SEM[d.getDay()]} ${dd}/${mm}`;
-      perDay.push({ n:0, label });
+      const label=i===0?'Hoje':i===1?'Ontem':CP788_DIAS_SEM[d.getDay()];
+      perDay.push({ label, data:`${dd}/${mm}`, itens:[] });
     }
     for(const x of registros){
       let d=null; try{ d = (typeof diasCalendarioBR==='function') ? diasCalendarioBR(new Date(x.ts)) : null; }catch(_){ d=null; }
-      if(d!=null && d>=0 && d<7) perDay[d].n++;
+      if(d!=null && d>=0 && d<7) perDay[d].itens.push(x);
     }
-    const hoje=perDay[0].n;
-    const bateu=hoje>=CP788_META_DIA;
-    box.innerHTML=`<section class="cp788-att-page cp788-att-layout">
-      <div class="cp788-att-main">
-        <header class="cp788-att-head">
-          <div><h2>Atendimentos</h2><p>${registros.length} cliente${registros.length===1?'':'s'} atendido${registros.length===1?'':'s'} · mais recentes primeiro</p></div>
-        </header>
-        ${visiveis.length?`<div class="cp788-att-list">${visiveis.map(cp788LinhaAtendimento).join('')}</div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui pela ordem dos atendimentos.</span></div>`}
-        ${faltam?`<button type="button" class="cp788-att-more" onclick="cp788MostrarMaisAtendimentos()">Mostrar mais ${Math.min(80,faltam)} atendimentos</button>`:''}
-      </div>
-      <aside class="cp788-att-side">
-        <div class="cp788-meta-card">
-          <div class="cp788-meta-title">Meta do dia</div>
-          ${cp788PredioSVG(hoje, CP788_META_DIA)}
-          <div class="cp788-meta-count"><b>${hoje}</b> / ${CP788_META_DIA} hoje</div>
-          <div class="cp788-meta-status${bateu?' done':''}">${bateu?'🏢 Meta batida!':'atendimentos de hoje'}</div>
-        </div>
-        <div class="cp788-meta-breakdown">
-          ${perDay.map(p=>`<div class="cp788-bd-row"><span>${escapeHtml(p.label)}</span><b>${p.n}</b></div>`).join('')}
-        </div>
-      </aside>
+    const totalSemana=perDay.reduce((s,p)=>s+p.itens.length,0);
+    box.innerHTML=`<section class="cp788-att-page">
+      <header class="cp788-att-head">
+        <div><h2>Atendimentos</h2><p>Últimos 7 dias · ${totalSemana} atendimento${totalSemana===1?'':'s'} · meta ${CP788_META_DIA}/dia</p></div>
+      </header>
+      ${totalSemana?`<div class="cp788-days">
+        ${perDay.map((p)=>{
+          const n=p.itens.length, bateu=n>=CP788_META_DIA;
+          const nomes=n?p.itens.map(x=>`<button type="button" class="cp788-day-name" onclick='abrirLead(${JSON.stringify(String(x.lead?.id||''))})'>${esc(x.lead?.name||'Cliente')}</button>`).join(''):'<div class="cp788-day-empty">—</div>';
+          return `<div class="cp788-day${bateu?' done':''}">
+            <div class="cp788-day-head"><b>${esc(p.label)}</b><span>${esc(p.data)}</span></div>
+            ${cp788PredioSVG(n, CP788_META_DIA)}
+            <div class="cp788-day-count${bateu?' done':''}"><b>${n}</b>/${CP788_META_DIA}</div>
+            <div class="cp788-day-list">${nomes}</div>
+          </div>`;
+        }).join('')}
+      </div>`:`<div class="cp788-att-empty"><b>Nenhum atendimento registrado ainda.</b><span>Quando você copiar uma mensagem enviada ou marcar um cliente como atendido, ele aparecerá aqui no dia respectivo.</span></div>`}
     </section>`;
   }
 
-  window.cp788MostrarMaisAtendimentos=function(){
-    state.cp788AtendimentosVisible=Math.max(80,Number(state.cp788AtendimentosVisible||80))+80;
-    const base=[state?.todosLeads,state?.carteiraLeads,state?.itemsAtivos].find(a=>Array.isArray(a)&&a.length)||[];
-    cp788RenderAtendimentos(base);
-  };
+  // (v908) cp788MostrarMaisAtendimentos removida: a tela por dia mostra todos os nomes de cada dia.
 
   window.carregarCarteira=async function(force){
     const box=document.querySelector('#carteiraBody');

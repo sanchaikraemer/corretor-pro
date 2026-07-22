@@ -41,14 +41,14 @@ assert.equal(alturaClip(s10), alturaClip(s12), 'acima da meta o preenchimento cl
 // Coral do app no preenchimento (não inventa cor).
 assert.match(s3, /fill="var\(--accent\)"/, 'o prédio precisa encher com o coral do app (var(--accent))');
 
-// A tela usa o layout de duas colunas + resumo por dia.
+// v908: a tela virou COLUNAS por dia (últimos 7), cada uma com o prédio da meta em cima e os
+// clientes atendidos naquele dia embaixo (só o nome).
 const rend = app.slice(fim, fim + 4000);
-assert.match(rend, /cp788-att-layout/, 'a tela precisa usar o layout de duas colunas');
-assert.match(rend, /cp788-meta-card/, 'precisa ter o card da meta com o prédio');
-// v868: resumo passou a ser DIA A DIA dos últimos 7 dias (Hoje, Ontem, e os demais com
-// dia da semana + data).
-assert.match(rend, /for\(let i=0;i<7;i\+\+\)/, 'o resumo precisa cobrir os 7 dias, dia a dia');
-assert.match(rend, /CP788_DIAS_SEM/, 'precisa usar os nomes dos dias da semana');
-assert.match(rend, /i===1\?'Ontem'/, 'precisa rotular Hoje/Ontem');
+assert.match(rend, /class="cp788-days"/, 'a tela usa colunas por dia');
+assert.match(rend, /cp788PredioSVG\(n, CP788_META_DIA\)/, 'cada dia tem o prédio da meta');
+assert.match(rend, /class="cp788-day-name"/, 'os clientes do dia aparecem como nomes clicáveis');
+assert.match(rend, /for\(let i=0;i<7;i\+\+\)/, 'cobre os 7 dias');
+assert.match(rend, /CP788_DIAS_SEM/, 'usa os nomes dos dias da semana');
+assert.match(rend, /i===1\?'Ontem'/, 'rotula Hoje/Ontem');
 
 console.log('v867-predio-atendimentos: ok');
