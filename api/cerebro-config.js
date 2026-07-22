@@ -1,5 +1,5 @@
 import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX, modeloTarefasSimples, modeloVisao } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX, modeloTarefasSimples } from "./_pipeline.js";
 
 // Bloqueia URLs que apontem para endereços privados, loopback ou link-local (SSRF).
 function validarUrlSegura(urlStr) {
@@ -204,20 +204,6 @@ export default async function handler(req, res) {
       const apagadosPendentes = await supabase.from("direciona_config").delete().like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
       const erro = salvoLegado?.error?.message || apagadoMeta?.error?.message || apagadosCasos?.error?.message || apagadosPendentes?.error?.message || "";
       return json(res, erro ? 500 : 200, { ok: !erro, error: erro || undefined });
-    }
-
-    // AÇÃO: aprender de uma imagem/print (lê a imagem com visão da IA)
-    if (body.action === "aprender-imagem") {
-      const openai = getOpenAI();
-      if (!openai) return json(res, 200, { ok: false, error: "Análise não configurada." });
-      try {
-        const dataUrl = String(body.imagemBase64 || "");
-        if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem não recebida no formato esperado." });
-        const licoes = await extrairLicoesDeImagem(dataUrl, openai);
-        return json(res, 200, { ok: true, fonte: "print", regras: licoes.regras || [], resumo: licoes.resumo || "" });
-      } catch (e) {
-        return json(res, 200, { ok: false, error: e?.message || "Falha ao ler a imagem." });
-      }
     }
 
     // AÇÃO: aprender de um link ou vídeo do YouTube
@@ -455,24 +441,6 @@ ${texto}`;
   const completion = await openai.chat.completions.create({
     model: modeloTarefasSimples(),
     messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" }
-  });
-  const parsed = JSON.parse(completion.choices[0].message.content);
-  return { resumo: parsed.resumo || "", regras: Array.isArray(parsed.regras) ? parsed.regras.filter(r => typeof r === "string" && r.trim()).slice(0, 6) : [] };
-}
-
-// Lê uma imagem/print com a visão da IA e extrai lições de venda
-async function extrairLicoesDeImagem(dataUrl, openai) {
-  const instrucao = `Você é o Cérebro Comercial do Corretor Pro, app pra corretores de imóveis. Leia o conteúdo desta imagem (pode ser um print de post, slide, mensagem de um mentor, anúncio). Extraia de 1 a 6 LIÇÕES/REGRAS práticas e acionáveis pra conduzir melhor o atendimento e gerar melhores mensagens no WhatsApp. Cada regra: frase curta, formato "situação → como agir" quando der. Ignore enrolação e motivação genérica. Se a imagem não tiver conteúdo útil de vendas, retorne regras vazias. Retorne APENAS JSON: { "resumo": "1 frase do que a imagem ensina", "regras": ["regra 1", ...] }.`;
-  const completion = await openai.chat.completions.create({
-    model: modeloVisao(),
-    messages: [{
-      role: "user",
-      content: [
-        { type: "text", text: instrucao },
-        { type: "image_url", image_url: { url: dataUrl } }
-      ]
-    }],
     response_format: { type: "json_object" }
   });
   const parsed = JSON.parse(completion.choices[0].message.content);
