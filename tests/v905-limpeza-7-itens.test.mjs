@@ -17,7 +17,8 @@ assert.match(app, /exportarLeadsCSV/, 'export ⬇ Excel permanece');
 const acoes = app.match(/home-saud-acoes">[\s\S]*?<\/div><\/div>/)[0];
 assert.doesNotMatch(acoes, />Ver todos</, 'sem "Ver todos" na home');
 assert.doesNotMatch(acoes, /Reanalisar todos/, 'sem "Reanalisar todos" na home');
-assert.match(acoes, /abrirUltimosAtendimentos\(\)'>Últimos atendimentos/, '"Últimos atendimentos" fica');
+// v911: "Últimos atendimentos" também saiu da home (redundante com o "Atendimentos" da barra de baixo).
+assert.doesNotMatch(acoes, /Últimos atendimentos/, 'sem "Últimos atendimentos" na home (v911)');
 assert.match(html, /menu-card-titulo">Reanalisar todos/, '"Reanalisar todos" agora está no Menu');
 assert.match(app, /window\.abrirTodosLeads/, 'abrirTodosLeads segue existindo (usado em outros lugares)');
 
