@@ -9580,6 +9580,28 @@ function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
   lead.lastAttendanceText=`${dataBR} ${horaBR}`;
 }
 
+// O fetch de "recarregar a carteira" disparado logo após marcar/desmarcar pode responder com
+// uma versão do banco de ALGUNS INSTANTES ATRÁS (mesmo caso já tratado em recarregarLeadFoco
+// pro state.lead) — e como ele SUBSTITUI state.todosLeads/state.leads por objetos novos, isso
+// apagava a marcação que tínhamos acabado de aplicar localmente. Sem isso, ao clicar Voltar
+// rápido demais, a Home voltava a mostrar o lead como "não atendido" em Fazer agora/Oportunidades
+// esquecidas — o clique tinha funcionado, só o card ficava desatualizado até um F5.
+function ui667ReconciliarAtendimentoLocal(leadId, aplicarFn){
+  for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
+    const item = Array.isArray(lista) ? lista.find(x => String(x.id) === String(leadId)) : null;
+    if(item) aplicarFn(item);
+  }
+  // Se a Home já está na tela (o corretor pode ter voltado antes do fetch responder), recalcula
+  // as listas com o dado corrigido em vez de esperar o próximo carregarDashboard.
+  if(state.active === 'home' && !state.lead?.id && !state.grupoAtivo &&
+     Array.isArray(state.itemsAtivos) && state.itemsAtivos.length &&
+     typeof renderListasHome === 'function' && typeof scoreRankingHoje === 'function'){
+    const ordenados = state.itemsAtivos.map(l => ({ ...l, _score: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
+    renderListasHome(ordenados);
+    if(typeof renderBotoesHome === 'function') renderBotoesHome();
+  }
+}
+
 window.ui667MarcarAtendido=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
@@ -9602,7 +9624,7 @@ window.ui667MarcarAtendido=async function(btn){
     renderLeadFoco(lead);
     invalidarLeadsCache();
     carregarAgendaTopo?.();
-    loadRecentLeads(false);
+    loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(lead.id, item => ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal)));
     recarregarLeadFoco(lead.id);
     toast(d.atualizado?`Atendimento atualizado às ${horaLocal}.`:`Atendimento marcado às ${horaLocal}.`);
   }catch(err){
@@ -9648,7 +9670,7 @@ window.ui667DesmarcarAtendido=async function(btn){
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao desmarcar");
     invalidarLeadsCache();
     carregarAgendaTopo?.();
-    loadRecentLeads(false);
+    loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(lead.id, item => ui667RemoverAtendidoLocal(item)));
     toast("Atendimento de hoje desmarcado.");
   }catch(err){
     // Reverte a tela: não deu pra salvar no servidor.
