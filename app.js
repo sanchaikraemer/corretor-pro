@@ -2449,8 +2449,9 @@ window.copiarMensagemLead = function(id){
 // registrado) e ESFRIARAM — escaparam da fila urgente de hoje. É "dinheiro parado": o
 // corretor já investiu e está prestes a perder por esquecimento. (ideia do podcast do Airton)
 function leadsEsquecidos(items){
-  // v914 — não repete quem já está na dose de "Fazer agora" de hoje (top 10 por mensagens).
-  const doseHoje = new Set((typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items).slice(0, CP_DOSE_DIA) : []).map(l => String(l.id)));
+  // v914/v922 — não repete quem está na dose FIXA de "Fazer agora" de hoje (atendido ou não:
+  // enquanto faz parte do plano do dia, não é "esquecido").
+  const doseHoje = typeof cpDoseFixaHoje === 'function' ? cpDoseFixaHoje(items).idsSet : new Set();
   const out = [];
   for(const l of (items || [])){
     const etapa = normalizarEtapa(l.etapa);
@@ -2530,12 +2531,13 @@ function renderBotoesHome(){
     return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
   };
 
-  // Fila urgente = quem precisa de ação agora, RANQUEADA pela nota (engajamento + abandono +
-  // bola com você) — a mesma do card "Fazer agora". A Home mostra só a DOSE do dia; o resto
-  // fica num expansor "fila de retomada" (não some).
+  // v922 — Fila urgente = a DOSE FIXA de hoje (sorteada uma vez, só diminui conforme atende —
+  // ver cpDoseFixaHoje). Quem é elegível mas não entrou nos 10 de hoje vira "fila de retomada"
+  // (não some, só não conta pro "Fazer agora" nem entra sozinho no meio do dia).
   // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (continuam
   // nas prioridades, só não ficam em foco agora). state.pulados é por sessão (zera ao recarregar).
-  let urgentes = (grupos["acao-hoje"] || []).concat(grupos["retomar-cuidado"] || []);
+  const doseFixaHoje = typeof cpDoseFixaHoje === 'function' ? cpDoseFixaHoje(items) : { pendentes: [], idsSet: new Set() };
+  let urgentes = doseFixaHoje.pendentes.slice();
   if(typeof cpNotaPrioridade === 'function') urgentes = urgentes.slice().sort((a,b)=>cpNotaPrioridade(b)-cpNotaPrioridade(a));
   {
     const pulados = state.pulados instanceof Set ? state.pulados : null;
@@ -2543,13 +2545,15 @@ function renderBotoesHome(){
       urgentes = urgentes.filter(l => !pulados.has(String(l.id))).concat(urgentes.filter(l => pulados.has(String(l.id))));
     }
   }
+  const elegiveisFazerAgora = (grupos["acao-hoje"] || []).concat(grupos["retomar-cuidado"] || []);
+  const backlogAlemDaDose = elegiveisFazerAgora.filter(l => !doseFixaHoje.idsSet.has(String(l.id)));
   const retomada = (grupos["retomada"] || []);
-  const DOSE_HOME = (typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
   let top3Html;
   if(urgentes.length){
-    // Dose do dia (hero + próximos); o resto vira "fila de retomada" num expansor (não some).
-    const dose = urgentes.slice(0, DOSE_HOME);
-    const backlog = urgentes.slice(DOSE_HOME);
+    // Dose fixa de hoje (hero + próximos); quem ficou de fora da dose vira "fila de retomada"
+    // num expansor (não some, só não conta como urgência de hoje).
+    const dose = urgentes;
+    const backlog = backlogAlemDaDose;
     const filaDose = dose.slice(1); // sem o nº1 (já é o hero)
     top3Html = renderHeroLead(dose[0])
       + (filaDose.length
@@ -8984,10 +8988,10 @@ function cpNotaPrioridade(l){
 }
 // Sábado e domingo: sem "Fazer agora" (o dono não trabalha fila no fim de semana).
 function cpFimDeSemana(){ const d = new Date().getDay(); return d === 0 || d === 6; }
-// v914 — "Fazer agora": todo DIA ÚTIL tem até 10 leads pra atender, escolhidos pela MAIOR
-// probabilidade de venda = mais MENSAGENS DO CLIENTE (interesse). Entram só os NÃO atendidos hoje
-// e com engajamento real (cliente já falou). Desempate: mais tempo parado (retomar o mais antigo).
-// Carryover é automático: quem não foi atendido hoje continua no topo amanhã, e novos completam 10.
+// v914 — candidatos ao "Fazer agora": ranqueados pela MAIOR probabilidade de venda = mais
+// MENSAGENS DO CLIENTE (interesse). Entram só os NÃO atendidos hoje e com engajamento real
+// (cliente já falou). Desempate: mais tempo parado (retomar o mais antigo). Esta é a FILA BRUTA
+// (candidatos elegíveis) — quem de fato compõe "os 10 de hoje" é decidido por cpDoseIdsHoje.
 function cpFilaFazerAgora(items){
   if(cpFimDeSemana()) return [];
   const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
@@ -8996,12 +9000,74 @@ function cpFilaFazerAgora(items){
   pool.sort((a,b) => mensagensDoCliente(b) - mensagensDoCliente(a) || dParado(b) - dParado(a));
   return pool;
 }
-// Dose do dia (o número do card "Fazer agora"): até CP_DOSE_DIA; 0 no fim de semana.
-function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.min(cpFilaFazerAgora(items).length, CP_DOSE_DIA); }
+// v922 — "Fazer agora" reclamado pelo dono: os 10 escolhidos de manhã ficavam sendo REPOSTOS
+// pelo próximo da fila assim que um era atendido (a fila bruta é recalculada toda hora e o
+// atendido simplesmente sai, deixando o 11º entrar) — o card nunca baixava de 10 no dia, mesmo
+// atendendo vários. Agora os IDs de hoje são sorteados UMA VEZ (persistidos) e ficam FIXOS o dia
+// inteiro: atender um faz o card baixar (10→9→8...), sem reposição automática. Só amanhã
+// (data BR diferente) é que a dose é sorteada de novo. "Atender +1" continua disponível pra quem
+// QUISER puxar mais um da fila de propósito (cpAdicionarNaDoseHoje), e esse extra também fica
+// fixo (não é substituído por outro).
+const CP_DOSE_STORAGE_KEY = "cpDoseFazerAgoraV1";
+function cpHojeBR(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
+function cpLerDoseSalva(){
+  try{
+    const raw = localStorage.getItem(CP_DOSE_STORAGE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed || parsed.data !== cpHojeBR() || !Array.isArray(parsed.ids)) return null;
+    return parsed;
+  }catch(_){ return null; }
+}
+function cpGravarDoseSalva(ids){
+  try{ localStorage.setItem(CP_DOSE_STORAGE_KEY, JSON.stringify({ data: cpHojeBR(), ids: ids.map(String) })); }catch(_){}
+}
+// IDs fixos da dose de hoje: lê o que já foi sorteado; se ainda não tem (primeiro carregamento do
+// dia), sorteia do topo da fila bruta e persiste. Sem dados carregados ainda, não persiste vazio
+// (senão travaria a dose em 0 pro resto do dia assim que os leads chegassem).
+function cpDoseIdsHoje(items){
+  if(cpFimDeSemana()) return [];
+  const salva = cpLerDoseSalva();
+  if(salva) return salva.ids;
+  const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
+  if(!ativos.length) return [];
+  const ids = cpFilaFazerAgora(ativos).slice(0, CP_DOSE_DIA).map(l => String(l.id));
+  cpGravarDoseSalva(ids);
+  return ids;
+}
+// Membros da dose fixa de hoje (atendidos ou não) e os que ainda faltam atender.
+function cpDoseFixaHoje(items){
+  const ids = cpDoseIdsHoje(items);
+  if(!ids.length) return { todos: [], pendentes: [], idsSet: new Set() };
+  const idsSet = new Set(ids);
+  const porId = new Map((Array.isArray(items) ? items : []).filter(leadEhAtivo).map(l => [String(l.id), l]));
+  const todos = ids.map(id => porId.get(id)).filter(Boolean);
+  const pendentes = todos.filter(l => !ehContatadoHoje(l));
+  return { todos, pendentes, idsSet };
+}
+// "Atender +1": puxa o próximo candidato da fila bruta que ainda não está na dose de hoje e
+// FIXA ele também (não é reposição automática — é o corretor pedindo mais trabalho no mesmo dia).
+function cpAdicionarNaDoseHoje(items){
+  if(cpFimDeSemana()) return null;
+  const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
+  const salva = cpLerDoseSalva();
+  const idsAtuais = salva ? salva.ids.slice() : cpDoseIdsHoje(ativos);
+  const idsSet = new Set(idsAtuais);
+  const proximo = cpFilaFazerAgora(ativos).find(l => !idsSet.has(String(l.id)));
+  if(!proximo) return null;
+  idsAtuais.push(String(proximo.id));
+  cpGravarDoseSalva(idsAtuais);
+  return proximo;
+}
+// Dose do dia (o número do card "Fazer agora"): quantos da dose FIXA de hoje ainda faltam atender.
+function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : cpDoseFixaHoje(items).pendentes.length; }
 window.cpNotaPrioridade = cpNotaPrioridade;
 window.cpFilaFazerAgora = cpFilaFazerAgora;
 window.cpFimDeSemana = cpFimDeSemana;
 window.cpFazerAgoraDose = cpFazerAgoraDose;
+window.cpDoseFixaHoje = cpDoseFixaHoje;
+window.cpDoseIdsHoje = cpDoseIdsHoje;
+window.cpAdicionarNaDoseHoje = cpAdicionarNaDoseHoje;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
@@ -9195,24 +9261,26 @@ window.cp786AbrirPrioridadePrincipal=cp786AbrirPrioridadePrincipal;
 function cpPrecisaAcaoHoje(l){ return cp786Categoria(l)==='agora'; } // "precisa de ação" = fila do Fazer agora
 function abrirFazerAgora(){
   const ativos=(state.itemsAtivos||[]).filter(leadEhAtivo);
-  const fila=cpFilaFazerAgora(ativos);
-  // Dose = 10 + os "+1" que o dono for pedindo (revela mais um por vez, no mesmo dia).
-  const extra=Math.max(0, Number(state.fazerAgoraExtra||0));
-  const mostrar=Math.min(fila.length, CP_DOSE_DIA + extra);
-  const dose=fila.slice(0, mostrar);
+  // v922 — dose FIXA de hoje: só quem ainda falta atender (os já atendidos somem da lista e o
+  // número baixa). Nada de reposição automática — só cresce se o corretor pedir "Atender +1".
+  const {pendentes}=cpDoseFixaHoje(ativos);
   const sub = cpFimDeSemana()
     ? 'Final de semana — sem fila de "Fazer agora" hoje.'
-    : `Os ${dose.length} de maior probabilidade de venda (quem mais te mandou mensagem).`;
-  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:dose});
-  // Botão "Atender +1": mostra mais um lead da fila enquanto quiser atender no mesmo dia.
-  if(fila.length > mostrar){
-    const foco=qs('#leadFocoArea');
-    if(foco){
-      const b=document.createElement('button');
-      b.type='button'; b.className='cp-atender-mais';
-      b.textContent=`Atender +1 (faltam ${fila.length - mostrar})`;
-      b.onclick=()=>{ state.fazerAgoraExtra=extra+1; abrirFazerAgora(); };
-      foco.appendChild(b);
+    : (pendentes.length ? `Os ${pendentes.length} que ainda faltam atender hoje, por prioridade.` : 'Você já atendeu todos os de hoje. Bom trabalho!');
+  abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:pendentes});
+  // Botão "Atender +1": puxa mais um da fila de propósito e FIXA ele também na dose de hoje.
+  if(!cpFimDeSemana()){
+    const idsHoje=new Set(cpDoseIdsHoje(ativos));
+    const temMais=cpFilaFazerAgora(ativos).some(l => !idsHoje.has(String(l.id)));
+    if(temMais){
+      const foco=qs('#leadFocoArea');
+      if(foco){
+        const b=document.createElement('button');
+        b.type='button'; b.className='cp-atender-mais';
+        b.textContent='Atender +1';
+        b.onclick=()=>{ if(cpAdicionarNaDoseHoje(ativos)) abrirFazerAgora(); };
+        foco.appendChild(b);
+      }
     }
   }
 }
@@ -12850,11 +12918,11 @@ function ui670DetailRows(lead,mc){
       const validos=['agora','programados','aguardando','todos'];
       const filtro=validos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
-      // v885 — mesma régua da Home: "Fazer agora" ranqueado por prioridade (engajamento +
-      // abandono + bola com você); a DOSE é o top CP_DOSE_DIA, o resto é backlog (não some).
-      const doseMax=(typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
+      // v885/v922 — mesma régua da Home: "Fazer agora" = a DOSE FIXA de hoje (só diminui
+      // conforme atende, sem reposição automática); o resto da fila ranqueada é backlog (não some).
+      const doseFixaCond=(typeof cpDoseFixaHoje==='function')?cpDoseFixaHoje(leads):{pendentes:[],idsSet:new Set()};
       const filaAgora=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(leads):(grupos.agora||[]);
-      const doseCount=Math.min(filaAgora.length,doseMax);
+      const doseCount=doseFixaCond.pendentes.length;
       // v885 — o H1 da tela acompanha a visão: chegar por "Total de leads" (filtro 'todos')
       // mostra "Carteira ativa", não "Condução / o que fazer agora" (confundia o dono).
       const pageT=document.querySelector('.pipeline-page-title'), pageS=document.querySelector('.pipeline-page-sub');
@@ -12867,7 +12935,7 @@ function ui670DetailRows(lead,mc){
       // Lista da visão atual. No "Fazer agora", dose em cima + divisor + fila de retomada.
       let listaHtml;
       if(filtro==='agora'){
-        const dose=filaAgora.slice(0,doseCount), resto=filaAgora.slice(doseCount);
+        const dose=doseFixaCond.pendentes, resto=filaAgora.filter(l=>!doseFixaCond.idsSet.has(String(l.id)));
         const divisor=resto.length?`<div style="margin:14px 4px 8px;color:var(--muted);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Fila de retomada — mais ${resto.length}</div>`:'';
         listaHtml=(dose.length?dose.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>')+divisor+resto.map(cp788LinhaConducao).join('');
       }else{
