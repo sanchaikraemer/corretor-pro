@@ -291,9 +291,8 @@ function mensagensDoCliente(l){
   }
   return n;
 }
-function leadTemProposta(l){
-  return l?.hasProposal === true || (Array.isArray(l?.recentMessages) && l.recentMessages.some(m => m && m.proposta));
-}
+// (v911) leadTemProposta removida: só o Raio-X / "Oportunidades esquecidas" antigos usavam, e
+// ambos deixaram de depender de "recebeu proposta" (dado que o app não sabe).
 const TIMELINE_PAGE_SIZE = 100;
 function mensagensVisiveisLead(lead){
   const msgs = Array.isArray(lead?.recentMessages) ? lead.recentMessages : [];
@@ -2478,149 +2477,38 @@ function leadsEsquecidos(items){
     const etapa = normalizarEtapa(l.etapa);
     if(["Vendido","Perdido","Geladeira"].includes(etapa)) continue;
     if(acaoHoje.has(String(l.id))) continue; // já está na fila de hoje = não está esquecido
-    const teveProposta = leadTemProposta(l);
-    const passoChave = ["Visita/Proposta","Negociação"].includes(etapa) || teveProposta || temAtendimentoManual(l);
-    if(!passoChave) continue;
-    // "parado" considera o último ATENDIMENTO, não só a última mensagem: um lead atendido
-    // hoje tem parado=0 e sai da lista de esquecidos (era o bug do "atendi agora e continua 144d").
+    // v911 — só FATO real (o app não sabe etapa/proposta/visita, que o dono mandou tirar): entra
+    // quem VOCÊ já atendeu (dinheiro investido) OU teve conversa real (5+ mensagens do cliente).
+    const investido = temAtendimentoManual(l) || mensagensDoCliente(l) >= CP_MIN_MSGS_PRIORIDADE;
+    if(!investido) continue;
+    // "parado" considera o último ATENDIMENTO, não só a última mensagem (lead atendido hoje = 0).
     const parado = diasParado(l);
-    if(!(parado >= 7)) continue; // ainda quente/recente (ou atendido agora) não é "esquecido"
-    let pesoRecuperacao = 0;
-    if(etapa === "Negociação") pesoRecuperacao += 40;
-    else if(etapa === "Visita/Proposta") pesoRecuperacao += 30;
-    if(teveProposta) pesoRecuperacao += 20;
-    if(temAtendimentoManual(l)) pesoRecuperacao += 10;
-    pesoRecuperacao += Math.min(20, parado);
-    out.push({ l, parado, pesoRecuperacao });
+    if(!(Number.isFinite(parado) && parado >= 7)) continue; // recente/atendido agora não é "esquecido"
+    out.push({ l, parado });
   }
-  out.sort((a,b) => b.pesoRecuperacao - a.pesoRecuperacao || b.parado - a.parado);
-  return out.slice(0, 6).map(x => x.l);
+  out.sort((a,b) => b.parado - a.parado); // mais antigos (mais tempo parado) primeiro
+  return out.slice(0, 10).map(x => x.l);
 }
 function radarRowHTML(l){
   const idJs = JSON.stringify(String(l.id || ""));
   const paradoRaw = diasParado(l);
   const parado = Number.isFinite(paradoRaw) ? paradoRaw : 0;
-  const etapa = normalizarEtapa(l.etapa);
-  const teveProposta = leadTemProposta(l);
-  const rec = (etapa === "Negociação" || teveProposta)
-    ? ["Alta","var(--acao)"]
-    : (etapa === "Visita/Proposta" || temAtendimentoManual(l))
-      ? ["Média","var(--lime)"]
-      : ["Baixa","var(--morno)"];
-  let oque = "atendimento feito";
-  if(etapa === "Negociação") oque = "negociação aberta";
-  else if(etapa === "Visita/Proposta") oque = "visita/proposta em jogo";
-  else if(teveProposta) oque = "recebeu proposta";
-  else if(temAtendimentoManual(l)) oque = "visita/atendimento feito";
+  // v911 — sem etapa/proposta/visita (o app não sabe): mostra só o FATO real (atendeu ou conversou).
+  const nMsgs = (typeof mensagensDoCliente === "function") ? mensagensDoCliente(l) : 0;
+  const fato = temAtendimentoManual(l) ? "você já atendeu" : (nMsgs ? `${nMsgs} msg${nMsgs > 1 ? "s" : ""} do cliente` : "conversa iniciada");
   const prod = (l.product && !/n[ãa]o identificad|importad/i.test(String(l.product))) ? " · " + escapeHtml(l.product) : "";
   return `<button type="button" class="radar-row" onclick='abrirLead(${idJs})'>
     <div class="radar-row-main">
       <div class="radar-nome">${escapeHtml(l.name || "Cliente")}<span class="radar-prod">${prod}</span></div>
-      <div class="radar-meta">${oque} · parado ${parado <= 0 ? "hoje" : parado + "d"}</div>
+      <div class="radar-meta">${fato} · parado ${parado <= 0 ? "hoje" : parado + "d"}</div>
     </div>
-    <div class="radar-rec" style="color:${rec[1]}"><b>${rec[0]}</b><span>recuperação</span></div>
+    <div class="radar-rec" style="color:var(--soft)"><b>${parado <= 0 ? "hoje" : parado + "d"}</b><span>parado</span></div>
   </button>`;
 }
 
-// Raio-X da carteira (Regras 4/5/9): até 3 frases de DECISÃO que leem a carteira inteira —
-// (R5) onde os clientes estão travando, (R4) esforço x resultado (conversa longa sem nenhuma
-// visita) e (R9/R1) a oportunidade parada de maior valor. NÃO é painel/funil: é diagnóstico em
-// frase, no topo da Home. Usa a etapa só pra CALCULAR (não exibe board). Sem painel confuso.
-function insightFocoHTML(items, esquecidos){
-  const ativos = (items || []).filter(l => l && l.id && !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
-  if(ativos.length < 5) return ""; // base pequena: diagnóstico não é confiável
-  const linhas = [];
-
-  // (R5) GARGALO — a fase onde mais clientes ficaram parados (5+ dias). É onde a energia rende mais.
-  const parado = (l) => { const d = diasParado(l); return Number.isFinite(d) && d >= 5; };
-  const cont = {};
-  for(const l of ativos){ if(!parado(l)) continue; const e = normalizarEtapa(l.etapa); cont[e] = (cont[e] || 0) + 1; }
-  let etapaG = null, nG = 0;
-  for(const e of ["Atendimento","Visita/Proposta","Negociação"]){ if((cont[e] || 0) > nG){ nG = cont[e]; etapaG = e; } }
-  if(etapaG && nG >= 2){
-    const frase = {
-      "Atendimento": `<b>${nG} clientes</b> travaram na conversa sem avançar pra visita — qualifique e proponha o próximo passo. É aí que sua energia rende mais.`,
-      "Visita/Proposta": `<b>${nG} clientes</b> já visitaram ou receberam proposta e sumiram — é seu dinheiro mais valioso parado. Retome antes de buscar lead novo.`,
-      "Negociação": `<b>${nG} clientes</b> em negociação perdendo força — corra pra fechar antes de perder o cliente.`
-    };
-    const titulo = { "Atendimento":"Travados na conversa", "Visita/Proposta":"Visitaram e sumiram", "Negociação":"Em negociação parada" }[etapaG];
-    linhas.push({ html: frase[etapaG], onclick: `abrirRaioX('gargalo',${JSON.stringify(etapaG)},${JSON.stringify(titulo)})` });
-  }
-
-  // (R4) ATIVIDADE x RESULTADO — conversas longas (30+ mensagens) sem NENHUMA visita/atendimento
-  // marcado. Muita mensagem e pouco avanço: o sinal de "atividade não é resultado".
-  const longas = ativos.filter(l => totalMensagensLead(l) >= 30 && !temVisitaLead(l)).length;
-  if(longas >= 1){
-    linhas.push({ html: longas === 1
-      ? `<b>1 conversa longa</b> sem nenhuma visita marcada — muita mensagem, pouco avanço. Hora de propor a visita.`
-      : `<b>${longas} conversas longas</b> sem nenhuma visita marcada — muita mensagem, pouco avanço. Hora de propor a visita.`,
-      onclick: `abrirRaioX('longas','',${JSON.stringify("Conversas longas sem visita")})` });
-  }
-
-  // (R9/R1) PARADA DE MAIOR VALOR — a oportunidade esquecida de maior potencial (topo do radar).
-  const esq = Array.isArray(esquecidos) ? esquecidos : leadsEsquecidos(items);
-  if(esq && esq[0]){
-    const l = esq[0];
-    const diasRaw = diasParado(l);
-    const dias = Number.isFinite(diasRaw) ? diasRaw : 0;
-    const etapa = normalizarEtapa(l.etapa);
-    const teveProposta = leadTemProposta(l);
-    let oque = "atendimento feito";
-    if(etapa === "Negociação") oque = "negociação aberta";
-    else if(etapa === "Visita/Proposta") oque = "visita/proposta em jogo";
-    else if(teveProposta) oque = "recebeu proposta";
-    linhas.push({ html: `<b>Parada de maior valor:</b> ${escapeHtml(l.name || "Cliente")} — ${oque}, parado há ${dias <= 0 ? "hoje" : dias + "d"}.`,
-      onclick: `abrirLead(${JSON.stringify(String(l.id||""))})` });
-  }
-
-  if(!linhas.length) return "";
-  // Cada linha vira um botão quando tem leads por trás (drill-down): abre a lista exata de
-  // quem são aqueles números, pra o corretor agir — não fica só diagnóstico sem saída.
-  const linhaHTML = (o) => {
-    const bullet = `<span style="color:var(--lime);font-weight:950;line-height:1.55">•</span>`;
-    const texto = `<span style="flex:1">${o.html}</span>`;
-    if(o.onclick){
-      return `<button type="button" class="raiox-linha" onclick='${o.onclick}' style="display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;background:transparent;border:0;padding:7px 4px;border-radius:8px;cursor:pointer;color:inherit;font:inherit">${bullet}${texto}<span aria-hidden="true" style="color:var(--soft);font-weight:950;opacity:.55;align-self:center">›</span></button>`;
-    }
-    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 4px">${bullet}${texto}</div>`;
-  };
-  return `<div class="insight-foco">
-    <div style="font-weight:950;color:var(--lime);text-transform:uppercase;letter-spacing:.1em;font-size:11px;margin-bottom:8px">📊 Raio-X da carteira</div>
-    <div style="display:flex;flex-direction:column;gap:2px">${linhas.map(linhaHTML).join("")}</div>
-  </div>`;
-}
-
-// Conversa avançou pra visita/atendimento? (usado pelo Raio-X: "conversas longas sem visita").
-function temVisitaLead(l){
-  const a = l.analysis || {};
-  if(Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length) return true;
-  if(temAtendimentoManual(l)) return true;
-  return ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l.etapa));
-}
-// Leads por trás de uma linha do Raio-X, recalculados na hora do clique (mesmos critérios
-// usados para MONTAR o texto do Raio-X, pra a lista bater com o número).
-function leadsRaioX(tipo, etapa){
-  const ativos = (state.itemsAtivos || []).filter(l => l && l.id && !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
-  if(tipo === "gargalo"){
-    return ativos
-      .filter(l => normalizarEtapa(l.etapa) === etapa && (() => { const d = diasParado(l); return Number.isFinite(d) && d >= 5; })())
-      .sort((a,b) => (Number.isFinite(diasParado(b))?diasParado(b):0) - (Number.isFinite(diasParado(a))?diasParado(a):0));
-  }
-  if(tipo === "longas"){
-    return ativos
-      .filter(l => totalMensagensLead(l) >= 30 && !temVisitaLead(l))
-      .sort((a,b) => totalMensagensLead(b) - totalMensagensLead(a));
-  }
-  return [];
-}
-function abrirRaioX(tipo, etapa, titulo){
-  const leads = leadsRaioX(tipo, etapa);
-  const sub = tipo === "gargalo"
-    ? "Parados há 5+ dias nesta etapa — é o dinheiro mais valioso parado. Retome antes de buscar lead novo."
-    : "Muita mensagem e nenhuma visita marcada — hora de propor a visita presencial.";
-  abrirGrupoHome("__raiox", { meta: { titulo: titulo || "Raio-X da carteira", sub }, leads });
-}
-window.abrirRaioX = abrirRaioX;
+// (v911) Raio-X da carteira removido de vez (o dono pediu): usava etapa/proposta/visita —
+// dados que o app não sabe de verdade — pra montar diagnóstico. insightFocoHTML/temVisitaLead/
+// leadsRaioX/abrirRaioX apagados junto.
 
 function renderBotoesHome(){
   const foco = qs("#leadFocoArea");
@@ -2738,13 +2626,12 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
     </style>
     <div class="home-saud">
-      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes"><button type="button" class="seq-link" onclick='abrirUltimosAtendimentos()'>Últimos atendimentos</button>${btnPularHtml}</div></div>
+      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes">${btnPularHtml}</div></div>
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
     ${esquecidosHtml}
     ${temLista ? `<div style="text-align:center;margin-top:8px"><button type="button" class="ver-todas" onclick='abrirTodosLeads()'>Ver todas as oportunidades →</button></div>` : ""}
-    <div class="raiox-mobile">${insightFocoHTML(items, esquecidos)}</div>
   `;
   qsa(".pickZipShortcut").forEach(b => {
     if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", () => qs("#zipInput")?.click()); }
@@ -3114,24 +3001,7 @@ window.voltarDaListaHome=voltarDaListaHome;
 window.abrirGrupoHome = abrirGrupoHome;
 window.renderBotoesHome = renderBotoesHome;
 
-// "Últimos atendimentos" (link da home): antes chamava setPipelineTab("ultimos"), função do
-// pipeline ANTIGO que o Condução (cp788) não usa mais — o resultado era cair no filtro padrão
-// "Fazer agora" e o dono via "atender agora" no lugar dos atendimentos. Agora abre de fato a
-// lista de quem foi atendido, do mais recente pro mais antigo, como grupo avulso.
-function abrirUltimosAtendimentos(){
-  const base = [state?.gruposHome?.todos, state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads]
-    .find(a => Array.isArray(a) && a.length) || [];
-  const leads = base
-    .map(l => ({ l, ts: ultimoAtendimentoTs(l) }))
-    .filter(x => x.ts > 0)
-    .sort((a, b) => b.ts - a.ts)
-    .map(x => x.l);
-  abrirGrupoHome("__ultimos", {
-    meta: { titulo: "Últimos atendimentos", sub: "Clientes que você atendeu, do mais recente para o mais antigo." },
-    leads
-  });
-}
-window.abrirUltimosAtendimentos = abrirUltimosAtendimentos;
+// (v911) "Últimos atendimentos" removido da home (redundante com "Atendimentos" na barra de baixo).
 
 // Atalho "Todos" da barra de baixo: abre a tela Hoje já dentro da lista completa
 // de leads ativos, do mais quente pro mais frio (chance de venda).
@@ -5212,10 +5082,10 @@ function renderLeadFoco(lead){
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico cp704-ico-danger" onclick='excluirLeadDefinitivo(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Excluir definitivamente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span class="lb">Excluir</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
+      <div class="cp704-top"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><div class="cp704-toolbar"><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
-          <h1>${escapeHtml(lead.name||'Contato')}</h1><div class="cp704-tags"><span class="cp704-tag">${escapeHtml(cp704Text(mc?.contato?.papel||a.tipoContato||'Comprador direto'))}</span></div>
+          <h1>${escapeHtml(lead.name||'Contato')}</h1>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:''}
           ${last?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${last}`)}</div>`:''}

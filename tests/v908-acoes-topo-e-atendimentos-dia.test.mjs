@@ -6,12 +6,13 @@ const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
 // v908 — (13) as ações do lead subiram pra barra de ícones do topo; (12) tela Atendimentos por dia.
 
-// 13: a barra de ícones do topo ganhou Proposta/Arquivar/Mensagens/Excluir (padrão .cp704-ico).
+// 13: a barra de ícones do topo ganhou Proposta/Arquivar/Mensagens (padrão .cp704-ico).
+// v911: o "Excluir" saiu do topo (fica só dentro do Editar) — o toolbar não tem mais o danger.
 const toolbar = app.match(/<div class="cp704-toolbar">[\s\S]*?<span class="lb">Reanalisar<\/span>/)[0];
 assert.match(toolbar, /<span class="lb">Proposta<\/span>/, 'ícone Proposta no topo');
 assert.match(toolbar, /<span class="lb">Arquivar<\/span>/, 'ícone Arquivar no topo');
 assert.match(toolbar, /<span class="lb">Mensagens<\/span>/, 'ícone Mensagens no topo');
-assert.match(toolbar, /cp704-ico-danger[\s\S]*?<span class="lb">Excluir<\/span>/, 'ícone Excluir (danger) no topo');
+assert.doesNotMatch(app, /cp704-ico cp704-ico-danger/, 'ícone Excluir saiu do topo (só no Editar)');
 // A função que abre o histórico e o card recolhível existem; o card antigo saiu.
 assert.match(app, /window\.cp704ToggleHistorico=function\(\)\{/, 'toggle do histórico existe');
 assert.match(app, /class="cp704-card cp704-hist-card" id="cp704HistCard" hidden/, 'card de mensagens recolhível');
