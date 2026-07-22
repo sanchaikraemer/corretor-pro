@@ -21,9 +21,9 @@ assert.doesNotMatch(quick, /marcarVendido/, 'sem ação de vender');
 assert.match(quick, /arquivarLead\(/, 'mantém Arquivar');
 assert.match(quick, /excluirLeadDefinitivo\(/, 'mantém Excluir definitivamente');
 
-// 3. cp704ToolsFlat e a barra rápida ui683 também não têm mais Vendido.
-const flat = app.match(/function cp704ToolsFlat\(lead,mc\)\{[\s\S]*?\n  \}/)[0];
-assert.doesNotMatch(flat, /marcarVendido|abrirVenda/, 'ToolsFlat sem venda');
+// 3. As ações do lead (viraram ícones no topo na v908) e a barra rápida ui683 não têm Vendido.
+const toolbar904 = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/)[0];
+assert.doesNotMatch(toolbar904, /marcarVendido|abrirVenda|>Vendido</, 'ações do topo sem venda');
 assert.doesNotMatch(app, /abrirVenda\(\$\{id\},\$\{nome\}\)/, 'barra rápida sem Vendido');
 
 // 4. Leads já marcados Vendido/Perdido/Geladeira aparecem como "Arquivado" (sem esses rótulos).

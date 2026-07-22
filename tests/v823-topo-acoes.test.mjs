@@ -13,9 +13,9 @@ assert.match(app, /cp704-toolbar">[\s\S]*?title="Reanalisar"[\s\S]*?title="Agend
 assert.doesNotMatch(app, /class="cp704-quickbar"/,
   'a barra antiga do aside (cp704-quickbar) deve ter sido removida');
 
-// Últimas mensagens agora fica no rodapé, dentro da linha das ferramentas, com setinha.
-assert.match(app, /cp704-tools-row">\$\{cp704ToolsFlat\(lead,mc\)\}<details class="cp704-details cp704-hist-inline"><summary>Últimas mensagens/,
-  'Últimas mensagens deve ficar no rodapé junto das ferramentas, colapsável');
+// v908: "Últimas mensagens" agora abre por um ícone no topo (Mensagens) num card recolhível.
+assert.match(app, /<span class="lb">Mensagens<\/span>/, 'ícone "Mensagens" no topo abre o histórico');
+assert.match(app, /id="cp704HistCard" hidden/, 'histórico é um card recolhível');
 
 // Regressão: observação segue única.
 assert.equal((app.match(/id="cp7ObsTexto"/g) || []).length, 1, 'observação segue única');
