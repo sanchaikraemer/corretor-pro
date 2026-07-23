@@ -107,14 +107,16 @@ assert.match(app, /\.cp-hoje-row\{width:100%;display:grid/, 'regra base do deskt
 assert.match(app, /grid-template-areas:"dot nm dd" "dot bar pr"/, 'regra base do mobile continua intacta (trava v942)');
 assert.match(app, /\.cp-hoje-row\[data-exp="1"\]\{grid-template-rows:auto auto/, 'nova regra desktop para linha com motivo existe');
 assert.match(app, /\.cp-hoje-row\[data-exp="1"\]\{grid-template-areas:"dot nm dd" "dot bar pr" "dot exp exp"\}/, 'nova regra mobile para linha com motivo existe');
-// v947.1 — cor de destaque (--cyan) + negrito, não o cinza discreto (--muted) do resto da linha.
-assert.match(app, /\.cp-hoje-row \.chr-exp\{[^}]*font-weight:800;color:var\(--cyan\)/, 'chr-exp usa negrito + cor de destaque, não o cinza discreto');
+// v948 — cor de destaque (--accent, o coral já usado em todo o app) + negrito, não o cinza
+// discreto (--muted) do resto da linha. v947.1 tinha usado --cyan (azul, fora da paleta do app,
+// segundo o dono) e foi corrigido pra --accent na v948.1.
+assert.match(app, /\.cp-hoje-row \.chr-exp\{[^}]*font-weight:800;color:var\(--accent\)/, 'chr-exp usa negrito + a cor de destaque do app (--accent), não cinza nem uma cor fora da paleta');
 
 // 6. O mesmo motivo aparece no card "Fazer agora" do detalhe do lead (renderLeadFoco), com destaque
 // visual próprio (v947.1 — "Última análise"/"Última mensagem" usam cp704-metaline, discreto de
 // propósito; o motivo precisa se destacar, senão o corretor não percebe que existe).
 assert.match(app, /motivoFazerAgora=\(typeof cpMotivoFechamento==='function'\)\?cpMotivoFechamento\(lead\):''/, 'renderLeadFoco calcula o motivo com o mesmo guard defensivo do resto do arquivo');
 assert.match(app, /\$\{motivoFazerAgora\?`<div class="cp704-motivo">\$\{escapeHtml\(motivoFazerAgora\)\}<\/div>`:''\}/, 'o card "Fazer agora" do detalhe mostra o motivo via cp704-motivo (destaque próprio), escapado, só quando não-vazio');
-assert.match(app, /\.cp704-motivo\{[^}]*color:var\(--cyan\)/, 'cp704-motivo usa a cor de destaque reservada a dados/análise (--cyan), não o cinza discreto do metaline');
+assert.match(app, /\.cp704-motivo\{[^}]*color:var\(--accent\)/, 'cp704-motivo usa a cor de destaque do app (--accent), não o cinza discreto do metaline nem uma cor fora da paleta');
 
 console.log('v946-ranking-explicavel: ok');
