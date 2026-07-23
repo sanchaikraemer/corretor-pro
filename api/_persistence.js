@@ -654,7 +654,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       "permuta", "risk", "produtoInteresse", "produtosInteresse", "mode",
       "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
       "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
-      "sugestoesPendentes", "arquiteturaMensagens", "error"
+      "sugestoesPendentes", "arquiteturaMensagens", "error",
+      // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no
+      // cabeçalho do lead). Sem eles aqui, a lista carrega uma análise sem data e, ao reabrir
+      // o lead a partir dela, "Última análise" some mesmo pra quem acabou de reanalisar.
+      "reanalisadoEm", "geradoEm", "analisadoEm", "iaComercialV2"
     ];
     const out = {};
     for (const key of keys) {

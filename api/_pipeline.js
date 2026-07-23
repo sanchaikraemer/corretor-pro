@@ -2520,7 +2520,12 @@ item separado em "produtosInteresse" (ex.: se o cliente citou o lote 105 da quad
 da quadra 157 do mesmo empreendimento, "produtosInteresse" vira ["Lote 105, quadra 77 — <nome do
 empreendimento citado na conversa>","Lote 37, quadra 157 — <nome do empreendimento citado na
 conversa>"]). Sem unidades específicas citadas, "produtosInteresse" pode ter só o item genérico
-igual a "produtoInteresse".
+igual a "produtoInteresse". "produtoInteresse"/"produtosInteresse" são dado INTERNO (ficam só no
+diagnóstico, pro corretor) — as três mensagens ("mensagens") NÃO PODEM listar de volta os
+números/identificadores específicos que o próprio cliente já disse (lote, quadra, apartamento,
+bloco etc.). O cliente já sabe o que ele escolheu; repetir esses números pra ele é redundante e
+não avança a conversa. Nas mensagens, refira-se às unidades de forma natural ("os lotes que você
+separou", "as opções que você escolheu"), sem recitar os números de volta.
 
 Formato JSON obrigatório:
 {
@@ -2582,6 +2587,10 @@ ${timelineText}`;
 
     return {
       mode: "openai",
+      // v936 — carimba QUANDO esta análise foi gerada. Sem isso, um lead que só passou pelo
+      // import automático (nunca clicou "Reanalisar") nunca tem nenhuma data de análise pra
+      // mostrar no cabeçalho do lead ("Última análise" ficava sempre vazia nesse caso).
+      geradoEm: new Date().toISOString(),
       summary: clean(raw.summary),
       diagnostico: {
         ultimaPessoaFalar: clean(d.ultimaPessoaFalar, "Não identificado"),

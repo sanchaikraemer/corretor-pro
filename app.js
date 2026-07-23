@@ -5129,7 +5129,9 @@ function cp865UltimaAnaliseISO(lead, a){
   // atualiza a linha e isso fazia a "Última análise" mudar de horário sem ter reanalisado (v896).
   const primarios = [a?.reanalisadoEm, a?.geradoEm, a?.analisadoEm, a?.iaComercialV2?.geradoEm];
   for(const c of primarios){ if(c && Number.isFinite(Date.parse(c))) return c; }
-  const fallback = [lead?.analysisReadyAt, lead?.criadoEm];
+  // v936 — "criadoEm" nunca existiu no objeto lead (o campo real é "createdAt", ver v904+);
+  // era um nome de campo errado que nunca resolvia nada, então esse fallback nunca funcionava.
+  const fallback = [lead?.analysisReadyAt, lead?.createdAt];
   for(const c of fallback){ if(c && Number.isFinite(Date.parse(c))) return c; }
   return '';
 }

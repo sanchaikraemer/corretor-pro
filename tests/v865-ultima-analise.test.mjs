@@ -29,16 +29,18 @@ assert.equal(
   'geradoEm é o fallback quando não houve reanálise'
 );
 // v896: SEM carimbo próprio da análise, NÃO usa updatedAt (marcar/desmarcar atualiza a linha
-// e não pode mudar a "Última análise"). Cai só em analysisReadyAt / criadoEm.
+// e não pode mudar a "Última análise"). Cai só em analysisReadyAt / createdAt.
 assert.equal(
   cp865UltimaAnaliseISO({ updatedAt: '2026-04-01T10:00:00Z' }, {}),
   '',
   'não usa updatedAt como Última análise'
 );
+// v936: o fallback usava "criadoEm", um nome de campo que nunca existiu no objeto lead (o real
+// é "createdAt") — o fallback nunca funcionava de fato. Corrigido pro nome real.
 assert.equal(
-  cp865UltimaAnaliseISO({ criadoEm: '2026-03-01T10:00:00Z', updatedAt: '2026-04-01T10:00:00Z' }, {}),
+  cp865UltimaAnaliseISO({ createdAt: '2026-03-01T10:00:00Z', updatedAt: '2026-04-01T10:00:00Z' }, {}),
   '2026-03-01T10:00:00Z',
-  'sem carimbo da análise, cai em criadoEm (estável), não em updatedAt'
+  'sem carimbo da análise, cai em createdAt (estável), não em updatedAt'
 );
 assert.equal(
   cp865UltimaAnaliseISO({ updatedAt: '2026-04-01T10:00:00Z' }, { iaComercialV2: { geradoEm: '2026-05-10T10:00:00Z' } }),
