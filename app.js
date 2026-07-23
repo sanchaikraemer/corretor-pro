@@ -4958,10 +4958,17 @@ function cp704Css(){
   }
   function cp704DetailRows(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
+    // v935 — quando o cliente cita MAIS DE UMA unidade específica (lote/quadra/apartamento),
+    // "Produto" sozinho mostra só o empreendimento genérico e a escolha real do cliente se
+    // perde (bug reportado pelo dono: conversa tinha os 3 lotes escolhidos, a análise não).
+    // produtosInteresse (array já gerado pela análise, ver api/_pipeline.js) lista cada unidade
+    // específica quando há mais de uma — aqui só aparece nesse caso, pra não duplicar "Produto".
+    const produtosInteresse = Array.isArray(a.produtosInteresse) ? a.produtosInteresse.map(cp704Text).filter(Boolean) : [];
     const rows=[
       ['Papel do contato',mc?.contato?.papel || a.tipoContato],
       ['Comprador final',mc?.oportunidade?.compradorFinal || mc?.contato?.compradorFinal],
       ['Produto',cp704Produto(lead,mc)],
+      ['Unidades específicas de interesse',produtosInteresse.length>1?produtosInteresse.join('; '):''],
       ['Resultado',mc?.oportunidade?.resultado || lead?.etapa],
       ['Permuta / entrada com imóvel',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
