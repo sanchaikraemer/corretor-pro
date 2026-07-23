@@ -9,15 +9,17 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // estava esperando resposta ("ontem de contato" / "ontem sem resposta" na própria tela) — a
 // bola estava do lado do cliente, não fazia sentido nenhum empurrar essa conversa de novo hoje.
 //
-// Causa: cpFilaFazerAgora (a fila ranqueada usada tanto pelo número "Fazer agora" quanto pelo
-// "Puxar da fila"/"Atender +1") só excluía quem foi CONTATADO HOJE (ehContatadoHoje) — não
-// excluía quem está "aguardando cliente" (cpAguardandoResposta: atendido em qualquer dia
-// anterior e o cliente ainda não respondeu depois). Um lead atendido ontem, sem resposta ainda,
-// não é "contatado hoje" — passava direto pelo filtro e virava candidato a "prioridade agora".
+// v939 — a correção da v938 usou cpAguardandoResposta, uma checagem que NUNCA expira (bloqueio
+// permanente, mesmo depois de 150 dias esperando). Isso ignorava a regra que o app JÁ TEM pra
+// decidir quando um lead "aguardando" volta a ser candidato: emJanelaDeEspera/limiarRetomada —
+// a MESMA regra que entraEmRetomada usa (espera 3 dias se o lead é novo, 5 se não é; depois
+// disso volta ao jogo). Corrigido pra usar essa regra existente em vez de inventar uma nova.
 
 const filaSrc = app.match(/function cpFilaFazerAgora\(items\)\{[\s\S]*?\n\}/)[0];
-assert.match(filaSrc, /!cpAguardandoResposta\(l\)/,
-  'cpFilaFazerAgora precisa excluir quem está aguardando resposta do cliente');
+assert.match(filaSrc, /!\(typeof emJanelaDeEspera==='function' && emJanelaDeEspera\(l\)\)/,
+  'cpFilaFazerAgora precisa excluir só quem ainda está DENTRO da janela de espera (regra existente, com prazo)');
+assert.doesNotMatch(filaSrc, /!cpAguardandoResposta\(l\)/,
+  'não pode voltar a usar o bloqueio permanente (cpAguardandoResposta nunca expira)');
 
 const fdsSrc = app.match(/function cpFimDeSemana\(\)\{[\s\S]*?\n\}/)[0];
 const fila = eval(`
@@ -25,7 +27,7 @@ const fila = eval(`
   const ehContatadoHoje = (l) => !!l.__hoje;
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const cp786TemCompromisso = () => false;
-  const cpAguardandoResposta = (l) => !!l.__aguardando;
+  const emJanelaDeEspera = (l) => !!l.__dentroDaJanela;
   const diasParado = (l) => Number(l.__parado||0);
   ${fdsSrc}
   ${filaSrc}
@@ -34,10 +36,11 @@ const fila = eval(`
 
 const pool = [
   { id:'ok', __msgs:9, __parado:5 },
-  // Contatado ontem, cliente ainda não respondeu: bola com o cliente — não pode ser oferecido.
-  { id:'aguardando-ontem', __msgs:9, __parado:1, __aguardando:true },
-  // Contatado há muito tempo e ainda sem resposta: mesma regra, não muda com o tempo parado.
-  { id:'aguardando-velho', __msgs:9, __parado:150, __aguardando:true },
+  // Contatado ontem, ainda DENTRO da janela de espera (3-5 dias): bola com o cliente, não entra.
+  { id:'dentro-da-janela', __msgs:9, __parado:1, __dentroDaJanela:true },
+  // Passou da janela de espera (regra existente: emJanelaDeEspera já voltou a ser false) —
+  // volta a ser candidato normalmente, mesmo tendo sido o corretor quem falou por último.
+  { id:'janela-passou', __msgs:9, __parado:150, __dentroDaJanela:false },
 ];
 const hoje = new Date();
 const ehFds = hoje.getDay() === 0 || hoje.getDay() === 6;
@@ -45,7 +48,7 @@ const r = fila(pool).map(l => l.id);
 if(ehFds){
   assert.deepEqual(r, [], 'fim de semana → fila vazia');
 } else {
-  assert.deepEqual(r, ['ok'], 'leads aguardando resposta do cliente não entram na fila, mesmo há muitos dias parados');
+  assert.deepEqual(r, ['janela-passou', 'ok'], 'só quem ainda está dentro da janela de espera fica de fora; depois do prazo, volta a ser candidato');
 }
 
 console.log('v938-fila-nao-oferece-aguardando-resposta: ok');
