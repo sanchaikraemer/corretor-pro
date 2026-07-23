@@ -2476,12 +2476,18 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   const dotCor = nivel === 1 ? 'var(--accent)' : '#5a6a70'; // coral = cliente aguardando você
   const dias = l.daysSinceLastInteraction != null ? `${l.daysSinceLastInteraction}d` : '';
   const prod = (typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || '');
-  return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
+  // Ranking explicável: por que este lead está nesta posição da fila (v945) — só aparece quando
+  // há um motivo real (nunca inventa); usa um atributo à parte (data-exp) em vez de mexer na
+  // classe cp-hoje-row, que testes de regressão travam como string exata.
+  let motivo = '';
+  try{ motivo = (typeof cpMotivoFechamento === 'function') ? cpMotivoFechamento(l) : ''; }catch(_){}
+  return `<button type="button" class="cp-hoje-row" ${motivo?'data-exp="1"':''} onclick='abrirLead(${idJs})'>
     <span class="chr-dot" style="background:${dotCor}"></span>
     <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
     <span class="chr-dd">${escapeHtml(dias)}</span>
+    ${motivo?`<span class="chr-exp">${escapeHtml(motivo)}</span>`:''}
   </button>`;
 }
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
@@ -2748,6 +2754,10 @@ function renderBotoesHome(){
       .cp-hoje-row .chr-track i{display:block;height:100%;border-radius:999px}
       .cp-hoje-row .chr-bar b{font-size:11px;font-weight:900;min-width:20px;text-align:right}
       .cp-hoje-row .chr-dd{grid-area:dd;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+      /* v945 — ranking explicável: 2ª linha só quando há motivo real (data-exp), sem mudar a
+         altura das linhas sem motivo. */
+      .cp-hoje-row .chr-exp{grid-area:exp;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp-hoje-row[data-exp="1"]{grid-template-rows:auto auto;row-gap:2px;grid-template-areas:"dot nm pr bar dd" "dot exp exp exp exp"}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
@@ -2762,6 +2772,7 @@ function renderBotoesHome(){
         .cp-hoje-row .chr-track{width:96px}
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
+        .cp-hoje-row[data-exp="1"]{grid-template-areas:"dot nm dd" "dot bar pr" "dot exp exp"}
       }
     </style>
     <div class="home-saud">
@@ -5215,6 +5226,10 @@ function renderLeadFoco(lead){
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
+    // Ranking explicável (v945): mesmo motivo mostrado na Home, agora dentro do card "Fazer
+    // agora" — vazio quando nenhum fator real se aplica (nunca inventa razão).
+    let motivoFazerAgora='';
+    try{ motivoFazerAgora=(typeof cpMotivoFechamento==='function')?cpMotivoFechamento(lead):''; }catch(_){}
     area.innerHTML=`<div class="cp704-lead">
       <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
@@ -5240,6 +5255,7 @@ function renderLeadFoco(lead){
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
           <section class="cp704-card">
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
+            ${motivoFazerAgora?`<div class="cp704-metaline">${escapeHtml(motivoFazerAgora)}</div>`:''}
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
@@ -9084,6 +9100,50 @@ function cpFilaFazerAgora(items){
   const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
   pool.sort((a,b) => cpProbabilidadeFechamento(b) - cpProbabilidadeFechamento(a) || mensagensDoCliente(b) - mensagensDoCliente(a));
   return pool;
+}
+// Espelha os MESMOS fatores de cpProbabilidadeFechamento (recorrência/perguntas/negociação/
+// cliente-espera-você), mas só pra virar TEXTO explicando o motivo — duplicado de propósito, não
+// fatorado num helper comum, porque cpProbabilidadeFechamento tem o corpo travado por regex nos
+// testes v943/v944 (eles extraem a função inteira e checam substrings literais nela); chamar uma
+// função nova de dentro dela quebraria esses testes. Qualquer mudança de peso/limiar lá precisa
+// ser replicada aqui.
+function cpFatoresRankingLead(l){
+  const recorrencia = Number(l?.clientMessageDays) || 0;
+  const perguntas = Number(l?.clientQuestionCount) || 0;
+  let propostaAtiva = false, retornoProposta = false;
+  try{
+    const ctx = (typeof contextoPrioridadeIA === 'function') ? contextoPrioridadeIA(l) : null;
+    propostaAtiva = !!ctx?.propostaAtiva;
+    retornoProposta = !!ctx?.retornoProposta;
+  }catch(_){}
+  const resp = Number(l?.daysSinceClientReply);
+  const toque = Number(l?.daysSinceLastTouch);
+  let ultimaMsgPedeResposta = true;
+  try{
+    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
+    if(last && last.falante === "contato"){
+      const t = String(last.m?.text || "");
+      ultimaMsgPedeResposta = /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
+    }
+  }catch(_){}
+  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgPedeResposta;
+  return { recorrencia, perguntas, propostaAtiva, retornoProposta, clienteEsperaVoce };
+}
+// Frase curta explicando por que o lead está classificado como está no "Fazer agora" — os mesmos
+// fatores que ordenam a fila, em texto. NÃO mostra contagem bruta de mensagens de propósito: é
+// exatamente o fator que menos deve pesar (v943 — "Henrique" tinha 218 mensagens e não devia
+// liderar); exibi-la como "motivo" recriaria a confusão que a v943/v944 corrigiram. Vazio quando
+// nenhum fator real se aplica (nunca inventa razão).
+function cpMotivoFechamento(l){
+  const f = cpFatoresRankingLead(l);
+  const razoes = [];
+  if(f.retornoProposta) razoes.push("negociação avançada — proposta em aberto");
+  else if(f.propostaAtiva) razoes.push("já se falou de valor ou condição de pagamento");
+  if(f.clienteEsperaVoce) razoes.push("cliente esperando sua resposta");
+  if(f.recorrencia >= 2) razoes.push(`voltou a conversar em ${f.recorrencia} dias diferentes`);
+  if(f.perguntas >= 1) razoes.push(`fez ${f.perguntas} pergunta${f.perguntas===1?'':'s'}`);
+  const texto = razoes.slice(0, 3).join(" · ");
+  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "";
 }
 // v922 tentou uma "dose fixa" persistida no aparelho (localStorage) pra parar de repor
 // automaticamente quem era atendido. Só que criou um problema novo: publicar a atualização no
