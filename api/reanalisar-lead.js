@@ -537,11 +537,20 @@ async function reanalisarLeadHandler702(req, res) {
     if (q.getTime() < Date.now() - 60 * 60 * 1000) return null;
     return { quando: q.toISOString(), motivo: String(motivo || "Retomar contato").slice(0, 160), auto: false };
   }
+  // v930 — áudio transcrito não gera lembrete. Prints do dono: dois lembretes sem nexo nenhum
+  // (trecho solto de áudio, tipo "cara, ela liga tudo, abre"), o corretor não lembrava de ter
+  // agendado aquilo. Áudio é registro solto/narrado (às vezes o corretor falando sozinho,
+  // "só botei aqui pra você não esquecer") — bem mais solto que mensagem digitada, onde
+  // "agende/marque/lembre + data" é quase sempre intencional. Lembrete só nasce de texto
+  // digitado (do corretor OU do cliente) daqui pra frente.
+  const AUDIO_TRANSCRITO_RE = /^\[Áudio transcrito/i;
   function lembreteDaTimeline(tl) {
     if (!Array.isArray(tl)) return null;
     for (let i = tl.length - 1; i >= 0; i--) {
       const m = tl[i];
-      const p = lembreteDoTexto(m?.text || "", m?.iso || null);
+      const texto = String(m?.text || "");
+      if (AUDIO_TRANSCRITO_RE.test(texto)) continue;
+      const p = lembreteDoTexto(texto, m?.iso || null);
       if (p) {
         const lem = fazerLembrete(p.dias, p.motivo, m?.iso || null);
         if (lem) return lem;
@@ -561,7 +570,11 @@ async function reanalisarLeadHandler702(req, res) {
     if (previous.lembreteRemovido) { obj.lembrete = null; return; }
     // Preserva SÓ se for lembrete posto manualmente pelo corretor (botões Hoje/Amanhã/+7...).
     // Lembretes legados marcados como auto:true (inventados pela IA antes do fix) são descartados.
-    if (previous.lembrete && previous.lembrete.auto !== true) {
+    // v930 — lembrete legado cujo motivo veio de ÁUDIO transcrito também é descartado (mesma
+    // limpeza dos legados auto:true): esse tipo de lembrete não devia ter sido criado, e
+    // reanalisar de novo deixa a régua atual (lembreteDaTimeline, que já ignora áudio) decidir.
+    const motivoEraAudio = AUDIO_TRANSCRITO_RE.test(String(previous.lembrete?.motivo || ""));
+    if (previous.lembrete && previous.lembrete.auto !== true && !motivoEraAudio) {
       obj.lembrete = previous.lembrete;
       return;
     }
