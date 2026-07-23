@@ -5385,7 +5385,6 @@ async function carregarAgendaTopo(){
 
 function agendaCardHTML(l, extra){
   const idJs = JSON.stringify(String(l.id||""));
-  const fonePhone = String(l.phone||"").replace(/\D/g,"");
   return `
     <div class="agenda-item">
       <div style="flex:1;min-width:0">
@@ -5398,7 +5397,6 @@ function agendaCardHTML(l, extra){
         <button type="button" onclick='abrirLead(${idJs})' style="padding:7px 13px;font-size:11px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Ver análise</button>
         ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id) : ""}
         ${l.analysis?.lembrete?.quando ? `<button type="button" onclick='removerLembrete(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(244,118,138,.10);color:#ffd7de;border:1px solid rgba(244,118,138,.26);border-radius:8px;cursor:pointer;font-weight:950">🗑 Excluir</button>` : ""}
-        ${fonePhone ? `<a class="btn" style="padding:6px 10px;font-size:11px;text-decoration:none" href="${escapeHtml(linkWhatsAppDireta(l) || ("https://wa.me/"+fonePhone))}" target="_blank">💬 WhatsApp</a>` : ""}
       </div>
     </div>`;
 }
