@@ -2675,14 +2675,26 @@ function renderBotoesHome(){
       + (backlog.length
           ? `<details style="margin-top:12px"><summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${backlog.length}</summary><div style="margin-top:10px">${backlog.map((l, i) => filaRowHTML(l, i+2+filaDose.length)).join("")}</div></details>`
           : "");
-  } else if(disponiveisParaPuxar.length){
-    // v925 — bateu a meta de hoje, mas ainda tem gente na fila ranqueada (a mesma que alimenta o
-    // número e o "Atender +1" — não só o balde categorizado "acao-hoje", que pode estar vazio
-    // com tudo "aguardando cliente"): convida a continuar em vez de só dizer "tudo em dia".
+  } else if(disponiveisParaPuxar.length && metaHoje === 0){
+    // v925 — bateu a meta de hoje (metaHoje/cpFazerAgoraDose já caiu pra 0 = dose consumida por
+    // atendimento real), mas ainda tem gente na fila ranqueada (a mesma que alimenta o número e o
+    // "Atender +1" — não só o balde categorizado "acao-hoje", que pode estar vazio com tudo
+    // "aguardando cliente"): convida a continuar em vez de só dizer "tudo em dia".
     top3Html = `<div style="padding:16px 18px;border:1px solid var(--lime);border-radius:14px;background:rgba(104,255,149,.06);margin-bottom:12px;text-align:center">
       <div style="font-size:15px;font-weight:950;color:var(--lime);margin-bottom:6px">🎉 Meta de hoje batida!</div>
       <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda tem ${disponiveisParaPuxar.length} lead${disponiveisParaPuxar.length>1?"s":""} esperando prioridade. Cada atendimento a mais é uma venda mais perto.</div>
       <button type="button" class="primary" onclick="cpAtenderMaisUmHoje()">Vamos atender mais um?</button>
+    </div>`;
+  } else if(disponiveisParaPuxar.length){
+    // v933 — metaHoje > 0 (a meta NÃO foi cumprida, tem gente pra atender ainda) mas o balde
+    // categorizado ("acao-hoje"/"retomar-cuidado") veio vazio — não é a mesma coisa que "meta
+    // batida", e dizer isso contradiz a saudação/card que mostram metaHoje leads pendentes na
+    // mesma tela (bug reportado pelo dono: via print, "10 pra atender hoje" + "Meta batida" juntos).
+    // Convida a puxar da fila ranqueada completa sem afirmar que o dia já foi cumprido.
+    top3Html = `<div style="padding:16px 18px;border:1px dashed var(--morno);border-radius:14px;background:rgba(245,195,107,.06);margin-bottom:12px;text-align:center">
+      <div style="font-size:15px;font-weight:950;color:var(--morno);margin-bottom:6px">📋 Nenhum lead prioritário pelas regras agora</div>
+      <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda faltam ${metaHoje} pra bater a meta de hoje. Tem ${disponiveisParaPuxar.length} lead${disponiveisParaPuxar.length>1?"s":""} na fila geral esperando prioridade — pode puxar de lá.</div>
+      <button type="button" class="primary" onclick="cpAtenderMaisUmHoje()">Puxar da fila</button>
     </div>`;
   } else if(retomada.length){
     // Nenhum urgente: todos foram atendidos recentemente. Sugere retomadas proativas.
