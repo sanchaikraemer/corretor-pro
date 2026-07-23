@@ -17,15 +17,16 @@ assert.match(app, /\.cp704-toolbar\{display:grid;grid-template-columns:repeat\(4
 assert.match(app, /@media\(min-width:1000px\)\{\.cp704-toolbar\{grid-template-columns:repeat\(8,minmax\(0,1fr\)\)\}\}/,
   'no desktop (min-width:1000px) a toolbar precisa virar 8 colunas — os 8 botões numa linha só');
 
-// 2. Cabeçalho do lead: só "Última análise" continua sendo renderizada. As outras 3 metalinhas
-// (mensagem/atendimento/atualização) e as variáveis que só existiam pra elas foram removidas.
+// 2. Cabeçalho do lead: "Última análise" continua sendo renderizada (v937 trouxe "Última
+// mensagem" de volta, ver tests/v887-cabecalho-metalinhas.test.mjs — o dono sentiu falta dela.
+// "Último atendimento" e "Última atualização" continuam removidas, essas não foram pedidas de volta).
 const iniFoco = app.indexOf('function renderLeadFoco(lead){');
 const fimFoco = app.indexOf('\nfunction ', app.indexOf('cp7ObsStatus', iniFoco));
 const foco = app.slice(iniFoco, fimFoco);
 assert.match(foco, /Última análise — \$\{analiseEm\}/, '"Última análise" continua aparecendo');
-assert.doesNotMatch(foco, /Última mensagem —|Último atendimento —|Última atualização —/,
-  'as outras 3 metalinhas não podem mais aparecer no cabeçalho do lead');
-assert.doesNotMatch(foco, /\bconst last=|\bconst atendimento=|\bconst atualizadoEm=/,
+assert.doesNotMatch(foco, /Último atendimento —|Última atualização —/,
+  '"Último atendimento" e "Última atualização" continuam fora do cabeçalho do lead');
+assert.doesNotMatch(foco, /\bconst atendimento=|\bconst atualizadoEm=/,
   'as variáveis que só alimentavam as metalinhas removidas não devem sobrar soltas no código');
 
 // As funções que só existiam pra calcular "Último atendimento" (agora sem nenhum uso) foram
