@@ -16,6 +16,22 @@ const DEFAULTS = {
   objecoes: []
 };
 
+// Teto defensivo pra nenhum campo livre do Cérebro estourar sozinho o contexto do
+// modelo — metodo/tom/diferenciais/evitar nunca tiveram teto (só regrasTexto/objecoesTexto
+// tinham, via sanitizarBloco). regrasTexto/objecoesTexto continuam com teto maior porque
+// são blocos que naturalmente acumulam mais conteúdo (várias regras/objeções por bloco).
+const MAX_CAMPO_LIVRE = 20000;
+const MAX_BLOCO_REGRAS = 60000;
+
+function capTexto(v, limite = MAX_CAMPO_LIVRE) {
+  return String(v || "").replace(/\u0000/g, "").slice(0, limite);
+}
+
+function clampDiasImportacao(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n > 0 && n <= 365) ? Math.round(n) : 90;
+}
+
 function regrasLegadasParaTexto(arr) {
   if (!Array.isArray(arr)) return "";
   return arr.map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim()).filter(Boolean).join("\n\n");
@@ -35,13 +51,13 @@ function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
   return {
     corretorNome: typeof v.corretorNome === "string" ? v.corretorNome.slice(0, 80).trim() : "",
-    metodo: typeof v.metodo === "string" ? v.metodo : "",
-    tom: typeof v.tom === "string" ? v.tom : "",
-    diferenciais: typeof v.diferenciais === "string" ? v.diferenciais : "",
-    evitar: typeof v.evitar === "string" ? v.evitar : "",
-    diasImportacao: Number(v.diasImportacao) > 0 ? Number(v.diasImportacao) : 90,
-    regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? v.regrasTexto : regrasLegadasParaTexto(v.regras),
-    objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? v.objecoesTexto : objecoesLegadasParaTexto(v.objecoes),
+    metodo: typeof v.metodo === "string" ? capTexto(v.metodo) : "",
+    tom: typeof v.tom === "string" ? capTexto(v.tom) : "",
+    diferenciais: typeof v.diferenciais === "string" ? capTexto(v.diferenciais) : "",
+    evitar: typeof v.evitar === "string" ? capTexto(v.evitar) : "",
+    diasImportacao: clampDiasImportacao(v.diasImportacao),
+    regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
+    objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? capTexto(v.objecoesTexto, MAX_BLOCO_REGRAS) : capTexto(objecoesLegadasParaTexto(v.objecoes), MAX_BLOCO_REGRAS),
     regras: Array.isArray(v.regras) ? v.regras : [],
     objecoes: Array.isArray(v.objecoes) ? v.objecoes : [],
     inteligenciaAprendida: v.inteligenciaAprendida && typeof v.inteligenciaAprendida === "object" ? v.inteligenciaAprendida : undefined
@@ -54,18 +70,29 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+// Retorna `null` (em vez de `{}`) quando o corpo chega mas não é JSON válido —
+// distinguir "veio vazio" de "veio quebrado" evita que um body corrompido vire,
+// silenciosamente, um save que zera método/tom/diferenciais/evitar pros defaults
+// vazios (cada campo do save cai pro default quando body.campo não é string).
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
-  if (typeof req.body === "string" && req.body.trim()) {
-    try { return JSON.parse(req.body); } catch (_) { return {}; }
+  if (typeof req.body === "string") {
+    if (!req.body.trim()) return {};
+    try { return JSON.parse(req.body); } catch (_) { return null; }
   }
-  const raw = await new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", chunk => data += chunk);
-    req.on("end", () => resolve(data || "{}"));
-    req.on("error", reject);
-  });
-  try { return JSON.parse(raw || "{}"); } catch (_) { return {}; }
+  let raw;
+  try {
+    raw = await new Promise((resolve, reject) => {
+      let data = "";
+      req.on("data", chunk => data += chunk);
+      req.on("end", () => resolve(data));
+      req.on("error", reject);
+    });
+  } catch (_) {
+    return null;
+  }
+  if (!raw || !raw.trim()) return {};
+  try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
 async function loadConfig(supabase) {
@@ -102,7 +129,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST" || req.method === "PUT") {
-    const body = await readJsonBody(req).catch(() => ({}));
+    const body = await readJsonBody(req).catch(() => null);
+    if (body === null) {
+      return json(res, 400, { ok: false, error: "Corpo da requisição inválido — não foi possível interpretar o JSON. Nada foi alterado no Cérebro." });
+    }
 
     // Exporta os casos e observações aprendidos para um Excel gerado no navegador.
     // Não chama a IA, não altera o Cérebro e não ativa o uso automático do aprendizado.
@@ -290,7 +320,7 @@ export default async function handler(req, res) {
 
     // Regras e objeções são salvas como blocos únicos de texto. O fallback converte
     // o formato antigo em lista para não perder conteúdo ao atualizar.
-    const sanitizarBloco = (texto, limite = 60000) => String(texto || "").replace(/\u0000/g, "").slice(0, limite);
+    const sanitizarBloco = (texto, limite = MAX_BLOCO_REGRAS) => capTexto(texto, limite);
     const regrasTextoEntrada = Object.prototype.hasOwnProperty.call(body, "regrasTexto")
       ? body.regrasTexto
       : regrasLegadasParaTexto(body.regras);
@@ -312,14 +342,13 @@ export default async function handler(req, res) {
     // não controla esses campos — eles são alimentados pela análise de ZIPs).
     const atualConfig = await loadConfig(supabase);
     const baseAprend = (atualConfig?.valor && typeof atualConfig.valor === "object") ? atualConfig.valor : {};
-    const diasN = Number(body.diasImportacao);
     const valor = {
       corretorNome: typeof body.corretorNome === "string" ? body.corretorNome.slice(0, 80).trim() : DEFAULTS.corretorNome,
-      metodo: typeof body.metodo === "string" ? body.metodo : DEFAULTS.metodo,
-      tom: typeof body.tom === "string" ? body.tom : DEFAULTS.tom,
-      diferenciais: typeof body.diferenciais === "string" ? body.diferenciais : DEFAULTS.diferenciais,
-      evitar: typeof body.evitar === "string" ? body.evitar : DEFAULTS.evitar,
-      diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? Math.round(diasN) : 90,
+      metodo: typeof body.metodo === "string" ? capTexto(body.metodo) : DEFAULTS.metodo,
+      tom: typeof body.tom === "string" ? capTexto(body.tom) : DEFAULTS.tom,
+      diferenciais: typeof body.diferenciais === "string" ? capTexto(body.diferenciais) : DEFAULTS.diferenciais,
+      evitar: typeof body.evitar === "string" ? capTexto(body.evitar) : DEFAULTS.evitar,
+      diasImportacao: clampDiasImportacao(body.diasImportacao),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
       objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
       regras: [],
@@ -346,4 +375,4 @@ export default async function handler(req, res) {
   return json(res, 405, { ok: false, error: "Use GET, POST ou PUT." });
 }
 
-export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY, sanitizeCerebroConfig };
+export { DEFAULTS as CEREBRO_DEFAULTS, CONFIG_KEY, sanitizeCerebroConfig, readJsonBody };
