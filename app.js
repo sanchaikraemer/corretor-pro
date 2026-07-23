@@ -7058,9 +7058,12 @@ async function renderProcessedResult(data, meta){
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else if(perguntarNome){
+    // v953 — pedido do dono: quando o nome bate EXATO (não "parecido"), não pergunta mais.
+    // Ele nunca usou a opção "é outro" nesse caso. Atualiza direto; os botões ficam ocultos
+    // só como caminho de retomada manual se a chamada automática falhar (ver mais abaixo).
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
-      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>Atualizando o cadastro automaticamente, sem criar duplicata.</div>` +
+      `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else{
     acoesHtml =
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
@@ -7079,8 +7082,10 @@ async function renderProcessedResult(data, meta){
     `</div>` +
     openAIErrorBlock(data);
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
-  // Decisão "é o mesmo / é outro": traz a pergunta pra vista (senão fica embaixo e parece que travou).
-  if(perguntarNome){
+  // Decisão "é o mesmo / é outro" (nome só parecido, ambíguo de verdade): traz a pergunta pra
+  // vista, senão fica embaixo e parece que travou. Nome exato não pergunta mais (v953) — sem
+  // pergunta, sem precisar trazer pra vista.
+  if(nomeSoParecido){
     setTimeout(() => { (qs("#pendingBox") || qs("#resultCard"))?.scrollIntoView({ behavior:"smooth", block:"center" }); }, 80);
   }
 
@@ -7093,9 +7098,12 @@ async function renderProcessedResult(data, meta){
   qs("#btnSalvarComoNovo")?.addEventListener("click", salvarLeadPendente);
   qs("#btnDescartarLead")?.addEventListener("click", descartarLeadPendente);
   qs("#btnAtualizarLead")?.addEventListener("click", atualizarLeadComEvolucao);
-  if(perguntarNome){
-    // Nome exato: só permite atualizar o cadastro existente, criar duplicata não é oferecido.
-    // Nome só parecido: espera o corretor confirmar se é o mesmo cliente ou outro (ver acima).
+  if(nomeSoParecido){
+    // Nome só parecido (não idêntico): espera o corretor confirmar se é o mesmo cliente ou
+    // outro — a única ambiguidade real que ainda pergunta (ver v953 acima).
+  }else if(perguntarNome){
+    // Nome exato: já sabemos que é o mesmo cliente — atualiza direto, sem perguntar (v953).
+    atualizarLeadComEvolucao();
   }else{
     salvarLeadPendente();
   }
