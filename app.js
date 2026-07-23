@@ -8982,7 +8982,11 @@ function cpFimDeSemana(){ const d = new Date().getDay(); return d === 0 || d ===
 function cpFilaFazerAgora(items){
   if(cpFimDeSemana()) return [];
   const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
-  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l));
+  // v938 — bug real: "Puxar da fila"/"Fazer agora" estava oferecendo lead que o corretor
+  // CONTATOU ONTEM e ainda está esperando resposta (cpAguardandoResposta) como se fosse
+  // "prioridade agora, tem objeção pra tratar" — errado, a bola tá com o cliente, empurrar de
+  // novo é forçar a mão sem motivo. Só entra quem NÃO está com a bola do lado do cliente.
+  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !cpAguardandoResposta(l));
   const dParado = l => { const d = diasParado(l); return Number.isFinite(d) ? d : 0; };
   pool.sort((a,b) => mensagensDoCliente(b) - mensagensDoCliente(a) || dParado(b) - dParado(a));
   return pool;
