@@ -2364,7 +2364,11 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
   const timer = setTimeout(() => controller.abort(), timeout);
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`${model} não respondeu em ${timeout}ms`)), timeout);
+    timeoutId = setTimeout(() => {
+      const err = new Error(`${model} não respondeu em ${timeout}ms`);
+      err.code = "ETIMEDOUT"; // deixa isRetryableOpenAIError reconhecer o timeout como retentável
+      reject(err);
+    }, timeout);
   });
   try {
     const apiPromise = openai.chat.completions.create({
@@ -2578,14 +2582,19 @@ CONVERSA COMPLETA:
 ${timelineText}`;
 
   try {
-    const r = await chamarGPT4Json({
+    // v946: 1 retry (não 3) com backoff curto — a chamada principal não tinha nenhuma rede contra
+    // erro transitório (429/5xx/timeout), diferente da transcrição (que já usa withRetries). Preso
+    // a 2 tentativas de propósito: as rotas que chamam analyzeWithBrain têm maxDuration:60 no
+    // vercel.json: 2 tentativas × até 26s + 800ms de espera ≈ 52.8s, com margem segura sob o teto —
+    // 3 tentativas estourariam os 60s antes da nossa própria lógica desistir.
+    const r = await withRetries(() => chamarGPT4Json({
       openai,
       systemPrompt: systemPromptAnalise,
       prompt,
       model: modeloAnalise(),
-      maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 2300),
+      maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600),
       timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
-    });
+    }), { tries: 2, baseDelayMs: 800 });
     const parsedRaw = r.parsed;
     const completion = r.response;
 
