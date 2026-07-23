@@ -26,9 +26,11 @@ assert.doesNotMatch(apiBlock, /observacoes:/, 'atendimento não deve duplicar in
 assert.match(apiBlock, /eventos\[indiceHoje\] = eventoAtual/, 'nova marcação no mesmo dia deve atualizar o horário anterior');
 assert.doesNotMatch(apiBlock, /jaMarcado:\s*true/, 'API não pode devolver o horário antigo como se a nova marcação não existisse');
 assert.doesNotMatch(mark, /Atendido\.\`|Atendido\."/, 'frontend não deve inserir observação redundante');
-// v887: "Última mensagem" puxa a hora da própria última mensagem real (mesma do histórico),
-// pra não divergir por fuso; cai no lastInteractionAt só como fallback.
-assert.match(app, /const last=\(ultimaMsgReal&&ultimaMsgReal\.m\)\?cp704DataHora\(ultimaMsgReal\.m\):cp705FormatDateTime\(lead\.lastInteractionAt/, 'Última mensagem deve usar a hora da mensagem real da timeline');
+// v887 tinha uma metalinha "Última mensagem" no cabeçalho do lead que puxava a hora da própria
+// última mensagem real (mesma do histórico), pra não divergir por fuso; a v934 removeu essa
+// metalinha do cabeçalho (pedido do dono: só "Última análise" ali). cp786UltimaMensagemReal
+// continua existindo/usada em outros lugares (histórico, análise) — só a exibição no cabeçalho
+// do lead que saiu.
 assert.doesNotMatch(app, /lastInteraction \|\| a\.reanalisadoEm/, 'data da análise não pode ser exibida como data da última mensagem');
 assert.match(persistence, /source === "corretor-pro-manual"/, 'observação manual não pode substituir a data da última mensagem real');
 assert.match(persistence, /"observacao_manual"/, 'tipo de observação manual deve ser excluído da última mensagem real');
