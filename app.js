@@ -590,7 +590,11 @@ function carregarTelaAtiva(t, force=false){
           icTab(state.icTabAtiva === "aprendizado" ? "aprendizado" : "cerebro", true);
         }
         // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
-        else if(t === "perdidos" || t === "geladeira") await carregarGeladeira();
+        // v952: chamada via window.* de propósito — existe uma versão mais nova (com paginação
+        // e state.geladeiraItemsTodos p/ busca) só em window.carregarGeladeira; a referência
+        // solta "carregarGeladeira" aqui resolvia pro nome de função do escopo do módulo (a
+        // versão velha, sem paginação nem state.geladeiraItemsTodos), nunca pra atual.
+        else if(t === "perdidos" || t === "geladeira") await window.carregarGeladeira();
         else if(t === "aprendizado") await carregarAprendizado();
         else if(t === "carteira") await carregarCarteira(force);
         if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
@@ -7931,7 +7935,7 @@ qs("#pipelineBusca")?.addEventListener("input", (e)=>{
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
 qs("#perdidosRefresh")?.addEventListener("click", carregarPerdidos);
-qs("#geladeiraRefresh")?.addEventListener("click", carregarGeladeira);
+qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#carteiraExport")?.addEventListener("click", baixarRelatorioCarteira);
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
@@ -8559,7 +8563,11 @@ window.carregarPerdidos = carregarPerdidos;
 
 async function reabrirLeadPerdido(id, btn){
   if(!id) return;
-  if(!confirm("Reabrir este cliente? Ele volta para os atendimentos ativos.")) return;
+  const msg = "Reabrir este cliente? Ele volta para os atendimentos ativos.";
+  const ok = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Reabrir lead", mensagem: msg, ok: "Reabrir" })
+    : confirm(msg);
+  if(!ok) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reabrindo..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -8578,72 +8586,21 @@ async function reabrirLeadPerdido(id, btn){
 }
 window.reabrirLeadPerdido = reabrirLeadPerdido;
 
-// Lista os leads na Geladeira (negócios fracos guardados pra revisitar), com botão Reativar.
-// Radar da Geladeira: aponta quem vale revisitar por etapa, permuta ou contexto concreto.
-function valeRevisitarGeladeira(l){
-  if(normalizarEtapa(l.etapa) !== "Geladeira") return null;
-  const a = l.analysis || {};
-  const dias = Number(l.daysSinceLastInteraction) || 0;
-  const etapaIA = normalizarEtapa(a.etapaSugerida);
-  const objTxt = ((Array.isArray(a.objections) ? a.objections.join(" ") : String(a.objections||"")) + " " + String(a.memoria?.observacoes||"") + " " + String(a.summary||"")).toLowerCase();
-  const temSafra = /safra|colhe|colheita|plantio|lavoura/.test(objTxt);
-  const sinalForte = etapaIA === "Negociação" || etapaIA === "Visita/Proposta" || a.permuta || temSafra;
-  if(!sinalForte) return null;
-  const motivos = [];
-  if(etapaIA === "Negociação" || etapaIA === "Visita/Proposta") motivos.push(`parou em ${etapaIA}`);
-  if(a.permuta) motivos.push("permuta (talvez já vendeu o bem)");
-  if(temSafra) motivos.push("safra/colheita já pode ter terminado");
-  if(dias >= 60) motivos.push(`${dias} dias parado`);
-  if(!motivos.length) return null;
-  return { motivos };
-}
-
-async function carregarGeladeira(){
-  const box = qs("#geladeiraList");
-  if(!box) return;
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const res = { ok:true, json: async () => await getLeadsData() };
-    const data = await res.json();
-    const items = (data?.items || []).map(limparLead).filter(l => ["Geladeira","Perdido"].includes(normalizarEtapa(l.etapa)));
-    if(!items.length){
-      box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>';
-      return;
-    }
-    const cardGel = (l, motivos) => {
-      const idJs = JSON.stringify(String(l.id||""));
-      const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "";
-      const destaque = motivos && motivos.length;
-      const motivoHtml = destaque ? `<div style="margin-top:8px;padding:6px 8px;background:rgba(104,255,149,.06);border-left:3px solid var(--acao);border-radius:6px;font-size:12px"><b style="color:var(--acao)">Vale revisitar:</b> ${escapeHtml(motivos.join(" · "))}</div>` : "";
-      return `
-        <div data-geladeira-id="${escapeHtml(String(l.id||""))}" style="border:1px solid ${destaque?"var(--acao)":"var(--line)"};background:${destaque?"rgba(104,255,149,.05)":"rgba(0,212,255,.04)"};border-radius:14px;padding:12px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <div style="flex:1;min-width:0">
-              <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||"Cliente")}</strong>
-              <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?" · "+dias:""}</div>
-            </div>
-            <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
-          </div>
-          ${motivoHtml}
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-            <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
-          </div>
-        </div>`;
-    };
-    // Todos os leads da geladeira são mostrados IGUAIS — sem destaque "vale revisitar" (pedido do dono).
-    let html = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?"s":""} guardado${items.length>1?"s":""}.</div>`;
-    html += items.map(l => cardGel(l, null)).join("");
-    box.innerHTML = html;
-  }catch(err){
-    box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-  }
-}
-window.carregarGeladeira = carregarGeladeira;
+// v952: a renderização real de Arquivados (com paginação e busca) vive só dentro da IIFE
+// #724-2, exposta em window.carregarGeladeira. Existia uma segunda função de mesmo nome aqui
+// (mais antiga, sem paginação nem suporte a busca) que nenhuma chamada `window.`-qualificada
+// nunca usava — mas a navegação chamava o nome solto "carregarGeladeira()", que por escopo
+// léxico do módulo resolvia pra ESTA função velha, não pra atual. Removida (ver fix em
+// carregarTelaAtiva). valeRevisitarGeladeira também saiu: só era usada por este bloco morto,
+// e já nem era chamada com motivos reais (sempre null) havia tempo.
 
 async function reativarLeadGeladeira(id, btn){
   if(!id) return;
-  if(!confirm("Reativar este cliente? Ele volta para os atendimentos ativos.")) return;
+  const msg = "Reativar este cliente? Ele volta para os atendimentos ativos.";
+  const ok = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Reativar lead", mensagem: msg, ok: "Reativar" })
+    : confirm(msg);
+  if(!ok) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reativando..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -11623,6 +11580,24 @@ function ui670DetailRows(lead,mc){
   function baseRows(items){
     return (Array.isArray(items) ? items : []).map(limparLead);
   }
+  function geladeiraCardHTML(l){
+    const idJs = leadId(l);
+    const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
+    return `
+      <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
+            <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
+          </div>
+          <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
+          <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
+        </div>
+      </div>`;
+  }
   function renderLoadMore(key, total, visible, fnName){
     const faltam = Math.max(0, total - visible);
     return faltam > 0
@@ -11678,29 +11653,37 @@ function ui670DetailRows(lead,mc){
     try{
       const data = await getLeadsData(false);
       const items = baseRows(data?.items).filter(l => ['Geladeira','Perdido'].includes(normalizarEtapa(l.etapa)));
+      state.geladeiraItemsTodos = items;
+      const buscaAtiva = qs('#buscaArquivados');
+      if(buscaAtiva && buscaAtiva.value.trim().length >= 2){
+        window.buscaGeladeiraInline(buscaAtiva.value);
+        cpPerfMark('renderGeladeira', start, { total:items.length, busca:true });
+        return;
+      }
       const limite = ensureVisibleKey('geladeiraVisibleCount');
       const lote = items.slice(0, limite);
       if(!items.length){ box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
-      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(l => {
-        const idJs = leadId(l);
-        const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
-        return `
-          <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-              <div style="flex:1;min-width:0">
-                <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
-                <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
-              </div>
-              <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-              <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
-            </div>
-          </div>`;
-      }).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(geladeiraCardHTML).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
       cpPerfMark('renderGeladeira', start, { total:items.length, visiveis:lote.length });
     }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderGeladeira', start, { error:true }); }
+  };
+
+  // Busca dentro dos Arquivados (Geladeira/Perdido): o dono pediu pra achar rápido um contato
+  // "morto" que voltou a responder, sem precisar rolar a lista inteira, e reativá-lo dali mesmo.
+  let _buscaGeladeiraTimer = null;
+  window.buscaGeladeiraInline = function(termo){
+    clearTimeout(_buscaGeladeiraTimer);
+    _buscaGeladeiraTimer = setTimeout(() => {
+      const box = qs('#geladeiraList');
+      if(!box) return;
+      const t = semAcento(termo);
+      if(t.length < 2){ window.carregarGeladeira(); return; }
+      const fonte = Array.isArray(state.geladeiraItemsTodos) ? state.geladeiraItemsTodos : [];
+      const numeros = String(termo||'').replace(/\D/g,'');
+      const matches = fonte.filter(l => semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||'').replace(/\D/g,'').includes(numeros)));
+      if(!matches.length){ box.innerHTML = `<div class="empty">Nenhum arquivado encontrado com "${escapeHtml(termo)}".</div>`; return; }
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${matches.length} encontrado${matches.length>1?'s':''}.</div>` + matches.map(geladeiraCardHTML).join('');
+    }, 200);
   };
 
   try{

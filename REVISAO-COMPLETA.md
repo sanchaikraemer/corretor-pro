@@ -79,3 +79,24 @@ que corrigiu, ou "achado, não corrigido" com o motivo)_
 
 **Pendente:** linhas ~950–3233 do arquivo (o grosso da lógica de análise/prompt da IA) ainda não
 foram lidas nesta revisão — continuar daqui no próximo ciclo.
+
+### Pausa pra feature ao vivo (v952) — acrescenta contexto útil pra quando a revisão chegar em app.js
+
+O dono pediu ao vivo busca dentro de Arquivados + trocar `confirm()` nativo por modal em-app no
+Reativar/Reabrir (ver `NOTAS-v952.md`). No caminho, achei e corrigi um bug real e não-óbvio,
+relevante pro resto da revisão de app.js:
+
+- **app.js tinha função duplicada por nome** (`carregarGeladeira`): uma antiga (função nomeada,
+  sem paginação) e uma nova (só em `window.carregarGeladeira`, dentro de IIFE). Chamada solta
+  (sem `window.`) dentro do próprio módulo sempre resolve pro nome de função do ESCOPO DO
+  MÓDULO, nunca pega a versão reatribuída via `window.X = ...` de dentro de uma IIFE depois.
+  Isso silenciosamente quebrava a paginação "carregar mais" da tela Arquivados desde a
+  Atualização #724-2. Corrigido (removida a duplicada, call site ajustado pra `window.*`).
+- **Vale procurar esse MESMO padrão em outras IIFEs "Atualização #NNN" do arquivo** (há várias:
+  #685, #724-2, #6862, #6863 nos comentários) — qualquer `window.algumNome = function(){...}`
+  dentro de uma IIFE que reaproveita um nome já usado como `function algumNome(){}` no escopo do
+  módulo tem o mesmo risco. Não fiz essa varredura ainda — fica pro ciclo que revisar app.js.
+- Teste antigo `v904-somente-arquivar.test.mjs` mirava sem querer na função morta (regex com
+  aspas duplas). Corrigido pra mirar a versão real (aspas simples). Vale desconfiar de outros
+  testes antigos que usam `app.match(/.../)`: se o regex não for específico o bastante, pode
+  estar validando código morto em vez do código que realmente roda.
