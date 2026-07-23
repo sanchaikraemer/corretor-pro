@@ -26,7 +26,6 @@ const sandbox = eval(`
   const ehContatadoHoje = (l) => !!l.__hoje;
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const cp786TemCompromisso = () => false;
-  const cpAguardandoResposta = (l) => !!l.__aguardando;
   const diasParado = (l) => Number(l.__parado||0);
   ${fdsSrc}
   ${filaSrc}
