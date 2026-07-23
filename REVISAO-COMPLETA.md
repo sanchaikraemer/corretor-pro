@@ -14,7 +14,7 @@
 | Arquivo | Linhas | Status | Observações |
 |---|---|---|---|
 | api/_persistence.js | 869 | concluído (v950) | camada de persistência — crítico. 1 fix aplicado + 2 achados registrados no log |
-| api/_pipeline.js | 3233 | pendente | motor de análise/IA — crítico; dividir em 2 blocos. Tem o MESMO regex frágil de acento em 2 pontos (linhas ~1712 e ~1986) — aplicar o mesmo fix de v950 |
+| api/_pipeline.js | 3233 | parcial (v951): linhas 1–950 revisadas, falta ~950–3233 | motor de análise/IA — crítico |
 | api/lead-update.js | 1748 | pendente | dividir em 2 blocos |
 | api/reanalisar-lead.js | 804 | pendente | |
 | api/cerebro-config.js | 378 | pendente | |
@@ -60,3 +60,22 @@ que corrigiu, ou "achado, não corrigido" com o motivo)_
   `leads`/`direciona_leads` falhar (só fica em `warnings`). A carteira do app lê só de
   `whatsapp_processamentos` (confirmado em `listRecentProcessings`), então não parece afetar o que o
   corretor vê — mas precisa confirmar se algo mais depende dessas tabelas antes de mudar isso.
+
+### api/_pipeline.js (v951) — linhas 1–950 de 3233, resto pendente
+
+**Corrigido:**
+- 11 linhas de comentário (474–527, ao redor de `filtrarCompromissosReais`) estavam com escapes
+  Unicode gravados como texto literal (`é`, `ç` etc.) em vez dos caracteres reais — comentário
+  ilegível, zero impacto em runtime. Decodificado.
+- Mesmo regex frágil de acento da v950, 2 ocorrências — trocado pro escape padrão.
+
+**Achado, não corrigido (precisa confirmar com o dono, não é bug óbvio):**
+- `normalizarModeloComercial`: exportada, zero chamadas no projeto inteiro — código morto do
+  reset "v724-2". Limpeza, não bug.
+- `finalizarAnaliseComercial`: chamada em 4 lugares como se transformasse o resultado
+  (`api/reanalisar-lead.js` ×3, `api/lead-update.js` ×1), mas só devolve o input sem alterar
+  desde o mesmo reset. Provavelmente inofensivo (o conceito que ela aplicava — teto de
+  probabilidade — foi removido depois em `_semScoreComercial`), mas os call-sites enganam.
+
+**Pendente:** linhas ~950–3233 do arquivo (o grosso da lógica de análise/prompt da IA) ainda não
+foram lidas nesta revisão — continuar daqui no próximo ciclo.
