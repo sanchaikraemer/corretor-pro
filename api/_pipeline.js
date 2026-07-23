@@ -2512,6 +2512,16 @@ Se as três acabarem propondo a MESMA ação (ex.: as três só perguntam "quer 
 propostas?"), reescreva até virarem três caminhos realmente distintos. Todas seguem o Cérebro,
 usam só fatos da conversa e mantêm o jeito de escrever do corretor.
 
+PRODUTO ESPECÍFICO: se o cliente citou identificadores específicos de unidade (lote, quadra,
+apartamento, bloco, torre, metragem exata etc.), "produtoInteresse" PRECISA incluir esses
+identificadores — não feche só no nome genérico do empreendimento/categoria, ou essa informação
+se perde da análise. Se o cliente citou MAIS DE UMA unidade específica, liste cada uma como um
+item separado em "produtosInteresse" (ex.: se o cliente citou o lote 105 da quadra 77 e o lote 37
+da quadra 157 do mesmo empreendimento, "produtosInteresse" vira ["Lote 105, quadra 77 — <nome do
+empreendimento citado na conversa>","Lote 37, quadra 157 — <nome do empreendimento citado na
+conversa>"]). Sem unidades específicas citadas, "produtosInteresse" pode ter só o item genérico
+igual a "produtoInteresse".
+
 Formato JSON obrigatório:
 {
   "summary":"texto",
