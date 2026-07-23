@@ -16,20 +16,22 @@ const persistence = fs.readFileSync(new URL('../api/_persistence.js', import.met
 //  5) Performance: service worker serve os assets do cache na hora (stale-while-revalidate).
 
 // 1. Linha densa + barra existem e renderizam os campos certos.
-const rowFn = app.match(/function cpHomeLeadRow\(l, ?pos\)\{[\s\S]*?\n\}/);
+const rowFn = app.match(/function cpHomeLeadRow\(l, ?pos, ?maxMsgs\)\{[\s\S]*?\n\}/);
 assert.ok(rowFn, 'cpHomeLeadRow não encontrada');
 assert.match(rowFn[0], /class="cp-hoje-row"/, 'linha usa a classe da lista compacta');
-assert.match(rowFn[0], /cpBarraMensagensMini\(l\)/, 'a linha inclui a barra de mensagens');
+assert.match(rowFn[0], /cpBarraMensagensMini\(l, ?maxMsgs\)/, 'a linha inclui a barra de mensagens (relativa ao maior da lista)');
 assert.match(rowFn[0], /chr-nm[\s\S]*chr-pr[\s\S]*chr-dd/, 'linha tem nome, produto e dias');
 
-const barFn = app.match(/function cpBarraMensagensMini\(l\)\{[\s\S]*?\n\}/);
+const barFn = app.match(/function cpBarraMensagensMini\(l, ?maxMsgs\)\{[\s\S]*?\n\}/);
 assert.ok(barFn, 'cpBarraMensagensMini não encontrada');
 assert.match(barFn[0], /mensagensDoCliente\(l\)/, 'a barra usa a contagem de mensagens do cliente');
 assert.match(barFn[0], /n >= 15 \? '#ff6258' : n >= 5 \? '#ff8f88' : '#8a99a0'/, 'cor por nível: cinza (baixo) → coral (alto), sem amarelo');
+assert.match(barFn[0], /n \/ teto \* 100/, 'a barra enche relativa ao maior da lista (não satura com contagens altas)');
 
-// CSS da lista: 1 coluna (sem quebra lateral).
+// CSS da lista: 1 coluna (sem quebra lateral), com layout mobile de 2 linhas.
 assert.match(app, /\.cp-hoje-list\{display:flex;flex-direction:column/, 'lista compacta é uma coluna (flex column)');
 assert.match(app, /\.cp-hoje-row\{width:100%;display:grid/, 'cada linha ocupa a largura toda');
+assert.match(app, /grid-template-areas:"dot nm dd" "dot bar pr"/, 'no mobile a linha vira 2 linhas (nome em cima, barra+produto embaixo)');
 
 // 2. lista-leads-grid (tela expandida do "Fazer agora") = 1 coluna sempre, sem 2/3 colunas.
 assert.match(css, /\.lista-leads-grid\{display:grid;grid-template-columns:1fr;gap:8px\}/, 'lista-leads-grid é 1 coluna');

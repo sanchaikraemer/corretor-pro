@@ -27,6 +27,9 @@ const sandbox = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const cp786TemCompromisso = () => false;
   const diasParado = (l) => Number(l.__parado||0);
+  // v943 — a ordem da fila passou a ser cpProbabilidadeFechamento (junção de fatores); este
+  // teste é sobre a CONTAGEM da dose, não a ordem, então um stub simples (por mensagens) basta.
+  const cpProbabilidadeFechamento = (l) => mensagensDoCliente(l);
   ${fdsSrc}
   ${filaSrc}
   ${totalSrc}

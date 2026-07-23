@@ -20,6 +20,6 @@ assert.doesNotMatch(rbh, /Vamos atender mais um\?/, 'texto do card antigo removi
 
 // A Home renderiza a lista compacta dos leads do dia (cp-hoje-list) puxando da fila ranqueada.
 assert.match(rbh, /cp-hoje-list/, 'a Home renderiza a lista compacta dos leads do dia');
-assert.match(rbh, /dose\.map\(\(l, ?i\) ?=> ?cpHomeLeadRow\(l, ?i\+1\)\)/, 'a lista é montada com cpHomeLeadRow');
+assert.match(rbh, /dose\.map\(\(l, ?i\) ?=> ?cpHomeLeadRow\(l, ?i\+1, ?maxMsgsDose\)\)/, 'a lista é montada com cpHomeLeadRow');
 
 console.log('v933-meta-batida-vs-dose-pendente: ok');
