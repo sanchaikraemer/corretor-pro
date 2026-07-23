@@ -2454,18 +2454,22 @@ function filaRowHTML(l, pos){
 }
 // v942 — barra de status das mensagens do cliente (Modelo A escolhido pelo dono: barra
 // horizontal + número, cor por nível). Mesma métrica do "Interesse do cliente" que já existe
-// dentro do lead (mensagensDoCliente). Cor: baixo = cinza, médio/alto = coral. A barra enche até
-// 30 mensagens (útil na lista — o número exato fica ao lado). O topo da lista naturalmente tem as
-// barras mais cheias, porque a fila é ranqueada por essa mesma contagem.
-function cpBarraMensagensMini(l){
+// dentro do lead (mensagensDoCliente). Cor: baixo = cinza, médio/alto = coral. v942.1 — a barra
+// enche RELATIVA ao maior da lista (maxMsgs): antes saturava em 30 msgs e, numa carteira onde os
+// leads têm 56–218 msgs, TODAS ficavam cheias e iguais (não diferenciava nada). Relativa ao topo,
+// a diferença aparece (o #1 cheio, os de baixo proporcionalmente menores). O número exato fica ao
+// lado.
+function cpBarraMensagensMini(l, maxMsgs){
   const n = (typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0;
   const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
-  const pct = Math.max(6, Math.min(100, Math.round(n / 30 * 100)));
+  const teto = Math.max(1, Number(maxMsgs) || 1);
+  const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
   return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente"><span class="chr-track"><i style="width:${pct}%;background:${cor}"></i></span><b style="color:${cor}">${n}</b></span>`;
 }
 // Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
-// produto, barra de mensagens e dias parado. Uma coluna, sem quebra lateral.
-function cpHomeLeadRow(l, pos){
+// produto, barra de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a
+// largura toda; barra + produto vão embaixo) — via grid-template-areas, sem quebra lateral.
+function cpHomeLeadRow(l, pos, maxMsgs){
   const idJs = JSON.stringify(String(l.id||""));
   let nivel = 0;
   try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
@@ -2476,7 +2480,7 @@ function cpHomeLeadRow(l, pos){
     <span class="chr-dot" style="background:${dotCor}"></span>
     <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr">${escapeHtml(prod||'')}</span>
-    ${cpBarraMensagensMini(l)}
+    ${cpBarraMensagensMini(l, maxMsgs)}
     <span class="chr-dd">${escapeHtml(dias)}</span>
   </button>`;
 }
@@ -2684,8 +2688,10 @@ function renderBotoesHome(){
   let top3Html;
   if(dose.length){
     // Lista compacta: um lead embaixo do outro, 1 coluna, sem quebra lateral (opção 1 + lista
-    // densa que o dono escolheu). Cada linha traz a barra de status das mensagens do cliente.
-    top3Html = `<div class="cp-hoje-list">${dose.map((l, i) => cpHomeLeadRow(l, i+1)).join("")}</div>`
+    // densa que o dono escolheu). Cada linha traz a barra de status das mensagens do cliente,
+    // relativa ao maior da lista (maxMsgsDose) pra as diferenças aparecerem.
+    const maxMsgsDose = dose.reduce((m,l)=>Math.max(m, (typeof mensagensDoCliente==='function'?mensagensDoCliente(l):0)), 1);
+    top3Html = `<div class="cp-hoje-list">${dose.map((l, i) => cpHomeLeadRow(l, i+1, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
           : "");
@@ -2730,23 +2736,33 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
-      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,1.35fr) 118px 42px;gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      /* Desktop: 1 linha (dot · nome · produto · barra · dias) via grid-areas. */
+      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,1.3fr) 116px 42px;grid-template-areas:"dot nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
       .cp-hoje-row:last-child{border-bottom:0}
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
-      .cp-hoje-row .chr-dot{width:8px;height:8px;border-radius:50%}
-      .cp-hoje-row .chr-nm{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .cp-hoje-row .chr-pr{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .cp-hoje-row .chr-bar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+      .cp-hoje-row .chr-dot{grid-area:dot;width:8px;height:8px;border-radius:50%}
+      .cp-hoje-row .chr-nm{grid-area:nm;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp-hoje-row .chr-pr{grid-area:pr;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp-hoje-row .chr-bar{grid-area:bar;display:flex;align-items:center;gap:8px;justify-content:flex-end}
       .cp-hoje-row .chr-track{width:64px;height:7px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;flex:0 0 auto}
       .cp-hoje-row .chr-track i{display:block;height:100%;border-radius:999px}
       .cp-hoje-row .chr-bar b{font-size:11px;font-weight:900;min-width:20px;text-align:right}
-      .cp-hoje-row .chr-dd{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+      .cp-hoje-row .chr-dd{grid-area:dd;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
       .cp-hoje-done{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);color:var(--soft);font-size:13px;font-weight:700;text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
       .cp-hoje-vazio{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center;margin-bottom:8px}
-      @media(max-width:560px){.cp-hoje-row{grid-template-columns:10px minmax(0,1fr) 96px 38px;gap:10px}.cp-hoje-row .chr-pr{display:none}.cp-hoje-row .chr-track{width:52px}}
+      /* Mobile: 2 linhas — nome + dias em cima (nome ocupa a largura toda), barra + produto embaixo. */
+      @media(max-width:560px){
+        .cp-hoje-row{grid-template-columns:14px minmax(0,1fr) auto;grid-template-areas:"dot nm dd" "dot bar pr";column-gap:10px;row-gap:5px;padding:12px 0}
+        .cp-hoje-row .chr-dot{align-self:center}
+        .cp-hoje-row .chr-nm{font-size:14.5px}
+        .cp-hoje-row .chr-bar{justify-self:start;gap:9px}
+        .cp-hoje-row .chr-track{width:96px}
+        .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
+        .cp-hoje-row .chr-dd{align-self:center}
+      }
     </style>
     <div class="home-saud">
       <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes">${btnPularHtml}</div></div>
@@ -9000,11 +9016,48 @@ function cpNotaPrioridade(l){
   return msgs * CP_PESO_ENGAJAMENTO + dias * CP_PESO_ABANDONO;
 }
 // Sábado e domingo: sem "Fazer agora" (o dono não trabalha fila no fim de semana).
-function cpFimDeSemana(){ const d = new Date().getDay(); return d === 0 || d === 6; }
-// v914 — candidatos ao "Fazer agora": ranqueados pela MAIOR probabilidade de venda = mais
-// MENSAGENS DO CLIENTE (interesse). Entram só os NÃO atendidos hoje e com engajamento real
-// (cliente já falou). Desempate: mais tempo parado (retomar o mais antigo). Esta é a FILA BRUTA
-// (candidatos elegíveis) — quantos de fato "contam" como dose de hoje é cpFazerAgoraDose (v924).
+// v943 — multi-linha de propósito: era 1 linha só, e testes que extraem essa função via regex
+// "\n\}" atravessavam ela sem querer e engoliam a função seguinte inteira (mascarou por acidente
+// uma função faltando em teste — só não deu ReferenceError porque "vazou" pra dentro do stub).
+function cpFimDeSemana(){
+  const d = new Date().getDay();
+  return d === 0 || d === 6;
+}
+// v943 — a ORDEM do "Fazer agora" precisa ser uma JUNÇÃO DE FATORES reais da conversa, não uma
+// regra isolada (nem "mais mensagens", nem "mais dias parado", nem só "cliente esperando você").
+// Pedido explícito do dono: analisar o histórico inteiro e estimar PROBABILIDADE DE FECHAMENTO
+// combinando — engajamento (quantas mensagens o cliente mandou), RECORRÊNCIA (voltou a conversar
+// em quantos dias diferentes — interesse sustentado pesa mais que uma explosão de mensagens num
+// dia só), quantas PERGUNTAS ele fez (dúvida real = interesse ativo), se já se discutiu
+// valor/condição de pagamento/proposta (sinal de negociação avançada — contextoPrioridadeIA, que
+// já lê o resumo da IA sobre a conversa inteira), e se o cliente é quem está esperando a SUA
+// resposta agora (bônus de responsividade, não mais um estágio isolado que trava tudo o resto).
+// clientMessageDays/clientQuestionCount vêm do servidor (calculados sobre o histórico INTEIRO,
+// como clientMessageCount da v942 — a lista só recebe uma prévia de mensagens).
+function cpProbabilidadeFechamento(l){
+  // Pesos calibrados pra NENHUM fator sozinho dominar: um lead "explosão de mensagens" (ex.: 218
+  // msgs em 2 dias, sem retomada, sem pergunta, sem negociação) não pode vencer um lead com poucas
+  // mensagens mas recorrente + qualificado. Por isso engajamento tem teto BAIXO (30) e peso 1,
+  // enquanto recorrência/perguntas/negociação (os fatores que indicam interesse REAL, não só
+  // volume) têm peso maior.
+  const engajamento = Math.min((typeof mensagensDoCliente === 'function' ? mensagensDoCliente(l) : 0), 30);
+  const recorrencia = Math.min(Number(l?.clientMessageDays) || 0, 20);
+  const perguntas = Math.min(Number(l?.clientQuestionCount) || 0, 20);
+  let sinalNegociacao = 0;
+  try{
+    const ctx = (typeof contextoPrioridadeIA === 'function') ? contextoPrioridadeIA(l) : null;
+    if(ctx?.propostaAtiva) sinalNegociacao += 1;   // já se falou de valor/condição/entrada/financiamento
+    if(ctx?.retornoProposta) sinalNegociacao += 1; // negociação num ponto avançado (proposta/contraproposta)
+  }catch(_){}
+  const resp = Number(l?.daysSinceClientReply);
+  const toque = Number(l?.daysSinceLastTouch);
+  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque);
+  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0);
+}
+// candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
+// falou) e fora da janela de espera. Ordem = probabilidade de fechamento (cpProbabilidadeFechamento,
+// junção de fatores). Esta é a FILA BRUTA (candidatos elegíveis) — quantos de fato "contam" como
+// dose de hoje é cpFazerAgoraDose.
 function cpFilaFazerAgora(items){
   if(cpFimDeSemana()) return [];
   const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
@@ -9017,8 +9070,7 @@ function cpFilaFazerAgora(items){
   // ainda esteja tecnicamente do lado dele — é a MESMA regra que entraEmRetomada usa). Corrigido
   // pra usar essa regra existente em vez de inventar um bloqueio que nunca é revisto.
   const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
-  const dParado = l => { const d = diasParado(l); return Number.isFinite(d) ? d : 0; };
-  pool.sort((a,b) => mensagensDoCliente(b) - mensagensDoCliente(a) || dParado(b) - dParado(a));
+  pool.sort((a,b) => cpProbabilidadeFechamento(b) - cpProbabilidadeFechamento(a) || mensagensDoCliente(b) - mensagensDoCliente(a));
   return pool;
 }
 // v922 tentou uma "dose fixa" persistida no aparelho (localStorage) pra parar de repor

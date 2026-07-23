@@ -28,6 +28,9 @@ const fila = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const cp786TemCompromisso = () => false;
   const emJanelaDeEspera = (l) => !!l.__dentroDaJanela;
+  // v943 — a ordem passou a ser cpProbabilidadeFechamento (junção de fatores, testada em
+  // v914/v941); este teste é sobre a EXCLUSÃO por janela de espera, não sobre ordem — stub simples.
+  const cpProbabilidadeFechamento = (l) => mensagensDoCliente(l);
   const diasParado = (l) => Number(l.__parado||0);
   ${fdsSrc}
   ${filaSrc}
@@ -48,7 +51,7 @@ const r = fila(pool).map(l => l.id);
 if(ehFds){
   assert.deepEqual(r, [], 'fim de semana → fila vazia');
 } else {
-  assert.deepEqual(r, ['janela-passou', 'ok'], 'só quem ainda está dentro da janela de espera fica de fora; depois do prazo, volta a ser candidato');
+  assert.deepEqual(r.slice().sort(), ['janela-passou', 'ok'].sort(), 'só quem ainda está dentro da janela de espera fica de fora; depois do prazo, volta a ser candidato (ordem entre os dois é assunto de cpProbabilidadeFechamento, testada em v914/v941)');
 }
 
 console.log('v938-fila-nao-oferece-aguardando-resposta: ok');

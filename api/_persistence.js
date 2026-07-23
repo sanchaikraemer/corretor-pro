@@ -717,15 +717,26 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // na MESMA varredura que já achava a última msg do cliente (sem custo extra de loop). Sem
     // janela de tempo: a janela de 90 dias zerava leads que esfriaram há 3+ meses (parecia bug pro
     // dono — ex.: cliente que escreveu ~15 msgs aparecia com "0"). A coldness fica nos "dias parado".
+    // v943 — pedido do dono: a ORDEM do "Fazer agora" precisa juntar VÁRIOS fatores reais da
+    // conversa (não só quantidade de mensagens nem só tempo parado) — quantas vezes o cliente
+    // voltou a conversar em dias DIFERENTES (recorrência = interesse sustentado), quantas
+    // perguntas ele fez (dúvida real = engajamento ativo). Mesma varredura, sem custo extra.
     let lastClient = null;
     let clientMessageCount = 0;
+    let clientQuestionCount = 0;
+    const _diasComMsg = new Set();
     for (let i = timeline.length - 1; i >= 0; i--) {
       const m = timeline[i];
       if (!ehClienteMsg(m)) continue;
       if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
-      if (!String(m?.text || "").trim()) continue;
+      const txt = String(m?.text || "").trim();
+      if (!txt) continue;
       clientMessageCount++;
+      if (txt.includes("?")) clientQuestionCount++;
+      const diaChave = m?.date || (m?.iso ? String(m.iso).slice(0, 10) : "");
+      if (diaChave) _diasComMsg.add(diaChave);
     }
+    const clientMessageDays = _diasComMsg.size;
     const lastClientIso = lastClient?.iso || null;
     const daysSinceClientReply = diasCalendarioBR(lastClientIso);
 
@@ -790,6 +801,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       audiosTranscritos: row.audios_transcritos ?? null,
       messageCount: timeline.length,
       clientMessageCount,
+      clientQuestionCount,
+      clientMessageDays,
       hasProposal,
       recentMessages,
       historyLoaded: includeFullTimeline,
