@@ -500,11 +500,9 @@ function carregarTelaAtiva(t, force=false){
           await carregarAprendizado();
           icTab(state.icTabAtiva === "aprendizado" ? "aprendizado" : "cerebro", true);
         }
-        else if(t === "vendas") await carregarVendas();
         // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
         else if(t === "perdidos" || t === "geladeira") await carregarGeladeira();
         else if(t === "aprendizado") await carregarAprendizado();
-        else if(t === "relatorio") await carregarRelatorio(force);
         else if(t === "carteira") await carregarCarteira(force);
         if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
       }catch(err){ console.warn("carregarTelaAtiva", t, err); }
@@ -3273,16 +3271,8 @@ async function abrirLeadTop3(id){
 window.abrirLeadTop3 = abrirLeadTop3;
 window.renderTop3 = renderTop3;
 
-function parseValorVenda(raw){
-  if(raw == null) return 0;
-  const s = String(raw).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-function formatBRL(n){
-  try{ return n.toLocaleString("pt-BR", { style:"currency", currency:"BRL" }); }
-  catch(_){ return "R$ "+n.toFixed(2); }
-}
+// v928 — parseValorVenda/formatBRL removidos: só existiam pra alimentar cálculos de "vendas
+// fechadas" (valor/mês), tudo removido (o dono não marca Vendido no app — só Arquivar).
 
 function renderSaudacao(items){
   // Dois alvos: #saudacao (corpo, mobile) e #saudacaoDesktop (cabeçalho, desktop).
@@ -3501,32 +3491,10 @@ async function _processarDashboard(data){
     }
     renderSaudacao(items);
     renderResumoDia(items);
-    const agora = new Date();
-    const vendasDoMes = all.filter(l => {
-      if(normalizarEtapa(l.etapa) !== "Vendido") return false;
-      const dt = l.analysis?.venda?.registradaEm ? new Date(l.analysis.venda.registradaEm) : null;
-      return dt && dt.getMonth() === agora.getMonth() && dt.getFullYear() === agora.getFullYear();
-    });
-    const totalVendasMes = vendasDoMes.reduce((acc,l)=>acc+parseValorVenda(l.analysis?.venda?.valor), 0);
-    // Resumo dos últimos 7 dias (vai pra faixa de KPIs da home)
-    const cutoff7d = Date.now() - 7*24*60*60*1000;
-    let contatosSemana = 0, vendasSemana = 0, valorVendasSemana = 0, novosLeadsSemana = 0;
-    for(const l of all){
-      const eventos = l.analysis?.aprendizado?.eventos || [];
-      for(const e of eventos){
-        const t = e.quando ? new Date(e.quando).getTime() : 0;
-        if(t >= cutoff7d && (e.evento === "whatsapp_aberto" || e.evento === "mensagem_copiada" || e.evento === "contato_manual")) contatosSemana++;
-      }
-      if(normalizarEtapa(l.etapa) === "Vendido"){
-        const dt = l.analysis?.venda?.registradaEm ? new Date(l.analysis.venda.registradaEm).getTime() : 0;
-        if(dt >= cutoff7d){ vendasSemana++; valorVendasSemana += parseValorVenda(l.analysis?.venda?.valor); }
-      }
-      const criado = l.criadoEm ? new Date(l.criadoEm).getTime() : 0;
-      if(criado >= cutoff7d) novosLeadsSemana++;
-    }
-    state.resumoSemana = { contatos: contatosSemana, vendas: vendasSemana, valorVendas: valorVendasSemana, novos: novosLeadsSemana };
-    if(qs("#kpiVendas")) qs("#kpiVendas").textContent = String(vendasDoMes.length);
-    if(qs("#kpiVendasValor")) qs("#kpiVendasValor").textContent = totalVendasMes>0 ? formatBRL(totalVendasMes) : "R$ 0";
+    // v928 — removido cálculo morto de "vendas do mês"/"vendas da semana" (o dono não marca
+    // Vendido no app — só Arquivar, decisão da v904 — então isso nunca refletia a realidade).
+    // Alimentava só #kpiVendas/#kpiVendasValor/state.resumoSemana, nenhum dos três lido em
+    // lugar nenhum da tela: dado morto calculado à toa em todo carregamento do dashboard.
     if(qs("#kpiAtivos")) qs("#kpiAtivos").textContent = String(items.length);
     const etapasUsadas = new Set(items.map(l => normalizarEtapa(l.etapa)));
     if(qs("#kpiPipelineAtivos")) qs("#kpiPipelineAtivos").textContent = items.length+" ativos";
@@ -5771,19 +5739,12 @@ async function carregarRelatorioSemana(){
     const leads = (data?.items || []);
     const SETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - SETE_DIAS_MS;
-    let novosLeads = 0, vendas = 0, valorVendas = 0;
+    let novosLeads = 0;
     let waAbertos = 0, msgCopiadas = 0, contatosManuais = 0, materiaisEnviados = 0;
     for(const l of leads){
       if(l.createdAt){
         const t = new Date(l.createdAt).getTime();
         if(!isNaN(t) && t >= cutoff) novosLeads++;
-      }
-      if(normalizarEtapa(l.etapa) === "Vendido"){
-        const vDt = l.analysis?.venda?.registradaEm ? new Date(l.analysis.venda.registradaEm).getTime() : null;
-        if(vDt && vDt >= cutoff){
-          vendas++;
-          valorVendas += parseValorVenda(l.analysis?.venda?.valor);
-        }
       }
       const eventos = l.analysis?.aprendizado?.eventos || [];
       for(const e of eventos){
@@ -5795,10 +5756,11 @@ async function carregarRelatorioSemana(){
         else if(e.evento === "material_sugerido_enviado") materiaisEnviados++;
       }
     }
+    // v928 — "Vendas" removido desta faixa (o dono não marca Vendido no app — só Arquivar,
+    // decisão da v904 — então esse número era sempre 0/irreal).
     box.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
         ${kpiMini("Novos leads", novosLeads, "var(--lime)")}
-        ${kpiMini("Vendas", vendas + (valorVendas>0?" · "+formatBRL(valorVendas):""), "var(--acao)")}
         ${kpiMini("WhatsApp", waAbertos, "var(--dados)")}
         ${kpiMini("Copiadas", msgCopiadas, "var(--cerebro)")}
         ${kpiMini("Contatos manuais", contatosManuais, "var(--timing)")}
@@ -7808,10 +7770,8 @@ qs("#pipelineBusca")?.addEventListener("input", (e)=>{
 });
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
-qs("#vendasRefresh")?.addEventListener("click", carregarVendas);
 qs("#perdidosRefresh")?.addEventListener("click", carregarPerdidos);
 qs("#geladeiraRefresh")?.addEventListener("click", carregarGeladeira);
-qs("#relatorioRefresh")?.addEventListener("click", () => carregarRelatorio(true));
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#carteiraExport")?.addEventListener("click", baixarRelatorioCarteira);
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
@@ -7984,118 +7944,11 @@ async function salvarMemoria(){
   }
 }
 
-// ============ VENDAS REGISTRADAS ============
-async function carregarVendas(){
-  const box = qs("#vendasList");
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const res = { ok:true, json: async () => await getLeadsData() };
-    const data = await res.json();
-    const items = (data?.items || []).map(limparLead).filter(l => normalizarEtapa(l.etapa) === "Vendido");
-    if(!items.length){
-      box.innerHTML = '<div class="empty">Nenhuma venda registrada ainda. Abra o lead e use o botão "Marcar venda".</div>';
-      return;
-    }
-    box.innerHTML = items.map(l => {
-      const v = l.analysis?.venda || {};
-      const valor = v.valor ? "R$ "+escapeHtml(String(v.valor)) : "";
-      return `
-        <div style="border:1px solid var(--line);background:rgba(104,255,149,.05);border-radius:14px;padding:12px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <strong style="font-size:15px">${escapeHtml(l.name||"Cliente")}</strong>
-            <span class="tag hot" style="background:rgba(104,255,149,.18);color:#bdffd0;border-color:rgba(104,255,149,.32)">VENDIDO</span>
-          </div>
-          ${v.empreendimento ? `<div class="small" style="margin-top:6px">${escapeHtml(v.empreendimento)}${v.unidade?" · Unid. "+escapeHtml(v.unidade):""}${v.box?" · Box "+escapeHtml(v.box):""}</div>` : ""}
-          ${valor ? `<div class="small" style="margin-top:4px;color:var(--acao);font-weight:950">${valor}</div>` : ""}
-          ${v.observacoes ? `<div class="small" style="margin-top:6px">${escapeHtml(v.observacoes)}</div>` : ""}
-          ${v.registradaEm ? `<div class="small" style="margin-top:6px;color:var(--muted)">Registrada em ${escapeHtml(new Date(v.registradaEm).toLocaleString("pt-BR"))}</div>` : ""}
-        </div>`;
-    }).join("");
-  }catch(err){
-    box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-  }
-}
-
-// ===== Relatório: fechamento do mês + funil =====
-// Tudo calculado no front a partir da base de leads (getLeadsData). Sem nada novo no banco.
-const FUNIL_ETAPAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby"];
-async function carregarRelatorio(force){
-  const box = qs("#relatorioBody");
-  if(!box) return;
-  const renderDe = (data) => {
-    if(data && data.ok === false){ box.innerHTML = '<div class="empty">Não consegui puxar seus leads agora. Toque em Atualizar.</div>'; return; }
-    const all = (data?.items || []).map(limparLead);
-    box.innerHTML = renderDesempenhoDash(all);
-  };
-  if(!force && state.todosLeads?.length){
-    renderDe({ items: state.todosLeads });
-    return;
-  }
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const data = await getLeadsData(force);
-    renderDe(data);
-  }catch(err){
-    box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-  }
-}
-window.carregarRelatorio = carregarRelatorio;
-
-// Painel de Desempenho (visual #481): KPIs + atendimentos/dia + funil de conversão — tudo com dado REAL.
-function renderDesempenhoDash(all){
-  all=Array.isArray(all)?all:[];
-  const ativos=all.filter(leadEhAtivo);
-  const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
-  const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
-  const counts={agora:0,respondeu:0,programados:0,aguardando:0};
-  for(const l of ativos){const c=categoriaDe(l);if(counts[c]!==undefined)counts[c]++;}
-
-  const hoje0=(typeof inicioDoDiaBR==='function')?inicioDoDiaBR():new Date(new Date().setHours(0,0,0,0));
-  const DOW=['D','S','T','Q','Q','S','S'];
-  const dias=[];
-  for(let i=6;i>=0;i--){const d=new Date(hoje0);d.setDate(d.getDate()-i);dias.push({ini:d,n:0,lbl:DOW[d.getDay()],hoje:i===0});}
-  for(const l of all){
-    const evs=l.analysis?.aprendizado?.eventos||[];
-    for(const ev of evs){
-      if(ev.evento!=='contato_manual'||!ev.quando) continue;
-      const q=new Date(ev.quando);if(isNaN(q.getTime())) continue;
-      for(const dd of dias){const fim=new Date(dd.ini);fim.setDate(fim.getDate()+1);if(q>=dd.ini&&q<fim){dd.n++;break;}}
-    }
-  }
-  const atendimentosHoje=dias[6].n,maxN=Math.max(1,...dias.map(d=>d.n));
-  const barras=dias.map(d=>`<div class="dz-bar${d.hoje?' hoje':''}"><span class="num">${d.n}</span><span class="col" style="height:${Math.round(d.n/maxN*100)}%"></span><span class="d">${d.lbl}</span></div>`).join('');
-
-  const agoraData=new Date();let vMesQtd=0,vMesValor=0;
-  for(const l of all){
-    if(normalizarEtapa(l.etapa)!=='Vendido') continue;
-    const dt=l.analysis?.venda?.registradaEm?new Date(l.analysis.venda.registradaEm):null;
-    if(!dt||isNaN(dt.getTime())) continue;
-    if(dt.getMonth()===agoraData.getMonth()&&dt.getFullYear()===agoraData.getFullYear()){vMesQtd++;vMesValor+=parseValorVenda(l.analysis?.venda?.valor);}
-  }
-  const nomeMes=agoraData.toLocaleDateString('pt-BR',{month:'long'}),ticket=vMesQtd?vMesValor/vMesQtd:0;
-  const totalAcoes=Math.max(1,counts.agora+counts.respondeu+counts.programados+counts.aguardando);
-  const leitura=[['Fazer agora',counts.agora],['Agenda',counts.programados],['Aguardando cliente',counts.aguardando]].map(([lbl,n])=>{const pct=Math.round(n/totalAcoes*100);return `<div class="row"><div class="top"><b>${lbl}</b><span>${n} · ${pct}%</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;}).join('');
-  const kpi=(k,v)=>`<div class="dz-kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`;
-  return `
-    <div class="dz-head"><h2>Ritmo comercial</h2><div class="sub">Movimentação real · últimos 7 dias</div></div>
-    <div class="dz-kpis">
-      ${kpi('Clientes ativos',ativos.length)}
-      ${kpi('Atendidos hoje',atendimentosHoje)}
-      ${kpi('Pedem sua ação',counts.agora)}
-      ${kpi('Vendas no mês',vMesQtd)}
-    </div>
-    <div class="dz-grid">
-      <div class="dz-card"><h4>Atendimentos por dia</h4><div class="dz-bars">${barras}</div></div>
-      <div class="dz-card"><h4>Condução atual</h4>${leitura}</div>
-    </div>
-    <div class="dz-card dz-vendas"><h4 style="text-transform:capitalize">Fechamento de ${nomeMes}</h4>
-      <div class="dz-vrow">
-        <div><div class="v" style="color:var(--lime)">${vMesQtd}</div><div class="k">${vMesQtd===1?'venda':'vendas'}</div></div>
-        <div><div class="v" style="color:var(--acao)">${vMesValor>0?formatBRL(vMesValor):'R$ 0'}</div><div class="k">valor total</div></div>
-        <div><div class="v">${ticket>0?formatBRL(ticket):'—'}</div><div class="k">ticket médio</div></div>
-      </div>
-    </div>`;
-}
+// v928 — removidos carregarVendas/carregarRelatorio/renderDesempenhoDash/FUNIL_ETAPAS: telas
+// mortas desde a v904 (o dono não marca Vendido no app — só Arquivar). Não tinham nenhum alvo
+// no HTML (#vendasList, #relatorioBody não existem) — nunca renderizavam nada, mas continuavam
+// sendo definidas e (no caso do carregarVendas) até chamadas via dispatch sem checar se o
+// elemento existia.
 
 // ===== Carteira completa: todos os leads num lugar (panorama + contatar hoje + ranking) =====
 // Reusa o mesmo dado (leads-recentes limit=2000) e os mesmos critérios da Hoje (scoreLead,
@@ -9702,15 +9555,6 @@ function cpNextAction(lead){
   const acao=typeof cp786ResumoAcao==='function'?cp786ResumoAcao(lead):'';
   return String(acao||'Abrir atendimento para conferir.').replace(/\s+/g,' ').slice(0,62);
 }
-function cpSaleValue(all){
-  const now=new Date(); let total=0;
-  for(const l of all||[]){
-    if(cpStage(l)!=="Vendido") continue;
-    const iso=l?.analysis?.venda?.registradaEm; const dt=iso?new Date(iso):null;
-    if(!dt || (dt.getMonth()===now.getMonth()&&dt.getFullYear()===now.getFullYear())) total += parseValorVenda(l?.analysis?.venda?.valor);
-  }
-  return total;
-}
 function cpSetText(id,val){ const el=qs("#"+id); if(el) el.textContent=val; }
 function cpPct(n,total){ return total>0?Math.round((n/total)*100):0; }
 function cpOpenLead(id){ if(id) abrirLead(String(id)); }
@@ -9738,7 +9582,6 @@ function renderCorretorProDashboard(items, all){
   cpSetText("cpActiveDeals",cpFimDeSemana()?"Final de semana":fazerAgora);
   cpSetText("cpVisits",compromissos);
   cpSetText("cpProposals",aguardandoN);
-  cpSetText("cpRevenue",formatBRL(cpSaleValue(all)));
   const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=items.length?"ativos agora":"base sem leads ativos";
 
   const ordered=cp786OrdenarConducao(items);
@@ -11417,46 +11260,11 @@ function ui670DetailRows(lead,mc){
       ? `<button type="button" class="cart-load-more" onclick="${fnName}()">Carregar mais ${Math.min(PAGE, faltam)} <span>(${visible} de ${total})</span></button>`
       : "";
   }
-  window.cp6862MaisVendas = function(){ loadMore('vendasVisibleCount', window.carregarVendas); };
   window.cp6862MaisPerdidos = function(){ loadMore('perdidosVisibleCount', window.carregarPerdidos); };
   window.cp6862MaisGeladeira = function(){ loadMore('geladeiraVisibleCount', window.carregarGeladeira); };
 
-  window.carregarVendas = async function(){
-    const start = cpPerfNow();
-    const box = qs('#vendasList');
-    if(!box) return;
-    box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-    try{
-      const data = await getLeadsData(false);
-      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Vendido');
-      const limite = ensureVisibleKey('vendasVisibleCount');
-      const lote = items.slice(0, limite);
-      if(!items.length){
-        box.innerHTML = '<div class="empty">Nenhuma venda registrada ainda. Abra o lead e use o botão "Marcar venda".</div>';
-        cpPerfMark('renderVendas', start, { total:0, visiveis:0 });
-        return;
-      }
-      box.innerHTML = lote.map(l => {
-        const v = l.analysis?.venda || {};
-        const valor = v.valor ? 'R$ '+escapeHtml(String(v.valor)) : '';
-        return `
-          <div style="border:1px solid var(--line);background:rgba(104,255,149,.05);border-radius:14px;padding:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-              <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${leadId(l)})'>${escapeHtml(l.name||'Cliente')}</strong>
-              <span class="tag hot" style="background:rgba(104,255,149,.18);color:#bdffd0;border-color:rgba(104,255,149,.32)">VENDIDO</span>
-            </div>
-            ${v.empreendimento ? `<div class="small" style="margin-top:6px">${escapeHtml(v.empreendimento)}${v.unidade?' · Unid. '+escapeHtml(v.unidade):''}${v.box?' · Box '+escapeHtml(v.box):''}</div>` : ''}
-            ${valor ? `<div class="small" style="margin-top:4px;color:var(--acao);font-weight:950">${valor}</div>` : ''}
-            ${v.observacoes ? `<div class="small" style="margin-top:6px">${escapeHtml(v.observacoes)}</div>` : ''}
-            ${v.registradaEm ? `<div class="small" style="margin-top:6px;color:var(--muted)">Registrada em ${escapeHtml(new Date(v.registradaEm).toLocaleString('pt-BR'))}</div>` : ''}
-          </div>`;
-      }).join('') + renderLoadMore('vendasVisibleCount', items.length, lote.length, 'cp6862MaisVendas');
-      cpPerfMark('renderVendas', start, { total:items.length, visiveis:lote.length });
-    }catch(err){
-      box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-      cpPerfMark('renderVendas', start, { error:true });
-    }
-  };
+  // v928 — window.carregarVendas/cp6862MaisVendas removidos: alvo #vendasList não existe no
+  // HTML desde a v904 (tela "Vendas registradas" removida) — nunca renderizava nada.
 
   window.carregarPerdidos = async function(){
     const start = cpPerfNow();
@@ -11530,7 +11338,6 @@ function ui670DetailRows(lead,mc){
     const antigoResumo = window.cpPerformanceResumo;
     window.cpPerformanceResumo = function(){
       const r = typeof antigoResumo === 'function' ? antigoResumo() : {};
-      r.renderVendasMs = cpPerfMedia('renderVendas');
       r.renderPerdidosMs = cpPerfMedia('renderPerdidos');
       r.renderGeladeiraMs = cpPerfMedia('renderGeladeira');
       return r;
