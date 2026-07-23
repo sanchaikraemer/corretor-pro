@@ -231,28 +231,10 @@
       <div class="cp-performance-overview">
       <div id="cpDashboard" class="cp-dashboard">
         <header class="cp-panorama-head">
-          <div><h2>Visão geral da carteira</h2><p id="cpDashboardDate">Hoje</p></div>
-          <button type="button" class="cp-period">Hoje <span>⌄</span></button>
+          <div><h2>Sua semana no Corretor Pro</h2><p id="cpDashboardDate">Hoje</p></div>
         </header>
 
-        <div class="cp-metrics">
-          <button type="button" class="cp-metric" onclick="cp788AbrirCarteiraAtiva()">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 11h8M12 8v6M9 11h6"/></svg></span>
-            <b id="cpNewLeads">0</b><small>Clientes ativos</small><em id="cpNewLeadsSub">em acompanhamento</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="cp786AbrirConducao('agora')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7a7 7 0 0 0-12-3L5 7"/><path d="M5 3v4h4M4 17a7 7 0 0 0 12 3l3-3"/><path d="M19 21v-4h-4"/></svg></span>
-            <b id="cpActiveDeals">0</b><small>Fazer agora</small><em>ações sob sua responsabilidade</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="show('agenda')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M8 10h8M8 14h4"/></svg></span>
-            <b id="cpVisits">0</b><small>Compromissos</small><em>agenda e lembretes</em>
-          </button>
-          <button type="button" class="cp-metric" onclick="cp786AbrirConducao('aguardando')">
-            <span class="cp-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"/><path d="M5 20c.5-5 2.8-7 7-7s6.5 2 7 7"/></svg></span>
-            <b id="cpProposals">0</b><small>Aguardando cliente</small><em>no tempo de resposta</em>
-          </button>
-        </div>
+        <div id="cpMetricasSemana" class="cp-met-list"></div>
 
         <div class="cp-dashboard-grid">
           <article class="cp-card cp-appointments-card">

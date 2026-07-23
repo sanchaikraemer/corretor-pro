@@ -64,6 +64,87 @@ import './js/pwa-install.js?v=__VERSION__';
 
 const KEEP_RE = /\.(txt|opus|ogg|mp3|m4a|wav|aac)$/i;
 
+// ===== v929 — atividade de uso (Desempenho): análises, importações e tempo no app =====
+// Fica só no localStorage DESTE aparelho (não sincroniza celular↔PC) — é contagem de USO, não
+// dado comercial do cliente, então não precisa da sincronização via Supabase do resto do app.
+const CP_ATIVIDADE_DIAS = 90; // guarda até 90 dias, poda o resto a cada gravação
+function cpRegistrarAtividade(chave, quandoIso){
+  try{
+    const key = "cpAtividade_"+chave;
+    const arr = JSON.parse(localStorage.getItem(key) || "[]");
+    arr.push(quandoIso || new Date().toISOString());
+    const cutoff = Date.now() - CP_ATIVIDADE_DIAS*24*60*60*1000;
+    const podado = arr.filter(iso => { const t = Date.parse(iso); return Number.isFinite(t) && t >= cutoff; });
+    localStorage.setItem(key, JSON.stringify(podado));
+  }catch(_){}
+}
+function cpContarAtividade(chave, desdeMs){
+  try{
+    const arr = JSON.parse(localStorage.getItem("cpAtividade_"+chave) || "[]");
+    if(!desdeMs) return arr.length;
+    return arr.filter(iso => { const t = Date.parse(iso); return Number.isFinite(t) && t >= desdeMs; }).length;
+  }catch(_){ return 0; }
+}
+window.cpRegistrarAtividade = cpRegistrarAtividade;
+window.cpContarAtividade = cpContarAtividade;
+
+// Tempo no app: conta só enquanto a aba está VISÍVEL (em segundo plano não conta). Guardado por
+// dia (chave de calendário BR), só neste aparelho.
+const CP_TEMPO_APP_KEY = "cpTempoAppPorDia";
+let _cpTempoAppInicioVisivel = (typeof document !== "undefined" && document.visibilityState === "visible") ? Date.now() : null;
+function cpTempoAppHojeChave(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date()); }
+function cpTempoAppLerMapa(){
+  try{ return JSON.parse(localStorage.getItem(CP_TEMPO_APP_KEY) || "{}"); }catch(_){ return {}; }
+}
+function cpTempoAppSalvarMapa(mapa){
+  try{
+    const chaves = Object.keys(mapa).sort();
+    while(chaves.length > 30) delete mapa[chaves.shift()]; // guarda ~30 dias de histórico
+    localStorage.setItem(CP_TEMPO_APP_KEY, JSON.stringify(mapa));
+  }catch(_){}
+}
+function cpTempoAppAcumular(){
+  if(_cpTempoAppInicioVisivel == null) return;
+  const agora = Date.now();
+  const ms = Math.max(0, agora - _cpTempoAppInicioVisivel);
+  _cpTempoAppInicioVisivel = agora;
+  if(ms <= 0) return;
+  const mapa = cpTempoAppLerMapa();
+  const chave = cpTempoAppHojeChave();
+  mapa[chave] = Math.round((Number(mapa[chave]) || 0) + ms/1000);
+  cpTempoAppSalvarMapa(mapa);
+}
+if(typeof document !== "undefined"){
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "hidden"){ cpTempoAppAcumular(); _cpTempoAppInicioVisivel = null; }
+    else { _cpTempoAppInicioVisivel = Date.now(); }
+  });
+  window.addEventListener("pagehide", cpTempoAppAcumular);
+  setInterval(cpTempoAppAcumular, 60000); // flush a cada 1 min, sobrevive a fechamento abrupto
+}
+function cpTempoAppSegundosHoje(){ cpTempoAppAcumular(); const mapa = cpTempoAppLerMapa(); return Math.round(Number(mapa[cpTempoAppHojeChave()])||0); }
+function cpTempoAppMediaSegundos7d(){
+  const mapa = cpTempoAppLerMapa();
+  const hoje = new Date();
+  let total = 0, dias = 0;
+  for(let i=0;i<7;i++){
+    const d = new Date(hoje); d.setDate(d.getDate()-i);
+    const chave = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(d);
+    if(mapa[chave] != null){ total += Number(mapa[chave])||0; dias++; }
+  }
+  return dias ? Math.round(total/dias) : 0;
+}
+function cpFormatarDuracao(segundos){
+  const s = Math.max(0, Math.round(segundos||0));
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  if(h > 0) return `${h}h ${String(m).padStart(2,"0")}min`;
+  if(m > 0) return `${m}min`;
+  return "menos de 1min";
+}
+window.cpTempoAppSegundosHoje = cpTempoAppSegundosHoje;
+window.cpTempoAppMediaSegundos7d = cpTempoAppMediaSegundos7d;
+window.cpFormatarDuracao = cpFormatarDuracao;
+
 // ===== Atualização #724-2: instrumentação leve de performance =====
 const CP_PERF_MAX = 80;
 function cpPerfNow(){ try{ return performance.now(); }catch(_){ return Date.now(); } }
@@ -7238,6 +7319,9 @@ async function processFile(file, options = {}){
 
     const ok = await uploadLargeZipToSupabase(working, { audioWindowDays, importId });
     if(!ok) return false;
+    // v929 — conta como 1 importação aqui (ZIP recebido com sucesso), independente de quantos
+    // leads a conversa vai gerar/atualizar depois — é a unidade natural de "importei um ZIP".
+    try{ cpRegistrarAtividade("importacao"); }catch(_){}
     // Não elimina o ZIP ainda: a importação só termina quando o lead é salvo/atualizado
     // ou quando o corretor descarta explicitamente a análise.
     return true;
@@ -9563,6 +9647,121 @@ function cpAvatarStyle(name){
   const palette=["#315766","#3B5F6A","#4B586E","#586655"];
   return `background:${palette[h%palette.length]};`;
 }
+
+// v929 — Desempenho: atividade real do corretor + resultado com clientes, no lugar da grade
+// que só repetia "Clientes ativos"/"Fazer agora" já mostrados na Home (pedido do dono: "não
+// pode ser a mesma coisa que atendimentos, senão não tem coerência").
+function cpDesempenhoMetricas(items, all){
+  const ativos = Array.isArray(items) ? items : [];
+  const todos = Array.isArray(all) ? all : ativos;
+  const cutoff7d = Date.now() - 7*24*60*60*1000;
+
+  let mensagensTrocadas = 0, mensagensCopiadas = 0;
+  const leadsAtendidosIds = new Set();
+  const propostas = [];
+  for(const l of todos){
+    const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+    for(const m of msgs){
+      const t = Date.parse(m?.iso || "");
+      if(Number.isFinite(t) && t >= cutoff7d) mensagensTrocadas++;
+      if(m?.type === "proposta") propostas.push({ lead:l, ts: Number.isFinite(t)?t:0 });
+    }
+    const eventos = l?.analysis?.aprendizado?.eventos || [];
+    let atendeuNaJanela = false;
+    for(const e of eventos){
+      const t = Date.parse(e?.quando || "");
+      if(!Number.isFinite(t) || t < cutoff7d) continue;
+      if(e.evento === "contato_manual") atendeuNaJanela = true;
+      if(e.evento === "mensagem_copiada") mensagensCopiadas++;
+    }
+    if(atendeuNaJanela) leadsAtendidosIds.add(String(l.id));
+  }
+
+  // Empreendimentos negociados: agrupa a carteira ATIVA pelo mesmo rótulo de produto que já
+  // aparece em cada lead — do maior pro menor.
+  const porProduto = new Map();
+  for(const l of ativos){
+    const label = (typeof produtosLabel === "function" ? produtosLabel(l) : "") || "";
+    if(!label || /n[ãa]o identificad/i.test(label)) continue;
+    porProduto.set(label, (porProduto.get(label)||0) + 1);
+  }
+  const empreendimentos = [...porProduto.entries()].sort((a,b)=>b[1]-a[1]);
+
+  return {
+    tempoHojeSeg: typeof cpTempoAppSegundosHoje === "function" ? cpTempoAppSegundosHoje() : 0,
+    tempoMedia7dSeg: typeof cpTempoAppMediaSegundos7d === "function" ? cpTempoAppMediaSegundos7d() : 0,
+    mensagensTrocadas,
+    empreendimentos,
+    leadsAtendidos: leadsAtendidosIds.size,
+    mensagensCopiadas,
+    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoff7d) : 0,
+    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoff7d) : 0,
+    propostas: propostas.sort((a,b)=>b.ts-a.ts),
+  };
+}
+window.cpDesempenhoMetricas = cpDesempenhoMetricas;
+
+const CP_MET_ICONS = {
+  tempo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+  msg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.9 8.4 8.6 8.6 0 0 1-3.9-1L4 20l1.2-4a8.4 8.4 0 0 1-1.1-4.2A8.4 8.4 0 0 1 12.6 3a8.4 8.4 0 0 1 8.4 8.5z"/></svg>',
+  leads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7a7 7 0 0 0-12-3L5 7"/><path d="M5 3v4h4M4 17a7 7 0 0 0 12 3l3-3"/><path d="M19 21v-4h-4"/></svg>',
+  copiar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="3" width="10" height="14" rx="2"/><path d="M4 8v11a2 2 0 0 0 2 2h9"/></svg>',
+  analise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a4 4 0 0 0-4 4v1a3 3 0 0 0-2 5 3 3 0 0 0 2 5v0a4 4 0 0 0 4 3"/><path d="M12 3a4 4 0 0 1 4 4v1a3 3 0 0 1 2 5 3 3 0 0 1-2 5v0a4 4 0 0 1-4 3"/><path d="M12 3v17"/></svg>',
+  importar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
+  proposta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 13h6M9 17h4"/></svg>',
+};
+function cpRenderDesempenhoMetricas(items, all){
+  const box = qs("#cpMetricasSemana");
+  if(!box) return;
+  const m = cpDesempenhoMetricas(items, all);
+  const linha = (icone, cor, titulo, sub, valor) => `
+    <div class="cp-met-row">
+      <div class="cp-met-ic" style="background:color-mix(in srgb, ${cor} 18%, transparent);color:${cor}">${icone}</div>
+      <div class="cp-met-copy"><b>${escapeHtml(titulo)}</b><small>${escapeHtml(sub)}</small></div>
+      <div class="cp-met-num">${escapeHtml(String(valor))}</div>
+    </div>`;
+  const rows = [
+    linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Hoje · média de ${cpFormatarDuracao(m.tempoMedia7dSeg)} nos últimos 7 dias`, cpFormatarDuracao(m.tempoHojeSeg)),
+    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", "Com clientes, esta semana", m.mensagensTrocadas),
+    linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", "Esta semana", m.leadsAtendidos),
+    linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", "Sugestões da IA que você usou", m.mensagensCopiadas),
+    linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", "Conversas processadas pela IA", m.analisesFeitas),
+    linha(CP_MET_ICONS.importar, "var(--dados)", "Importações", "ZIPs de conversa processados", m.importacoes),
+  ].join("");
+  const propostasRow = `
+    <button type="button" class="cp-met-row cp-met-row-btn" onclick="cpAbrirHistoricoPropostas()">
+      <div class="cp-met-ic" style="background:color-mix(in srgb, var(--accent) 18%, transparent);color:var(--accent)">${CP_MET_ICONS.proposta}</div>
+      <div class="cp-met-copy"><b>Propostas feitas</b><small>Ver histórico completo</small></div>
+      <div class="cp-met-num">${m.propostas.length}</div>
+    </button>`;
+  const tagsHtml = m.empreendimentos.length
+    ? m.empreendimentos.slice(0,3).map(([nome,n]) => `<span class="cp-met-tag">${escapeHtml(nome)} <b>${n}</b></span>`).join("")
+      + (m.empreendimentos.length > 3 ? `<span class="cp-met-tag">+${m.empreendimentos.length-3}</span>` : "")
+    : `<span class="cp-met-tag" style="opacity:.6">Nenhum ainda</span>`;
+  box.innerHTML = rows + propostasRow + `
+    <div class="cp-met-tags-row">
+      <small>Empreendimentos negociados</small>
+      <div class="cp-met-taglist">${tagsHtml}</div>
+    </div>`;
+}
+window.cpRenderDesempenhoMetricas = cpRenderDesempenhoMetricas;
+
+// "Ver histórico" de propostas: reusa a lista avulsa (mesmo mecanismo do "Fazer agora") pra
+// mostrar os leads com proposta registrada, mais recente primeiro — abrir o lead mostra a
+// proposta completa na linha do tempo dele.
+function cpAbrirHistoricoPropostas(){
+  const items = state.itemsAtivos || [];
+  const all = state.todosLeads || items;
+  const m = cpDesempenhoMetricas(items, all);
+  if(!m.propostas.length){ toast("Nenhuma proposta registrada ainda."); return; }
+  const porLead = new Map();
+  for(const p of m.propostas){ const id = String(p.lead?.id||""); if(id && !porLead.has(id)) porLead.set(id, p.lead); }
+  const leads = [...porLead.values()];
+  const sub = `${m.propostas.length} proposta${m.propostas.length>1?"s":""} registrada${m.propostas.length>1?"s":""} — abra o lead pra ver os detalhes.`;
+  abrirGrupoHome("__propostas", { meta:{ titulo:"Propostas feitas", sub }, leads });
+}
+window.cpAbrirHistoricoPropostas = cpAbrirHistoricoPropostas;
+
 function renderCorretorProDashboard(items, all){
   items=Array.isArray(items)?items:[]; all=Array.isArray(all)?all:items;
   const root=qs("#cpDashboard"); if(!root) return;
@@ -9575,14 +9774,7 @@ function renderCorretorProDashboard(items, all){
 
   const categorias786=new Map(items.map(l=>[l,cp786Categoria(l)]));
   const categoriaDe=l=>categorias786.get(l)||cp786Categoria(l);
-  const fazerAgora=cpFazerAgoraDose(items);
-  const compromissos=items.filter(l=>categoriaDe(l)==='programados').length;
-  const aguardandoN=items.filter(l=>categoriaDe(l)==='aguardando').length;
-  cpSetText("cpNewLeads",items.length);
-  cpSetText("cpActiveDeals",cpFimDeSemana()?"Final de semana":fazerAgora);
-  cpSetText("cpVisits",compromissos);
-  cpSetText("cpProposals",aguardandoN);
-  const sub=qs("#cpNewLeadsSub"); if(sub) sub.textContent=items.length?"ativos agora":"base sem leads ativos";
+  cpRenderDesempenhoMetricas(items, all);
 
   const ordered=cp786OrdenarConducao(items);
   const programados=items.filter(l=>categoriaDe(l)==='programados');
@@ -10178,6 +10370,7 @@ window.ui670Reanalisar=async function(btn){
     if(!analysis||schema<682)throw new Error("A análise não foi gerada pela IA atual. Tente reanalisar novamente.");
     clearInterval(progressoTimer);
     progresso.done("Análise concluída e salva.");
+    try{ cpRegistrarAtividade("analise"); }catch(_){}
 
     const atualizado=limparLead({...leadBaseAtualizado,analysis,summary:analysis.summary||leadBaseAtualizado.summary||lead.summary,nextAction:analysis.nextAction||leadBaseAtualizado.nextAction||lead.nextAction});
     state.lead=atualizado;state.analysis=atualizado.analysis||null;
