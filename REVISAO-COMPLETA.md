@@ -18,7 +18,7 @@
 | api/lead-update.js | 1748 | pendente | dividir em 2 blocos |
 | api/reanalisar-lead.js | 804 | pendente | |
 | api/cerebro-config.js | 378 | pendente | |
-| api/processar-storage.js | 370 | pendente | |
+| api/processar-storage.js | 370 | tocado pontualmente (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Ainda não foi lido linha a linha por completo |
 | api/restaurar-leads.js | 264 | pendente | |
 | api/limpar-tudo.js | 235 | pendente | |
 | api/criar-upload-url.js | 228 | pendente | tem o MESMO regex frágil de acento (linha ~105) — aplicar o mesmo fix de v950 |

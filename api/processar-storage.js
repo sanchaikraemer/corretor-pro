@@ -1,4 +1,4 @@
-import { requireApiKey } from "./_persistence.js";
+import { requireApiKey, _buscarProcessamentoExistenteV681 } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import {
@@ -96,6 +96,29 @@ async function salvarTranscricaoCache(storage, hash, item) {
   if (error) throw new Error(`Não consegui guardar a transcrição reaproveitável: ${error.message}`);
 }
 
+// Reaproveitamento de transcrição — por que NÃO comparar o áudio pelo hash de conteúdo entre
+// importações diferentes: o WhatsApp não garante bytes idênticos entre duas exportações da
+// MESMA conversa (mesmo áudio, arquivo ligeiramente diferente por dentro) — na prática o hash
+// quase nunca bate entre importações separadas, então "audiosReaproveitados" ficava sempre 0 e
+// todo áudio já transcrito antes era pago e transcrito de novo a cada reimportação. O nome do
+// arquivo de áudio (ex.: AUD-20240115-WA0007.opus), por outro lado, é estável entre exportações
+// — mas só é seguro comparar DENTRO do histórico do MESMO cliente já identificado, nunca contra
+// outros clientes (nome de arquivo sozinho pode repetir entre conversas diferentes).
+const AUDIO_TRANSCRITO_PREFIXO = "[Áudio transcrito] ";
+
+export function transcricoesDoLeadAnterior(timelineJson) {
+  const mapa = {};
+  for (const m of (Array.isArray(timelineJson) ? timelineJson : [])) {
+    if (!m || m.type !== "audio" || m.audioStatus !== "transcrito") continue;
+    const nome = normalizeName(m.mediaFile || "");
+    const texto = String(m.text || "");
+    if (!nome || !texto.startsWith(AUDIO_TRANSCRITO_PREFIXO)) continue;
+    const semPrefixo = texto.slice(AUDIO_TRANSCRITO_PREFIXO.length).trim();
+    if (semPrefixo) mapa[nome] = semPrefixo;
+  }
+  return mapa;
+}
+
 async function salvarManifesto(storage, manifestPath, manifest) {
   const buffer = Buffer.from(JSON.stringify(manifest), "utf8");
   const { error } = await storage.upload(manifestPath, buffer, {
@@ -106,7 +129,7 @@ async function salvarManifesto(storage, manifestPath, manifest) {
   if (error) throw new Error(`Não consegui salvar o manifesto da importação: ${error.message}`);
 }
 
-export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays }) {
+export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {} }) {
   const prefix = `imports/${importId}`;
   const manifestPath = `${prefix}/manifest.json`;
   const existente = await carregarManifesto(storage, manifestPath);
@@ -144,8 +167,17 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
     const hash = hashAudio(audioBuffer);
     audioStorage[nome] = audioPath;
     audioHashes[nome] = hash;
-    const cached = await carregarTranscricaoCache(storage, hash);
-    if (cached) transcriptions[nome] = cached;
+    // Primeiro tenta pelo histórico do MESMO cliente (nome do arquivo — mais confiável, ver
+    // nota acima de transcricoesDoLeadAnterior). Só cai pro cache por hash de conteúdo se não
+    // achou nada ali (esse cache por hash raramente bate entre importações separadas, mas não
+    // custa manter como reforço).
+    const doLead = cacheDoLead[nome];
+    if (doLead) {
+      transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
+    } else {
+      const cached = await carregarTranscricaoCache(storage, hash);
+      if (cached) transcriptions[nome] = cached;
+    }
     arquivosTemporarios.push(audioPath);
   };
   for (let i = 0; i < entradas.length; i += CONCORRENCIA_UPLOAD) {
@@ -215,7 +247,15 @@ export default async function handler(req, res) {
   try {
     if (action === "preparar") {
       if (!importId) return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
-      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays });
+      // Identifica um possível cliente já existente só pelo NOME DO ARQUIVO do zip (ainda não
+      // temos a análise nesta etapa, só o arquivo) — mesma lógica já usada e confiável na hora
+      // de salvar (_buscarProcessamentoExistenteV681). Serve só pra reaproveitar transcrição de
+      // áudios já feitos nesse MESMO cliente; não decide fusão de cadastro (isso continua
+      // acontecendo depois, na análise/persistência, do jeito que já era).
+      const nomeArquivoZip = storagePath.split("/").pop() || "";
+      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath }).catch(() => null);
+      const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
+      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead });
       return json(res, 200, {
         ok: true, bucket, path: storagePath, importId, manifestPath: `imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
