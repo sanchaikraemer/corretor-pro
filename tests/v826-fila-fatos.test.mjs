@@ -23,7 +23,12 @@ assert.equal(nivelDe({ emJanela: true }), 7);
 assert.equal(nivelDe({ clienteAguardandoVoce: true, lembreteAtrasado: true, negociacaoAguardando: true }), 1);
 assert.equal(nivelDe({ lembreteAtrasado: true, negociacaoAguardando: true, compromissoProgramado: true }), 2);
 assert.equal(nivelDe({ retornoParaHoje: true, negociacaoAguardando: true }), 3);
-assert.equal(nivelDe({ negociacaoAguardando: true, compromissoProgramado: true, retomadaPorTempo: true }), 4);
+// v941 — negociacaoAguardando é um sinal FUZZY (regex sobre o texto da análise da IA); fatos
+// concretos com data real (compromissoProgramado) agora vencem esse sinal fuzzy, não o
+// contrário — era assim que furava a janela de espera (emJanela) fácil demais (bug real
+// reportado pelo dono: lead contatado ontem, ainda no prazo normal, aparecendo como
+// "Negociação aguardando você"). Ver tests/v941-negociacao-respeita-janela-espera.test.mjs.
+assert.equal(nivelDe({ negociacaoAguardando: true, compromissoProgramado: true, retomadaPorTempo: true }), 5);
 assert.equal(nivelDe({ compromissoProgramado: true, retomadaPorTempo: true, emJanela: true }), 5);
 
 // Grupos: níveis 1..5 = ação hoje; 6 = retomar com cuidado; 7 = pode aguardar.

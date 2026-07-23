@@ -1259,10 +1259,20 @@ function filaPorFatos(f = {}){
   if(f.clienteAguardandoVoce) return { nivel:1, grupo:"acao-hoje", titulo:"Cliente aguardando" };
   if(f.lembreteAtrasado)      return { nivel:2, grupo:"acao-hoje", titulo:"Compromisso vencido" };
   if(f.retornoParaHoje)       return { nivel:3, grupo:"acao-hoje", titulo:"Retorno para hoje" };
-  if(f.negociacaoAguardando)  return { nivel:4, grupo:"acao-hoje", titulo:"Negociação aguardando você" };
   if(f.compromissoProgramado) return { nivel:5, grupo:"acao-hoje", titulo:"Atendimento programado" };
   if(f.clientePediuTempo)     return { nivel:0, grupo:"pode-aguardar", titulo:"Cliente pediu para aguardar" };
+  // v941 — bug real: "negociacaoAguardando" vem de um regex sobre o TEXTO da análise da IA
+  // (proposta/condição/contraproposta) — praticamente toda negociação de imóvel toca nesses
+  // termos, então esse sinal fuzzy disparava fácil demais e furava a checagem de janela de
+  // espera (emJanela), que ficava mais abaixo na cadeia. Resultado visto pelo dono: lead
+  // contatado ONTEM (dentro do prazo normal de resposta — 3 ou 5 dias) aparecendo mesmo assim
+  // como "Negociação aguardando você"/"PRIORIDADE AGORA". emJanela (fato concreto: eu
+  // contatei, ainda dentro do prazo) agora vem ANTES do sinal fuzzy — só cai em "acao-hoje" por
+  // negociação se JÁ passou da janela normal de resposta. Os fatos concretos com data real
+  // (lembreteAtrasado/retornoParaHoje/compromissoProgramado) continuam com prioridade sobre
+  // negociacaoAguardando, como já era — só o sinal fuzzy que passa a respeitar a janela.
   if(f.emJanela)              return { nivel:7, grupo:"pode-aguardar", titulo:"Aguardando resposta" };
+  if(f.negociacaoAguardando)  return { nivel:4, grupo:"acao-hoje", titulo:"Negociação aguardando você" };
   if(f.travaExterna && !f.pendenciaCorretor) return { nivel:0, grupo:"boa-sem-urgencia", titulo:"Boa oportunidade, sem urgência" };
   if(f.retomadaPorTempo)      return { nivel:6, grupo:"retomar-cuidado", titulo:"Retomar com cuidado" };
   return { nivel:0, grupo:"baixa-prioridade", titulo:"Baixa prioridade" };
@@ -4962,7 +4972,11 @@ function cp704Css(){
         who=cliente ? cp704Text(lead?.name,'Contato').split(/\s+/)[0] : 'Você';
         dotCls=cliente?'':'you';
       }
-      return `<div class="cp704-tmsg${wrapCls}"><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text).slice(0,520))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
+      // v940 — bug real: cortar a mensagem em 520 caracteres cortava ela NO MEIO DA FRASE (ex.:
+      // "...transferir o financiamento para outro comprador recebendo" — sem o resto: "o que
+      // pagou nele até então..."). Esta é a "Últimas mensagens"/histórico completo — o propósito
+      // dela é mostrar a conversa REAL; sem corte de tamanho nenhum.
+      return `<div class="cp704-tmsg${wrapCls}"><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text))}</p><small>${escapeHtml(cp704DataHora(m))}</small></div></div>`;
     }).join('') + btn;
   }
   function cp704DetailRows(lead,mc){
