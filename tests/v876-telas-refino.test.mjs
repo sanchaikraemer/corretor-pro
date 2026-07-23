@@ -34,9 +34,11 @@ assert.ok(
   "KPI 'Agora' deveria usar active condicional a filtros.quentes.length>0"
 );
 
-// 3. Alerta "análise antiga" compacto: barra âmbar lateral + título menor.
-assert.ok(app.includes(".cp704-stale{border-color:rgba(255,201,107,.28)"), "cp704-stale não foi suavizado");
-assert.ok(app.includes("border-left:3px solid var(--morno)"), "cp704-stale não ganhou a barra âmbar lateral");
+// 3. Alerta "análise antiga" compacto: barra lateral + título menor.
+// v942 — a cor âmbar/amarelo queimado foi trocada por cinza claro no app todo (pedido do dono);
+// o token --morno agora é cinza, então a barra lateral segue existindo, só que neutra.
+assert.ok(app.includes(".cp704-stale{border-color:rgba(184,194,201,.28)"), "cp704-stale não foi suavizado");
+assert.ok(app.includes("border-left:3px solid var(--morno)"), "cp704-stale não ganhou a barra lateral");
 assert.ok(app.includes(".cp704-stale .cp704-card-title h2{font-size:14px}"), "título do alerta antigo não foi reduzido");
 
 console.log("v876-telas-refino: OK");

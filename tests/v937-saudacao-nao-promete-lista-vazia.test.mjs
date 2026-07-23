@@ -9,12 +9,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // cabeçalho do lead (a pedido dele mesmo, na hora), mas ela é informação que falta de verdade:
 // saber se o cliente respondeu DEPOIS da última análise. Voltou.
 //
-// 2) "E os 9 prioritários pra hoje são o quê? E os 200+ clientes são o quê?" — a saudação da
-// Home dizia "9 leads pra atender hoje, de cima pra baixo", prometendo uma LISTA pronta e
-// ordenada. Quando o balde de urgentes (acao-hoje/retomar-cuidado) vem vazio, essa lista não
-// existe — o corpo da própria Home, bem abaixo, já mostra "Nenhum lead prioritário pelas
-// regras agora" (v933). O cabeçalho contradizia o corpo na mesma tela. Agora, nesse cenário, o
-// cabeçalho muda de frase pra não prometer uma lista que não existe.
+// 2) A saudação da Home. v942 — o dono mandou remover o card amarelo e SEMPRE mostrar os leads do
+// dia. Como a Home agora sempre puxa da fila ranqueada completa, "de cima pra baixo" volta a ser
+// verdade; a saudação mostra o número REAL que aparece na lista = min(meta, elegíveis na fila),
+// pra não prometer mais leads do que a lista exibe.
 
 // 1. "Última mensagem" está de volta no cabeçalho do lead.
 const iniFoco = app.indexOf('function renderLeadFoco(lead){');
@@ -25,15 +23,15 @@ assert.match(foco, /const ultimaMsgReal=\(typeof cp786UltimaMensagemReal==='func
 assert.match(foco, /Última mensagem — \$\{ultimaMsgEm\}/, '"Última mensagem" precisa voltar a aparecer');
 assert.match(foco, /Última análise — \$\{analiseEm\}/, '"Última análise" continua aparecendo (não foi tocada)');
 
-// 2. renderSaudacao: quando não há candidato real no balde de urgentes (acao-hoje/
-// retomar-cuidado), a frase não pode mais prometer "de cima pra baixo" — precisa bater com a
-// mensagem "Nenhum lead prioritário" que a Home mostra no corpo pra esse mesmo cenário.
+// 2. renderSaudacao mostra o número real da lista (naLista = min(meta, fila)) e não promete mais
+// uma lista vazia. O card "nenhum lead prioritário" não é mais referenciado.
 const iniSaud = app.indexOf('function renderSaudacao(items){');
 const fimSaud = app.indexOf('\nfunction ', iniSaud + 1);
 const saud = app.slice(iniSaud, fimSaud);
-assert.match(saud, /const semCandidatosReais ?= ?!\(\(gruposH\["acao-hoje"\]\|\|\[\]\)\.length \|\| \(gruposH\["retomar-cuidado"\]\|\|\[\]\)\.length\)/,
-  'renderSaudacao precisa checar se existe candidato real no balde de urgentes');
-assert.match(saud, /semCandidatosReais\s*\n?\s*\?\s*`<span class="destaque">Meta de hoje: \$\{acaoMostrada\}<\/span>, mas nenhum lead prioritário pelas regras agora/,
-  'sem candidato real, a frase não pode prometer uma lista "de cima pra baixo" que não existe');
+assert.match(saud, /const naLista ?= ?Math\.min\(acaoMostrada, ?filaLen\)/,
+  'a saudação usa o número real da lista (min entre a meta e os elegíveis na fila)');
+assert.match(saud, /naLista > 0[\s\S]*?lead\$\{naLista>1\?"s":""\} pra atender hoje/,
+  'com leads na fila, a frase é "N leads pra atender hoje"');
+assert.doesNotMatch(saud, /nenhum lead prioritário pelas regras/, 'a saudação não fala mais em "nenhum lead prioritário"');
 
 console.log('v937-saudacao-nao-promete-lista-vazia: ok');

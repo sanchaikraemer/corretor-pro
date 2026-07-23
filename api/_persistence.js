@@ -711,9 +711,20 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       const al = autor.toLowerCase();
       return primeiroNome ? (al.includes(primeiroNome) || primeiroNome.includes(al)) : !ehBusinessMsg.test(autor);
     };
+    // v942 — conta o TOTAL de mensagens DO CLIENTE sobre o histórico INTEIRO (no servidor) e manda
+    // esse número pronto (clientMessageCount). A lista do navegador só recebe uma prévia (~8 msgs),
+    // então contar lá subestimava — a barra de "interesse" na Home ficava sempre quase vazia. Faz
+    // na MESMA varredura que já achava a última msg do cliente (sem custo extra de loop). Sem
+    // janela de tempo: a janela de 90 dias zerava leads que esfriaram há 3+ meses (parecia bug pro
+    // dono — ex.: cliente que escreveu ~15 msgs aparecia com "0"). A coldness fica nos "dias parado".
     let lastClient = null;
+    let clientMessageCount = 0;
     for (let i = timeline.length - 1; i >= 0; i--) {
-      if (ehClienteMsg(timeline[i])) { lastClient = timeline[i]; break; }
+      const m = timeline[i];
+      if (!ehClienteMsg(m)) continue;
+      if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
+      if (!String(m?.text || "").trim()) continue;
+      clientMessageCount++;
     }
     const lastClientIso = lastClient?.iso || null;
     const daysSinceClientReply = diasCalendarioBR(lastClientIso);
@@ -778,6 +789,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       audiosEncontrados: row.audios_encontrados ?? null,
       audiosTranscritos: row.audios_transcritos ?? null,
       messageCount: timeline.length,
+      clientMessageCount,
       hasProposal,
       recentMessages,
       historyLoaded: includeFullTimeline,
