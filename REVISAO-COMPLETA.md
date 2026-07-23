@@ -1,0 +1,62 @@
+# Revisão completa linha a linha — iniciada 2026-07-23
+
+## Regras desta revisão
+- Branch `claude/saas-real-estate-expert-q610re` — nunca mexer em `main`, nunca fazer merge/deploy sem pedir antes.
+- Cada correção aplicada segue o CLAUDE.md: versão sequencial em `package.json` (`version` + `displayVersion`),
+  `npm install --package-lock-only`, `NOTAS-vNNN.md`, `npm test` verde antes de commitar.
+- Nunca cravar dado comercial (preço, empreendimento, condição, nome de pessoa) no código.
+- Decisão de negócio ambígua (não é bug técnico, é escolha de produto) → registra no log abaixo, não inventa.
+- Se `npm test` quebrar numa correção e não for trivial resolver, reverte e registra como "achado, não corrigido".
+- Ritmo sequencial (um arquivo/bloco por vez, sem paralelismo) — combinado com o dono do projeto.
+
+## Checklist de arquivos (ordem de prioridade)
+
+| Arquivo | Linhas | Status | Observações |
+|---|---|---|---|
+| api/_persistence.js | 869 | concluído (v950) | camada de persistência — crítico. 1 fix aplicado + 2 achados registrados no log |
+| api/_pipeline.js | 3233 | pendente | motor de análise/IA — crítico; dividir em 2 blocos. Tem o MESMO regex frágil de acento em 2 pontos (linhas ~1712 e ~1986) — aplicar o mesmo fix de v950 |
+| api/lead-update.js | 1748 | pendente | dividir em 2 blocos |
+| api/reanalisar-lead.js | 804 | pendente | |
+| api/cerebro-config.js | 378 | pendente | |
+| api/processar-storage.js | 370 | pendente | |
+| api/restaurar-leads.js | 264 | pendente | |
+| api/limpar-tudo.js | 235 | pendente | |
+| api/criar-upload-url.js | 228 | pendente | tem o MESMO regex frágil de acento (linha ~105) — aplicar o mesmo fix de v950 |
+| api/diagnostico.js | 220 | pendente | |
+| api/leads-recentes.js | 188 | pendente | |
+| api/analisar.js | 138 | pendente | |
+| app.js | 13178 | pendente | dividir em blocos, respeitando limites de função. Tem o MESMO regex frágil de acento em pelo menos 5 pontos (linhas ~3703, ~7822, ~8299, e mais 2) — aplicar o mesmo fix de v950 |
+| service-worker.js | 244 | pendente | |
+| index.html | 661 | pendente | |
+| styles.css | 2325 | pendente | dividir em 2 blocos |
+| build.js | 92 | pendente | |
+| js/proposta.js | 285 | pendente | |
+| js/pwa-install.js | 115 | pendente | |
+| js/commercial-schema.js + js/dom.js + js/state.js | 27 | pendente | revisar junto (pequenos) |
+
+Testes (`tests/*.test.mjs`) ficam fora da varredura linha a linha — só são tocados quando uma
+correção exige teste de regressão novo (regra do CLAUDE.md).
+
+## Log de achados e correções
+_(preenchido conforme a revisão avança — cada entrada aponta arquivo:linha, o problema, e a versão
+que corrigiu, ou "achado, não corrigido" com o motivo)_
+
+### api/_persistence.js (v950)
+
+**Corrigido:**
+- `_normNome` (linha 160): regex de remoção de acento usava caracteres Unicode combinantes literais
+  no código-fonte em vez do escape `̀-ͯ` (que a função `normalizeKey`, no mesmo arquivo,
+  já usa). Mesmo comportamento, mas frágil a corrupção silenciosa. Normalizado pro escape.
+  Mesmo padrão encontrado em mais 6 pontos do projeto (api/criar-upload-url.js,
+  api/_pipeline.js ×2, app.js ×5+) — marcado nas linhas desses arquivos no checklist acima pra
+  corrigir quando a revisão chegar neles.
+
+**Achado, não corrigido (precisa decisão, não é bug simples):**
+- `_buscarProcessamentoExistenteV681`/`buscarAvatarAnterior`: varrem até 5000/500 registros em
+  memória pra achar duplicata por telefone/nome, ordenados por data. Acima desse volume de leads
+  processados, registros mais antigos ficam invisíveis pra deduplicação (import duplicado em vez de
+  atualizar o existente). Precisa de busca indexada no banco, não é fix de uma linha.
+- `persistProcessingResult`: retorna `ok:true` mesmo se o upsert nas tabelas legadas
+  `leads`/`direciona_leads` falhar (só fica em `warnings`). A carteira do app lê só de
+  `whatsapp_processamentos` (confirmado em `listRecentProcessings`), então não parece afetar o que o
+  corretor vê — mas precisa confirmar se algo mais depende dessas tabelas antes de mudar isso.
