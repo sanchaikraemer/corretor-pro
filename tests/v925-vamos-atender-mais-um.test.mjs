@@ -30,9 +30,8 @@ assert.match(rbh, /Meta de hoje batida/i, 'mensagem de meta batida presente');
 assert.match(rbh, /Vamos atender mais um\?/, 'texto do convite "Vamos atender mais um?"');
 assert.match(rbh, /onclick="cpAtenderMaisUmHoje\(\)"/, 'o botão chama cpAtenderMaisUmHoje()');
 
-// 3. "Ver todas as oportunidades" continua acessível mesmo nesse estado (temLista considera a fila completa).
-assert.match(rbh, /const temLista ?= ?urgentes\.length ?> ?0 ?\|\| ?retomada\.length ?> ?0 ?\|\| ?disponiveisParaPuxar\.length ?> ?0/,
-  'temLista deve considerar disponiveisParaPuxar (fila completa), não só o balde categorizado');
+// (v931: "Ver todas as oportunidades"/temLista foram removidos da Home — porta redundante pro
+// mesmo destino do Menu → "Condução do atendimento". Ver tests/v931-sem-porta-redundante.test.mjs.)
 
 // 4. cpAtenderMaisUmHoje existe, soma o extra e re-renderiza a Home, exposta no window.
 const fnSrc = app.match(/function cpAtenderMaisUmHoje\(\)\{[\s\S]*?\n\}/);

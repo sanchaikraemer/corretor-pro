@@ -2111,6 +2111,25 @@ function lembreteHojeOuFuturo(l){
     return diff!=null ? diff>=0 : t>Date.now();
   }catch(_){ return t>Date.now(); }
 }
+// v931 — o número do tile "Agenda" da Home precisa ser o MESMO que aparece na tela Agenda de
+// verdade (carregarAgenda): lembrete de hoje/futuro + compromissos confirmados. Antes o tile
+// usava cp786Categoria==='programados' (que também conta compromisso VENCIDO, mantido em
+// destaque até ser atendido) — número maior que o da Agenda, que nunca lista o vencido de um
+// lead ativo. Mesma conta aqui, sem duplicar ranking.
+function cpAgendaContagem(items){
+  if(!Array.isArray(items)) return 0;
+  const iniHojeA = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const fimHojeA = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
+  let n = 0;
+  for(const l of items){
+    const t = lembreteTs(l);
+    if(!isNaN(t) && t >= iniHojeA) n++; // hoje ou futuro (vencido some, igual à tela Agenda)
+    const aps = l?.analysis?.confirmedAppointments;
+    if(Array.isArray(aps)) n += aps.length;
+  }
+  return n;
+}
+window.cpAgendaContagem = cpAgendaContagem;
 
 // scorePrio = ORDENAÇÃO/prioridade do funil (usa a sentinela do lembrete pra jogar pro topo/rodapé).
 // scoreSinais = só os sinais comerciais reais (SEM a sentinela) — usado no cálculo da PROBABILIDADE,
@@ -2677,7 +2696,6 @@ function renderBotoesHome(){
     top3Html = `<div class="small" style="color:var(--muted);opacity:.7;padding:18px;border:1px dashed var(--line);border-radius:10px;text-align:center">Tudo em dia! Nenhum lead pendente agora. Bom momento pra importar conversas novas.</div>`;
   }
 
-  const temLista = urgentes.length > 0 || retomada.length > 0 || disponiveisParaPuxar.length > 0;
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
   const btnPularHtml = urgentes.length > 1 ? `<button type="button" class="seq-link" onclick='pularProximo()'>⏭ Pular próximo</button>` : "";
 
@@ -2716,7 +2734,6 @@ function renderBotoesHome(){
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
     ${esquecidosHtml}
-    ${temLista ? `<div style="text-align:center;margin-top:8px"><button type="button" class="ver-todas" onclick='abrirTodosLeads()'>Ver todas as oportunidades →</button></div>` : ""}
   `;
   qsa(".pickZipShortcut").forEach(b => {
     if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", () => qs("#zipInput")?.click()); }
@@ -3096,16 +3113,8 @@ window.abrirGrupoHome = abrirGrupoHome;
 window.renderBotoesHome = renderBotoesHome;
 
 // (v911) "Últimos atendimentos" removido da home (redundante com "Atendimentos" na barra de baixo).
-
-// Atalho "Todos" da barra de baixo: abre a tela Hoje já dentro da lista completa
-// de leads ativos, do mais quente pro mais frio (chance de venda).
-async function abrirTodosLeads(){
-  // "Ver todos" agora abre a tela unificada Leads, na visão por prioridade.
-  state.lead = null; state.focoLeadId = null;
-  state.leadsView = "prioridade";
-  show("pipeline");
-}
-window.abrirTodosLeads = abrirTodosLeads;
+// (v931) botão duplicado removido da Home: era o mesmo destino do Menu →
+// "Condução do atendimento" — porta redundante pro mesmo lugar.
 
 // "Ver lista de hoje" (insight) abre EXATAMENTE a mesma fila priorizada da tela inicial
 // (grupo "ação hoje", mesma ordem) — não a lista por %. Assim não há dois rankings de "hoje".
@@ -7698,7 +7707,6 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
 }));
 // Qualquer item da lista lateral/gaveta fecha a gaveta do celular ao ser tocado (inclui os que usam onclick, como "Últimos atendimentos").
 qsa(".sb-item").forEach(b=>b.addEventListener("click", fecharMenuGaveta));
-qsa(".navTodos").forEach(b=>b.addEventListener("click",abrirTodosLeads));
 qsa(".pickZipShortcut").forEach(b=>b.addEventListener("click",()=>qs("#zipInput").click()));
 qs("#pickZip").addEventListener("click",()=>qs("#zipInput").click());
 qs("#uploadBox").addEventListener("click",e=>{if(e.target.id!=="pickZip")qs("#zipInput").click()});
@@ -9221,14 +9229,14 @@ renderResumoDia = function(items){
   const fds=cpFimDeSemana();
   const fazerAgora=cpFazerAgoraDose(ativos);
   const faB=fds?'<b class="cp-fds">Final de semana</b>':`<b>${fazerAgora}</b>`;
-  const compromissos=ativos.filter(l=>cp786Categoria(l)==='programados').length;
+  const compromissos=cpAgendaContagem(ativos);
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" onclick="cp786AbrirConducao('programados')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
+    <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
 };
 
