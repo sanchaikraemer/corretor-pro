@@ -48,12 +48,11 @@ assert.equal(
 // Sem nenhuma data disponível → string vazia (não inventa data).
 assert.equal(cp865UltimaAnaliseISO({}, {}), '', 'sem dado nenhum, retorna vazio');
 
-// --- 2) A linha "Última análise" é renderizada ACIMA de "Última mensagem". ---
+// --- 2) A linha "Última análise" é renderizada no cabeçalho do lead. ---
+// v934 — "Última mensagem"/"Último atendimento"/"Última atualização" foram removidas do
+// cabeçalho (pedido do dono: deixar só "Última análise" ali).
 const idxAnalise = app.indexOf('Última análise — ');
-const idxMensagem = app.indexOf('Última mensagem — ');
 assert.ok(idxAnalise !== -1, 'o template precisa render "Última análise — data"');
-assert.ok(idxMensagem !== -1, 'o template ainda precisa ter "Última mensagem — data"');
-assert.ok(idxAnalise < idxMensagem, '"Última análise" precisa vir acima de "Última mensagem"');
 
 // --- 3) As duas linhas ficam em negrito (mesma classe .cp704-metaline). ---
 const regra = app.match(/\.cp704-metaline\{[^}]*\}/);

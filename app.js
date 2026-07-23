@@ -1922,22 +1922,6 @@ function ehContatadoHoje(l){
   return null;
 }
 
-// Dias de calendário (BR) desde o último "contato_manual" registrado. null = nunca atendido.
-function ultimoAtendimentoManual(l){
-  const eventos = l?.analysis?.aprendizado?.eventos || [];
-  let maisRecente = null;
-  for(const e of eventos){
-    if(e?.evento !== "contato_manual" || !e?.quando) continue;
-    const d = new Date(e.quando);
-    if(isNaN(d.getTime())) continue;
-    if(!maisRecente || d > new Date(maisRecente.quando)) maisRecente = e;
-  }
-  return maisRecente;
-}
-function ultimoAtendimentoDataHora(l){
-  const e = ultimoAtendimentoManual(l);
-  return e?.quando ? fmtUltimaAtualizacao(e.quando) : "";
-}
 
 // v826 §6.5 — Último ATENDIMENTO real, considerando TODAS as fontes: eventos de
 // contato manual (botão "Marcar atendimento" e cópia de mensagem), itens manuais
@@ -4704,6 +4688,7 @@ function cp704Css(){
       .cp704-desmarcar{background:transparent;border:0;color:var(--muted);font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:4px 8px;white-space:nowrap}
       .cp704-desmarcar:hover{color:var(--text)}
       .cp704-toolbar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+      @media(min-width:1000px){.cp704-toolbar{grid-template-columns:repeat(8,minmax(0,1fr))}}
       .cp704-ico{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font-weight:850;font-size:10.5px;line-height:1.1;white-space:nowrap;cursor:pointer;min-width:66px}
       .cp704-ico svg{width:19px;height:19px}
       .cp704-ico:hover{color:var(--text);border-color:var(--muted)}
@@ -5160,14 +5145,7 @@ function renderLeadFoco(lead){
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
-    // "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do histórico),
-    // pra não divergir: lead.lastInteractionAt vinha como ISO/UTC e a conversão pra São Paulo
-    // deslocava 3h (histórico 03:32 x cabeçalho 00:32). Fallback pro campo antigo quando não há msg.
-    const ultimaMsgReal=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(lead):null;
-    const last=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
-    const atendimento=ultimoAtendimentoDataHora(lead);
-    const atualizadoEm=(typeof fmtUltimaAtualizacao==='function' && lead?.updatedAt)?fmtUltimaAtualizacao(lead.updatedAt):'';
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     area.innerHTML=`<div class="cp704-lead">
@@ -5176,11 +5154,7 @@ function renderLeadFoco(lead){
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
-          ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:''}
-          ${last?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${last}`)}</div>`:''}
-          ${atendimento?`<div class="cp704-metaline">${escapeHtml(`Último atendimento — ${atendimento}`)}</div>`:''}
-          ${atualizadoEm?`<div class="cp704-metaline">${escapeHtml(`Última atualização — ${atualizadoEm}`)}</div>`:''}
-          ${(!analiseEm&&!last&&!atendimento&&!atualizadoEm)?`<div class="cp704-metaline">Sem data registrada</div>`:''}
+          ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
