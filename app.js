@@ -9051,7 +9051,19 @@ function cpProbabilidadeFechamento(l){
   }catch(_){}
   const resp = Number(l?.daysSinceClientReply);
   const toque = Number(l?.daysSinceLastTouch);
-  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque);
+  // v944: falar por último não basta — se a última mensagem do cliente foi só uma despedida/
+  // agradecimento ("Claro", "Obrigado pela atenção"), sem pergunta nem pedido, não existe bola
+  // com o cliente esperando resposta. Só pondera quando a última fala dele de fato pede resposta
+  // (mesma checagem que ui670ModeloComercial usa pra "ultimaPedeResposta").
+  let ultimaMsgPedeResposta = true;
+  try{
+    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
+    if(last && last.falante === "contato"){
+      const t = String(last.m?.text || "");
+      ultimaMsgPedeResposta = /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
+    }
+  }catch(_){}
+  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgPedeResposta;
   return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0);
 }
 // candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
