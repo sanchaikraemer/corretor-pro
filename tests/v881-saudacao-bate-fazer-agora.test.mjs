@@ -39,11 +39,13 @@ assert.ok(
   "renderSaudacao ainda usa META_DIA — o teto de 12 fazia o número divergir da lista"
 );
 
-// 3. A frase-alvo continua sendo gerada a partir de acaoMostrada.
+// 3. A frase-alvo é disparada por acaoMostrada > 0. v942 — o NÚMERO mostrado passou a ser o real
+// que aparece na lista da Home = min(meta, elegíveis na fila) (naLista), pra não prometer mais
+// leads do que a lista exibe. A frase segue "N leads pra atender hoje, de cima pra baixo".
 assert.ok(
   /acaoMostrada\s*>\s*0/.test(corpo) &&
-    corpo.includes("lead${acaoMostrada>1?\"s\":\"\"} pra atender hoje"),
-  "a frase 'N leads pra atender hoje' deveria depender de acaoMostrada"
+    corpo.includes("lead${naLista>1?\"s\":\"\"} pra atender hoje"),
+  "a frase 'N leads pra atender hoje' deveria usar naLista (o número real da lista)"
 );
 
 console.log("v881-saudacao-bate-fazer-agora: OK");

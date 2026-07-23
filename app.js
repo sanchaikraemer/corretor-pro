@@ -355,20 +355,28 @@ function totalMensagensLead(l){
 // É o proxy de INTERESSE: cliente que responde muito está mais engajado. Alimenta a barra de
 // "Interesse do cliente" e o ranking do "Fazer agora" (mesma régua, decisão do dono).
 function mensagensDoCliente(l){
+  // v942 — na LISTA da Home o lead traz só uma prévia (~8 msgs), então contar aqui subestimava
+  // (a barra de "interesse" ficava sempre quase vazia). O servidor manda clientMessageCount: a
+  // contagem real (TOTAL) das mensagens do cliente, calculada sobre o histórico inteiro no banco.
+  // Preferimos esse número quando o histórico completo ainda não foi carregado. No detalhe do
+  // lead (historyLoaded=true) a gente conta das mensagens reais, como antes.
+  if(!(l && l.historyLoaded)){
+    const stored = Number(l?.clientMessageCount);
+    if(Number.isFinite(stored)) return stored;
+  }
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return 0;
   const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
-  // v896: só conta as mensagens do cliente dentro da JANELA (90 dias) — mede o interesse ATUAL,
-  // não engajamento antigo. Mensagem sem data legível entra (benefício da dúvida = recente).
-  const janelaDias = (typeof CP_JANELA_INTERESSE_DIAS==='number'?CP_JANELA_INTERESSE_DIAS:90);
-  const limite = Date.now() - janelaDias*86400000;
+  // v942 — conta TODAS as mensagens do cliente na conversa (sem janela de tempo). A janela de 90
+  // dias da v896 zerava o número de qualquer lead que esfriou há 3+ meses (ex.: Sara, quieta desde
+  // fevereiro, aparecia com "0 mensagens do cliente" mesmo tendo escrito ~15) — o dono, com razão,
+  // apontou que isso parece quebrado. A coldness já é mostrada pelos "dias parado"; aqui o número
+  // é o engajamento REAL da conversa, não "interesse dos últimos 90 dias".
   let n = 0;
   for(const m of msgs){
     if(!m || !String(m.text||"").trim()) continue;
     const src = String(m.source||"").toLowerCase(), type = String(m.type||"").toLowerCase();
     if(src==='manual'||src==='crm'||src==='corretor-pro-manual'||type==='print-whatsapp'||['atendimento','nota','ligacao','visita','presencial','proposta','observacao_manual','mensagem_enviada'].includes(type)) continue;
-    const t = m?.iso ? Date.parse(m.iso) : (m?.date ? Date.parse(m.date) : NaN);
-    if(Number.isFinite(t) && t < limite) continue; // fora da janela de 90 dias
     if(typeof ehMsgDoCliente==='function' && ehMsgDoCliente(m, pn)) n++;
   }
   return n;
@@ -894,7 +902,7 @@ function analiseComercialPrincipalHTML(a){
   ].filter(v => String(v || "").trim()) : [];
 
   if(!ac || !camposObrigatorios.length){
-    return `<section style="border:1px solid rgba(255,155,59,.45);border-radius:14px;padding:13px;background:rgba(255,155,59,.07)">
+    return `<section style="border:1px solid rgba(184,194,201,.45);border-radius:14px;padding:13px;background:rgba(184,194,201,.07)">
       <div style="font-size:15px;font-weight:950;color:#fff">Diagnóstico comercial completo</div>
       <div style="margin-top:6px;color:var(--soft);font-size:12px;line-height:1.45">Este lead ainda está com a análise antiga. Toque em <b style="color:var(--morno)">Reanalisar</b> para gerar a leitura completa da conversa e as mensagens comerciais.</div>
     </section>`;
@@ -2444,6 +2452,34 @@ function filaRowHTML(l, pos){
     <div class="fila-chev">›</div>
   </div>`;
 }
+// v942 — barra de status das mensagens do cliente (Modelo A escolhido pelo dono: barra
+// horizontal + número, cor por nível). Mesma métrica do "Interesse do cliente" que já existe
+// dentro do lead (mensagensDoCliente). Cor: baixo = cinza, médio/alto = coral. A barra enche até
+// 30 mensagens (útil na lista — o número exato fica ao lado). O topo da lista naturalmente tem as
+// barras mais cheias, porque a fila é ranqueada por essa mesma contagem.
+function cpBarraMensagensMini(l){
+  const n = (typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0;
+  const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
+  const pct = Math.max(6, Math.min(100, Math.round(n / 30 * 100)));
+  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente"><span class="chr-track"><i style="width:${pct}%;background:${cor}"></i></span><b style="color:${cor}">${n}</b></span>`;
+}
+// Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
+// produto, barra de mensagens e dias parado. Uma coluna, sem quebra lateral.
+function cpHomeLeadRow(l, pos){
+  const idJs = JSON.stringify(String(l.id||""));
+  let nivel = 0;
+  try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
+  const dotCor = nivel === 1 ? 'var(--accent)' : '#5a6a70'; // coral = cliente aguardando você
+  const dias = l.daysSinceLastInteraction != null ? `${l.daysSinceLastInteraction}d` : '';
+  const prod = (typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || '');
+  return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
+    <span class="chr-dot" style="background:${dotCor}"></span>
+    <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
+    <span class="chr-pr">${escapeHtml(prod||'')}</span>
+    ${cpBarraMensagensMini(l)}
+    <span class="chr-dd">${escapeHtml(dias)}</span>
+  </button>`;
+}
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
 const HERO_WHY_ICONS = [
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>`,
@@ -2624,82 +2660,41 @@ function renderBotoesHome(){
     return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
   };
 
-  // v924 — Fila urgente = a META de hoje (10 menos quem já foi atendido hoje — cpFazerAgoraDose)
-  // aplicada ao topo da fila ranqueada. Quem é elegível mas ficou fora do corte de hoje vira
-  // "fila de retomada" (não some, só não conta pro "Fazer agora" nem entra sozinho no meio do dia).
-  // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (continuam
-  // nas prioridades, só não ficam em foco agora). state.pulados é por sessão (zera ao recarregar).
-  let urgentesRanqueados = (grupos["acao-hoje"] || []).concat(grupos["retomar-cuidado"] || []);
-  if(typeof cpNotaPrioridade === 'function') urgentesRanqueados = urgentesRanqueados.slice().sort((a,b)=>cpNotaPrioridade(b)-cpNotaPrioridade(a));
+  // v942 — a Home mostra SEMPRE os leads do dia, um embaixo do outro (lista compacta), SEM aquele
+  // card amarelo que o dono mandou tirar. Se o balde estrito de urgentes está vazio, a gente puxa
+  // direto da FILA RANQUEADA completa (cpFilaFazerAgora — os elegíveis, já fora de quem foi
+  // atendido hoje e de quem está na janela de espera). Nunca mais um card dizendo que "não tem
+  // trabalho" com 160+ leads na carteira.
+  // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (por
+  // sessão; zera ao recarregar).
+  let filaRanqueada = typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : [];
   {
     const pulados = state.pulados instanceof Set ? state.pulados : null;
     if(pulados && pulados.size){
-      urgentesRanqueados = urgentesRanqueados.filter(l => !pulados.has(String(l.id))).concat(urgentesRanqueados.filter(l => pulados.has(String(l.id))));
+      filaRanqueada = filaRanqueada.filter(l => !pulados.has(String(l.id))).concat(filaRanqueada.filter(l => pulados.has(String(l.id))));
     }
   }
   const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
-  const doseBase = urgentesRanqueados.slice(0, metaHoje);
-  // v925 — bater a meta de hoje não fecha a porta: "Vamos atender mais um?" deixa o corretor
-  // puxar mais gente, sem esperar o dia seguinte (mesmo mecanismo do botão "Atender +1" de
-  // abrirFazerAgora, via state.fazerAgoraExtra — a mesma variável dos dois lugares). O extra
-  // vem da FILA RANQUEADA completa (cpFilaFazerAgora — a mesma que alimenta o número e o
-  // "Atender +1"), não só do balde categorizado "acao-hoje": esse balde pode estar vazio (ex.:
-  // tudo que sobra está "aguardando cliente") mesmo com gente disponível pra puxar de propósito.
+  // "Atender mais um" (state.fazerAgoraExtra) puxa além da meta, sem esperar o dia seguinte.
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
-  const idsNaDoseBase = new Set(doseBase.map(l => String(l.id)));
-  const filaCompleta = typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : [];
-  const extrasPuxados = filaCompleta.filter(l => !idsNaDoseBase.has(String(l.id))).slice(0, extraHoje);
-  extrasPuxados.forEach(l => idsNaDoseBase.add(String(l.id)));
-  const urgentes = doseBase.concat(extrasPuxados);
-  const backlogAlemDaDose = urgentesRanqueados.slice(metaHoje).filter(l => !idsNaDoseBase.has(String(l.id)));
-  const disponiveisParaPuxar = filaCompleta.filter(l => !idsNaDoseBase.has(String(l.id)));
-  const retomada = (grupos["retomada"] || []);
+  const quantosMostrar = Math.max(0, metaHoje) + extraHoje;
+  const dose = filaRanqueada.slice(0, quantosMostrar);
+  const urgentes = dose; // usado no btnPular e no gate das "oportunidades esquecidas" abaixo
+  const disponiveisParaPuxar = filaRanqueada.slice(dose.length);
   let top3Html;
-  if(urgentes.length){
-    // Dose de hoje (hero + próximos); quem ficou de fora do corte vira "fila de retomada" num
-    // expansor (não some, só não conta como urgência de hoje).
-    const dose = urgentes;
-    const backlog = backlogAlemDaDose;
-    const filaDose = dose.slice(1); // sem o nº1 (já é o hero)
-    top3Html = renderHeroLead(dose[0])
-      + (filaDose.length
-          ? `<div class="fila-head"><h3>Próximos atendimentos</h3><span>Prioridade: engajamento + tempo parado</span></div>`
-            + filaDose.map((l, i) => filaRowHTML(l, i+2)).join("")
-          : "")
-      + (backlog.length
-          ? `<details style="margin-top:12px"><summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${backlog.length}</summary><div style="margin-top:10px">${backlog.map((l, i) => filaRowHTML(l, i+2+filaDose.length)).join("")}</div></details>`
+  if(dose.length){
+    // Lista compacta: um lead embaixo do outro, 1 coluna, sem quebra lateral (opção 1 + lista
+    // densa que o dono escolheu). Cada linha traz a barra de status das mensagens do cliente.
+    top3Html = `<div class="cp-hoje-list">${dose.map((l, i) => cpHomeLeadRow(l, i+1)).join("")}</div>`
+      + (disponiveisParaPuxar.length
+          ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
           : "");
-  } else if(disponiveisParaPuxar.length && metaHoje === 0){
-    // v925 — bateu a meta de hoje (metaHoje/cpFazerAgoraDose já caiu pra 0 = dose consumida por
-    // atendimento real), mas ainda tem gente na fila ranqueada (a mesma que alimenta o número e o
-    // "Atender +1" — não só o balde categorizado "acao-hoje", que pode estar vazio com tudo
-    // "aguardando cliente"): convida a continuar em vez de só dizer "tudo em dia".
-    top3Html = `<div style="padding:16px 18px;border:1px solid var(--lime);border-radius:14px;background:rgba(104,255,149,.06);margin-bottom:12px;text-align:center">
-      <div style="font-size:15px;font-weight:950;color:var(--lime);margin-bottom:6px">🎉 Meta de hoje batida!</div>
-      <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda tem ${disponiveisParaPuxar.length} lead${disponiveisParaPuxar.length>1?"s":""} esperando prioridade. Cada atendimento a mais é uma venda mais perto.</div>
-      <button type="button" class="primary" onclick="cpAtenderMaisUmHoje()">Vamos atender mais um?</button>
-    </div>`;
-  } else if(disponiveisParaPuxar.length){
-    // v933 — metaHoje > 0 (a meta NÃO foi cumprida, tem gente pra atender ainda) mas o balde
-    // categorizado ("acao-hoje"/"retomar-cuidado") veio vazio — não é a mesma coisa que "meta
-    // batida", e dizer isso contradiz a saudação/card que mostram metaHoje leads pendentes na
-    // mesma tela (bug reportado pelo dono: via print, "10 pra atender hoje" + "Meta batida" juntos).
-    // Convida a puxar da fila ranqueada completa sem afirmar que o dia já foi cumprido.
-    top3Html = `<div style="padding:16px 18px;border:1px dashed var(--morno);border-radius:14px;background:rgba(245,195,107,.06);margin-bottom:12px;text-align:center">
-      <div style="font-size:15px;font-weight:950;color:var(--morno);margin-bottom:6px">📋 Nenhum lead prioritário pelas regras agora</div>
-      <div class="small" style="color:var(--soft);margin-bottom:12px">Ainda faltam ${metaHoje} pra bater a meta de hoje. Tem ${disponiveisParaPuxar.length} lead${disponiveisParaPuxar.length>1?"s":""} na fila geral esperando prioridade — pode puxar de lá.</div>
-      <button type="button" class="primary" onclick="cpAtenderMaisUmHoje()">Puxar da fila</button>
-    </div>`;
-  } else if(retomada.length){
-    // Nenhum urgente: todos foram atendidos recentemente. Sugere retomadas proativas.
-    top3Html = `<div style="padding:14px 16px;border:1px dashed var(--lime);border-radius:12px;background:rgba(255,98,88,.05);margin-bottom:12px">
-      <div style="font-size:14px;font-weight:950;color:var(--lime);margin-bottom:4px">✅ Nenhum lead urgente agora</div>
-      <div class="small" style="color:var(--soft)">Ótimo momento pra fazer retomadas proativas — leads que pararam mas ainda têm potencial.</div>
-    </div>`
-      + `<div class="fila-head"><h3>Retomadas sugeridas</h3><span>Leads parados há 3+ dias que valem um toque</span></div>`
-      + retomada.map((l, i) => filaRowHTML(l, i+1)).join("");
+  } else if(metaHoje === 0 && filaRanqueada.length){
+    // Já atendeu a dose de hoje, mas ainda tem gente elegível. Sem card grande — convite discreto.
+    top3Html = `<div class="cp-hoje-done">Você já atendeu os ${CP_DOSE_DIA} de hoje. 👏 <button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um</button></div>`;
   } else {
-    top3Html = `<div class="small" style="color:var(--muted);opacity:.7;padding:18px;border:1px dashed var(--line);border-radius:10px;text-align:center">Tudo em dia! Nenhum lead pendente agora. Bom momento pra importar conversas novas.</div>`;
+    // Fila realmente vazia (fim de semana, ou ninguém elegível agora). Uma linha neutra, sem box.
+    top3Html = `<div class="cp-hoje-vazio">${cpFimDeSemana() ? 'Fim de semana — a fila do "Fazer agora" volta na segunda.' : 'Nenhum lead pra atender agora. Bom momento pra importar conversas novas.'}</div>`;
   }
 
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
@@ -2733,6 +2728,25 @@ function renderBotoesHome(){
       .home-m1-semana-kpis .kpi b{display:block;font-size:18px;font-weight:950;margin-bottom:2px}
       .home-m1-semana-kpis .kpi span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:950}
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
+      /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
+      .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
+      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,1.35fr) 118px 42px;gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      .cp-hoje-row:last-child{border-bottom:0}
+      .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
+      .cp-hoje-row .chr-dot{width:8px;height:8px;border-radius:50%}
+      .cp-hoje-row .chr-nm{font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp-hoje-row .chr-pr{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp-hoje-row .chr-bar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+      .cp-hoje-row .chr-track{width:64px;height:7px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;flex:0 0 auto}
+      .cp-hoje-row .chr-track i{display:block;height:100%;border-radius:999px}
+      .cp-hoje-row .chr-bar b{font-size:11px;font-weight:900;min-width:20px;text-align:right}
+      .cp-hoje-row .chr-dd{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+      .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
+      .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
+      .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
+      .cp-hoje-done{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);color:var(--soft);font-size:13px;font-weight:700;text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+      .cp-hoje-vazio{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center;margin-bottom:8px}
+      @media(max-width:560px){.cp-hoje-row{grid-template-columns:10px minmax(0,1fr) 96px 38px;gap:10px}.cp-hoje-row .chr-pr{display:none}.cp-hoje-row .chr-track{width:52px}}
     </style>
     <div class="home-saud">
       <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes">${btnPularHtml}</div></div>
@@ -3153,7 +3167,7 @@ async function reanalisarTudo(){
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
         <div style="text-align:center;padding:10px 6px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px"><b style="display:block;font-size:18px">${total}</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">leads</span></div>
         <div style="text-align:center;padding:10px 6px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px"><b style="display:block;font-size:18px">~${tempoEst}min</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">tempo</span></div>
-        <div style="text-align:center;padding:10px 6px;background:rgba(255,155,59,.06);border:1px solid var(--morno);border-radius:10px"><b style="display:block;font-size:15px;color:var(--morno)">~R$${custoMin}–${custoMax}</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">custo análise</span></div>
+        <div style="text-align:center;padding:10px 6px;background:rgba(184,194,201,.06);border:1px solid var(--morno);border-radius:10px"><b style="display:block;font-size:15px;color:var(--morno)">~R$${custoMin}–${custoMax}</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">custo análise</span></div>
       </div>
       <div class="small" style="color:var(--soft);font-size:11px;margin-bottom:16px;line-height:1.5">💡 Só precisa fazer isso quando muda algo grande. No dia a dia, cada lead já reanalisa sozinho quando você importa a conversa. Dá pra cancelar no meio.</div>
       <div style="display:flex;gap:10px">
@@ -3400,16 +3414,14 @@ function renderSaudacao(items){
       ? `<span class="destaque">Final de semana!</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje — o "Fazer agora" volta na segunda.`
       : `<span class="destaque">Final de semana!</span> Fila de "Fazer agora" pausada — volta na segunda.`;
   } else if(acaoMostrada > 0){
-    // v937 — "X leads pra atender hoje, de cima pra baixo" prometia uma LISTA pronta e
-    // ordenada. Quando o balde de urgentes (acao-hoje/retomar-cuidado) vem vazio, essa lista
-    // não existe — dizer "de cima pra baixo" contradiz a própria Home logo abaixo, que mostra
-    // "Nenhum lead prioritário pelas regras agora" e pede pra puxar manual da fila (bug
-    // reportado pelo dono: o cabeçalho prometia uma lista de 9 que, na prática, não existe).
-    const gruposH = state.gruposHome || {};
-    const semCandidatosReais = !((gruposH["acao-hoje"]||[]).length || (gruposH["retomar-cuidado"]||[]).length);
-    html = semCandidatosReais
-      ? `<span class="destaque">Meta de hoje: ${acaoMostrada}</span>, mas nenhum lead prioritário pelas regras agora — puxe da fila geral abaixo.`
-      : `<span class="destaque">${acaoMostrada} lead${acaoMostrada>1?"s":""} pra atender hoje</span>, de cima pra baixo.`;
+    // v942 — a Home agora SEMPRE mostra os leads do dia (puxa da fila ranqueada completa), então
+    // "de cima pra baixo" volta a ser verdade e o card amarelo "nenhum lead prioritário" foi
+    // removido. O número mostrado é o real que aparece na lista = min(meta, elegíveis na fila).
+    const filaLen = (typeof cpFilaFazerAgora === 'function') ? cpFilaFazerAgora(items).length : 0;
+    const naLista = Math.min(acaoMostrada, filaLen);
+    html = naLista > 0
+      ? `<span class="destaque">${naLista} lead${naLista>1?"s":""} pra atender hoje</span>, de cima pra baixo.`
+      : `<span class="destaque">Tudo em dia!</span> Nenhum lead na fila agora — bom momento pra prospectar.`;
   } else if(tratadosHoje > 0){
     html = `<span class="destaque">Mandou bem!</span> ${tratadosHoje} lead${tratadosHoje>1?"s":""} atendidos hoje.`;
   } else {
@@ -4492,7 +4504,7 @@ const TIPO_RETOMADA_LABEL = {
   "quente-fechar": { txt:"Pronto pra fechar", cor:"var(--acao)", bg:"rgba(104,255,149,.14)" },
   "morno-confirmar": { txt:"Confirmar próximo passo", cor:"var(--timing)", bg:"rgba(255,45,155,.14)" },
   "frio-reaquecer": { txt:"Reativar", cor:"var(--dados)", bg:"rgba(55,232,255,.12)" },
-  "objecao-tratar": { txt:"Tratar objeção", cor:"var(--morno)", bg:"rgba(255,155,59,.14)" },
+  "objecao-tratar": { txt:"Tratar objeção", cor:"var(--morno)", bg:"rgba(184,194,201,.14)" },
   "informacao-enviar": { txt:"Enviar material", cor:"var(--cerebro)", bg:"rgba(196,92,255,.14)" },
   "primeiro-contato": { txt:"Primeiro contato", cor:"var(--lime)", bg:"rgba(255,98,88,.12)" },
   "stand-by": { txt:"Stand-by", cor:"var(--muted)", bg:"rgba(255,255,255,.06)" }
@@ -4722,16 +4734,16 @@ function cp704Css(){
       .cp704-hero{border:1px solid rgba(255,255,255,.10);background:linear-gradient(135deg,rgba(7,52,64,.92),rgba(5,31,40,.96));border-radius:18px;padding:15px;box-shadow:0 14px 45px rgba(0,0,0,.20)}
       .cp704-hero h1{font-size:28px;line-height:1.04;margin:0 0 8px;font-weight:950;letter-spacing:-.03em;color:var(--text)}
       .cp704-tags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cp704-tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);padding:5px 8px;border-radius:999px;font-weight:850}
-      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(255,201,107,.45);background:rgba(255,201,107,.10);color:#ffd28a}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,98,88,.45);background:rgba(255,98,88,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}.cp704-etapa{gap:7px}.cp704-etapa .cp704-etapa-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
+      .cp704-mainrow{display:grid;grid-template-columns:1fr;gap:12px;align-items:center}.cp704-situation{display:flex;flex-direction:column;gap:8px}.cp704-pill{display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;border:1px solid rgba(184,194,201,.45);background:rgba(184,194,201,.10);color:var(--soft)}.cp704-pill.green{border-color:rgba(104,255,149,.45);background:rgba(104,255,149,.10);color:#68ff95}.cp704-pill.red{border-color:rgba(255,98,88,.45);background:rgba(255,98,88,.10);color:#ff7f74}.cp704-situation p{margin:0;color:rgba(237,246,248,.92);font-size:14px;line-height:1.45}.cp704-etapa{gap:7px}.cp704-etapa .cp704-etapa-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
       .cp704-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.cp704-metric{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:rgba(237,246,248,.92)}.cp704-metric small{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:1px}
       .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
-      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ffbf5a}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-empty-analysis{border:1px solid rgba(255,201,107,.35);background:rgba(255,201,107,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:#ffd28a}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(255,201,107,.45);background:rgba(255,255,255,.04);color:#ffd28a;border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
+      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
-      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(255,201,107,.35);color:#ffd28a}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:#ff7f74!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
-      .cp704-stale{border-color:rgba(255,201,107,.28);background:rgba(255,201,107,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(255,201,107,.45);border-radius:12px;background:rgba(255,255,255,.04);color:#ffd28a;padding:10px;font-weight:900}
+      .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:#ff7f74!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
+      .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
@@ -6988,7 +7000,7 @@ async function renderProcessedResult(data, meta){
     `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}. <a href="#" onclick="show('cerebro');return false" style="color:var(--lime);text-decoration:underline">ajustar padrão</a></div>` : "";
 
   const sm = data.metrics || {};
-  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:#ffd9ad"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
   const inc = data.incrementalMeta || {};
   const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
 
@@ -7007,11 +7019,11 @@ async function renderProcessedResult(data, meta){
     // corretor, gerando duplicata (o cliente ficava com dois cadastros e o mais antigo parado
     // "esquecido" enquanto o novo tinha a conversa atualizada).
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else if(perguntarNome){
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(255,155,59,.08);border:1px solid var(--morno);border-radius:12px;color:#ffd9ad"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else{
     acoesHtml =
@@ -12533,7 +12545,7 @@ function ui670DetailRows(lead,mc){
   const css = document.createElement('style');
   css.id = 'cp697PreparacaoCSS';
   css.textContent = `
-    .cp697-page{max-width:760px;margin:0 auto;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-head{margin:0 0 14px}.cp697-head h2{font-size:30px!important;line-height:1.02;margin:0 0 8px;color:var(--text);font-weight:950;letter-spacing:-.04em}.cp697-head p{font-size:14px!important;line-height:1.35;color:var(--muted);margin:0 0 14px}.cp697-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.cp697-progress>div{padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.025)}.cp697-progress b{display:block;color:var(--text);font-size:22px;line-height:1;font-weight:950}.cp697-progress span{display:block;margin-top:4px;color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.cp697-tabs{display:flex;gap:8px;overflow-x:auto;margin:12px 0 14px;padding-bottom:2px}.cp697-tabs button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--soft);border-radius:999px;padding:9px 12px;font-size:12px;font-weight:950;white-space:nowrap}.cp697-tabs button.active{background:var(--lime);border-color:var(--lime);color:#06262d}.cp697-tabs span{opacity:.75;margin-left:4px}.cp697-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);overflow:visible!important;margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;gap:9px;align-items:center;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative}.cp697-row:last-child{border-bottom:0}.cp697-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0}.cp697-row.ready:before{background:#68ff95}.cp697-row.pending:before{background:rgba(255,155,59,.9)}.cp697-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp697-copy b{font-size:17px!important;line-height:1.08;font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy em{font-style:normal;color:var(--muted);font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy small{color:rgba(227,245,249,.77);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-status{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:10.5px!important;font-weight:950;line-height:1;white-space:nowrap}.cp697-row.ready .cp697-status{border-color:rgba(104,255,149,.42);color:#68ff95;background:rgba(104,255,149,.07)}.cp697-row.pending .cp697-status{border-color:rgba(255,155,59,.45);color:#ffd09b;background:rgba(255,155,59,.07)}.cp697-chevron{color:var(--muted);font-size:18px}.cp697-empty,.cp697-loading{padding:24px;color:var(--muted);text-align:center;display:flex;flex-direction:column;gap:6px}.cp697-empty b,.cp697-loading b{color:var(--text)}.cp697-loading{min-height:240px;align-items:center;justify-content:center}.cp697-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp697spin .8s linear infinite}@keyframes cp697spin{to{transform:rotate(360deg)}}.cp697-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0}.cp697-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp697-home-title b{font-size:16px;color:var(--text)}.cp697-home-title button{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp697-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp697-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#FF6258,#68ff95);border-radius:999px}.cp697-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}.screen#carteira.active,#carteiraBody{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(98px + env(safe-area-inset-bottom,0px))!important}.cp697-head h2{font-size:29px!important}.cp697-progress{grid-template-columns:repeat(3,minmax(0,1fr))}.cp697-progress b{font-size:20px}.cp697-list{margin-bottom:calc(140px + env(safe-area-inset-bottom,0px))}.cp697-page{padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))}}
+    .cp697-page{max-width:760px;margin:0 auto;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-head{margin:0 0 14px}.cp697-head h2{font-size:30px!important;line-height:1.02;margin:0 0 8px;color:var(--text);font-weight:950;letter-spacing:-.04em}.cp697-head p{font-size:14px!important;line-height:1.35;color:var(--muted);margin:0 0 14px}.cp697-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.cp697-progress>div{padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.025)}.cp697-progress b{display:block;color:var(--text);font-size:22px;line-height:1;font-weight:950}.cp697-progress span{display:block;margin-top:4px;color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.cp697-tabs{display:flex;gap:8px;overflow-x:auto;margin:12px 0 14px;padding-bottom:2px}.cp697-tabs button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--soft);border-radius:999px;padding:9px 12px;font-size:12px;font-weight:950;white-space:nowrap}.cp697-tabs button.active{background:var(--lime);border-color:var(--lime);color:#06262d}.cp697-tabs span{opacity:.75;margin-left:4px}.cp697-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);overflow:visible!important;margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;gap:9px;align-items:center;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative}.cp697-row:last-child{border-bottom:0}.cp697-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0}.cp697-row.ready:before{background:#68ff95}.cp697-row.pending:before{background:rgba(184,194,201,.9)}.cp697-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp697-copy b{font-size:17px!important;line-height:1.08;font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy em{font-style:normal;color:var(--muted);font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy small{color:rgba(227,245,249,.77);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-status{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:10.5px!important;font-weight:950;line-height:1;white-space:nowrap}.cp697-row.ready .cp697-status{border-color:rgba(104,255,149,.42);color:#68ff95;background:rgba(104,255,149,.07)}.cp697-row.pending .cp697-status{border-color:rgba(184,194,201,.45);color:var(--soft);background:rgba(184,194,201,.07)}.cp697-chevron{color:var(--muted);font-size:18px}.cp697-empty,.cp697-loading{padding:24px;color:var(--muted);text-align:center;display:flex;flex-direction:column;gap:6px}.cp697-empty b,.cp697-loading b{color:var(--text)}.cp697-loading{min-height:240px;align-items:center;justify-content:center}.cp697-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp697spin .8s linear infinite}@keyframes cp697spin{to{transform:rotate(360deg)}}.cp697-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0}.cp697-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp697-home-title b{font-size:16px;color:var(--text)}.cp697-home-title button{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp697-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp697-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#FF6258,#68ff95);border-radius:999px}.cp697-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}.screen#carteira.active,#carteiraBody{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(98px + env(safe-area-inset-bottom,0px))!important}.cp697-head h2{font-size:29px!important}.cp697-progress{grid-template-columns:repeat(3,minmax(0,1fr))}.cp697-progress b{font-size:20px}.cp697-list{margin-bottom:calc(140px + env(safe-area-inset-bottom,0px))}.cp697-page{padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))}}
   `;
   document.head.appendChild(css);
   document.addEventListener('DOMContentLoaded', ()=>{ applyFix697(); setTimeout(homeProgress697, 300); });

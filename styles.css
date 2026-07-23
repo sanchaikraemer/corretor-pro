@@ -40,7 +40,7 @@ body.auth-locked{overflow:hidden}
   --acao:#79E08A;           /* positivo */
   --timing:#EC85B0;         /* lembrete / timing (rosa suave) */
   --cerebro:#9B8CFF;        /* roxo: negociação/cérebro */
-  --morno:#F5C36B;          /* atenção / morno */
+  --morno:#B8C2C9;          /* v942: era amarelo queimado (#F5C36B) — dono pediu cinza claro em todo o app */
   --risco:#F4768A;          /* negativo / risco */
   --pink:#EC85B0;
   --red:#F4768A;
@@ -200,9 +200,9 @@ details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-c
   .top3-area::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:999px}
   .top3-mini{padding:10px;min-width:78vw;max-width:78vw;flex-shrink:0;scroll-snap-align:start}
 }
+/* v942 — sempre 1 coluna (leads um embaixo do outro, sem quebra lateral). Antes ia pra 2/3
+   colunas em telas largas e a 2ª coluna estourava a lateral, cortando os nomes (pedido do dono). */
 .lista-leads-grid{display:grid;grid-template-columns:1fr;gap:8px}
-@media(min-width:900px){.lista-leads-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
-@media(min-width:1280px){.lista-leads-grid{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:900px){
   body{padding-bottom:0}.app{max-width:1320px;padding:24px}.desktop-layout{display:block}.bottom-nav{display:none}.desktop-only{display:block !important}.screen{display:block}.title{font-size:32px}.card{margin-bottom:18px}.sticky{position:sticky;top:18px;background:#11151d;z-index:5;max-height:calc(100vh - 36px);overflow:auto}.mobile-only{display:none}
   .agenda-topo{display:flex}
@@ -450,13 +450,13 @@ details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-c
 .diag-perg{margin-top:11px;padding:10px 12px;background:rgba(255,98,88,.08);border:1px solid rgba(255,98,88,.25);border-radius:10px}
 .diag-perg-lab{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:950;color:var(--lime);margin-bottom:3px}
 .diag-perg-txt{font-size:13px;color:var(--text);font-weight:600}
-.diag-alerta{margin-top:10px;padding:9px 12px;background:rgba(255,155,59,.1);border:1px solid var(--morno);border-radius:10px;font-size:12px;color:#ffd9ad;line-height:1.45}
+.diag-alerta{margin-top:10px;padding:9px 12px;background:rgba(184,194,201,.10);border:1px solid var(--morno);border-radius:10px;font-size:12px;color:var(--soft);line-height:1.45}
 /* Radar "Oportunidades esquecidas" na Home */
-.radar-card{margin-top:16px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,155,59,.06),rgba(255,45,155,.04));border:1px solid rgba(255,155,59,.3);border-radius:16px}
+.radar-card{margin-top:16px;padding:14px 16px;background:rgba(184,194,201,.05);border:1px solid rgba(184,194,201,.22);border-radius:16px}
 .radar-tit{color:var(--morno);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:11px;margin-bottom:11px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .radar-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:600;font-size:11px}
 .radar-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-top:8px;cursor:pointer;transition:background .15s,border-color .15s}
-.radar-row:hover{background:rgba(255,255,255,.06);border-color:rgba(255,155,59,.4)}
+.radar-row:hover{background:rgba(255,255,255,.06);border-color:rgba(184,194,201,.4)}
 .radar-row-main{flex:1;min-width:0}
 .radar-nome{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .radar-prod{color:var(--muted);font-weight:600;font-size:12px}
@@ -561,13 +561,13 @@ button:focus-visible,.btn:focus-visible,.sb-item:focus-visible,.nav:focus-visibl
   outline:2px solid var(--accent); outline-offset:2px;
 }
 .tag{ color:var(--soft); background:rgba(255,255,255,.05); border-color:var(--line); }
-.tag.warn{ color:#F5C36B; background:rgba(245,195,107,.12); border-color:rgba(245,195,107,.26); }
+.tag.warn{ color:var(--morno); background:rgba(184,194,201,.12); border-color:rgba(184,194,201,.26); }
 .upload-card{ border-color:var(--line); }
 .timeline{ border-left-color:var(--line2); }
 .kanban .col h4 .count{ background:rgba(255,255,255,.06); color:var(--soft); }
 .fila-wa,.fila-done{ border-color:var(--line); }
 .hero-real .h-why-ic{ background:rgba(255,255,255,.04); border-color:var(--line); color:var(--soft); }
-.agenda-item .urgency.medio{ background:rgba(245,195,107,.14); color:#F5C36B; border-color:rgba(245,195,107,.28); }
+.agenda-item .urgency.medio{ background:rgba(184,194,201,.14); color:var(--morno); border-color:rgba(184,194,201,.28); }
 .agenda-item .urgency.baixo{ background:rgba(255,255,255,.05); color:var(--soft); border-color:var(--line); }
 .lead,.menu-item,.mini,.upload-card,.notice,.empty,.agenda-item,.fila-row,.hero-real,.dash-card{ border-radius:var(--radius); }
 input,textarea{ border-radius:12px; border-color:var(--line); background:var(--input); }
@@ -731,7 +731,7 @@ html[data-theme="dark"]{
   --acao:#70D49D;
   --timing:#E89BB7;
   --cerebro:#A99AF8;
-  --morno:#F0C675;
+  --morno:#C2CBD1;
   --risco:#F07F8E;
   --pink:#E89BB7;
   --red:#F07F8E;
@@ -769,7 +769,7 @@ html[data-theme="light"]{
   --acao:#218B5B;
   --timing:#B85A7D;
   --cerebro:#6D5EC8;
-  --morno:#A76B12;
+  --morno:#6E7A82;
   --risco:#CC4E61;
   --pink:#B85A7D;
   --red:#CC4E61;

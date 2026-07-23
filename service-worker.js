@@ -42,12 +42,29 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    // O HTML NÃO é versionado na URL — precisa vir fresco pra apontar pros assets ?v=NNN novos.
     event.respondWith(networkFirst(event.request, '/index.html'));
     return;
   }
 
-  event.respondWith(networkFirst(event.request, null));
+  // v942 — assets estáticos (app.js, styles.css, js/*, vendor) são SERVIDOS DO CACHE NA HORA e
+  // revalidados por trás. Antes era network-first: todo carregamento esperava a rede ir e voltar
+  // pelo proxy, mesmo com tudo já salvo no aparelho — era a causa do "clico e demora pra carregar"
+  // reportado pelo dono. Como cada asset tem ?v=__VERSION__ na URL, uma versão nova = URL nova =
+  // cache miss = busca fresca automática. Ou seja: instantâneo E sem nunca servir versão velha.
+  event.respondWith(staleWhileRevalidate(event.request));
 });
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request).then(response => {
+    if (response && response.ok) cache.put(request, response.clone()).catch(() => null);
+    return response;
+  }).catch(() => null);
+  // Cache primeiro (instantâneo). Sem cache ainda (1º acesso), espera a rede.
+  return cached || (await fetchPromise) || new Response('', { status: 504, statusText: 'offline' });
+}
 
 async function networkFirst(request, fallbackUrl) {
   const cache = await caches.open(STATIC_CACHE);
