@@ -3390,7 +3390,16 @@ function renderSaudacao(items){
       ? `<span class="destaque">Final de semana!</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje — o "Fazer agora" volta na segunda.`
       : `<span class="destaque">Final de semana!</span> Fila de "Fazer agora" pausada — volta na segunda.`;
   } else if(acaoMostrada > 0){
-    html = `<span class="destaque">${acaoMostrada} lead${acaoMostrada>1?"s":""} pra atender hoje</span>, de cima pra baixo.`;
+    // v937 — "X leads pra atender hoje, de cima pra baixo" prometia uma LISTA pronta e
+    // ordenada. Quando o balde de urgentes (acao-hoje/retomar-cuidado) vem vazio, essa lista
+    // não existe — dizer "de cima pra baixo" contradiz a própria Home logo abaixo, que mostra
+    // "Nenhum lead prioritário pelas regras agora" e pede pra puxar manual da fila (bug
+    // reportado pelo dono: o cabeçalho prometia uma lista de 9 que, na prática, não existe).
+    const gruposH = state.gruposHome || {};
+    const semCandidatosReais = !((gruposH["acao-hoje"]||[]).length || (gruposH["retomar-cuidado"]||[]).length);
+    html = semCandidatosReais
+      ? `<span class="destaque">Meta de hoje: ${acaoMostrada}</span>, mas nenhum lead prioritário pelas regras agora — puxe da fila geral abaixo.`
+      : `<span class="destaque">${acaoMostrada} lead${acaoMostrada>1?"s":""} pra atender hoje</span>, de cima pra baixo.`;
   } else if(tratadosHoje > 0){
     html = `<span class="destaque">Mandou bem!</span> ${tratadosHoje} lead${tratadosHoje>1?"s":""} atendidos hoje.`;
   } else {
@@ -5154,6 +5163,13 @@ function renderLeadFoco(lead){
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
+    // v937 — "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do
+    // histórico), pra não divergir: lead.lastInteractionAt vinha como ISO/UTC e a conversão pra
+    // São Paulo deslocava 3h. Fallback pro campo antigo quando não há msg (regra da v887,
+    // restaurada — a v934 tinha removido essa metalinha a pedido, mas ela é informação que o
+    // corretor precisa pra saber se o cliente respondeu depois da análise).
+    const ultimaMsgReal=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(lead):null;
+    const ultimaMsgEm=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -5164,6 +5180,7 @@ function renderLeadFoco(lead){
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
+          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgEm}`)}</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
