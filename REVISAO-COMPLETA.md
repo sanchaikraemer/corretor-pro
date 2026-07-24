@@ -19,7 +19,7 @@
 | api/reanalisar-lead.js | 804 | concluído (v957) | fix de fuso horário em lembrete a partir de mensagem — ver log |
 | api/cerebro-config.js | 378 | concluído | lido por completo, sem fix — ver log |
 | api/processar-storage.js | 370 | concluído (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Segunda leitura completa focada em bugs não achou mais nada de novo |
-| api/restaurar-leads.js | 264 | pendente | |
+| api/restaurar-leads.js | 264 | concluído (v958) | 3 fixes reais — ver log |
 | api/limpar-tudo.js | 235 | pendente | |
 | api/criar-upload-url.js | 228 | pendente | tem o MESMO regex frágil de acento (linha ~105) — aplicar o mesmo fix de v950 |
 | api/diagnostico.js | 220 | pendente | |
@@ -210,3 +210,29 @@ Nenhum bug de segurança/dado encontrado. Um achado menor, não corrigido:
   (corretorNome/metodo/tom/diferenciais/evitar, que caem pro default vazio se ausentes) não é
   alcançável hoje — só viraria problema se um chamador futuro fizesse update parcial. Não mexi
   (não é bug reproduzível com o único chamador existente).
+
+### api/restaurar-leads.js (v958) — arquivo CONCLUÍDO (264 linhas)
+
+**Corrigido — 3 bugs reais (ver NOTAS-v958.md pro detalhe):**
+- `iso()`: bloco de data serial do Excel (`45383` → 2024-04-01) nunca rodava de verdade, porque
+  todo call site já chega com o valor stringificado (`str(...)`) e o bloco só disparava com
+  `typeof value === "number"`. `new Date("45383")` não dá `Invalid Date` — o JS lê como ANO
+  45383 e persiste essa data lixo silenciosamente. Corrigido pra detectar o número mesmo vindo
+  como string.
+- `normalizarLeadLegado`: `dedupeKey` usava o NOME de exibição já com o fallback "Cliente
+  restaurado" aplicado — toda linha legada sem nome e sem telefone virava a mesma chave
+  `nome:cliente restaurado`, e o filtro `seenKeys` de `restaurarLeadsLegados` descartava a
+  segunda/terceira/etc. como se fossem duplicata da primeira, mesmo com `id` de origem
+  diferente. Corrigido: dedupeKey usa o nome real (sem o placeholder); sem telefone e sem nome
+  real, fica `""` (o código já tratava dedupeKey vazio como "não aplica" — passa a filtrar só
+  pelo `id` de origem).
+- `stage()`: tratava `"geladeira"` e `"standby"/"pausado"` como a mesma etapa (`"Standby"`), mas
+  `normalizarEtapa()` em app.js — a autoridade real desse vocabulário no resto do app — trata
+  como duas etapas diferentes (`"Geladeira"` some da busca ativa via `foraDaBusca()`;
+  `"Standby"` continua no pipeline ativo). Lead que já estava arquivado na base antiga voltava
+  pra fila ativa do corretor depois de restaurado. Corrigido pra separar os dois casos na mesma
+  ordem/critério de `normalizarEtapa()`.
+
+**Achado, não corrigido (mesmo padrão recorrente, fora de escopo seguro):**
+- `lerTabela`/`currentKeys`: mais dois `.limit(5000)` — quinto/sexto lugar com o padrão de
+  escala já registrado em `_persistence.js`, `_pipeline.js` (×2) e `lead-update.js`.

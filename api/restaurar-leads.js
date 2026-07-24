@@ -33,7 +33,12 @@ function stage(value) {
   if (s.includes("vendid") || s.includes("fechad")) return "Vendido";
   if (s.includes("negoci")) return "Negociação";
   if (s.includes("visita") || s.includes("proposta")) return "Visita/Proposta";
-  if (s.includes("stand") || s.includes("geladeira") || s.includes("paus")) return "Standby";
+  // Mesma ordem/critério de normalizarEtapa() em app.js: "geladeira"/"arquivad" é uma etapa
+  // própria (arquivado, some da busca ativa — ver foraDaBusca), diferente de "Standby" (pausado,
+  // continua contando no pipeline ativo). Checar isso ANTES de "stand" evita que um lead que já
+  // estava arquivado na base antiga volte pra fila ativa depois de restaurado.
+  if (s.includes("geladeira") || s.includes("arquiv")) return "Geladeira";
+  if (s.includes("stand") || s.includes("paus") || s.includes("congelad")) return "Standby";
   if (s.includes("atendimento") || s.includes("qualific")) return "Atendimento";
   if (s.includes("novo") || s.includes("inicial")) return "Novo";
   return String(value || "Novo").trim();
@@ -41,12 +46,18 @@ function stage(value) {
 
 function iso(value, fallback = null) {
   if (!value && value !== 0) return fallback;
-  if (typeof value === "number" && Number.isFinite(value)) {
+  // str() (usada em todo call site deste arquivo) sempre entrega string, então "typeof value ===
+  // 'number'" nunca era true na prática — a data serial do Excel (ex.: 45383) chegava aqui como
+  // a STRING "45383", pulava o bloco de baixo e ia direto pro new Date(value) genérico. new
+  // Date("45383") não dá Invalid Date: o parser lê "45383" como ANO 45383 (data lixo, silenciosa,
+  // sem cair no fallback). Por isso o número também precisa ser detectado quando vem como string.
+  const num = typeof value === "number"
+    ? value
+    : (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null);
+  if (num !== null && num > 20000 && num < 100000) {
     // Datas seriadas do Excel.
-    if (value > 20000 && value < 100000) {
-      const epoch = Date.UTC(1899, 11, 30);
-      return new Date(epoch + value * 86400000).toISOString();
-    }
+    const epoch = Date.UTC(1899, 11, 30);
+    return new Date(epoch + num * 86400000).toISOString();
   }
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? fallback : d.toISOString();
@@ -68,7 +79,8 @@ function pickObservation(row) {
 
 export function normalizarLeadLegado(row = {}, table = "leads") {
   const id = str(row.id, row.lead_id);
-  const name = str(row.nome, row.name, row.nome_cliente, row.cliente, "Cliente restaurado");
+  const realName = str(row.nome, row.name, row.nome_cliente, row.cliente);
+  const name = realName || "Cliente restaurado";
   const phone = str(row.telefone, row.phone, row.celular, row.whatsapp);
   const product = str(row.empreendimento, row.empreendimento_interesse, row.produto, row.product, "Outros");
   const etapa = stage(str(row.etapa, row.status));
@@ -128,9 +140,15 @@ export function normalizarLeadLegado(row = {}, table = "leads") {
   };
 
   const shortId = id ? id.slice(0, 8) : norm(`${name}-${phone}`).replace(/\s+/g, "").slice(0, 8);
+  // dedupeKey usa realName (não o placeholder "Cliente restaurado"): duas linhas legadas
+  // diferentes sem nome e sem telefone não podem cair na mesma chave só por causa do fallback de
+  // exibição, senão restaurarLeadsLegados descarta uma delas como se fosse duplicata da outra
+  // (ver seenKeys em restaurarLeadsLegados). Sem telefone e sem nome real, dedupeKey fica "" —
+  // a linha só é agrupada/filtrada pelo seu próprio id (quando existe).
+  const phoneDigits = digits(phone);
   return {
     id,
-    dedupeKey: digits(phone).length >= 8 ? `fone:${digits(phone).slice(-8)}` : `nome:${norm(name)}`,
+    dedupeKey: phoneDigits.length >= 8 ? `fone:${phoneDigits.slice(-8)}` : (realName ? `nome:${norm(realName)}` : ""),
     payload: {
       ...(id ? { id } : {}),
       nome_arquivo: `${name} [LEGADO ${shortId || "restaurado"}]`,
