@@ -2474,6 +2474,11 @@ function filaRowHTML(l, pos){
 // leads têm 56–218 msgs, TODAS ficavam cheias e iguais (não diferenciava nada). Relativa ao topo,
 // a diferença aparece (o #1 cheio, os de baixo proporcionalmente menores). O número exato fica ao
 // lado.
+// v972 — ATENÇÃO, não "corrigir" isto pra bater com a ordem da fila: este número é volume bruto
+// de mensagens (engajamento), o MESMO fator que v943/v944 baixaram de propósito no peso do
+// ranking (cpProbabilidadeFechamento) — não é, e nunca foi, a nota de prioridade. O dono já viu
+// essa contradição (nº maior aqui ≠ topo da lista) e o conserto foi dar à linha um indicador de
+// posição PRÓPRIO (chr-rank, em cpHomeLeadRow) — não mexer nestes limiares/cores.
 function cpBarraMensagensMini(l, maxMsgs){
   const n = (typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0;
   const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
@@ -2489,20 +2494,37 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   let nivel = 0;
   try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
   const dotCor = nivel === 1 ? 'var(--accent)' : '#5a6a70'; // coral = cliente aguardando você
-  const dias = l.daysSinceLastInteraction != null ? `${l.daysSinceLastInteraction}d` : '';
+  const diasNum = l.daysSinceLastInteraction;
+  const dias = diasNum != null ? `${diasNum}d` : '';
+  // v972 — achado do dono: "78d"/"109d" solto do lado de "cliente esperando sua resposta" parecia
+  // dizer "o cliente espera há 78/109 dias", mas o campo é dias desde a ÚLTIMA interação de
+  // QUALQUER lado (nem sempre é a mesma coisa). Rótulo "há" + title explicam o que é de fato,
+  // sem mudar o cálculo do dado (daysSinceLastInteraction continua vindo de onde sempre veio).
+  const diasTitle = diasNum == null ? '' : (nivel === 1
+    ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
+    : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
   const prod = (typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || '');
   // Ranking explicável: por que este lead está nesta posição da fila (v945) — só aparece quando
   // há um motivo real (nunca inventa); usa um atributo à parte (data-exp) em vez de mexer na
   // classe cp-hoje-row, que testes de regressão travam como string exata.
   let motivo = '';
   try{ motivo = (typeof cpMotivoFechamento === 'function') ? cpMotivoFechamento(l) : ''; }catch(_){}
+  // v972 — achado do dono: quando vários leads no topo da fila batem os mesmos 2 primeiros
+  // fatores (proposta + cliente espera), a frase toda parece igual à primeira vista; o número que
+  // REALMENTE difere por lead (recorrência/perguntas) ganha negrito+sublinhado pra saltar aos olhos
+  // — cpMotivoFechamento em si não muda (texto travado pelo teste v946).
+  const motivoHtml = motivo ? escapeHtml(motivo).replace(/\d+/g, (n) => `<b>${n}</b>`) : '';
+  // v972 — achado do dono: o nº da barra de mensagens (ao lado) é o mais chamativo da linha mas
+  // NÃO é a prioridade (ver aviso em cpBarraMensagensMini) — por isso pode "parecer maior" num
+  // lead que está mais abaixo na lista. pos É a ordem real (cpFilaFazerAgora já ordenou por
+  // cpProbabilidadeFechamento); o badge chr-rank dá um número que nunca contradiz a posição.
   return `<button type="button" class="cp-hoje-row" ${motivo?'data-exp="1"':''} onclick='abrirLead(${idJs})'>
     <span class="chr-dot" style="background:${dotCor}"></span>
-    <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
-    <span class="chr-pr">${escapeHtml(prod||'')}</span>
+    <span class="chr-nm"><b class="chr-rank" title="Prioridade ${pos} de hoje — vale a ORDEM da lista, não o número da barra ao lado">${pos}º</b> ${escapeHtml(l.name||'Cliente')}</span>
+    <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
-    <span class="chr-dd">${escapeHtml(dias)}</span>
-    ${motivo?`<span class="chr-exp">${escapeHtml(motivo)}</span>`:''}
+    <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`há ${escapeHtml(dias)}`:''}</span>
+    ${motivo?`<span class="chr-exp">${motivoHtml}</span>`:''}
   </button>`;
 }
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
@@ -2763,6 +2785,9 @@ function renderBotoesHome(){
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
       .cp-hoje-row .chr-dot{grid-area:dot;width:8px;height:8px;border-radius:50%}
       .cp-hoje-row .chr-nm{grid-area:nm;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      /* v972 — badge de posição (1º/2º/...): número que NUNCA contradiz a ordem da lista, tom
+         neutro de propósito (não compete com o coral do resto da linha). */
+      .cp-hoje-row .chr-rank{display:inline-block;min-width:15px;margin-right:2px;color:var(--muted);font-weight:900;font-size:.9em}
       .cp-hoje-row .chr-pr{grid-area:pr;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row .chr-bar{grid-area:bar;display:flex;align-items:center;gap:8px;justify-content:flex-end}
       .cp-hoje-row .chr-track{width:64px;height:7px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;flex:0 0 auto}
@@ -2772,6 +2797,10 @@ function renderBotoesHome(){
       /* v945 — ranking explicável: 2ª linha só quando há motivo real (data-exp), sem mudar a
          altura das linhas sem motivo. */
       .cp-hoje-row .chr-exp{grid-area:exp;font-size:11.5px;font-weight:800;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      /* v972 — o dígito que varia por lead (recorrência/perguntas) sublinhado, pra não parecer
+         frase idêntica quando 2+ leads batem os mesmos fatores gerais. Cor continua --accent de
+         propósito (pedido explícito do dono na v949 — não repetir o erro da v948/cyan). */
+      .cp-hoje-row .chr-exp b{text-decoration:underline;text-underline-offset:2px}
       .cp-hoje-row[data-exp="1"]{grid-template-rows:auto auto;row-gap:2px;grid-template-areas:"dot nm pr bar dd" "dot exp exp exp exp"}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
