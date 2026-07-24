@@ -7880,7 +7880,10 @@ async function _checkSharedImpl(){
 
   // No cold start, o documento pode montar alguns milissegundos antes da transação do
   // service worker ficar visível. Faz uma espera curta em vez de desistir e ir para a Home.
-  const limite=cameFromShare ? Date.now()+8000 : Date.now();
+  // v983 — 8s era curto demais pra conversas grandes (com áudio): o service worker ainda
+  // estava terminando de gravar o ZIP quando o app desistia de esperar e mostrava erro
+  // (mesmo o compartilhamento tendo dado certo). 15s dá mais fôlego pro aparelho/arquivo grande.
+  const limite=cameFromShare ? Date.now()+15000 : Date.now();
   let record=null;
   do{
     record=await localizarSharePendente(shareId);
@@ -7922,7 +7925,14 @@ async function _checkSharedImpl(){
       (erroUrl?'<br><br><b>Motivo:</b> '+escapeHtml(erroUrl):'')+
       (debug?'<br><br><details><summary>Diagnóstico técnico</summary>'+formatShareDebug(debug)+'</details>':'')+
       '<div style="margin-top:14px"><button type="button" class="btn" id="btnRecuperarShare">Tentar recuperar</button></div>';
-    qs('#btnRecuperarShare')?.addEventListener('click',()=>{ __cpCheckSharedPromise=null; checkShared(); });
+    // v983 — o clique só disparava uma nova espera de até 8s por trás, sem NENHUM sinal na tela;
+    // pro dono parecia botão morto ("cliquei e nada aconteceu"). Agora desativa e troca o texto
+    // na hora, antes mesmo da nova tentativa começar.
+    qs('#btnRecuperarShare')?.addEventListener('click', (ev) => {
+      const btn = ev.currentTarget;
+      if(btn){ btn.disabled = true; btn.textContent = 'Procurando…'; }
+      __cpCheckSharedPromise=null; checkShared();
+    });
     return {handled:true,waiting:true};
   }
   return {handled:false};

@@ -14,7 +14,7 @@ const checkStart = app.indexOf('async function _checkSharedImpl()');
 const checkEnd = app.indexOf('async function checkShared()', checkStart);
 const checkBlock = app.slice(checkStart, checkEnd);
 assert.match(checkBlock, /state\.pendingSave && state\.pendingSharedRecordId/, 'resultado aguardando salvamento não pode processar o mesmo ZIP de novo na mesma aba');
-assert.match(checkBlock, /Date\.now\(\)\+8000/, 'cold start deve aguardar a transação do service worker');
+assert.match(checkBlock, /Date\.now\(\)\+15000/, 'cold start deve aguardar a transação do service worker');
 assert.match(app, /Com ID explícito, nunca pega um \"latest\" antigo/, 'share novo não pode abrir um ZIP antigo durante a espera');
 assert.match(app, /headerId!==String\(idPreferido\)/, 'fallback legado do cache precisa pertencer ao share atual');
 assert.match(checkBlock, /await processFile\(file,\{shareId:id\}\)/, 'processamento do ZIP precisa ser aguardado');
