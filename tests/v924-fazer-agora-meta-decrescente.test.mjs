@@ -22,6 +22,11 @@ assert.ok(fdsSrc && filaSrc && totalSrc && doseSrc, 'funções da dose de hoje n
 
 const sandbox = eval(`
   const CP_DOSE_DIA = 10;
+  // v980: cpAtendidosHojeTotal passou a preferir state.todosLeads (base completa, incluindo
+  // arquivados) e só cai pro "items" recebido quando essa base ainda não foi carregada — este
+  // teste é sobre a MATEMÁTICA da dose a partir de "items", não sobre esse detalhe, então
+  // simula justamente o caso "ainda não carregada" (state.todosLeads vazia).
+  let state = { todosLeads: [] };
   const leadEhAtivo = () => true;
   const ehContatadoHoje = (l) => !!l.__hoje;
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
