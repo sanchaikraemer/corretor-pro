@@ -44,9 +44,8 @@ pra sobreviver a uma possível compactação de contexto no meio do arquivo.
 
 | Bloco | Linhas | Status |
 |---|---|---|
-| 1 | 1–5450 | concluído (v964) — blocos 1+2 lidos juntos nesta passada; ver achados abaixo |
-| 3 | 5451–6000 | pendente |
-| 4 | 6001–8000 | pendente |
+| 1 | 1–7750 | concluído (v964) — blocos 1+2+3 lidos juntos nesta passada; ver achados abaixo. Nada de novo achado em 5450–7750 (Agenda, Cérebro/Aprendizado, exportação Excel, fluxo de importação/Share Target — tudo consistente) |
+| 4 | 7751–8000 | pendente — continuar a partir daqui |
 | 5 | 8001–10000 | pendente |
 | 6 | 10001–12000 | pendente |
 | 7 | 12001–13169 | pendente |
