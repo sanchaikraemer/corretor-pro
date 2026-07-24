@@ -49,6 +49,7 @@ const sandbox = `
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const escapeHtml = (s) => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const produtosLabel = (l) => l.product || '';
+  const produtosLabelCurto = (l) => l.product || '';
   const prioridadeAtendimento = (l) => ({ nivel: l.__nivel||0 });
   const cpBarraMensagensMini = (l, maxMsgs) => '<span class="chr-bar"></span>';
   ${rowSrc}
