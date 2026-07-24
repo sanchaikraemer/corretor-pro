@@ -3284,7 +3284,13 @@ async function executarReanaliseTudo(items){
         body: JSON.stringify(payloadComCerebro({ id: l.id }))
       });
       const data = await res.json().catch(() => ({ ok: false, error: "Resposta inválida do servidor" }));
-      if(data?.ok) return { ok: true };
+      if(data?.ok){
+        // v971 — "Reanalisar todos" nunca contava pra "Análises feitas" do Desempenho (só o
+        // botão de reanalisar 1 lead por vez contava, linha ~10570) — cada lead reanalisado com
+        // sucesso aqui é uma análise de verdade, igual à individual.
+        try{ cpRegistrarAtividade("analise"); }catch(_){}
+        return { ok: true };
+      }
       const motivo = String(data?.error || `Erro ${res.status}`);
       if(/sem timeline|sem conteúdo|sem conversa/i.test(motivo)) return { ok: false, semConversa: true, motivo };
       return { ok: false, motivo };
