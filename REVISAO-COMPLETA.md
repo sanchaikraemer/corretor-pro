@@ -32,7 +32,7 @@
 | build.js | 92 | concluído (v966) | guarda de API duplicada na raiz cobria só 5 de 12 arquivos — ver log |
 | js/proposta.js | 289 | concluído (v967) | 2 confirm() nativos que a varredura da v964 não pegou — ver log |
 | js/pwa-install.js | 116 | concluído | sem fix de código — achado de conteúdo faltando (onboarding), ver log |
-| js/commercial-schema.js + js/dom.js + js/state.js | 27 | pendente | revisar junto (pequenos) |
+| js/commercial-schema.js + js/dom.js + js/state.js | 28 | concluído (v968) | 2 bugs reais em js/dom.js — ver log |
 
 Testes (`tests/*.test.mjs`) ficam fora da varredura linha a linha — só são tocados quando uma
 correção exige teste de regressão novo (regra do CLAUDE.md).
@@ -629,6 +629,34 @@ estático (ícone, texto, botões) em `index.html` — o onboarding ficou só co
 inventei o conteúdo (texto/passos do "ritual diário") porque é decisão de produto, não bug
 técnico — fica registrado pro dono decidir se quer esse onboarding de volta e o que ele deve
 dizer.
+
+### js/dom.js + js/commercial-schema.js + js/state.js (v968) — CONCLUÍDOS (28 linhas ao todo)
+
+**Corrigido, em `js/dom.js` (usado por `app.js` e todos os módulos `js/*`):**
+- `escapeHtml(t="")`: parâmetro default só cobre `undefined`, não `null` — campo nulo vindo do
+  banco (Postgres NULL vira JSON `null`, não some do objeto) caía em `String(null)` = a STRING
+  `"null"`, mostrando o texto literal "null" na tela em vez de nada. Trocado pro corpo usar
+  `t??""`, cobre os dois casos.
+- `toast(t)`: cada chamada agendava um novo `setTimeout` sem cancelar o anterior — dois toasts
+  em menos de 2.6s faziam o timer do primeiro esconder o segundo antes da hora. Corrigido com
+  `clearTimeout` do timer anterior antes de agendar o novo.
+
+Ver `NOTAS-v968.md`.
+
+**Achados, não corrigidos (mesma classe de bug, mas não alcançável hoje):**
+- `safeJson(v)`: `JSON.stringify(undefined)` retorna `undefined`, e `.replace` nisso quebraria
+  com exceção — mas os 3 call sites reais em `app.js` sempre garantem valor não-undefined
+  antes de chamar. Não é bug alcançável agora.
+- `js/commercial-schema.js`: `ui675AnaliseDeterministica` (app.js ~10354) grava
+  `_schemaComercial` manualmente em vez de reusar `stampCommercialSchema` — fica faltando só
+  `_schemaComercialMinor`, que não é lido em lugar nenhum do projeto (metadado morto, sem
+  efeito na lógica real).
+
+`js/state.js` lido por completo, sem achado — objeto de estado simples, sem lógica.
+
+**Checklist de arquivos da revisão está 100% CONCLUÍDO** (todos os itens da tabela acima,
+`api/*`, `app.js`, `service-worker.js`, `index.html`, `styles.css`, `build.js`, `js/*` —
+lidos linha a linha, do início ao fim).
 
 ### api/analisar.js (v963) — arquivo CONCLUÍDO (138 linhas)
 
