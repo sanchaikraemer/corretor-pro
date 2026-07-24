@@ -25,7 +25,7 @@
 | api/diagnostico.js | 220 | concluído (v961) | analiseFunciona podia mascarar erro real — ver log |
 | api/leads-recentes.js | 188 | concluído (v962) | auditoria subestimava duplicidade + backup sem Cérebro — ver log |
 | api/analisar.js | 138 | concluído (v963) | 🔴 faltava requireApiKey — corrigido, ver log |
-| app.js | 13178 | pendente | dividir em blocos, respeitando limites de função. Tem o MESMO regex frágil de acento em pelo menos 5 pontos (linhas ~3703, ~7822, ~8299, e mais 2) — aplicar o mesmo fix de v950 |
+| app.js | 13169 | em andamento | dividir em blocos — ver sub-checklist logo abaixo desta tabela |
 | service-worker.js | 244 | pendente | |
 | index.html | 661 | pendente | |
 | styles.css | 2325 | pendente | dividir em 2 blocos |
@@ -36,6 +36,53 @@
 
 Testes (`tests/*.test.mjs`) ficam fora da varredura linha a linha — só são tocados quando uma
 correção exige teste de regressão novo (regra do CLAUDE.md).
+
+### Sub-checklist app.js (13169 linhas — grande demais pra 1 bloco só)
+
+Lido/corrigido em blocos sequenciais de ~1800–2000 linhas. Cada bloco concluído é marcado aqui
+pra sobreviver a uma possível compactação de contexto no meio do arquivo.
+
+| Bloco | Linhas | Status |
+|---|---|---|
+| 1 | 1–2000 | concluído (v964) — ver achados abaixo |
+| 2 | 2001–4000 | parcial — 2001–3100 já lido nesta mesma passada (junto do bloco 1); retomar a partir de ~3100 |
+| 3 | 4001–6000 | pendente |
+| 4 | 6001–8000 | pendente |
+| 5 | 8001–10000 | pendente |
+| 6 | 10001–12000 | pendente |
+| 7 | 12001–13169 | pendente |
+
+Achados já conhecidos ANTES de começar (registrados por outras revisões/achados cruzados neste
+mesmo arquivo, conferir ao passar por essas linhas):
+- Regex frágil de acento (mesmo padrão de v950/v951/v960) em pelo menos 5 pontos: ~3703, ~7822,
+  ~8299, e mais 2 a localizar. **Ainda pendente** (não confirmado/corrigido na v964).
+- Nomes de pessoas hardcoded (achado grande da v955, ver seção `_pipeline.js`): confirmado
+  presente também aqui, linhas 2053/2076 (`BUSINESS_RE`, `ehMsgDoCliente`) — mesmo achado grande,
+  não repetir contagem, já registrado como pendente de decisão do dono.
+- Push duplicado de `carregarGeladeira` já corrigido (v952) — mas o mesmo padrão
+  (`window.algumNome=function(){}` dentro de IIFE reaproveitando nome já usado como
+  `function algumNome(){}`/outra IIFE) se repete em MAIS lugares — **confirmado e detalhado na
+  v964** (ver NOTAS-v964.md): `abrirVenda`/`marcarPerdido` (4 gerações cada) e
+  `arquivarLead`/`ui683MarcarEtapaRapida` (2 gerações cada). Comportamento ao vivo está correto
+  (a última geração de cada um é a que roda), mas fica ~200 linhas de código morto espalhadas —
+  limpeza registrada como pendente, não feita ainda (precisa confirmar que nenhum outro nome
+  intermediário — `ui683MoverEtapaComEvento`, `abrirModalDesfecho` não-Final — é referenciado em
+  mais algum lugar antes de apagar).
+- Dois `carregarPipeline` no arquivo, o de baixo (~linha 11874) sobrescreve o de cima (achado da
+  v860, NOTAS-v860.md) — mesma categoria de risco do bug do carregarGeladeira. Ainda não
+  verificado se o de cima é 100% morto ou se algum call site bare-identifier ainda o alcança —
+  conferir quando a leitura sequencial chegar perto dessa linha.
+
+### v964 — 10 confirm() nativos → cp903Confirm + bug real no botão "Apagar tudo"
+
+Ver `NOTAS-v964.md` pro detalhe completo. Resumo: mais 10 usos do `confirm()` nativo (fora do
+padrão visual do app, mesmo problema já reportado pelo dono no botão Reativar) convertidos pro
+modal `cp903Confirm`, em `importarTelefonesCSV`, `apagarLead`, `excluirLeadDefinitivo`,
+`removerLembrete`, `apagarItemAprendizado`, `limparAprendizadoTudo`, `zerarCerebroTudo`,
+`#btnDescartarUpload`, `descartarLeadPendente`, `#wipeAll`. Achado um bug real no caminho: o
+botão "Apagar tudo" mandava `{ confirmacao: "APAGAR TUDO" }` mas a API exige `{ confirm: "..." }`
+— o botão NUNCA funcionava (sempre 400). Corrigido. `.cp903-modal p` ganhou
+`white-space:pre-line` pra mensagens multi-linha não perderem a quebra visual.
 
 ## Log de achados e correções
 _(preenchido conforme a revisão avança — cada entrada aponta arquivo:linha, o problema, e a versão

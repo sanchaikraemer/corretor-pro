@@ -3000,7 +3000,11 @@ async function importarTelefonesCSV(){
         aplicar.push({ id: ld.id, telefone: tel });
       }
       if(!aplicar.length){ toast("Nada pra preencher — esses leads já têm número ou não bateram pelo nome."); return; }
-      if(!confirm(`Vou preencher o telefone de ${aplicar.length} lead(s) que estavam sem número. Confirmar?`)) return;
+      const msgTel = `Vou preencher o telefone de ${aplicar.length} lead(s) que estavam sem número. Confirmar?`;
+      const okTel = (typeof cp903Confirm === "function")
+        ? await cp903Confirm({ titulo: "Preencher telefones", mensagem: msgTel, ok: "Preencher" })
+        : confirm(msgTel);
+      if(!okTel) return;
       let ok = 0, erro = 0;
       for(let i=0;i<aplicar.length;i++){
         const a = aplicar[i];
@@ -3890,7 +3894,11 @@ function coletarDupeIds(id){
 }
 async function apagarLead(id, nome){
   if(!id) return;
-  if(!confirm(`Apagar lead "${nome||"sem nome"}"? Não tem como desfazer.`)) return;
+  const msgApagar = `Apagar lead "${nome||"sem nome"}"? Não tem como desfazer.`;
+  const okApagar = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar lead", mensagem: msgApagar, ok: "Apagar", perigo: true })
+    : confirm(msgApagar);
+  if(!okApagar) return;
   try{
     const ids = coletarDupeIds(id);
     const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
@@ -4383,7 +4391,11 @@ window.excluirLeadDoModal = excluirLeadDoModal;
 // Exclusão definitiva a partir do botão discreto no fim da tela do lead.
 async function excluirLeadDefinitivo(id, nome){
   if(!id) return;
-  if(!confirm(`Excluir DEFINITIVAMENTE o lead "${nome||"sem nome"}"?\n\nIsso apaga tudo (conversa, análise, histórico). Não tem como desfazer.`)) return;
+  const msgExcluir = `Excluir DEFINITIVAMENTE o lead "${nome||"sem nome"}"?\n\nIsso apaga tudo (conversa, análise, histórico). Não tem como desfazer.`;
+  const okExcluir = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Excluir definitivamente", mensagem: msgExcluir, ok: "Excluir", perigo: true })
+    : confirm(msgExcluir);
+  if(!okExcluir) return;
   try{
     const ids = coletarDupeIds(id);
     const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
@@ -5537,7 +5549,11 @@ async function reagendarLembrete(id, dateStr){
 window.reagendarLembrete = reagendarLembrete;
 // Exclui o lembrete da agenda (não some o lead — só tira o item agendado).
 async function removerLembrete(id){
-  if(!confirm("Excluir este lembrete da agenda? O lead continua salvo — só sai do agendado.")) return;
+  const msgLembrete = "Excluir este lembrete da agenda? O lead continua salvo — só sai do agendado.";
+  const okLembrete = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Excluir lembrete", mensagem: msgLembrete, ok: "Excluir" })
+    : confirm(msgLembrete);
+  if(!okLembrete) return;
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6136,7 +6152,11 @@ async function carregarAprendizado(){
 
 async function apagarItemAprendizado(categoria, indice){
   if(!cerebroIntel || !Array.isArray(cerebroIntel[categoria])) return;
-  if(!confirm("Apagar essa observação? O Corretor Pro vai desconsiderar esse aprendizado.")) return;
+  const msgItem = "Apagar essa observação? O Corretor Pro vai desconsiderar esse aprendizado.";
+  const okItem = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar observação", mensagem: msgItem, ok: "Apagar", perigo: true })
+    : confirm(msgItem);
+  if(!okItem) return;
   cerebroIntel[categoria].splice(indice, 1);
   await salvarAprendizado();
   carregarAprendizado();
@@ -6144,7 +6164,11 @@ async function apagarItemAprendizado(categoria, indice){
 window.apagarItemAprendizado = apagarItemAprendizado;
 
 async function limparAprendizadoTudo(){
-  if(!confirm("Apagar TUDO que o Corretor Pro aprendeu com os históricos? O Cérebro Comercial digitado manualmente não será afetado.")) return;
+  const msgTudo = "Apagar TUDO que o Corretor Pro aprendeu com os históricos? O Cérebro Comercial digitado manualmente não será afetado.";
+  const okTudo = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar todo o aprendizado", mensagem: msgTudo, ok: "Apagar tudo", perigo: true })
+    : confirm(msgTudo);
+  if(!okTudo) return;
   try{
     const res = await fetch("./api/cerebro-config", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6549,7 +6573,11 @@ function resetarCerebro(){
 // análise rodar "pura" (só o modelo lendo a conversa). Mantém o nome do corretor e os
 // produtos (Diferenciais), que são FATOS que a IA precisa — não regra/aprendizado.
 async function zerarCerebroTudo(){
-  if(!confirm("Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.")) return;
+  const msgZerar = "Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.";
+  const okZerar = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Zerar o Cérebro", mensagem: msgZerar, ok: "Zerar tudo", perigo: true })
+    : confirm(msgZerar);
+  if(!okZerar) return;
   const status = qs("#cerebroStatus"); if(status) status.textContent = "Zerando...";
   try{
     const cfg = {
@@ -6903,7 +6931,11 @@ async function uploadLargeZipToSupabase(file, options = {}){
       if(state.ultimoArquivo){ state.processing = false; processFile(state.ultimoArquivo); }
     });
     qs("#btnDescartarUpload")?.addEventListener("click", async () => {
-      if(!confirm("Descartar esta importação e apagar os arquivos temporários?")) return;
+      const msgDescartarUp = "Descartar esta importação e apagar os arquivos temporários?";
+      const okDescartarUp = (typeof cp903Confirm === "function")
+        ? await cp903Confirm({ titulo: "Descartar importação", mensagem: msgDescartarUp, ok: "Descartar", perigo: true })
+        : confirm(msgDescartarUp);
+      if(!okDescartarUp) return;
       const stored = state.ultimoUploadStorage;
       if(stored) await finalizarImportacaoStorage(stored);
       const shareId = String(state.pendingSharedRecordId || "");
@@ -7345,7 +7377,11 @@ async function salvarLeadPendente(){
 }
 
 async function descartarLeadPendente(){
-  if(!confirm("Descartar essa análise sem salvar no banco?")) return;
+  const msgDescartarAn = "Descartar essa análise sem salvar no banco?";
+  const okDescartarAn = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Descartar análise", mensagem: msgDescartarAn, ok: "Descartar", perigo: true })
+    : confirm(msgDescartarAn);
+  if(!okDescartarAn) return;
   const shareDescartadoId = String(state.pendingSharedRecordId || "");
   const importacaoDescartada = state.pendingSave;
   await finalizarImportacaoStorage(importacaoDescartada);
@@ -7968,9 +8004,15 @@ qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   }
 });
 qs("#wipeAll").addEventListener("click", async ()=>{
-  const ok1 = confirm("Tem certeza? Isso apaga TODAS as conversas, leads e ZIPs guardados. Não tem como recuperar.");
+  const msgWipe1 = "Tem certeza? Isso apaga TODAS as conversas, leads e ZIPs guardados. Não tem como recuperar.";
+  const ok1 = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar tudo", mensagem: msgWipe1, ok: "Continuar", perigo: true })
+    : confirm(msgWipe1);
   if(!ok1) return;
-  const ok2 = confirm("Última confirmação: apagar mesmo tudo?");
+  const msgWipe2 = "Última confirmação: apagar mesmo tudo?";
+  const ok2 = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Última confirmação", mensagem: msgWipe2, ok: "Apagar tudo", perigo: true })
+    : confirm(msgWipe2);
   if(!ok2) return;
   const box = qs("#wipeResult");
   box.style.display = "block";
@@ -7979,7 +8021,10 @@ qs("#wipeAll").addEventListener("click", async ()=>{
     const res = await fetch("./api/limpar-tudo", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ confirmacao: "APAGAR TUDO" })
+      // era { confirmacao: "APAGAR TUDO" } — a API (api/limpar-tudo.js) exige literalmente
+      // body.confirm === "APAGAR TUDO"; com a chave errada esse botão SEMPRE devolvia 400
+      // "Confirmação inválida", mesmo depois das duas confirmações.
+      body: JSON.stringify({ confirm: "APAGAR TUDO" })
     });
     const data = await res.json().catch(()=>({ ok:false, error:"resposta invalida" }));
     let html = '';
