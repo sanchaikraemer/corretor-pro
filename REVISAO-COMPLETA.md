@@ -21,7 +21,7 @@
 | api/processar-storage.js | 370 | concluído (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Segunda leitura completa focada em bugs não achou mais nada de novo |
 | api/restaurar-leads.js | 264 | concluído (v958) | 3 fixes reais — ver log |
 | api/limpar-tudo.js | 235 | concluído (v959) | paginação de storage — ver log |
-| api/criar-upload-url.js | 228 | pendente | tem o MESMO regex frágil de acento (linha ~105) — aplicar o mesmo fix de v950 |
+| api/criar-upload-url.js | 228 | concluído (v960) | regex de acento corrigido + guarda de regressão nova — ver log |
 | api/diagnostico.js | 220 | pendente | |
 | api/leads-recentes.js | 188 | pendente | |
 | api/analisar.js | 138 | pendente | |
@@ -252,3 +252,16 @@ mesmo sem confirmar um teto documentado). Ver `NOTAS-v959.md`.
 **Não é bug, registrado por completude:** a lista de tabelas apagadas não inclui
 `direciona_config` (Cérebro) — reseta dados/leads, preserva a configuração do corretor. Parece
 intencional; só fica registrado caso o dono espere um reset totalmente completo.
+
+### api/criar-upload-url.js (v960) — arquivo CONCLUÍDO (228 linhas)
+
+**Corrigido:** mesmo regex frágil de acento (`sanitizeFileName`, linha ~105) da v950/v951 —
+caracteres Unicode combinantes literais no código-fonte em vez do escape. Terceira ocorrência
+desse padrão nesta revisão; desta vez também entrou uma guarda de regressão
+(`tests/v960-sem-acento-unicode-literal.test.mjs`) que falha se QUALQUER arquivo já corrigido
+voltar a ter o caractere literal — `app.js` ainda tem o mesmo padrão em ~5 pontos e entra nessa
+lista quando a revisão chegar lá (tarefa app.js, pendente). Ver `NOTAS-v960.md`.
+
+Resto do arquivo lido por completo, sem outro bug: sem risco de path traversal no
+`storagePath` (sanitizers não permitem `/`), limite de tamanho declarado é só pré-check de UX
+(garantia real é o `fileSizeLimit` do bucket, já com fallback/aviso tratados).
