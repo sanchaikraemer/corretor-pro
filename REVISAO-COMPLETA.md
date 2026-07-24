@@ -23,7 +23,7 @@
 | api/limpar-tudo.js | 235 | concluído (v959) | paginação de storage — ver log |
 | api/criar-upload-url.js | 228 | concluído (v960) | regex de acento corrigido + guarda de regressão nova — ver log |
 | api/diagnostico.js | 220 | concluído (v961) | analiseFunciona podia mascarar erro real — ver log |
-| api/leads-recentes.js | 188 | pendente | |
+| api/leads-recentes.js | 188 | concluído (v962) | auditoria subestimava duplicidade + backup sem Cérebro — ver log |
 | api/analisar.js | 138 | pendente | |
 | app.js | 13178 | pendente | dividir em blocos, respeitando limites de função. Tem o MESMO regex frágil de acento em pelo menos 5 pontos (linhas ~3703, ~7822, ~8299, e mais 2) — aplicar o mesmo fix de v950 |
 | service-worker.js | 244 | pendente | |
@@ -282,3 +282,20 @@ bucket do Supabase com regras diferentes (um sem teto de tamanho e sem restriç�
 o outro com teto de 300 MB e só ZIP) e se sobrescrevem — o próximo cold start de
 `criar-upload-url.js` derruba silenciosamente qualquer limite maior liberado manualmente via
 `mode=bucket`. Detalhe completo em `NOTAS-v961.md`.
+
+### api/leads-recentes.js (v962) — arquivo CONCLUÍDO (188 linhas)
+
+**Corrigido — 2 bugs reais (ver NOTAS-v962.md):**
+- `gerarAuditoriaDados` (`?audit=1`): contador de "possíveis duplicados" por telefone/nome vinha
+  da lista já cortada em 50 exemplos — com mais de 50 grupos duplicados de verdade, o relatório
+  subestimava o total (dizia 50 quando era mais). Contador agora vem da lista completa; só os
+  exemplos exibidos continuam limitados a 50.
+- `exportarTudo` (`?export=full`, "backup completo"): não incluía `direciona_config` (tabela do
+  Cérebro — persona/regras/conhecimento do corretor, ver CLAUDE.md). Um restore desse "backup
+  completo" recuperava os leads mas perdia toda a configuração da IA. Tabela adicionada à lista
+  de export (mudança aditiva, sem risco pro que já era exportado).
+
+**Achado, não corrigido (mesmo padrão recorrente, versão mais branda):** `readTable` pagina de
+verdade via `.range()` em loop (mais cuidadoso que os outros arquivos revisados), mas ainda tem
+teto fixo de 20.000 linhas por tabela — mesma classe de achado de escala já registrada em vários
+outros arquivos, só que com teto mais alto e paginação real por baixo.
