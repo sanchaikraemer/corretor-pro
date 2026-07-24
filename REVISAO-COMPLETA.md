@@ -14,7 +14,7 @@
 | Arquivo | Linhas | Status | Observações |
 |---|---|---|---|
 | api/_persistence.js | 869 | concluído (v950) | camada de persistência — crítico. 1 fix aplicado + 2 achados registrados no log |
-| api/_pipeline.js | 3233 | parcial (v951): linhas 1–950 revisadas, falta ~950–3233 | motor de análise/IA — crítico |
+| api/_pipeline.js | 3233 | concluído (v951 + v955) | motor de análise/IA — crítico. **Achado grande pendente de decisão: nomes de pessoas cravados no código, ver log** |
 | api/lead-update.js | 1748 | pendente | dividir em 2 blocos |
 | api/reanalisar-lead.js | 804 | pendente | |
 | api/cerebro-config.js | 378 | pendente | |
@@ -100,3 +100,49 @@ relevante pro resto da revisão de app.js:
   aspas duplas). Corrigido pra mirar a versão real (aspas simples). Vale desconfiar de outros
   testes antigos que usam `app.match(/.../)`: se o regex não for específico o bastante, pode
   estar validando código morto em vez do código que realmente roda.
+
+### api/_pipeline.js (v955) — linhas 950–3233, arquivo CONCLUÍDO
+
+**Corrigido:**
+- `assinaturaTimelineIncremental` (dedupe de item de timeline numa reimportação) não baixava a
+  caixa do nome do arquivo de áudio, diferente da assinatura irmã em `_persistence.js`.
+  Alinhado — mesma normalização (minúsculo) nos dois lugares.
+
+**🔴 ACHADO GRANDE, PRIORIDADE ALTA — precisa decisão do dono, não é fix de uma linha:**
+
+Nomes de pessoas e de empresa parceira **cravados no código**, contrariando a regra
+não-negociável do CLAUDE.md ("nenhuma informação comercial — preço, empreendimento, condição,
+nome de pessoa — pode ser cravada no código"). Usados como heurística pra decidir "esse autor
+da mensagem é o CORRETOR ou o CLIENTE":
+- `api/_pipeline.js` linhas 128, 232, 862, 1906 — `sanchai`, `miguel kirinus`,
+  `senger`/`construtora senger` (empresa parceira) hardcoded em regex.
+- `api/_pipeline.js` linha 1836 — **lista de 28 primeiros nomes** (jamil, isabela, amiel,
+  victor, paty, taiany, laura, jean, thuane, jessica, rafael, gilmar, alison, emerson,
+  gabriele, joel, daniele, julia, henrique, karoliny, ricardo, alberto, marcia, monique,
+  sanchai, cristian, fabio, douglas, zuleica) — muito provavelmente nomes reais de
+  clientes/contatos usados como "stopwords" de similaridade de texto.
+- `app.js` linhas 2053, 2076 — mesmo padrão.
+- `api/lead-update.js` linha 1300 — mesmo padrão.
+
+O próprio código PROVA que esse problema já foi identificado e corrigido uma vez, só que em
+outro lugar: comentário na linha 2489 de `_pipeline.js` diz literalmente "o nome do corretor
+vem SEMPRE da configuração do Cérebro... Sem nome fixo no código" (fix da v827 §7.4). E
+`mcAutorEhContato` já recebe `corretorNome` dinâmico como parâmetro e usa ele — mas roda o
+regex hardcoded LOGO DEPOIS, como checagem redundante. O mecanismo certo já existe; só não foi
+usado pra substituir de vez o hardcode nessas funções de classificação de autor.
+
+Não corrigido agora porque: essa heurística decide "negócio vs cliente" em CADA análise —
+núcleo da classificação de mensagem. Errar aqui quebra silenciosamente em produção, sem teste
+automatizado pegar (é heurística de linguagem natural). `autorPareceNegocioPipeline` nem
+recebe `corretorNome` hoje — precisaria virar parâmetro e propagar por vários call-sites, mais
+que um ciclo automatizado deveria decidir sozinho. Ver `NOTAS-v955.md` pra recomendação
+detalhada de como migrar isso pro Cérebro configurado.
+
+**Achados menores:**
+- Mais 2 pontos com limite fixo de leitura no Supabase (`loadMemoriaComercialV2`: 10.000 linhas;
+  `aprenderRespostasDaCarteira`: 3.000 linhas) — mesma classe do achado de escala da v950
+  (limite 5000 em `_buscarProcessamentoExistenteV681`). Terceiro lugar com esse padrão.
+- Duas implementações paralelas de "assinatura de item de timeline pra dedupe"
+  (`assinaturaTimelineIncremental` vs `_assinaturaTimelineV681`) em arquivos diferentes — agora
+  alinhadas pro caso de áudio, mas continuam duplicadas. Não unificado (mexeria em lógica
+  central de merge dos dois lados do pipeline).

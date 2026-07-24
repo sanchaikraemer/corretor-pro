@@ -3094,7 +3094,10 @@ function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcrip
 // Áudios usam o nome do arquivo; textos usam data, hora, autor e conteúdo normalizado.
 function assinaturaTimelineIncremental(m) {
   if (!m || typeof m !== "object") return "";
-  if (m.mediaFile) return "audio|" + normalizeName(m.mediaFile);
+  // minúsculo de propósito: mesma normalização que _assinaturaTimelineV681 (api/_persistence.js)
+  // usa pro mesmo fim — sem isso, o mesmo áudio com nome em caixa diferente entre uma
+  // reimportação e outra podia ser tratado como "mensagem nova" indevidamente.
+  if (m.mediaFile) return "audio|" + normalizeName(m.mediaFile).toLowerCase();
   const txt = String(m.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 500);
   const sig = [String(m.date || "").trim(), String(m.time || "").trim(), String(m.author || "").trim().toLowerCase(), txt].join("|");
   return sig.replace(/\|/g, "") ? sig : "";
