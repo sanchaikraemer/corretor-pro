@@ -17,7 +17,7 @@
 | api/_pipeline.js | 3233 | concluído (v951 + v955) | motor de análise/IA — crítico. **Achado grande pendente de decisão: nomes de pessoas cravados no código, ver log** |
 | api/lead-update.js | 1722 | concluído (v956) | ver log — 1 fix grande (v900 faltando no caminho principal) + achados |
 | api/reanalisar-lead.js | 804 | concluído (v957) | fix de fuso horário em lembrete a partir de mensagem — ver log |
-| api/cerebro-config.js | 378 | pendente | |
+| api/cerebro-config.js | 378 | concluído | lido por completo, sem fix — ver log |
 | api/processar-storage.js | 370 | tocado pontualmente (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Ainda não foi lido linha a linha por completo |
 | api/restaurar-leads.js | 264 | pendente | |
 | api/limpar-tudo.js | 235 | pendente | |
@@ -195,3 +195,18 @@ lugares.
 **Achado, não corrigido (comportamento intencional):** `podeReusar6863` travado em `false`
 desde a v752 — bloco de reuso de análise por assinatura de timeline fica morto de propósito.
 Mesma categoria do achado da v951 (`finalizarAnaliseComercial`/`normalizarModeloComercial`).
+
+### api/cerebro-config.js (arquivo CONCLUÍDO, 378 linhas — lido por completo, sem fix)
+
+Nenhum bug de segurança/dado encontrado. Um achado menor, não corrigido:
+- Fila de aprendizado pendente (`processar-aprendizado-pendente`) não tem limite de tentativas
+  — um item que falha sempre (ex.: lead com dado incompatível) fica retentando pra sempre. Na
+  prática não trava a fila (o item que falha ganha `atualizado_em` novo e vai pro fim da ordem
+  de processamento, então outros itens seguem sendo processados no meio tempo), mas o item
+  problemático nunca é descartado nem sinalizado como "definitivamente falho". Baixa
+  severidade — não é urgente, registrado só pra não perder de vista.
+- `salvarCerebro()` (app.js) sempre manda o formulário inteiro no save, então a assimetria entre
+  campos que usam `hasOwnProperty` (regrasTexto/objecoesTexto) e campos que não usam
+  (corretorNome/metodo/tom/diferenciais/evitar, que caem pro default vazio se ausentes) não é
+  alcançável hoje — só viraria problema se um chamador futuro fizesse update parcial. Não mexi
+  (não é bug reproduzível com o único chamador existente).
