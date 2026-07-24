@@ -46,11 +46,16 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
   out.aprovada = true;
   return out;
 }
-// Dia da semana de HOJE no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite.
-function diaSemanaBR() {
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(new Date());
+// Dia da semana de uma data no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite
+// (madrugada em UTC ainda é o dia anterior em Brasília, UTC-3) — usada tanto pra "hoje" quanto
+// pra uma data-base específica (ex.: quando uma mensagem foi enviada).
+function diaSemanaBRDe(date) {
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(date);
   const m = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return m[wd] != null ? m[wd] : new Date().getDay();
+  return m[wd] != null ? m[wd] : date.getDay();
+}
+function diaSemanaBR() {
+  return diaSemanaBRDe(new Date());
 }
 // Dias até o próximo dia da semana (ex.: "sexta"), relativo a uma data base. queVem força a semana seguinte.
 // Sem baseDate, usa hoje no fuso de Brasília. Com base (ex.: data da mensagem do cliente), conta a partir dela.
@@ -61,7 +66,10 @@ function diasAteDiaSemana(nome, queVem, baseDate) {
   let refDay;
   if (baseDate) {
     const d = new Date(baseDate);
-    refDay = isNaN(d.getTime()) ? diaSemanaBR() : d.getUTCDay();
+    // v957: era d.getUTCDay() — pra uma mensagem enviada entre 21h e meia-noite em Brasília
+    // (ainda madrugada em UTC do dia seguinte), isso calculava o dia da semana ERRADO, e
+    // "te chamo sábado" podia virar lembrete pro dia certo errado por 1 dia de diferença.
+    refDay = isNaN(d.getTime()) ? diaSemanaBR() : diaSemanaBRDe(d);
   } else {
     refDay = diaSemanaBR();
   }

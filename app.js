@@ -590,7 +590,11 @@ function carregarTelaAtiva(t, force=false){
           icTab(state.icTabAtiva === "aprendizado" ? "aprendizado" : "cerebro", true);
         }
         // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
-        else if(t === "perdidos" || t === "geladeira") await carregarGeladeira();
+        // v952: chamada via window.* de propósito — existe uma versão mais nova (com paginação
+        // e state.geladeiraItemsTodos p/ busca) só em window.carregarGeladeira; a referência
+        // solta "carregarGeladeira" aqui resolvia pro nome de função do escopo do módulo (a
+        // versão velha, sem paginação nem state.geladeiraItemsTodos), nunca pra atual.
+        else if(t === "perdidos" || t === "geladeira") await window.carregarGeladeira();
         else if(t === "aprendizado") await carregarAprendizado();
         else if(t === "carteira") await carregarCarteira(force);
         if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
@@ -2996,7 +3000,11 @@ async function importarTelefonesCSV(){
         aplicar.push({ id: ld.id, telefone: tel });
       }
       if(!aplicar.length){ toast("Nada pra preencher — esses leads já têm número ou não bateram pelo nome."); return; }
-      if(!confirm(`Vou preencher o telefone de ${aplicar.length} lead(s) que estavam sem número. Confirmar?`)) return;
+      const msgTel = `Vou preencher o telefone de ${aplicar.length} lead(s) que estavam sem número. Confirmar?`;
+      const okTel = (typeof cp903Confirm === "function")
+        ? await cp903Confirm({ titulo: "Preencher telefones", mensagem: msgTel, ok: "Preencher" })
+        : confirm(msgTel);
+      if(!okTel) return;
       let ok = 0, erro = 0;
       for(let i=0;i<aplicar.length;i++){
         const a = aplicar[i];
@@ -3700,7 +3708,7 @@ const ETAPAS_PRINCIPAIS = ["Novo", "Atendimento", "Visita/Proposta", "Negociaç�
 const ETAPAS_OCULTAS = ["Standby", "Geladeira", "Perdido", "Vendido"];
 
 function normalizarEtapa(raw){
-  const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   if(/vendido|venda concluida|venda fechada/.test(s)) return "Vendido";
   if(/perdido|desistiu|recusou/.test(s)) return "Perdido";
   if(/geladeira|arquivad/.test(s)) return "Geladeira";
@@ -3886,7 +3894,11 @@ function coletarDupeIds(id){
 }
 async function apagarLead(id, nome){
   if(!id) return;
-  if(!confirm(`Apagar lead "${nome||"sem nome"}"? Não tem como desfazer.`)) return;
+  const msgApagar = `Apagar lead "${nome||"sem nome"}"? Não tem como desfazer.`;
+  const okApagar = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar lead", mensagem: msgApagar, ok: "Apagar", perigo: true })
+    : confirm(msgApagar);
+  if(!okApagar) return;
   try{
     const ids = coletarDupeIds(id);
     const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
@@ -4379,7 +4391,11 @@ window.excluirLeadDoModal = excluirLeadDoModal;
 // Exclusão definitiva a partir do botão discreto no fim da tela do lead.
 async function excluirLeadDefinitivo(id, nome){
   if(!id) return;
-  if(!confirm(`Excluir DEFINITIVAMENTE o lead "${nome||"sem nome"}"?\n\nIsso apaga tudo (conversa, análise, histórico). Não tem como desfazer.`)) return;
+  const msgExcluir = `Excluir DEFINITIVAMENTE o lead "${nome||"sem nome"}"?\n\nIsso apaga tudo (conversa, análise, histórico). Não tem como desfazer.`;
+  const okExcluir = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Excluir definitivamente", mensagem: msgExcluir, ok: "Excluir", perigo: true })
+    : confirm(msgExcluir);
+  if(!okExcluir) return;
   try{
     const ids = coletarDupeIds(id);
     const res = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id, ids, action: "apagar" }) });
@@ -5533,7 +5549,11 @@ async function reagendarLembrete(id, dateStr){
 window.reagendarLembrete = reagendarLembrete;
 // Exclui o lembrete da agenda (não some o lead — só tira o item agendado).
 async function removerLembrete(id){
-  if(!confirm("Excluir este lembrete da agenda? O lead continua salvo — só sai do agendado.")) return;
+  const msgLembrete = "Excluir este lembrete da agenda? O lead continua salvo — só sai do agendado.";
+  const okLembrete = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Excluir lembrete", mensagem: msgLembrete, ok: "Excluir" })
+    : confirm(msgLembrete);
+  if(!okLembrete) return;
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6132,7 +6152,11 @@ async function carregarAprendizado(){
 
 async function apagarItemAprendizado(categoria, indice){
   if(!cerebroIntel || !Array.isArray(cerebroIntel[categoria])) return;
-  if(!confirm("Apagar essa observação? O Corretor Pro vai desconsiderar esse aprendizado.")) return;
+  const msgItem = "Apagar essa observação? O Corretor Pro vai desconsiderar esse aprendizado.";
+  const okItem = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar observação", mensagem: msgItem, ok: "Apagar", perigo: true })
+    : confirm(msgItem);
+  if(!okItem) return;
   cerebroIntel[categoria].splice(indice, 1);
   await salvarAprendizado();
   carregarAprendizado();
@@ -6140,7 +6164,11 @@ async function apagarItemAprendizado(categoria, indice){
 window.apagarItemAprendizado = apagarItemAprendizado;
 
 async function limparAprendizadoTudo(){
-  if(!confirm("Apagar TUDO que o Corretor Pro aprendeu com os históricos? O Cérebro Comercial digitado manualmente não será afetado.")) return;
+  const msgTudo = "Apagar TUDO que o Corretor Pro aprendeu com os históricos? O Cérebro Comercial digitado manualmente não será afetado.";
+  const okTudo = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar todo o aprendizado", mensagem: msgTudo, ok: "Apagar tudo", perigo: true })
+    : confirm(msgTudo);
+  if(!okTudo) return;
   try{
     const res = await fetch("./api/cerebro-config", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -6545,7 +6573,11 @@ function resetarCerebro(){
 // análise rodar "pura" (só o modelo lendo a conversa). Mantém o nome do corretor e os
 // produtos (Diferenciais), que são FATOS que a IA precisa — não regra/aprendizado.
 async function zerarCerebroTudo(){
-  if(!confirm("Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.")) return;
+  const msgZerar = "Zerar o Cérebro (método, tom, o que evitar, regras, objeções) E TODO o aprendizado?\n\nA análise passa a rodar PURA (somente a conversa, sem regras aprendidas). Mantém o seu nome e os produtos. Não tem como desfazer.";
+  const okZerar = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Zerar o Cérebro", mensagem: msgZerar, ok: "Zerar tudo", perigo: true })
+    : confirm(msgZerar);
+  if(!okZerar) return;
   const status = qs("#cerebroStatus"); if(status) status.textContent = "Zerando...";
   try{
     const cfg = {
@@ -6899,7 +6931,11 @@ async function uploadLargeZipToSupabase(file, options = {}){
       if(state.ultimoArquivo){ state.processing = false; processFile(state.ultimoArquivo); }
     });
     qs("#btnDescartarUpload")?.addEventListener("click", async () => {
-      if(!confirm("Descartar esta importação e apagar os arquivos temporários?")) return;
+      const msgDescartarUp = "Descartar esta importação e apagar os arquivos temporários?";
+      const okDescartarUp = (typeof cp903Confirm === "function")
+        ? await cp903Confirm({ titulo: "Descartar importação", mensagem: msgDescartarUp, ok: "Descartar", perigo: true })
+        : confirm(msgDescartarUp);
+      if(!okDescartarUp) return;
       const stored = state.ultimoUploadStorage;
       if(stored) await finalizarImportacaoStorage(stored);
       const shareId = String(state.pendingSharedRecordId || "");
@@ -7054,9 +7090,12 @@ async function renderProcessedResult(data, meta){
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else if(perguntarNome){
+    // v953 — pedido do dono: quando o nome bate EXATO (não "parecido"), não pergunta mais.
+    // Ele nunca usou a opção "é outro" nesse caso. Atualiza direto; os botões ficam ocultos
+    // só como caminho de retomada manual se a chamada automática falhar (ver mais abaixo).
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>A conversa será incorporada ao mesmo cadastro, sem criar duplicata.</div>` +
-      `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>Atualizando o cadastro automaticamente, sem criar duplicata.</div>` +
+      `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else{
     acoesHtml =
       `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
@@ -7075,8 +7114,10 @@ async function renderProcessedResult(data, meta){
     `</div>` +
     openAIErrorBlock(data);
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
-  // Decisão "é o mesmo / é outro": traz a pergunta pra vista (senão fica embaixo e parece que travou).
-  if(perguntarNome){
+  // Decisão "é o mesmo / é outro" (nome só parecido, ambíguo de verdade): traz a pergunta pra
+  // vista, senão fica embaixo e parece que travou. Nome exato não pergunta mais (v953) — sem
+  // pergunta, sem precisar trazer pra vista.
+  if(nomeSoParecido){
     setTimeout(() => { (qs("#pendingBox") || qs("#resultCard"))?.scrollIntoView({ behavior:"smooth", block:"center" }); }, 80);
   }
 
@@ -7089,9 +7130,12 @@ async function renderProcessedResult(data, meta){
   qs("#btnSalvarComoNovo")?.addEventListener("click", salvarLeadPendente);
   qs("#btnDescartarLead")?.addEventListener("click", descartarLeadPendente);
   qs("#btnAtualizarLead")?.addEventListener("click", atualizarLeadComEvolucao);
-  if(perguntarNome){
-    // Nome exato: só permite atualizar o cadastro existente, criar duplicata não é oferecido.
-    // Nome só parecido: espera o corretor confirmar se é o mesmo cliente ou outro (ver acima).
+  if(nomeSoParecido){
+    // Nome só parecido (não idêntico): espera o corretor confirmar se é o mesmo cliente ou
+    // outro — a única ambiguidade real que ainda pergunta (ver v953 acima).
+  }else if(perguntarNome){
+    // Nome exato: já sabemos que é o mesmo cliente — atualiza direto, sem perguntar (v953).
+    atualizarLeadComEvolucao();
   }else{
     salvarLeadPendente();
   }
@@ -7333,7 +7377,11 @@ async function salvarLeadPendente(){
 }
 
 async function descartarLeadPendente(){
-  if(!confirm("Descartar essa análise sem salvar no banco?")) return;
+  const msgDescartarAn = "Descartar essa análise sem salvar no banco?";
+  const okDescartarAn = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Descartar análise", mensagem: msgDescartarAn, ok: "Descartar", perigo: true })
+    : confirm(msgDescartarAn);
+  if(!okDescartarAn) return;
   const shareDescartadoId = String(state.pendingSharedRecordId || "");
   const importacaoDescartada = state.pendingSave;
   await finalizarImportacaoStorage(importacaoDescartada);
@@ -7819,7 +7867,7 @@ document.addEventListener("click", (e) => {
   }
 });
 // Normaliza pra busca: minúsculo e SEM acento (buscar "joao" acha "João" e vice-versa).
-function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim(); }
 window.semAcento = semAcento;
 // Lead arquivado (arquivo morto / Perdido) ou na geladeira NÃO aparece na busca —
 // fica só na tela dedicada (arquivo morto). Busca é pra leads ativos.
@@ -7931,7 +7979,7 @@ qs("#pipelineBusca")?.addEventListener("input", (e)=>{
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
 qs("#perdidosRefresh")?.addEventListener("click", carregarPerdidos);
-qs("#geladeiraRefresh")?.addEventListener("click", carregarGeladeira);
+qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#carteiraExport")?.addEventListener("click", baixarRelatorioCarteira);
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
@@ -7956,9 +8004,15 @@ qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   }
 });
 qs("#wipeAll").addEventListener("click", async ()=>{
-  const ok1 = confirm("Tem certeza? Isso apaga TODAS as conversas, leads e ZIPs guardados. Não tem como recuperar.");
+  const msgWipe1 = "Tem certeza? Isso apaga TODAS as conversas, leads e ZIPs guardados. Não tem como recuperar.";
+  const ok1 = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Apagar tudo", mensagem: msgWipe1, ok: "Continuar", perigo: true })
+    : confirm(msgWipe1);
   if(!ok1) return;
-  const ok2 = confirm("Última confirmação: apagar mesmo tudo?");
+  const msgWipe2 = "Última confirmação: apagar mesmo tudo?";
+  const ok2 = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Última confirmação", mensagem: msgWipe2, ok: "Apagar tudo", perigo: true })
+    : confirm(msgWipe2);
   if(!ok2) return;
   const box = qs("#wipeResult");
   box.style.display = "block";
@@ -7967,7 +8021,10 @@ qs("#wipeAll").addEventListener("click", async ()=>{
     const res = await fetch("./api/limpar-tudo", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ confirmacao: "APAGAR TUDO" })
+      // era { confirmacao: "APAGAR TUDO" } — a API (api/limpar-tudo.js) exige literalmente
+      // body.confirm === "APAGAR TUDO"; com a chave errada esse botão SEMPRE devolvia 400
+      // "Confirmação inválida", mesmo depois das duas confirmações.
+      body: JSON.stringify({ confirm: "APAGAR TUDO" })
     });
     const data = await res.json().catch(()=>({ ok:false, error:"resposta invalida" }));
     let html = '';
@@ -8296,7 +8353,7 @@ async function exportarLeadsCSV(btn){
       const objections = Array.isArray(a.objections) ? a.objections.slice(0,5) : [];
       const pontosSensiveis = String(mem.pontosSensiveis||"").split(/[·\n;]+/).map(s=>s.trim()).filter(Boolean);
       const pesaContraArr = [];
-      const _normpc = t => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+      const _normpc = t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
       [...objections, ...pontosSensiveis].forEach(t => {
         if(!pesaContraArr.some(x => _normpc(x) === _normpc(t))) pesaContraArr.push(t);
       });
@@ -8559,7 +8616,11 @@ window.carregarPerdidos = carregarPerdidos;
 
 async function reabrirLeadPerdido(id, btn){
   if(!id) return;
-  if(!confirm("Reabrir este cliente? Ele volta para os atendimentos ativos.")) return;
+  const msg = "Reabrir este cliente? Ele volta para os atendimentos ativos.";
+  const ok = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Reabrir lead", mensagem: msg, ok: "Reabrir" })
+    : confirm(msg);
+  if(!ok) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reabrindo..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -8578,72 +8639,21 @@ async function reabrirLeadPerdido(id, btn){
 }
 window.reabrirLeadPerdido = reabrirLeadPerdido;
 
-// Lista os leads na Geladeira (negócios fracos guardados pra revisitar), com botão Reativar.
-// Radar da Geladeira: aponta quem vale revisitar por etapa, permuta ou contexto concreto.
-function valeRevisitarGeladeira(l){
-  if(normalizarEtapa(l.etapa) !== "Geladeira") return null;
-  const a = l.analysis || {};
-  const dias = Number(l.daysSinceLastInteraction) || 0;
-  const etapaIA = normalizarEtapa(a.etapaSugerida);
-  const objTxt = ((Array.isArray(a.objections) ? a.objections.join(" ") : String(a.objections||"")) + " " + String(a.memoria?.observacoes||"") + " " + String(a.summary||"")).toLowerCase();
-  const temSafra = /safra|colhe|colheita|plantio|lavoura/.test(objTxt);
-  const sinalForte = etapaIA === "Negociação" || etapaIA === "Visita/Proposta" || a.permuta || temSafra;
-  if(!sinalForte) return null;
-  const motivos = [];
-  if(etapaIA === "Negociação" || etapaIA === "Visita/Proposta") motivos.push(`parou em ${etapaIA}`);
-  if(a.permuta) motivos.push("permuta (talvez já vendeu o bem)");
-  if(temSafra) motivos.push("safra/colheita já pode ter terminado");
-  if(dias >= 60) motivos.push(`${dias} dias parado`);
-  if(!motivos.length) return null;
-  return { motivos };
-}
-
-async function carregarGeladeira(){
-  const box = qs("#geladeiraList");
-  if(!box) return;
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const res = { ok:true, json: async () => await getLeadsData() };
-    const data = await res.json();
-    const items = (data?.items || []).map(limparLead).filter(l => ["Geladeira","Perdido"].includes(normalizarEtapa(l.etapa)));
-    if(!items.length){
-      box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>';
-      return;
-    }
-    const cardGel = (l, motivos) => {
-      const idJs = JSON.stringify(String(l.id||""));
-      const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "";
-      const destaque = motivos && motivos.length;
-      const motivoHtml = destaque ? `<div style="margin-top:8px;padding:6px 8px;background:rgba(104,255,149,.06);border-left:3px solid var(--acao);border-radius:6px;font-size:12px"><b style="color:var(--acao)">Vale revisitar:</b> ${escapeHtml(motivos.join(" · "))}</div>` : "";
-      return `
-        <div data-geladeira-id="${escapeHtml(String(l.id||""))}" style="border:1px solid ${destaque?"var(--acao)":"var(--line)"};background:${destaque?"rgba(104,255,149,.05)":"rgba(0,212,255,.04)"};border-radius:14px;padding:12px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <div style="flex:1;min-width:0">
-              <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||"Cliente")}</strong>
-              <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?" · "+dias:""}</div>
-            </div>
-            <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
-          </div>
-          ${motivoHtml}
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-            <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
-          </div>
-        </div>`;
-    };
-    // Todos os leads da geladeira são mostrados IGUAIS — sem destaque "vale revisitar" (pedido do dono).
-    let html = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?"s":""} guardado${items.length>1?"s":""}.</div>`;
-    html += items.map(l => cardGel(l, null)).join("");
-    box.innerHTML = html;
-  }catch(err){
-    box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-  }
-}
-window.carregarGeladeira = carregarGeladeira;
+// v952: a renderização real de Arquivados (com paginação e busca) vive só dentro da IIFE
+// #724-2, exposta em window.carregarGeladeira. Existia uma segunda função de mesmo nome aqui
+// (mais antiga, sem paginação nem suporte a busca) que nenhuma chamada `window.`-qualificada
+// nunca usava — mas a navegação chamava o nome solto "carregarGeladeira()", que por escopo
+// léxico do módulo resolvia pra ESTA função velha, não pra atual. Removida (ver fix em
+// carregarTelaAtiva). valeRevisitarGeladeira também saiu: só era usada por este bloco morto,
+// e já nem era chamada com motivos reais (sempre null) havia tempo.
 
 async function reativarLeadGeladeira(id, btn){
   if(!id) return;
-  if(!confirm("Reativar este cliente? Ele volta para os atendimentos ativos.")) return;
+  const msg = "Reativar este cliente? Ele volta para os atendimentos ativos.";
+  const ok = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Reativar lead", mensagem: msg, ok: "Reativar" })
+    : confirm(msg);
+  if(!ok) return;
   if(btn){ btn.disabled = true; btn.textContent = "Reativando..."; }
   try{
     const res = await fetch("./api/lead-update", {
@@ -11623,6 +11633,24 @@ function ui670DetailRows(lead,mc){
   function baseRows(items){
     return (Array.isArray(items) ? items : []).map(limparLead);
   }
+  function geladeiraCardHTML(l){
+    const idJs = leadId(l);
+    const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
+    return `
+      <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
+            <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
+          </div>
+          <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
+          <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
+        </div>
+      </div>`;
+  }
   function renderLoadMore(key, total, visible, fnName){
     const faltam = Math.max(0, total - visible);
     return faltam > 0
@@ -11678,29 +11706,37 @@ function ui670DetailRows(lead,mc){
     try{
       const data = await getLeadsData(false);
       const items = baseRows(data?.items).filter(l => ['Geladeira','Perdido'].includes(normalizarEtapa(l.etapa)));
+      state.geladeiraItemsTodos = items;
+      const buscaAtiva = qs('#buscaArquivados');
+      if(buscaAtiva && buscaAtiva.value.trim().length >= 2){
+        window.buscaGeladeiraInline(buscaAtiva.value);
+        cpPerfMark('renderGeladeira', start, { total:items.length, busca:true });
+        return;
+      }
       const limite = ensureVisibleKey('geladeiraVisibleCount');
       const lote = items.slice(0, limite);
       if(!items.length){ box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
-      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(l => {
-        const idJs = leadId(l);
-        const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
-        return `
-          <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-              <div style="flex:1;min-width:0">
-                <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
-                <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
-              </div>
-              <span class="tag" style="background:rgba(0,212,255,.12);color:#bff0ff;border-color:rgba(0,212,255,.32);font-size:10px">ARQUIVADO</span>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-              <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
-            </div>
-          </div>`;
-      }).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(geladeiraCardHTML).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
       cpPerfMark('renderGeladeira', start, { total:items.length, visiveis:lote.length });
     }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderGeladeira', start, { error:true }); }
+  };
+
+  // Busca dentro dos Arquivados (Geladeira/Perdido): o dono pediu pra achar rápido um contato
+  // "morto" que voltou a responder, sem precisar rolar a lista inteira, e reativá-lo dali mesmo.
+  let _buscaGeladeiraTimer = null;
+  window.buscaGeladeiraInline = function(termo){
+    clearTimeout(_buscaGeladeiraTimer);
+    _buscaGeladeiraTimer = setTimeout(() => {
+      const box = qs('#geladeiraList');
+      if(!box) return;
+      const t = semAcento(termo);
+      if(t.length < 2){ window.carregarGeladeira(); return; }
+      const fonte = Array.isArray(state.geladeiraItemsTodos) ? state.geladeiraItemsTodos : [];
+      const numeros = String(termo||'').replace(/\D/g,'');
+      const matches = fonte.filter(l => semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||'').replace(/\D/g,'').includes(numeros)));
+      if(!matches.length){ box.innerHTML = `<div class="empty">Nenhum arquivado encontrado com "${escapeHtml(termo)}".</div>`; return; }
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${matches.length} encontrado${matches.length>1?'s':''}.</div>` + matches.map(geladeiraCardHTML).join('');
+    }, 200);
   };
 
   try{

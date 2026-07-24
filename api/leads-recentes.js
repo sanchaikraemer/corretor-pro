@@ -42,7 +42,7 @@ function nomeAuditoria(row = {}) {
   return String(ra?.clientName || ra?.lead?.clientName || row.nome_cliente || row.nome || row.nome_arquivo || row.arquivo_nome || "").trim();
 }
 
-function gerarAuditoriaDados(rows = []) {
+export function gerarAuditoriaDados(rows = []) {
   const total = rows.length;
   const ids = new Map();
   const telefones = new Map();
@@ -89,16 +89,21 @@ function gerarAuditoriaDados(rows = []) {
   }
 
   const duplicadosPorId = [...ids.entries()].filter(([, qtd]) => qtd > 1).map(([id, qtd]) => ({ id, qtd }));
-  const duplicadosTelefone = [...telefones.entries()].filter(([, arr]) => arr.length > 1).slice(0, 50).map(([telefoneFinal, registros]) => ({ telefoneFinal, qtd: registros.length, registros }));
-  const duplicadosNome = [...nomes.entries()].filter(([, arr]) => arr.length > 1).slice(0, 50).map(([nomeNormalizado, registros]) => ({ nomeNormalizado, qtd: registros.length, registros }));
+  // Conta ANTES de cortar a lista de exemplos em 50 — senão, com mais de 50 grupos duplicados,
+  // o resumo (e a mensagem em "problemas") subestima o problema real (ex.: 120 grupos vira "50
+  // possíveis duplicidades", escondendo os outros 70).
+  const gruposDuplicadosTelefone = [...telefones.entries()].filter(([, arr]) => arr.length > 1);
+  const gruposDuplicadosNome = [...nomes.entries()].filter(([, arr]) => arr.length > 1);
+  const duplicadosTelefone = gruposDuplicadosTelefone.slice(0, 50).map(([telefoneFinal, registros]) => ({ telefoneFinal, qtd: registros.length, registros }));
+  const duplicadosNome = gruposDuplicadosNome.slice(0, 50).map(([nomeNormalizado, registros]) => ({ nomeNormalizado, qtd: registros.length, registros }));
 
   if (semHistorico) problemas.push(`${semHistorico} lead(s) sem histórico/timeline.`);
   if (semAnalise) problemas.push(`${semAnalise} lead(s) sem análise comercial salva.`);
   if (semNome) problemas.push(`${semNome} lead(s) sem nome claro.`);
   if (semData) problemas.push(`${semData} registro(s) sem data.`);
   if (audiosPendentes) problemas.push(`${audiosPendentes} lead(s) com áudio encontrado maior que áudio transcrito.`);
-  if (duplicadosTelefone.length) problemas.push(`${duplicadosTelefone.length} possível(is) duplicidade(s) por telefone.`);
-  if (duplicadosNome.length) problemas.push(`${duplicadosNome.length} possível(is) duplicidade(s) por nome.`);
+  if (gruposDuplicadosTelefone.length) problemas.push(`${gruposDuplicadosTelefone.length} possível(is) duplicidade(s) por telefone.`);
+  if (gruposDuplicadosNome.length) problemas.push(`${gruposDuplicadosNome.length} possível(is) duplicidade(s) por nome.`);
 
   return {
     ok: true,
@@ -112,8 +117,8 @@ function gerarAuditoriaDados(rows = []) {
       semNome,
       semData,
       audiosPendentes,
-      possiveisDuplicadosTelefone: duplicadosTelefone.length,
-      possiveisDuplicadosNome: duplicadosNome.length,
+      possiveisDuplicadosTelefone: gruposDuplicadosTelefone.length,
+      possiveisDuplicadosNome: gruposDuplicadosNome.length,
       idsDuplicados: duplicadosPorId.length
     },
     status,
@@ -141,7 +146,11 @@ async function exportarTudo(req, res) {
   const main = await readTable(supabase, "whatsapp_processamentos", "criado_em");
   if (!main.ok) return json(res, 500, { ok: false, error: main.error, table: main.table });
   const extras = {};
-  for (const table of ["direciona_leads", "leads", "corretor_pro_backups"]) {
+  // direciona_config guarda o Cérebro (persona/regras/conhecimento configurado pelo corretor —
+  // ver CLAUDE.md). Sem essa tabela, um "backup completo" recupera os leads mas perde toda a
+  // configuração que a IA depende pra responder certo — o nome "full backup" não cumpria a
+  // promessa.
+  for (const table of ["direciona_leads", "leads", "corretor_pro_backups", "direciona_config"]) {
     const result = await readTable(supabase, table, "criado_em");
     if (result.ok && result.rows.length) extras[table] = result.rows;
   }

@@ -102,7 +102,7 @@ function sanitizeImportId(value = "") {
 function sanitizeFileName(name = "conversa-whatsapp.zip") {
   return String(name)
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w.\-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")

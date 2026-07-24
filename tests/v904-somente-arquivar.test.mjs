@@ -38,7 +38,9 @@ assert.doesNotMatch(html, /cp-metric-revenue/, 'sem tile de receita no Desempenh
 assert.doesNotMatch(html, /id="vendas"/, 'sem a tela #vendas');
 
 // 6. O arquivo (Arquivados) segue reunindo Geladeira + Perdido antigos num lugar só.
-assert.match(app, /\["Geladeira","Perdido"\]\.includes\(normalizarEtapa\(l\.etapa\)\)/,
+// v952: a antiga função duplicada de carregarGeladeira (que este teste mirava sem querer,
+// com aspas duplas) foi removida — só sobra a versão real, com aspas simples.
+assert.match(app, /\['Geladeira','Perdido'\]\.includes\(normalizarEtapa\(l\.etapa\)\)/,
   'Arquivados reúne Geladeira e Perdido antigos');
 
 console.log('v904-somente-arquivar: ok');

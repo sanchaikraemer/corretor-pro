@@ -74,32 +74,47 @@ async function deleteAllRows(supabase, table) {
   };
 }
 
-async function emptyBucket(supabase, bucket) {
+export async function emptyBucket(supabase, bucket) {
   const todos = [];
+  const PAGE = 1000;
   async function listFolder(prefix) {
-    const { data, error } = await supabase.storage.from(bucket).list(prefix, {
-      limit: 1000,
-      sortBy: { column: "name", order: "asc" }
-    });
-    if (error) return { error: error.message };
-    for (const item of data || []) {
-      const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
-      if (item.id) {
-        todos.push(fullPath);
-      } else {
-        // É pasta — desce.
-        const sub = await listFolder(fullPath);
-        if (sub?.error) return sub;
+    // list() nunca pagina sozinho — devolve no máximo PAGE itens por chamada. Uma pasta
+    // compartilhada (ex.: transcription-cache/) pode facilmente passar de 1000 arquivos depois
+    // de meses de uso; sem o loop de offset, "limpar tudo" parava no primeiro lote e reportava
+    // sucesso (ok:true) deixando o resto pra trás.
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
+        limit: PAGE,
+        offset,
+        sortBy: { column: "name", order: "asc" }
+      });
+      if (error) return { error: error.message };
+      for (const item of data || []) {
+        const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.id) {
+          todos.push(fullPath);
+        } else {
+          // É pasta — desce.
+          const sub = await listFolder(fullPath);
+          if (sub?.error) return sub;
+        }
       }
+      if (!data || data.length < PAGE) break;
     }
     return { ok: true };
   }
   const walk = await listFolder("");
   if (walk?.error) return { ok: false, error: walk.error, deleted: 0 };
   if (!todos.length) return { ok: true, deleted: 0 };
-  const { data, error } = await supabase.storage.from(bucket).remove(todos);
-  if (error) return { ok: false, error: error.message, deleted: 0 };
-  return { ok: true, deleted: (data || []).length };
+  // remove() em lotes de PAGE — mesma precaução, sem mudar quais arquivos são apagados.
+  let deleted = 0;
+  for (let i = 0; i < todos.length; i += PAGE) {
+    const batch = todos.slice(i, i + PAGE);
+    const { data, error } = await supabase.storage.from(bucket).remove(batch);
+    if (error) return { ok: false, error: error.message, deleted };
+    deleted += (data || []).length;
+  }
+  return { ok: true, deleted };
 }
 
 function inspectKey(raw) {

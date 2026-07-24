@@ -1,4 +1,5 @@
 import { processZipBuffer } from "./_pipeline.js";
+import { requireApiKey } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -75,6 +76,7 @@ function decodeBase64Zip(body = {}) {
 }
 
 export default async function handler(req, res) {
+  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Método não permitido." });
 
   try {

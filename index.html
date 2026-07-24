@@ -211,6 +211,7 @@
         <div class="card compact">
           <div class="label" style="margin-bottom:6px">Arquivados</div>
           <div class="small" style="color:var(--muted);margin-bottom:8px">Contatos pausados ficam guardados aqui sem ocupar as prioridades do dia. Toque em "Reativar" para devolvê-los aos atendimentos ativos.</div>
+          <input type="search" id="buscaArquivados" placeholder="Buscar nos arquivados por nome ou interesse..." autocomplete="off" oninput="buscaGeladeiraInline(this.value)" style="width:100%;box-sizing:border-box;padding:11px 16px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:14px;outline:none;margin-bottom:12px">
           <div id="geladeiraList"></div>
         </div>
       </div>

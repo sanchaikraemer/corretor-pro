@@ -471,19 +471,19 @@ function normalizeComparable(text = "") {
     .trim();
 }
 
-// Mant\u00e9m s\u00f3 os compromissos que t\u00eam PROVA na conversa real:
-// 1) o trechoLiteral citado pela IA bate com uma sequ\u00eancia de palavras que de fato
+// Mantém só os compromissos que têm PROVA na conversa real:
+// 1) o trechoLiteral citado pela IA bate com uma sequência de palavras que de fato
 //    aparece no texto da conversa; e
-// 2) se o tipo \u00e9 uma refei\u00e7\u00e3o concreta (caf\u00e9/almo\u00e7o/jantar), essa palavra TEM que
-//    aparecer na conversa \u2014 sen\u00e3o \u00e9 a IA chamando de "caf\u00e9" algo que ningu\u00e9m marcou
-//    (ex.: trecho real "te chamo amanh\u00e3" rotulado como caf\u00e9).
-// Sem prova = compromisso inventado/deduzido pela IA \u2192 descartado.
+// 2) se o tipo é uma refeição concreta (café/almoço/jantar), essa palavra TEM que
+//    aparecer na conversa — senão é a IA chamando de "café" algo que ninguém marcou
+//    (ex.: trecho real "te chamo amanhã" rotulado como café).
+// Sem prova = compromisso inventado/deduzido pela IA → descartado.
 function termoObrigatorioDoTipo(oQue) {
   const s = normalizeComparable(oQue || "");
   if (/cafe/.test(s)) return /(^| )cafe( |$)/;
   if (/almoco/.test(s)) return /(^| )almoco( |$)/;
   if (/jantar/.test(s)) return /(^| )jantar( |$)/;
-  return null; // visita/liga\u00e7\u00e3o/reuni\u00e3o/gen\u00e9rico podem ser impl\u00edcitos \u2014 n\u00e3o exige a palavra
+  return null; // visita/ligação/reunião/genérico podem ser implícitos — não exige a palavra
 }
 // Tipos de material que o app sabe renderizar/mandar (espelha MATERIAL_LABEL no front).
 const MATERIAIS_VALIDOS = new Set([
@@ -518,13 +518,13 @@ export function filtrarCompromissosReais(appointments, conversaText) {
   if (!tl.length) return [];
   const tlJoin = " " + tl.join(" ") + " ";
   return appointments.filter(ap => {
-    // (2) refei\u00e7\u00e3o concreta: a palavra do tipo precisa existir na conversa real.
+    // (2) refeição concreta: a palavra do tipo precisa existir na conversa real.
     const termo = termoObrigatorioDoTipo(ap && ap.oQue);
     if (termo && !termo.test(tlJoin)) return false;
-    // (1) prova literal: trechoLiteral tem que bater uma sequ\u00eancia real do texto.
+    // (1) prova literal: trechoLiteral tem que bater uma sequência real do texto.
     const trecho = normalizeComparable(ap && ap.trechoLiteral || "").split(/\s+/).filter(t => t.length >= 2);
-    if (trecho.length < 2) return false; // sem cita\u00e7\u00e3o literal \u00fatil = sem prova
-    const win = Math.min(3, trecho.length); // exige uma sequ\u00eancia de palavras real
+    if (trecho.length < 2) return false; // sem citação literal útil = sem prova
+    const win = Math.min(3, trecho.length); // exige uma sequência de palavras real
     for (let i = 0; i + win <= trecho.length; i++) {
       const seq = " " + trecho.slice(i, i + win).join(" ") + " ";
       if (tlJoin.includes(seq)) return true;
@@ -1709,7 +1709,7 @@ Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa
   }
 }
 
-const _semAcento = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const _semAcento = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 // Extrai (sem banco, sem IA) as mensagens que o CORRETOR escreveu numa timeline — nunca as do cliente.
 export function extrairRespostasCorretor(timeline, clientName) {
@@ -1983,7 +1983,7 @@ const _STOPWORDS_RANK = new Set([
 ]);
 function _tokensRank(s) {
   return String(s || "").toLowerCase()
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w\s]/g, " ")
     .split(/\s+/)
     .filter(w => w.length >= 3 && !_STOPWORDS_RANK.has(w));
@@ -3094,7 +3094,10 @@ function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcrip
 // Áudios usam o nome do arquivo; textos usam data, hora, autor e conteúdo normalizado.
 function assinaturaTimelineIncremental(m) {
   if (!m || typeof m !== "object") return "";
-  if (m.mediaFile) return "audio|" + normalizeName(m.mediaFile);
+  // minúsculo de propósito: mesma normalização que _assinaturaTimelineV681 (api/_persistence.js)
+  // usa pro mesmo fim — sem isso, o mesmo áudio com nome em caixa diferente entre uma
+  // reimportação e outra podia ser tratado como "mensagem nova" indevidamente.
+  if (m.mediaFile) return "audio|" + normalizeName(m.mediaFile).toLowerCase();
   const txt = String(m.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 500);
   const sig = [String(m.date || "").trim(), String(m.time || "").trim(), String(m.author || "").trim().toLowerCase(), txt].join("|");
   return sig.replace(/\|/g, "") ? sig : "";
