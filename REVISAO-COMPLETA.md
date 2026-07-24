@@ -16,7 +16,7 @@
 | api/_persistence.js | 869 | concluído (v950) | camada de persistência — crítico. 1 fix aplicado + 2 achados registrados no log |
 | api/_pipeline.js | 3233 | concluído (v951 + v955) | motor de análise/IA — crítico. **Achado grande pendente de decisão: nomes de pessoas cravados no código, ver log** |
 | api/lead-update.js | 1722 | concluído (v956) | ver log — 1 fix grande (v900 faltando no caminho principal) + achados |
-| api/reanalisar-lead.js | 804 | pendente | |
+| api/reanalisar-lead.js | 804 | concluído (v957) | fix de fuso horário em lembrete a partir de mensagem — ver log |
 | api/cerebro-config.js | 378 | pendente | |
 | api/processar-storage.js | 370 | tocado pontualmente (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Ainda não foi lido linha a linha por completo |
 | api/restaurar-leads.js | 264 | pendente | |
@@ -180,3 +180,18 @@ isso precisa de decisão consciente, não de um ciclo automatizado.
   esse padrão de teto fixo de leitura (ver achados da v950/v955).
 - Mais ocorrências do padrão de nomes hardcoded já registrado (linha ~1274, dentro de
   `contarContatosV685`) — já contabilizado no achado grande da v955, sem repetir aqui.
+
+### api/reanalisar-lead.js (v957) — arquivo CONCLUÍDO (804 linhas)
+
+**Corrigido:** `diasAteDiaSemana` (usada por `lembreteDoTexto`/`lembreteDaTimeline` — "te chamo
+sábado" vira lembrete) usava `d.getUTCDay()` quando calculava a partir da data de uma mensagem
+específica (`baseDate`), diferente de `diaSemanaBR()` (usada pra "agora"), que já era consciente
+do fuso de Brasília de propósito. Mensagem enviada entre 21h e meia-noite em Brasília cai na
+madrugada do dia seguinte em UTC — nesse intervalo, o cálculo do dia da semana saía errado por
+1 dia, e o lembrete podia nascer no dia certo da semana errado por 24h. Extraída
+`diaSemanaBRDe(date)` (mesma lógica de `diaSemanaBR`, pra qualquer data) e usada nos dois
+lugares.
+
+**Achado, não corrigido (comportamento intencional):** `podeReusar6863` travado em `false`
+desde a v752 — bloco de reuso de análise por assinatura de timeline fica morto de propósito.
+Mesma categoria do achado da v951 (`finalizarAnaliseComercial`/`normalizarModeloComercial`).
