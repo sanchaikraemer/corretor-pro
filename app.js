@@ -12846,7 +12846,12 @@ function ui670DetailRows(lead,mc){
   setTimeout(fixVersionText, 50);
   setTimeout(fixVersionText, 250);
   setTimeout(fixVersionText, 1000);
-  setInterval(fixVersionText, 2000);
+  // v979: era a cada 2s, para sempre, varrendo TODO o texto do documento — rodando o
+  // tempo inteiro que o app fica aberto, competia com clique/toque pelo processador
+  // principal (perceptível como lentidão). As 3 chamadas acima já cobrem o carregamento;
+  // o intervalo é só uma rede de segurança tardia, então 30s (mesmo ritmo já usado na
+  // sincronização da Home) preserva o comportamento sem manter o navegador ocupado à toa.
+  setInterval(fixVersionText, 30000);
 })();
 
 

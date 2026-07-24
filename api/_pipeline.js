@@ -688,11 +688,15 @@ async function withRetries(fn, { tries = 3, baseDelayMs = 600 } = {}) {
 
 const WHISPER_EXT_MAP = { ".opus": ".ogg", ".aac": ".m4a" };
 
-async function transcribeAudio({ zip, audioName, openai }) {
+export async function transcribeAudio({ zip, audioName, openai }) {
   const audioFile = zip.files[audioName];
   if (!audioFile) return "";
+  // Checa o tamanho DECLARADO pelo ZIP antes de descompactar — um áudio "bomba" (pequeno
+  // fechado, gigante quando aberto) não pode ser lido inteiro na memória só para então
+  // ser descartado. zipEntrySize já é usada com o mesmo objetivo para o .txt da conversa.
+  if (zipEntrySize(audioFile) > 24 * 1024 * 1024) return "";
   const buffer = await audioFile.async("nodebuffer");
-  if (buffer.length > 24 * 1024 * 1024) return ""; // Whisper aceita até 25 MB.
+  if (buffer.length > 24 * 1024 * 1024) return ""; // reforço: confere o tamanho real, caso o ZIP declare errado. Whisper aceita até 25 MB.
   const rawExt = (path.extname(audioName) || ".ogg").toLowerCase();
   // Whisper aceita ogg/m4a/mp3/wav/etc. mas rejeita .opus e .aac no nome do arquivo,
   // mesmo sendo containers equivalentes. Renomeia antes de enviar.
@@ -3232,5 +3236,37 @@ export async function finalizarAnaliseDaConversa(payload) {
       audiosComErro
     }
   };
+}
+
+// Rota de compatibilidade (api/analisar.js) — processa um ZIP inteiro numa chamada só,
+// combinando em sequência as 3 etapas que o fluxo por Storage (api/processar-storage.js)
+// roda separadas: prepararConversaDoZip → transcreverArquivosExtraidos → finalizarAnaliseDaConversa.
+// Existe para quem ainda manda o ZIP direto no corpo da requisição, sem subir pro Supabase
+// Storage antes. Não é reimportação-aware (sem existingLeadId/existingTimeline) — cada
+// chamada é tratada como uma conversa nova, do jeito que a rota sempre se comportou.
+export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebroConfig = null } = {}) {
+  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true });
+  const extracted = prep._extractedFiles || {};
+  const arquivos = Object.entries(extracted).map(([name, audioBuffer]) => ({ name, buffer: audioBuffer }));
+  const lote = arquivos.length
+    ? await transcreverArquivosExtraidos(arquivos)
+    : { transcriptions: {}, transcriptionEnabled: true };
+  return finalizarAnaliseDaConversa({
+    txtFile: prep.txtFile,
+    messages: prep.messages,
+    audioFilesRelevantes: prep.audioFilesRelevantes,
+    audioFilesForaDaJanela: prep.audioFilesForaDaJanela,
+    transcriptionMap: lote.transcriptions,
+    janelaConversa: prep.janelaConversa,
+    ignoredFilesCount: prep.ignoredFilesCount,
+    ignoredFiles: prep.ignoredFiles,
+    audiosTotalNoZip: prep.audiosTotalNoZip,
+    audiosDescartadosPorJanela: prep.audiosDescartadosPorJanela,
+    metricsBase: prep.metricsBase,
+    existingTimeline: [],
+    previousAnalysis: null,
+    existingLeadId: null,
+    cerebroConfig
+  });
 }
 
