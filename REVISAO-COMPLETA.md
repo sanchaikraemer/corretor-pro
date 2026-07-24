@@ -30,7 +30,7 @@
 | index.html | 663 | concluído | lido por completo, sem bug — ver log |
 | styles.css | 2325 | concluído | lido por completo, sem bug — ver log |
 | build.js | 92 | concluído (v966) | guarda de API duplicada na raiz cobria só 5 de 12 arquivos — ver log |
-| js/proposta.js | 285 | pendente | |
+| js/proposta.js | 289 | concluído (v967) | 2 confirm() nativos que a varredura da v964 não pegou — ver log |
 | js/pwa-install.js | 115 | pendente | |
 | js/commercial-schema.js + js/dom.js + js/state.js | 27 | pendente | revisar junto (pequenos) |
 
@@ -584,6 +584,21 @@ guarda de verdade: duplica um dos 7 arquivos que ficavam desprotegidos na raiz, 
 Resto do arquivo (cópia dos assets pra `public/`, substituição de `__VERSION__`/`__BUILD_ID__`,
 empacotamento do JSZip local, verificação final "build só tem exatamente os arquivos
 esperados") lido por completo, sem outro bug — mecanismos de proteção bem pensados.
+
+### js/proposta.js (v967) — arquivo CONCLUÍDO (289 linhas)
+
+**Corrigido:** `propClear` (botão "Limpar" da tela de proposta) e `excluirPropostaTimeline`
+(excluir proposta do histórico do lead) usavam `confirm()` nativo — a varredura da v964
+converteu 10 usos em `app.js` mas não olhou este módulo separado (extraído de `app.js` na
+v848). Convertidos pro mesmo padrão `cp903Confirm`. `propClear` virou `async function` pra
+poder dar `await`. Ver `NOTAS-v967.md`.
+
+Resto do arquivo lido por completo, sem outro bug: `PROP_CAMPOS` (usado por
+`coletarPropostaData`/`aplicarPropostaData` pra salvar/reabrir proposta no lead) bate
+exatamente com os IDs reais dos campos em `index.html` (conferido campo a campo); todas as
+funções que cruzam pra `app.js` (`payloadComCerebro`, `show`, `abrirLead`,
+`invalidarLeadsCache`) usam `window.*` de propósito (evita o mesmo risco de split module/window
+já documentado várias vezes nesta revisão) e existem de fato do outro lado, sem duplicidade.
 
 ### api/analisar.js (v963) — arquivo CONCLUÍDO (138 linhas)
 

@@ -134,8 +134,12 @@ function propRender(){
   if(obs){ obsBox.style.display = "block"; qs("#pp-obs").textContent = obs; }
   else obsBox.style.display = "none";
 }
-function propClear(){
-  if(!confirm("Limpar todos os campos da proposta?")) return;
+async function propClear(){
+  const msgLimparProp = "Limpar todos os campos da proposta?";
+  const okLimparProp = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Limpar proposta", mensagem: msgLimparProp, ok: "Limpar", perigo: true })
+    : confirm(msgLimparProp);
+  if(!okLimparProp) return;
   const msgS = qs("#pf-salvo-msg"); if(msgS) msgS.style.display = "none";
   qsa("#propostas input, #propostas textarea").forEach(el=>{ el.value = ""; });
   if(qs("#pf-correcao")) qs("#pf-correcao").value = "";
@@ -265,7 +269,11 @@ window.registrarPropostaNoLead = registrarPropostaNoLead;
 // Exclui uma proposta (item da timeline) — pra tirar duplicadas/erradas.
 async function excluirPropostaTimeline(leadId, iso){
   if(!iso){ toast("Não consigo identificar essa proposta."); return; }
-  if(!confirm("Excluir esta proposta do histórico do lead?")) return;
+  const msgExcluirProp = "Excluir esta proposta do histórico do lead?";
+  const okExcluirProp = (typeof cp903Confirm === "function")
+    ? await cp903Confirm({ titulo: "Excluir proposta", mensagem: msgExcluirProp, ok: "Excluir", perigo: true })
+    : confirm(msgExcluirProp);
+  if(!okExcluirProp) return;
   try{
     const res = await fetch("./api/reanalisar-lead", {
       method:"POST", headers:{"Content-Type":"application/json"},
