@@ -205,7 +205,7 @@ export function _nomesMesmoLead(aId = "", bId = "") {
   return !!a && !!b && a === b;
 }
 
-function _assinaturaTimelineV681(m) {
+export function _assinaturaTimelineV681(m) {
   if (!m || typeof m !== "object") return "";
   if (m.mediaFile) return "audio|" + String(m.mediaFile).split(/[\\/]/).pop().toLowerCase().trim();
   const txt = String(m.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 220);
@@ -213,7 +213,7 @@ function _assinaturaTimelineV681(m) {
   return sig.replace(/\|/g, "") ? sig : "";
 }
 
-function _mesclarTimelinesV681(antiga, nova) {
+export function _mesclarTimelinesV681(antiga, nova) {
   const a0 = Array.isArray(antiga) ? antiga : [];
   const b = Array.isArray(nova) ? nova : [];
   // v900: uma "mensagem enviada" (type:"mensagem_enviada") é a SUGESTÃO copiada — apenas uma

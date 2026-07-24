@@ -7,7 +7,7 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { requireApiKey } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial,
@@ -769,11 +769,16 @@ async function acaoAtualizarComEvolucao(body, res) {
   // o trecho que só estava no arquivo antigo se perdia. Agora os dois se somam.
   const timelineAntiga = Array.isArray(current.timeline_json) ? current.timeline_json : [];
   const timelineNova = Array.isArray(result.timeline) ? result.timeline : [];
-  const { mescladas: novaTimeline, preservadasDoAntigo } = mesclarTimelines(timelineAntiga, timelineNova);
+  // v956: usa a mesma mescla de _persistence.js (_mesclarTimelinesV681), em vez da versão local
+  // mais simples que existia aqui — essa já resolve a v900 ("mensagem enviada" copiada/sugestão
+  // sendo substituída pela mensagem REAL do WhatsApp quando a reimportação a traz). Esse fluxo
+  // (atualizar-com-evolucao) é o caminho mais comum de reimportação de lead já existente; a
+  // versão local não tinha essa proteção, então o v900 não valia pra ele.
+  const { timeline: novaTimeline, preservadasDoAntigo } = _mesclarTimelinesV681(timelineAntiga, timelineNova);
 
   // Mensagens novas (as que NÃO estavam na conversa salva) = o que a IA usa pra avaliar o que mudou.
-  const chavesAntigas = new Set(timelineAntiga.map(assinaturaMsg));
-  const novasMensagens = timelineNova.filter(m => !chavesAntigas.has(assinaturaMsg(m)));
+  const chavesAntigas = new Set(timelineAntiga.map(_assinaturaTimelineV681));
+  const novasMensagens = timelineNova.filter(m => !chavesAntigas.has(_assinaturaTimelineV681(m)));
   const importId = String(body?.importId || "") || null;
   const consolidadaEm = new Date().toISOString();
   const importacaoPendente = {
@@ -1049,37 +1054,6 @@ async function acaoAtualizarComEvolucao(body, res) {
     persistedAt: persistedRow.atualizado_em || persistedRow.updated_at || concluidaEm,
     importIdConfirmado: persistedImportId || null
   });
-}
-
-// Junta duas timelines (a salva + a do novo arquivo) sem repetir mensagem e em ordem
-// cronológica. A mesma mensagem aparece igual nos dois exports (mesma data/hora/autor/texto),
-// então dá pra identificar o que é repetido. Áudio é identificado pelo arquivo (a transcrição
-// pode variar uma palavra entre exports). Devolve as mescladas e quantas só estavam na antiga.
-function assinaturaMsg(m) {
-  if (!m || typeof m !== "object") return "";
-  if (m.mediaFile) return "audio|" + String(m.mediaFile).toLowerCase().trim();
-  const txt = String(m.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 200);
-  const sig = [String(m.date || "").trim(), String(m.time || "").trim(), String(m.author || "").trim().toLowerCase(), txt].join("|");
-  return sig.replace(/\|/g, "") ? sig : ""; // assinatura vazia (mensagem degenerada) => nunca deduplica
-}
-
-function mesclarTimelines(antiga, nova) {
-  const a = Array.isArray(antiga) ? antiga : [];
-  const b = Array.isArray(nova) ? nova : [];
-  const vistos = new Set();
-  const out = [];
-  for (const m of [...a, ...b]) {
-    const k = assinaturaMsg(m);
-    if (k && vistos.has(k)) continue;
-    if (k) vistos.add(k);
-    out.push(m);
-  }
-  // Ordem cronológica (mesmo critério do pipeline). Reindexa id/order pra ficar sequencial.
-  out.sort((x, y) => String(x.iso || "").localeCompare(String(y.iso || "")) || Number(x.order || 0) - Number(y.order || 0));
-  out.forEach((m, i) => { if (m && typeof m === "object") { m.id = i + 1; m.order = i + 1; } });
-  const chavesNovas = new Set(b.map(assinaturaMsg));
-  const preservadasDoAntigo = a.filter(m => { const k = assinaturaMsg(m); return k && !chavesNovas.has(k); }).length;
-  return { mescladas: out, preservadasDoAntigo };
 }
 
 // ============ ETAPA ============
