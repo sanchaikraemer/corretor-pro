@@ -70,8 +70,8 @@ const storage = fs.readFileSync(new URL('../api/processar-storage.js', import.me
 const preparoInicio = storage.indexOf('if (action === "preparar")');
 const preparoFim = storage.indexOf('if (action === "transcrever")');
 const blocoPreparar = storage.slice(preparoInicio, preparoFim);
-assert.match(blocoPreparar, /_buscarProcessamentoExistenteV681\(supabase, \{ result: \{\}, fileName: nomeArquivoZip, path: storagePath \}\)/,
-  'ação preparar busca o lead correspondente só pelo nome do arquivo, sem result/analysis ainda');
+assert.match(blocoPreparar, /_buscarProcessamentoExistenteV681\(supabase, \{ result: \{\}, fileName: nomeArquivoZip, path: storagePath, ownerId: conta\.userId \}\)/,
+  'ação preparar busca o lead correspondente só pelo nome do arquivo (e da própria conta), sem result/analysis ainda');
 assert.match(blocoPreparar, /cacheDoLead/, 'passa o cache do lead anterior pra prepararExtracaoPersistente');
 
 // 8. Dentro da extração, o cache do lead é tentado ANTES do cache por hash de conteúdo (mais

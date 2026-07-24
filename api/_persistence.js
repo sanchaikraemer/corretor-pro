@@ -257,7 +257,7 @@ export function _mesclarTimelinesV681(antiga, nova) {
   return { timeline: out, novasUnicas, preservadasDoAntigo, substituidasPelaReal: a0.length - a.length, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
 }
 
-export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path }) {
+export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, ownerId = null }) {
   const analysis = result?.analysis || {};
   const lead = result?.lead || analysis?.lead || {};
   const nomeArquivoNovo = _cleanArquivoIdentity(fileName || result?.txtFile || path?.split("/").pop() || "");
@@ -267,11 +267,18 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
 
-  const { data, error } = await supabase
+  // v980: sem ownerId, a busca de "já existe" ficaria cega a dono e podia mesclar o
+  // reimport de uma conta com o registro de OUTRA conta que por coincidência tem o mesmo
+  // telefone/nome de arquivo — isso vazaria dado entre contas. Com contas ativadas, o
+  // filtro por owner_id é obrigatório aqui; ownerId=null só é aceito no modo de
+  // compatibilidade anterior às contas (chave única, sem dono nenhum ainda).
+  let query = supabase
     .from("whatsapp_processamentos")
-    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at,owner_id")
     .order("atualizado_em", { ascending: false })
     .limit(5000);
+  query = ownerId ? query.eq("owner_id", ownerId) : query;
+  const { data, error } = await query;
   if (error || !Array.isArray(data)) return null;
   for (const row of data) {
     const ra = row.resultado_analise || {};
@@ -346,16 +353,18 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   return _semScoreComercial(merged);
 }
 
-async function buscarAvatarAnterior(supabase, lead, analysis) {
+async function buscarAvatarAnterior(supabase, lead, analysis, ownerId = null) {
   try {
     const phone = String(lead?.phone || analysis?.lead?.phone || "").replace(/\D/g, "");
     const nomeNovo = _normNome(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || "");
     if (!phone && !nomeNovo) return "";
-    const { data } = await supabase
+    let query = supabase
       .from("whatsapp_processamentos")
       .select("resultado_analise, telefone, criado_em")
       .order("criado_em", { ascending: false })
       .limit(500);
+    query = ownerId ? query.eq("owner_id", ownerId) : query;
+    const { data } = await query;
     if (!Array.isArray(data)) return "";
     for (const r of data) {
       const ra = r.resultado_analise || {};
@@ -377,7 +386,8 @@ export async function persistProcessingResult({
   path = null,
   fileName = null,
   fileSize = null,
-  forceNew = false
+  forceNew = false,
+  ownerId = null
 }) {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -394,7 +404,7 @@ export async function persistProcessingResult({
   // Em uma criação explicitamente nova, nunca herda dados de outro registro com o mesmo nome.
   // Reaproveitamento de avatar continua disponível apenas nos fluxos legados que não pediram forceNew.
   if (!forceNew && analysis && !analysis.avatarFoto) {
-    const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis);
+    const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis, ownerId);
     if (fotoAnterior) analysis = { ...analysis, avatarFoto: fotoAnterior };
   }
 
@@ -403,7 +413,7 @@ export async function persistProcessingResult({
 
   const existenteV681 = forceNew
     ? null
-    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path });
+    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path, ownerId });
 
   const canonicalPayload = {
     nome_arquivo: nomeArquivo,
@@ -420,6 +430,7 @@ export async function persistProcessingResult({
     storage_bucket: bucket || "",
     storage_path: path || "",
     file_size: fileSize,
+    owner_id: ownerId,
     criado_em: result?.criadoEm || new Date().toISOString(),
     atualizado_em: new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -475,6 +486,7 @@ export async function persistProcessingResult({
         storage_bucket: bucket,
         storage_path: path,
         file_size: fileSize,
+        owner_id: ownerId,
         audios_encontrados: audiosEncontrados,
         audios_transcritos: audiosTranscritos,
         updated_at: new Date().toISOString()
@@ -507,6 +519,7 @@ export async function persistProcessingResult({
       observacoes: null,
       resultado_analise: analysis,
       timeline_json: timeline,
+      owner_id: ownerId,
       atualizado_em: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -541,6 +554,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   const includeFullTimeline = options?.includeFullTimeline === true;
   const requestedId = options?.id ? String(options.id) : "";
   const previewLimit = Math.min(20, Math.max(3, Number(options?.previewLimit || 8)));
+  const ownerId = options?.ownerId || null;
 
   // Evita trazer texto_extraido, storage e outros campos grandes que não entram na tela.
   // timeline_json ainda é lida no servidor para calcular dias, último falante e contagens,
@@ -551,6 +565,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       .from("whatsapp_processamentos")
       .select(colunas)
       .order(colunaData, { ascending: false });
+    // v980: com contas ativadas, ownerId é obrigatório na prática — sem ele, a lista
+    // devolveria conversas de TODAS as contas juntas. Só fica sem filtro nos ambientes
+    // legados (sem login ainda), onde owner_id nem existe nas linhas.
+    if (ownerId) q = q.eq("owner_id", ownerId);
     if (requestedId) q = q.eq("id", requestedId).limit(1);
     else q = q.limit(fetchLimit);
     return q;

@@ -1,4 +1,5 @@
 import { requireApiKey, getSupabaseAdmin, listRecentProcessings } from "./_persistence.js";
+import { requireAccount } from "./_auth.js";
 
 const CACHE_TTL_MS = 5000; // no máximo 5 s; sincronização entre celular e PC tem prioridade
 const responseCache = new Map();
@@ -139,6 +140,9 @@ async function auditarDados(req, res) {
   return json(res, 200, gerarAuditoriaDados(main.rows));
 }
 
+// auditarDados/exportarTudo enxergam TODAS as contas, de propósito — são ferramentas de
+// bastidor do administrador, não da carteira de um corretor específico. Com contas
+// ativadas, só o administrador pode chamá-las.
 async function exportarTudo(req, res) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
@@ -183,15 +187,23 @@ function json(res, status, payload) {
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Use GET." });
-  if (String(req.query?.audit || "") === "1") return auditarDados(req, res);
-  if (String(req.query?.export || "") === "full") return exportarTudo(req, res);
+  const conta = await requireAccount(req, res);
+  if (!conta) return;
+  if (String(req.query?.audit || "") === "1" || String(req.query?.export || "") === "full") {
+    if (!conta.isAdmin) return json(res, 403, { ok: false, error: "Só o administrador acessa esta ferramenta." });
+    if (String(req.query?.audit || "") === "1") return auditarDados(req, res);
+    return exportarTudo(req, res);
+  }
   const limit = Math.min(2000, Math.max(1, Number(req.query?.limit || 8)));
   const fresh = String(req.query?.fresh || "") === "1";
-  const cached = responseCache.get(limit);
+  // Cache separado POR CONTA — sem isso, a resposta guardada para um corretor podia ser
+  // servida de volta para outro que pedisse o mesmo "limit" dentro da mesma janela de 5s.
+  const cacheKey = `${conta.userId}:${limit}`;
+  const cached = responseCache.get(cacheKey);
   if (!fresh && cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
     return json(res, 200, cached.result);
   }
-  const result = await listRecentProcessings(limit, { previewLimit: 8 });
-  if (result.ok) responseCache.set(limit, { ts: Date.now(), result });
+  const result = await listRecentProcessings(limit, { previewLimit: 8, ownerId: conta.userId });
+  if (result.ok) responseCache.set(cacheKey, { ts: Date.now(), result });
   return json(res, result.ok ? 200 : 500, result);
 }
