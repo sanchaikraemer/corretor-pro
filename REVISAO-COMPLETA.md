@@ -45,7 +45,8 @@ pra sobreviver a uma possível compactação de contexto no meio do arquivo.
 | Bloco | Linhas | Status |
 |---|---|---|
 | 1 | 1–7750 | concluído (v964) — blocos 1+2+3 lidos juntos nesta passada; ver achados abaixo. Nada de novo achado em 5450–7750 (Agenda, Cérebro/Aprendizado, exportação Excel, fluxo de importação/Share Target — tudo consistente) |
-| 4 | 8100–10000 | pendente — continuar a partir da linha ~8100 (linhas 7751–8098 já lidas nesta mesma passada, sem achado novo; v965 corrigiu o regex de acento em 3711/7870/8356, dentro do trecho já concluído) |
+| 4 | 8100–9550 | concluído nesta passada, sem achado novo (Memória do lead, Carteira/tabela, exportação CSV/backup/auditoria, diagnóstico OpenAI, atalhos de teclado, cp786/cpFilaFazerAgora/probabilidade de fechamento) |
+| 5 | 9550–13169 | pendente — mas ver nota de verificação abaixo sobre `carregarPipeline`/`renderListasHome` antes de mexer nessa região |
 | 5 | 8001–10000 | pendente |
 | 6 | 10001–12000 | pendente |
 | 7 | 12001–13169 | pendente |
@@ -94,6 +95,31 @@ mesmo arquivo, conferir ao passar por essas linhas):
   específico do caso. Não corrigi: não dá pra saber se foi um `null` esquecido de um debug ou
   uma escolha consciente (ex.: o dono achou o insight script demais pra aparecer ali) — impacto
   baixo (caso raro, é cosmético, não perde dado nem informa errado), fica registrado.
+
+### Investigação: carregarPipeline / renderListasHome / renderResumoDia — VERIFICADO SEGURO
+
+Ao ler perto da linha 9400–9550, achei o MESMO padrão de `window.X=function(){}` dentro de IIFE
+reaproveitando nome já usado — o padrão do bug do `carregarGeladeira` (v952) — só que MUITO mais
+profundo: `carregarPipeline` é redefinida 4 vezes (linha ~3787 original, ~9506, ~12305, ~13118),
+`renderListasHome` 3 vezes (~2385, ~9448, ~13180), com uma MISTURA de chamadas soltas
+(`carregarPipeline()`) e qualificadas (`window.carregarPipeline()`) espalhadas pelo arquivo —
+exatamente a receita do bug antigo.
+
+**Investiguei a fundo antes de tocar em qualquer coisa** (rastreei todo call site de
+`carregarPipeline`) e a conclusão é: **não é bug**. Toda vez que uma dessas IIFEs faz
+`window.carregarPipeline = function(){...}`, a linha seguinte faz
+`try{ carregarPipeline = window.carregarPipeline; }catch(_){}` — resincroniza de propósito a
+variável de escopo do módulo com a propriedade de `window`. Confirmado nas 2 reatribuições de
+`carregarPipeline` (linhas ~12336 e ~13167) e na de `renderListasHome` (linha ~13203). Ou seja,
+depois do bug do `carregarGeladeira` (v952), o código passou a usar esse idioma de
+resincronização de propósito pra nunca mais cair nessa armadilha — parece uma correção
+consciente do próprio padrão, não um descuido. Não mexi em nada aqui.
+
+**Fica registrado só como referência**, pra qualquer sessão futura que esbarrar nesse mesmo
+padrão suspeito não perder tempo reinvestigando do zero — mas SEMPRE confirme se o
+`try{ nome = window.nome; }catch(_){}` de resincronização está presente antes de assumir que é
+seguro; se algum dia aparecer um `window.X = function(){}` SEM essa linha logo depois, aí sim é
+o bug de novo.
 
 ### v964 — 10 confirm() nativos → cp903Confirm + bug real no botão "Apagar tudo"
 
