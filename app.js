@@ -2442,6 +2442,8 @@ function renderListasHome(ordenados){
 // Ícone do WhatsApp (igual ao desenho — círculo verde com o glifo).
 const WA_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.7-.3-1.5-.6-2.1-1.5-.5-.6-.8-1.3-.9-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4 0-.1 0-.3 0-.4 0-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.7 4.2 3.7.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1 .1-1.2z"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>`;
+// v974 — raio do resumo de motivo na Home (Opção 4 escolhida pelo dono entre 4 prévias).
+const RAIO_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>`;
 // Uma linha da Fila inteligente (porte do layout-alvo). Reaproveita dados/cliques reais.
 function filaRowHTML(l, pos){
   const idJs = JSON.stringify(String(l.id||""));
@@ -2513,11 +2515,15 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   // classe cp-hoje-row, que testes de regressão travam como string exata.
   let motivo = '';
   try{ motivo = (typeof cpMotivoFechamento === 'function') ? cpMotivoFechamento(l) : ''; }catch(_){}
-  // v972 — achado do dono: quando vários leads no topo da fila batem os mesmos 2 primeiros
-  // fatores (proposta + cliente espera), a frase toda parece igual à primeira vista; o número que
-  // REALMENTE difere por lead (recorrência/perguntas) ganha negrito+sublinhado pra saltar aos olhos
-  // — cpMotivoFechamento em si não muda (texto travado pelo teste v946).
-  const motivoHtml = motivo ? escapeHtml(motivo).replace(/\d+/g, (n) => `<b>${n}</b>`) : '';
+  // v974 — Opção 4 escolhida pelo dono entre 4 prévias (a v972, frase inteira em negrito, ele
+  // achou "grande, desarmoniza"): mostra só a razão MAIS forte (o 1º pedaço de cpMotivoFechamento
+  // — ela já devolve as razões em ordem de importância, separadas por " · ") + quantas outras
+  // existem ("+N"). A frase completa não é perdida — vai pro title (aparece no toque/hover).
+  // cpMotivoFechamento não muda (texto travado pelo teste v946); isso só reaproveita o mesmo
+  // separador que ela já usa pra juntar as razões, sem duplicar a lógica de pontuação.
+  const motivoPartes = motivo ? motivo.split(' · ') : [];
+  const motivoResumo = motivoPartes[0] || '';
+  const motivoExtra = motivoPartes.length > 1 ? ` +${motivoPartes.length - 1}` : '';
   // v972 — achado do dono: o nº da barra de mensagens (ao lado) é o mais chamativo da linha mas
   // NÃO é a prioridade (ver aviso em cpBarraMensagensMini) — por isso pode "parecer maior" num
   // lead que está mais abaixo na lista. pos É a ordem real (cpFilaFazerAgora já ordenou por
@@ -2528,7 +2534,7 @@ function cpHomeLeadRow(l, pos, maxMsgs){
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`há ${escapeHtml(dias)}`:''}</span>
-    ${motivo?`<span class="chr-exp">${motivoHtml}</span>`:''}
+    ${motivo?`<span class="chr-exp" title="${escapeHtml(motivo)}">${RAIO_SVG}<span class="chr-exp-tx">${escapeHtml(motivoResumo)}${escapeHtml(motivoExtra)}</span></span>`:''}
   </button>`;
 }
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
@@ -2800,11 +2806,13 @@ function renderBotoesHome(){
       .cp-hoje-row .chr-dd{grid-area:dd;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
       /* v945 — ranking explicável: 2ª linha só quando há motivo real (data-exp), sem mudar a
          altura das linhas sem motivo. */
-      .cp-hoje-row .chr-exp{grid-area:exp;font-size:11.5px;font-weight:800;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      /* v972 — o dígito que varia por lead (recorrência/perguntas) sublinhado, pra não parecer
-         frase idêntica quando 2+ leads batem os mesmos fatores gerais. Cor continua --accent de
-         propósito (pedido explícito do dono na v949 — não repetir o erro da v948/cyan). */
-      .cp-hoje-row .chr-exp b{text-decoration:underline;text-underline-offset:2px}
+      /* v974 — Opção 4 escolhida pelo dono entre 4 prévias (supera o texto corrido em negrito da
+         v972, que ele achou "grande, desarmoniza a tela"): raio + resumo curto, cor --accent
+         continua de propósito (pedido explícito do dono na v949 — não repetir o erro da
+         v948/cyan), só com peso/tamanho bem mais leves que antes. */
+      .cp-hoje-row .chr-exp{grid-area:exp;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--accent);overflow:hidden;cursor:help}
+      .cp-hoje-row .chr-exp svg{flex:none}
+      .cp-hoje-row .chr-exp-tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row[data-exp="1"]{grid-template-rows:auto auto;row-gap:2px;grid-template-areas:"dot nm pr bar dd" "dot exp exp exp exp"}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
