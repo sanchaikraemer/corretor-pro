@@ -675,3 +675,63 @@ nova no futuro, não só este arquivo.
 
 Resto do arquivo (parser de multipart escrito à mão, decodificação de base64, validação de
 "análise completa") lido por completo, sem outro bug.
+
+## Resumo final — revisão CONCLUÍDA (2026-07-24)
+
+Todo arquivo do checklist (todo `api/*.js`, `app.js` inteiro — 13214 linhas, do início ao fim —,
+`service-worker.js`, `index.html`, `styles.css`, `build.js`, todo `js/*.js`) foi lido linha a
+linha. Nenhum arquivo ficou pendente.
+
+**Correções reais aplicadas (11 versões, v950–v968), cada uma com teste de regressão novo:**
+- v950/v951/v955: `_persistence.js`/`_pipeline.js` — regex de acento frágil, comentários
+  corrompidos, assinatura de timeline inconsistente entre arquivos.
+- v952: `carregarGeladeira` duplicada em `app.js` quebrava silenciosamente a paginação de
+  Arquivados (bug ao vivo real, não só código morto).
+- v956: `api/lead-update.js` — caminho mais comum de reimportação não tinha a proteção da v900
+  (mensagem real podia ser sobrescrita por sugestão antiga).
+- v957: `api/reanalisar-lead.js` — lembrete calculado a partir de mensagem podia nascer no dia
+  da semana errado por causa de fuso horário.
+- v958: `api/restaurar-leads.js` — 3 bugs (data serial do Excel nunca detectada, dedupe por
+  nome colapsando leads legítimos diferentes, Geladeira/Standby tratados como a mesma etapa).
+- v959: `api/limpar-tudo.js` — reset total não paginava o Storage, podia deixar arquivo pra trás
+  e reportar sucesso mesmo assim.
+- v960/v965: mesmo regex de acento frágil corrigido em `criar-upload-url.js` e (3 pontos) em
+  `app.js`, com guarda de regressão que cobre todo o projeto.
+- v961: `api/diagnostico.js` — diagnóstico podia dizer "análise funciona" com o modelo de
+  análise quebrado, só porque o teste de validação da chave passou.
+- v962: `api/leads-recentes.js` — auditoria de duplicidade subestimava o total; backup completo
+  não incluía a configuração do Cérebro.
+- v963: `api/analisar.js` — 🔴 única rota do projeto sem `requireApiKey` (endpoint público que
+  gastava crédito de OpenAI pra qualquer POST).
+- v964: 10 `confirm()` nativos em `app.js` convertidos pro modal `cp903Confirm` + bug real no
+  botão "Apagar tudo" (chave errada no body, nunca funcionava).
+- v966: `build.js` — guarda contra API duplicada na raiz protegia só 5 dos 12 arquivos reais de
+  `api/` (lista cravada, nunca atualizada conforme rotas novas foram criadas).
+- v967: mais 2 `confirm()` nativos em `js/proposta.js`, fora do alcance da varredura da v964.
+- v968: `js/dom.js` — `escapeHtml(null)` mostrava o texto literal "null" na tela; `toast()`
+  deixava um toast esconder o próximo antes da hora.
+
+**Achados grandes registrados, não corrigidos (decisão do dono, não bug técnico):**
+- Nomes de pessoas/empresa parceira cravados no código como heurística de classificação de
+  autor de mensagem (`_pipeline.js`, `app.js`, `lead-update.js`) — contraria a regra do
+  CLAUDE.md, mas mexer envolve migrar heurística de linguagem natural sem teste automatizado
+  cobrindo o caso. Ver detalhe completo na entrada de `_pipeline.js` (v955) acima.
+- Onboarding (`js/pwa-install.js`/`app.js`): banner existe e é ligado/desligado, mas nunca teve
+  conteúdo (texto/passos) escrito — decisão de produto, não bug.
+- Vários pontos de teto fixo de leitura no Supabase (`.limit(5000)` e similares, ~6 lugares
+  distintos) — escala, não bug funcional hoje.
+
+**Código morto documentado (dead-code cascade — comportamento ao vivo já está correto, versão
+mais nova de cada função é a que roda de verdade; limpeza física fica pra outra sessão):**
+`abrirVenda`/`marcarPerdido`/`arquivarLead`/`ui683MarcarEtapaRapida`,
+`abrirEditarLead`/`salvarEditarLead` (aqui a versão viva é a MELHOR, não a mais nova — reforçar
+a resincronização seria regressão), `iniciarSequenciaAtendimento` e função-irmãs (sem nenhum
+call site), CSS de 2 gerações antigas da tela Atendimentos.
+
+**Padrões verificados seguros** (mesmo formato suspeito do bug da v952, mas com resincronização
+presente): `carregarPipeline`/`renderListasHome`/`renderCarteiraTabela`/`setCarteiraFiltro` e as
+funções da IIFE "v683 fluxo diário" — documentado com aviso pra sessões futuras não assumirem
+segurança sem reconferir a linha de resincronização.
+
+Todas as correções: `npm test` verde, `NOTAS-vNNN.md` individual, commit + push na branch
+`claude/saas-real-estate-expert-q610re`. Nenhum merge/deploy pra `main` foi feito.
