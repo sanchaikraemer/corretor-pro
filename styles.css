@@ -461,6 +461,8 @@ details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-c
 .radar-nome{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .radar-prod{color:var(--muted);font-weight:600;font-size:12px}
 .radar-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.radar-bar{height:3px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
+.radar-bar i{display:block;height:100%;border-radius:99px}
 .radar-rec{flex:none;text-align:right;line-height:1.1}
 .radar-rec b{display:block;font-size:13px;font-weight:950}
 .radar-rec span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800}
