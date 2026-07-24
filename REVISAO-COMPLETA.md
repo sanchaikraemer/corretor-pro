@@ -15,7 +15,7 @@
 |---|---|---|---|
 | api/_persistence.js | 869 | concluído (v950) | camada de persistência — crítico. 1 fix aplicado + 2 achados registrados no log |
 | api/_pipeline.js | 3233 | concluído (v951 + v955) | motor de análise/IA — crítico. **Achado grande pendente de decisão: nomes de pessoas cravados no código, ver log** |
-| api/lead-update.js | 1748 | pendente | dividir em 2 blocos |
+| api/lead-update.js | 1722 | concluído (v956) | ver log — 1 fix grande (v900 faltando no caminho principal) + achados |
 | api/reanalisar-lead.js | 804 | pendente | |
 | api/cerebro-config.js | 378 | pendente | |
 | api/processar-storage.js | 370 | tocado pontualmente (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Ainda não foi lido linha a linha por completo |
@@ -146,3 +146,37 @@ detalhada de como migrar isso pro Cérebro configurado.
   (`assinaturaTimelineIncremental` vs `_assinaturaTimelineV681`) em arquivos diferentes — agora
   alinhadas pro caso de áudio, mas continuam duplicadas. Não unificado (mexeria em lógica
   central de merge dos dois lados do pipeline).
+
+### api/lead-update.js (v956) — arquivo CONCLUÍDO (1722 linhas)
+
+**Corrigido (v956, ver seção própria acima):** `acaoAtualizarComEvolucao` (o caminho mais comum
+de reimportação de lead já existente) não tinha a proteção da v900 (mensagem real substitui
+cópia da sugestão enviada) — agora usa a mesma função já testada de `_persistence.js`. Nessa
+mesma limpeza, uma TERCEIRA implementação de assinatura/mescla de timeline foi encontrada
+(`assinaturaMsg`/`mesclarTimelines`, agora removida) — ou seja, existiam 3 versões paralelas do
+mesmo conceito em 3 arquivos diferentes (`_persistence.js`, `_pipeline.js`, `lead-update.js`).
+Ficam 2 (a de `_pipeline.js`, usada só na etapa de análise pra decidir "mensagem nova", e a de
+`_persistence.js`, agora reaproveitada também aqui) — reforça o achado já registrado de que
+esse conceito devia ser unificado num só lugar algum dia.
+
+**Achado — informativo, não é bug, mas interage com a mudança da v954 desta mesma noite:**
+`acaoApagar` → `apagarStorageDosLeads` (linha ~1561): ao apagar um lead, se ele não tiver
+`_storageRefs.transcriptionCachePaths` registrado (leads de antes da v911, e TODO lead criado
+manualmente via `acaoCriarManual`/`acaoNovaOportunidadeParceiro`, que nunca passa pelo import
+de ZIP), o código **apaga a pasta inteira `transcription-cache/` do Storage** — compartilhada
+entre TODOS os clientes — não só os arquivos daquele lead. É proposital e documentado no
+próprio código (privacidade: sem rastro hash→lead nesses casos, a única forma seguve de
+garantir que não sobra transcrição com dado pessoal é limpar tudo). Efeito colateral: como
+praticamente todo lead manual dispara essa limpeza total, o cache de reaproveitamento de
+transcrição que a v954 (desta mesma noite) passou a depender tende a ser esvaziado com
+frequência sempre que o corretor apagar QUALQUER lead manual — mesmo um que nunca teve áudio.
+Não mexi nisso: é lógica de exclusão de dado pessoal, risco alto de mexer sem revisão humana.
+Se o dono quiser, dá pra restringir esse gatilho só a leads que realmente têm chance de ter
+áudio (ex.: pular quando `analysis?.origem` for `"manual"` ou `"oportunidade-parceiro"`), mas
+isso precisa de decisão consciente, não de um ciclo automatizado.
+
+**Achados menores:**
+- `removerVinculosComLeadsApagados` (linha ~1639): mais um `.limit(5000)` — quarto lugar com
+  esse padrão de teto fixo de leitura (ver achados da v950/v955).
+- Mais ocorrências do padrão de nomes hardcoded já registrado (linha ~1274, dentro de
+  `contarContatosV685`) — já contabilizado no achado grande da v955, sem repetir aqui.
