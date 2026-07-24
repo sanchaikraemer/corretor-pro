@@ -17,10 +17,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // 3) Quando 2+ leads do topo da fila batem os mesmos 2 fatores gerais (proposta + cliente
 //    espera), o motivo parecia frase idêntica. Correção NESTA versão: o número que REALMENTE
 //    varia por lead (recorrência/perguntas) ganha negrito+sublinhado — cpMotivoFechamento em si
-//    não muda (texto travado pelo teste v946). SUPERADO NA v974: o dono viu isso no ar e achou a
-//    frase inteira "grande, em negrito, desarmoniza a tela" — escolheu a Opção 4 (ícone + resumo
-//    curto, frase completa só no title) entre 4 prévias. Ver tests/v974-motivo-icone-resumo.test.mjs
-//    pro formato atual; os testes abaixo que checavam o negrito por dígito foram removidos daqui.
+//    não muda (texto travado pelo teste v946). SUPERADO NA v974 (ícone + resumo curto) e depois
+//    RETIRADO DE VEZ NA v975: o dono achou redundante com o briefing/análise que já existe dentro
+//    do lead e pediu pra tirar da Home. Ver tests/v975-motivo-so-no-lead.test.mjs. Os testes
+//    abaixo que checavam o negrito por dígito foram removidos daqui.
 // 4) Lista de produtos truncava no meio da palavra sem jeito de ver o texto completo. Correção:
 //    title com o texto completo no span chr-pr.
 //
@@ -39,10 +39,10 @@ const motivoSrc = extrai('cpMotivoFechamento');
 const rowSrc = extrai('cpHomeLeadRow');
 const barSrc = extrai('cpBarraMensagensMini');
 
-// 0. Os avisos anti-regressão existem no código-fonte (pra nenhuma sessão futura desfazer o
-// achado sem perceber o histórico).
+// 0. O aviso anti-regressão sobre cpBarraMensagensMini existe no código-fonte (pra nenhuma sessão
+// futura desfazer o achado sem perceber o histórico). O aviso equivalente sobre a cor --accent do
+// chr-exp deixou de fazer sentido na v975 (o elemento inteiro foi retirado da Home).
 assert.match(app, /não é, e nunca foi, a nota de prioridade/, 'aviso sobre cpBarraMensagensMini não ser prioridade está documentado');
-assert.match(app, /pedido explícito do dono na v949/, 'aviso sobre a cor --accent ser decisão do dono está documentado');
 
 // 1. Badge de posição: existe, usa a classe chr-rank, mostra "pos" + "º" e não depende de haver
 // motivo (aparece sempre, mesmo em lead sem nenhum fator de ranking).
