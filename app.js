@@ -2071,10 +2071,21 @@ function ehMsgDoCliente(m, primeiroNomeCliente){
   if(!autor || autor === "Sistema") return false;
   const autorNorm = autor.toLowerCase();
   const nomeNorm = String(primeiroNomeCliente || "").trim().toLowerCase();
+  // Nome do corretor vem do Cérebro (campo "Seu nome", configurado pelo próprio usuário) — não
+  // pode ficar cravado no código. O corte antigo só reconhecia EXATAMENTE "sanchai"/"miguel
+  // kirinus" (hardcoded); qualquer outro rótulo de autor do próprio corretor no export do
+  // WhatsApp caía no "qualquer outro autor é o cliente" logo abaixo, e uma mensagem do PRÓPRIO
+  // corretor virava "cliente esperando resposta" na fila de prioridade.
+  let corretorNorm = "";
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    corretorNorm = String(cfg?.corretorNome || "").trim().toLowerCase().split(/\s+/)[0] || "";
+  }catch(_){ }
+  const ehAutorCorretor = (corretorNorm && autorNorm.includes(corretorNorm)) || /^(sanchai|miguel\s+kirinus)$/i.test(autorNorm);
   // O nome do contato tem prioridade sobre palavras de profissão no próprio nome
-  // (ex.: "Anderson Ruviaro Corretor SM Gabro").
-  if(nomeNorm && autorNorm.includes(nomeNorm) && !/^(sanchai|miguel\s+kirinus)$/i.test(autorNorm)) return true;
-  if(BUSINESS_RE.test(autor)) return false;
+  // (ex.: "Anderson Ruviaro Corretor SM Gabro") — mas nunca sobre o autor ser o próprio corretor.
+  if(nomeNorm && autorNorm.includes(nomeNorm) && !ehAutorCorretor) return true;
+  if(ehAutorCorretor || BUSINESS_RE.test(autor)) return false;
   // Em conversa individual, qualquer outro participante real é o contato.
   return true;
 }
