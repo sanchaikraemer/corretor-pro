@@ -24,7 +24,7 @@
 | api/criar-upload-url.js | 228 | concluído (v960) | regex de acento corrigido + guarda de regressão nova — ver log |
 | api/diagnostico.js | 220 | concluído (v961) | analiseFunciona podia mascarar erro real — ver log |
 | api/leads-recentes.js | 188 | concluído (v962) | auditoria subestimava duplicidade + backup sem Cérebro — ver log |
-| api/analisar.js | 138 | pendente | |
+| api/analisar.js | 138 | concluído (v963) | 🔴 faltava requireApiKey — corrigido, ver log |
 | app.js | 13178 | pendente | dividir em blocos, respeitando limites de função. Tem o MESMO regex frágil de acento em pelo menos 5 pontos (linhas ~3703, ~7822, ~8299, e mais 2) — aplicar o mesmo fix de v950 |
 | service-worker.js | 244 | pendente | |
 | index.html | 661 | pendente | |
@@ -299,3 +299,21 @@ o outro com teto de 300 MB e só ZIP) e se sobrescrevem — o próximo cold star
 verdade via `.range()` em loop (mais cuidadoso que os outros arquivos revisados), mas ainda tem
 teto fixo de 20.000 linhas por tabela — mesma classe de achado de escala já registrada em vários
 outros arquivos, só que com teto mais alto e paginação real por baixo.
+
+### api/analisar.js (v963) — arquivo CONCLUÍDO (138 linhas)
+
+**🔴 Corrigido — segurança/custo real:** era a ÚNICA rota do projeto sem `requireApiKey`. Rodava
+o pipeline completo da OpenAI (transcrição + análise) pra qualquer POST não autenticado — já
+tinha sido achado e registrado em `NOTAS-v860.md` ("rota pública que gasta crédito") e adiado a
+pedido do dono na época; reapareceu de forma independente nesta revisão sistemática. Corrigido
+com o mesmo `requireApiKey` de todo o resto do projeto. Avaliei o risco de quebrar algum chamador
+externo (não achei nenhum uso de `/api/analisar` em `app.js`) — optei por corrigir dado o
+histórico (2ª vez encontrado) e o risco financeiro de deixar aberto; reverter é trivial se
+aparecer um chamador legítimo. Ver `NOTAS-v963.md`.
+
+**Novo:** guarda de regressão (`tests/v963-todas-rotas-exigem-api-key.test.mjs`) que varre TODO
+handler de rota em `api/` e falha se algum não chamar `requireApiKey` — protege qualquer rota
+nova no futuro, não só este arquivo.
+
+Resto do arquivo (parser de multipart escrito à mão, decodificação de base64, validação de
+"análise completa") lido por completo, sem outro bug.
