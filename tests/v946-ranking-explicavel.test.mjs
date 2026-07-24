@@ -43,6 +43,7 @@ const sandbox = `
   const ui670UltimaMensagemReal = (l) => l.__last || {m:null, falante:'desconhecido'};
   const escapeHtml = (s) => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const produtosLabel = (l) => l.product || '';
+  const produtosLabelCurto = (l) => l.product || '';
   const prioridadeAtendimento = (l) => ({ nivel: 0 });
   const cpBarraMensagensMini = (l, maxMsgs) => '<span class="chr-bar"></span>';
   const RAIO_SVG = '<svg class="raio-stub"></svg>';
