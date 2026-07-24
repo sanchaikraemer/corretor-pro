@@ -9,10 +9,14 @@ const publicDir = path.join(__dirname, "public");
 // Proteção estrutural: estes arquivos pertencem exclusivamente à pasta /api.
 // Se forem enviados para a raiz, o front pode ser atualizado enquanto a função
 // serverless real continua antiga, causando erros difíceis de diagnosticar.
-const apiDuplicadosNaRaiz = [
-  "_persistence.js", "_pipeline.js", "lead-update.js",
-  "processar-storage.js", "reanalisar-lead.js"
-].filter((file) => fs.existsSync(path.join(__dirname, file)));
+// Lista lida do próprio diretório /api (não hardcoded) pra nunca ficar desatualizada
+// conforme rotas novas são adicionadas — uma lista fixa já ficou pra trás do /api real
+// mais de uma vez nesta revisão.
+const apiDir = path.join(__dirname, "api");
+const apiFiles = fs.existsSync(apiDir)
+  ? fs.readdirSync(apiDir).filter((file) => file.endsWith(".js"))
+  : [];
+const apiDuplicadosNaRaiz = apiFiles.filter((file) => fs.existsSync(path.join(__dirname, file)));
 if (apiDuplicadosNaRaiz.length) {
   throw new Error(
     "Arquivos de API duplicados na raiz. Exclua: " +

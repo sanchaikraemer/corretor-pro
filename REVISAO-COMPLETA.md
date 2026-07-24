@@ -25,11 +25,11 @@
 | api/diagnostico.js | 220 | concluído (v961) | analiseFunciona podia mascarar erro real — ver log |
 | api/leads-recentes.js | 188 | concluído (v962) | auditoria subestimava duplicidade + backup sem Cérebro — ver log |
 | api/analisar.js | 138 | concluído (v963) | 🔴 faltava requireApiKey — corrigido, ver log |
-| app.js | 13169 | em andamento | dividir em blocos — ver sub-checklist logo abaixo desta tabela |
-| service-worker.js | 244 | pendente | |
-| index.html | 661 | pendente | |
-| styles.css | 2325 | pendente | dividir em 2 blocos |
-| build.js | 92 | pendente | |
+| app.js | 13214 | concluído (v964+v965) | lido linha a linha do início ao fim — ver sub-checklist e achados abaixo desta tabela |
+| service-worker.js | 244 | concluído | lido por completo, sem bug — ver log |
+| index.html | 663 | concluído | lido por completo, sem bug — ver log |
+| styles.css | 2325 | concluído | lido por completo, sem bug — ver log |
+| build.js | 92 | concluído (v966) | guarda de API duplicada na raiz cobria só 5 de 12 arquivos — ver log |
 | js/proposta.js | 285 | pendente | |
 | js/pwa-install.js | 115 | pendente | |
 | js/commercial-schema.js + js/dom.js + js/state.js | 27 | pendente | revisar junto (pequenos) |
@@ -45,11 +45,11 @@ pra sobreviver a uma possível compactação de contexto no meio do arquivo.
 | Bloco | Linhas | Status |
 |---|---|---|
 | 1 | 1–7750 | concluído (v964) — blocos 1+2+3 lidos juntos nesta passada; ver achados abaixo. Nada de novo achado em 5450–7750 (Agenda, Cérebro/Aprendizado, exportação Excel, fluxo de importação/Share Target — tudo consistente) |
-| 4 | 8100–9550 | concluído nesta passada, sem achado novo (Memória do lead, Carteira/tabela, exportação CSV/backup/auditoria, diagnóstico OpenAI, atalhos de teclado, cp786/cpFilaFazerAgora/probabilidade de fechamento) |
-| 5 | 9550–13169 | pendente — mas ver nota de verificação abaixo sobre `carregarPipeline`/`renderListasHome` antes de mexer nessa região |
-| 5 | 8001–10000 | pendente |
-| 6 | 10001–12000 | pendente |
-| 7 | 12001–13169 | pendente |
+| 4 | 7750–9550 | concluído nesta passada, sem achado novo (Memória do lead, Carteira/tabela, exportação CSV/backup/auditoria, diagnóstico OpenAI, atalhos de teclado, cp786/cpFilaFazerAgora/probabilidade de fechamento) |
+| 5 | 9550–11512 | concluído — regex de acento (v965); investigação `carregarPipeline`/`renderListasHome` (verificado seguro) e `abrirEditarLead`/`salvarEditarLead` (verificado seguro, dead code) documentadas acima |
+| 6 | 11512–13214 (fim do arquivo) | concluído — geladeira/busca arquivados, virtualização, cascata de reformas de tela "Atendimentos" (cp694→788), investigações `renderCarteiraTabela`/`setCarteiraFiltro`/demais funções do v683 (verificado seguro) e correção do achado antigo sobre `gruposHome.hoje` — tudo documentado acima |
+
+**app.js CONCLUÍDO — arquivo inteiro (13214 linhas) lido do início ao fim nesta revisão.**
 
 Achados já conhecidos ANTES de começar (registrados por outras revisões/achados cruzados neste
 mesmo arquivo, conferir ao passar por essas linhas):
@@ -69,22 +69,27 @@ mesmo arquivo, conferir ao passar por essas linhas):
   intermediário — `ui683MoverEtapaComEvento`, `abrirModalDesfecho` não-Final — é referenciado em
   mais algum lugar antes de apagar).
 - Dois `carregarPipeline` no arquivo, o de baixo (~linha 11874) sobrescreve o de cima (achado da
-  v860, NOTAS-v860.md) — mesma categoria de risco do bug do carregarGeladeira. Ainda não
-  verificado se o de cima é 100% morto ou se algum call site bare-identifier ainda o alcança —
-  conferir quando a leitura sequencial chegar perto dessa linha.
+  v860, NOTAS-v860.md) — mesma categoria de risco do bug do carregarGeladeira. **Verificado
+  seguro** (ver seção "Investigação: carregarPipeline" abaixo) — resincronização de propósito
+  presente, não é bug.
 
 ### Achados adicionais lendo linhas 3100–5450 (não corrigidos — ver motivo em cada um)
 
 - **`iniciarSequenciaAtendimento`/`proximoDaSequencia`/`sairDaSequencia`/`finalizarSequencia`
-  (linhas ~4707–4739) — feature "Atender em sequência" 100% órfã.** `state.gruposHome.hoje`
-  (usado pra montar a fila) nunca é populado em lugar nenhum — os grupos reais são
-  `"acao-hoje"`, `"retomar-cuidado"` etc. (ver `renderListasHome`), não `"hoje"`. MAS, mais
-  importante: `iniciarSequenciaAtendimento` não é chamada de NENHUM lugar (nem `onclick` em
-  app.js, nem em `index.html`) — não existe botão/entrada pra essa função. `state.sequencia`
-  nunca fica truthy em produção. Não corrigi porque consertar o `gruposHome.hoje` não
-  restauraria funcionalidade nenhuma (nada chama a função de qualquer forma) — parece resto de
-  um design anterior à fila "Fazer agora" (dose/`cpFilaFazerAgora`) atual. Se o dono quiser essa
-  navegação "1 lead por vez" de volta, precisa decidir ONDE entra o botão — não é fix técnico.
+  (linhas ~4707–4739) — feature "Atender em sequência" 100% órfã.** `iniciarSequenciaAtendimento`
+  não é chamada de NENHUM lugar (nem `onclick` em app.js, nem em `index.html`) — não existe
+  botão/entrada pra essa função, confirmado de novo ao concluir a leitura sequencial do arquivo
+  inteiro. `state.sequencia` nunca fica truthy em produção. Não corrigi porque não existe
+  nenhum jeito de disparar a função hoje — parece resto de um design anterior à fila "Fazer
+  agora" (dose/`cpFilaFazerAgora`) atual. Se o dono quiser essa navegação "1 lead por vez" de
+  volta, precisa decidir ONDE entra o botão — não é fix técnico.
+  **Correção a este achado:** a versão anterior deste registro dizia que `state.gruposHome.hoje`
+  "nunca é populado em lugar nenhum" — isso estava errado. A geração FINAL de `renderListasHome`
+  (linha ~13180, dentro da IIFE #788, a que realmente roda — confirmado ao ler o arquivo até o
+  fim) populada `state.gruposHome.hoje` sim (`hoje:[...grupos.respondeu,...grupos.agora]`,
+  linha ~13191) — só as gerações mais antigas dessa função (~2385/~9448) não tinham essa chave.
+  Não muda a conclusão: mesmo com `gruposHome.hoje` populado, a função que consumiria isso
+  segue sem nenhum call site — o achado real sempre foi a ausência de botão, não o dado.
 - **`cp704Insights` (linha ~5066) — `const obsFact=null;` hardcoded, nunca chama
   `cp707ObservationFacts(lead)`.** `cp704Situacao` (linha 4903) chama `cp707ObservationFacts`
   de verdade e usa `obsFact.situacao` quando bate o caso especial ("a esposa não aprovou a
@@ -120,6 +125,101 @@ padrão suspeito não perder tempo reinvestigando do zero — mas SEMPRE confirm
 `try{ nome = window.nome; }catch(_){}` de resincronização está presente antes de assumir que é
 seguro; se algum dia aparecer um `window.X = function(){}` SEM essa linha logo depois, aí sim é
 o bug de novo.
+
+### Investigação: abrirEditarLead / salvarEditarLead — VERIFICADO SEGURO (dead code, não é bug)
+
+Mesmo padrão suspeito do `carregarGeladeira`: `function abrirEditarLead(){}`/`function
+salvarEditarLead(){}` originais (linhas ~3925/~4331, com botão "Excluir este lead" e
+reanálise automática ao trocar produto) reatribuídas DUAS VEZES via `window.abrirEditarLead =
+function(){}`/`window.salvarEditarLead = function(){}` dentro de IIFEs depois (v685-1 ~11102,
+v685-ajustes ~11434) — SEM o `try{ nome = window.nome; }catch(_){}` de resincronização que
+salvou o caso `carregarPipeline`.
+
+Rastreei todo call site:
+- `cp715EditarLead` (linha 5157, chamada real do botão "Editar" da toolbar do lead, ao vivo —
+  `renderLeadFoco` linha 5250) faz chamada SOLTA `abrirEditarLead(...)` → sempre resolve pro
+  ORIGINAL (~3925), nunca pras versões novas. Confirmado: é o único call site alcançável.
+- `salvarEditarLead` só é chamado solto (linha 3981 dentro do original, e também dentro das
+  DUAS versões novas — linhas 11130 e 11464 — cada uma delas TAMBÉM chama `salvarEditarLead(...)`
+  sem `window.`) — ou seja, mesmo se algum dia o modal novo abrisse, o botão Salvar dele chamaria
+  o `salvarEditarLead` ORIGINAL do escopo do módulo, não o `window.salvarEditarLead` reatribuído.
+  `window.salvarEditarLead(...)` (com `window.`) não é chamado de lugar nenhum no arquivo inteiro.
+- O único call site que usa `window.abrirEditarLead(...)` (com `window.`) fica dentro de
+  `abrirEditorDoLeadAtual` (v685-ajustes-2, linha 11591), só disparado por clique num elemento
+  `#ui685AjustesEditQuick`/`#ui685AjustesEditAdmin`/`[data-action="editar-lead"]` — mas
+  **`injetarAjustesLead`/`injetarEstiloAjustes` (as funções que criariam esses elementos) nunca
+  são chamadas em lugar nenhum** (confirmado por grep no arquivo inteiro e em index.html) — o
+  próprio código deixa pista disso: comentário "Atualização #724-2: wrapper antigo de
+  renderLeadFoco removido" logo depois das duas definições. Sem o wrapper, `injetarAjustesLead`
+  ficou órfã — os elementos nunca existem no DOM, então `abrirEditorDoLeadAtual` sempre cai no
+  `if(!btn) return;` e o `window.abrirEditarLead(...)` dentro dela nunca roda.
+
+**Conclusão: as duas reatribuições `window.*` são código 100% morto/inalcançável — mesma
+categoria do achado `abrirVenda`/`marcarPerdido`/`arquivarLead` (não é bug ao vivo como o
+`carregarGeladeira`).** Diferente daquele caso, aqui NÃO faz sentido "restaurar" as versões
+novas: a versão que já roda de verdade (a original, ~3925/~4331) tem MAIS funcionalidade
+(botão de excluir lead + reanálise automática ao trocar produto) que as versões novas — a
+v685-ajustes inclusive se descreve no próprio comentário como "Escopo fechado: editar apenas
+Nome, Telefone e Produto", uma simplificação deliberada, não uma melhoria. "Corrigir" a
+resincronização faria a versão MAIS POBRE virar a que roda — seria regressão, não fix. Não
+mexido. Limpeza de código morto (remover as duas IIFEs v685-1/v685-ajustes/v685-ajustes-2
+inteiras) é possível no futuro, mas fora do escopo desta revisão (mesma lógica do achado
+`abrirVenda`).
+
+### Investigação: _processarDashboard / buildDesempenhoInsightsHTML / carteiraPassaFiltro / carteiraRowHTML / renderCarteiraTabela — VERIFICADO SEGURO
+
+Mesmo padrão suspeito, dentro e ao redor da IIFE "v683 fluxo diário" (linhas ~10717–10774) e da
+"Atualização #724-2" (~11760–11887). Rastreei cada uma via grep de todas as reatribuições:
+
+- `_processarDashboard`, `buildDesempenhoInsightsHTML`, `carteiraPassaFiltro`,
+  `carteiraRowHTML`: cada uma reatribuída de forma solta (`nome = function(){...}`) **exatamente
+  uma vez em todo o arquivo**, e a linha SEGUINTE, na mesma IIFE, sempre faz `window.nome = nome;`
+  — sincronização imediata, sem brecha. Seguras.
+- `renderCarteiraTabela`: mais complexa — 8 gerações no total (original ~8240; ~10759 com
+  `window.renderCarteiraTabela=renderCarteiraTabela` logo depois; ~11800 **sem** sync
+  imediato; ~12082, ~12287, ~12498, ~12645 e ~13075, essas 5 últimas todas
+  `window.renderCarteiraTabela=function(){}` seguidas de `try{ renderCarteiraTabela =
+  window.renderCarteiraTabela; }catch(_){}` na linha seguinte). Existe uma janela SEM
+  sincronização entre a geração de ~11800 e a resincronização de ~12097 — mas essa janela é só
+  DURANTE o carregamento síncrono do script (todo o corpo dessas IIFEs roda antes de qualquer
+  clique do usuário ser possível); confirmei que as 3 chamadas de `renderCarteiraTabela()` que
+  antecedem textualmente a linha 8240 (dentro de `carregarCarteira`/`setCarteiraFiltro`/
+  `carregarMaisCarteira`) só disparam em resposta a evento, nunca durante o carregamento do
+  módulo. Ao fim do carregamento (linha ~13079), as duas ligações (nome solto e `window.nome`)
+  já convergiram pra última geração — nenhum call site real (nem `onclick`, nem `addEventListener`
+  com closure, nem chamada solta dentro de função) consegue observar a geração intermediária.
+  Segura hoje, mas **frágil**: se uma edição futura remover o `try{...}catch(_){}` de
+  resincronização de qualquer uma das 5 últimas gerações, a lacuna de ~11800 deixa de se
+  autocorrigir. Mesma mesma categoria/aviso do achado já registrado pra `carregarPipeline`.
+- `carregarPipeline`: reconferido com números de linha exatos (não os "~" aproximados da
+  investigação anterior) — 5 gerações (original ~3787; ~9506 solta; ~11834 solta; ~12305 com
+  `window.` + resync ~12336; ~13118 com `window.` + resync ~13167, geração final). Único call
+  site "capturado por referência" (`qs("#pipelineRefresh")?.addEventListener("click",
+  carregarPipeline)`, linha 7961) mira um elemento que **não existe em `index.html`** — não é
+  bug vivo, é só mais um resto de código morto (`#pipelineRefresh` nunca existiu na tela atual).
+  Confirma a conclusão já registrada acima ("Investigação: carregarPipeline").
+
+Não mexi em nada — nenhuma das 5 tem bug ao vivo hoje.
+
+### Investigação: setCarteiraFiltro "esquece" o argumento de filtro — VERIFICADO SEGURO (não é bug)
+
+`setCarteiraFiltro(f)` original (linha 8228) respeitava o argumento `f` (filtro clicado nos
+chips "Todos/Agora/Reativar/Arquivados"). Encontrei 4 reatribuições depois (linhas ~11797,
+~12099, ~12299, ~12505, ~13080 — a última é a que vale) e a maioria **ignora o argumento por
+completo**, sempre fixando `state.carteiraFiltro = 'todos'` (ou nem setando nada, no caso da
+final). À primeira vista parece o mesmo bug de "esqueceram de propagar o parâmetro".
+
+Não é: rastreei cada `renderCarteiraTabela` pareada com cada geração de `setCarteiraFiltro` e
+nenhuma versão a partir da Atualização #724-2 (`cp694` em diante) desenha mais os chips de
+filtro no HTML — a tela "Atendimentos" virou uma lista única ordenada por prioridade
+(`cp694`/`cp695`/`cp696`/`cp697`) e por fim uma grade por dia da semana (`cp788`, a versão que
+roda hoje). Confirmei por grep que `state.carteiraFiltro` só é LIDO pelas gerações antigas de
+`renderCarteiraTabela` (linhas 8245/10763/11805, todas mortas pela mesma cadeia de
+resincronização já documentada) — a versão viva (`cp788RenderAtendimentos`) nunca lê
+`state.carteiraFiltro`. Sem UI de chips viva, não existe call site real de
+`setCarteiraFiltro('agora')`/`('reaquecer')`/etc. — o parâmetro nunca carrega valor útil que
+esteja sendo descartado. Faz parte da mesma reforma de tela que já apareceu nos outros achados
+"verificado seguro" desta sessão. Não mexido.
 
 ### v964 — 10 confirm() nativos → cp903Confirm + bug real no botão "Apagar tudo"
 
@@ -394,6 +494,96 @@ o outro com teto de 300 MB e só ZIP) e se sobrescrevem — o próximo cold star
 verdade via `.range()` em loop (mais cuidadoso que os outros arquivos revisados), mas ainda tem
 teto fixo de 20.000 linhas por tabela — mesma classe de achado de escala já registrada em vários
 outros arquivos, só que com teto mais alto e paginação real por baixo.
+
+### service-worker.js (arquivo CONCLUÍDO, 244 linhas — lido por completo, sem fix)
+
+Estratégias de cache bem pensadas e já comentadas no próprio código: HTML sempre network-first
+(pra sempre apontar pros assets `?v=NNN` mais novos), assets estáticos stale-while-revalidate
+(instantâneo, versionado por querystring — deploy novo = URL nova = cache miss automático),
+`/api/` nunca interceptado. Fluxo de Compartilhar (Share Target) salva o ZIP recebido no
+IndexedDB (fallback: Cache Storage), grava um `shareId` único por envio, e só redireciona pro
+app depois de TODOS os `await` de gravação terminarem — sem race condition entre o SW gravar e o
+app.js ler.
+
+Conferido especificamente por ser um padrão que já causou bug nesta revisão (chave de cache
+fixa vs. dinâmica, ver achados de `app.js`): `app.js` mantém sua PRÓPRIA cópia sincronizada de
+`shareIdbGet`/`shareCacheKey`/lista de chaves legadas (linhas ~7546-7696) que bate exatamente
+com o que este arquivo grava (`direciona-share`/`zips`, `/__direciona_shared_zip__/${shareId}`)
+— inclusive as chaves antigas sem `shareId` (de antes desse ID existir) continuam na lista de
+busca do app.js pra não perder ZIP de sessão compartilhada antes da migração. Consistente.
+
+**Achado trivial, não corrigido (zero impacto):** `ZIP_KEYS` (linha 4) é uma constante
+declarada e nunca lida em lugar nenhum do arquivo — resto de uma versão anterior do fluxo de
+Share Target que usava chave fixa (sem `shareId`) em vez da atual. Puramente cosmético (não
+afeta cache nem comportamento); não fiz limpeza porque não é bug e a convenção desta revisão é
+não gastar versão/commit só por remoção de código morto isolado, sem relação com um fix real.
+
+### index.html (arquivo CONCLUÍDO, 663 linhas — lido por completo, sem fix)
+
+Verifiquei especificamente o padrão de bug mais comum encontrado nesta revisão (nome que não
+bate entre onde é chamado e onde é definido): comparei TODOS os `data-target="..."` com os IDs
+reais de `<section class="screen">` e TODAS as funções chamadas via `onclick`/`onchange`/
+`oninput` contra suas definições em `app.js`/`js/*.js` (via grep, incluindo `js/proposta.js` —
+que é importado como módulo ES a partir de `app.js`, mesmo risco de "só ficou em escopo de
+módulo, nunca em `window`" já visto várias vezes em app.js). Zero nomes órfãos, zero `id`
+duplicado no arquivo inteiro.
+
+Único caso que parecia divergência (`data-target="geladeira"` no card do Menu, linha 583,
+enquanto a seção real é `id="perdidos"` e o item da barra lateral já usa
+`data-target="perdidos"`) **não é bug**: `show()` e `carregarTelaAtiva()` em app.js (linhas
+~687 e ~592-597) tratam "geladeira" como alias deliberado de "perdidos", com comentário
+explícito no código contando a história (era um bug de tela em branco, corrigido antes desta
+revisão). Confirmado lendo os dois pontos de tratamento antes de registrar como achado — não
+era.
+
+### styles.css (arquivo CONCLUÍDO, 2325 linhas — lido por completo, sem fix)
+
+CSS não tem o risco de "split-brain" que motivou boa parte dos achados em app.js (regra
+`window.X=function(){}` sem resincronizar `X` do escopo do módulo): numa folha de estilo, a
+ÚLTIMA regra com a mesma especificidade sempre vence, pra QUALQUER consumidor — não existe
+call site "solto" vendo uma versão e outro vendo outra. Confirmado que o arquivo é
+estruturalmente válido: chaves `{`/`}` balanceadas (script de verificação, profundidade final
+0), nenhum bloco `@media` malformado.
+
+Verificação cruzada com o que já foi lido em `app.js`/`index.html`: nenhum seletor referencia um
+`id`/classe que não existe nem uma variável CSS não definida.
+
+**Achado, não corrigido (puramente cosmético, zero impacto funcional):** CSS morto de DUAS
+gerações anteriores da tela "Atendimentos" (mesmo padrão de redesenho iterativo já documentado
+em app.js, aqui sem nenhum risco por ser CSS):
+- Geração 1 (comentário "Atualização #788", linha ~2153): `.cp788-att-list`, `.cp788-att-row`,
+  `.cp788-att-copy`, `.cp788-att-time`, `.cp788-att-chevron`, `.cp788-att-more` — layout de
+  lista cronológica simples.
+- Geração 2 (comentário "v867", linha ~2180): `.cp788-att-layout`, `.cp788-att-main`,
+  `.cp788-att-side`, `.cp788-meta-card`, `.cp788-meta-title`, `.cp788-meta-count`,
+  `.cp788-meta-status`, `.cp788-meta-breakdown`, `.cp788-bd-row` — layout de 2 colunas com
+  prédio da meta ao lado.
+
+Confirmado por grep em `app.js` que NENHUMA dessas classes é gerada em lugar nenhum — a versão
+que realmente roda hoje (comentário "v910", linha ~2199: `.cp788-days`/`.cp788-day`/etc., grade
+por dia da semana) é a única usada por `cp788RenderAtendimentos` (ver achados de app.js). Regra
+CSS que não casa com elemento nenhum simplesmente nunca se aplica — não interfere em nada, não
+foi removida (limpeza isolada de CSS morto não justifica versão/commit própria nesta revisão,
+mesmo critério já usado pros outros achados de código morto).
+
+### build.js (v966) — arquivo CONCLUÍDO (92 linhas)
+
+**Corrigido — proteção estrutural furada por atualização silenciosa:** a guarda "bloqueia o
+build se algum arquivo de `api/` for duplicado na raiz" (protege contra o front publicar
+código que não bate com a função serverless real) usava uma lista de nomes cravada no código,
+escrita quando `api/` tinha só 5 arquivos. Hoje `api/` tem 12 — os outros 7
+(`analisar.js`, `cerebro-config.js`, `criar-upload-url.js`, `diagnostico.js`,
+`leads-recentes.js`, `limpar-tudo.js`, `restaurar-leads.js`, todos adicionados em versões
+posteriores) não tinham NENHUMA proteção contra esse tipo de duplicata. Corrigido pra ler
+`api/` de verdade via `fs.readdirSync` em vez de lista fixa — nunca mais fica pra trás. Ver
+`NOTAS-v966.md`. Novo teste (`tests/v966-build-guarda-api-raiz-dinamica.test.mjs`) EXERCITA a
+guarda de verdade: duplica um dos 7 arquivos que ficavam desprotegidos na raiz, roda
+`build.js` como processo filho, confirma que falha com a mensagem certa, remove o arquivo no
+`finally`.
+
+Resto do arquivo (cópia dos assets pra `public/`, substituição de `__VERSION__`/`__BUILD_ID__`,
+empacotamento do JSZip local, verificação final "build só tem exatamente os arquivos
+esperados") lido por completo, sem outro bug — mecanismos de proteção bem pensados.
 
 ### api/analisar.js (v963) — arquivo CONCLUÍDO (138 linhas)
 
