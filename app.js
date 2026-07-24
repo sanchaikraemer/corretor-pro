@@ -2442,8 +2442,6 @@ function renderListasHome(ordenados){
 // Ícone do WhatsApp (igual ao desenho — círculo verde com o glifo).
 const WA_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.7-.3-1.5-.6-2.1-1.5-.5-.6-.8-1.3-.9-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4 0-.1 0-.3 0-.4 0-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.7 4.2 3.7.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1 .1-1.2z"/></svg>`;
 const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>`;
-// v974 — raio do resumo de motivo na Home (Opção 4 escolhida pelo dono entre 4 prévias).
-const RAIO_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>`;
 // Uma linha da Fila inteligente (porte do layout-alvo). Reaproveita dados/cliques reais.
 function filaRowHTML(l, pos){
   const idJs = JSON.stringify(String(l.id||""));
@@ -2510,31 +2508,21 @@ function cpHomeLeadRow(l, pos, maxMsgs){
     ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
     : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
   const prod = (typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || '');
-  // Ranking explicável: por que este lead está nesta posição da fila (v945) — só aparece quando
-  // há um motivo real (nunca inventa); usa um atributo à parte (data-exp) em vez de mexer na
-  // classe cp-hoje-row, que testes de regressão travam como string exata.
-  let motivo = '';
-  try{ motivo = (typeof cpMotivoFechamento === 'function') ? cpMotivoFechamento(l) : ''; }catch(_){}
-  // v974 — Opção 4 escolhida pelo dono entre 4 prévias (a v972, frase inteira em negrito, ele
-  // achou "grande, desarmoniza"): mostra só a razão MAIS forte (o 1º pedaço de cpMotivoFechamento
-  // — ela já devolve as razões em ordem de importância, separadas por " · ") + quantas outras
-  // existem ("+N"). A frase completa não é perdida — vai pro title (aparece no toque/hover).
-  // cpMotivoFechamento não muda (texto travado pelo teste v946); isso só reaproveita o mesmo
-  // separador que ela já usa pra juntar as razões, sem duplicar a lógica de pontuação.
-  const motivoPartes = motivo ? motivo.split(' · ') : [];
-  const motivoResumo = motivoPartes[0] || '';
-  const motivoExtra = motivoPartes.length > 1 ? ` +${motivoPartes.length - 1}` : '';
+  // v975 — pedido do dono: a linha da Home NÃO mostra mais o motivo do ranking (v945/946, depois
+  // reformatado em v972/v974). Ele achou redundante — a mesma explicação já mora dentro do lead
+  // (renderLeadFoco/cp704-motivo, que continua existindo, intocado) e repeti-la resumida aqui só
+  // poluía a tela sem ajudar a decidir nada. cpMotivoFechamento continua existindo e sendo usada
+  // ali dentro — só parou de ser chamada AQUI.
   // v972 — achado do dono: o nº da barra de mensagens (ao lado) é o mais chamativo da linha mas
   // NÃO é a prioridade (ver aviso em cpBarraMensagensMini) — por isso pode "parecer maior" num
   // lead que está mais abaixo na lista. pos É a ordem real (cpFilaFazerAgora já ordenou por
   // cpProbabilidadeFechamento); o badge chr-rank dá um número que nunca contradiz a posição.
-  return `<button type="button" class="cp-hoje-row" ${motivo?'data-exp="1"':''} onclick='abrirLead(${idJs})'>
+  return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
     <span class="chr-dot" style="background:${dotCor}"></span>
     <span class="chr-nm"><b class="chr-rank" title="Prioridade ${pos} de hoje — vale a ORDEM da lista, não o número da barra ao lado">${pos}º</b> ${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`há ${escapeHtml(dias)}`:''}</span>
-    ${motivo?`<span class="chr-exp" title="${escapeHtml(motivo)}">${RAIO_SVG}<span class="chr-exp-tx">${escapeHtml(motivoResumo)}${escapeHtml(motivoExtra)}</span></span>`:''}
   </button>`;
 }
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
@@ -2804,16 +2792,9 @@ function renderBotoesHome(){
       .cp-hoje-row .chr-track i{display:block;height:100%;border-radius:999px}
       .cp-hoje-row .chr-bar b{font-size:11px;font-weight:900;min-width:20px;text-align:right}
       .cp-hoje-row .chr-dd{grid-area:dd;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
-      /* v945 — ranking explicável: 2ª linha só quando há motivo real (data-exp), sem mudar a
-         altura das linhas sem motivo. */
-      /* v974 — Opção 4 escolhida pelo dono entre 4 prévias (supera o texto corrido em negrito da
-         v972, que ele achou "grande, desarmoniza a tela"): raio + resumo curto, cor --accent
-         continua de propósito (pedido explícito do dono na v949 — não repetir o erro da
-         v948/cyan), só com peso/tamanho bem mais leves que antes. */
-      .cp-hoje-row .chr-exp{grid-area:exp;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--accent);overflow:hidden;cursor:help}
-      .cp-hoje-row .chr-exp svg{flex:none}
-      .cp-hoje-row .chr-exp-tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .cp-hoje-row[data-exp="1"]{grid-template-rows:auto auto;row-gap:2px;grid-template-areas:"dot nm pr bar dd" "dot exp exp exp exp"}
+      /* v945 introduziu uma 2ª linha (data-exp) pro motivo do ranking, reformatada em v972/v974 —
+         v975 tirou o motivo da Home de vez (pedido do dono: já existe dentro do lead, repetir
+         aqui só poluía). Linha voltou a ser sempre de 1 linha só; sem essas regras. */
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
@@ -2828,7 +2809,6 @@ function renderBotoesHome(){
         .cp-hoje-row .chr-track{width:96px}
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
-        .cp-hoje-row[data-exp="1"]{grid-template-areas:"dot nm dd" "dot bar pr" "dot exp exp"}
       }
     </style>
     <div class="home-saud">
