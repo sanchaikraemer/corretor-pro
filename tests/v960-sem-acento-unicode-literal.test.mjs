@@ -9,12 +9,13 @@ import assert from 'node:assert/strict';
 // erro de sintaxe. Guarda de regressão: nenhum dos arquivos já corrigidos pode voltar a ter o
 // caractere combinante literal no código-fonte.
 //
-// app.js tem o mesmo padrão em pelo menos 5 pontos (ver REVISAO-COMPLETA.md, tarefa pendente) —
-// deliberadamente FORA desta lista até a revisão chegar lá; incluir junto quando for corrigido.
+// v965 — app.js tinha o mesmo padrão em exatamente 3 pontos (normalizarEtapa, semAcento,
+// _normpc) — corrigido e incluído aqui.
 const ARQUIVOS_JA_CORRIGIDOS = [
   '../api/_persistence.js',
   '../api/_pipeline.js',
-  '../api/criar-upload-url.js'
+  '../api/criar-upload-url.js',
+  '../app.js'
 ];
 
 // Mesma faixa de caracteres combinantes construída via \u (não literal) — detecta o mesmo bug

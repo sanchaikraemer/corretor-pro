@@ -45,15 +45,16 @@ pra sobreviver a uma possível compactação de contexto no meio do arquivo.
 | Bloco | Linhas | Status |
 |---|---|---|
 | 1 | 1–7750 | concluído (v964) — blocos 1+2+3 lidos juntos nesta passada; ver achados abaixo. Nada de novo achado em 5450–7750 (Agenda, Cérebro/Aprendizado, exportação Excel, fluxo de importação/Share Target — tudo consistente) |
-| 4 | 7751–8000 | pendente — continuar a partir daqui |
+| 4 | 8100–10000 | pendente — continuar a partir da linha ~8100 (linhas 7751–8098 já lidas nesta mesma passada, sem achado novo; v965 corrigiu o regex de acento em 3711/7870/8356, dentro do trecho já concluído) |
 | 5 | 8001–10000 | pendente |
 | 6 | 10001–12000 | pendente |
 | 7 | 12001–13169 | pendente |
 
 Achados já conhecidos ANTES de começar (registrados por outras revisões/achados cruzados neste
 mesmo arquivo, conferir ao passar por essas linhas):
-- Regex frágil de acento (mesmo padrão de v950/v951/v960) em pelo menos 5 pontos: ~3703, ~7822,
-  ~8299, e mais 2 a localizar. **Ainda pendente** (não confirmado/corrigido na v964).
+- Regex frágil de acento (mesmo padrão de v950/v951/v960): **corrigido na v965** — eram
+  exatamente 3 pontos (`normalizarEtapa`, `semAcento`, `_normpc`), não "pelo menos 5" como a
+  estimativa inicial sugeria. `app.js` entrou na guarda de regressão `v960-sem-acento-unicode-literal`.
 - Nomes de pessoas hardcoded (achado grande da v955, ver seção `_pipeline.js`): confirmado
   presente também aqui, linhas 2053/2076 (`BUSINESS_RE`, `ehMsgDoCliente`) — mesmo achado grande,
   não repetir contagem, já registrado como pendente de decisão do dono.

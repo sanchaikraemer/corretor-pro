@@ -3708,7 +3708,7 @@ const ETAPAS_PRINCIPAIS = ["Novo", "Atendimento", "Visita/Proposta", "Negociaç�
 const ETAPAS_OCULTAS = ["Standby", "Geladeira", "Perdido", "Vendido"];
 
 function normalizarEtapa(raw){
-  const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   if(/vendido|venda concluida|venda fechada/.test(s)) return "Vendido";
   if(/perdido|desistiu|recusou/.test(s)) return "Perdido";
   if(/geladeira|arquivad/.test(s)) return "Geladeira";
@@ -7867,7 +7867,7 @@ document.addEventListener("click", (e) => {
   }
 });
 // Normaliza pra busca: minúsculo e SEM acento (buscar "joao" acha "João" e vice-versa).
-function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim(); }
 window.semAcento = semAcento;
 // Lead arquivado (arquivo morto / Perdido) ou na geladeira NÃO aparece na busca —
 // fica só na tela dedicada (arquivo morto). Busca é pra leads ativos.
@@ -8353,7 +8353,7 @@ async function exportarLeadsCSV(btn){
       const objections = Array.isArray(a.objections) ? a.objections.slice(0,5) : [];
       const pontosSensiveis = String(mem.pontosSensiveis||"").split(/[·\n;]+/).map(s=>s.trim()).filter(Boolean);
       const pesaContraArr = [];
-      const _normpc = t => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+      const _normpc = t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
       [...objections, ...pontosSensiveis].forEach(t => {
         if(!pesaContraArr.some(x => _normpc(x) === _normpc(t))) pesaContraArr.push(t);
       });
