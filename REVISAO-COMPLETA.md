@@ -44,9 +44,8 @@ pra sobreviver a uma possível compactação de contexto no meio do arquivo.
 
 | Bloco | Linhas | Status |
 |---|---|---|
-| 1 | 1–2000 | concluído (v964) — ver achados abaixo |
-| 2 | 2001–4000 | parcial — 2001–3100 já lido nesta mesma passada (junto do bloco 1); retomar a partir de ~3100 |
-| 3 | 4001–6000 | pendente |
+| 1 | 1–5450 | concluído (v964) — blocos 1+2 lidos juntos nesta passada; ver achados abaixo |
+| 3 | 5451–6000 | pendente |
 | 4 | 6001–8000 | pendente |
 | 5 | 8001–10000 | pendente |
 | 6 | 10001–12000 | pendente |
@@ -72,6 +71,29 @@ mesmo arquivo, conferir ao passar por essas linhas):
   v860, NOTAS-v860.md) — mesma categoria de risco do bug do carregarGeladeira. Ainda não
   verificado se o de cima é 100% morto ou se algum call site bare-identifier ainda o alcança —
   conferir quando a leitura sequencial chegar perto dessa linha.
+
+### Achados adicionais lendo linhas 3100–5450 (não corrigidos — ver motivo em cada um)
+
+- **`iniciarSequenciaAtendimento`/`proximoDaSequencia`/`sairDaSequencia`/`finalizarSequencia`
+  (linhas ~4707–4739) — feature "Atender em sequência" 100% órfã.** `state.gruposHome.hoje`
+  (usado pra montar a fila) nunca é populado em lugar nenhum — os grupos reais são
+  `"acao-hoje"`, `"retomar-cuidado"` etc. (ver `renderListasHome`), não `"hoje"`. MAS, mais
+  importante: `iniciarSequenciaAtendimento` não é chamada de NENHUM lugar (nem `onclick` em
+  app.js, nem em `index.html`) — não existe botão/entrada pra essa função. `state.sequencia`
+  nunca fica truthy em produção. Não corrigi porque consertar o `gruposHome.hoje` não
+  restauraria funcionalidade nenhuma (nada chama a função de qualquer forma) — parece resto de
+  um design anterior à fila "Fazer agora" (dose/`cpFilaFazerAgora`) atual. Se o dono quiser essa
+  navegação "1 lead por vez" de volta, precisa decidir ONDE entra o botão — não é fix técnico.
+- **`cp704Insights` (linha ~5066) — `const obsFact=null;` hardcoded, nunca chama
+  `cp707ObservationFacts(lead)`.** `cp704Situacao` (linha 4903) chama `cp707ObservationFacts`
+  de verdade e usa `obsFact.situacao` quando bate o caso especial ("a esposa não aprovou a
+  compra"). `cp704Insights` deveria (pelo padrão do resto da função) usar os
+  `obsFact.insight1/2/3` correspondentes nesse mesmo caso, mas está travado em `null` — cai
+  sempre no caminho genérico. Resultado: nesse caso raro e específico, a "Situação" do card
+  mostra "Em decisão" (correto) mas os "Insights" mostram texto genérico em vez do insight
+  específico do caso. Não corrigi: não dá pra saber se foi um `null` esquecido de um debug ou
+  uma escolha consciente (ex.: o dono achou o insight script demais pra aparecer ali) — impacto
+  baixo (caso raro, é cosmético, não perde dado nem informa errado), fica registrado.
 
 ### v964 — 10 confirm() nativos → cp903Confirm + bug real no botão "Apagar tudo"
 
