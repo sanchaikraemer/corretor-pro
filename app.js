@@ -2778,7 +2778,7 @@ function renderBotoesHome(){
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
       /* Desktop: 1 linha (dot · nome · produto · barra · dias) via grid-areas. */
-      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,1.3fr) 116px 42px;grid-template-areas:"dot nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,1.3fr) 144px 42px;grid-template-areas:"dot nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
       .cp-hoje-row:last-child{border-bottom:0}
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
       .cp-hoje-row .chr-dot{grid-area:dot;width:8px;height:8px;border-radius:50%}
@@ -2788,7 +2788,11 @@ function renderBotoesHome(){
       .cp-hoje-row .chr-rank{display:inline-block;min-width:15px;margin-right:2px;color:var(--muted);font-weight:900;font-size:.9em}
       .cp-hoje-row .chr-pr{grid-area:pr;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row .chr-bar{grid-area:bar;display:flex;align-items:center;gap:8px;justify-content:flex-end}
-      .cp-hoje-row .chr-track{width:64px;height:7px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;flex:0 0 auto}
+      /* v976 — pedido do dono: só a barra mais COMPRIDA (64px→92px desktop, 96px→130px mobile);
+         o número ao lado (chr-bar b) fica do mesmo tamanho de sempre, de propósito — ele pediu
+         explicitamente "não é maior a fonte". Coluna "bar" do grid (116px→144px) cresceu junto
+         pra caber a barra maior sem espremer o número. */
+      .cp-hoje-row .chr-track{width:92px;height:7px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;flex:0 0 auto}
       .cp-hoje-row .chr-track i{display:block;height:100%;border-radius:999px}
       .cp-hoje-row .chr-bar b{font-size:11px;font-weight:900;min-width:20px;text-align:right}
       .cp-hoje-row .chr-dd{grid-area:dd;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
@@ -2806,7 +2810,7 @@ function renderBotoesHome(){
         .cp-hoje-row .chr-dot{align-self:center}
         .cp-hoje-row .chr-nm{font-size:14.5px}
         .cp-hoje-row .chr-bar{justify-self:start;gap:9px}
-        .cp-hoje-row .chr-track{width:96px}
+        .cp-hoje-row .chr-track{width:130px}
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
       }
