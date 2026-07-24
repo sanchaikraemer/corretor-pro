@@ -2483,12 +2483,15 @@ function cpBarraMensagensMini(l, maxMsgs){
   const n = (typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0;
   const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
   // v973 — pedido do dono: barra em gradiente, não mais cor chapada. Os 3 níveis/limiares de
-  // "cor" continuam os mesmos de sempre (intocados, travados pelo teste v942) — só ganharam um
-  // tom mais claro do MESMO nível como segunda parada do gradiente.
-  const corClara = n >= 15 ? '#ffb3ac' : n >= 5 ? '#ffd0cc' : '#c7ced2';
+  // "cor" continuam os mesmos de sempre (intocados, travados pelo teste v942).
+  // v977 — pedido do dono: gradiente vira branco → cor (Opção B, escolhida entre 3 prévias:
+  // coral→coral-claro da v973, azul-claro→coral, branco→coral). Branco fixo (#F7FAFB, o mesmo
+  // tom do texto do app, --text) — não é um tom mais claro do nível (v973/corClara, removido);
+  // harmoniza melhor no fundo escuro, segundo o dono.
+  const BRANCO_GRADIENTE = '#F7FAFB';
   const teto = Math.max(1, Number(maxMsgs) || 1);
   const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
-  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${cor} 40%,${corClara})"></i></span><b style="color:${cor}">${n}</b></span>`;
+  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
 }
 // Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
 // produto, barra de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a
