@@ -16,7 +16,9 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-const aplicar = app.match(/function ui667AplicarAtendidoLocal\(lead, quando, dataBR, horaBR\)\{[\s\S]*?\n\}/);
+// v980: ganhou um 5º parâmetro opcional (detalhes) pra permitir marcar atendimento também ao
+// salvar observação, não só pelo botão — mantendo o padrão { tipo, de } já usado no evento.
+const aplicar = app.match(/function ui667AplicarAtendidoLocal\(lead, quando, dataBR, horaBR, detalhes[^)]*\)\{[\s\S]*?\n\}/);
 const remover = app.match(/function ui667RemoverAtendidoLocal\(lead\)\{[\s\S]*?\n\}/);
 const reconciliar = app.match(/function ui667ReconciliarAtendimentoLocal\(leadId, aplicarFn\)\{[\s\S]*?\n\}/);
 assert.ok(aplicar && remover && reconciliar, 'não achei ui667AplicarAtendidoLocal/ui667RemoverAtendidoLocal/ui667ReconciliarAtendimentoLocal em app.js');

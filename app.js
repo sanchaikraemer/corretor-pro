@@ -3536,8 +3536,9 @@ function renderSaudacao(items){
   // fila ranqueada), não o backlog inteiro. Cabeçalho laranja e card mostram o mesmo número.
   // v907: "atendidos hoje" conta IGUAL à Meta do dia — todo lead atendido hoje, INCLUSIVE o que
   // você arquivou depois (antes o filtro leadEhAtivo tirava o arquivado e a home dava menos que a Meta).
-  let tratadosHoje = 0;
-  for(const l of items){ if(ehContatadoHoje(l)) tratadosHoje++; }
+  // v980 — essa intenção da v907 nunca foi replicada em cpAtendidosHojeTotal (usada pela dose e
+  // por outras telas); agora as duas usam a MESMA função, então não têm mais como divergir.
+  const tratadosHoje = cpAtendidosHojeTotal(items);
   const acaoMostrada = cpFazerAgoraDose(items);
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   const title = qs("#homePageTitle");
@@ -9264,9 +9265,17 @@ function cpMotivoFechamento(l){
 // aqui). Sem lista travada, sem localStorage, sem depender de quando o app foi atualizado —
 // atender qualquer lead hoje faz esse número cair na hora, em qualquer aparelho, sempre.
 function cpAtendidosHojeTotal(items){
-  const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
+  // v980 — o comentário da v907 (algumas linhas abaixo, em renderSaudacao) já dizia que
+  // "atendidos hoje" devia contar TODO lead atendido hoje, INCLUSIVE o que foi arquivado
+  // depois — mas esta função continuava filtrando por leadEhAtivo, então um lead atendido e
+  // arquivado no mesmo dia sumia da conta aqui (Home/dose) enquanto a tela Atendimentos
+  // (cp788RenderAtendimentos, sem esse filtro) continuava contando — números diferentes ao
+  // mesmo tempo (relato do dono: 11 na Home, 12 nos Atendimentos). Sem o filtro, e usando a
+  // base COMPLETA (todos os leads, não só os ativos que o chamador às vezes já filtrou antes
+  // de passar pra cá) sempre que ela já estiver carregada.
+  const base = (Array.isArray(state?.todosLeads) && state.todosLeads.length) ? state.todosLeads : items;
   let n = 0;
-  for(const l of ativos) if(ehContatadoHoje(l)) n++;
+  for(const l of (Array.isArray(base) ? base : [])) if(ehContatadoHoje(l)) n++;
   return n;
 }
 // Dose do dia (o número do card "Fazer agora"): meta de 10 menos quem já foi atendido hoje.
@@ -9671,13 +9680,13 @@ function ui667ModoDetalheLead(ativo){
 }
 window.ui667ModoDetalheLead=ui667ModoDetalheLead;
 
-function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR){
+function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR, detalhes = {tipo:"Atendido",de:"botao_atendido"}){
   if(!lead) return;
   lead.analysis=lead.analysis||{};
   lead.analysis.aprendizado=lead.analysis.aprendizado||{};
   const eventos=Array.isArray(lead.analysis.aprendizado.eventos)?lead.analysis.aprendizado.eventos:[];
-  if(!eventos.some(e=>e?.evento==="contato_manual"&&e?.detalhes?.de==="botao_atendido"&&e?.quando===quando)){
-    eventos.push({evento:"contato_manual",estilo:null,detalhes:{tipo:"Atendido",de:"botao_atendido"},quando});
+  if(!eventos.some(e=>e?.evento==="contato_manual"&&e?.detalhes?.de===detalhes.de&&e?.quando===quando)){
+    eventos.push({evento:"contato_manual",estilo:null,detalhes,quando});
   }
   lead.analysis.aprendizado.eventos=eventos;
   lead.lastAttendanceAt=quando;
@@ -10573,6 +10582,14 @@ window.cp7ObsSalvar = async function(btn){
         item.analysis=item.analysis||{};
         item.analysis.memoria={...(item.analysis.memoria||{}),...(data.memoria||{})};
       }
+    }
+    // Pedido do dono: salvar observação marca o lead como atendido — mesmo patch local já
+    // usado pelo botão "Marcar atendimento" (ui667AplicarAtendidoLocal), pra refletir na
+    // hora sem esperar o próximo recarregamento da lista.
+    if(data.item?.iso){
+      const detalhesObs = {tipo:"Observação",de:"observacao_manual"};
+      ui667AplicarAtendidoLocal(lead, data.item.iso, data.item.date, data.item.time, detalhesObs);
+      ui667ReconciliarAtendimentoLocal(lead.id, (item) => ui667AplicarAtendidoLocal(item, data.item.iso, data.item.date, data.item.time, detalhesObs));
     }
     if(ta) ta.value="";
     renderLeadFoco(lead);

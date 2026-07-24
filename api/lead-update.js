@@ -1219,7 +1219,20 @@ async function acaoObservacaoAdicionar(id, body, res) {
     manualAtualizadoEm:iso,
     atualizadoEm:iso
   };
-  const merged = { ...analysis, memoria, _atualizadoEm:iso };
+  // Pedido do dono: salvar observação marca o lead como atendido, igual já acontece no botão
+  // "Marcar atendimento" (detalhes.de:"botao_atendido") e ao copiar mensagem (de:"copiar_msg")
+  // em api/reanalisar-lead.js. Mesmo evento contato_manual, mesma fila que ultimoAtendimentoTs
+  // (app.js) já lê — sem isso, salvar uma observação não contava como ter atendido o cliente.
+  const aprendizadoAnterior = analysis.aprendizado || {};
+  const eventosAnteriores = Array.isArray(aprendizadoAnterior.eventos) ? [...aprendizadoAnterior.eventos] : [];
+  eventosAnteriores.push({
+    evento: "contato_manual",
+    estilo: null,
+    detalhes: { tipo: "Observação", de: "observacao_manual" },
+    quando: iso
+  });
+  const aprendizado = { ...aprendizadoAnterior, eventos: eventosAnteriores.slice(-50) };
+  const merged = { ...analysis, memoria, aprendizado, _atualizadoEm:iso };
   const { error:putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise:merged, timeline_json:timeline, atualizado_em:iso })
