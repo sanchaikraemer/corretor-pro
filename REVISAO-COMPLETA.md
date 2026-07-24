@@ -31,7 +31,7 @@
 | styles.css | 2325 | concluído | lido por completo, sem bug — ver log |
 | build.js | 92 | concluído (v966) | guarda de API duplicada na raiz cobria só 5 de 12 arquivos — ver log |
 | js/proposta.js | 289 | concluído (v967) | 2 confirm() nativos que a varredura da v964 não pegou — ver log |
-| js/pwa-install.js | 115 | pendente | |
+| js/pwa-install.js | 116 | concluído | sem fix de código — achado de conteúdo faltando (onboarding), ver log |
 | js/commercial-schema.js + js/dom.js + js/state.js | 27 | pendente | revisar junto (pequenos) |
 
 Testes (`tests/*.test.mjs`) ficam fora da varredura linha a linha — só são tocados quando uma
@@ -599,6 +599,36 @@ exatamente com os IDs reais dos campos em `index.html` (conferido campo a campo)
 funções que cruzam pra `app.js` (`payloadComCerebro`, `show`, `abrirLead`,
 `invalidarLeadsCache`) usam `window.*` de propósito (evita o mesmo risco de split module/window
 já documentado várias vezes nesta revisão) e existem de fato do outro lado, sem duplicidade.
+
+### js/pwa-install.js (arquivo CONCLUÍDO, 116 linhas — lido por completo, sem fix)
+
+Lógica de instalação PWA (`beforeinstallprompt`, detecção iOS/Safari, banner "Baixar app")
+correta e bem defendida contra timing: o convite pode ser capturado cedo pelo script inline do
+`index.html` (antes deste módulo carregar, já que `app.js` fica no fim do `<body>`) — este
+arquivo lê `window.__deferredInstallPrompt` tanto no carregamento quanto via evento customizado
+`direciona-install-ready`, cobrindo os dois casos (eu quase levantei isso como achado, mas o
+comentário do próprio código já documenta exatamente esse cuidado, e confirmei que os DOIS
+caminhos realmente convergem). Todos os `qs("#id")?.addEventListener(...)` de instalação
+(`#btnInstalarApp`, `#bannerInstalarBtn/Fechar/Web`) miram elementos ESTÁTICOS que já existem no
+HTML no momento em que este módulo carrega — sem risco.
+
+**Achado, não corrigido (falta conteúdo, não é bug de código):** o banner de **onboarding**
+(`#bannerOnboarding`) é só um `<div hidden></div>` VAZIO em `index.html` (linha 141) — nunca
+recebe `innerHTML` em lugar nenhum do projeto inteiro (confirmado por grep em `app.js`,
+`index.html`, `styles.css` e todo `js/`). `app.js` (linha ~3638) só alterna o `display` desse
+container vazio conforme a regra ("1 a 4 leads, ainda não dispensado, ou aberto via Menu") — mas
+não tem título, texto nem botões pra mostrar. Os dois botões que este arquivo tenta ligar,
+`#bannerOnboardingFechar`/`#bannerOnboardingOk` (linhas 99-100), não existem em lugar nenhum —
+os `addEventListener` sempre operam sobre `null` (protegido por `?.`, não quebra nada, só nunca
+funciona). `window.abrirOnboarding` (linha 106, comentário diz "abrir de novo pelo Menu") também
+não é chamada de nenhum botão/menu real. Efeito prático: como a div fica sem conteúdo nem
+padding/borda própria, ela colapsa pra altura zero — o corretor provavelmente NUNCA percebe
+nada na tela (não é um bug visível), mas o "ritual de boas-vindas" pretendido nunca chegou a
+ser escrito. Diferente do banner de instalar (`#bannerInstalar`), que tem HTML completo
+estático (ícone, texto, botões) em `index.html` — o onboarding ficou só como esqueleto. Não
+inventei o conteúdo (texto/passos do "ritual diário") porque é decisão de produto, não bug
+técnico — fica registrado pro dono decidir se quer esse onboarding de volta e o que ele deve
+dizer.
 
 ### api/analisar.js (v963) — arquivo CONCLUÍDO (138 linhas)
 
