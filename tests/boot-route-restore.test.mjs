@@ -8,7 +8,12 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-const boot = app.slice(app.indexOf('async function iniciarDireciona'), app.indexOf('requestAnimationFrame(iniciarDireciona)'));
+// v980: o disparo direto de "requestAnimationFrame(iniciarDireciona)" virou
+// "requestAnimationFrame(() => { iniciarPortaoDeAcesso(iniciarDireciona)..." — o boot só
+// chama iniciarDireciona depois que o portão de acesso (login por conta) libera. Atualiza
+// o marcador de fim do recorte, senão o slice() com indexOf(-1) silenciosamente cresce até
+// quase o fim do arquivo inteiro e o teste passa sem checar nada de específico.
+const boot = app.slice(app.indexOf('async function iniciarDireciona'), app.indexOf('requestAnimationFrame(() => { iniciarPortaoDeAcesso'));
 assert.ok(boot, 'não encontrei a função de boot iniciarDireciona');
 
 assert.match(boot, /history\.state/, 'o boot precisa ler history.state para restaurar a rota');

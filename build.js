@@ -50,11 +50,13 @@ try {
 const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
   "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png",
-  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js",
+  "js/auth.js"
 ];
 const textFiles = new Set([
   "index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js",
-  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js",
+  "js/auth.js"
 ]);
 
 for (const file of files) {
@@ -72,14 +74,20 @@ for (const file of files) {
   }
 }
 
-// Dependência do navegador empacotada localmente: sem CDN e sem execução remota.
+// Dependências do navegador empacotadas localmente: sem CDN e sem execução remota.
 const vendorDir = path.join(publicDir, "vendor");
 fs.mkdirSync(vendorDir, { recursive: true });
 const jsZipSrc = path.join(__dirname, "node_modules", "jszip", "dist", "jszip.min.js");
 if (!fs.existsSync(jsZipSrc)) throw new Error("JSZip não instalado. Execute npm install antes do build.");
 fs.copyFileSync(jsZipSrc, path.join(vendorDir, "jszip.min.js"));
 
-const expected = [...files, "vendor/jszip.min.js"].sort();
+// Cliente do Supabase (login/conta de cada corretor) — mesmo motivo do JSZip acima: vendorizado
+// localmente para não depender de CDN nem abrir exceção na política de segurança (CSP) do site.
+const supabaseJsSrc = path.join(__dirname, "node_modules", "@supabase", "supabase-js", "dist", "umd", "supabase.js");
+if (!fs.existsSync(supabaseJsSrc)) throw new Error("@supabase/supabase-js não instalado. Execute npm install antes do build.");
+fs.copyFileSync(supabaseJsSrc, path.join(vendorDir, "supabase.js"));
+
+const expected = [...files, "vendor/jszip.min.js", "vendor/supabase.js"].sort();
 const actual = [];
 function walk(dir, prefix = "") {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

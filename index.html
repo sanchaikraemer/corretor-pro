@@ -69,6 +69,42 @@
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
 
+<div id="cpAuthGate" class="cp-auth-gate" style="display:none" aria-hidden="true">
+  <div class="cp-auth-card">
+    <div class="cp-auth-brand">Corretor <span style="color:#FF6258">Pro</span></div>
+    <div class="cp-auth-tabs">
+      <button type="button" class="cp-auth-tab active" data-auth-tab="login">Entrar</button>
+      <button type="button" class="cp-auth-tab" data-auth-tab="cadastro">Criar conta</button>
+    </div>
+
+    <div id="cpAuthMsgErro" class="cp-auth-msg cp-auth-msg-erro" style="display:none"></div>
+    <div id="cpAuthMsgOk" class="cp-auth-msg cp-auth-msg-ok" style="display:none"></div>
+
+    <form id="cpAuthPanelLogin" class="cp-auth-panel">
+      <label for="cpAuthLoginEmail">E-mail</label>
+      <input id="cpAuthLoginEmail" type="email" autocomplete="username" required>
+      <label for="cpAuthLoginSenha">Senha</label>
+      <input id="cpAuthLoginSenha" type="password" autocomplete="current-password" required>
+      <button type="submit" class="btn" id="cpAuthBtnLogin">Entrar no Corretor Pro</button>
+    </form>
+
+    <form id="cpAuthPanelCadastro" class="cp-auth-panel" style="display:none">
+      <label for="cpAuthCadNome">Seu nome</label>
+      <input id="cpAuthCadNome" type="text" autocomplete="name" required>
+      <label for="cpAuthCadEmail">E-mail</label>
+      <input id="cpAuthCadEmail" type="email" autocomplete="username" required>
+      <label for="cpAuthCadSenha">Senha</label>
+      <input id="cpAuthCadSenha" type="password" autocomplete="new-password" required>
+      <button type="submit" class="btn" id="cpAuthBtnCadastro">Criar conta e iniciar teste de 7 dias</button>
+    </form>
+
+    <div id="cpAuthBloqueado" class="cp-auth-bloqueado" style="display:none">
+      <p id="cpAuthBloqueadoMsg"></p>
+      <a id="cpAuthWhats" class="btn secondary" href="#" target="_blank" rel="noopener">Falar no WhatsApp para liberar</a>
+    </div>
+  </div>
+</div>
+
 <main class="app">
   <aside class="sidebar">
     <div class="sb-brand go" data-target="home" style="cursor:pointer" aria-label="Corretor Pro — ir para Hoje">
@@ -592,6 +628,12 @@
           <button type="button" class="menu-card" id="btnInstalarApp" style="display:none">
             <div class="menu-card-ico">↓</div><div class="menu-card-txt"><div class="menu-card-titulo">Instalar app</div><div class="menu-card-desc">Instale o Corretor Pro no seu dispositivo.</div></div><div class="menu-card-seta">›</div>
           </button>
+          <button type="button" class="menu-card go" id="btnAdminContas" data-target="adminContas" style="display:none">
+            <div class="menu-card-ico">◈</div><div class="menu-card-txt"><div class="menu-card-titulo">Administrar contas</div><div class="menu-card-desc">Ver quem está cadastrado, liberar ou bloquear acesso.</div></div><div class="menu-card-seta">›</div>
+          </button>
+          <button type="button" class="menu-card" onclick="sairDaContaCorretorPro()">
+            <div class="menu-card-ico">⏻</div><div class="menu-card-txt"><div class="menu-card-titulo">Sair da conta</div><div class="menu-card-desc">Encerra sua sessão neste aparelho.</div></div><div class="menu-card-seta">›</div>
+          </button>
         </div>
         <div class="small" id="instalarDica" style="margin-top:10px;color:var(--muted);display:none">Pra instalar manualmente: toque no menu do navegador (⋮) e em <b>"Adicionar à tela inicial"</b> ou <b>"Instalar app"</b>.</div>
       </div>
@@ -639,6 +681,17 @@
       </div>
       <div class="small" style="text-align:center;color:var(--muted);opacity:.6;margin-top:4px">Corretor Pro · Atualização #__VERSION__ · __BUILD_ID__</div>
     </section>
+
+    <section id="adminContas" class="screen">
+      <button type="button" class="go" data-target="menu" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer;margin-bottom:10px">‹ Voltar</button>
+      <div class="card">
+        <div class="label">Administrar contas</div>
+        <h2 class="title">Quem está usando o Corretor Pro</h2>
+        <p class="small" style="color:var(--muted);margin-bottom:14px">Teste grátis de 7 dias a partir do cadastro. Depois disso, o acesso fica bloqueado até você liberar aqui — combinado o pagamento por fora, do seu jeito.</p>
+        <button class="btn secondary" type="button" onclick="cpCarregarAdminContas()" style="width:auto;padding:10px 18px;margin-bottom:14px">Atualizar lista</button>
+        <div id="adminContasLista"></div>
+      </div>
+    </section>
   </div>
   </div>
 </main>
@@ -657,6 +710,7 @@
 <button type="button" id="btnVoltarTopo" title="Voltar ao topo" aria-label="Voltar ao topo" style="position:fixed;bottom:80px;right:18px;width:46px;height:46px;border-radius:50%;background:rgba(11,16,24,.92);color:var(--lime);border:1px solid var(--lime);font-size:20px;font-weight:950;cursor:pointer;z-index:998;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(255,98,88,.18);backdrop-filter:blur(6px);transition:transform .2s,opacity .2s">↑</button>
 
 <script src="/vendor/jszip.min.js?v=__VERSION__"></script>
+<script src="/vendor/supabase.js?v=__VERSION__"></script>
 <script type="module" src="/app.js?v=__VERSION__"></script>
 </body>
 </html>

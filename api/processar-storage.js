@@ -1,4 +1,5 @@
 import { requireApiKey, _buscarProcessamentoExistenteV681 } from "./_persistence.js";
+import { requireAccount, requireDonoDoRegistro } from "./_auth.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import {
@@ -213,6 +214,8 @@ async function removerImportacao(storage, manifest, manifestPath, storagePath) {
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST para processar um ZIP do Storage." });
+  const conta = await requireAccount(req, res);
+  if (!conta) return;
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -253,7 +256,7 @@ export default async function handler(req, res) {
       // áudios já feitos nesse MESMO cliente; não decide fusão de cadastro (isso continua
       // acontecendo depois, na análise/persistência, do jeito que já era).
       const nomeArquivoZip = storagePath.split("/").pop() || "";
-      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath }).catch(() => null);
+      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath, ownerId: conta.userId }).catch(() => null);
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
       const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead });
       return json(res, 200, {
@@ -311,6 +314,7 @@ export default async function handler(req, res) {
     if (action === "analisar") {
       let existingTimeline = Array.isArray(body?.existingTimeline) ? body.existingTimeline : [];
       const existingLeadId = body?.existingLeadId ? String(body.existingLeadId) : "";
+      if (existingLeadId && !(await requireDonoDoRegistro(supabase, "whatsapp_processamentos", existingLeadId, conta, res))) return;
       if (existingLeadId && !existingTimeline.length) {
         const { data: anterior, error: anteriorError } = await supabase.from("whatsapp_processamentos").select("timeline_json").eq("id", existingLeadId).maybeSingle();
         if (anteriorError) throw new Error(`Não consegui recuperar o histórico anterior: ${anteriorError.message}`);

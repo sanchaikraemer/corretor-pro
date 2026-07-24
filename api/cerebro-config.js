@@ -1,4 +1,5 @@
 import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
+import { requireAccount } from "./_auth.js";
 import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
@@ -95,35 +96,45 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-async function loadConfig(supabase) {
-  // Tenta ler da tabela direciona_config (chave/valor) se existir.
-  const { data, error } = await supabase
-    .from("direciona_config")
-    .select("valor")
-    .eq("chave", CONFIG_KEY)
-    .maybeSingle();
+async function loadConfig(supabase, ownerId = null) {
+  // Tenta ler da tabela direciona_config (chave/valor) se existir. Com contas ativadas,
+  // cada dono tem sua PRÓPRIA linha para a mesma chave — sem ownerId (modo antigo, sem
+  // login) cai na linha sem dono, do jeito que já funcionava antes das contas existirem.
+  let query = supabase.from("direciona_config").select("valor").eq("chave", CONFIG_KEY);
+  query = ownerId ? query.eq("owner_id", ownerId) : query.is("owner_id", null);
+  const { data, error } = await query.maybeSingle();
   if (error) return { found: false, error: error.message };
   if (!data?.valor) return { found: false, defaults: true };
   return { found: true, valor: sanitizeCerebroConfig(data.valor) };
 }
 
-async function saveConfig(supabase, valor) {
+async function saveConfig(supabase, valor, ownerId = null) {
   const { error } = await supabase
     .from("direciona_config")
-    .upsert({ chave: CONFIG_KEY, valor, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+    .upsert(
+      { chave: CONFIG_KEY, valor, owner_id: ownerId, atualizado_em: new Date().toISOString() },
+      { onConflict: "chave,owner_id" }
+    );
   return { error };
 }
 
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
+  const conta = await requireAccount(req, res);
+  if (!conta) return;
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
   if (req.method === "GET") {
-    const r = await loadConfig(supabase);
+    const r = await loadConfig(supabase, conta.userId);
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
+    // TODO (v981+): obterStatusAprendizadoAutomatico e o restante do aprendizado automático
+    // (aprender-carteira, processar-aprendizado-pendente) ainda leem/gravam sem filtrar por
+    // conta — funcionam hoje porque só existe uma conta de verdade em uso. Antes de liberar
+    // a segunda conta de teste pra valer, esse pedaço precisa da mesma revisão que o Cérebro
+    // principal já recebeu aqui.
     const aprendizadoAutomatico = await obterStatusAprendizadoAutomatico().catch(() => ({ ativo: true, versao: 2, totalCasos: 0, historicosProcessados: 0 }));
     return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico });
   }
@@ -138,7 +149,7 @@ export default async function handler(req, res) {
     // Não chama a IA, não altera o Cérebro e não ativa o uso automático do aprendizado.
     if (body.action === "exportar-aprendizado") {
       try {
-        const atual = await loadConfig(supabase);
+        const atual = await loadConfig(supabase, conta.userId);
         const config = atual?.valor && typeof atual.valor === "object" ? atual.valor : { ...DEFAULTS };
         const exportacao = await obterExportacaoAprendizado(config.inteligenciaAprendida || {}, config);
         return json(res, 200, { ok: true, exportacao });
@@ -210,10 +221,10 @@ export default async function handler(req, res) {
     // AÇÃO v808: apaga tanto as categorias legadas quanto os casos estruturados.
     // O Cérebro manual (método/tom/regras digitadas) permanece intacto.
     if (body.action === "limpar-aprendizado-completo") {
-      const atual = await loadConfig(supabase);
+      const atual = await loadConfig(supabase, conta.userId);
       const base = (atual?.valor && typeof atual.valor === "object") ? atual.valor : { ...DEFAULTS };
       base.inteligenciaAprendida = {};
-      const salvoLegado = await saveConfig(supabase, base);
+      const salvoLegado = await saveConfig(supabase, base, conta.userId);
       const apagadoMeta = await supabase.from("direciona_config").delete().eq("chave", "corretor-memoria-comercial-v2");
       const apagadosCasos = await supabase.from("direciona_config").delete().like("chave", "corretor-memoria-caso-v2:%");
       const apagadosPendentes = await supabase.from("direciona_config").delete().like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
@@ -330,17 +341,17 @@ export default async function handler(req, res) {
 
     // Action específico: atualizar APENAS a inteligenciaAprendida (preserva o resto do Cérebro).
     if (body.action === "intel-update") {
-      const atual = await loadConfig(supabase);
+      const atual = await loadConfig(supabase, conta.userId);
       const base = (atual?.valor && typeof atual.valor === "object") ? atual.valor : {};
       base.inteligenciaAprendida = (body.inteligenciaAprendida && typeof body.inteligenciaAprendida === "object") ? body.inteligenciaAprendida : {};
-      const r = await saveConfig(supabase, base);
+      const r = await saveConfig(supabase, base, conta.userId);
       if (r.error) return json(res, 500, { ok: false, error: r.error.message || String(r.error) });
       return json(res, 200, { ok: true });
     }
 
     // Save padrão: preserva inteligenciaAprendida e estiloHistorico existentes (form do Cérebro
     // não controla esses campos — eles são alimentados pela análise de ZIPs).
-    const atualConfig = await loadConfig(supabase);
+    const atualConfig = await loadConfig(supabase, conta.userId);
     const baseAprend = (atualConfig?.valor && typeof atualConfig.valor === "object") ? atualConfig.valor : {};
     const valor = {
       corretorNome: typeof body.corretorNome === "string" ? body.corretorNome.slice(0, 80).trim() : DEFAULTS.corretorNome,
@@ -356,7 +367,7 @@ export default async function handler(req, res) {
       inteligenciaAprendida: baseAprend.inteligenciaAprendida || {},
       estiloHistorico: Array.isArray(baseAprend.estiloHistorico) ? baseAprend.estiloHistorico : undefined
     };
-    const r = await saveConfig(supabase, valor);
+    const r = await saveConfig(supabase, valor, conta.userId);
     if (r.error) {
       const missing = /relation .* does not exist|not find the table|schema cache/i.test(r.error.message || "");
       if (missing) {

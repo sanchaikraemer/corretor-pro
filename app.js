@@ -3,6 +3,7 @@ import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commerc
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
 import './js/pwa-install.js?v=__VERSION__';
+import { iniciarPortaoDeAcesso, obterTokenSessao } from './js/auth.js?v=__VERSION__';
 
 // ===== Segurança v684-1: chave secreta nas chamadas /api =====
 // Configure a mesma chave em Vercel > Environment Variables: CORRETOR_PRO_API_KEY.
@@ -46,6 +47,12 @@ import './js/pwa-install.js?v=__VERSION__';
     const key = getKey();
     const headers = new Headers((init && init.headers) || (typeof input !== "string" && input?.headers) || {});
     if (key && !headers.has("X-Corretor-Pro-Key")) headers.set("X-Corretor-Pro-Key", key);
+    // v980: identifica DE QUEM é a chamada (conta individual) — sem isso o servidor não
+    // sabe separar os dados de um corretor dos de outro. A chave acima continua existindo
+    // como segunda trava (defesa em profundidade), mas quem decide "de quem são esses
+    // dados" agora é este token de sessão, nunca algo vindo solto do corpo da requisição.
+    const tokenSessao = (typeof obterTokenSessao === "function") ? obterTokenSessao() : "";
+    if (tokenSessao && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${tokenSessao}`);
     const res = await originalFetch(input, { ...init, headers });
     if (res.status === 401) {
       const nova = window.definirChaveSegurancaCorretorPro();
@@ -9835,7 +9842,7 @@ async function iniciarDireciona(){
     }
   }catch(err){ console.warn("iniciarDireciona", err); }
 }
-requestAnimationFrame(iniciarDireciona);
+requestAnimationFrame(() => { iniciarPortaoDeAcesso(iniciarDireciona).catch(err => console.error("iniciarPortaoDeAcesso", err)); });
 
 // Sincronização entre aparelhos: consulta o banco a cada 30 s quando a Home está visível.
 // A chamada força leitura nova; o cache local continua servindo só para navegação imediata.

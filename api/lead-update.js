@@ -7,6 +7,7 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { requireApiKey } from "./_persistence.js";
+import { requireAccount, requireDonoDoRegistro } from "./_auth.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -53,14 +54,19 @@ async function readJsonBody(req) {
 
 export default async function handler(req, res) {
   if (requireApiKey(req, res) !== true) return;
+  const conta = await requireAccount(req, res);
+  if (!conta) return;
   // GET pra ler memória sem precisar de body (usado pelo carregarMemoria do front).
   if (req.method === "GET") {
     const id = req.query?.id;
     if (!id) return json(res, 400, { ok: false, error: "Informe ?id=" });
+    const supabaseDono = getSupabaseAdmin();
+    if (!supabaseDono) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+    if (!(await requireDonoDoRegistro(supabaseDono, "whatsapp_processamentos", id, conta, res))) return;
     const action = req.query?.action || "memoria-get";
     if (action === "memoria-get") return await acaoMemoriaGet(id, res);
     if (action === "detalhe") {
-      const result = await listRecentProcessings(1, { id, includeFullTimeline: true });
+      const result = await listRecentProcessings(1, { id, includeFullTimeline: true, ownerId: conta.isAdmin ? null : conta.userId });
       const item = result?.items?.[0] || null;
       if (!result?.ok) return json(res, 500, result);
       if (!item) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -75,14 +81,20 @@ export default async function handler(req, res) {
   const action = body?.action;
   if (!action) return json(res, 400, { ok: false, error: "Informe action." });
 
-  // salvar-novo / criar-manual não precisam de id (o banco gera ao salvar)
-  if (action === "salvar-novo") return await acaoSalvarNovo(body, res);
-  if (action === "criar-manual") return await acaoCriarManual(body, res);
-  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res);
+  // salvar-novo / criar-manual / nova-oportunidade-parceiro não precisam de id (o banco
+  // gera ao salvar) — o dono do registro novo é sempre quem está autenticado agora.
+  if (action === "salvar-novo") return await acaoSalvarNovo(body, res, conta.userId);
+  if (action === "criar-manual") return await acaoCriarManual(body, res, conta.userId);
+  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, conta.userId, conta);
   if (action === "extrair-print") return await acaoExtrairPrint(body, res);
   if (action === "detectar-rosto") return await acaoDetectarRosto(body, res);
   if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res);
-  if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res);
+  if (action === "atualizar-com-evolucao") {
+    const supabaseDono = getSupabaseAdmin();
+    if (!supabaseDono) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+    if (body?.id && !(await requireDonoDoRegistro(supabaseDono, "whatsapp_processamentos", body.id, conta, res))) return;
+    return await acaoAtualizarComEvolucao(body, res, conta.userId);
+  }
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
     const r = await aprenderRespostasDaCarteira();
@@ -91,6 +103,11 @@ export default async function handler(req, res) {
 
   const id = body?.id;
   if (!id) return json(res, 400, { ok: false, error: "Informe id." });
+
+  // Portão único: nenhuma das ações abaixo roda em cima de um registro de OUTRA conta.
+  const supabaseDono = getSupabaseAdmin();
+  if (!supabaseDono) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+  if (!(await requireDonoDoRegistro(supabaseDono, "whatsapp_processamentos", id, conta, res))) return;
 
   switch (action) {
     case "etapa":         return await acaoEtapa(id, body.etapa, res);
@@ -101,7 +118,7 @@ export default async function handler(req, res) {
     case "desfecho":      return await acaoDesfecho(id, body, res);
     case "lembrete-set":  return await acaoLembreteSet(id, body, res);
     case "lembrete-clear":return await acaoLembreteClear(id, res);
-    case "apagar":        return await acaoApagar(id, res, body?.ids);
+    case "apagar":        return await acaoApagar(id, res, body?.ids, conta);
     case "editar-dados":  return await acaoEditarDados(id, body, res);
     case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
@@ -216,7 +233,7 @@ async function acaoLembreteClear(id, res) {
 }
 
 // ============ SALVAR NOVO LEAD (após o usuário clicar em "Salvar lead") ============
-async function acaoSalvarNovo(body, res) {
+async function acaoSalvarNovo(body, res, ownerId) {
   const result = body?.result;
   if (!result || typeof result !== "object") {
     return json(res, 400, { ok: false, error: "Informe result com os dados processados." });
@@ -245,7 +262,8 @@ async function acaoSalvarNovo(body, res) {
       fileName: body?.fileName || result?.txtFile || null,
       fileSize: body?.fileSize || null,
       // Mesmo nome/telefone nunca cria outro cadastro: a persistência atualiza o existente.
-      forceNew: false
+      forceNew: false,
+      ownerId
     });
     const salvoId = persistence?.processing?.id;
     let aprendizadoAutomatico = null;
@@ -479,7 +497,7 @@ Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por 
   return json(res, 200, { ok: false, error: ultimoErro || "Falha ao ler os prints." });
 }
 
-async function acaoCriarManual(body, res) {
+async function acaoCriarManual(body, res, ownerId) {
   const nome = String(body?.nome || "").trim().slice(0, 120);
   const telefone = String(body?.telefone || "").trim().slice(0, 40);
   const produto = String(body?.produto || "").trim().slice(0, 80);
@@ -566,7 +584,8 @@ async function acaoCriarManual(body, res) {
       bucket: null,
       path: null,
       fileName: nome, // garante que nome_arquivo no banco também é só "Bocorni"
-      fileSize: null
+      fileSize: null,
+      ownerId
     });
     return json(res, 200, { ok: !!persistence?.processing?.id, id: persistence?.processing?.id, persistence });
   } catch (err) {
@@ -579,7 +598,7 @@ async function acaoCriarManual(body, res) {
 // Cria um registro comercial independente para um novo comprador, preservando o
 // contato/parceiro original. Não exige alteração de schema no Supabase: o vínculo
 // fica dentro de resultado_analise.modeloComercial e oportunidadesVinculadas.
-async function acaoNovaOportunidadeParceiro(body, res) {
+async function acaoNovaOportunidadeParceiro(body, res, ownerId, conta) {
   const idOrigem = String(body?.id || "").trim();
   const compradorFinal = String(body?.compradorFinal || "").trim().slice(0, 120);
   const produto = String(body?.produto || "").trim().slice(0, 100);
@@ -590,6 +609,10 @@ async function acaoNovaOportunidadeParceiro(body, res) {
 
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+  // idOrigem aponta pra um registro EXISTENTE (o contato parceiro) — não passou pelo
+  // portão genérico do handler porque essa action foi despachada antes dele (não precisa
+  // de id pra CRIAR, mas precisa pra LER a origem). Confere aqui.
+  if (!(await requireDonoDoRegistro(supabase, "whatsapp_processamentos", idOrigem, conta, res))) return;
   const { data: origem, error: getErr } = await supabase
     .from("whatsapp_processamentos")
     .select("id,resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
@@ -702,7 +725,8 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     bucket: null,
     path: null,
     fileName: result.txtFile,
-    fileSize: null
+    fileSize: null,
+    ownerId
   });
   const novoId = persistence?.processing?.id;
   if (!novoId) return json(res, 500, { ok: false, error: "Não foi possível criar a nova oportunidade.", details: persistence?.warnings || [] });
@@ -1660,17 +1684,20 @@ async function removerVinculosComLeadsApagados(supabase, ids) {
   return atualizados;
 }
 
-async function acaoApagar(id, res, ids) {
+async function acaoApagar(id, res, ids, conta) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
   const alvoPrincipal = String(id || "");
   const alvosBrutos = [...new Set((Array.isArray(ids) ? ids : []).concat([alvoPrincipal]).map(v => String(v || "")).filter(Boolean))];
 
   let alvos = [alvoPrincipal];
-  const { data: rowsCandidatas, error: buscaErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("*")
-    .in("id", alvosBrutos);
+  // O alvo principal já passou pelo portão requireDonoDoRegistro antes de chegar aqui.
+  // Os IDs extras de "ids" (apagar em lote) ainda não foram checados — sem filtrar por
+  // dono aqui, alguém podia incluir o id de OUTRA conta na lista e (se o nome batesse por
+  // coincidência) apagar um registro que não é dele.
+  let buscaQuery = supabase.from("whatsapp_processamentos").select("*").in("id", alvosBrutos);
+  if (!conta?.isAdmin) buscaQuery = buscaQuery.or(`owner_id.eq.${conta.userId},owner_id.is.null`);
+  const { data: rowsCandidatas, error: buscaErr } = await buscaQuery;
   if (buscaErr) return json(res, 500, { ok: false, error: buscaErr.message });
   const rows = Array.isArray(rowsCandidatas) ? rowsCandidatas : [];
   const principal = rows.find(r => String(r.id) === alvoPrincipal);
