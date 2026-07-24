@@ -15,9 +15,12 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 //    ambíguo (dias desde a última interação DE QUALQUER LADO, não necessariamente quanto tempo o
 //    cliente espera). Correção: prefixo "há" + title explicando o que o número mede.
 // 3) Quando 2+ leads do topo da fila batem os mesmos 2 fatores gerais (proposta + cliente
-//    espera), o motivo parecia frase idêntica. Correção: o número que REALMENTE varia por lead
-//    (recorrência/perguntas) ganha negrito+sublinhado — cpMotivoFechamento em si não muda (texto
-//    travado pelo teste v946).
+//    espera), o motivo parecia frase idêntica. Correção NESTA versão: o número que REALMENTE
+//    varia por lead (recorrência/perguntas) ganha negrito+sublinhado — cpMotivoFechamento em si
+//    não muda (texto travado pelo teste v946). SUPERADO NA v974: o dono viu isso no ar e achou a
+//    frase inteira "grande, em negrito, desarmoniza a tela" — escolheu a Opção 4 (ícone + resumo
+//    curto, frase completa só no title) entre 4 prévias. Ver tests/v974-motivo-icone-resumo.test.mjs
+//    pro formato atual; os testes abaixo que checavam o negrito por dígito foram removidos daqui.
 // 4) Lista de produtos truncava no meio da palavra sem jeito de ver o texto completo. Correção:
 //    title com o texto completo no span chr-pr.
 //
@@ -53,8 +56,8 @@ assert.match(rowSrc, /há \$\{escapeHtml\(dias\)\}/, 'texto visível do contador
 // 3. chr-pr: title com o produto completo (mesmo texto que é exibido, sem truncar no title).
 assert.match(rowSrc, /chr-pr" title="\$\{escapeHtml\(prod\|\|''\)\}"/, 'chr-pr expõe o texto completo via title (não trunca no hover)');
 
-// 4. motivo: números dentro do texto embrulhados em <b> (destaque), sem alterar cpMotivoFechamento.
-assert.match(rowSrc, /motivoHtml\s*=\s*motivo\s*\?\s*escapeHtml\(motivo\)\.replace\(\/\\d\+\/g/, 'números do motivo são embrulhados em <b> na hora de renderizar (não na função de motivo em si)');
+// 4. motivo: cpMotivoFechamento continua devolvendo só texto puro (v946) — quem decide como
+// destacar isso na tela é cpHomeLeadRow, e essa parte mudou na v974 (ver aquele teste).
 assert.doesNotMatch(motivoSrc, /<b>/, 'cpMotivoFechamento continua devolvendo só texto puro (destaque é responsabilidade de quem renderiza)');
 
 // 5. cpBarraMensagensMini permanece bit-a-bit a mesma lógica travada pelos testes v942/v943
@@ -70,6 +73,7 @@ const sandbox = `
   const escapeHtml = (s) => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const produtosLabel = (l) => l.product || '';
   const prioridadeAtendimento = (l) => ({ nivel: l.__nivel||0 });
+  const RAIO_SVG = '<svg class="raio-stub"></svg>';
   ${barSrc}
   ${fatoresSrc}
   ${motivoSrc}
@@ -78,12 +82,10 @@ const sandbox = `
 `;
 const { cpHomeLeadRow } = eval(sandbox);
 
-// 6a. Lead qualificado (mesmo caso do teste v946): motivo cita "6 dias diferentes" e "4 perguntas"
-// — na linha renderizada, os dígitos 6 e 4 aparecem em negrito.
+// 6a. Lead qualificado (mesmo caso do teste v946) — o formato do resumo do motivo em si (ícone +
+// 1ª razão) é coberto em tests/v974-motivo-icone-resumo.test.mjs; aqui só o que continua igual.
 const qualificado = { __msgs: 12, clientMessageDays: 6, clientQuestionCount: 4, __proposta: true, __retorno: true, product: 'Apartamento Evolutti Prime' };
 const htmlQualificado = cpHomeLeadRow(qualificado, 4, 218);
-assert.match(htmlQualificado, /<b>6<\/b> dias diferentes/, 'o "6" de recorrência aparece em negrito dentro do motivo renderizado');
-assert.match(htmlQualificado, /<b>4<\/b> perguntas/, 'o "4" de perguntas aparece em negrito dentro do motivo renderizado');
 
 // 6b. O badge de posição usa o "pos" recebido (4), não o índice interno nem a contagem de
 // mensagens (12) — é exatamente esse descolamento que criava a confusão original.

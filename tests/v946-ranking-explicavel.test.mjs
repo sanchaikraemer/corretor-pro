@@ -45,6 +45,7 @@ const sandbox = `
   const produtosLabel = (l) => l.product || '';
   const prioridadeAtendimento = (l) => ({ nivel: 0 });
   const cpBarraMensagensMini = (l, maxMsgs) => '<span class="chr-bar"></span>';
+  const RAIO_SVG = '<svg class="raio-stub"></svg>';
   ${fatoresSrc}
   ${motivoSrc}
   ${rowSrc}
@@ -107,10 +108,12 @@ assert.match(app, /\.cp-hoje-row\{width:100%;display:grid/, 'regra base do deskt
 assert.match(app, /grid-template-areas:"dot nm dd" "dot bar pr"/, 'regra base do mobile continua intacta (trava v942)');
 assert.match(app, /\.cp-hoje-row\[data-exp="1"\]\{grid-template-rows:auto auto/, 'nova regra desktop para linha com motivo existe');
 assert.match(app, /\.cp-hoje-row\[data-exp="1"\]\{grid-template-areas:"dot nm dd" "dot bar pr" "dot exp exp"\}/, 'nova regra mobile para linha com motivo existe');
-// v948 — cor de destaque (--accent, o coral já usado em todo o app) + negrito, não o cinza
-// discreto (--muted) do resto da linha. v947.1 tinha usado --cyan (azul, fora da paleta do app,
-// segundo o dono) e foi corrigido pra --accent na v948.1.
-assert.match(app, /\.cp-hoje-row \.chr-exp\{[^}]*font-weight:800;color:var\(--accent\)/, 'chr-exp usa negrito + a cor de destaque do app (--accent), não cinza nem uma cor fora da paleta');
+// v948 — cor de destaque (--accent, o coral já usado em todo o app), não o cinza discreto
+// (--muted) do resto da linha. v947.1 tinha usado --cyan (azul, fora da paleta do app, segundo o
+// dono) e foi corrigido pra --accent na v948.1. Cor continua travada aqui; o PESO mudou na v974
+// (800→700, dono achou a frase inteira "grande, em negrito, desarmoniza" — ver
+// tests/v974-motivo-icone-resumo.test.mjs para o formato atual, ícone + resumo curto).
+assert.match(app, /\.cp-hoje-row \.chr-exp\{[^}]*font-weight:700;color:var\(--accent\)/, 'chr-exp usa a cor de destaque do app (--accent), não cinza nem uma cor fora da paleta (peso ajustado na v974)');
 
 // 6. O mesmo motivo aparece no card "Fazer agora" do detalhe do lead (renderLeadFoco), com destaque
 // visual próprio (v947.1 — "Última análise"/"Última mensagem" usam cp704-metaline, discreto de
