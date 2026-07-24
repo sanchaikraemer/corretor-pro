@@ -53,3 +53,21 @@ Esta sessão normalmente **não tem credenciais do Supabase nem acesso automáti
 projetos do Vercel do usuário** — não assuma que dá pra ler logs de produção ou consultar
 o banco diretamente. Se precisar diagnosticar algo que só acontece em produção, peça print
 do erro ou peça para o usuário liberar o acesso explicitamente.
+
+## Como falar com o dono — ele é corretor de imóveis, não programador
+
+O dono deste projeto **não é programador**, é corretor de imóveis. Nas respostas pra ele (fora
+de comentário de código), nada de jargão técnico — sem nome de função, classe CSS, "commit",
+"branch", "regex", "PR", etc. Fale do que muda **na tela**, no dia a dia dele, não de como o
+código faz isso por dentro. Se for inevitável citar algo técnico, traduza na mesma frase.
+
+## "Colocar no ar" já autoriza publicar — não pergunte nesse momento
+
+Quando o dono pedir pra corrigir algo, implementar algo, ou disser (em qualquer variação) que
+quer "o site no ar", "resolver e pronto", "publicar", "ponto final" — **isso já autoriza abrir o
+Pull Request da branch de trabalho pra `main` e mesclar (merge) na hora, sem parar pra perguntar
+de novo.** Essa autorização já foi pedida de forma explícita e repetida; não pergunte "quer que
+eu abra o PR?" de novo — abra e mescle direto, e só depois avise que está no ar. Isso vale pro
+fluxo normal de correção/feature deste projeto (é o que as sessões anteriores já faziam, ver
+histórico de merges). Só pare pra confirmar antes de agir se a mudança sair desse fluxo normal —
+ex.: apagar dados reais, mudar estrutura do banco, mexer em configuração de pagamento/cobrança.
