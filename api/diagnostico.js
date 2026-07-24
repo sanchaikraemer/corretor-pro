@@ -81,6 +81,7 @@ async function timed(label, fn) {
 async function modoOpenAI(res) {
   const summary = getOpenAIConfigSummary();
   const testes = [];
+  let testeAnalise;
 
   if (summary.configured) {
     const oaRaw = getOpenAIRaw();
@@ -88,22 +89,28 @@ async function modoOpenAI(res) {
     // Testa EXATAMENTE como o pipeline real chama (Chat Completions), não a
     // Responses API — gpt-4.1 não aceita reasoning.effort e o teste antigo dava
     // falso negativo, escondendo o erro de verdade (saldo/limite/rate).
-    testes.push(await timed(`OpenAI · análise e mensagens (${summary.analysisModel})`, () => oaRaw.chat.completions.create({
+    testeAnalise = await timed(`OpenAI · análise e mensagens (${summary.analysisModel})`, () => oaRaw.chat.completions.create({
       model: summary.analysisModel,
       messages: [{ role: "user", content: "Responda apenas: ok" }],
       max_tokens: 16
-    })));
+    }));
+    testes.push(testeAnalise);
   } else {
-    testes.push({ label: "OpenAI", ok: false, ms: 0, error: "OPENAI_API_KEY ausente no servidor.", status: null, code: null, type: null });
+    testeAnalise = { label: "OpenAI", ok: false, ms: 0, error: "OPENAI_API_KEY ausente no servidor.", status: null, code: null, type: null };
+    testes.push(testeAnalise);
   }
 
   const allOk = testes.every(t => t.ok);
-  const algumaIaOk = testes.some(t => t.ok);
+  // analiseFunciona reflete o teste que chama exatamente como o pipeline real (chat.completions
+  // com o analysisModel) — não "algum teste passou". models.list só prova que a chave é válida;
+  // se só ele passar (ex.: modelo de análise indisponível/sem quota pra esse modelo específico),
+  // a análise de verdade continua quebrada e o diagnóstico não pode dizer que está tudo ok.
+  const analiseFunciona = !!testeAnalise.ok;
   const primeiroErro = testes.find(t => !t.ok);
 
-  return json(res, algumaIaOk ? 200 : 500, {
+  return json(res, analiseFunciona ? 200 : 500, {
     ok: allOk,
-    analiseFunciona: algumaIaOk,
+    analiseFunciona,
     config: summary,
     primeiroErro: primeiroErro
       ? {

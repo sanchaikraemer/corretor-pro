@@ -22,7 +22,7 @@
 | api/restaurar-leads.js | 264 | concluído (v958) | 3 fixes reais — ver log |
 | api/limpar-tudo.js | 235 | concluído (v959) | paginação de storage — ver log |
 | api/criar-upload-url.js | 228 | concluído (v960) | regex de acento corrigido + guarda de regressão nova — ver log |
-| api/diagnostico.js | 220 | pendente | |
+| api/diagnostico.js | 220 | concluído (v961) | analiseFunciona podia mascarar erro real — ver log |
 | api/leads-recentes.js | 188 | pendente | |
 | api/analisar.js | 138 | pendente | |
 | app.js | 13178 | pendente | dividir em blocos, respeitando limites de função. Tem o MESMO regex frágil de acento em pelo menos 5 pontos (linhas ~3703, ~7822, ~8299, e mais 2) — aplicar o mesmo fix de v950 |
@@ -265,3 +265,20 @@ lista quando a revisão chegar lá (tarefa app.js, pendente). Ver `NOTAS-v960.md
 Resto do arquivo lido por completo, sem outro bug: sem risco de path traversal no
 `storagePath` (sanitizers não permitem `/`), limite de tamanho declarado é só pré-check de UX
 (garantia real é o `fileSizeLimit` do bucket, já com fallback/aviso tratados).
+
+### api/diagnostico.js (v961) — arquivo CONCLUÍDO (220 linhas)
+
+**Corrigido:** `modoOpenAI` (mode=openai) calculava `analiseFunciona` (e o status HTTP da
+resposta) com `testes.some(t => t.ok)` — "algum teste passou". Com a chave configurada rodam 2
+testes: `models.list` (só prova que a chave é válida) e uma chamada de chat completion idêntica
+à do pipeline real, com o `analysisModel` configurado. Se só o `models.list` passasse (chave
+válida mas o MODELO de análise específico indisponível/sem quota pra essa conta — cenário comum
+de "chave ok mas análise quebrada"), o diagnóstico dizia `analiseFunciona:true` e devolvia 200.
+Corrigido pra usar só o resultado do teste de análise. Ver `NOTAS-v961.md`.
+
+**🟡 Achado, não corrigido — precisa decisão do dono (conflito entre dois endpoints):**
+`modoBucket` (mode=bucket) e `ensureBucketReady` de `api/criar-upload-url.js` configuram o MESMO
+bucket do Supabase com regras diferentes (um sem teto de tamanho e sem restrição de MIME type,
+o outro com teto de 300 MB e só ZIP) e se sobrescrevem — o próximo cold start de
+`criar-upload-url.js` derruba silenciosamente qualquer limite maior liberado manualmente via
+`mode=bucket`. Detalhe completo em `NOTAS-v961.md`.
