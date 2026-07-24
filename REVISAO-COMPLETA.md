@@ -20,7 +20,7 @@
 | api/cerebro-config.js | 378 | concluído | lido por completo, sem fix — ver log |
 | api/processar-storage.js | 370 | concluído (v954) | reaproveitamento de transcrição por nome de arquivo — ver NOTAS-v954.md. Segunda leitura completa focada em bugs não achou mais nada de novo |
 | api/restaurar-leads.js | 264 | concluído (v958) | 3 fixes reais — ver log |
-| api/limpar-tudo.js | 235 | pendente | |
+| api/limpar-tudo.js | 235 | concluído (v959) | paginação de storage — ver log |
 | api/criar-upload-url.js | 228 | pendente | tem o MESMO regex frágil de acento (linha ~105) — aplicar o mesmo fix de v950 |
 | api/diagnostico.js | 220 | pendente | |
 | api/leads-recentes.js | 188 | pendente | |
@@ -236,3 +236,19 @@ Nenhum bug de segurança/dado encontrado. Um achado menor, não corrigido:
 **Achado, não corrigido (mesmo padrão recorrente, fora de escopo seguro):**
 - `lerTabela`/`currentKeys`: mais dois `.limit(5000)` — quinto/sexto lugar com o padrão de
   escala já registrado em `_persistence.js`, `_pipeline.js` (×2) e `lead-update.js`.
+
+### api/limpar-tudo.js (v959) — arquivo CONCLUÍDO (235 linhas)
+
+Rota destrutiva de reset total, já com 3 camadas de proteção contra disparo acidental (API key +
+env var explícita + confirmação literal "APAGAR TUDO") — não mexi em nenhuma delas.
+
+**Corrigido:** `emptyBucket` listava cada pasta do bucket UMA vez com `limit:1000` — `list()` do
+Supabase Storage nunca pagina sozinho. Pasta com mais de 1000 arquivos (plausível em
+`transcription-cache/`, compartilhada entre todos os leads) fazia "limpar tudo" apagar só o
+primeiro lote e reportar `ok:true` como se tivesse esvaziado tudo. Corrigido com paginação por
+offset até a página vir incompleta, e `remove()` passou a rodar em lotes de 1000 (precaução,
+mesmo sem confirmar um teto documentado). Ver `NOTAS-v959.md`.
+
+**Não é bug, registrado por completude:** a lista de tabelas apagadas não inclui
+`direciona_config` (Cérebro) — reseta dados/leads, preserva a configuração do corretor. Parece
+intencional; só fica registrado caso o dono espere um reset totalmente completo.
