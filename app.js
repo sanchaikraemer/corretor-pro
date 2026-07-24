@@ -2389,6 +2389,18 @@ function emJanelaDeEspera(l){
   const aps = l.analysis?.confirmedAppointments;
   if(Array.isArray(aps) && aps.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando||"").toLowerCase()))) return false;
   let toque = l.daysSinceLastTouch; if(toque==null) toque = _diasDesdeMsg(l, false);
+  // v981 — bug real (print do dono): lead atendido pelo botão "Marcar atendimento" (ou por
+  // "copiar mensagem" sem observação) voltava a aparecer em prioridades/"Fazer agora" antes dos
+  // 3-5 dias de espera. Causa: esses dois gatilhos só gravam o evento contato_manual — não tocam
+  // timeline_json — então daysSinceLastTouch (calculado em cima da timeline no servidor) não
+  // sabia do atendimento e continuava com a idade da última mensagem real do WhatsApp. Mesma
+  // causa raiz já corrigida em diasParado (v882): usa o toque mais recente entre mensagem e
+  // atendimento manual, nunca o mais antigo.
+  const atTs = ultimoAtendimentoTs(l);
+  if(atTs){
+    const dAt = diasCalendarioBR(atTs);
+    if(dAt != null && Number.isFinite(dAt) && (toque == null || dAt < toque)) toque = dAt;
+  }
   let resposta = l.daysSinceClientReply; if(resposta==null) resposta = _diasDesdeMsg(l, true);
   if(toque == null) return false;
   // Só espera se EU contatei por último (cliente ainda não respondeu desde então).
@@ -2793,7 +2805,11 @@ function renderBotoesHome(){
           : "");
   } else if(metaHoje === 0 && filaRanqueada.length){
     // Já atendeu a dose de hoje, mas ainda tem gente elegível. Sem card grande — convite discreto.
-    top3Html = `<div class="cp-hoje-done">Você já atendeu os ${CP_DOSE_DIA} de hoje. 👏 <button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um</button></div>`;
+    // v981 — mostrava sempre CP_DOSE_DIA (fixo em "10"), então quem passava da meta (atendia 11,
+    // 12...) continuava vendo "você já atendeu os 10 de hoje" parado, como se tivesse travado.
+    // Mostra o total real de hoje (mesma contagem do banner da Home, cpAtendidosHojeTotal).
+    const atendidosHojeReal = typeof cpAtendidosHojeTotal === 'function' ? cpAtendidosHojeTotal(items) : CP_DOSE_DIA;
+    top3Html = `<div class="cp-hoje-done">Você já atendeu ${atendidosHojeReal} hoje. 👏 <button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um</button></div>`;
   } else {
     // Fila realmente vazia (fim de semana, ou ninguém elegível agora). Uma linha neutra, sem box.
     top3Html = `<div class="cp-hoje-vazio">${cpFimDeSemana() ? 'Fim de semana — a fila do "Fazer agora" volta na segunda.' : 'Nenhum lead pra atender agora. Bom momento pra importar conversas novas.'}</div>`;
