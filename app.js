@@ -2710,6 +2710,16 @@ function leadsEsquecidos(items){
   out.sort((a,b) => b.parado - a.parado); // mais antigos (mais tempo parado) primeiro
   return out.slice(0, 10).map(x => x.l);
 }
+// v982 — pedido do dono: destacar visualmente QUANTO uma oportunidade esquecida está atrasada,
+// não só o número em texto. Cor e comprimento da barra sobem juntos com os dias parado, usando as
+// cores semânticas que o app já tem (--risco/--morno/--soft) — nenhuma cor nova.
+function radarSeveridade(parado){
+  const dias = Number.isFinite(parado) ? Math.max(0, parado) : 0;
+  const pct = Math.max(4, Math.min(100, Math.round(dias / 365 * 100)));
+  if(dias >= 180) return { cor: "var(--risco)", pct };
+  if(dias >= 60) return { cor: "var(--morno)", pct };
+  return { cor: "var(--soft)", pct };
+}
 function radarRowHTML(l){
   const idJs = JSON.stringify(String(l.id || ""));
   const paradoRaw = diasParado(l);
@@ -2718,12 +2728,14 @@ function radarRowHTML(l){
   const nMsgs = (typeof mensagensDoCliente === "function") ? mensagensDoCliente(l) : 0;
   const fato = temAtendimentoManual(l) ? "você já atendeu" : (nMsgs ? `${nMsgs} msg${nMsgs > 1 ? "s" : ""} do cliente` : "conversa iniciada");
   const prod = (l.product && !/n[ãa]o identificad|importad/i.test(String(l.product))) ? " · " + escapeHtml(l.product) : "";
+  const sev = radarSeveridade(parado);
   return `<button type="button" class="radar-row" onclick='abrirLead(${idJs})'>
     <div class="radar-row-main">
       <div class="radar-nome">${escapeHtml(l.name || "Cliente")}<span class="radar-prod">${prod}</span></div>
       <div class="radar-meta">${fato} · parado ${parado <= 0 ? "hoje" : parado + "d"}</div>
+      <div class="radar-bar"><i style="width:${sev.pct}%;background:${sev.cor}"></i></div>
     </div>
-    <div class="radar-rec" style="color:var(--soft)"><b>${parado <= 0 ? "hoje" : parado + "d"}</b><span>parado</span></div>
+    <div class="radar-rec" style="color:${sev.cor}"><b>${parado <= 0 ? "hoje" : parado + "d"}</b><span>parado</span></div>
   </button>`;
 }
 
