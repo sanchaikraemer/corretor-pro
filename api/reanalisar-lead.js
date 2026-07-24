@@ -197,7 +197,17 @@ async function readJsonBody(req) {
 function lembreteDoTexto(txt, baseDate) {
   const t = String(txt || "").toLowerCase();
   if (!t) return null;
-  const temComando = /\b(agend\w*|reagend\w*|marc\w*|remarc\w*|lembr\w*|relembr\w*)\b/.test(t);
+  // "lembrando"/"lembrança" (relato, não é comando) e "não/nunca lembr[oa]" (o autor dizendo que
+  // ESQUECEU, o oposto de um comando) disparavam lembrete fantasma só por conterem o radical
+  // "lembr". Casos reais: mensagem copiada começando "Estava lembrando da nossa conversa..." e
+  // mensagem do cliente "...o teu eu não lembro o preço de lançamento". Comando de verdade
+  // ("lembra de mim sábado", "lembrete: ligar amanhã") nunca usa essas formas — checa numa cópia
+  // do texto com elas removidas, sem afetar a extração de data (que continua usando o texto original).
+  const semRuidoDeLembr = t
+    .replace(/\b(?:n[ãa]o|nunca|num)\s+lembr\w*\b/g, " ")
+    .replace(/\blembran[çc]\w*\b/g, " ")
+    .replace(/\blembrando\b/g, " ");
+  const temComando = /\b(agend\w*|reagend\w*|marc\w*|remarc\w*|lembr\w*|relembr\w*)\b/.test(semRuidoDeLembr);
   if (!temComando) return null;
   let dias = null, m;
   // Prazo EXPLÍCITO primeiro: "em/daqui/depois de N dias|semanas|meses" (evita pegar um "1 mês" solto no texto).
@@ -556,6 +566,11 @@ async function reanalisarLeadHandler702(req, res) {
     if (!Array.isArray(tl)) return null;
     for (let i = tl.length - 1; i >= 0; i--) {
       const m = tl[i];
+      // Mesma proteção que já existia pro texto recém-submetido (comando "mensagem copiada não
+      // pode gerar lembrete", logo abaixo) — faltava aqui, na varredura do histórico já salvo.
+      // Sugestão de IA copiada costuma abrir com "Estava lembrando de você..." e virava lembrete
+      // fantasma na reanálise seguinte.
+      if (m?.type === "mensagem_enviada") continue;
       const texto = String(m?.text || "");
       if (AUDIO_TRANSCRITO_RE.test(texto)) continue;
       const p = lembreteDoTexto(texto, m?.iso || null);
