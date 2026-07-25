@@ -46,38 +46,8 @@ function garantirMensagensMotorComercialV714(analysis, lead) {
   out.aprovada = true;
   return out;
 }
-// Dia da semana de uma data no fuso de Brasília (0=domingo). Evita virar o dia no UTC à noite
-// (madrugada em UTC ainda é o dia anterior em Brasília, UTC-3) — usada tanto pra "hoje" quanto
-// pra uma data-base específica (ex.: quando uma mensagem foi enviada).
-function diaSemanaBRDe(date) {
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(date);
-  const m = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return m[wd] != null ? m[wd] : date.getDay();
-}
-function diaSemanaBR() {
-  return diaSemanaBRDe(new Date());
-}
-// Dias até o próximo dia da semana (ex.: "sexta"), relativo a uma data base. queVem força a semana seguinte.
-// Sem baseDate, usa hoje no fuso de Brasília. Com base (ex.: data da mensagem do cliente), conta a partir dela.
-function diasAteDiaSemana(nome, queVem, baseDate) {
-  const mapa = { domingo: 0, segunda: 1, "terça": 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, "sábado": 6, sabado: 6 };
-  const alvo = mapa[String(nome || "").toLowerCase()];
-  if (alvo == null) return null;
-  let refDay;
-  if (baseDate) {
-    const d = new Date(baseDate);
-    // v957: era d.getUTCDay() — pra uma mensagem enviada entre 21h e meia-noite em Brasília
-    // (ainda madrugada em UTC do dia seguinte), isso calculava o dia da semana ERRADO, e
-    // "te chamo sábado" podia virar lembrete pro dia certo errado por 1 dia de diferença.
-    refDay = isNaN(d.getTime()) ? diaSemanaBR() : diaSemanaBRDe(d);
-  } else {
-    refDay = diaSemanaBR();
-  }
-  let delta = (alvo - refDay + 7) % 7;
-  if (delta === 0) delta = 7;
-  if (queVem && delta < 7) delta += 7;
-  return delta;
-}
+// v988 — dia-da-semana relativo (usado só pela extração de lembrete por texto, removida nesta
+// versão) não tem mais chamador. Ver histórico em NOTAS-v988.md se precisar recuperar.
 
 // Data e hora no fuso de Brasília (servidor roda em UTC). Devolve { dataBR, horaBR }.
 function agoraBR(now = new Date()) {
@@ -190,51 +160,15 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw || "{}"); } catch (_) { return {}; }
 }
 
-// Lê um texto (anotação do corretor OU mensagem do cliente) e, se trouxer COMANDO EXPLÍCITO
-// de agendar/marcar/lembrar/remarcar/reagendar + data, devolve { dias, motivo } pra virar
-// LEMBRETE. Sem palavra-chave de comando OU sem data → null. Nunca infere; nunca inventa.
-// baseDate (opcional) é a data da mensagem — pra calcular "sábado" relativo a ela, não a hoje.
-function lembreteDoTexto(txt, baseDate) {
-  const t = String(txt || "").toLowerCase();
-  if (!t) return null;
-  // "lembrando"/"lembrança" (relato, não é comando) e "não/nunca lembr[oa]" (o autor dizendo que
-  // ESQUECEU, o oposto de um comando) disparavam lembrete fantasma só por conterem o radical
-  // "lembr". Casos reais: mensagem copiada começando "Estava lembrando da nossa conversa..." e
-  // mensagem do cliente "...o teu eu não lembro o preço de lançamento". Comando de verdade
-  // ("lembra de mim sábado", "lembrete: ligar amanhã") nunca usa essas formas — checa numa cópia
-  // do texto com elas removidas, sem afetar a extração de data (que continua usando o texto original).
-  // v987 — "lembrei"/"lembrou" (relato em 1ª/3ª pessoa do passado — "lembrei do apto que você
-  // comprou...") é a MESMA classe de falso positivo: narrativa, nunca comando. Print do dono:
-  // atendimento registrado pro Valdir com uma mensagem começando "...lembrei do apto 502A..." e
-  // contendo "hoje" mais adiante (descrevendo disponibilidade, não pedindo lembrete) virou
-  // "Lembrete de hoje" sem ele ter clicado em Agendar.
-  const semRuidoDeLembr = t
-    .replace(/\b(?:n[ãa]o|nunca|num)\s+lembr\w*\b/g, " ")
-    .replace(/\blembran[çc]\w*\b/g, " ")
-    .replace(/\blembrando\b/g, " ")
-    .replace(/\blembrei\b/g, " ")
-    .replace(/\blembrou\b/g, " ");
-  const temComando = /\b(agend\w*|reagend\w*|marc\w*|remarc\w*|lembr\w*|relembr\w*)\b/.test(semRuidoDeLembr);
-  if (!temComando) return null;
-  let dias = null, m;
-  // Prazo EXPLÍCITO primeiro: "em/daqui/depois de N dias|semanas|meses" (evita pegar um "1 mês" solto no texto).
-  if ((m = t.match(/(?:em|daqui\s*a?|depois\s+de)\s*(\d{1,3})\s*(dias?|semanas?|m[eê]s(?:es)?)\b/))) {
-    const n = parseInt(m[1], 10);
-    dias = /semana/.test(m[2]) ? n * 7 : /m[eê]s/.test(m[2]) ? n * 30 : n;
-  }
-  else if ((m = t.match(/(\d{1,3})\s*dias?\b/)) && !/\bh[áa]\s*\d|atr[áa]s/.test(t)) dias = parseInt(m[1], 10);
-  else if ((m = t.match(/(\d{1,3})\s*semanas?\b/))) dias = parseInt(m[1], 10) * 7;
-  else if ((m = t.match(/(\d{1,3})\s*m[eê]s(?:es)?\b/))) dias = parseInt(m[1], 10) * 30;
-  else if (/\bhoje\b|ainda hoje|hoje mesmo|pra hoje|para hoje/.test(t)) dias = 0;
-  else if (/\bamanh[ãa]/.test(t)) dias = 1;
-  else if (/semana que vem|pr[óo]xima semana/.test(t)) dias = 7;
-  else if (/m[eê]s que vem|pr[óo]ximo m[eê]s/.test(t)) dias = 30;
-  else if ((m = t.match(/\b(domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:[\s-]*feira)?\b/))) {
-    dias = diasAteDiaSemana(m[1], /que vem|pr[óo]xim/.test(t), baseDate);
-  }
-  if (dias == null || dias < 0 || dias > 1095) return null;
-  return { dias, motivo: String(txt).trim().slice(0, 160) };
-}
+// v988 — pedido do dono: lembrete NUNCA pode nascer sozinho do texto de uma conversa,
+// observação ou atendimento — só de um clique explícito em "Agendar" (ou nos atalhos
+// Hoje/Amanhã/+7 dias do modal, que caem direto na ação de reagendar, mais abaixo neste
+// arquivo). A extração por palavra-chave que existia aqui (lembreteDoTexto) foi removida:
+// mesmo depois de 3 rodadas de ajuste fino (v930 ignorando áudio, v969 ignorando
+// "lembrando"/"não lembro", v987 ignorando "lembrei"/"lembrou"), toda vez que o dono escrevia
+// uma frase natural contendo palavras como "lembrei"/"hoje"/"marcar" em outro sentido, o
+// sistema criava um "lembrete fantasma" sem ele ter pedido. Marcar compromisso passou a ser
+// sempre e só uma ação manual — ver NOTAS-v988.md.
 
 function normalizarTextoV684(v) {
   return String(v || "").trim();
@@ -544,71 +478,14 @@ async function reanalisarLeadHandler702(req, res) {
     }
   }
 
-  // Lembrete: NUNCA inventado. Só existe quando alguém (corretor OU cliente) escreveu
-  // literalmente "agende/marque/lembre/remarque/reagende + data" — em anotação do corretor
-  // OU em mensagem do cliente na timeline. A IA não infere "cliente quis agendar".
-  function fazerLembrete(dias, motivo, base) {
-    const q = base ? new Date(base) : new Date();
-    if (isNaN(q.getTime())) return null;
-    if (dias === 0) {
-      const agora = new Date();
-      q.setFullYear(agora.getFullYear(), agora.getMonth(), agora.getDate());
-      q.setHours(Math.min(agora.getHours() + 1, 22), 0, 0, 0);
-    } else {
-      q.setDate(q.getDate() + dias);
-      q.setHours(8, 0, 0, 0);
-    }
-    // Se cair no passado (ex.: mensagem antiga falando "sábado" que já passou), descarta.
-    if (q.getTime() < Date.now() - 60 * 60 * 1000) return null;
-    return { quando: q.toISOString(), motivo: String(motivo || "Retomar contato").slice(0, 160), auto: false };
-  }
-  // v930 — áudio transcrito não gera lembrete. Prints do dono: dois lembretes sem nexo nenhum
-  // (trecho solto de áudio, tipo "cara, ela liga tudo, abre"), o corretor não lembrava de ter
-  // agendado aquilo. Áudio é registro solto/narrado (às vezes o corretor falando sozinho,
-  // "só botei aqui pra você não esquecer") — bem mais solto que mensagem digitada, onde
-  // "agende/marque/lembre + data" é quase sempre intencional. Lembrete só nasce de texto
-  // digitado (do corretor OU do cliente) daqui pra frente.
-  const AUDIO_TRANSCRITO_RE = /^\[Áudio transcrito/i;
-  function lembreteDaTimeline(tl) {
-    if (!Array.isArray(tl)) return null;
-    for (let i = tl.length - 1; i >= 0; i--) {
-      const m = tl[i];
-      // Mesma proteção que já existia pro texto recém-submetido (comando "mensagem copiada não
-      // pode gerar lembrete", logo abaixo) — faltava aqui, na varredura do histórico já salvo.
-      // Sugestão de IA copiada costuma abrir com "Estava lembrando de você..." e virava lembrete
-      // fantasma na reanálise seguinte.
-      if (m?.type === "mensagem_enviada") continue;
-      const texto = String(m?.text || "");
-      if (AUDIO_TRANSCRITO_RE.test(texto)) continue;
-      const p = lembreteDoTexto(texto, m?.iso || null);
-      if (p) {
-        const lem = fazerLembrete(p.dias, p.motivo, m?.iso || null);
-        if (lem) return lem;
-      }
-    }
-    return null;
-  }
-  // Mensagem copiada não pode gerar lembrete a partir do próprio texto da sugestão
-  // (ela pode conter "podemos agendar..."). Só anotações reais do corretor detectam lembrete.
-  const lembreteNovo = (novoAtendimento && tipoManual !== "mensagem_enviada") ? lembreteDoTexto(novoAtendimento, null) : null;
+  // v988 — Lembrete: NUNCA inferido de texto (conversa, observação ou atendimento). Só existe
+  // por ação explícita do corretor: os botões de "Agendar" (action "reagendar-lembrete", que
+  // não passa por aqui) ou preservando um lembrete manual que já existia. Salvar uma observação
+  // ou reanalisar nunca cria, muda ou apaga um lembrete por conta própria — só remove se o
+  // corretor clicou em "Excluir" (lembreteRemovido).
   function aplicarLembrete(obj) {
-    if (lembreteNovo) {
-      obj.lembrete = fazerLembrete(lembreteNovo.dias, lembreteNovo.motivo, null);
-      obj.lembreteRemovido = false;
-      return;
-    }
     if (previous.lembreteRemovido) { obj.lembrete = null; return; }
-    // Preserva SÓ se for lembrete posto manualmente pelo corretor (botões Hoje/Amanhã/+7...).
-    // Lembretes legados marcados como auto:true (inventados pela IA antes do fix) são descartados.
-    // v930 — lembrete legado cujo motivo veio de ÁUDIO transcrito também é descartado (mesma
-    // limpeza dos legados auto:true): esse tipo de lembrete não devia ter sido criado, e
-    // reanalisar de novo deixa a régua atual (lembreteDaTimeline, que já ignora áudio) decidir.
-    const motivoEraAudio = AUDIO_TRANSCRITO_RE.test(String(previous.lembrete?.motivo || ""));
-    if (previous.lembrete && previous.lembrete.auto !== true && !motivoEraAudio) {
-      obj.lembrete = previous.lembrete;
-      return;
-    }
-    obj.lembrete = lembreteDaTimeline(timelineFinal) || null;
+    obj.lembrete = previous.lembrete && previous.lembrete.auto !== true ? previous.lembrete : null;
   }
 
   // Se for apenas salvar (sem reanalisar): atualiza timeline e observações, mantém análise atual.
