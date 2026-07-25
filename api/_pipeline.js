@@ -2430,6 +2430,15 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const timelineArr = Array.isArray(timeline) ? timeline : [];
   const timelineTextFull = timelineArr.map(linhaDe).join("\n");
 
+  // v986 — observação manual (registrada pelo corretor, ex.: "já enviei outra opção por
+  // imagem, o sistema não capta isso") entrava misturada na CONVERSA COMPLETA, como só mais
+  // uma linha entre mensagens do WhatsApp — a IA passava a tratar como um relato a confirmar,
+  // não como fato. Bloco separado + instrução explícita: é fato confirmado, com peso alto,
+  // e as sugestões de mensagem não podem contradizer/ignorar o que o corretor já registrou
+  // ter feito.
+  const observacoesManuaisArr = timelineArr.filter(m => m?.type === "observacao_manual" || m?.source === "corretor-pro-manual");
+  const observacoesManuaisTexto = observacoesManuaisArr.map(m => `[${m?.date || ""} ${m?.time || ""}] ${m?.text || ""}`).join("\n");
+
   // Limite técnico para evitar travar a etapa de análise em conversas enormes.
   // Não injeta resumo antigo, produto antigo, unidade antiga ou nextAction antigo.
   const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 30000);
@@ -2582,7 +2591,10 @@ Formato JSON obrigatório:
   "nextAction":"texto"
 }
 
-CONVERSA COMPLETA:
+${observacoesManuaisTexto ? `OBSERVAÇÕES DO CORRETOR (registradas manualmente por ${corretorNome}, o administrador deste lead — NÃO são mensagens do WhatsApp, são fatos que ele confirma terem acontecido fora da conversa, como enviar uma imagem/print/áudio externo que o sistema não consegue ler). Trate cada uma como VERDADE CONFIRMADA, nunca como algo a checar ou duvidar. Dê peso alto no diagnóstico e no próximo passo. As três mensagens NÃO PODEM ignorar uma observação nem oferecer de novo algo que ela já diz ter sido feito (ex.: se a observação diz "já enviei outra opção", a mensagem não pode perguntar se pode enviar — o próximo passo é dar seguimento ao que já foi enviado):
+${observacoesManuaisTexto}
+
+` : ""}CONVERSA COMPLETA:
 ${timelineText}`;
 
   try {
