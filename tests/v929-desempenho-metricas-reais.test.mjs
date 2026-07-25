@@ -16,15 +16,21 @@ assert.doesNotMatch(html, /id="cpNewLeads"|id="cpActiveDeals"|id="cpVisits"|id="
   'os alvos antigos (duplicavam Clientes ativos/Fazer agora/Compromissos/Aguardando) devem sair');
 assert.match(html, /id="cpMetricasSemana"/, 'o novo contêiner da lista de métricas deve existir');
 
-// 2. cpDesempenhoMetricas agrega as 8 métricas a partir de dado real (não placeholder).
-const ini = app.indexOf('function cpDesempenhoMetricas(items, all){');
+// 2. cpDesempenhoMetricas agrega as métricas a partir de dado real (não placeholder), somando
+// o MÊS CORRENTE (dia 1 até hoje) — não mais "últimos 7 dias corridos" (trocado na v984, a
+// pedido do dono: ele revisa Desempenho uma vez por mês, não por dia).
+const iniHelper = app.indexOf('function cpInicioMesMs(){');
+const iniFn = app.indexOf('function cpDesempenhoMetricas(items, all){');
 const fim = app.indexOf('\nwindow.cpDesempenhoMetricas');
-assert.ok(ini !== -1 && fim !== -1, 'cpDesempenhoMetricas não encontrada em app.js');
-const fnSrc = app.slice(ini, fim);
+assert.ok(iniHelper !== -1 && iniFn !== -1 && fim !== -1, 'cpInicioMesMs/cpDesempenhoMetricas não encontradas em app.js');
+// remove o "window.cpInicioMesMs = ..." no meio do trecho: não existe `window` neste eval isolado.
+const fnSrc = app.slice(iniHelper, fim).replace(/^window\.cpInicioMesMs = cpInicioMesMs;\n/m, '');
 
-const cutoffTeste = Date.now() - 3*24*60*60*1000; // 3 dias atrás: dentro da janela de 7 dias
-const foraDaJanela = new Date(Date.now() - 20*24*60*60*1000).toISOString();
-const dentroDaJanela = new Date(cutoffTeste).toISOString();
+// "dentro do mês" = ontem (sempre no mês corrente); "fora do mês" = mês passado (sempre antes
+// do dia 1 corrente, não importa em que dia do mês o teste rodar).
+const dentroDaJanela = new Date(Date.now() - 1*24*60*60*1000).toISOString();
+const mesPassado = new Date(); mesPassado.setMonth(mesPassado.getMonth() - 1);
+const foraDaJanela = mesPassado.toISOString();
 
 const cpDesempenhoMetricas = eval(`
   const produtosLabel = (l) => l.__produto || "";
@@ -55,8 +61,8 @@ const items = [
 const all = items;
 
 const m = cpDesempenhoMetricas(items, all);
-assert.equal(m.mensagensTrocadas, 2, 'só conta mensagens dentro dos últimos 7 dias (a: 1 + b: 1)');
-assert.equal(m.leadsAtendidos, 1, 'só o lead "a" tem contato_manual DENTRO da janela de 7 dias');
+assert.equal(m.mensagensTrocadas, 2, 'só conta mensagens dentro do mês corrente (a: 1 + b: 1)');
+assert.equal(m.leadsAtendidos, 1, 'só o lead "a" tem contato_manual DENTRO do mês corrente');
 assert.equal(m.mensagensCopiadas, 1, 'só a mensagem_copiada dentro da janela conta');
 assert.equal(m.analisesFeitas, 5, 'vem de cpContarAtividade("analise", ...)');
 assert.equal(m.importacoes, 3, 'vem de cpContarAtividade("importacao", ...)');
