@@ -5260,7 +5260,21 @@ function cp704Css(){
     const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
     try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
     catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
-    try{ registrarMensagemEnviada(state.lead?.id, msg); }catch(_){}
+    const leadId=state.lead?.id;
+    // v985 — este É o botão real de copiar usado de dentro do lead ("Fazer agora" > Copiar).
+    // Antes só chamava registrarMensagemEnviada (registra ATENDIMENTO), sem nunca gravar o
+    // evento "mensagem_copiada" que o Desempenho conta — por isso "Mensagens copiadas" ficava
+    // zerado mesmo copiando direto daqui o tempo todo. Registra ANTES de registrarMensagemEnviada
+    // pra já estar salvo quando ela recarrega a lista de leads (Desempenho lê dessa lista).
+    if(leadId){
+      try{
+        await fetch("./api/lead-update", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ id:leadId, action:"aprendizado", evento:"mensagem_copiada", detalhes:{ de:"fazer_agora", opcao:k||window.cp704SelectedMsg||'a' } })
+        }).catch(()=>{});
+      }catch(_){}
+    }
+    try{ registrarMensagemEnviada(leadId, msg); }catch(_){}
   };
   window.cp704OpenWhats=function(){
     const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
