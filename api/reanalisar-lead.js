@@ -203,10 +203,17 @@ function lembreteDoTexto(txt, baseDate) {
   // mensagem do cliente "...o teu eu não lembro o preço de lançamento". Comando de verdade
   // ("lembra de mim sábado", "lembrete: ligar amanhã") nunca usa essas formas — checa numa cópia
   // do texto com elas removidas, sem afetar a extração de data (que continua usando o texto original).
+  // v987 — "lembrei"/"lembrou" (relato em 1ª/3ª pessoa do passado — "lembrei do apto que você
+  // comprou...") é a MESMA classe de falso positivo: narrativa, nunca comando. Print do dono:
+  // atendimento registrado pro Valdir com uma mensagem começando "...lembrei do apto 502A..." e
+  // contendo "hoje" mais adiante (descrevendo disponibilidade, não pedindo lembrete) virou
+  // "Lembrete de hoje" sem ele ter clicado em Agendar.
   const semRuidoDeLembr = t
     .replace(/\b(?:n[ãa]o|nunca|num)\s+lembr\w*\b/g, " ")
     .replace(/\blembran[çc]\w*\b/g, " ")
-    .replace(/\blembrando\b/g, " ");
+    .replace(/\blembrando\b/g, " ")
+    .replace(/\blembrei\b/g, " ")
+    .replace(/\blembrou\b/g, " ");
   const temComando = /\b(agend\w*|reagend\w*|marc\w*|remarc\w*|lembr\w*|relembr\w*)\b/.test(semRuidoDeLembr);
   if (!temComando) return null;
   let dias = null, m;
