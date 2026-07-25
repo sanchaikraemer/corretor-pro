@@ -43,7 +43,7 @@ const envBlock = app.slice(envStart, envEnd);
 assert.match(envBlock, /tipoManual:"mensagem_enviada"/, 'entra na timeline como mensagem enviada');
 assert.match(envBlock, /registrarAtendimento:true/, 'conta como atendimento');
 assert.doesNotMatch(envBlock, /etapa/, 'copiar nunca altera a etapa comercial');
-assert.match(app, /done = \(\) => \{ toast\("Mensagem copiada"\);[\s\S]*?registrarMensagemEnviada\(l\.id, msg\)/, 'o botão Copiar do hero chama o registro');
+assert.match(app, /const done = \(\) => \{[\s\S]*?toast\("Mensagem copiada"\);[\s\S]*?registrarMensagemEnviada\(l\.id, msg\)/, 'o botão Copiar do hero chama o registro');
 assert.match(app, /cp704CopyMsg=async function[\s\S]*?registrarMensagemEnviada\(state\.lead\?\.id, msg\)/, 'o botão Copiar do detalhe chama o registro');
 // Backend: copiar registra o evento de atendimento (contato_manual), sem tocar na etapa.
 assert.match(api, /body\?\.registrarAtendimento === true/, 'backend registra atendimento ao copiar');

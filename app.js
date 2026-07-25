@@ -2679,7 +2679,20 @@ window.copiarMensagemLead = function(id){
   const a = l.analysis || {};
   const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
   if(!msg){ toast("Sem mensagem pronta pra este lead. Abra o lead e reanalise pra gerar."); return; }
-  const done = () => { toast("Mensagem copiada"); try{ registrarAprendizado && registrarAprendizado("mensagem_copiada", String(l.id||"")||null, { de:"hero" }); }catch(_){} registrarMensagemEnviada(l.id, msg); };
+  // v984 — antes chamava a função global de aprendizado, que sempre usa state.lead?.id (o lead
+  // ABERTO na tela de detalhe). Copiando direto do card da Home, nenhum lead está aberto, então
+  // o evento nunca era salvo (Desempenho > Mensagens copiadas ficava zerado mesmo com uso real).
+  // Aqui registra direto no lead do card (l.id).
+  const done = () => {
+    toast("Mensagem copiada");
+    try{
+      fetch("./api/lead-update", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ id:l.id, action:"aprendizado", evento:"mensagem_copiada", detalhes:{ de:"hero" } })
+      }).catch(()=>{});
+    }catch(_){}
+    registrarMensagemEnviada(l.id, msg);
+  };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
 };
@@ -9983,10 +9996,18 @@ function cpAvatarStyle(name){
 // v929 — Desempenho: atividade real do corretor + resultado com clientes, no lugar da grade
 // que só repetia "Clientes ativos"/"Fazer agora" já mostrados na Home (pedido do dono: "não
 // pode ser a mesma coisa que atendimentos, senão não tem coerência").
+// v984 — janela trocada de "últimos 7 dias corridos" pra "mês corrente" (dia 1 até hoje,
+// fuso de Brasília): pedido do dono, que revisa o Desempenho uma vez por mês, não por dia —
+// com 7 dias rolando o recorte muda todo dia e o total nunca bate com o que ele fez no mês.
+function cpInicioMesMs(){
+  const hojeIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date());
+  return new Date(`${hojeIso.slice(0,7)}-01T00:00:00-03:00`).getTime();
+}
+window.cpInicioMesMs = cpInicioMesMs;
 function cpDesempenhoMetricas(items, all){
   const ativos = Array.isArray(items) ? items : [];
   const todos = Array.isArray(all) ? all : ativos;
-  const cutoff7d = Date.now() - 7*24*60*60*1000;
+  const cutoffPeriodo = typeof cpInicioMesMs === "function" ? cpInicioMesMs() : (Date.now() - 30*24*60*60*1000);
 
   let mensagensTrocadas = 0, mensagensCopiadas = 0;
   const leadsAtendidosIds = new Set();
@@ -9995,14 +10016,14 @@ function cpDesempenhoMetricas(items, all){
     const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
     for(const m of msgs){
       const t = Date.parse(m?.iso || "");
-      if(Number.isFinite(t) && t >= cutoff7d) mensagensTrocadas++;
+      if(Number.isFinite(t) && t >= cutoffPeriodo) mensagensTrocadas++;
       if(m?.type === "proposta") propostas.push({ lead:l, ts: Number.isFinite(t)?t:0 });
     }
     const eventos = l?.analysis?.aprendizado?.eventos || [];
     let atendeuNaJanela = false;
     for(const e of eventos){
       const t = Date.parse(e?.quando || "");
-      if(!Number.isFinite(t) || t < cutoff7d) continue;
+      if(!Number.isFinite(t) || t < cutoffPeriodo) continue;
       if(e.evento === "contato_manual") atendeuNaJanela = true;
       if(e.evento === "mensagem_copiada") mensagensCopiadas++;
     }
@@ -10026,8 +10047,8 @@ function cpDesempenhoMetricas(items, all){
     empreendimentos,
     leadsAtendidos: leadsAtendidosIds.size,
     mensagensCopiadas,
-    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoff7d) : 0,
-    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoff7d) : 0,
+    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo) : 0,
+    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo) : 0,
     propostas: propostas.sort((a,b)=>b.ts-a.ts),
   };
 }
@@ -10054,8 +10075,8 @@ function cpRenderDesempenhoMetricas(items, all){
     </div>`;
   const rows = [
     linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Hoje · média de ${cpFormatarDuracao(m.tempoMedia7dSeg)} nos últimos 7 dias`, cpFormatarDuracao(m.tempoHojeSeg)),
-    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", "Com clientes, esta semana", m.mensagensTrocadas),
-    linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", "Esta semana", m.leadsAtendidos),
+    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", "Com clientes, este mês", m.mensagensTrocadas),
+    linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", "Este mês", m.leadsAtendidos),
     linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", "Sugestões da IA que você usou", m.mensagensCopiadas),
     linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", "Conversas processadas pela IA", m.analisesFeitas),
     linha(CP_MET_ICONS.importar, "var(--dados)", "Importações", "ZIPs de conversa processados", m.importacoes),
