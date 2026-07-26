@@ -79,13 +79,26 @@ export async function resolveOrganizationId(req, res, { supabase } = {}) {
     }
     const { data: vinculo, error: vinculoError } = await client
       .from("memberships")
-      .select("organization_id")
+      .select("organization_id, organizations(status, trial_expira_em)")
       .eq("user_id", userData.user.id)
       .limit(1)
       .maybeSingle();
     if (vinculoError || !vinculo?.organization_id) {
       authJson(res, 403, { ok: false, error: "Esta conta não está vinculada a nenhuma empresa." });
       return null;
+    }
+    // v1003 — a trava de "teste acabou/bloqueado" precisa valer AQUI, no servidor, não só na
+    // tela de login (que é só uma checagem de cortesia — qualquer chamada direta pulava ela).
+    // Sem a organização carregada (bancos de teste antigos), segue sem travar: a trava real é
+    // pra contas novas, que sempre têm status/trial preenchidos pela migração 0003.
+    const org = vinculo.organizations;
+    if (org && typeof org === "object") {
+      const trialFim = org.trial_expira_em ? new Date(org.trial_expira_em).getTime() : null;
+      const trialVencido = org.status === "teste" && Number.isFinite(trialFim) && trialFim <= Date.now();
+      if (org.status === "bloqueado" || trialVencido) {
+        authJson(res, 403, { ok: false, bloqueado: true, error: "Seu teste grátis acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento." });
+        return null;
+      }
     }
     return vinculo.organization_id;
   }
