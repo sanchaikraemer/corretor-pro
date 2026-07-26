@@ -99,22 +99,12 @@ async function entrar() {
       ? `restam ${diasRestantes} dia(s) de teste grátis`
       : 'assinatura ativa';
 
-    // v994 — só a conta original (já usada no dia a dia) entra direto no sistema completo.
-    // O sistema principal (index.html/app.js) ainda não separa os dados por corretor — mandar
-    // qualquer conta nova pra lá deixaria um corretor ver os clientes do outro. Até essa
-    // separação estar pronta, contas novas ficam numa tela de espera segura em vez de entrar.
-    const idEmpresaPrincipal = String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '').trim();
-    const ehEmpresaPrincipal = idEmpresaPrincipal && String(minhaEmpresa.id || '').trim() === idEmpresaPrincipal;
-
-    if (ehEmpresaPrincipal) {
-      msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. Abrindo o sistema...`;
-      btn.textContent = 'Login confirmado ✓';
-      setTimeout(() => { window.location.href = '/'; }, 600);
-    } else {
-      msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. A parte completa do sistema pra novos corretores está quase pronta: assim que estiver liberada, você entra direto por aqui, sem precisar fazer nada. Já pode fechar esta página.`;
-      btn.disabled = false;
-      btn.textContent = 'Login confirmado ✓';
-    }
+    // v1004 — a separação de dados por corretor ficou pronta (v997–v1003): agora TODO corretor
+    // com a conta em dia entra direto no sistema completo. A sessão fica salva neste navegador
+    // e o app passa a usá-la nas chamadas — cada um vê só a própria carteira e o próprio Cérebro.
+    msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. Abrindo o sistema...`;
+    btn.textContent = 'Login confirmado ✓';
+    setTimeout(() => { window.location.href = '/'; }, 600);
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
