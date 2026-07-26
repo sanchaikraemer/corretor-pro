@@ -162,6 +162,7 @@ function renderizarPainel() {
           <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
           <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
           <button class="pequeno secundario" style="width:auto" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
+          ${String(e.id) === String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '') ? '' : `<button class="pequeno secundario btn-excluir" style="width:auto" onclick="excluirConta('${e.id}')">Excluir</button>`}
         </div>
       </td>
     </tr>
@@ -189,6 +190,31 @@ async function marcarPago(id) {
 async function bloquear(id) {
   const { error } = await supabaseClient.from('organizations').update({ status: 'bloqueado' }).eq('id', id);
   if (error) return alert('Erro: ' + error.message);
+  carregarEmpresas();
+}
+
+// v1005 — excluir uma conta de teste inteira (dados + login) direto do painel, sem SQL.
+// A exclusão de verdade acontece no servidor (api/admin-contas), que confere se quem pede
+// é administrador da plataforma e se recusa a excluir a conta original.
+async function excluirConta(id) {
+  const conta = ultimosDados.find(x => String(x.id) === String(id));
+  const nome = conta?.nome || 'esta conta';
+  if (!confirm(`Excluir "${nome}" e TODOS os dados dela (clientes, Cérebro e login)? Isso não tem volta.`)) return;
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return alert('Sessão expirada — recarregue a página e entre de novo.');
+  try {
+    const resp = await fetch('/api/admin-contas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ action: 'excluir-conta', organizationId: id })
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok || !r.ok) return alert('Erro ao excluir: ' + (r.error || `código ${resp.status}`));
+    alert(`Conta "${nome}" excluída${r.loginsApagados ? ` (${r.loginsApagados} login(s) apagado(s))` : ''}.`);
+  } catch (e) {
+    return alert('Erro ao excluir: ' + (e?.message || e));
+  }
   carregarEmpresas();
 }
 
