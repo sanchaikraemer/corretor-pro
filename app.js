@@ -22,16 +22,56 @@ import './js/pwa-install.js?v=__VERSION__';
   // v1004 — sessão de login por conta (quem entrou por entrar.html). Se existir, as chamadas
   // à API vão autenticadas como AQUELE corretor (Authorization: Bearer) e o servidor mostra só
   // os dados dele. Sem sessão, tudo segue exatamente como antes (chave compartilhada).
-  async function getSessionToken(){
+  function cpClienteSupabase(){
     try {
-      if (!window.__cpSupabaseClient) {
-        if (!window.supabase?.createClient || !window.CORRETOR_PRO_SUPABASE_URL || !window.CORRETOR_PRO_SUPABASE_ANON_KEY) return "";
+      if (!window.__cpSupabaseClient && window.supabase?.createClient && window.CORRETOR_PRO_SUPABASE_URL && window.CORRETOR_PRO_SUPABASE_ANON_KEY) {
         window.__cpSupabaseClient = window.supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
       }
-      const { data } = await window.__cpSupabaseClient.auth.getSession();
+    } catch(_) {}
+    return window.__cpSupabaseClient || null;
+  }
+  async function getSessionToken(){
+    try {
+      const cliente = cpClienteSupabase();
+      if (!cliente) return "";
+      const { data } = await cliente.auth.getSession();
       return data?.session?.access_token || "";
     } catch(_) { return ""; }
   }
+
+  // v1007 — identidade visível de quem está logado: nome da conta na saudação e na lateral,
+  // e o botão "Sair da conta" (só aparece quando existe sessão de login neste aparelho).
+  window.cpAtualizarIdentidadeVisivel = function(){
+    try {
+      const nome = String(state?.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim();
+      const primeiro = nome.split(/\s+/)[0] || "";
+      const b = document.getElementById("cpNomeUser");
+      if (b) b.textContent = primeiro || "Corretor";
+      const av = document.getElementById("cpAvatarUser");
+      if (av) av.textContent = (primeiro[0] || "C").toUpperCase();
+    } catch(_) {}
+  };
+  window.cpSairDaConta = async function(){
+    if (!confirm("Sair desta conta neste aparelho?")) return;
+    try { await window.__cpSupabaseClient?.auth?.signOut(); } catch(_) {}
+    window.location.href = "/entrar.html";
+  };
+  (async function cpCarregarContaLogada(){
+    try {
+      const cliente = cpClienteSupabase();
+      if (!cliente) return;
+      const { data } = await cliente.auth.getSession();
+      if (!data?.session) return;
+      const btn = document.getElementById("btnSairConta");
+      if (btn) btn.style.display = "";
+      // O nome da conta é o que a pessoa preencheu no cadastro (organizations.nome) —
+      // a RLS garante que só o próprio vínculo é visível aqui.
+      const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").limit(1).maybeSingle();
+      const nome = String(vinculo?.organizations?.nome || "").trim();
+      if (nome) { window.__cpContaNome = nome; }
+      window.cpAtualizarIdentidadeVisivel();
+    } catch(_) {}
+  })();
   window.definirChaveSegurancaCorretorPro = function(){
     const atual = getKey();
     const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
@@ -3601,7 +3641,10 @@ function renderSaudacao(items){
   if(h < 12) saud = "Bom dia";
   else if(h < 18) saud = "Boa tarde";
   else saud = "Boa noite";
-  const corretorNome = (state.cerebroCfg?.corretorNome || "").trim().split(/\s+/)[0] || "";
+  // v1007 — prioridade do nome: o que o corretor escreveu no Cérebro > o nome da conta
+  // logada (preenchido no cadastro) > "corretor" genérico.
+  const corretorNome = (state.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim().split(/\s+/)[0] || "";
+  if (typeof window.cpAtualizarIdentidadeVisivel === "function") window.cpAtualizarIdentidadeVisivel();
   // O número da saudação BATE com o card "Fazer agora": é a DOSE do dia (top CP_DOSE_DIA da
   // fila ranqueada), não o backlog inteiro. Cabeçalho laranja e card mostram o mesmo número.
   // v907: "atendidos hoje" conta IGUAL à Meta do dia — todo lead atendido hoje, INCLUSIVE o que
