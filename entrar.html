@@ -16,10 +16,10 @@
     </div>
     <div class="cartao">
       <h1>Entrar</h1>
-      <p class="sub">Cada corretor/imobiliária entra com sua própria conta.</p>
+      <p class="sub">Cada corretor entra com sua própria conta.</p>
 
       <label>E-mail</label>
-      <input id="email" type="email" placeholder="seuemail@empresa.com">
+      <input id="email" type="email" placeholder="seuemail@email.com">
       <label>Senha</label>
       <div class="campo-senha">
         <input id="senha" type="password" placeholder="••••••">
@@ -78,7 +78,7 @@ async function entrar() {
     const minhaEmpresa = vinculo && vinculo.organizations;
     if (!minhaEmpresa) {
       msg.className = 'erro';
-      msg.textContent = 'Login ok, mas não encontrei nenhuma empresa vinculada a esta conta.';
+      msg.textContent = 'Login ok, mas não encontrei nenhuma conta vinculada a este login.';
       btn.disabled = false; btn.textContent = 'Entrar';
       return;
     }
@@ -89,7 +89,7 @@ async function entrar() {
 
     if (bloqueado) {
       msg.className = 'erro';
-      msg.textContent = `Seu teste grátis de "${minhaEmpresa.nome}" acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento.`;
+      msg.textContent = `Seu teste grátis acabou, ${minhaEmpresa.nome}. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento.`;
       btn.disabled = false; btn.textContent = 'Entrar';
       return;
     }
@@ -99,19 +99,19 @@ async function entrar() {
       ? `restam ${diasRestantes} dia(s) de teste grátis`
       : 'assinatura ativa';
 
-    // v994 — só a empresa original (já usada no dia a dia) entra direto no sistema completo.
-    // O sistema principal (index.html/app.js) ainda não separa os dados por empresa — mandar
-    // qualquer empresa nova pra lá deixaria uma ver os clientes da outra. Até essa separação
-    // estar pronta, empresas novas ficam numa tela de espera segura em vez de entrar.
+    // v994 — só a conta original (já usada no dia a dia) entra direto no sistema completo.
+    // O sistema principal (index.html/app.js) ainda não separa os dados por corretor — mandar
+    // qualquer conta nova pra lá deixaria um corretor ver os clientes do outro. Até essa
+    // separação estar pronta, contas novas ficam numa tela de espera segura em vez de entrar.
     const idEmpresaPrincipal = String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '').trim();
     const ehEmpresaPrincipal = idEmpresaPrincipal && String(minhaEmpresa.id || '').trim() === idEmpresaPrincipal;
 
     if (ehEmpresaPrincipal) {
-      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — ${situacao}. Abrindo o sistema...`;
+      msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. Abrindo o sistema...`;
       btn.textContent = 'Login confirmado ✓';
       setTimeout(() => { window.location.href = '/'; }, 600);
     } else {
-      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — ${situacao}. A parte completa do sistema para novas empresas está quase pronta: assim que estiver liberada, você entra direto por aqui, sem precisar fazer nada. Já pode fechar esta página.`;
+      msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. A parte completa do sistema pra novos corretores está quase pronta: assim que estiver liberada, você entra direto por aqui, sem precisar fazer nada. Já pode fechar esta página.`;
       btn.disabled = false;
       btn.textContent = 'Login confirmado ✓';
     }

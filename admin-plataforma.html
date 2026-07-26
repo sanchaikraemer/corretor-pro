@@ -18,7 +18,7 @@
       <h1>Entrar como administrador</h1>
       <p class="sub">Este painel é só pra quem administra a plataforma inteira (você).</p>
       <label>E-mail</label>
-      <input id="email" type="email" placeholder="seuemail@empresa.com">
+      <input id="email" type="email" placeholder="seuemail@email.com">
       <label>Senha</label>
       <div class="campo-senha">
         <input id="senha" type="password" placeholder="••••••">
@@ -30,11 +30,11 @@
 
     <div class="cartao larga" id="areaPainel" style="display:none">
       <div class="rodape-conta">
-        <div><b>Painel administrativo</b><div class="tag-empresa">Todas as empresas cadastradas</div></div>
+        <div><b>Painel administrativo</b><div class="tag-empresa">Todos os corretores cadastrados</div></div>
         <button class="secundario pequeno" onclick="location.reload()">Sair</button>
       </div>
       <table>
-        <thead><tr><th>Empresa</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criada em</th><th>Ação</th></tr></thead>
+        <thead><tr><th>Corretor</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criada em</th><th>Ação</th></tr></thead>
         <tbody id="linhas"></tbody>
       </table>
       <div id="msgPainel"></div>
