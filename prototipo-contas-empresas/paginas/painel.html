@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Minha carteira — protótipo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="cartao larga">
+    <div class="selo">PROTÓTIPO — não é o sistema real</div>
+    <div class="rodape-conta">
+      <div>
+        <div><b id="nomeUsuario"></b></div>
+        <div class="tag-empresa">Empresa: <span id="nomeEmpresa"></span> (id: <span id="idEmpresa"></span>)</div>
+      </div>
+      <button class="secundario pequeno" onclick="sair()">Sair</button>
+    </div>
+
+    <h1>Meus clientes</h1>
+    <p class="sub">Só aparecem clientes desta empresa — nunca de outra.</p>
+    <table>
+      <thead><tr><th>Nome</th><th>Produto</th><th>Etapa</th></tr></thead>
+      <tbody id="linhas"></tbody>
+    </table>
+
+    <div class="bloco-teste">
+      <h2>Testar a cerca de segurança</h2>
+      <p class="sub">Digite o ID de OUTRA empresa e tente ver os clientes dela mesmo estando logado com esta conta.</p>
+      <div class="linha-teste">
+        <input id="empresaAlvo" placeholder="Ex.: emp-2">
+        <button class="pequeno" style="width:auto" onclick="tentarInvadir()">Tentar acessar</button>
+      </div>
+      <div id="msgTeste"></div>
+    </div>
+  </div>
+
+<script>
+const token = localStorage.getItem('protótipoToken');
+if (!token) location.href = 'login.html';
+
+document.getElementById('nomeUsuario').textContent = localStorage.getItem('protótipoNome') || '';
+document.getElementById('nomeEmpresa').textContent = localStorage.getItem('protótipoEmpresa') || '';
+
+async function carregar() {
+  const r = await fetch('/api/minha-carteira', { headers: { Authorization: 'Bearer ' + token } });
+  const d = await r.json();
+  if (!d.ok) { location.href = 'login.html'; return; }
+  document.getElementById('idEmpresa').textContent = d.empresaId;
+  const outraSugestao = d.empresaId === 'emp-1' ? 'emp-2' : 'emp-1';
+  document.getElementById('empresaAlvo').placeholder = 'Ex.: ' + outraSugestao;
+  const linhas = document.getElementById('linhas');
+  linhas.innerHTML = d.leads.length
+    ? d.leads.map(l => `<tr><td>${l.nome}</td><td>${l.produto}</td><td>${l.etapa}</td></tr>`).join('')
+    : '<tr><td colspan="3">Nenhum cliente ainda.</td></tr>';
+}
+
+async function tentarInvadir() {
+  const alvo = document.getElementById('empresaAlvo').value.trim();
+  const msg = document.getElementById('msgTeste');
+  const r = await fetch('/api/tentar-acessar?empresaId=' + encodeURIComponent(alvo), {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const d = await r.json();
+  if (!d.ok) {
+    msg.className = 'erro';
+    msg.textContent = '🔒 ' + d.error;
+  } else {
+    msg.className = 'ok';
+    msg.textContent = '✅ Acesso liberado (é a sua própria empresa) — ' + d.leads.length + ' cliente(s).';
+  }
+}
+
+async function sair() {
+  await fetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+  localStorage.clear();
+  location.href = 'login.html';
+}
+
+carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f4f5f7;
+  color: #1f2430;
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.cartao {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(0,0,0,.08);
+  padding: 28px;
+  width: 100%;
+  max-width: 440px;
+}
+.cartao.larga { max-width: 640px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.selo {
+  display: inline-block;
+  background: #fff1ec;
+  color: #d1531f;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+p.sub { color: #5b6270; font-size: 14px; margin-top: 0; }
+label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dcdfe5;
+  border-radius: 10px;
+  font-size: 14px;
+}
+button {
+  margin-top: 20px;
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ff6a3d, #ff8a5c);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+button.secundario {
+  background: #f0f1f4;
+  color: #1f2430;
+}
+button.pequeno { width: auto; padding: 8px 14px; margin-top: 0; font-size: 13px; }
+.erro { color: #c22929; font-size: 13px; margin-top: 10px; }
+.ok { color: #1f8a3c; font-size: 13px; margin-top: 10px; }
+.linkbar { text-align: center; margin-top: 16px; font-size: 13px; }
+a { color: #d1531f; text-decoration: none; font-weight: 600; }
+.rodape-conta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+.tag-empresa { font-size: 13px; color: #5b6270; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { text-align: left; padding: 8px 6px; font-size: 13px; border-bottom: 1px solid #f0f1f4; }
+th { color: #5b6270; font-weight: 600; }
+.bloco-teste { margin-top: 26px; padding-top: 18px; border-top: 1px dashed #dcdfe5; }
+.bloco-teste h2 { font-size: 15px; margin-bottom: 4px; }
+.linha-teste { display: flex; gap: 8px; margin-top: 10px; }
+.linha-teste input { flex: 1; }
+.demo-contas { background: #f7f8fa; border-radius: 10px; padding: 12px 14px; font-size: 12px; margin-top: 16px; color: #5b6270; }

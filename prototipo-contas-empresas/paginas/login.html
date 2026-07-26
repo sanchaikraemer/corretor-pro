@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Entrar — protótipo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="cartao">
+    <div class="selo">PROTÓTIPO — não é o sistema real</div>
+    <h1>Entrar</h1>
+    <p class="sub">Cada empresa loga com sua própria conta e só enxerga os próprios clientes.</p>
+
+    <label>E-mail</label>
+    <input id="email" type="email" placeholder="seuemail@empresa.com">
+    <label>Senha</label>
+    <input id="senha" type="password" placeholder="••••••">
+    <button onclick="entrar()">Entrar</button>
+    <div id="msg"></div>
+
+    <div class="linkbar">Não tem conta? <a href="cadastro.html">Criar uma empresa nova</a></div>
+
+    <div class="demo-contas">
+      <b>Contas de teste já prontas:</b><br>
+      sanchai@teste.com / 123456 — Imobiliária Sanchai<br>
+      ana@teste.com / 123456 — Imobiliária Concorrente
+    </div>
+  </div>
+
+<script>
+async function entrar() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha })
+    });
+    const d = await r.json();
+    if (!d.ok) { msg.className = 'erro'; msg.textContent = d.error; return; }
+    localStorage.setItem('protótipoToken', d.token);
+    localStorage.setItem('protótipoEmpresa', d.empresaNome);
+    localStorage.setItem('protótipoNome', d.nome);
+    location.href = 'painel.html';
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Erro ao entrar: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
