@@ -1,4 +1,4 @@
-import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
+import { requireApiKey, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -151,6 +151,9 @@ export function normalizarLeadLegado(row = {}, table = "leads") {
     dedupeKey: phoneDigits.length >= 8 ? `fone:${phoneDigits.slice(-8)}` : (realName ? `nome:${norm(realName)}` : ""),
     payload: {
       ...(id ? { id } : {}),
+      // As tabelas legadas (leads/direciona_leads) só existiram antes das contas por login —
+      // são sempre da conta original, nunca de um corretor novo.
+      organization_id: EMPRESA_PRINCIPAL_ID,
       nome_arquivo: `${name} [LEGADO ${shortId || "restaurado"}]`,
       arquivo_nome: `${name} [LEGADO ${shortId || "restaurado"}]`,
       status: "pronto",
@@ -180,6 +183,7 @@ async function currentKeys(supabase) {
   let query = supabase
     .from("whatsapp_processamentos")
     .select("id,nome_arquivo,arquivo_nome,resultado_analise")
+    .eq("organization_id", EMPRESA_PRINCIPAL_ID)
     .limit(5000);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
