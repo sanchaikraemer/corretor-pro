@@ -51,9 +51,13 @@
 
       <div class="tabela-admin">
         <table>
-          <thead><tr><th>Corretor</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criado em</th><th>Ação</th></tr></thead>
+          <thead><tr><th>Corretor</th><th>Dias de teste</th><th>Usuários</th><th>Criado em</th><th>Ação</th></tr></thead>
           <tbody id="linhas"></tbody>
         </table>
+      </div>
+      <div class="rodape-lista">
+        <span id="infoContas"></span>
+        <button id="btnMaisContas" class="secundario pequeno" style="display:none;width:auto" onclick="carregarMaisContas()">Mostrar mais</button>
       </div>
       <div id="msgPainel"></div>
     </div>
@@ -123,41 +127,62 @@ function iniciais(nome) {
   return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
 }
 
-async function carregarEmpresas() {
-  const msg = document.getElementById('msgPainel');
-  const { data, error } = await supabaseClient
-    .from('admin_visao_empresas')
-    .select('*')
-    .order('criado_em', { ascending: false });
-  if (error) { msg.className = 'erro'; msg.textContent = error.message; return; }
-  ultimosDados = data || [];
-  renderizarPainel();
+// v1008 — o painel precisa aguentar MILHARES de corretores: a lista carrega em lotes de 50
+// ("Mostrar mais"), e busca/filtros/contadores são feitos pelo BANCO, não varrendo a tela.
+const PAGINA_CONTAS = 50;
+let offsetContas = 0;
+let temMaisContas = false;
+let buscaTimer = null;
+
+async function carregarResumo() {
+  try {
+    const contar = async (status) => {
+      let q = supabaseClient.from('admin_visao_empresas').select('id', { count: 'exact', head: true });
+      if (status) q = q.eq('status', status);
+      const { count } = await q;
+      return Number.isFinite(count) ? count : 0;
+    };
+    const [total, teste, ativo, bloqueado] = await Promise.all([contar(null), contar('teste'), contar('ativo'), contar('bloqueado')]);
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statTeste').textContent = teste;
+    document.getElementById('statAtivo').textContent = ativo;
+    document.getElementById('statBloqueado').textContent = bloqueado;
+  } catch (_) {}
 }
 
+async function carregarEmpresas({ manter = false } = {}) {
+  const msg = document.getElementById('msgPainel');
+  msg.className = ''; msg.textContent = '';
+  if (!manter) { offsetContas = 0; ultimosDados = []; }
+  let q = supabaseClient
+    .from('admin_visao_empresas')
+    .select('*')
+    .order('criado_em', { ascending: false })
+    .range(offsetContas, offsetContas + PAGINA_CONTAS - 1);
+  if (filtroStatus !== 'todos') q = q.eq('status', filtroStatus);
+  const busca = filtroBusca.trim();
+  if (busca) q = q.ilike('nome', `%${busca}%`);
+  const { data, error } = await q;
+  if (error) { msg.className = 'erro'; msg.textContent = error.message; return; }
+  ultimosDados = ultimosDados.concat(data || []);
+  temMaisContas = (data || []).length === PAGINA_CONTAS;
+  offsetContas += (data || []).length;
+  renderizarPainel();
+  carregarResumo();
+}
+
+function carregarMaisContas() { carregarEmpresas({ manter: true }); }
+
 function renderizarPainel() {
-  const porStatus = { teste: 0, ativo: 0, bloqueado: 0 };
-  ultimosDados.forEach(e => { if (porStatus[e.status] !== undefined) porStatus[e.status]++; });
-  document.getElementById('statTotal').textContent = ultimosDados.length;
-  document.getElementById('statTeste').textContent = porStatus.teste;
-  document.getElementById('statAtivo').textContent = porStatus.ativo;
-  document.getElementById('statBloqueado').textContent = porStatus.bloqueado;
-
-  const busca = filtroBusca.trim().toLowerCase();
-  const filtrados = ultimosDados.filter(e => {
-    if (filtroStatus !== 'todos' && e.status !== filtroStatus) return false;
-    if (busca && !String(e.nome || '').toLowerCase().includes(busca)) return false;
-    return true;
-  });
-
   const linhas = document.getElementById('linhas');
-  linhas.innerHTML = filtrados.map(e => `
+  linhas.innerHTML = ultimosDados.map(e => `
     <tr>
-      <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div>${escapeHtml(e.nome)}</div></td>
-      <td data-rotulo="Status"><span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></td>
+      <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div><span>${escapeHtml(e.nome)}</span> <span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></div></td>
       <td data-rotulo="Dias de teste">${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
       <td data-rotulo="Usuários">${e.qtd_usuarios}</td>
       <td data-rotulo="Criado em">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
       <td data-rotulo="">
+        <button class="pequeno secundario btn-acoes-toggle" style="width:auto" onclick="toggleAcoes(this)">Ações ⌄</button>
         <div class="acoes-linha">
           <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
           <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
@@ -167,18 +192,29 @@ function renderizarPainel() {
       </td>
     </tr>
   `).join('');
+  const btnMais = document.getElementById('btnMaisContas');
+  if (btnMais) btnMais.style.display = temMaisContas ? '' : 'none';
+  const info = document.getElementById('infoContas');
+  if (info) info.textContent = ultimosDados.length ? `Mostrando ${ultimosDados.length} conta(s)` : 'Nenhuma conta encontrada com esse filtro.';
+}
+
+function toggleAcoes(btn) {
+  const tr = btn.closest('tr');
+  if (tr) tr.classList.toggle('acoes-abertas');
+  btn.textContent = tr && tr.classList.contains('acoes-abertas') ? 'Ações ⌃' : 'Ações ⌄';
 }
 
 function filtrarPorStatus(status, btn) {
   filtroStatus = status;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selecionado'));
   btn.classList.add('selecionado');
-  renderizarPainel();
+  carregarEmpresas();
 }
 
 function buscarCorretor(valor) {
   filtroBusca = valor;
-  renderizarPainel();
+  clearTimeout(buscaTimer);
+  buscaTimer = setTimeout(() => carregarEmpresas(), 350);
 }
 
 async function marcarPago(id) {
