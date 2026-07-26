@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 // células e o CSS precisa ter a regra de celular que os exibe.
 
 const admin = fs.readFileSync(new URL('../admin-plataforma.html', import.meta.url), 'utf8');
-for (const rotulo of ['Status', 'Dias de teste', 'Usuários', 'Criado em']) {
+// v1008: o status foi pro lado do nome (cartão compacto) — sem célula própria.
+for (const rotulo of ['Dias de teste', 'Usuários', 'Criado em']) {
   assert.ok(admin.includes(`data-rotulo="${rotulo}"`), `admin-plataforma.html precisa rotular a célula "${rotulo}" pro modo celular`);
 }
 

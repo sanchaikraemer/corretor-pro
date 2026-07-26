@@ -140,8 +140,12 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .pill.ativo{ color:var(--st-ativo); background:var(--st-ativo-bg); }
 .pill.bloqueado{ color:var(--st-bloq); background:var(--st-bloq-bg); }
 
-/* v1006 — painel administrativo legível no celular: em tela estreita a tabela vira cartões
-   (um por corretor), cada dado com seu rótulo ao lado e os botões em linha, sem corte lateral. */
+.rodape-lista{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; font-size:12.5px; color:var(--cp-muted); }
+.btn-acoes-toggle{ display:none; }
+
+/* v1006/v1008 — painel administrativo legível E em escala no celular: cartão COMPACTO por
+   corretor (nome + status na 1ª linha, dados numa linha de etiquetas, ações escondidas atrás
+   do botão "Ações"), pensado pra lista com centenas/milhares de contas + "Mostrar mais". */
 @media (max-width:760px){
   .painel-largo{ padding:18px; }
   .stats-admin{ grid-template-columns:repeat(2,1fr); gap:10px; }
@@ -151,14 +155,17 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
   .tabela-admin{ background:transparent; border:none; border-radius:0; overflow:visible; }
   .tabela-admin thead{ display:none; }
   .tabela-admin table, .tabela-admin tbody{ display:block; width:100%; }
-  .tabela-admin tbody tr{ display:block; background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; padding:4px 0 12px; margin-bottom:12px; }
+  .tabela-admin tbody tr{ display:block; background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; padding:10px 12px 12px; margin-bottom:10px; }
   .tabela-admin tbody tr:hover{ background:var(--cp-sidebar); }
-  .tabela-admin td{ display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:none; padding:7px 16px; font-size:14px; }
-  .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  .tabela-admin td{ border-bottom:none; padding:0; font-size:13px; }
+  .tabela-admin td:first-child{ display:block; font-weight:800; font-size:14.5px; margin-bottom:8px; }
+  .tabela-admin td[data-rotulo]:not([data-rotulo=""]){ display:inline-flex; align-items:center; gap:6px; background:var(--cp-panel-2); border-radius:8px; padding:3px 9px; margin:0 6px 6px 0; font-size:12.5px; }
+  .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .tabela-admin td[data-rotulo=""]::before{ content:none; }
-  .tabela-admin td:first-child{ padding-top:12px; font-weight:800; }
-  .tabela-admin td:last-child{ display:block; }
-  .acoes-linha{ margin-top:6px; }
+  .tabela-admin td:last-child{ display:block; margin-top:2px; }
+  .btn-acoes-toggle{ display:inline-block; }
+  .tabela-admin tr .acoes-linha{ display:none; }
+  .tabela-admin tr.acoes-abertas .acoes-linha{ display:flex; margin-top:8px; }
 }
 
 .demo-contas{
