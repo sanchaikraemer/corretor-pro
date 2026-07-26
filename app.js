@@ -19,6 +19,19 @@ import './js/pwa-install.js?v=__VERSION__';
   function getKey(){
     try { return localStorage.getItem(STORAGE_KEY) || ""; } catch(_) { return ""; }
   }
+  // v1004 — sessão de login por conta (quem entrou por entrar.html). Se existir, as chamadas
+  // à API vão autenticadas como AQUELE corretor (Authorization: Bearer) e o servidor mostra só
+  // os dados dele. Sem sessão, tudo segue exatamente como antes (chave compartilhada).
+  async function getSessionToken(){
+    try {
+      if (!window.__cpSupabaseClient) {
+        if (!window.supabase?.createClient || !window.CORRETOR_PRO_SUPABASE_URL || !window.CORRETOR_PRO_SUPABASE_ANON_KEY) return "";
+        window.__cpSupabaseClient = window.supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+      }
+      const { data } = await window.__cpSupabaseClient.auth.getSession();
+      return data?.session?.access_token || "";
+    } catch(_) { return ""; }
+  }
   window.definirChaveSegurancaCorretorPro = function(){
     const atual = getKey();
     const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
@@ -44,10 +57,18 @@ import './js/pwa-install.js?v=__VERSION__';
   window.fetch = async function(input, init = {}){
     if (!isApiUrl(input)) return originalFetch(input, init);
     const key = getKey();
+    const token = await getSessionToken();
     const headers = new Headers((init && init.headers) || (typeof input !== "string" && input?.headers) || {});
+    if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
     if (key && !headers.has("X-Corretor-Pro-Key")) headers.set("X-Corretor-Pro-Key", key);
     const res = await originalFetch(input, { ...init, headers });
     if (res.status === 401) {
+      // Com login por conta, um 401 significa sessão vencida — volta pra tela de entrar,
+      // nunca pro pedido da chave compartilhada (que não é desse fluxo).
+      if (token) {
+        try { window.location.href = "/entrar.html"; } catch(_) {}
+        return res;
+      }
       const nova = window.definirChaveSegurancaCorretorPro();
       if (nova && nova !== key) {
         const retryHeaders = new Headers(headers);
@@ -56,6 +77,14 @@ import './js/pwa-install.js?v=__VERSION__';
         agendarAprendizadoDepoisDaMutacao(input, init, retry);
         return retry;
       }
+    }
+    // Conta bloqueada/teste vencido (v1003): o servidor recusa tudo — manda de volta pra
+    // tela de entrar, onde a mensagem de pagamento aparece.
+    if (res.status === 403 && token) {
+      try {
+        const corpo = await res.clone().json();
+        if (corpo?.bloqueado === true) { window.location.href = "/entrar.html"; return res; }
+      } catch(_) {}
     }
     agendarAprendizadoDepoisDaMutacao(input, init, res);
     return res;
