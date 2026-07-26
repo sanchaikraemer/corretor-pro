@@ -49,6 +49,51 @@ export function getSupabaseAdmin() {
   });
 }
 
+// Id fixo da empresa original (mesmo id usado em contas-config.js e nas migrações de
+// supabase/migrations/). Enquanto o app principal (app.js) ainda não manda o login de cada
+// corretor pra API, uma chamada autenticada só pela chave compartilhada de sempre é tratada
+// como sendo dessa conta — é o único jeito de acesso que existia antes das contas por login,
+// e hoje é exatamente o que ela já representa (todos os dados de hoje já pertencem a ela).
+export const EMPRESA_PRINCIPAL_ID = "00000000-0000-0000-0000-000000000001";
+
+// v997 — primeiro passo pra cada corretor só ver os próprios dados: descobre de qual conta é a
+// chamada. Se vier um login de verdade (token do Supabase, header Authorization: Bearer ...),
+// confirma o token e busca a empresa vinculada àquele usuário — NUNCA aceita um id de empresa
+// mandado pelo próprio cliente (isso deixaria qualquer chamada fingir ser de outra conta).
+// Sem token, cai no caminho antigo (chave compartilhada), sempre resolvendo pra EMPRESA_PRINCIPAL_ID.
+// Ainda não é usado por nenhuma rota — vem como próxima etapa, uma tabela por vez.
+export async function resolveOrganizationId(req, res, { supabase } = {}) {
+  const authHeader = String(req.headers?.authorization || req.headers?.Authorization || "").trim();
+  const bearer = /^Bearer\s+(.+)$/i.exec(authHeader)?.[1];
+
+  if (bearer) {
+    const client = supabase || getSupabaseAdmin();
+    if (!client) {
+      authJson(res, 500, { ok: false, error: "Supabase não configurado no ambiente." });
+      return null;
+    }
+    const { data: userData, error: userError } = await client.auth.getUser(bearer);
+    if (userError || !userData?.user?.id) {
+      authJson(res, 401, { ok: false, error: "Sessão inválida ou expirada. Faça login novamente." });
+      return null;
+    }
+    const { data: vinculo, error: vinculoError } = await client
+      .from("memberships")
+      .select("organization_id")
+      .eq("user_id", userData.user.id)
+      .limit(1)
+      .maybeSingle();
+    if (vinculoError || !vinculo?.organization_id) {
+      authJson(res, 403, { ok: false, error: "Esta conta não está vinculada a nenhuma empresa." });
+      return null;
+    }
+    return vinculo.organization_id;
+  }
+
+  if (!requireApiKey(req, res)) return null;
+  return EMPRESA_PRINCIPAL_ID;
+}
+
 // Dias de CALENDÁRIO entre uma data e agora, no fuso de Brasília (NÃO "períodos de 24h" — senão
 // uma mensagem de ontem à noite conta como "hoje" de manhã, porque passaram <24h). 0 = hoje, 1 = ontem.
 function diasCalendarioBR(iso) {
