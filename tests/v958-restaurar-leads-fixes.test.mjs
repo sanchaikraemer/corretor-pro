@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { normalizarLeadLegado, restaurarLeadsLegados } from '../api/restaurar-leads.js';
+import { EMPRESA_PRINCIPAL_ID } from '../api/_persistence.js';
 
 // v958 — revisão de api/restaurar-leads.js. Três bugs reais achados e corrigidos.
 
@@ -40,8 +41,11 @@ import { normalizarLeadLegado, restaurarLeadsLegados } from '../api/restaurar-le
       const rows = table === 'leads'
         ? [{ id: 101, observacao: 'Cliente A: quer 2 quartos' }, { id: 202, observacao: 'Cliente B: quer 3 quartos' }]
         : [];
+      const resultado = () => Promise.resolve({ data: rows, error: null });
       return {
-        select() { return { limit() { return Promise.resolve({ data: rows, error: null }); } }; },
+        // lerTabela() (leads/direciona_leads) encadeia select().limit(); currentKeys()
+        // (whatsapp_processamentos) encadeia select().eq().limit() — o fake precisa aceitar os dois.
+        select() { return { limit: resultado, eq() { return { limit: resultado }; } }; },
         upsert(rowsToUpsert) { upserted.push(...rowsToUpsert); return Promise.resolve({ error: null }); }
       };
     }
@@ -49,6 +53,11 @@ import { normalizarLeadLegado, restaurarLeadsLegados } from '../api/restaurar-le
   const result = await restaurarLeadsLegados(fakeSupabase, {});
   assert.equal(result.restored, 2, `duas linhas legadas distintas sem nome/telefone deviam restaurar 2, restaurou ${result.restored}`);
   assert.equal(upserted.length, 2);
+  // v1001 — lead restaurado da base legada precisa vir marcado como da empresa original,
+  // senão fica sem dono (organization_id nulo não aparece pra ninguém depois).
+  for (const row of upserted) {
+    assert.equal(row.organization_id, EMPRESA_PRINCIPAL_ID, 'lead restaurado da base legada precisa gravar organization_id da empresa original');
+  }
 }
 
 // 3. stage(): "Geladeira" (arquivado, some da busca ativa — normalizarEtapa()/foraDaBusca() em
