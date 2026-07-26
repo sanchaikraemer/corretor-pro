@@ -1,5 +1,5 @@
-import { requireApiKey, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, APRENDIZADO_PENDENTE_V2_PREFIX } from "./_pipeline.js";
+import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -95,36 +95,36 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-async function loadConfig(supabase) {
+async function loadConfig(supabase, organizationId) {
   // Tenta ler da tabela direciona_config (chave/valor) se existir.
   const { data, error } = await supabase
     .from("direciona_config")
     .select("valor")
     .eq("chave", CONFIG_KEY)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (error) return { found: false, error: error.message };
   if (!data?.valor) return { found: false, defaults: true };
   return { found: true, valor: sanitizeCerebroConfig(data.valor) };
 }
 
-async function saveConfig(supabase, valor) {
-  const { error } = await supabase
-    .from("direciona_config")
-    .upsert({ chave: CONFIG_KEY, valor, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+async function saveConfig(supabase, valor, organizationId) {
+  const { error } = await upsertConfigComOrganizacao(supabase, organizationId, { chave: CONFIG_KEY, valor, atualizado_em: new Date().toISOString() }) || {};
   return { error };
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
   if (req.method === "GET") {
-    const r = await loadConfig(supabase);
+    const r = await loadConfig(supabase, organizationId);
     if (r.error && !/relation .* does not exist|not find the table|schema cache/i.test(r.error)) {
       return json(res, 500, { ok: false, error: r.error });
     }
-    const aprendizadoAutomatico = await obterStatusAprendizadoAutomatico().catch(() => ({ ativo: true, versao: 2, totalCasos: 0, historicosProcessados: 0 }));
+    const aprendizadoAutomatico = await obterStatusAprendizadoAutomatico(organizationId).catch(() => ({ ativo: true, versao: 2, totalCasos: 0, historicosProcessados: 0 }));
     return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico });
   }
 
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
     // Não chama a IA, não altera o Cérebro e não ativa o uso automático do aprendizado.
     if (body.action === "exportar-aprendizado") {
       try {
-        const atual = await loadConfig(supabase);
+        const atual = await loadConfig(supabase, organizationId);
         const config = atual?.valor && typeof atual.valor === "object" ? atual.valor : { ...DEFAULTS };
         const exportacao = await obterExportacaoAprendizado(config.inteligenciaAprendida || {}, config);
         return json(res, 200, { ok: true, exportacao });
@@ -152,8 +152,8 @@ export default async function handler(req, res) {
     // fica marcada como aprendida só porque a paginação chegou ao fim.
     if (body.action === "finalizar-bootstrap-aprendizado") {
       const totalCarteira = Math.max(0, Number(body.totalCarteira) || 0);
-      const ok = await marcarBootstrapAprendizadoConcluido(totalCarteira);
-      const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+      const ok = await marcarBootstrapAprendizadoConcluido(totalCarteira, organizationId);
+      const status = await obterStatusAprendizadoAutomatico(organizationId).catch(() => null);
       return json(res, ok ? 200 : 500, { ok, aprendizadoAutomatico: status });
     }
 
@@ -166,12 +166,13 @@ export default async function handler(req, res) {
         .from("direciona_config")
         .select("chave,valor,atualizado_em")
         .like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`)
+        .eq("organization_id", organizationId)
         .order("atualizado_em", { ascending: true })
         .range(0, 0);
       if (filaErr) return json(res, 200, { ok:false, error:filaErr.message });
       const fila = filas?.[0];
       if (!fila) {
-        const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+        const status = await obterStatusAprendizadoAutomatico(organizationId).catch(() => null);
         return json(res, 200, { ok:true, vazio:true, aprendizadoAutomatico:status });
       }
       const leadId = String(fila?.valor?.leadId || fila.chave.slice(APRENDIZADO_PENDENTE_V2_PREFIX.length));
@@ -179,10 +180,11 @@ export default async function handler(req, res) {
         .from("whatsapp_processamentos")
         .select("id,nome_arquivo,timeline_json,resultado_analise,etapa")
         .eq("id", leadId)
+        .eq("organization_id", organizationId)
         .maybeSingle();
       if (leadErr) return json(res, 200, { ok:false, error:leadErr.message, leadId });
       if (!lead) {
-        await supabase.from("direciona_config").delete().eq("chave", fila.chave);
+        await supabase.from("direciona_config").delete().eq("chave", fila.chave).eq("organization_id", organizationId);
         return json(res, 200, { ok:true, removido:true, motivo:"lead não existe mais", leadId });
       }
       const a = lead.resultado_analise || {};
@@ -194,29 +196,30 @@ export default async function handler(req, res) {
         produto: a?.modeloComercial?.oportunidade?.produto || a.produtoInteresse || a?.lead?.product || "",
         etapa: a.etapaSugerida || lead.etapa || a?.lead?.etapa || "",
         memoriaManual: a.memoria || {},
-        openai
+        openai,
+        organizationId
       });
       if (r?.ok) {
-        await supabase.from("direciona_config").delete().eq("chave", fila.chave);
-        const status = await obterStatusAprendizadoAutomatico().catch(() => null);
+        await supabase.from("direciona_config").delete().eq("chave", fila.chave).eq("organization_id", organizationId);
+        const status = await obterStatusAprendizadoAutomatico(organizationId).catch(() => null);
         return json(res, 200, { ok:true, processado:true, leadId, resultado:r, aprendizadoAutomatico:status });
       }
       const tentativas = Number(fila?.valor?.tentativas || 0) + 1;
       const valorFila = { ...(fila.valor || {}), leadId, tentativas, ultimoErro:String(r?.error || "Falha no aprendizado").slice(0,240), ultimaTentativaEm:new Date().toISOString() };
-      await supabase.from("direciona_config").upsert({ chave:fila.chave, valor:valorFila, atualizado_em:new Date().toISOString() }, { onConflict:"chave" });
+      await upsertConfigComOrganizacao(supabase, organizationId, { chave:fila.chave, valor:valorFila, atualizado_em:new Date().toISOString() });
       return json(res, 200, { ok:false, pendente:true, leadId, tentativas, error:valorFila.ultimoErro });
     }
 
     // AÇÃO v808: apaga tanto as categorias legadas quanto os casos estruturados.
     // O Cérebro manual (método/tom/regras digitadas) permanece intacto.
     if (body.action === "limpar-aprendizado-completo") {
-      const atual = await loadConfig(supabase);
+      const atual = await loadConfig(supabase, organizationId);
       const base = (atual?.valor && typeof atual.valor === "object") ? atual.valor : { ...DEFAULTS };
       base.inteligenciaAprendida = {};
-      const salvoLegado = await saveConfig(supabase, base);
-      const apagadoMeta = await supabase.from("direciona_config").delete().eq("chave", "corretor-memoria-comercial-v2");
-      const apagadosCasos = await supabase.from("direciona_config").delete().like("chave", "corretor-memoria-caso-v2:%");
-      const apagadosPendentes = await supabase.from("direciona_config").delete().like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
+      const salvoLegado = await saveConfig(supabase, base, organizationId);
+      const apagadoMeta = await supabase.from("direciona_config").delete().eq("chave", "corretor-memoria-comercial-v2").eq("organization_id", organizationId);
+      const apagadosCasos = await supabase.from("direciona_config").delete().like("chave", "corretor-memoria-caso-v2:%").eq("organization_id", organizationId);
+      const apagadosPendentes = await supabase.from("direciona_config").delete().like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`).eq("organization_id", organizationId);
       const erro = salvoLegado?.error?.message || apagadoMeta?.error?.message || apagadosCasos?.error?.message || apagadosPendentes?.error?.message || "";
       return json(res, erro ? 500 : 200, { ok: !erro, error: erro || undefined });
     }
@@ -250,13 +253,14 @@ export default async function handler(req, res) {
         let total = null;
         if (offset === 0) {
           try {
-            const c = await supabase.from("whatsapp_processamentos").select("id", { count: "exact", head: true });
+            const c = await supabase.from("whatsapp_processamentos").select("id", { count: "exact", head: true }).eq("organization_id", organizationId);
             if (Number.isFinite(c.count)) total = c.count;
           } catch (_) {}
         }
         const { data: leads, error } = await supabase
           .from("whatsapp_processamentos")
           .select("id, nome_arquivo, timeline_json, resultado_analise")
+          .eq("organization_id", organizationId)
           .order("id", { ascending: true })
           .range(offset, offset + limite - 1);
         if (error) return json(res, 200, { ok: false, error: "Banco: " + error.message });
@@ -280,10 +284,11 @@ export default async function handler(req, res) {
             etapa: a.etapaSugerida || a?.lead?.etapa || "",
             memoriaManual: a.memoria || {},
             openai,
-            forcar: body.forcar === true
+            forcar: body.forcar === true,
+            organizationId
           });
           if (r?.ok) {
-            try { await supabase.from("direciona_config").delete().eq("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}${String(l.id || "").slice(0,180)}`); } catch (_) {}
+            try { await supabase.from("direciona_config").delete().eq("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}${String(l.id || "").slice(0,180)}`).eq("organization_id", organizationId); } catch (_) {}
             if (r.ignorado && r.motivo === "sem diálogo real") semConteudo++;
             else aprendidas++;
             totalNoBanco = r.totalCasos || totalNoBanco;
@@ -330,17 +335,17 @@ export default async function handler(req, res) {
 
     // Action específico: atualizar APENAS a inteligenciaAprendida (preserva o resto do Cérebro).
     if (body.action === "intel-update") {
-      const atual = await loadConfig(supabase);
+      const atual = await loadConfig(supabase, organizationId);
       const base = (atual?.valor && typeof atual.valor === "object") ? atual.valor : {};
       base.inteligenciaAprendida = (body.inteligenciaAprendida && typeof body.inteligenciaAprendida === "object") ? body.inteligenciaAprendida : {};
-      const r = await saveConfig(supabase, base);
+      const r = await saveConfig(supabase, base, organizationId);
       if (r.error) return json(res, 500, { ok: false, error: r.error.message || String(r.error) });
       return json(res, 200, { ok: true });
     }
 
     // Save padrão: preserva inteligenciaAprendida e estiloHistorico existentes (form do Cérebro
     // não controla esses campos — eles são alimentados pela análise de ZIPs).
-    const atualConfig = await loadConfig(supabase);
+    const atualConfig = await loadConfig(supabase, organizationId);
     const baseAprend = (atualConfig?.valor && typeof atualConfig.valor === "object") ? atualConfig.valor : {};
     const valor = {
       corretorNome: typeof body.corretorNome === "string" ? body.corretorNome.slice(0, 80).trim() : DEFAULTS.corretorNome,
@@ -356,7 +361,7 @@ export default async function handler(req, res) {
       inteligenciaAprendida: baseAprend.inteligenciaAprendida || {},
       estiloHistorico: Array.isArray(baseAprend.estiloHistorico) ? baseAprend.estiloHistorico : undefined
     };
-    const r = await saveConfig(supabase, valor);
+    const r = await saveConfig(supabase, valor, organizationId);
     if (r.error) {
       const missing = /relation .* does not exist|not find the table|schema cache/i.test(r.error.message || "");
       if (missing) {

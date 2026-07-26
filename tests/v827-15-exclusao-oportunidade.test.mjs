@@ -124,17 +124,13 @@ try {
   assert.ok(deleteQuery.includes("lead-A") && deleteQuery.includes("lead-C"), "o DELETE de fato só pediu os ids validados");
   assert.ok(!deleteQuery.includes("lead-B"), "o DELETE não pode incluir o cliente diferente");
   assert.match(deleteQuery, new RegExp(`organization_id=eq\\.${EMPRESA_PRINCIPAL_ID}`), "o DELETE de leads precisa filtrar por organization_id");
-  // aprenderRespostasDaCarteira() (chamada no fim de "apagar" pra reconstruir o banco de
-  // exemplos do Cérebro) ainda lê a carteira inteira sem filtro — ela grava num "balde" só
-  // (direciona_config, chave única pra todo mundo), então só faz sentido filtrar essa leitura
-  // DEPOIS que essa tabela também separar por corretor (mudança de schema, etapa futura e maior,
-  // já registrada em NOTAS-v997.md). Corrigir só a leitura aqui e deixar a escrita global criaria
-  // uma inconsistência pior. As DEMAIS leituras (as que decidem o que apagar) precisam estar
-  // filtradas desde já — são as que importam pra não vazar/apagar dado de outro corretor.
-  const leiturasRelevantes = getQueries.filter(q => !q.includes("order=atualizado_em.asc"));
-  assert.ok(leiturasRelevantes.length >= 1, "precisa ter consultado a tabela antes de apagar");
-  for (const q of leiturasRelevantes) {
-    assert.match(q, new RegExp(`organization_id=eq\\.${EMPRESA_PRINCIPAL_ID}`), `leitura pra decidir o que apagar precisa filtrar por organization_id, veio: ${q}`);
+  // v1002 — a exceção que existia aqui (aprenderRespostasDaCarteira lia a carteira inteira sem
+  // filtro, porque o banco de exemplos do Cérebro era um "balde" global) acabou: agora TODA
+  // leitura de whatsapp_processamentos nesse fluxo, inclusive a da reconstrução do banco de
+  // exemplos, precisa sair filtrada por organization_id.
+  assert.ok(getQueries.length >= 1, "precisa ter consultado a tabela antes de apagar");
+  for (const q of getQueries) {
+    assert.match(q, new RegExp(`organization_id=eq\\.${EMPRESA_PRINCIPAL_ID}`), `toda leitura no fluxo de apagar precisa filtrar por organization_id, veio: ${q}`);
   }
 
   console.log("v827-15-exclusao-oportunidade: ok");

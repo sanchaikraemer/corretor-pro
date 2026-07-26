@@ -1,5 +1,5 @@
 import { processZipBuffer } from "./_pipeline.js";
-import { requireApiKey } from "./_persistence.js";
+import { resolveOrganizationId } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -76,7 +76,8 @@ function decodeBase64Zip(body = {}) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Método não permitido." });
 
   try {
@@ -114,7 +115,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const result = await processZipBuffer(zipBuffer, { audioWindowDays, cerebroConfig });
+    const result = await processZipBuffer(zipBuffer, { audioWindowDays, cerebroConfig, organizationId });
     const analysis = result?.analysis || null;
     const messages = analysis?.messages || {};
     const complete = [messages.a, messages.b, messages.c].every(v => String(v || "").trim().length >= 10);

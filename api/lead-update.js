@@ -11,7 +11,8 @@ import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, merge
 import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial,
-  ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache
+  ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
+  upsertConfigComOrganizacao
 } from "./_pipeline.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
@@ -86,7 +87,7 @@ export default async function handler(req, res) {
   if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
-    const r = await aprenderRespostasDaCarteira();
+    const r = await aprenderRespostasDaCarteira(organizationId);
     return json(res, r.ok ? 200 : 500, r);
   }
 
@@ -258,7 +259,7 @@ async function acaoSalvarNovo(body, res, organizationId) {
     const salvoId = persistence?.processing?.id;
     let aprendizadoAutomatico = null;
     if (salvoId && Array.isArray(result?.timeline) && result.timeline.length) {
-      aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(salvoId), motivo: "nova-importacao" }).catch(e => ({ ok:false, error:e?.message || String(e) }));
+      aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(salvoId), motivo: "nova-importacao", organizationId }).catch(e => ({ ok:false, error:e?.message || String(e) }));
     }
     return json(res, 200, { ok: !!salvoId, persistence, aprendizadoAutomatico });
   } catch (err) {
@@ -1056,7 +1057,7 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
 
   // A timeline já está persistida. A leitura pela IA entra numa fila separada para
   // não atrasar nem fazer a reimportação expirar. O app processa essa fila na sequência.
-  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id), motivo: "reimportacao" })
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id), motivo: "reimportacao", organizationId })
     .catch(e => ({ ok:false, error:e?.message || String(e) }));
 
   return json(res, 200, {
@@ -1185,7 +1186,7 @@ async function acaoMemoriaSet(id, body, res, organizationId) {
   // A observação/manual entra na mesma fila do aprendizado contínuo. Não reanalisa
   // o lead e não troca as três sugestões que já estão na tela.
   const aprendizadoAutomatico = camposRecebidos.length
-    ? await marcarAprendizadoPendente({ leadId:String(id), motivo:"memoria-manual-atualizada" }).catch(e => ({ ok:false, error:e?.message || String(e) }))
+    ? await marcarAprendizadoPendente({ leadId:String(id), motivo:"memoria-manual-atualizada", organizationId }).catch(e => ({ ok:false, error:e?.message || String(e) }))
     : { ok:true, ignorado:true, motivo:"nenhum-campo-manual-alterado" };
   return json(res, 200, { ok: true, id, memoria, camposAlterados:camposRecebidos, aprendizadoAutomatico, reanalisado:false });
 }
@@ -1262,7 +1263,7 @@ async function acaoObservacaoAdicionar(id, body, res, organizationId) {
     .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok:false, error:putErr.message });
 
-  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId:String(id), motivo:"observacao-manual-adicionada" })
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId:String(id), motivo:"observacao-manual-adicionada", organizationId })
     .catch(e => ({ ok:false, error:e?.message || String(e) }));
   return json(res, 200, { ok:true, id, item, memoria, aprendizadoAutomatico, reanalisado:false });
 }
@@ -1644,13 +1645,13 @@ async function apagarStorageDosLeads(supabase, rows) {
   return { removidos, detalhes, cacheLegadoGlobalLimpo: precisaLimparCacheLegado };
 }
 
-async function limparAprendizadoDosLeads(supabase, ids) {
+async function limparAprendizadoDosLeads(supabase, ids, organizationId) {
   for (const id of ids) {
     const chaves = [
       `corretor-memoria-caso-v2:${String(id).slice(0, 180)}`,
       `corretor-aprendizado-pendente-v2:${String(id).slice(0, 180)}`
     ];
-    const { error } = await supabase.from("direciona_config").delete().in("chave", chaves);
+    const { error } = await supabase.from("direciona_config").delete().in("chave", chaves).eq("organization_id", organizationId);
     if (error && !erroTabelaAusente(error)) throw new Error(`direciona_config: ${error.message}`);
   }
 
@@ -1661,21 +1662,22 @@ async function limparAprendizadoDosLeads(supabase, ids) {
     .from("direciona_config")
     .select("valor")
     .eq("chave", "direciona-cerebro")
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (cerebroErr && !erroTabelaAusente(cerebroErr)) throw new Error(`direciona_config: ${cerebroErr.message}`);
   if (cerebroRow?.valor && typeof cerebroRow.valor === "object") {
     const valor = { ...cerebroRow.valor };
     delete valor.inteligenciaAprendida;
-    const { error } = await supabase.from("direciona_config").upsert({
+    const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: "direciona-cerebro",
       valor,
       atualizado_em: new Date().toISOString()
-    }, { onConflict: "chave" });
+    }) || {};
     if (error) throw new Error(`direciona-cerebro: ${error.message}`);
   }
-  const { error: conhecimentoErr } = await supabase.from("direciona_config").delete().eq("chave", "corretor-conhecimento");
+  const { error: conhecimentoErr } = await supabase.from("direciona_config").delete().eq("chave", "corretor-conhecimento").eq("organization_id", organizationId);
   if (conhecimentoErr && !erroTabelaAusente(conhecimentoErr)) throw new Error(`corretor-conhecimento: ${conhecimentoErr.message}`);
-  invalidarMemoriaComercialCache();
+  invalidarMemoriaComercialCache(organizationId);
 }
 
 async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
@@ -1737,7 +1739,7 @@ async function acaoApagar(id, res, ids, organizationId) {
 
   try {
     const storage = await apagarStorageDosLeads(supabase, registros);
-    await limparAprendizadoDosLeads(supabase, alvos);
+    await limparAprendizadoDosLeads(supabase, alvos, organizationId);
     const vinculosAtualizados = await removerVinculosComLeadsApagados(supabase, alvos, organizationId);
     const auxiliares = [];
     for (const tabela of ["leads", "direciona_leads"]) auxiliares.push(await apagarTabelaAuxiliar(supabase, tabela, alvos));
@@ -1746,7 +1748,7 @@ async function acaoApagar(id, res, ids, organizationId) {
     if (error) throw new Error(error.message);
 
     // Recria o banco de exemplos apenas com as conversas que continuam na carteira.
-    const respostas = await aprenderRespostasDaCarteira().catch(error => ({ ok: false, error: error?.message || String(error) }));
+    const respostas = await aprenderRespostasDaCarteira(organizationId).catch(error => ({ ok: false, error: error?.message || String(error) }));
     return json(res, 200, {
       ok: true,
       id,
