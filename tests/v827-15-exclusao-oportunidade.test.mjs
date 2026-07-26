@@ -1,6 +1,6 @@
 import http from "node:http";
 import assert from "node:assert/strict";
-import { _buscarProcessamentoExistenteV681, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead } from "../api/_persistence.js";
+import { _buscarProcessamentoExistenteV681, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, EMPRESA_PRINCIPAL_ID } from "../api/_persistence.js";
 
 // §v827-16 (plano de estabilização, item 1 — "separar cliente de oportunidade"):
 // o NOME é o identificador real do cliente neste app (é o que vem estável do export do
@@ -48,6 +48,7 @@ const registros = {
   "lead-C": { id: "lead-C", resultado_analise: { clientName: "João Pedro" } }
 };
 let deleteQuery = "";
+const getQueries = []; // v999 — toda leitura em whatsapp_processamentos precisa filtrar por organization_id
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -58,6 +59,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/rest/v1/whatsapp_processamentos" && req.method === "GET") {
+    getQueries.push(url.search);
     const select = url.searchParams.get("select") || "";
     if (select.includes("timeline_json")) {
       res.statusCode = 200;
@@ -121,6 +123,19 @@ try {
   assert.ok(!payload.ids.includes("lead-B"), "NÃO apaga o cliente diferente");
   assert.ok(deleteQuery.includes("lead-A") && deleteQuery.includes("lead-C"), "o DELETE de fato só pediu os ids validados");
   assert.ok(!deleteQuery.includes("lead-B"), "o DELETE não pode incluir o cliente diferente");
+  assert.match(deleteQuery, new RegExp(`organization_id=eq\\.${EMPRESA_PRINCIPAL_ID}`), "o DELETE de leads precisa filtrar por organization_id");
+  // aprenderRespostasDaCarteira() (chamada no fim de "apagar" pra reconstruir o banco de
+  // exemplos do Cérebro) ainda lê a carteira inteira sem filtro — ela grava num "balde" só
+  // (direciona_config, chave única pra todo mundo), então só faz sentido filtrar essa leitura
+  // DEPOIS que essa tabela também separar por corretor (mudança de schema, etapa futura e maior,
+  // já registrada em NOTAS-v997.md). Corrigir só a leitura aqui e deixar a escrita global criaria
+  // uma inconsistência pior. As DEMAIS leituras (as que decidem o que apagar) precisam estar
+  // filtradas desde já — são as que importam pra não vazar/apagar dado de outro corretor.
+  const leiturasRelevantes = getQueries.filter(q => !q.includes("order=atualizado_em.asc"));
+  assert.ok(leiturasRelevantes.length >= 1, "precisa ter consultado a tabela antes de apagar");
+  for (const q of leiturasRelevantes) {
+    assert.match(q, new RegExp(`organization_id=eq\\.${EMPRESA_PRINCIPAL_ID}`), `leitura pra decidir o que apagar precisa filtrar por organization_id, veio: ${q}`);
+  }
 
   console.log("v827-15-exclusao-oportunidade: ok");
 } finally {

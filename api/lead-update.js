@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     const id = req.query?.id;
     if (!id) return json(res, 400, { ok: false, error: "Informe ?id=" });
     const action = req.query?.action || "memoria-get";
-    if (action === "memoria-get") return await acaoMemoriaGet(id, res);
+    if (action === "memoria-get") return await acaoMemoriaGet(id, res, organizationId);
     if (action === "detalhe") {
       const result = await listRecentProcessings(1, { id, includeFullTimeline: true, organizationId });
       const item = result?.items?.[0] || null;
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
   if (action === "extrair-print") return await acaoExtrairPrint(body, res);
   if (action === "detectar-rosto") return await acaoDetectarRosto(body, res);
   if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res);
-  if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res);
+  if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
     const r = await aprenderRespostasDaCarteira();
@@ -94,17 +94,17 @@ export default async function handler(req, res) {
   if (!id) return json(res, 400, { ok: false, error: "Informe id." });
 
   switch (action) {
-    case "etapa":         return await acaoEtapa(id, body.etapa, res);
-    case "memoria-get":   return await acaoMemoriaGet(id, res);
-    case "memoria-set":   return await acaoMemoriaSet(id, body, res);
-    case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res);
-    case "aprendizado":   return await acaoAprendizado(id, body, res);
-    case "desfecho":      return await acaoDesfecho(id, body, res);
-    case "lembrete-set":  return await acaoLembreteSet(id, body, res);
-    case "lembrete-clear":return await acaoLembreteClear(id, res);
-    case "apagar":        return await acaoApagar(id, res, body?.ids);
-    case "editar-dados":  return await acaoEditarDados(id, body, res);
-    case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res);
+    case "etapa":         return await acaoEtapa(id, body.etapa, res, organizationId);
+    case "memoria-get":   return await acaoMemoriaGet(id, res, organizationId);
+    case "memoria-set":   return await acaoMemoriaSet(id, body, res, organizationId);
+    case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res, organizationId);
+    case "aprendizado":   return await acaoAprendizado(id, body, res, organizationId);
+    case "desfecho":      return await acaoDesfecho(id, body, res, organizationId);
+    case "lembrete-set":  return await acaoLembreteSet(id, body, res, organizationId);
+    case "lembrete-clear":return await acaoLembreteClear(id, res, organizationId);
+    case "apagar":        return await acaoApagar(id, res, body?.ids, organizationId);
+    case "editar-dados":  return await acaoEditarDados(id, body, res, organizationId);
+    case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res, organizationId);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
   }
 }
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
 // Usado quando a reanálise principal foi gravada mas uma função antiga não devolveu
 // o objeto completo, ou quando o front precisa consolidar fatos determinísticos.
 // O servidor relê o lead, reconcilia novamente e só então persiste.
-async function acaoAnaliseComercialSet(id, analysis, res) {
+async function acaoAnaliseComercialSet(id, analysis, res, organizationId) {
   if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
     return json(res, 400, { ok: false, error: "Informe a análise comercial." });
   }
@@ -125,6 +125,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -150,6 +151,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select("resultado_analise");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
@@ -160,7 +162,7 @@ async function acaoAnaliseComercialSet(id, analysis, res) {
 }
 
 // ============ LEMBRETE (snooze manual) ============
-async function acaoLembreteSet(id, body, res) {
+async function acaoLembreteSet(id, body, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
@@ -175,6 +177,7 @@ async function acaoLembreteSet(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -189,12 +192,13 @@ async function acaoLembreteSet(id, body, res) {
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   return json(res, 200, { ok: true, lembrete: merged.lembrete });
 }
 
-async function acaoLembreteClear(id, res) {
+async function acaoLembreteClear(id, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
@@ -202,6 +206,7 @@ async function acaoLembreteClear(id, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -211,7 +216,8 @@ async function acaoLembreteClear(id, res) {
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   return json(res, 200, { ok: true });
 }
@@ -749,7 +755,7 @@ async function acaoNovaOportunidadeParceiro(body, res, organizationId) {
 // O corretor reimporta a conversa ao fim de um novo atendimento. Em vez de criar
 // um lead duplicado, atualizamos o existente, comparando a análise anterior com a
 // nova pra registrar o que aconteceu (Aprendizado §23).
-async function acaoAtualizarComEvolucao(body, res) {
+async function acaoAtualizarComEvolucao(body, res, organizationId) {
   const id = body?.id;
   const result = body?.result;
   if (!id) return json(res, 400, { ok: false, error: "Informe id do lead a atualizar." });
@@ -762,6 +768,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise, etapa, timeline_json, atualizado_em, updated_at")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -811,6 +818,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     .from("whatsapp_processamentos")
     .update(payloadConsolidacao)
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select("id")
     .maybeSingle();
   if (consolidacao.error || !consolidacao.data?.id) {
@@ -1025,6 +1033,7 @@ async function acaoAtualizarComEvolucao(body, res) {
     .from("whatsapp_processamentos")
     .update(updatePayload)
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select("id,resultado_analise,timeline_json,atualizado_em,updated_at")
     .maybeSingle();
   if (putErr) return json(res, 500, { ok: false, recoverable: true, conversationSaved: true, error: putErr.message });
@@ -1063,7 +1072,7 @@ async function acaoAtualizarComEvolucao(body, res) {
 }
 
 // ============ ETAPA ============
-async function acaoEtapa(id, etapa, res) {
+async function acaoEtapa(id, etapa, res, organizationId) {
   if (!ETAPAS_VALIDAS.includes(etapa)) {
     return json(res, 400, { ok: false, error: `Etapa inválida. Use uma de: ${ETAPAS_VALIDAS.join(", ")}` });
   }
@@ -1074,6 +1083,7 @@ async function acaoEtapa(id, etapa, res) {
     .from("whatsapp_processamentos")
     .update({ etapa, atualizado_em: new Date().toISOString() })
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .select("id")
     .maybeSingle();
 
@@ -1082,6 +1092,7 @@ async function acaoEtapa(id, etapa, res) {
       .from("whatsapp_processamentos")
       .select("resultado_analise")
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .maybeSingle();
     if (getErr) return json(res, 500, { ok: false, error: getErr.message });
     if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1090,7 +1101,8 @@ async function acaoEtapa(id, etapa, res) {
     const { error: putErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (putErr) return json(res, 500, { ok: false, error: putErr.message });
     return json(res, 200, { ok: true, id, etapa, storage: "json" });
   }
@@ -1101,13 +1113,14 @@ async function acaoEtapa(id, etapa, res) {
 }
 
 // ============ MEMÓRIA ============
-async function acaoMemoriaGet(id, res) {
+async function acaoMemoriaGet(id, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
   const { data, error } = await supabase
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (error) return json(res, 500, { ok: false, error: error.message });
   if (!data) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1127,7 +1140,7 @@ function camposManuaisMemoria(memoria, campos = []) {
   return [...new Set([...(Array.isArray(memoria?.camposManuais) ? memoria.camposManuais : []), ...campos].filter(Boolean))];
 }
 
-async function acaoMemoriaSet(id, body, res) {
+async function acaoMemoriaSet(id, body, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
 
@@ -1137,6 +1150,7 @@ async function acaoMemoriaSet(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1164,7 +1178,8 @@ async function acaoMemoriaSet(id, body, res) {
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: agora })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
 
   // A observação/manual entra na mesma fila do aprendizado contínuo. Não reanalisa
@@ -1175,7 +1190,7 @@ async function acaoMemoriaSet(id, body, res) {
   return json(res, 200, { ok: true, id, memoria, camposAlterados:camposRecebidos, aprendizadoAutomatico, reanalisado:false });
 }
 
-async function acaoObservacaoAdicionar(id, body, res) {
+async function acaoObservacaoAdicionar(id, body, res, organizationId) {
   const texto = String(body?.texto || body?.observacao || "").replace(/\r/g, "").trim().slice(0, 5000);
   if (!texto) return json(res, 400, { ok:false, error:"Escreva a observação." });
   const supabase = getSupabaseAdmin();
@@ -1185,6 +1200,7 @@ async function acaoObservacaoAdicionar(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise,timeline_json")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok:false, error:getErr.message });
   if (!current) return json(res, 404, { ok:false, error:"Lead não encontrado." });
@@ -1242,7 +1258,8 @@ async function acaoObservacaoAdicionar(id, body, res) {
   const { error:putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise:merged, timeline_json:timeline, atualizado_em:iso })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok:false, error:putErr.message });
 
   const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId:String(id), motivo:"observacao-manual-adicionada" })
@@ -1297,7 +1314,7 @@ function contarContatosV685(timeline, eventos) {
   return Math.max(mensagensVoce, contatosManuais, 0);
 }
 
-async function acaoDesfecho(id, body, res) {
+async function acaoDesfecho(id, body, res, organizationId) {
   const tipo = String(body?.tipo || "").toLowerCase();
   if (!["vendido", "perdido"].includes(tipo)) return json(res, 400, { ok: false, error: "Informe tipo vendido ou perdido." });
   const vendido = tipo === "vendido";
@@ -1317,6 +1334,7 @@ async function acaoDesfecho(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise,timeline_json,criado_em,created_at")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1407,12 +1425,13 @@ async function acaoDesfecho(id, body, res) {
   const updates = { resultado_analise: merged, atualizado_em: now.toISOString() };
   // Tenta gravar etapa na coluna se existir; se não existir, mantém etapa no JSON.
   updates.etapa = etapa;
-  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).select("id,resultado_analise").maybeSingle();
+  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).eq("organization_id", organizationId).select("id,resultado_analise").maybeSingle();
   if (attempt.error && /column .* does not exist|etapa.*does not exist/i.test(attempt.error.message || "")) {
     attempt = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: now.toISOString() })
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .select("id,resultado_analise")
       .maybeSingle();
   }
@@ -1422,7 +1441,7 @@ async function acaoDesfecho(id, body, res) {
 }
 
 // ============ APRENDIZADO ============
-async function acaoAprendizado(id, body, res) {
+async function acaoAprendizado(id, body, res, organizationId) {
   const evento = body?.evento;
   const estilo = body?.estilo;
   const detalhes = body?.detalhes || {};
@@ -1435,6 +1454,7 @@ async function acaoAprendizado(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1464,7 +1484,8 @@ async function acaoAprendizado(id, body, res) {
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", organizationId);
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
   return json(res, 200, { ok: true, totalEventos: aprendizado.eventos.length });
 }
@@ -1472,7 +1493,7 @@ async function acaoAprendizado(id, body, res) {
 // ============ APAGAR ============
 // Edita nome e telefone do lead. Tenta atualizar colunas diretas (se existirem);
 // sempre mescla também em resultado_analise pra garantir consistência com o front.
-async function acaoEditarDados(id, body, res) {
+async function acaoEditarDados(id, body, res, organizationId) {
   const nome = typeof body?.nome === "string" ? body.nome.trim().slice(0, 120) : null;
   const telefone = typeof body?.telefone === "string" ? body.telefone.trim().slice(0, 40) : null;
   // Produto/empreendimento definido na mão pelo corretor (quando a IA não identificou).
@@ -1489,6 +1510,7 @@ async function acaoEditarDados(id, body, res) {
     .from("whatsapp_processamentos")
     .select("resultado_analise")
     .eq("id", id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -1511,13 +1533,14 @@ async function acaoEditarDados(id, body, res) {
   if (nome != null) updates.nome_cliente = nome;
   if (telefone != null) updates.telefone = telefone;
 
-  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).select("id").maybeSingle();
+  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).eq("organization_id", organizationId).select("id").maybeSingle();
   if (attempt.error && /column .* does not exist|nome_cliente|telefone/i.test(attempt.error.message || "")) {
     // sem colunas diretas — salva só o merged
     attempt = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .select("id")
       .maybeSingle();
   }
@@ -1655,11 +1678,12 @@ async function limparAprendizadoDosLeads(supabase, ids) {
   invalidarMemoriaComercialCache();
 }
 
-async function removerVinculosComLeadsApagados(supabase, ids) {
+async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
   const alvo = new Set(ids.map(String));
   const { data: rows, error } = await supabase
     .from("whatsapp_processamentos")
     .select("id,resultado_analise")
+    .eq("organization_id", organizationId)
     .limit(5000);
   if (error) throw new Error(`Vínculos: ${error.message}`);
   let atualizados = 0;
@@ -1672,14 +1696,15 @@ async function removerVinculosComLeadsApagados(supabase, ids) {
     const { error: updateErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: atualizado, atualizado_em: new Date().toISOString() })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("organization_id", organizationId);
     if (updateErr) throw new Error(`Vínculo ${row.id}: ${updateErr.message}`);
     atualizados++;
   }
   return atualizados;
 }
 
-async function acaoApagar(id, res, ids) {
+async function acaoApagar(id, res, ids, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
   const alvoPrincipal = String(id || "");
@@ -1689,7 +1714,8 @@ async function acaoApagar(id, res, ids) {
   const { data: rowsCandidatas, error: buscaErr } = await supabase
     .from("whatsapp_processamentos")
     .select("*")
-    .in("id", alvosBrutos);
+    .in("id", alvosBrutos)
+    .eq("organization_id", organizationId);
   if (buscaErr) return json(res, 500, { ok: false, error: buscaErr.message });
   const rows = Array.isArray(rowsCandidatas) ? rowsCandidatas : [];
   const principal = rows.find(r => String(r.id) === alvoPrincipal);
@@ -1712,11 +1738,11 @@ async function acaoApagar(id, res, ids) {
   try {
     const storage = await apagarStorageDosLeads(supabase, registros);
     await limparAprendizadoDosLeads(supabase, alvos);
-    const vinculosAtualizados = await removerVinculosComLeadsApagados(supabase, alvos);
+    const vinculosAtualizados = await removerVinculosComLeadsApagados(supabase, alvos, organizationId);
     const auxiliares = [];
     for (const tabela of ["leads", "direciona_leads"]) auxiliares.push(await apagarTabelaAuxiliar(supabase, tabela, alvos));
 
-    const { error } = await supabase.from("whatsapp_processamentos").delete().in("id", alvos);
+    const { error } = await supabase.from("whatsapp_processamentos").delete().in("id", alvos).eq("organization_id", organizationId);
     if (error) throw new Error(error.message);
 
     // Recria o banco de exemplos apenas com as conversas que continuam na carteira.
