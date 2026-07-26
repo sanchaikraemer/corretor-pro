@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel administrativo — Corretor Pro</title>
+<link rel="stylesheet" href="style.css">
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+  <div>
+    <div class="marca">
+      <img src="logo-cp.png" alt="">
+      <b>Corretor <strong>Pro</strong></b>
+    </div>
+    <div class="cartao larga" id="areaLogin">
+      <h1>Entrar como administrador</h1>
+      <p class="sub">Este painel é só pra quem administra a plataforma inteira (você).</p>
+      <label>E-mail</label>
+      <input id="email" type="email" placeholder="seuemail@empresa.com">
+      <label>Senha</label>
+      <input id="senha" type="password" placeholder="••••••">
+      <button onclick="entrarAdmin()">Entrar</button>
+      <div id="msgLogin"></div>
+    </div>
+
+    <div class="cartao larga" id="areaPainel" style="display:none">
+      <div class="rodape-conta">
+        <div><b>Painel administrativo</b><div class="tag-empresa">Todas as empresas cadastradas</div></div>
+        <button class="secundario pequeno" onclick="location.reload()">Sair</button>
+      </div>
+      <table>
+        <thead><tr><th>Empresa</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criada em</th><th>Ação</th></tr></thead>
+        <tbody id="linhas"></tbody>
+      </table>
+      <div id="msgPainel"></div>
+    </div>
+  </div>
+
+<script>
+const supabaseClient = supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+
+async function entrarAdmin() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const msg = document.getElementById('msgLogin');
+  msg.className = ''; msg.textContent = '';
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+    if (error) throw error;
+
+    const { data: souAdmin, error: adminErr } = await supabaseClient
+      .from('platform_admins')
+      .select('user_id');
+    if (adminErr) throw adminErr;
+
+    if (!souAdmin || !souAdmin.length) {
+      msg.className = 'erro';
+      msg.textContent = 'Esta conta não é administradora da plataforma.';
+      await supabaseClient.auth.signOut();
+      return;
+    }
+
+    document.getElementById('areaLogin').style.display = 'none';
+    document.getElementById('areaPainel').style.display = '';
+    carregarEmpresas();
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Erro ao entrar: ' + (e.message || e);
+  }
+}
+
+async function carregarEmpresas() {
+  const msg = document.getElementById('msgPainel');
+  const { data, error } = await supabaseClient
+    .from('admin_visao_empresas')
+    .select('*')
+    .order('criado_em', { ascending: false });
+  if (error) { msg.className = 'erro'; msg.textContent = error.message; return; }
+
+  const linhas = document.getElementById('linhas');
+  linhas.innerHTML = data.map(e => `
+    <tr>
+      <td>${e.nome}</td>
+      <td>${e.status}</td>
+      <td>${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
+      <td>${e.qtd_usuarios}</td>
+      <td>${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td>
+        <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
+        <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
+        <button class="pequeno secundario" style="width:auto" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function marcarPago(id) {
+  const { error } = await supabaseClient.from('organizations').update({ status: 'ativo' }).eq('id', id);
+  if (error) return alert('Erro: ' + error.message);
+  carregarEmpresas();
+}
+
+async function bloquear(id) {
+  const { error } = await supabaseClient.from('organizations').update({ status: 'bloqueado' }).eq('id', id);
+  if (error) return alert('Erro: ' + error.message);
+  carregarEmpresas();
+}
+
+async function estenderTeste(id) {
+  const { data: atual } = await supabaseClient.from('organizations').select('trial_expira_em').eq('id', id).single();
+  const base = atual && new Date(atual.trial_expira_em) > new Date() ? new Date(atual.trial_expira_em) : new Date();
+  base.setDate(base.getDate() + 7);
+  const { error } = await supabaseClient.from('organizations').update({ status: 'teste', trial_expira_em: base.toISOString() }).eq('id', id);
+  if (error) return alert('Erro: ' + error.message);
+  carregarEmpresas();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+/* Mesma paleta oficial do Corretor Pro (tema escuro), copiada de styles.css,
+   só pra este protótipo parecer o app de verdade. */
+:root{
+  --cp-bg:#052B36;
+  --cp-sidebar:#082F3B;
+  --cp-panel:#0D3946;
+  --cp-panel-2:#124653;
+  --cp-border:rgba(32,86,101,.5);
+  --cp-text:#F7FAFB;
+  --cp-soft:#C2CDD2;
+  --cp-muted:#8FA0A8;
+  --cp-coral:#FF6258;
+}
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+body{
+  min-height:100vh;
+  background:var(--cp-bg);
+  color:var(--cp-text);
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.marca{ text-align:center; margin-bottom:22px; }
+.marca img{ width:44px; height:44px; display:block; margin:0 auto 8px; }
+.marca b{ font-size:20px; font-weight:900; }
+.marca b strong{ color:var(--cp-coral); font-weight:900; }
+.cartao{
+  background:var(--cp-panel);
+  border:1px solid var(--cp-border);
+  border-radius:16px;
+  padding:28px;
+  width:100%;
+  max-width:400px;
+  box-shadow:0 14px 36px rgba(0,10,16,.25);
+}
+.cartao.larga{ max-width:640px; }
+.selo-proto{
+  display:inline-block;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.03em;
+  color:var(--cp-muted);
+  border:1px solid var(--cp-border);
+  border-radius:999px;
+  padding:3px 10px;
+  margin-bottom:14px;
+}
+h1{ font-size:19px; margin:0 0 4px; font-weight:800; }
+p.sub{ color:var(--cp-soft); font-size:13.5px; margin-top:0; line-height:1.5; }
+label{ display:block; font-size:13px; font-weight:700; color:var(--cp-soft); margin:16px 0 6px; }
+input{
+  width:100%;
+  padding:11px 13px;
+  border-radius:10px;
+  border:1px solid var(--cp-border);
+  background:var(--cp-sidebar);
+  color:var(--cp-text);
+  font-size:14px;
+}
+input::placeholder{ color:var(--cp-muted); }
+button{
+  margin-top:22px;
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  background:var(--cp-coral);
+  color:#fff;
+  font-weight:800;
+  font-size:14px;
+  cursor:pointer;
+}
+button.secundario{ background:var(--cp-panel-2); color:var(--cp-text); }
+button.pequeno{ width:auto; padding:9px 16px; margin-top:0; font-size:13px; }
+.erro{ color:#ff8f87; font-size:13px; margin-top:12px; }
+.ok{ color:#5fe0a0; font-size:13px; margin-top:12px; }
+.linkbar{ text-align:center; margin-top:18px; font-size:13px; color:var(--cp-soft); }
+a{ color:var(--cp-coral); text-decoration:none; font-weight:700; }
+.rodape-conta{
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:1px solid var(--cp-border); padding-bottom:16px; margin-bottom:20px;
+}
+.tag-empresa{ font-size:13px; color:var(--cp-soft); }
+table{ width:100%; border-collapse:collapse; margin-top:12px; }
+th,td{ text-align:left; padding:9px 6px; font-size:13.5px; border-bottom:1px solid var(--cp-border); }
+th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+.bloco-teste{ margin-top:28px; padding-top:20px; border-top:1px dashed var(--cp-border); }
+.bloco-teste h2{ font-size:14.5px; margin-bottom:4px; }
+.linha-teste{ display:flex; gap:8px; margin-top:12px; }
+.linha-teste input{ flex:1; }
+.demo-contas{
+  background:var(--cp-sidebar);
+  border:1px solid var(--cp-border);
+  border-radius:10px;
+  padding:12px 14px;
+  font-size:12px;
+  margin-top:18px;
+  color:var(--cp-soft);
+  line-height:1.6;
+}

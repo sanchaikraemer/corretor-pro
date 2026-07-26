@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Criar conta — Corretor Pro</title>
+<link rel="stylesheet" href="style.css">
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+  <div>
+    <div class="marca">
+      <img src="logo-cp.png" alt="">
+      <b>Corretor <strong>Pro</strong></b>
+    </div>
+    <div class="cartao">
+      <h1>Criar sua conta</h1>
+      <p class="sub">7 dias grátis pra testar. Sem cartão, sem compromisso.</p>
+
+      <label>Nome da sua imobiliária/empresa</label>
+      <input id="nomeEmpresa" placeholder="Ex.: Imobiliária Nova Vista">
+      <label>Seu e-mail</label>
+      <input id="email" type="email" placeholder="voce@suaempresa.com">
+      <label>Crie uma senha</label>
+      <input id="senha" type="password" placeholder="mínimo 6 caracteres">
+      <button id="btnCriar" onclick="cadastrar()">Criar conta e começar teste grátis</button>
+      <div id="msg"></div>
+
+      <div class="linkbar">Já tem conta? <a href="login.html">Entrar</a></div>
+    </div>
+  </div>
+
+<script>
+const supabaseClient = supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+
+async function cadastrar() {
+  const nomeEmpresa = document.getElementById('nomeEmpresa').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btnCriar');
+  msg.className = '';
+  msg.textContent = '';
+
+  if (!nomeEmpresa || !email || !senha) {
+    msg.className = 'erro';
+    msg.textContent = 'Preencha o nome da empresa, e-mail e senha.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Criando conta...';
+
+  try {
+    const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password: senha });
+    if (signUpError) throw signUpError;
+
+    if (!signUpData.session) {
+      // Projeto configurado para exigir confirmação por e-mail antes de liberar sessão.
+      msg.className = 'ok';
+      msg.textContent = 'Conta criada! Confirme seu e-mail (verifique a caixa de entrada) e depois faça login.';
+      btn.disabled = false;
+      btn.textContent = 'Criar conta e começar teste grátis';
+      return;
+    }
+
+    const { error: rpcError } = await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeEmpresa });
+    if (rpcError) throw rpcError;
+
+    msg.className = 'ok';
+    msg.textContent = 'Conta criada! Seu teste grátis de 7 dias começou agora. Entrando...';
+    setTimeout(() => { location.href = 'login.html'; }, 1200);
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Erro ao criar conta: ' + (e.message || e);
+    btn.disabled = false;
+    btn.textContent = 'Criar conta e começar teste grátis';
+  }
+}
+</script>
+</body>
+</html>

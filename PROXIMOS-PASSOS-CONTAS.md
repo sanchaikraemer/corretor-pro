@@ -1,34 +1,68 @@
-# Contas individuais + parede entre empresas — status pra quando você acordar
+# Contas individuais, teste de 7 dias e painel administrativo — status
 
-## O que eu fiz enquanto você dormia
+## O que está feito e CONFIRMADO no seu Supabase real
 
-1. **Protótipo visual** (`prototipo-contas-empresas/`) — já aprovado por você, com a cara real
-   do Corretor Pro. Continua isolado, não afeta o site no ar.
-2. **A receita real do banco de dados** (`supabase/migrations/`) — duas migrações prontas:
-   - `0001_contas_e_empresas.sql`: cria as tabelas de empresa/usuário e a cerca automática.
-   - `0002_migrar_dados_existentes.sql`: encaixa sua carteira de hoje dentro da "Empresa 1",
-     sem perder nada.
-   - **Testei as duas rodando de verdade** num banco igual ao seu, simulando duas empresas —
-     confirmei que uma nunca enxerga nem consegue forçar ver os dados da outra. Detalhes em
-     `supabase/migrations/README.md`.
+Você mesmo aplicou, ao vivo, essas três migrações (todas com "Success"):
 
-Nada disso foi publicado. Nada do site que está no ar foi tocado.
+1. `0001_contas_e_empresas.sql` — empresas, vínculo usuário↔empresa, e a cerca automática
+   (RLS) isolando `whatsapp_processamentos`/`direciona_config` por empresa.
+2. `0002_migrar_dados_existentes.sql` — seus 284 clientes de hoje migrados pra dentro da
+   "Empresa 1", confirmados por consulta.
+3. `0003_teste_e_administracao.sql` — teste grátis de 7 dias, status de pagamento, e o
+   painel administrativo (só você enxerga todas as empresas; cada corretor só a própria).
 
-## O que falta — e por que eu parei aqui
+Você já é **dono da Empresa 1** e **administrador da plataforma**.
 
-Pra continuar (fazer o sistema realmente logar com conta individual, e não mais com a chave
-única), eu preciso de uma de duas coisas, porque não tenho acesso ao seu Supabase real nesta
-sessão:
+## O que eu construí esta noite: `contas-reais/`
 
-- **Opção A** — você aplica as duas migrações (é copiar e colar, 2 cliques, o passo a passo tá
-  no README) e me avisa. Eu sigo o resto sem precisar de mais nada seu além disso.
-- **Opção B** — você me dá acesso ao projeto Supabase (URL + chave), e eu aplico e sigo direto.
+Três telas reais, ligadas no seu Supabase de verdade (não é mais simulação):
 
-Depois disso, o que falta é: trocar a tela de "digite a chave" pela tela de entrar de verdade, e
-fazer o sistema consultar o banco "como você", não mais "como administrador" — essa parte eu
-quero testar com uma conta real antes de publicar, não às cegas.
+- `contas-reais/paginas/cadastro.html` — cadastro público: corretor novo cria a própria
+  empresa sozinho, com e-mail/senha, e o teste de 7 dias começa automaticamente.
+- `contas-reais/paginas/login.html` — login que checa o status da empresa (dentro do teste,
+  vencido, ou pago) e mostra a mensagem certa em cada caso.
+- `contas-reais/paginas/admin.html` — painel só seu: lista todas as empresas, dias restantes
+  de teste, quantos usuários, com botões "marcar pago", "bloquear" e "+7 dias de teste".
 
-## Se você não fizer nada ainda
+## Como testei — e um limite importante que descobri
 
-Sem problema — o sistema continua funcionando exatamente como hoje, do jeito que você está
-acostumado. Essa mudança só acontece quando você decidir seguir.
+Toda a lógica de segurança (quem vê o quê, o cadastro não deixar ninguém se autopromover a
+pago, nem se vincular à empresa de outro) foi **testada de verdade, rodando**, num banco
+igual ao seu — inclusive achei e corrigi dois bugs reais nesse processo (contador de usuários
+zerado pro admin; e o login podendo mostrar a empresa errada pra quem é dono E administrador
+ao mesmo tempo, que é exatamente o seu caso). Isso está tudo documentado e verificado.
+
+**O que eu não consegui fazer**: esta sessão de trabalho roda num ambiente isolado que só
+acessa uma lista específica de endereços na internet — e o seu projeto Supabase não está
+nela. Não é um bug, é uma trava de segurança do próprio ambiente, e não tentei burlar. Isso
+significa que as três telas novas (`cadastro.html`, `login.html`, `admin.html`) foram escritas
+com todo cuidado e revisadas linha a linha, mas **eu não cliquei nelas de verdade contra o seu
+banco real** — só a parte de banco de dados (a mais arriscada) eu confirmei rodando.
+
+## O que eu peço pra você testar (5 minutos)
+
+Abra estes 3 arquivos (pode ser direto do computador, ou peça pra alguém subir num servidor
+de teste) e me conta o que acontece:
+
+1. Em `cadastro.html`: crie uma empresa de teste (pode ser fictícia) e veja se dá certo.
+2. Em `login.html`: entre com essa conta de teste e confira se aparece "restam 7 dias de
+   teste grátis".
+3. Em `admin.html`: entre com a SUA conta (dono/administrador) e veja se a empresa de teste
+   aparece na lista, com os botões funcionando.
+
+Se algo der errado, me manda o print da mensagem de erro que eu conserto na hora.
+
+## Uma decisão sua, antes de divulgar o link pros corretores
+
+No Supabase, em **Authentication → Settings**, tem uma opção **"Confirm email"**. Se estiver
+ligada, quem se cadastra precisa clicar num link no e-mail antes de conseguir entrar (mais
+seguro contra e-mail falso, mas trava o "já entra e começa a usar na hora" que você descreveu).
+Se estiver desligada, entra direto. É sua escolha — me avisa qual prefere que eu ajusto o
+texto das telas de acordo.
+
+## O que falta depois de você confirmar que essas telas funcionam
+
+Ligar essas telas no aplicativo de verdade — trocar a tela de "digite a chave" pela tela de
+entrar, e fazer o aplicativo já abrir na Home certa depois do login. Essa parte mexe em
+arquivos que estão no ar hoje, então prefiro fazer com você testando comigo, não sozinho de
+madrugada.
