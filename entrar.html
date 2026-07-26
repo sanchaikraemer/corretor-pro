@@ -95,16 +95,26 @@ async function entrar() {
     }
 
     msg.className = 'ok';
-    if (minhaEmpresa.status === 'teste') {
-      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — restam ${diasRestantes} dia(s) de teste grátis. (Redirecionamento pra tela principal ainda não está ligado nesta etapa de testes.)`;
+    const situacao = minhaEmpresa.status === 'teste'
+      ? `restam ${diasRestantes} dia(s) de teste grátis`
+      : 'assinatura ativa';
+
+    // v994 — só a empresa original (já usada no dia a dia) entra direto no sistema completo.
+    // O sistema principal (index.html/app.js) ainda não separa os dados por empresa — mandar
+    // qualquer empresa nova pra lá deixaria uma ver os clientes da outra. Até essa separação
+    // estar pronta, empresas novas ficam numa tela de espera segura em vez de entrar.
+    const idEmpresaPrincipal = String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '').trim();
+    const ehEmpresaPrincipal = idEmpresaPrincipal && String(minhaEmpresa.id || '').trim() === idEmpresaPrincipal;
+
+    if (ehEmpresaPrincipal) {
+      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — ${situacao}. Abrindo o sistema...`;
+      btn.textContent = 'Login confirmado ✓';
+      setTimeout(() => { window.location.href = '/'; }, 600);
     } else {
-      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — assinatura ativa. (Redirecionamento pra tela principal ainda não está ligado nesta etapa de testes.)`;
+      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — ${situacao}. A parte completa do sistema para novas empresas está quase pronta: assim que estiver liberada, você entra direto por aqui, sem precisar fazer nada. Já pode fechar esta página.`;
+      btn.disabled = false;
+      btn.textContent = 'Login confirmado ✓';
     }
-    // Ainda não redireciona pra Home (index.html) de propósito — essa ligação é a próxima etapa,
-    // feita com cuidado à parte. Por isso o botão não pode ficar preso em "Entrando...": aqui já
-    // reflete que o login terminou com sucesso, mesmo sem ter pra onde navegar ainda.
-    btn.disabled = false;
-    btn.textContent = 'Login confirmado ✓';
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
