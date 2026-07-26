@@ -23,7 +23,10 @@
       <label>Seu e-mail</label>
       <input id="email" type="email" placeholder="voce@suaempresa.com">
       <label>Crie uma senha</label>
-      <input id="senha" type="password" placeholder="mínimo 6 caracteres">
+      <div class="campo-senha">
+        <input id="senha" type="password" placeholder="mínimo 6 caracteres">
+        <button type="button" class="btn-olho" onclick="alternarSenha('senha', this)" aria-label="Mostrar senha"></button>
+      </div>
       <button id="btnCriar" onclick="cadastrar()">Criar conta e começar teste grátis</button>
       <div id="msg"></div>
 
@@ -33,6 +36,20 @@
 
 <script>
 const supabaseClient = supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+
+const SVG_OLHO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const SVG_OLHO_FECHADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 1 12s4 8 11 8a9.26 9.26 0 0 0 5.39-1.61M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
+
+function alternarSenha(id, btn) {
+  const campo = document.getElementById(id);
+  const oculto = campo.type === 'password';
+  campo.type = oculto ? 'text' : 'password';
+  btn.innerHTML = oculto ? SVG_OLHO_FECHADO : SVG_OLHO;
+  btn.setAttribute('aria-label', oculto ? 'Ocultar senha' : 'Mostrar senha');
+}
+
+// Ícone inicial (senha oculta -> mostra o olho aberto, convidando a clicar pra revelar).
+document.querySelectorAll('.btn-olho').forEach(b => { b.innerHTML = SVG_OLHO; });
 
 async function cadastrar() {
   const nomeEmpresa = document.getElementById('nomeEmpresa').value.trim();
@@ -57,9 +74,15 @@ async function cadastrar() {
     if (signUpError) throw signUpError;
 
     if (!signUpData.session) {
-      // Projeto configurado para exigir confirmação por e-mail antes de liberar sessão.
-      msg.className = 'ok';
-      msg.textContent = 'Conta criada! Confirme seu e-mail (verifique a caixa de entrada) e depois faça login.';
+      // O Supabase, por segurança, não avisa diretamente que um e-mail já tem conta — ele
+      // devolve uma resposta "de sucesso" fingida (sem revelar se o e-mail existe ou não).
+      // O jeito de diferenciar é checar "identities": um cadastro genuinamente novo vem com
+      // pelo menos uma; um e-mail que já existe vem com essa lista vazia.
+      const jaExiste = Array.isArray(signUpData.user?.identities) && signUpData.user.identities.length === 0;
+      msg.className = jaExiste ? 'erro' : 'ok';
+      msg.textContent = jaExiste
+        ? 'Esse e-mail já tem uma conta. Em vez de criar outra, clique em "Entrar".'
+        : 'Conta criada! Confirme seu e-mail (verifique a caixa de entrada) e depois faça login.';
       btn.disabled = false;
       btn.textContent = 'Criar conta e começar teste grátis';
       return;
