@@ -61,6 +61,26 @@ input{
   font-size:14px;
 }
 input::placeholder{ color:var(--cp-muted); }
+.campo-senha{ position:relative; }
+.campo-senha input{ padding-right:44px; }
+.btn-olho{
+  position:absolute;
+  right:4px;
+  top:0;
+  bottom:0;
+  width:38px;
+  margin-top:0;
+  padding:0;
+  background:none;
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  color:var(--cp-muted);
+}
+.btn-olho:hover{ color:var(--cp-text); }
+.btn-olho svg{ width:19px; height:19px; }
 button{
   margin-top:22px;
   width:100%;
