@@ -302,7 +302,7 @@ export function _mesclarTimelinesV681(antiga, nova) {
   return { timeline: out, novasUnicas, preservadasDoAntigo, substituidasPelaReal: a0.length - a.length, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
 }
 
-export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path }) {
+export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, organizationId }) {
   const analysis = result?.analysis || {};
   const lead = result?.lead || analysis?.lead || {};
   const nomeArquivoNovo = _cleanArquivoIdentity(fileName || result?.txtFile || path?.split("/").pop() || "");
@@ -315,6 +315,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const { data, error } = await supabase
     .from("whatsapp_processamentos")
     .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+    .eq("organization_id", organizationId)
     .order("atualizado_em", { ascending: false })
     .limit(5000);
   if (error || !Array.isArray(data)) return null;
@@ -391,7 +392,7 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   return _semScoreComercial(merged);
 }
 
-async function buscarAvatarAnterior(supabase, lead, analysis) {
+async function buscarAvatarAnterior(supabase, lead, analysis, organizationId) {
   try {
     const phone = String(lead?.phone || analysis?.lead?.phone || "").replace(/\D/g, "");
     const nomeNovo = _normNome(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || "");
@@ -399,6 +400,7 @@ async function buscarAvatarAnterior(supabase, lead, analysis) {
     const { data } = await supabase
       .from("whatsapp_processamentos")
       .select("resultado_analise, telefone, criado_em")
+      .eq("organization_id", organizationId)
       .order("criado_em", { ascending: false })
       .limit(500);
     if (!Array.isArray(data)) return "";
@@ -422,8 +424,12 @@ export async function persistProcessingResult({
   path = null,
   fileName = null,
   fileSize = null,
-  forceNew = false
+  forceNew = false,
+  organizationId
 }) {
+  if (!organizationId) {
+    return { ok: false, skipped: true, reason: "organizationId é obrigatório — sem ele, o lead ficaria sem dono." };
+  }
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return { ok: false, skipped: true, reason: "Supabase não configurado no ambiente." };
@@ -439,7 +445,7 @@ export async function persistProcessingResult({
   // Em uma criação explicitamente nova, nunca herda dados de outro registro com o mesmo nome.
   // Reaproveitamento de avatar continua disponível apenas nos fluxos legados que não pediram forceNew.
   if (!forceNew && analysis && !analysis.avatarFoto) {
-    const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis);
+    const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis, organizationId);
     if (fotoAnterior) analysis = { ...analysis, avatarFoto: fotoAnterior };
   }
 
@@ -448,9 +454,10 @@ export async function persistProcessingResult({
 
   const existenteV681 = forceNew
     ? null
-    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path });
+    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path, organizationId });
 
   const canonicalPayload = {
+    organization_id: organizationId,
     nome_arquivo: nomeArquivo,
     arquivo_nome: nomeArquivo,
     status: "pronto",
@@ -509,6 +516,7 @@ export async function persistProcessingResult({
     } catch (error) {
       attempts.push({ table: "whatsapp_processamentos", model: "canonical", error: error.message });
       const legacyPayload = {
+        organization_id: organizationId,
         arquivo_nome: nomeArquivo,
         status: "pronto",
         etapa: "Conversa processada pelo Motor Real do Corretor Pro.",
@@ -580,6 +588,8 @@ export async function persistProcessingResult({
 export async function listRecentProcessings(limit = 12, options = {}) {
   const supabase = options?.supabase || getSupabaseAdmin();
   if (!supabase) return { ok: false, items: [], error: "Supabase não configurado." };
+  const organizationId = options?.organizationId;
+  if (!organizationId) return { ok: false, items: [], error: "organizationId é obrigatório." };
 
   const resolvedLimit = limit == null ? 12 : Number(limit);
   const fetchLimit = Math.min(2000, Math.max(20, resolvedLimit * 3));
@@ -595,6 +605,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     let q = supabase
       .from("whatsapp_processamentos")
       .select(colunas)
+      .eq("organization_id", organizationId)
       .order(colunaData, { ascending: false });
     if (requestedId) q = q.eq("id", requestedId).limit(1);
     else q = q.limit(fetchLimit);

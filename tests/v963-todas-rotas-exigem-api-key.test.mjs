@@ -10,8 +10,9 @@ import assert from 'node:assert/strict';
 // rota já usa.
 //
 // Guarda de regressão: em vez de travar só nesse arquivo, varre TODO handler de rota em api/ e
-// garante que cada um chama requireApiKey — pra um endpoint novo nunca nascer sem essa checagem
-// de novo, em qualquer arquivo.
+// garante que cada um chama requireApiKey (ou, a partir da v998, resolveOrganizationId — que
+// por dentro sempre passa por requireApiKey no caminho sem login novo, e é mais forte que ela
+// quando existe login) — pra um endpoint novo nunca nascer sem alguma dessas checagens.
 
 const apiDir = new URL('../api/', import.meta.url);
 const arquivos = fs.readdirSync(apiDir).filter(f => f.endsWith('.js'));
@@ -25,7 +26,7 @@ for (const nome of arquivos) {
   const ehRota = /export default async function handler\s*\(/.test(src);
   if (!ehRota) { rotasSemHandler.push(nome); continue; }
   rotasVerificadas.push(nome);
-  if (!/requireApiKey\s*\(/.test(src)) rotasSemApiKey.push(nome);
+  if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src)) rotasSemApiKey.push(nome);
 }
 
 assert.ok(rotasVerificadas.includes('analisar.js'), 'api/analisar.js precisa ser reconhecida como rota (tem handler default)');
