@@ -18,10 +18,10 @@
       <h1>Criar sua conta</h1>
       <p class="sub">7 dias grátis pra testar. Sem cartão, sem compromisso.</p>
 
-      <label>Nome da sua imobiliária/empresa</label>
-      <input id="nomeEmpresa" placeholder="Ex.: Imobiliária Nova Vista">
+      <label>Seu nome</label>
+      <input id="nomeEmpresa" placeholder="Ex.: João da Silva">
       <label>Seu e-mail</label>
-      <input id="email" type="email" placeholder="voce@suaempresa.com">
+      <input id="email" type="email" placeholder="voce@email.com">
       <label>Crie uma senha</label>
       <div class="campo-senha">
         <input id="senha" type="password" placeholder="mínimo 6 caracteres">
@@ -62,7 +62,7 @@ async function cadastrar() {
 
   if (!nomeEmpresa || !email || !senha) {
     msg.className = 'erro';
-    msg.textContent = 'Preencha o nome da empresa, e-mail e senha.';
+    msg.textContent = 'Preencha seu nome, e-mail e senha.';
     return;
   }
 
