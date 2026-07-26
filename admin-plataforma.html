@@ -28,15 +28,33 @@
       <div id="msgLogin"></div>
     </div>
 
-    <div class="cartao larga" id="areaPainel" style="display:none">
+    <div class="cartao painel-largo" id="areaPainel" style="display:none">
       <div class="rodape-conta">
         <div><b>Painel administrativo</b><div class="tag-empresa">Todos os corretores cadastrados</div></div>
         <button class="secundario pequeno" onclick="location.reload()">Sair</button>
       </div>
-      <table>
-        <thead><tr><th>Corretor</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criada em</th><th>Ação</th></tr></thead>
-        <tbody id="linhas"></tbody>
-      </table>
+
+      <div class="stats-admin">
+        <div class="stat-tile"><span>Total de corretores</span><b id="statTotal">0</b></div>
+        <div class="stat-tile teste"><span>Em teste</span><b id="statTeste">0</b></div>
+        <div class="stat-tile ativo"><span>Ativos (pagando)</span><b id="statAtivo">0</b></div>
+        <div class="stat-tile bloqueado"><span>Bloqueados</span><b id="statBloqueado">0</b></div>
+      </div>
+
+      <div class="filtros-admin">
+        <input id="buscaCorretor" placeholder="Buscar corretor pelo nome..." oninput="buscarCorretor(this.value)">
+        <button class="chip selecionado" onclick="filtrarPorStatus('todos', this)">Todos</button>
+        <button class="chip" onclick="filtrarPorStatus('teste', this)">Em teste</button>
+        <button class="chip" onclick="filtrarPorStatus('ativo', this)">Ativos</button>
+        <button class="chip" onclick="filtrarPorStatus('bloqueado', this)">Bloqueados</button>
+      </div>
+
+      <div class="tabela-admin">
+        <table>
+          <thead><tr><th>Corretor</th><th>Status</th><th>Dias de teste</th><th>Usuários</th><th>Criado em</th><th>Ação</th></tr></thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
       <div id="msgPainel"></div>
     </div>
   </div>
@@ -88,6 +106,23 @@ async function entrarAdmin() {
   }
 }
 
+const STATUS_LABEL = { teste: 'Teste', ativo: 'Ativo', bloqueado: 'Bloqueado' };
+let ultimosDados = [];
+let filtroStatus = 'todos';
+let filtroBusca = '';
+
+// O nome vem de quem se cadastra (não é fixo no código) — sem escapar, um nome com
+// HTML/script quebraria ou injetaria código na tela do administrador.
+function escapeHtml(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function iniciais(nome) {
+  const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '?';
+  return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+}
+
 async function carregarEmpresas() {
   const msg = document.getElementById('msgPainel');
   const { data, error } = await supabaseClient
@@ -95,22 +130,54 @@ async function carregarEmpresas() {
     .select('*')
     .order('criado_em', { ascending: false });
   if (error) { msg.className = 'erro'; msg.textContent = error.message; return; }
+  ultimosDados = data || [];
+  renderizarPainel();
+}
+
+function renderizarPainel() {
+  const porStatus = { teste: 0, ativo: 0, bloqueado: 0 };
+  ultimosDados.forEach(e => { if (porStatus[e.status] !== undefined) porStatus[e.status]++; });
+  document.getElementById('statTotal').textContent = ultimosDados.length;
+  document.getElementById('statTeste').textContent = porStatus.teste;
+  document.getElementById('statAtivo').textContent = porStatus.ativo;
+  document.getElementById('statBloqueado').textContent = porStatus.bloqueado;
+
+  const busca = filtroBusca.trim().toLowerCase();
+  const filtrados = ultimosDados.filter(e => {
+    if (filtroStatus !== 'todos' && e.status !== filtroStatus) return false;
+    if (busca && !String(e.nome || '').toLowerCase().includes(busca)) return false;
+    return true;
+  });
 
   const linhas = document.getElementById('linhas');
-  linhas.innerHTML = data.map(e => `
+  linhas.innerHTML = filtrados.map(e => `
     <tr>
-      <td>${e.nome}</td>
-      <td>${e.status}</td>
+      <td><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div>${escapeHtml(e.nome)}</div></td>
+      <td><span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></td>
       <td>${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
       <td>${e.qtd_usuarios}</td>
       <td>${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
       <td>
-        <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
-        <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
-        <button class="pequeno secundario" style="width:auto" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
+        <div class="acoes-linha">
+          <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
+          <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
+          <button class="pequeno secundario" style="width:auto" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
+        </div>
       </td>
     </tr>
   `).join('');
+}
+
+function filtrarPorStatus(status, btn) {
+  filtroStatus = status;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('selecionado'));
+  btn.classList.add('selecionado');
+  renderizarPainel();
+}
+
+function buscarCorretor(valor) {
+  filtroBusca = valor;
+  renderizarPainel();
 }
 
 async function marcarPago(id) {

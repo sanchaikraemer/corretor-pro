@@ -10,6 +10,9 @@
   --cp-soft:#C2CDD2;
   --cp-muted:#8FA0A8;
   --cp-coral:#FF6258;
+  --st-teste:#ffcf7d; --st-teste-bg:rgba(255,196,90,.15);
+  --st-ativo:#5fe0a0; --st-ativo-bg:rgba(95,224,160,.15);
+  --st-bloq:#ff8f87; --st-bloq-bg:rgba(255,98,88,.18);
 }
 *{ box-sizing:border-box; }
 html,body{ height:100%; margin:0; }
@@ -111,6 +114,32 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .bloco-teste h2{ font-size:14.5px; margin-bottom:4px; }
 .linha-teste{ display:flex; gap:8px; margin-top:12px; }
 .linha-teste input{ flex:1; }
+/* v996 — painel administrativo ganha resumo, busca/filtro e mais espaço na tela (modelo 1
+   escolhido entre as 4 propostas de layout). */
+.painel-largo{ max-width:1200px; }
+.stats-admin{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+.stat-tile{ background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; padding:18px 20px; }
+.stat-tile span{ display:block; font-size:12px; color:var(--cp-muted); font-weight:700; margin-bottom:8px; }
+.stat-tile b{ font-size:30px; font-weight:900; font-variant-numeric:tabular-nums; }
+.stat-tile.teste b{ color:var(--st-teste); }
+.stat-tile.ativo b{ color:var(--st-ativo); }
+.stat-tile.bloqueado b{ color:var(--st-bloq); }
+.filtros-admin{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.filtros-admin input{ flex:0 0 260px; margin:0; }
+.chip{ font-size:12.5px; font-weight:700; padding:8px 14px; border-radius:999px; border:1px solid var(--cp-border); color:var(--cp-soft); background:transparent; cursor:pointer; }
+.chip.selecionado{ background:var(--cp-panel-2); color:var(--cp-text); border-color:var(--cp-panel-2); }
+.tabela-admin{ background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; overflow:hidden; }
+.tabela-admin table{ margin-top:0; }
+.tabela-admin tbody tr:hover{ background:var(--cp-panel-2); }
+.nome-corretor{ display:flex; align-items:center; gap:10px; }
+.avatar-admin{ width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:800; color:#052B36; flex:0 0 auto; }
+.acoes-linha{ display:flex; gap:6px; flex-wrap:wrap; }
+.pill{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:800; padding:4px 10px; border-radius:999px; white-space:nowrap; }
+.pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+.pill.teste{ color:var(--st-teste); background:var(--st-teste-bg); }
+.pill.ativo{ color:var(--st-ativo); background:var(--st-ativo-bg); }
+.pill.bloqueado{ color:var(--st-bloq); background:var(--st-bloq-bg); }
+
 .demo-contas{
   background:var(--cp-sidebar);
   border:1px solid var(--cp-border);
