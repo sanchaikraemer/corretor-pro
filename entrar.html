@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <title>Entrar — Corretor Pro</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="contas-estilo.css">
 <script src="vendor/supabase.js"></script>
-<script src="config.js"></script>
+<script src="contas-config.js"></script>
 </head>
 <body>
   <div>
@@ -83,7 +83,7 @@ async function entrar() {
     } else {
       msg.textContent = `Entrando em "${minhaEmpresa.nome}" — assinatura ativa.`;
     }
-    // Aqui, quando integrado ao app de verdade, redirecionaria pra Home (index.html).
+    // Próximo passo (fora deste momento): redirecionar pra Home (index.html) já autenticado.
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);

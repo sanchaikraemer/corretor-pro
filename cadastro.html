@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <title>Criar conta — Corretor Pro</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="contas-estilo.css">
 <script src="vendor/supabase.js"></script>
-<script src="config.js"></script>
+<script src="contas-config.js"></script>
 </head>
 <body>
   <div>
@@ -26,7 +26,7 @@
       <button id="btnCriar" onclick="cadastrar()">Criar conta e começar teste grátis</button>
       <div id="msg"></div>
 
-      <div class="linkbar">Já tem conta? <a href="login.html">Entrar</a></div>
+      <div class="linkbar">Já tem conta? <a href="entrar.html">Entrar</a></div>
     </div>
   </div>
 
@@ -69,7 +69,7 @@ async function cadastrar() {
 
     msg.className = 'ok';
     msg.textContent = 'Conta criada! Seu teste grátis de 7 dias começou agora. Entrando...';
-    setTimeout(() => { location.href = 'login.html'; }, 1200);
+    setTimeout(() => { location.href = 'entrar.html'; }, 1200);
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao criar conta: ' + (e.message || e);
