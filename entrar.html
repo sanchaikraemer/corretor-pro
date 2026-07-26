@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Entrar — Corretor Pro</title>
+<link rel="stylesheet" href="contas-estilo.css">
+<script src="vendor/supabase.js"></script>
+<script src="contas-config.js"></script>
+</head>
+<body>
+  <div>
+    <div class="marca">
+      <img src="logo-cp.png" alt="">
+      <b>Corretor <strong>Pro</strong></b>
+    </div>
+    <div class="cartao">
+      <h1>Entrar</h1>
+      <p class="sub">Cada corretor/imobiliária entra com sua própria conta.</p>
+
+      <label>E-mail</label>
+      <input id="email" type="email" placeholder="seuemail@empresa.com">
+      <label>Senha</label>
+      <input id="senha" type="password" placeholder="••••••">
+      <button id="btnEntrar" onclick="entrar()">Entrar</button>
+      <div id="msg"></div>
+
+      <div class="linkbar">Não tem conta? <a href="cadastro.html">Criar conta grátis</a></div>
+    </div>
+  </div>
+
+<script>
+const supabaseClient = supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+
+async function entrar() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btnEntrar');
+  msg.className = '';
+  msg.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+
+  try {
+    const { data: loginData, error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+    if (error) throw error;
+
+    // Busca a empresa PELO VÍNCULO do próprio usuário (memberships), não pela visão geral —
+    // quem também é administrador da plataforma enxerga todas as empresas na admin_visao_empresas,
+    // e ali não dava pra saber qual delas era a própria (podia mostrar o status de outra empresa
+    // por engano). Filtrando por memberships.user_id = eu mesmo, é sempre a empresa certa.
+    const meuId = loginData.user.id;
+    const { data: vinculo, error: empError } = await supabaseClient
+      .from('memberships')
+      .select('papel, organizations(id, nome, status, trial_expira_em)')
+      .eq('user_id', meuId)
+      .limit(1)
+      .maybeSingle();
+    if (empError) throw empError;
+
+    const minhaEmpresa = vinculo && vinculo.organizations;
+    if (!minhaEmpresa) {
+      msg.className = 'erro';
+      msg.textContent = 'Login ok, mas não encontrei nenhuma empresa vinculada a esta conta.';
+      btn.disabled = false; btn.textContent = 'Entrar';
+      return;
+    }
+
+    const diasRestantes = Math.max(0, Math.ceil((new Date(minhaEmpresa.trial_expira_em) - new Date()) / 86400000));
+    const bloqueado = minhaEmpresa.status === 'bloqueado'
+      || (minhaEmpresa.status === 'teste' && diasRestantes <= 0);
+
+    if (bloqueado) {
+      msg.className = 'erro';
+      msg.textContent = `Seu teste grátis de "${minhaEmpresa.nome}" acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento.`;
+      btn.disabled = false; btn.textContent = 'Entrar';
+      return;
+    }
+
+    msg.className = 'ok';
+    if (minhaEmpresa.status === 'teste') {
+      msg.textContent = `Entrando em "${minhaEmpresa.nome}" — restam ${diasRestantes} dia(s) de teste grátis.`;
+    } else {
+      msg.textContent = `Entrando em "${minhaEmpresa.nome}" — assinatura ativa.`;
+    }
+    // Próximo passo (fora deste momento): redirecionar pra Home (index.html) já autenticado.
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Erro ao entrar: ' + (e.message || e);
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+</script>
+</body>
+</html>

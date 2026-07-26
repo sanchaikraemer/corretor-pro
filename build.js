@@ -50,11 +50,13 @@ try {
 const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
   "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png",
-  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js",
+  "cadastro.html", "entrar.html", "admin-plataforma.html", "contas-estilo.css", "contas-config.js"
 ];
 const textFiles = new Set([
   "index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js",
-  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js"
+  "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/proposta.js", "js/pwa-install.js",
+  "cadastro.html", "entrar.html", "admin-plataforma.html", "contas-estilo.css", "contas-config.js"
 ]);
 
 for (const file of files) {
@@ -79,7 +81,11 @@ const jsZipSrc = path.join(__dirname, "node_modules", "jszip", "dist", "jszip.mi
 if (!fs.existsSync(jsZipSrc)) throw new Error("JSZip não instalado. Execute npm install antes do build.");
 fs.copyFileSync(jsZipSrc, path.join(vendorDir, "jszip.min.js"));
 
-const expected = [...files, "vendor/jszip.min.js"].sort();
+const supabaseJsSrc = path.join(__dirname, "node_modules", "@supabase", "supabase-js", "dist", "umd", "supabase.js");
+if (!fs.existsSync(supabaseJsSrc)) throw new Error("supabase-js não instalado. Execute npm install antes do build.");
+fs.copyFileSync(supabaseJsSrc, path.join(vendorDir, "supabase.js"));
+
+const expected = [...files, "vendor/jszip.min.js", "vendor/supabase.js"].sort();
 const actual = [];
 function walk(dir, prefix = "") {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
