@@ -24,7 +24,7 @@ for (const arquivo of ['cadastro.html', 'entrar.html', 'admin-plataforma.html'])
   const html = fs.readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
   assert.ok(!/https?:\/\//.test(html.match(/<script[^>]*src="([^"]*)"/g)?.join('') || ''),
     `${arquivo} não pode carregar script de CDN/URL externa`);
-  assert.match(html, /src="vendor\/supabase\.js"/, `${arquivo} precisa usar o supabase-js vendorizado localmente`);
+  assert.match(html, /src="vendor\/supabase\.js(\?v=[^"]*)?"/, `${arquivo} precisa usar o supabase-js vendorizado localmente`);
 }
 
 // A anon key é pública de propósito — mas a service_role (secreta) nunca pode aparecer aqui.

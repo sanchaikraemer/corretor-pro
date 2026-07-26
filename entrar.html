@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entrar — Corretor Pro</title>
-<link rel="stylesheet" href="contas-estilo.css">
-<script src="vendor/supabase.js"></script>
-<script src="contas-config.js"></script>
+<link rel="stylesheet" href="contas-estilo.css?v=__VERSION__">
+<script src="vendor/supabase.js?v=__VERSION__"></script>
+<script src="contas-config.js?v=__VERSION__"></script>
 </head>
 <body>
   <div>
@@ -96,11 +96,15 @@ async function entrar() {
 
     msg.className = 'ok';
     if (minhaEmpresa.status === 'teste') {
-      msg.textContent = `Entrando em "${minhaEmpresa.nome}" — restam ${diasRestantes} dia(s) de teste grátis.`;
+      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — restam ${diasRestantes} dia(s) de teste grátis. (Redirecionamento pra tela principal ainda não está ligado nesta etapa de testes.)`;
     } else {
-      msg.textContent = `Entrando em "${minhaEmpresa.nome}" — assinatura ativa.`;
+      msg.textContent = `Login confirmado em "${minhaEmpresa.nome}" — assinatura ativa. (Redirecionamento pra tela principal ainda não está ligado nesta etapa de testes.)`;
     }
-    // Próximo passo (fora deste momento): redirecionar pra Home (index.html) já autenticado.
+    // Ainda não redireciona pra Home (index.html) de propósito — essa ligação é a próxima etapa,
+    // feita com cuidado à parte. Por isso o botão não pode ficar preso em "Entrando...": aqui já
+    // reflete que o login terminou com sucesso, mesmo sem ter pra onde navegar ainda.
+    btn.disabled = false;
+    btn.textContent = 'Login confirmado ✓';
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
