@@ -126,7 +126,7 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .stat-tile.bloqueado b{ color:var(--st-bloq); }
 .filtros-admin{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
 .filtros-admin input{ flex:0 0 260px; margin:0; }
-.chip{ font-size:12.5px; font-weight:700; padding:8px 14px; border-radius:999px; border:1px solid var(--cp-border); color:var(--cp-soft); background:transparent; cursor:pointer; }
+.chip{ width:auto; margin-top:0; font-size:12.5px; font-weight:700; padding:8px 14px; border-radius:999px; border:1px solid var(--cp-border); color:var(--cp-soft); background:transparent; cursor:pointer; }
 .chip.selecionado{ background:var(--cp-panel-2); color:var(--cp-text); border-color:var(--cp-panel-2); }
 .tabela-admin{ background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; overflow:hidden; }
 .tabela-admin table{ margin-top:0; }
@@ -139,6 +139,27 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .pill.teste{ color:var(--st-teste); background:var(--st-teste-bg); }
 .pill.ativo{ color:var(--st-ativo); background:var(--st-ativo-bg); }
 .pill.bloqueado{ color:var(--st-bloq); background:var(--st-bloq-bg); }
+
+/* v1006 — painel administrativo legível no celular: em tela estreita a tabela vira cartões
+   (um por corretor), cada dado com seu rótulo ao lado e os botões em linha, sem corte lateral. */
+@media (max-width:760px){
+  .painel-largo{ padding:18px; }
+  .stats-admin{ grid-template-columns:repeat(2,1fr); gap:10px; }
+  .stat-tile{ padding:12px 14px; }
+  .stat-tile b{ font-size:24px; }
+  .filtros-admin input{ flex:1 1 100%; }
+  .tabela-admin{ background:transparent; border:none; border-radius:0; overflow:visible; }
+  .tabela-admin thead{ display:none; }
+  .tabela-admin table, .tabela-admin tbody{ display:block; width:100%; }
+  .tabela-admin tbody tr{ display:block; background:var(--cp-sidebar); border:1px solid var(--cp-border); border-radius:14px; padding:4px 0 12px; margin-bottom:12px; }
+  .tabela-admin tbody tr:hover{ background:var(--cp-sidebar); }
+  .tabela-admin td{ display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:none; padding:7px 16px; font-size:14px; }
+  .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  .tabela-admin td[data-rotulo=""]::before{ content:none; }
+  .tabela-admin td:first-child{ padding-top:12px; font-weight:800; }
+  .tabela-admin td:last-child{ display:block; }
+  .acoes-linha{ margin-top:6px; }
+}
 
 .demo-contas{
   background:var(--cp-sidebar);
