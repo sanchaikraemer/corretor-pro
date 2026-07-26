@@ -1,4 +1,4 @@
-import { requireApiKey, _buscarProcessamentoExistenteV681 } from "./_persistence.js";
+import { resolveOrganizationId, _buscarProcessamentoExistenteV681 } from "./_persistence.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import {
@@ -211,7 +211,8 @@ async function removerImportacao(storage, manifest, manifestPath, storagePath) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST para processar um ZIP do Storage." });
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -312,7 +313,7 @@ export default async function handler(req, res) {
       let existingTimeline = Array.isArray(body?.existingTimeline) ? body.existingTimeline : [];
       const existingLeadId = body?.existingLeadId ? String(body.existingLeadId) : "";
       if (existingLeadId && !existingTimeline.length) {
-        const { data: anterior, error: anteriorError } = await supabase.from("whatsapp_processamentos").select("timeline_json").eq("id", existingLeadId).maybeSingle();
+        const { data: anterior, error: anteriorError } = await supabase.from("whatsapp_processamentos").select("timeline_json").eq("id", existingLeadId).eq("organization_id", organizationId).maybeSingle();
         if (anteriorError) throw new Error(`Não consegui recuperar o histórico anterior: ${anteriorError.message}`);
         if (anterior) existingTimeline = Array.isArray(anterior.timeline_json) ? anterior.timeline_json : existingTimeline;
       }

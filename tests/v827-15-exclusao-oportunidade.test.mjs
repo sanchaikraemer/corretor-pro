@@ -14,7 +14,7 @@ import { _buscarProcessamentoExistenteV681, _nomeIdentity, _nomeRuimIdentity, _n
 // identificar naquela rodada.
 const supabaseFake = (rows) => ({
   from() {
-    return { select() { return { order() { return { limit() { return Promise.resolve({ data: rows, error: null }); } }; } }; } };
+    return { select() { return { eq() { return { order() { return { limit() { return Promise.resolve({ data: rows, error: null }); } }; } }; } }; } };
   }
 });
 const rowJoao = { id: "row-joao", telefone: "", resultado_analise: { produtoInteresse: "Personalité", clientName: "João Pedro" } };

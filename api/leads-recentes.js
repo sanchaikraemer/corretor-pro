@@ -1,4 +1,4 @@
-import { requireApiKey, getSupabaseAdmin, listRecentProcessings } from "./_persistence.js";
+import { requireApiKey, resolveOrganizationId, getSupabaseAdmin, listRecentProcessings } from "./_persistence.js";
 
 const CACHE_TTL_MS = 5000; // no máximo 5 s; sincronização entre celular e PC tem prioridade
 const responseCache = new Map();
@@ -181,17 +181,27 @@ function json(res, status, payload) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Use GET." });
-  if (String(req.query?.audit || "") === "1") return auditarDados(req, res);
-  if (String(req.query?.export || "") === "full") return exportarTudo(req, res);
+  // audit/export continuam só pelo caminho da chave compartilhada (uso interno de operação,
+  // não uma tela que um corretor comum acessa) — mantém requireApiKey aqui de propósito.
+  if (String(req.query?.audit || "") === "1") {
+    if (requireApiKey(req, res) !== true) return;
+    return auditarDados(req, res);
+  }
+  if (String(req.query?.export || "") === "full") {
+    if (requireApiKey(req, res) !== true) return;
+    return exportarTudo(req, res);
+  }
   const limit = Math.min(2000, Math.max(1, Number(req.query?.limit || 8)));
   const fresh = String(req.query?.fresh || "") === "1";
-  const cached = responseCache.get(limit);
+  const cacheKey = `${organizationId}:${limit}`;
+  const cached = responseCache.get(cacheKey);
   if (!fresh && cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
     return json(res, 200, cached.result);
   }
-  const result = await listRecentProcessings(limit, { previewLimit: 8 });
-  if (result.ok) responseCache.set(limit, { ts: Date.now(), result });
+  const result = await listRecentProcessings(limit, { previewLimit: 8, organizationId });
+  if (result.ok) responseCache.set(cacheKey, { ts: Date.now(), result });
   return json(res, result.ok ? 200 : 500, result);
 }

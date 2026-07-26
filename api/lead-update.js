@@ -6,7 +6,7 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Uso: POST /api/lead-update com body { id, action, ...payload }
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
-import { requireApiKey } from "./_persistence.js";
+import { resolveOrganizationId } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -52,7 +52,8 @@ async function readJsonBody(req) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   // GET pra ler memória sem precisar de body (usado pelo carregarMemoria do front).
   if (req.method === "GET") {
     const id = req.query?.id;
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
     const action = req.query?.action || "memoria-get";
     if (action === "memoria-get") return await acaoMemoriaGet(id, res);
     if (action === "detalhe") {
-      const result = await listRecentProcessings(1, { id, includeFullTimeline: true });
+      const result = await listRecentProcessings(1, { id, includeFullTimeline: true, organizationId });
       const item = result?.items?.[0] || null;
       if (!result?.ok) return json(res, 500, result);
       if (!item) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -76,9 +77,9 @@ export default async function handler(req, res) {
   if (!action) return json(res, 400, { ok: false, error: "Informe action." });
 
   // salvar-novo / criar-manual não precisam de id (o banco gera ao salvar)
-  if (action === "salvar-novo") return await acaoSalvarNovo(body, res);
-  if (action === "criar-manual") return await acaoCriarManual(body, res);
-  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res);
+  if (action === "salvar-novo") return await acaoSalvarNovo(body, res, organizationId);
+  if (action === "criar-manual") return await acaoCriarManual(body, res, organizationId);
+  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, organizationId);
   if (action === "extrair-print") return await acaoExtrairPrint(body, res);
   if (action === "detectar-rosto") return await acaoDetectarRosto(body, res);
   if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res);
@@ -216,7 +217,7 @@ async function acaoLembreteClear(id, res) {
 }
 
 // ============ SALVAR NOVO LEAD (após o usuário clicar em "Salvar lead") ============
-async function acaoSalvarNovo(body, res) {
+async function acaoSalvarNovo(body, res, organizationId) {
   const result = body?.result;
   if (!result || typeof result !== "object") {
     return json(res, 400, { ok: false, error: "Informe result com os dados processados." });
@@ -245,7 +246,8 @@ async function acaoSalvarNovo(body, res) {
       fileName: body?.fileName || result?.txtFile || null,
       fileSize: body?.fileSize || null,
       // Mesmo nome/telefone nunca cria outro cadastro: a persistência atualiza o existente.
-      forceNew: false
+      forceNew: false,
+      organizationId
     });
     const salvoId = persistence?.processing?.id;
     let aprendizadoAutomatico = null;
@@ -479,7 +481,7 @@ Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por 
   return json(res, 200, { ok: false, error: ultimoErro || "Falha ao ler os prints." });
 }
 
-async function acaoCriarManual(body, res) {
+async function acaoCriarManual(body, res, organizationId) {
   const nome = String(body?.nome || "").trim().slice(0, 120);
   const telefone = String(body?.telefone || "").trim().slice(0, 40);
   const produto = String(body?.produto || "").trim().slice(0, 80);
@@ -566,7 +568,8 @@ async function acaoCriarManual(body, res) {
       bucket: null,
       path: null,
       fileName: nome, // garante que nome_arquivo no banco também é só "Bocorni"
-      fileSize: null
+      fileSize: null,
+      organizationId
     });
     return json(res, 200, { ok: !!persistence?.processing?.id, id: persistence?.processing?.id, persistence });
   } catch (err) {
@@ -579,7 +582,7 @@ async function acaoCriarManual(body, res) {
 // Cria um registro comercial independente para um novo comprador, preservando o
 // contato/parceiro original. Não exige alteração de schema no Supabase: o vínculo
 // fica dentro de resultado_analise.modeloComercial e oportunidadesVinculadas.
-async function acaoNovaOportunidadeParceiro(body, res) {
+async function acaoNovaOportunidadeParceiro(body, res, organizationId) {
   const idOrigem = String(body?.id || "").trim();
   const compradorFinal = String(body?.compradorFinal || "").trim().slice(0, 120);
   const produto = String(body?.produto || "").trim().slice(0, 100);
@@ -594,6 +597,7 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     .from("whatsapp_processamentos")
     .select("id,resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
     .eq("id", idOrigem)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!origem) return json(res, 404, { ok: false, error: "Contato parceiro não encontrado." });
@@ -702,7 +706,8 @@ async function acaoNovaOportunidadeParceiro(body, res) {
     bucket: null,
     path: null,
     fileName: result.txtFile,
-    fileSize: null
+    fileSize: null,
+    organizationId
   });
   const novoId = persistence?.processing?.id;
   if (!novoId) return json(res, 500, { ok: false, error: "Não foi possível criar a nova oportunidade.", details: persistence?.warnings || [] });
@@ -727,7 +732,8 @@ async function acaoNovaOportunidadeParceiro(body, res) {
   await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: origemAtualizada, atualizado_em: now.toISOString(), updated_at: now.toISOString() })
-    .eq("id", idOrigem);
+    .eq("id", idOrigem)
+    .eq("organization_id", organizationId);
 
   return json(res, 200, {
     ok: true,
