@@ -1,4 +1,4 @@
-import { requireApiKey } from "./_persistence.js";
+import { resolveOrganizationId } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
 import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, marcarAprendizadoPendente, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR, commercialSchemaFrom, stampCommercialSchema } from "../js/commercial-schema.js";
@@ -217,7 +217,8 @@ function enriquecerIAComercialV684(analysis, lead, timeline) {
 }
 
 async function reanalisarLeadHandler702(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Use POST." });
   const body = await readJsonBody(req).catch(() => ({}));
   const cerebroConfig = body?.cerebroConfig || null;
@@ -230,7 +231,7 @@ async function reanalisarLeadHandler702(req, res) {
   const { data: row, error: getErr } = await supabase
     .from("whatsapp_processamentos")
     .select("timeline_json, resultado_analise, nome_arquivo, etapa")
-    .eq("id", id)
+    .eq("id", id).eq("organization_id", organizationId)
     .maybeSingle();
   if (getErr) return json(res, 500, { ok: false, error: getErr.message });
   if (!row) return json(res, 404, { ok: false, error: "Lead não encontrado." });
@@ -245,7 +246,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: rmErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ timeline_json: nova, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (rmErr) return json(res, 500, { ok: false, error: rmErr.message });
     return json(res, 200, { ok: true, removido: true });
   }
@@ -284,7 +285,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: marcarErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: agora.toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (marcarErr) return json(res, 500, { ok: false, error: marcarErr.message });
     return json(res, 200, { ok: true, marcado: indiceHoje < 0, atualizado: indiceHoje >= 0, dataBR: br.dataBR, horaBR: br.horaBR, quando: agora.toISOString() });
   }
@@ -313,7 +314,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: dErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: agora.toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (dErr) return json(res, 500, { ok: false, error: dErr.message });
     return json(res, 200, { ok: true, removido: true });
   }
@@ -335,7 +336,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: rgErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (rgErr) return json(res, 500, { ok: false, error: rgErr.message });
     return json(res, 200, { ok: true, reagendado: true, quando: q.toISOString() });
   }
@@ -348,7 +349,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: rmErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (rmErr) return json(res, 500, { ok: false, error: rmErr.message });
     return json(res, 200, { ok: true, removido: true });
   }
@@ -385,7 +386,7 @@ async function reanalisarLeadHandler702(req, res) {
     const updC = { resultado_analise: mergedC, timeline_json: novaTl, atualizado_em: new Date().toISOString() };
     const etapaC = String(row.etapa || "Novo").toLowerCase();
     if (!/vendido|perdido/.test(etapaC) && novoC?.etapaSugerida) updC.etapa = novoC.etapaSugerida;
-    const { error: errC } = await supabase.from("whatsapp_processamentos").update(updC).eq("id", id);
+    const { error: errC } = await supabase.from("whatsapp_processamentos").update(updC).eq("id", id).eq("organization_id", organizationId);
     if (errC) return json(res, 500, { ok: false, error: errC.message });
     return json(res, 200, { ok: true, analysis: mergedC });
   }
@@ -520,7 +521,7 @@ async function reanalisarLeadHandler702(req, res) {
     }
     const update = { resultado_analise: merged, atualizado_em: new Date().toISOString() };
     if (novoAtendimento) update.timeline_json = timelineFinal;
-    const { error: upErr } = await supabase.from("whatsapp_processamentos").update(update).eq("id", id);
+    const { error: upErr } = await supabase.from("whatsapp_processamentos").update(update).eq("id", id).eq("organization_id", organizationId);
     if (upErr) return json(res, 500, { ok: false, error: upErr.message });
     return json(res, 200, { ok: true, apenasSalvar: true, atendimentoRegistrado: body?.registrarAtendimento === true, quando: new Date().toISOString() });
   }
@@ -533,7 +534,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { error: preErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: preMerged, timeline_json: timelineFinal, atualizado_em: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id).eq("organization_id", organizationId);
     if (preErr) return json(res, 500, { ok: false, error: preErr.message });
   }
 
@@ -588,7 +589,7 @@ async function reanalisarLeadHandler702(req, res) {
   const { data: freshRow } = await supabase
     .from("whatsapp_processamentos")
     .select("resultado_analise, updated_at")
-    .eq("id", id)
+    .eq("id", id).eq("organization_id", organizationId)
     .single();
   const freshPrevious = freshRow?.resultado_analise || previous;
 
@@ -638,7 +639,7 @@ async function reanalisarLeadHandler702(req, res) {
   const ehFinalCorretor = /vendido|perdido/.test(etapaAtual);
   if (!ehFinalCorretor && merged?.etapaSugerida) update.etapa = merged.etapaSugerida;
   const freshUpdatedAt = freshRow?.updated_at;
-  let updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id);
+  let updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id).eq("organization_id", organizationId);
   let finalQuery = freshUpdatedAt ? updateQuery.eq("updated_at", freshUpdatedAt) : updateQuery;
   let { data: updatedRows, error: putErr } = await finalQuery.select("id");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
@@ -648,7 +649,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { data: retryRow, error: retryReadErr } = await supabase
       .from("whatsapp_processamentos")
       .select("resultado_analise, updated_at")
-      .eq("id", id)
+      .eq("id", id).eq("organization_id", organizationId)
       .single();
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
     let retryMerged = { ...(retryRow?.resultado_analise || {}), ...merged, reanalisadoEm: agoraSalvar };
@@ -657,7 +658,7 @@ async function reanalisarLeadHandler702(req, res) {
     retryMerged = enriquecerIAComercialV684(retryMerged, leadModelo, timelineFinal);
     retryMerged = stampCommercialSchema(retryMerged);
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
-    let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id);
+    let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id).eq("organization_id", organizationId);
     if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
     const retryResult = await retryQ.select("id");
     if (retryResult.error) return json(res, 500, { ok:false, error:retryResult.error.message });
@@ -670,7 +671,7 @@ async function reanalisarLeadHandler702(req, res) {
   const { data: verifyRow, error: verifyErr } = await supabase
     .from("whatsapp_processamentos")
     .select("resultado_analise")
-    .eq("id", id)
+    .eq("id", id).eq("organization_id", organizationId)
     .single();
   if (verifyErr) return json(res, 500, { ok:false, error: verifyErr.message });
   let persisted = verifyRow?.resultado_analise || null;
@@ -680,7 +681,7 @@ async function reanalisarLeadHandler702(req, res) {
     const { data: forcedRows, error: forcedErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: forced, atualizado_em: new Date().toISOString() })
-      .eq("id", id)
+      .eq("id", id).eq("organization_id", organizationId)
       .select("resultado_analise");
     if (forcedErr) return json(res, 500, { ok:false, error: forcedErr.message });
     persisted = forcedRows?.[0]?.resultado_analise || forced;
