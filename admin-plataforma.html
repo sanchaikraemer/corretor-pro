@@ -152,12 +152,12 @@ function renderizarPainel() {
   const linhas = document.getElementById('linhas');
   linhas.innerHTML = filtrados.map(e => `
     <tr>
-      <td><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div>${escapeHtml(e.nome)}</div></td>
-      <td><span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></td>
-      <td>${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
-      <td>${e.qtd_usuarios}</td>
-      <td>${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
-      <td>
+      <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div>${escapeHtml(e.nome)}</div></td>
+      <td data-rotulo="Status"><span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></td>
+      <td data-rotulo="Dias de teste">${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
+      <td data-rotulo="Usuários">${e.qtd_usuarios}</td>
+      <td data-rotulo="Criado em">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
+      <td data-rotulo="">
         <div class="acoes-linha">
           <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
           <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
