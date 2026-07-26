@@ -375,7 +375,7 @@ async function reanalisarLeadHandler702(req, res) {
     }
     if (!novaTl.length) return json(res, 400, { ok: false, error: "Sem conteúdo pra analisar (deixe ao menos uma observação)." });
     const leadC = prev.lead || {};
-    const novoC = await analyzeWithBrain({ lead: leadC, timeline: novaTl, openai: openaiC, leadId: id, forcarVariacao: true, cerebroConfig });
+    const novoC = await analyzeWithBrain({ lead: leadC, timeline: novaTl, openai: openaiC, leadId: id, forcarVariacao: true, cerebroConfig, organizationId });
     const mergedC = {
       ...prev, ...novoC,
       venda: prev.venda || undefined,
@@ -553,7 +553,7 @@ async function reanalisarLeadHandler702(req, res) {
   if (openai) {
     try {
       const timelineParaIA6863 = timelineFinal;
-      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true, cerebroConfig });
+      novoAnalysis = await analyzeWithBrain({ lead: leadModelo, timeline: timelineParaIA6863, openai, leadId: id, forcarVariacao: true, cerebroConfig, organizationId });
       novoAnalysis._iaEntrada6863 = { totalOriginal: timelineFinal.length, totalEnviado: timelineParaIA6863.length, compactado: timelineParaIA6863.length < timelineFinal.length };
     } catch (e) {
       avisoReanalise = String(e?.message || e || "");
@@ -582,7 +582,7 @@ async function reanalisarLeadHandler702(req, res) {
   novoAnalysis = stampCommercialSchema(novoAnalysis);
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
   const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
-  if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai).catch(() => {});
+  if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai, organizationId).catch(() => {});
 
   // Re-lê o estado ATUAL do banco antes de salvar. Armazena updated_at para
   // o optimistic lock no UPDATE: se outra reanálise gravou antes, essa não sobrescreve.
@@ -691,7 +691,7 @@ async function reanalisarLeadHandler702(req, res) {
 
   // v808: a reanálise registra uma fila rápida; a leitura comercial roda em outra
   // requisição para não somar mais uma chamada de IA ao tempo crítico da reanálise.
-  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id || ""), motivo: "reanalisado" })
+  const aprendizadoAutomatico = await marcarAprendizadoPendente({ leadId: String(id || ""), motivo: "reanalisado", organizationId })
     .catch(e => ({ ok:false, error:e?.message || String(e) }));
 
   return json(res, 200, { ok: true, analysis: persisted, aprendizadoAutomatico, warning: avisoReanalise || null, schemaComercial: COMMERCIAL_SCHEMA_VERSION, apiVersion: COMMERCIAL_SCHEMA_MINOR });

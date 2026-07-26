@@ -129,7 +129,7 @@ async function salvarManifesto(storage, manifestPath, manifest) {
   if (error) throw new Error(`Não consegui salvar o manifesto da importação: ${error.message}`);
 }
 
-export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {} }) {
+export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {}, organizationId }) {
   const prefix = `imports/${importId}`;
   const manifestPath = `${prefix}/manifest.json`;
   const existente = await carregarManifesto(storage, manifestPath);
@@ -142,7 +142,7 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   }
 
   const buffer = await baixarBuffer(storage, storagePath); // único download integral do ZIP
-  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true }); // única extração
+  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId }); // única extração
   const extracted = prep._extractedFiles || {};
   delete prep._extractedFiles;
 
@@ -256,7 +256,7 @@ export default async function handler(req, res) {
       const nomeArquivoZip = storagePath.split("/").pop() || "";
       const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath }).catch(() => null);
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
-      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead });
+      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, organizationId });
       return json(res, 200, {
         ok: true, bucket, path: storagePath, importId, manifestPath: `imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
@@ -325,7 +325,8 @@ export default async function handler(req, res) {
         audiosTotalNoZip: body?.audiosTotalNoZip, audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
         metricsBase: body?.metricsBase, existingTimeline, previousAnalysis: null, existingLeadId,
         audiosReaproveitados: body?.audiosReaproveitados, audiosNovosSolicitados: body?.audiosNovosSolicitados,
-        cerebroConfig: body?.cerebroConfig || null
+        cerebroConfig: body?.cerebroConfig || null,
+        organizationId
       });
       const analysis = result?.analysis || null;
       const manifestPath = importId ? `imports/${importId}/manifest.json` : "";

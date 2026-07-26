@@ -1079,7 +1079,7 @@ export function validarFormatoMensagens(mensagens) {
   return { ok: motivos.length === 0, motivos };
 }
 
-async function loadCerebroConfig(frontendConfig = null) {
+async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
   // localStorage desatualizado não pode substituir silenciosamente o conteúdo
   // completo que já está persistido.
@@ -1091,6 +1091,7 @@ async function loadCerebroConfig(frontendConfig = null) {
         .from("direciona_config")
         .select("valor")
         .eq("chave", "direciona-cerebro")
+        .eq("organization_id", organizationId)
         .maybeSingle();
       if (!error && hasCerebroInstructions(data?.valor)) {
         return { ...sanitizeCerebroConfig(data.valor), _fonte: "banco" };
@@ -1250,10 +1251,33 @@ export function prepararTimelineParaAprendizado(timeline, clientName = "", memor
 
 const MEMORIA_CASO_V2_PREFIX = "corretor-memoria-caso-v2:";
 export const APRENDIZADO_PENDENTE_V2_PREFIX = "corretor-aprendizado-pendente-v2:";
-let _memoriaComercialCacheV2 = { ts: 0, valor: null };
 
-export function invalidarMemoriaComercialCache() {
-  _memoriaComercialCacheV2 = { ts: 0, valor: null };
+// v1002 — mesma conta original de _persistence.js (EMPRESA_PRINCIPAL_ID; não importa daquele
+// arquivo porque _persistence já importa deste — seria um ciclo). O teste v1002 garante que os
+// dois valores nunca divirjam. É o padrão quando um chamador antigo não informa o corretor:
+// exatamente o comportamento de hoje, tudo da conta original.
+export const ORGANIZACAO_PADRAO_LEGADA = "00000000-0000-0000-0000-000000000001";
+
+// v1002 — grava em direciona_config já com dono (organization_id). Enquanto a migração 0004
+// não tiver sido aplicada no banco, a regra de unicidade nova ("por corretor + chave") ainda
+// não existe — nesse caso cai na regra antiga (chave global), continuando a funcionar igual
+// hoje, mas já carimbando o dono na linha.
+export async function upsertConfigComOrganizacao(supabase, organizationId, payload) {
+  const comOrg = { ...payload, organization_id: organizationId || ORGANIZACAO_PADRAO_LEGADA };
+  const tentativa = await supabase.from("direciona_config").upsert(comOrg, { onConflict: "organization_id,chave" });
+  if (tentativa?.error && /no unique or exclusion constraint|42P10/i.test(tentativa.error.message || "")) {
+    return supabase.from("direciona_config").upsert(comOrg, { onConflict: "chave" });
+  }
+  return tentativa;
+}
+
+// Cache por corretor — um valor único compartilhado serviria os casos aprendidos de um
+// corretor pra outro por até 60 segundos.
+const _memoriaComercialCacheV2 = new Map();
+
+export function invalidarMemoriaComercialCache(organizationId) {
+  if (organizationId) _memoriaComercialCacheV2.delete(organizationId);
+  else _memoriaComercialCacheV2.clear();
 }
 
 function memoriaComercialVazia() {
@@ -1283,7 +1307,7 @@ function chaveFonteMemoriaV2(leadId, sourceHash = "") {
 // As mutações do lead apenas registram esta fila, operação rápida e confiável. A
 // leitura pela IA acontece em uma requisição separada, para não atrasar nem fazer
 // a importação/reanálise estourar o tempo da função.
-export async function marcarAprendizadoPendente({ leadId, motivo = "timeline-atualizada" } = {}) {
+export async function marcarAprendizadoPendente({ leadId, motivo = "timeline-atualizada", organizationId = ORGANIZACAO_PADRAO_LEGADA } = {}) {
   const id = String(leadId || "").trim();
   if (!id) return { ok: false, error: "Lead sem id para aprendizado." };
   try {
@@ -1291,40 +1315,41 @@ export async function marcarAprendizadoPendente({ leadId, motivo = "timeline-atu
     if (!supabase) return { ok: false, error: "Supabase não configurado." };
     const agora = new Date().toISOString();
     const valor = { leadId: id, motivo: String(motivo || "timeline-atualizada").slice(0, 120), solicitadoEm: agora, tentativas: 0 };
-    const { error } = await supabase.from("direciona_config").upsert({
+    const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: `${APRENDIZADO_PENDENTE_V2_PREFIX}${id.slice(0, 180)}`, valor, atualizado_em: agora
-    }, { onConflict: "chave" });
+    });
     return error ? { ok: false, error: error.message } : { ok: true, pendente: true };
   } catch (e) { return { ok: false, error: e?.message || String(e) }; }
 }
 
-async function loadMetaMemoriaComercialV2() {
+async function loadMetaMemoriaComercialV2(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   try {
     const supabase = await supabaseMemoriaV2();
     if (!supabase) return sanitizarMetaMemoriaComercial({});
-    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", MEMORIA_COMERCIAL_V2_KEY).maybeSingle();
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", MEMORIA_COMERCIAL_V2_KEY).eq("organization_id", organizationId).maybeSingle();
     return sanitizarMetaMemoriaComercial(data?.valor);
   } catch (_) { return sanitizarMetaMemoriaComercial({}); }
 }
 
-async function loadFonteMemoriaV2(leadId, sourceHash = "") {
+async function loadFonteMemoriaV2(leadId, sourceHash = "", organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   try {
     const supabase = await supabaseMemoriaV2();
     if (!supabase) return null;
-    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveFonteMemoriaV2(leadId, sourceHash)).maybeSingle();
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveFonteMemoriaV2(leadId, sourceHash)).eq("organization_id", organizationId).maybeSingle();
     return data?.valor && typeof data.valor === "object" ? data.valor : null;
   } catch (_) { return null; }
 }
 
 // Cada lead vive em uma linha própria. Isso evita que duas importações simultâneas
 // façam load-modify-save do mesmo JSON e apaguem o aprendizado uma da outra.
-async function loadMemoriaComercialV2(force = false) {
+async function loadMemoriaComercialV2(force = false, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   const agora = Date.now();
-  if (!force && _memoriaComercialCacheV2.valor && agora - _memoriaComercialCacheV2.ts < 60000) return _memoriaComercialCacheV2.valor;
+  const emCache = _memoriaComercialCacheV2.get(organizationId);
+  if (!force && emCache?.valor && agora - emCache.ts < 60000) return emCache.valor;
   try {
     const supabase = await supabaseMemoriaV2();
     if (!supabase) return memoriaComercialVazia();
-    const meta = await loadMetaMemoriaComercialV2();
+    const meta = await loadMetaMemoriaComercialV2(organizationId);
     const rows = [];
     const PAGE = 1000;
     for (let ini = 0; ini < 10000; ini += PAGE) {
@@ -1332,6 +1357,7 @@ async function loadMemoriaComercialV2(force = false) {
         .from("direciona_config")
         .select("chave,valor")
         .like("chave", `${MEMORIA_CASO_V2_PREFIX}%`)
+        .eq("organization_id", organizationId)
         .order("chave", { ascending: true })
         .range(ini, ini + PAGE - 1);
       if (error) throw error;
@@ -1355,7 +1381,7 @@ async function loadMemoriaComercialV2(force = false) {
       if (v.processadoEm && (!atualizadoEm || String(v.processadoEm) > String(atualizadoEm))) atualizadoEm = v.processadoEm;
     }
     const valor = { ...meta, casos, fontes, atualizadoEm };
-    _memoriaComercialCacheV2 = { ts: agora, valor };
+    _memoriaComercialCacheV2.set(organizationId, { ts: agora, valor });
     return valor;
   } catch (_) { return memoriaComercialVazia(); }
 }
@@ -1404,6 +1430,7 @@ async function salvarCasosAprendidos(casos, meta = {}) {
   try {
     const supabase = await supabaseMemoriaV2();
     if (!supabase) return { ok: false, error: "Supabase não configurado." };
+    const organizationId = meta.organizationId || ORGANIZACAO_PADRAO_LEGADA;
     const novos = (Array.isArray(casos) ? casos : []).map(c => sanitizarCasoAprendido(c, meta)).filter(Boolean).slice(0, 8);
     const processadoEm = new Date().toISOString();
     const valor = {
@@ -1415,11 +1442,11 @@ async function salvarCasosAprendidos(casos, meta = {}) {
       processadoEm,
       casos: novos
     };
-    const { error } = await supabase.from("direciona_config").upsert({
+    const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: chaveFonteMemoriaV2(meta.leadId, meta.sourceHash), valor, atualizado_em: processadoEm
-    }, { onConflict: "chave" });
+    }) || {};
     if (error) return { ok: false, error: error.message };
-    _memoriaComercialCacheV2 = { ts: 0, valor: null };
+    invalidarMemoriaComercialCache(organizationId);
     return { ok: true, casosDoLead: novos.length };
   } catch (e) { return { ok: false, error: e?.message || String(e) }; }
 }
@@ -1563,13 +1590,13 @@ export async function obterExportacaoAprendizado(inteligenciaAprendida = {}, cer
   };
 }
 
-export async function obterStatusAprendizadoAutomatico() {
-  const mem = await loadMemoriaComercialV2(true);
+export async function obterStatusAprendizadoAutomatico(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
+  const mem = await loadMemoriaComercialV2(true, organizationId);
   let pendentes = 0;
   try {
     const supabase = await supabaseMemoriaV2();
     if (supabase) {
-      const r = await supabase.from("direciona_config").select("chave", { count: "exact", head: true }).like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`);
+      const r = await supabase.from("direciona_config").select("chave", { count: "exact", head: true }).like("chave", `${APRENDIZADO_PENDENTE_V2_PREFIX}%`).eq("organization_id", organizationId);
       if (Number.isFinite(Number(r.count))) pendentes = Number(r.count);
     }
   } catch (_) {}
@@ -1585,25 +1612,25 @@ export async function obterStatusAprendizadoAutomatico() {
   };
 }
 
-export async function marcarBootstrapAprendizadoConcluido(totalCarteira) {
+export async function marcarBootstrapAprendizadoConcluido(totalCarteira, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   try {
     const supabase = await supabaseMemoriaV2();
     if (!supabase) return false;
-    const meta = await loadMetaMemoriaComercialV2();
+    const meta = await loadMetaMemoriaComercialV2(organizationId);
     meta.bootstrapConcluidoEm = new Date().toISOString();
-    meta.totalCarteiraNoBootstrap = Number(totalCarteira) || (await obterStatusAprendizadoAutomatico()).historicosProcessados;
+    meta.totalCarteiraNoBootstrap = Number(totalCarteira) || (await obterStatusAprendizadoAutomatico(organizationId)).historicosProcessados;
     meta.atualizadoEm = new Date().toISOString();
-    const { error } = await supabase.from("direciona_config").upsert({ chave: MEMORIA_COMERCIAL_V2_KEY, valor: meta, atualizado_em: meta.atualizadoEm }, { onConflict: "chave" });
-    _memoriaComercialCacheV2 = { ts: 0, valor: null };
+    const { error } = await upsertConfigComOrganizacao(supabase, organizationId, { chave: MEMORIA_COMERCIAL_V2_KEY, valor: meta, atualizado_em: meta.atualizadoEm }) || {};
+    invalidarMemoriaComercialCache(organizationId);
     return !error;
   } catch (_) { return false; }
 }
 
-export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", memoriaManual = null, openai = null, forcar = false } = {}) {
+export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", memoriaManual = null, openai = null, forcar = false, organizationId = ORGANIZACAO_PADRAO_LEGADA } = {}) {
   const material = prepararTimelineParaAprendizado(timeline, clientName, memoriaManual);
   if (material.trim().length < 40) return { ok: true, ignorado: true, motivo: "sem diálogo real", casosDoLead: 0 };
   const sourceHash = hashTextoAprendizado(material);
-  const anterior = await loadFonteMemoriaV2(leadId, sourceHash);
+  const anterior = await loadFonteMemoriaV2(leadId, sourceHash, organizationId);
   if (!forcar && anterior?.sourceHash === sourceHash) {
     return { ok: true, ignorado: true, motivo: "histórico já aprendido", casosDoLead: Array.isArray(anterior.casos) ? anterior.casos.length : 0 };
   }
@@ -1617,9 +1644,9 @@ export async function aprenderComHistoricoReal({ timeline, clientName = "", lead
   intel.origem = { leadId: String(leadId || ""), arquivo: String(nomeArquivo || "").slice(0, 120), produto: String(produto || "").slice(0, 60) };
   // Mantém compatibilidade com a tela antiga de categorias e, em paralelo, grava
   // os casos estruturados que passam a guiar obrigatoriamente as sugestões.
-  const legado = await registrarInteligenciaAprendida(intel);
+  const legado = await registrarInteligenciaAprendida(intel, organizationId);
   const salvo = await salvarCasosAprendidos(intel.casos, {
-    leadId, clientName, nomeArquivo, sourceHash, produto, etapa,
+    leadId, clientName, nomeArquivo, sourceHash, produto, etapa, organizationId,
     totalMensagens: Array.isArray(timeline) ? timeline.length : 0
   });
   return {
@@ -1677,7 +1704,7 @@ async function loadConhecimentoCorretor() {
 
 // Fire-and-forget. Após cada análise, extrai o que há de novo nas mensagens do
 // corretor e funde no bloco "corretor-conhecimento". Nunca bloqueia a resposta.
-export async function atualizarConhecimentoCorretor(timelineText, openai) {
+export async function atualizarConhecimentoCorretor(timelineText, openai, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   try {
     if (!openai || !timelineText) return;
     const { getSupabaseAdmin } = await import("./_persistence.js");
@@ -1687,6 +1714,7 @@ export async function atualizarConhecimentoCorretor(timelineText, openai) {
       .from("direciona_config")
       .select("valor")
       .eq("chave", "corretor-conhecimento")
+      .eq("organization_id", organizationId)
       .maybeSingle();
     const atual = String(data?.valor?.texto || "").trim();
     const promptAtualizar = `Você mantém a base de conhecimento de um corretor de imóveis.
@@ -1705,9 +1733,7 @@ Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa
     });
     const novo = String(completion.choices?.[0]?.message?.content || "").trim();
     if (!novo || novo.length < 20) return;
-    await supabase
-      .from("direciona_config")
-      .upsert({ chave: "corretor-conhecimento", valor: { texto: novo }, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+    await upsertConfigComOrganizacao(supabase, organizationId, { chave: "corretor-conhecimento", valor: { texto: novo }, atualizado_em: new Date().toISOString() });
   } catch (e) {
     console.warn("[direciona] atualizarConhecimentoCorretor:", e?.message || e);
   }
@@ -1764,7 +1790,7 @@ export async function atualizarRespostasCorretor(timeline, clientName) {
 
 // Varre TODA a carteira (timelines já salvas) e enche o banco de estilo de uma vez — SEM IA,
 // só leitura. Usado pelo botão "Aprender da carteira" pra bootstrap dos leads já existentes.
-export async function aprenderRespostasDaCarteira() {
+export async function aprenderRespostasDaCarteira(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
@@ -1772,6 +1798,7 @@ export async function aprenderRespostasDaCarteira() {
     const { data: rows, error } = await supabase
       .from("whatsapp_processamentos")
       .select("timeline_json, resultado_analise")
+      .eq("organization_id", organizationId)
       .order("atualizado_em", { ascending: true })
       .limit(3000);
     if (error) return { ok: false, error: error.message };
@@ -1786,7 +1813,7 @@ export async function aprenderRespostasDaCarteira() {
       }
     }
     const lista = bag.slice(-120); // guarda bastante exemplo, priorizando os mais recentes
-    await supabase.from("direciona_config").upsert({ chave: "corretor-respostas", valor: { exemplos: lista }, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+    await upsertConfigComOrganizacao(supabase, organizationId, { chave: "corretor-respostas", valor: { exemplos: lista }, atualizado_em: new Date().toISOString() });
     return { ok: true, total: lista.length, lidos: rows?.length || 0 };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
@@ -1806,7 +1833,7 @@ async function loadRespostasCorretor() {
 // Acumula a INTELIGÊNCIA COMERCIAL observada em cada análise (tons, técnicas, respostas
 // a objeções, matches produto×perfil, padrões de follow-up). Cada categoria limita a 30
 // entradas mais recentes. Fire-and-forget — falha aqui não derruba a análise.
-export async function registrarInteligenciaAprendida(intel) {
+export async function registrarInteligenciaAprendida(intel, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   if (!intel || typeof intel !== "object") return { ok: false, motivo: "intel vazio" };
   const push = (arr, item, max = 30) => {
     if (item == null) return arr;
@@ -1821,6 +1848,7 @@ export async function registrarInteligenciaAprendida(intel) {
       .from("direciona_config")
       .select("valor")
       .eq("chave", "direciona-cerebro")
+      .eq("organization_id", organizationId)
       .maybeSingle();
     const valor = data?.valor || {};
     const agora = new Date().toISOString();
@@ -1962,9 +1990,7 @@ export async function registrarInteligenciaAprendida(intel) {
       else ia.padroesFollowup = push(ia.padroesFollowup, { quando: agora, origem, texto: txt.slice(0, 240) });
     }
     valor.inteligenciaAprendida = ia;
-    const up = await supabase
-      .from("direciona_config")
-      .upsert({ chave: "direciona-cerebro", valor, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+    const up = await upsertConfigComOrganizacao(supabase, organizationId, { chave: "direciona-cerebro", valor, atualizado_em: new Date().toISOString() });
     if (up?.error) {
       console.warn("[direciona] upsert direciona_config falhou:", up.error.message);
       return { ok: false, motivo: up.error.message };
@@ -2394,7 +2420,7 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
   }
 }
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -2476,7 +2502,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     hoje = _agoraDt.toISOString().slice(0, 10);
     dataHoraAtualAnalise = _agoraDt.toISOString();
   }
-  const configCerebro = await loadCerebroConfig(cerebroConfig).catch(() => null);
+  const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
   if (!hasCerebroInstructions(configCerebro)) {
     return {
       mode: "cerebro_ausente",
@@ -2866,10 +2892,10 @@ export function getOpenAIConfigSummary() {
 }
 
 
-async function getDiasJanelaConfig() {
+async function getDiasJanelaConfig(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // Lê config do Cérebro pra saber quantos dias da conversa considerar (default 45)
   try {
-    const cfg = await loadCerebroConfig();
+    const cfg = await loadCerebroConfig(null, organizationId);
     const d = Number(cfg?.diasImportacao);
     if (Number.isFinite(d) && d > 0 && d <= 3650) return Math.round(d);
   } catch (_) {}
@@ -2991,7 +3017,7 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const txt = await zip.files[txtName].async("string");
   const messagesAll = parseWhatsappTxt(txt);
   // v725: todas as mensagens escritas ficam na análise. A janela escolhida limita só transcrição de áudio.
-  const planoAudio = montarPlanoJanelaAudios(messagesAll, audioFiles, options.audioWindowDays ?? await getDiasJanelaConfig());
+  const planoAudio = montarPlanoJanelaAudios(messagesAll, audioFiles, options.audioWindowDays ?? await getDiasJanelaConfig(options.organizationId));
   const messages = planoAudio.messages;
   const filtroInfo = planoAudio.janelaInfo;
 
@@ -3167,7 +3193,8 @@ export async function finalizarAnaliseDaConversa(payload) {
     txtFile, messages, audioFilesRelevantes, audioFilesForaDaJanela, transcriptionMap, janelaConversa,
     ignoredFilesCount, ignoredFiles, audiosTotalNoZip, audiosDescartadosPorJanela,
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
-    audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfig = null
+    audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfig = null,
+    organizationId = ORGANIZACAO_PADRAO_LEGADA
   } = payload;
 
   const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || []);
@@ -3191,7 +3218,7 @@ export async function finalizarAnaliseDaConversa(payload) {
   // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
   // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
   if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
-  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig });
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
@@ -3256,8 +3283,8 @@ export async function finalizarAnaliseDaConversa(payload) {
 // Existe para quem ainda manda o ZIP direto no corpo da requisição, sem subir pro Supabase
 // Storage antes. Não é reimportação-aware (sem existingLeadId/existingTimeline) — cada
 // chamada é tratada como uma conversa nova, do jeito que a rota sempre se comportou.
-export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebroConfig = null } = {}) {
-  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true });
+export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA } = {}) {
+  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId });
   const extracted = prep._extractedFiles || {};
   const arquivos = Object.entries(extracted).map(([name, audioBuffer]) => ({ name, buffer: audioBuffer }));
   const lote = arquivos.length
@@ -3278,7 +3305,8 @@ export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebro
     existingTimeline: [],
     previousAnalysis: null,
     existingLeadId: null,
-    cerebroConfig
+    cerebroConfig,
+    organizationId
   });
 }
 
