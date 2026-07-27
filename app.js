@@ -54,7 +54,13 @@ import './js/pwa-install.js?v=__VERSION__';
     } catch(_) {}
   };
   window.cpSairDaConta = async function(){
-    if (!confirm("Sair desta conta neste aparelho?")) return;
+    // v1016 — confirm() nativo (a "tela feia" do navegador) não deixava claro que era uma
+    // pergunta de verdade; troca pelo modal com a cara do próprio app (mesmo padrão já usado em
+    // arquivar/perder lead), com Cancelar em destaque e o botão de sair marcado como ação de risco.
+    const ok = (typeof cp903Confirm === "function")
+      ? await cp903Confirm({ titulo: "Sair da conta", mensagem: "Deseja sair desta conta neste aparelho?", ok: "Sair", cancelar: "Cancelar", perigo: true })
+      : confirm("Sair desta conta neste aparelho?");
+    if (!ok) return;
     try { await window.__cpSupabaseClient?.auth?.signOut(); } catch(_) {}
     window.location.href = "/entrar.html";
   };
@@ -89,6 +95,16 @@ import './js/pwa-install.js?v=__VERSION__';
   // de verdade. Forçar recarregamento completo nesse caso garante que a tela nunca mistura dado
   // de duas contas diferentes no mesmo aparelho.
   addEventListener("pageshow", (ev) => { if (ev.persisted) location.reload(); });
+  // v1016 — causa raiz de "troquei de conta e continua puxando os leads da conta antiga":
+  // com DUAS abas do Corretor Pro abertas no mesmo navegador (uma por conta), a sessão de login
+  // fica guardada numa única "gaveta" (localStorage) compartilhada por todas as abas da mesma
+  // origem. Ao logar como a 2ª conta numa aba nova, a aba ANTIGA (ainda aberta com a 1ª conta)
+  // pode, segundos depois, renovar sozinha o próprio login em segundo plano e SOBRESCREVER a
+  // gaveta com a sessão da conta antiga de novo — a aba nova então busca os leads já com o login
+  // errado, mesmo mostrando o nome certo na saudação (que já tinha carregado antes disso acontecer).
+  // Toda aba do site agora escuta essa gaveta: se OUTRA aba muda o login guardado nela, esta aba
+  // recarrega sozinha na hora — assim nenhuma aba velha consegue "brigar" pela conta certa depois.
+  addEventListener("storage", (ev) => { if (ev.key && ev.key.includes("auth-token")) location.reload(); });
   window.definirChaveSegurancaCorretorPro = function(){
     const atual = getKey();
     const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
@@ -434,6 +450,10 @@ function invalidarLeadsCache(){
   state.viewRendered = {};
 }
 function totalMensagensLead(l){
+  // v1016: exibição pro corretor usa só os últimos 90 dias (messageCount90d) — messageCount
+  // (histórico completo) continua existindo no dado só pra ranking/dedupe interno.
+  const n90 = Number(l?.messageCount90d);
+  if (Number.isFinite(n90)) return n90;
   const n = Number(l?.messageCount);
   return Number.isFinite(n) ? n : (Array.isArray(l?.recentMessages) ? l.recentMessages.length : 0);
 }
@@ -10045,8 +10065,11 @@ window.ui667DesmarcarAtendido=async function(btn){
    ============================================================ */
 
 configurarEscolhaTema();
-// Saudação correta desde o primeiro frame (antes dos dados carregarem)
-(function(){ const h=new Date().getHours(); const el=document.getElementById("homePageTitle"); if(el) el.textContent=(h<12?"Bom dia":h<18?"Boa tarde":"Boa noite")+", corretor!"; })();
+// v1016 — este placeholder escrevia "Bom dia, corretor!" (nome genérico) no instante em que a
+// página abre, antes de saber o nome de verdade — o corretor via um nome errado piscando na tela
+// por um instante a cada troca de conta/carregamento. Removido: o título fica no "Hoje" estático
+// do HTML até renderSaudacao() trocar pelo nome de verdade (já roda assim que os dados chegam,
+// inclusive em contas com zero leads, desde a v1014).
 async function iniciarDireciona(){
   // Share Target vem antes da Home. Enquanto existe um ZIP pendente, nenhuma rotina
   // inicial pode trocar a tela nem disparar recarga automática.
