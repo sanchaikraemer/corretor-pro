@@ -21,7 +21,7 @@ for (const fn of ["mostrarOpcoesInstalar", "esconderOpcoesInstalar", "dispararIn
 // funções não têm nenhum chamador fora deste módulo, então não precisam de window.X.
 assert.match(pwaInstall, /window\.abrirOnboarding = abrirOnboarding;/, "abrirOnboarding precisa ficar em window (onclick inline do HTML depende disso)");
 
-assert.match(pwaInstall, /import \{ qs, toast \} from '\.\/dom\.js\?v=__VERSION__';/, "js/pwa-install.js precisa importar os helpers de dom.js");
+assert.match(pwaInstall, /import \{ qs, toast(?:, escapeHtml)? \} from '\.\/dom\.js\?v=__VERSION__';/, "js/pwa-install.js precisa importar os helpers de dom.js");
 assert.match(pwaInstall, /import \{ state \} from '\.\/state\.js\?v=__VERSION__';/, "js/pwa-install.js precisa importar o state compartilhado");
 assert.match(pwaInstall, /window\.show\("home"\)/, "abrirOnboarding precisa chamar window.show, não show direto — a função show continua em app.js");
 

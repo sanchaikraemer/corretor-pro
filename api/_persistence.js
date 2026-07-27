@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID, timingSafeEqual } from "crypto";
+import { randomUUID, timingSafeEqual, createHmac } from "crypto";
 
 
 function authJson(res, status, payload) {
@@ -150,6 +150,79 @@ export async function resolveOrganizationId(req, res, { supabase } = {}) {
 
   if (!requireApiKey(req, res)) return null;
   return EMPRESA_PRINCIPAL_ID;
+}
+
+// v1035 — chave pessoal de longa duração pra quem tem iPhone mandar o ZIP do WhatsApp direto
+// pelo Atalho (Shortcuts), sem precisar do login do Supabase dentro do próprio Atalho (o token
+// de sessão expira e o app Atalhos não sabe renovar sozinho). É assinada (HMAC), não fica salva
+// em texto puro em lugar nenhum: guardamos só o "issuedAt" de quando foi gerada (chave
+// ATALHO_ZIP_TOKEN_CHAVE em direciona_config, reaproveitando a mesma tabela do Cérebro — sem
+// precisar de tabela nova) e recalculamos a assinatura esperada toda vez. Gerar uma chave nova
+// troca o issuedAt salvo, o que invalida sozinho qualquer chave anterior (é assim que se "revoga").
+export const ATALHO_ZIP_TOKEN_CHAVE = "atalho-zip-token-valido-desde";
+
+function _atalhoZipTokenSecret() {
+  return process.env.ATALHO_ZIP_TOKEN_SECRET || "";
+}
+
+function _assinarAtalhoZipToken(organizationId, issuedAt, secret) {
+  return createHmac("sha256", secret).update(`${organizationId}.${issuedAt}`).digest("hex");
+}
+
+// Usada por api/atalho-zip-token.js pra gerar (ou mostrar de novo) a chave — nunca precisa ficar
+// salva em texto puro porque dá pra recalcular a qualquer momento a partir do issuedAt guardado.
+export function montarAtalhoZipToken(organizationId, issuedAt) {
+  const secret = _atalhoZipTokenSecret();
+  if (!secret) return null;
+  return `${organizationId}.${issuedAt}.${_assinarAtalhoZipToken(organizationId, issuedAt, secret)}`;
+}
+
+// Confirma a chave mandada pelo Atalho do iPhone (header X-Corretor-Pro-Atalho-Token) e devolve
+// a organização dona dela — nunca aceita a organização que o próprio pedido diz ser (só a que a
+// assinatura prova). Bloqueia ANTES de qualquer leitura do corpo (o ZIP), igual requireApiKey.
+export async function resolveOrganizationIdByAtalhoToken(req, res, { supabase } = {}) {
+  const secret = _atalhoZipTokenSecret();
+  if (!secret) {
+    authJson(res, 500, { ok: false, error: "O envio pelo Atalho ainda não foi configurado neste servidor (falta ATALHO_ZIP_TOKEN_SECRET)." });
+    return null;
+  }
+  const recebido = String(req.headers?.["x-corretor-pro-atalho-token"] || "").trim();
+  const partes = recebido.split(".");
+  if (partes.length !== 3 || !partes[0] || !partes[1] || !partes[2]) {
+    authJson(res, 401, { ok: false, error: "Chave do Atalho ausente ou em formato inválido. Gere uma nova dentro do Corretor Pro." });
+    return null;
+  }
+  const [organizationId, issuedAt, assinaturaRecebida] = partes;
+  const assinaturaEsperada = _assinarAtalhoZipToken(organizationId, issuedAt, secret);
+  if (!safeEqualSecret(assinaturaRecebida, assinaturaEsperada)) {
+    authJson(res, 401, { ok: false, error: "Chave do Atalho inválida." });
+    return null;
+  }
+  const client = supabase || getSupabaseAdmin();
+  if (!client) {
+    authJson(res, 500, { ok: false, error: "Supabase não configurado no ambiente." });
+    return null;
+  }
+  const { data: cutoff, error: cutoffError } = await client
+    .from("direciona_config")
+    .select("valor")
+    .eq("chave", ATALHO_ZIP_TOKEN_CHAVE)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (cutoffError || String(cutoff?.valor?.issuedAt || "") !== issuedAt) {
+    authJson(res, 401, { ok: false, error: "Esta chave do Atalho não é mais válida — gere uma nova dentro do Corretor Pro." });
+    return null;
+  }
+  const { data: org } = await client.from("organizations").select("status, trial_expira_em").eq("id", organizationId).maybeSingle();
+  if (org && typeof org === "object") {
+    const trialFim = org.trial_expira_em ? new Date(org.trial_expira_em).getTime() : null;
+    const trialVencido = org.status === "teste" && Number.isFinite(trialFim) && trialFim <= Date.now();
+    if (org.status === "bloqueado" || trialVencido) {
+      authJson(res, 403, { ok: false, bloqueado: true, error: "Sua conta está bloqueada ou o teste grátis acabou. Confirme o pagamento pra continuar." });
+      return null;
+    }
+  }
+  return organizationId;
 }
 
 // Descobre se quem está chamando é administrador da PLATAFORMA (tabela platform_admins) —
