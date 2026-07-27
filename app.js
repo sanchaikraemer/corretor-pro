@@ -7494,7 +7494,13 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
-  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
+  // v1027 — causa real de "reaproveitados" sempre 0 (mesmo reimportando o MESMO ZIP de
+  // propósito, pra testar): esta função forçava minúsculas na chave de busca, mas o servidor
+  // (normalizeName, api/_pipeline.js) NUNCA lowercasa — e nome de áudio do WhatsApp quase
+  // sempre vem com prefixo maiúsculo ("AUD-...", "PTT-..."). "aud-123.opus" nunca batia com a
+  // chave real "AUD-123.opus" guardada no manifesto: a busca sempre falhava, o contador sempre
+  // mostrava 0 E o app retranscrevia (de novo, pagando de novo) áudio que já tinha cache pronto.
+  const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().trim();
   const audios = audiosTodos.filter(nome => !transcriptionMap[normalizarAudio(nome)]?.text);
   const audiosReaproveitados = audiosTodos.length - audios.length;
 
