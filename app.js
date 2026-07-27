@@ -1440,7 +1440,19 @@ function prioridadeAtendimento(l){
   const esforcoCliente = /visit(ou|a feita|amos)|decorado|falou com (o )?banco|levant(ou|ando) (a )?doc|aprov(ou|ado) (o )?cr[ée]dito|escolheu (a |as )?unidade|colocou (a |o )?(casa|im[óo]vel) (à|a) venda|pediu (a |uma )?simula|mandou documento/.test(txt);
   const travaExterna = ehPermuta(l) || /depende (da|de) (venda|safra|colheita)|quando vender|assim que vender|esperar (a )?(safra|colheita)|aguard(a|ando) (a )?venda|precisa vender (a |o |seu |sua )?(casa|im[óo]vel|apartamento|terreno)|vender (a |o |seu |sua )?(casa|im[óo]vel|apartamento|terreno) (antes|primeiro)|s[óo] (compra|fecha) (depois|quando)|vai acompanhar|mais pra frente/.test(txt);
   const clientePediuPraAguardar = /me chama (mais tarde|semana que vem|m[êe]s que vem)|chama depois|vou pensar|vou analisar|estou analisando|estamos analisando|vou conversar|vou ver com|te aviso|te retorno|qualquer coisa te chamo/.test(txt);
-  const temAgenda = Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length > 0;
+  // v1022 — bug real e recorrente ("lead continua aparecendo nas prioridades sem respeitar o
+  // prazo"): temAgenda contava QUALQUER compromisso já confirmado alguma vez na conversa, mesmo
+  // um vencido há meses — a extração da IA não some com um compromisso antigo (ele continua em
+  // confirmedAppointments pra sempre), então compromissoProgramado ficava PERMANENTEMENTE
+  // verdadeiro pra esse lead, furando a janela de espera (emJanela, nível 7 — checado bem depois
+  // na cadeia de filaPorFatos) de vez em quando. Já existe uma versão com data certa pra "esse
+  // compromisso ainda está de pé" (ui671CompromissoAberto/ui671DiasAte, usada no card do lead) —
+  // só faltava aplicar aqui. Agora só conta como "programado" um compromisso de hoje pra frente.
+  const temAgenda = Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.some(ap => {
+    const diff = (typeof ui671DiasAte === 'function') ? ui671DiasAte(String(ap?.data || "").slice(0, 10)) : null;
+    if(diff != null) return diff >= 0;
+    return /\b(hoje|amanh[ãa])\b/.test(String(ap?.quando || "").toLowerCase());
+  });
   const etapaAvancada = ["Visita/Proposta","Negociação"].includes(e);
   const tipo = String(a.tipoRetomada||"").toLowerCase();
   const ctxIA = contextoPrioridadeIA(l);
@@ -1456,8 +1468,10 @@ function prioridadeAtendimento(l){
     : ui671DiasAte(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(_lembreteTs)));
   const lembreteAtrasado = diasLembrete != null && diasLembrete < 0;
   const retornoParaHoje = diasLembrete === 0;
-  const compromissoProgramado = temAgenda ||
-    (Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando || "").toLowerCase())));
+  // v1022 — o "ou" com o mesmo teste hoje/amanhã virou redundante: temAgenda agora já cobre
+  // esse caso (ver comentário ali) de forma correta (com data), então compromissoProgramado é
+  // só o próprio temAgenda.
+  const compromissoProgramado = temAgenda;
   const retomadaPorTempo = Number.isFinite(diasContato) && diasContato >= limiarRetomada(l);
   // "Cliente respondeu e ainda não recebeu resposta": o cliente falou por último.
   // v1019 — este sinal furava a proteção de atendimento recente (linha do filaPorFatos que checa
@@ -2176,22 +2190,20 @@ function rotuloTempoAtendimento(ts){
   return `há ${dias} dias`;
 }
 
-function diasDesdeAtendimentoManual(l){
-  const eventos = l.analysis?.aprendizado?.eventos || [];
-  let maisRecente = null;
-  for(const e of eventos){
-    if(e.evento !== "contato_manual" || !e.quando) continue;
-    const t = new Date(e.quando);
-    if(isNaN(t.getTime())) continue;
-    if(!maisRecente || t > maisRecente) maisRecente = t;
-  }
-  return maisRecente ? diasCalendarioBR(maisRecente) : null;
-}
-
 // Prazo de proteção: lead atendido não volta pra fila de prioritários antes de PRAZO_PROTECAO_ATENDIDO dias.
 const PRAZO_PROTECAO_ATENDIDO = 5;
+// v1022 — usava diasDesdeAtendimentoManual (função removida aqui), que só olhava
+// aprendizado.eventos/contato_manual — uma fonte MAIS ESTREITA que ultimoAtendimentoTs (que
+// também olha lastAttendanceAt/ultimoAtendimentoEm e mensagens manuais da timeline; a mesma
+// fonte que emJanelaDeEspera já usa desde a v1018). As duas checagens de "atendido
+// recentemente" tinham divergido: um atendimento salvo por um desses outros caminhos contava
+// pra emJanelaDeEspera mas não pra esta proteção — clienteAguardandoVoce (ponto vermelho) e o
+// grupo "Atendidos recentemente" podiam discordar da janela de espera sobre o MESMO lead.
+// Agora as duas usam a mesma fonte de verdade.
 function protegidoPosAtendimento(l){
-  const dias = diasDesdeAtendimentoManual(l);
+  const ts = ultimoAtendimentoTs(l);
+  if(!ts) return false;
+  const dias = diasCalendarioBR(ts);
   return dias != null && dias < PRAZO_PROTECAO_ATENDIDO;
 }
 
@@ -7221,6 +7233,42 @@ function criarImportId(){
   return "imp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,12);
 }
 
+// v1022 — "por que nunca reaproveita nada?": o servidor já sabe reaproveitar a transcrição de
+// uma importação que travou/deu timeout (o áudio já transcrito fica guardado, ligado ao MESMO
+// importId — ver prepararExtracaoPersistente em api/processar-storage.js), MAS só se o
+// corretor tentar de novo com o MESMO importId. state.activeImportId vive só na memória da
+// aba: se o celular/navegador recarregar a página no meio de uma conversa grande (bem comum
+// com ZIP grande demorando), essa memória some — a próxima tentativa gera um importId novo,
+// perde a ligação com o que já foi transcrito, e transcreve tudo nas de novo do zero (o "0
+// reaproveitados" sempre, mesmo repetindo o mesmo arquivo). Guarda no aparelho (localStorage)
+// qual importId pertence a qual arquivo (nome+tamanho), pra uma nova tentativa com o MESMO
+// arquivo reencontrar o importId anterior mesmo depois de a página recarregar.
+const CP_IMPORT_PENDENTE_KEY = "cpImportPendente";
+const CP_IMPORT_PENDENTE_VALIDADE_MS = 24 * 60 * 60 * 1000; // 24h — depois disso não faz sentido reaproveitar
+function cpSalvarImportPendente(importId, file){
+  try{
+    if(!importId || !file) return;
+    localStorage.setItem(CP_IMPORT_PENDENTE_KEY, JSON.stringify({
+      importId, fileName: file.name, fileSize: file.size, ts: Date.now()
+    }));
+  }catch(_){}
+}
+function cpImportIdParaArquivo(file){
+  try{
+    if(!file) return "";
+    const raw = localStorage.getItem(CP_IMPORT_PENDENTE_KEY);
+    if(!raw) return "";
+    const info = JSON.parse(raw);
+    if(!info || !info.importId) return "";
+    if(Date.now() - Number(info.ts||0) > CP_IMPORT_PENDENTE_VALIDADE_MS) return "";
+    if(info.fileName !== file.name || Number(info.fileSize) !== file.size) return "";
+    return String(info.importId);
+  }catch(_){ return ""; }
+}
+function cpLimparImportPendente(){
+  try{ localStorage.removeItem(CP_IMPORT_PENDENTE_KEY); }catch(_){}
+}
+
 async function uploadLargeZipToSupabase(file, options = {}){
   state.ultimoArquivo = file;
   const importId = String(options.importId || state.activeImportId || criarImportId());
@@ -7335,6 +7383,7 @@ async function uploadLargeZipToSupabase(file, options = {}){
       if(shareId) await finalizarSharePendente(shareId);
       state.ultimoUploadStorage = null;
       state.activeImportId = null;
+      cpLimparImportPendente();
       state.ultimoArquivo = null;
       clearAnalysis();
       toast("Importação descartada.");
@@ -7673,6 +7722,7 @@ async function atualizarLeadComEvolucao(){
     const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
     state.activeImportId = null;
+    cpLimparImportPendente();
     state.ultimoUploadStorage = null;
     state.pendingExistente = null;
     const ev = data.evolucao;
@@ -7743,6 +7793,7 @@ async function salvarLeadPendente(){
     const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
     state.activeImportId = null;
+    cpLimparImportPendente();
     state.ultimoUploadStorage = null;
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
@@ -7780,6 +7831,7 @@ async function descartarLeadPendente(){
   await finalizarImportacaoStorage(importacaoDescartada);
   state.pendingSave = null;
   state.activeImportId = null;
+  cpLimparImportPendente();
   state.ultimoUploadStorage = null;
   clearAnalysis();
   if(shareDescartadoId) await finalizarSharePendente(shareDescartadoId);
@@ -7790,8 +7842,13 @@ async function processFile(file, options = {}){
   if(!file) return false;
   if(state.processing) return false;
   const pendingShareId = String(options.shareId || state.pendingSharedRecordId || "").trim();
-  const importId = String(options.importId || state.activeImportId || criarImportId());
+  // v1022 — se a página recarregou desde a última tentativa (state.activeImportId se perdeu),
+  // busca no aparelho se ESTE MESMO arquivo (nome+tamanho) já tinha uma importação em
+  // andamento — reencontrando o importId, o servidor reconhece a extração/transcrição já
+  // feita antes e não cobra/repete o que já tinha sido transcrito.
+  const importId = String(options.importId || state.activeImportId || cpImportIdParaArquivo(file) || criarImportId());
   state.activeImportId = importId;
+  cpSalvarImportPendente(importId, file);
   if(pendingShareId){
     state.pendingSharedRecordId = pendingShareId;
     window.__cpShareImportActive = true;
@@ -7866,6 +7923,7 @@ async function processFile(file, options = {}){
       if(pendingShareId) await descartarSharePendente(pendingShareId);
       state.ultimoUploadStorage = null;
       state.activeImportId = null;
+      cpLimparImportPendente();
       state.ultimoArquivo = null;
       showCard("resultCard", false);
     });
