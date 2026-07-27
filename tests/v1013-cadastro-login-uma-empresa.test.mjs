@@ -37,8 +37,8 @@ assert.match(entrar, /user_metadata\?\.nome_empresa/, 'entrar.html usa o nome sa
 // (resolveOrganizationId) e na exibição do nome da conta em app.js — nenhum .limit(1) "cego".
 assert.match(entrar, /order\('criado_em', \{ ascending: false \}\)/, 'entrar.html ordena os vínculos antes do limit(1)');
 assert.match(persistence, /\.order\("criado_em", \{ ascending: false \}\)/, 'resolveOrganizationId ordena os vínculos antes do limit(1)');
-assert.match(appJs, /memberships"\)\.select\("organizations\(nome\)"\)\.order\("criado_em", \{ ascending: false \}\)/,
-  'app.js também ordena antes de exibir o nome da conta na lateral');
+assert.match(appJs, /memberships"\)\.select\("organizations\(nome\)"\)\.eq\("user_id", data\.session\.user\.id\)\.order\("criado_em", \{ ascending: false \}\)/,
+  'app.js também filtra pelo próprio usuário e ordena antes de exibir o nome da conta na lateral (ver fix v1014)');
 
 // 4. Migração 0006 impede um segundo vínculo pro mesmo login (trava a raiz do abuso de teste
 // grátis múltiplo), sem apagar/alterar nada existente.

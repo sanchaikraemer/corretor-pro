@@ -69,9 +69,14 @@ import './js/pwa-install.js?v=__VERSION__';
       // O cartão "Conta" da tela Menu (Mais) só existe pra quem está logado — foi lá que o
       // dono procurou o sair primeiro (v1009).
       document.querySelectorAll(".cp-sair-conta").forEach(el => { el.style.display = ""; });
-      // O nome da conta é o que a pessoa preencheu no cadastro (organizations.nome) —
-      // a RLS garante que só o próprio vínculo é visível aqui.
-      const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      // O nome da conta é o que a pessoa preencheu no cadastro (organizations.nome).
+      // v1014 — este .eq("user_id", ...) NUNCA pode faltar: quem também é administrador da
+      // plataforma tem uma política de RLS que libera ver TODOS os vínculos do sistema (pra
+      // enxergar todas as empresas no painel administrativo) — sem filtrar pelo próprio user_id
+      // aqui, a consulta pegava o vínculo mais recente CRIADO POR QUALQUER CONTA (ex.: uma conta
+      // de teste criada um dia depois), mostrando o nome de OUTRA empresa na saudação/lateral do
+      // administrador, mesmo com os dados corretos (a API de leads sempre filtrou certo).
+      const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").eq("user_id", data.session.user.id).order("criado_em", { ascending: false }).limit(1).maybeSingle();
       const nome = String(vinculo?.organizations?.nome || "").trim();
       if (nome) { window.__cpContaNome = nome; }
       window.cpAtualizarIdentidadeVisivel();
@@ -3648,13 +3653,6 @@ window.renderTop3 = renderTop3;
 // fechadas" (valor/mês), tudo removido (o dono não marca Vendido no app — só Arquivar).
 
 function renderSaudacao(items){
-  // Dois alvos: #saudacao (corpo, mobile) e #saudacaoDesktop (cabeçalho, desktop).
-  // O CSS decide qual aparece em cada tela — aqui só sincroniza conteúdo/visibilidade.
-  const boxes = [qs("#saudacao"), qs("#saudacaoDesktop")].filter(Boolean);
-  if(!boxes.length) return;
-  const setAll = (display, html) => boxes.forEach(b => { b.style.display = display; if(html != null) b.innerHTML = html; });
-  if(state.lead?.id || state.grupoAtivo){ setAll("none"); return; }
-  if(!items?.length){ setAll("none", ""); return; }
   const h = new Date().getHours();
   let saud = "Olá";
   if(h < 12) saud = "Bom dia";
@@ -3664,6 +3662,21 @@ function renderSaudacao(items){
   // logada (preenchido no cadastro) > "corretor" genérico.
   const corretorNome = (state.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim().split(/\s+/)[0] || "";
   if (typeof window.cpAtualizarIdentidadeVisivel === "function") window.cpAtualizarIdentidadeVisivel();
+  const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
+  // v1014 — o título (#homePageTitle) precisa levar o nome de verdade mesmo quando a conta ainda
+  // não tem NENHUM lead (conta nova, período de teste recém-começado): antes disso, o título só
+  // era atualizado dentro do bloco que exige items.length, então toda conta zerada ficava presa
+  // no placeholder genérico "Bom dia, corretor!" (definido às cegas antes dos dados carregarem)
+  // pra sempre — mesmo já logada e identificada corretamente em todo o resto da tela.
+  const title = qs("#homePageTitle");
+  if(title) title.textContent = head;
+  // Dois alvos: #saudacao (corpo, mobile) e #saudacaoDesktop (cabeçalho, desktop).
+  // O CSS decide qual aparece em cada tela — aqui só sincroniza conteúdo/visibilidade.
+  const boxes = [qs("#saudacao"), qs("#saudacaoDesktop")].filter(Boolean);
+  if(!boxes.length) return;
+  const setAll = (display, html) => boxes.forEach(b => { b.style.display = display; if(html != null) b.innerHTML = html; });
+  if(state.lead?.id || state.grupoAtivo){ setAll("none"); return; }
+  if(!items?.length){ setAll("none", ""); return; }
   // O número da saudação BATE com o card "Fazer agora": é a DOSE do dia (top CP_DOSE_DIA da
   // fila ranqueada), não o backlog inteiro. Cabeçalho laranja e card mostram o mesmo número.
   // v907: "atendidos hoje" conta IGUAL à Meta do dia — todo lead atendido hoje, INCLUSIVE o que
@@ -3672,9 +3685,6 @@ function renderSaudacao(items){
   // por outras telas); agora as duas usam a MESMA função, então não têm mais como divergir.
   const tratadosHoje = cpAtendidosHojeTotal(items);
   const acaoMostrada = cpFazerAgoraDose(items);
-  const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
-  const title = qs("#homePageTitle");
-  if(title) title.textContent = head;
   let html;
   if(cpFimDeSemana()){
     html = tratadosHoje > 0
