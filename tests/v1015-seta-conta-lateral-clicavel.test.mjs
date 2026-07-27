@@ -7,36 +7,44 @@ import assert from 'node:assert/strict';
 // botão já ficava logo abaixo dele, sempre visível quando logado), o cartão virou um <button> de
 // verdade que disparava a mesma ação.
 //
-// v1017 — o dono apontou o problema oposto: com o cartão CLICÁVEL chamando cpSairDaConta()
-// e o botão dedicado "Sair da conta" logo abaixo fazendo exatamente a mesma coisa, os dois
-// ficaram redundantes ("ambos servem pra mesma coisa"). Volta a ser um <div> sem ação — a
-// setinha "⌄" (que não abre mais nada) saiu junto, pra não voltar a prometer um menu que não
-// existe. "Sair da conta" (o botão dedicado, com ícone e texto claro) segue sendo o único
-// caminho pra encerrar a sessão.
+// v1017 — o dono apontou o problema oposto: com o cartão CLICÁVEL chamando cpSairDaConta() e o
+// botão dedicado "Sair da conta" logo abaixo fazendo exatamente a mesma coisa, os dois ficaram
+// redundantes ("ambos servem pra mesma coisa"). Virou um <div> sem ação — a setinha "⌄" saiu
+// junto, pra não voltar a prometer um menu que não existe.
+//
+// v1024 — o dono repetiu o pedido: mesmo virando só informativo (sem clique) na v1017, o cartão
+// (avatar + nome) continuava na tela, do lado do botão "Sair da conta" — e pra ele os dois ainda
+// "fazem a mesma coisa" (avatar+nome só reforça quem está logado, o que o botão "Sair da conta"
+// já deixa claro). Dessa vez o cartão saiu inteiro da barra lateral — só sobra o botão dedicado.
 
 const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-assert.match(index, /<div class="cp-sidebar-user" id="cpSidebarUserBtn">/,
-  'o cartão da conta na lateral precisa voltar a ser um <div> sem ação — "Sair da conta" já existe logo abaixo');
-assert.doesNotMatch(index, /<button[^>]*class="cp-sidebar-user"/, 'não pode mais existir a versão em <button> que chamava cpSairDaConta() ao clicar no cartão');
-assert.doesNotMatch(index, /cp-user-chevron/, 'a setinha "⌄" saiu do cartão — não pode sugerir uma interação que não existe');
+// 1. O cartão (div, avatar, nome) não pode mais existir na barra lateral.
+assert.doesNotMatch(index, /id="cpSidebarUserBtn"/, 'o cartão da conta na lateral (div ou button) não pode mais existir');
+assert.doesNotMatch(index, /class="cp-sidebar-user"/, 'a classe do cartão não pode mais aparecer no HTML');
+assert.doesNotMatch(index, /id="cpAvatarUser"/, 'o avatar do cartão da lateral não pode mais existir');
+assert.doesNotMatch(index, /id="cpNomeUser"/, 'o nome do cartão da lateral não pode mais existir (cpNomeUserMenu, na tela Menu, é outro elemento e continua existindo)');
 
-// Avatar/nome continuam dentro, exatamente como antes (só a setinha e a tag <button> saíram).
-assert.match(index, /<div class="cp-sidebar-user" id="cpSidebarUserBtn">\s*<span class="cp-avatar" id="cpAvatarUser">C<\/span><span><b id="cpNomeUser">Corretor<\/b><small>Corretor<\/small><\/span>\s*<\/div>/,
-  'avatar e nome precisam continuar dentro do cartão, sem mudar a estrutura visual');
-
-// "Sair da conta" (botão dedicado, com ícone e texto) continua sendo o único jeito de sair pela lateral.
+// 2. "Sair da conta" (botão dedicado, com ícone e texto) continua sendo o único jeito de sair pela lateral.
 assert.match(index, /<button type="button" class="sb-item" id="btnSairConta" style="display:none" onclick="cpSairDaConta\(\)">/,
   'o botão dedicado "Sair da conta" precisa continuar existindo e chamando cpSairDaConta()');
 
-// CSS não pode mais indicar que o cartão é clicável (sem cursor:pointer, sem chevron).
-const iniRegra = css.indexOf('.cp-sidebar-user{');
-const fimRegra = css.indexOf('}', iniRegra);
-const regra = css.slice(iniRegra, fimRegra);
-assert.doesNotMatch(regra, /cursor:pointer/, 'o cartão não pode mais parecer clicável (sem cursor de mãozinha)');
-assert.match(regra, /width:100%!important/, 'precisa continuar ocupando a largura da barra lateral');
-assert.doesNotMatch(css, /\.cp-sidebar-user:hover\{background/, 'não pode sobrar destaque de FUNDO no hover de um elemento que não é mais interativo');
-assert.doesNotMatch(css, /\.cp-user-chevron\{/, 'a regra da setinha (removida do HTML) não pode sobrar solta no CSS');
+// 3. CSS do cartão removido não pode sobrar solto.
+assert.doesNotMatch(css, /\.cp-sidebar-user/, 'nenhuma regra de CSS do cartão removido pode sobrar (nem a base, nem hover, nem transição)');
+assert.doesNotMatch(css, /\.cp-avatar\{/, 'a regra .cp-avatar (só usada pelo cartão removido) não pode sobrar solta');
+// .cp-profile (o botão de perfil redondo do topo, "Perfil", ainda existe e usa "span" da mesma
+// família visual) precisa continuar estilizado — só o .cp-avatar (do cartão removido) saiu do combo.
+assert.match(css, /\.cp-profile span\{display:grid!important/, 'o botão de perfil do topo (.cp-profile) precisa continuar com o mesmo visual de avatar redondo');
+assert.match(index, /class="cp-profile desktop-only"/, 'o botão de perfil do topo (não é o cartão removido) continua existindo');
 
-console.log('v1015-seta-conta-lateral-clicavel: ok (atualizado na v1017 — cartão volta a ser só informativo)');
+// 4. app.js não pode mais tentar atualizar elementos que não existem mais — só o nome dentro
+// da tela Menu (cpNomeUserMenu) continua sendo atualizado.
+const fnIni = app.indexOf('window.cpAtualizarIdentidadeVisivel = function()');
+const fnFim = app.indexOf('\n  };', fnIni);
+const fnSrc = app.slice(fnIni, fnFim);
+assert.doesNotMatch(fnSrc, /cpNomeUser"|cpAvatarUser"/, 'cpAtualizarIdentidadeVisivel não pode mais mexer nos elementos removidos do cartão da lateral');
+assert.match(fnSrc, /cpNomeUserMenu/, 'cpAtualizarIdentidadeVisivel continua atualizando o nome dentro da tela Menu');
+
+console.log('v1015-seta-conta-lateral-clicavel: ok (atualizado na v1024 — cartão da lateral removido de vez, sem clique nem exibição)');

@@ -245,11 +245,13 @@ function parteJanelaDeEspera() {
 }
 
 function parteCartaoLateral() {
-  // 1) cartão duplicado — já coberto em tests/v1015-seta-conta-lateral-clicavel.test.mjs
-  // (atualizado nesta versão). Confirma aqui só que os dois arquivos concordam entre si.
+  // 1) cartão duplicado — coberto em detalhe em tests/v1015-seta-conta-lateral-clicavel.test.mjs.
+  // Na v1017 o cartão tinha virado um <div> sem ação (ainda visível, só sem clique); na v1024 o
+  // dono repetiu o pedido e o cartão saiu inteiro da tela — confirma aqui só que os dois arquivos
+  // concordam entre si (o cartão não existe mais).
   const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(index, /<div class="cp-sidebar-user" id="cpSidebarUserBtn">/, 'cartão da conta precisa ser um <div> sem ação (ver v1015 atualizado)');
-  console.log('v1017 (cartão lateral): sem duplicidade com "Sair da conta" — ok');
+  assert.doesNotMatch(index, /id="cpSidebarUserBtn"/, 'o cartão da conta na lateral foi removido de vez na v1024');
+  console.log('v1017 (cartão lateral): sem duplicidade com "Sair da conta" — ok (removido de vez na v1024)');
 }
 
 function parteBarraFazerAgora() {

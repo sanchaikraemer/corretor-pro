@@ -976,6 +976,13 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     _ultimaImportacao: eventoImportacao,
     _storageRefs: mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs),
     _atualizadoEm: concluidaEm,
+    // v1024 — "Última análise" (cp865UltimaAnaliseISO, em app.js) prioriza reanalisadoEm sobre
+    // geradoEm. nova (vinda de finalizarAnaliseDaConversa) só traz geradoEm — sem isto aqui, um
+    // reanalisadoEm ANTIGO (de uma reanálise manual anterior, via api/reanalisar-lead.js)
+    // sobrevivia ao "...anterior" e ficava PRA SEMPRE na frente do geradoEm fresco desta
+    // reimportação, mostrando uma data velha mesmo com a conversa acabada de reimportar/reanalisar
+    // (bug relatado pelo dono: reimportou e "Última análise" continuou com a data de 9 dias atrás).
+    reanalisadoEm: concluidaEm,
     // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto/reanálise.
     confirmedAppointments: []
   };
