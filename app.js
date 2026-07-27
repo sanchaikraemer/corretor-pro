@@ -11154,13 +11154,24 @@ window.cp7ObsSalvar = async function(btn){
   const original = btn?.textContent || "Salvar observação";
   if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
   if(status) status.innerHTML = '<span style="color:var(--morno)">Salvando observação…</span>';
-  try{
+  const enviarObservacao = async () => {
     const res = await fetchComTimeout("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ id:lead.id, action:"observacao-adicionar", texto })
     }, 30000);
     const data = await res.json().catch(()=>({ok:false}));
     if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível salvar a observação.");
+    return data;
+  };
+  try{
+    let data;
+    try{ data = await enviarObservacao(); }
+    catch(err){
+      // v1034 — voltar do WhatsApp pra escrever a observação pode pegar a rede ainda reconectando
+      // (mesmo caso já resolvido em registrarAtendimentoDaCopia, ver v1020): tenta mais uma vez
+      // antes de desistir, em vez de mostrar "signal is aborted"/"Failed to fetch" cru na tela.
+      data = await enviarObservacao();
+    }
 
     // Patch imediato: a observação aparece sem fechar/reabrir abas. As sugestões atuais
     // permanecem intactas; só uma reanálise futura vai gerar novas respostas.
@@ -11195,7 +11206,7 @@ window.cp7ObsSalvar = async function(btn){
     invalidarLeadsCache();
     setTimeout(()=>window.iniciarAprendizadoContinuoAutomatico?.({somentePendentes:true}),500);
   }catch(err){
-    if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(String(err?.message||err))+'</span>';
+    if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(userFriendlyError(err))+'</span>';
     if(btn){ btn.disabled=false; btn.textContent=original; }
   }
 };
