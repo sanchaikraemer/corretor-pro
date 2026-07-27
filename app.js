@@ -5074,12 +5074,18 @@ function iniciarBarraProgresso(btn, texto){
 }
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
+// v1026 — o botão "Voltar" usava history.back(), que pode levar pra QUALQUER coisa que
+// estivesse antes na pilha do navegador (outro lead, outra tela) — o dono pediu, mais de uma
+// vez, que "Voltar" sempre volte pra Home (ou pro grupo aberto dentro dela), nunca "pra última
+// ação". Agora sempre limpa o lead e renderiza a Home direto, sem depender do histórico do
+// navegador, e substitui a rota salva por uma de Home (pra um refresh logo em seguida também
+// não achar um lead salvo).
 function voltarDoLead(){
   if(typeof cp7ObsPararGravacaoSeAtiva === "function") cp7ObsPararGravacaoSeAtiva();
-  if(history.state?.cpApp && history.state?.screen === "lead"){ history.back(); return; }
   cpClearLeadState();
   if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
   else { renderBotoesHome(); }
+  cpReplaceRoute(cpRouteForScreen("home"));
 }
 window.voltarDoLead = voltarDoLead;
 
@@ -8345,8 +8351,16 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
   // Ir manualmente pra home limpa lead aberto e grupo aberto, pra mostrar os botões iniciais.
   // (A guarda em renderListasHome impede que o auto-refresh derrube quem está num lead/grupo.)
   if(b.dataset.target === "home"){ state.lead = null; state.focoLeadId = null; state.grupoAtivo = null; }
-  // Proposta aberta pelo Menu (não a partir de um lead) não fica vinculada a lead nenhum.
-  if(b.dataset.target === "propostas"){ state.propLeadId = null; state.propLeadNome = ""; atualizarVoltarProposta(); }
+  // Proposta aberta pelo Menu/barra (não a partir de um lead) não fica vinculada a lead nenhum —
+  // MAS só quando é uma navegação NOVA pra Propostas. v1026: o dono relatou "abri o lead, cliquei
+  // em Proposta, preenchi tudo, cliquei em Registrar e não salvou" — causa real: com a barra de
+  // navegação sempre visível (celular, rolando um formulário comprido), um toque (às vezes sem
+  // querer) no ícone "Propostas" da barra, MESMO JÁ ESTANDO na tela de propostas vinda de um lead,
+  // zerava o vínculo com o lead silenciosamente — o formulário continuava com tudo preenchido (os
+  // campos não somem), então nada parecia ter mudado até clicar em "Registrar" e cair no aviso
+  // "abra a partir de um lead". Reclicar no mesmo item de navegação, já estando nela, não pode
+  // apagar um vínculo em andamento.
+  if(b.dataset.target === "propostas" && state.active !== "propostas"){ state.propLeadId = null; state.propLeadNome = ""; atualizarVoltarProposta(); }
   // "Carteira" sempre abre na aba Oportunidades (priorizada), não na última aba usada (ex.: Últimos).
   if(b.dataset.target === "pipeline"){ setPipelineTab("oportunidades"); }
   show(b.dataset.target,{navKey});
@@ -10240,29 +10254,18 @@ async function iniciarDireciona(){
   // inicial pode trocar a tela nem disparar recarga automática.
   const compartilhado = await checkShared().catch(() => ({ handled:false }));
   if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
-  // Se o app RECARREGOU enquanto o corretor estava vendo um lead (atualização de versão,
-  // troca de service worker ou o Android reabrindo o PWA depois de ir pro WhatsApp), o
-  // history.state sobrevive ao reload e ainda guarda a rota do lead. Sem isto, todo reload
-  // caía na Home e o corretor era jogado pra tela inicial de novo e de novo.
-  const rotaSalva = history.state;
-  const leadSalvoId = (rotaSalva && rotaSalva.cpApp && rotaSalva.screen === "lead" && rotaSalva.leadId)
-    ? String(rotaSalva.leadId) : "";
-  if(leadSalvoId){
-    if(rotaSalva.carteiraFiltro) state.carteiraFiltro = rotaSalva.carteiraFiltro;
-    if(rotaSalva.pipelineFiltro) state.pipelineVisualFiltro = rotaSalva.pipelineFiltro;
-    if(rotaSalva.grupoAtivo) state.grupoAtivo = rotaSalva.grupoAtivo;
-    // Reabre o lead direto. abrirLead busca o detalhe pela API e volta pra Home sozinho
-    // se o lead não existir mais, então é seguro chamar já no boot.
-    abrirLead(leadSalvoId, { fromHistory:true }).catch(err => console.warn("restaurar lead no boot", err));
+  // v1026 — pedido explícito e repetido do dono: atualizar a página (F5/Ctrl+Shift+R, ou o
+  // Android recarregando o PWA sozinho) NUNCA pode abrir outra coisa além da Home. Isto aqui
+  // ANTES reabria um lead salvo em history.state de propósito (pra sobreviver a uma troca de
+  // versão/service worker no meio do atendimento) — mas na prática isso reabria sozinho leads
+  // já atendidos há muito tempo em qualquer refresh comum, o que o dono relatou como o próprio
+  // bug. A Home é sempre o destino; qualquer rota antiga (de outra tela/lead) some do
+  // history.state pra não sobreviver a um novo refresh.
+  if(history.state?.cpApp && history.state?.screen !== "home"){
+    try{ history.replaceState({ cpApp:true, screen:"home" }, "", location.href); }catch(_){}
   }
-  // Dashboard/agenda não dependem da restauração de leads antigos nem da lista rápida
-  // abaixo — rodam em paralelo, cada um com seu próprio fallback, em vez de ficarem
-  // atrás de um await sequencial que trava a tela inteira se uma etapa pendurar.
-  // Rodam mesmo quando restauramos um lead: assim, ao tocar em "Voltar", a Home já está pronta.
-  if(state.active === "home" || leadSalvoId){
-    carregarDashboard();
-    carregarAgendaTopo();
-  }
+  carregarDashboard();
+  carregarAgendaTopo();
   garantirRestauracaoLeadsAntigos().catch(()=>{});
   try{
     const data = await getLeadsData(false);
@@ -10920,12 +10923,75 @@ async function ui675PersistirFallback(id,analysis){
 // Observação de atendimento (texto ou áudio gravado na hora): soma na linha do tempo do
 // lead (sem apagar nada) e reanalisa, pra virar contexto real pras próximas sugestões.
 let _cp7ObsRecorder = null, _cp7ObsChunks = [], _cp7ObsStream = null;
+// v1026 — ditado em tempo real (o texto vai aparecendo ENQUANTO fala, em vez de só depois de
+// "Parar gravação"). Usa o reconhecimento de fala do próprio navegador/celular (Web Speech API,
+// já embutido no Chrome/Android — não precisa de servidor nem de biblioteca nova) quando
+// disponível; onde não existir (ex.: alguns navegadores no iPhone), cai automaticamente no
+// caminho antigo (grava o áudio inteiro e manda transcrever no fim), sem trocar de botão nem
+// pedir nada diferente do corretor.
+let _cp7ObsReco = null, _cp7ObsRecoTextoBase = "";
+function cp7ObsSpeechRecognitionDisponivel(){
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
 function cp7ObsPararGravacaoSeAtiva(){
   try{ if(_cp7ObsRecorder && _cp7ObsRecorder.state === "recording") _cp7ObsRecorder.stop(); }catch(_){}
   try{ _cp7ObsStream?.getTracks()?.forEach(t => t.stop()); }catch(_){}
   _cp7ObsStream = null;
+  try{ if(_cp7ObsReco){ const r=_cp7ObsReco; _cp7ObsReco=null; r.onend=null; r.stop(); } }catch(_){}
 }
 window.cp7ObsToggleGravacao = async function(btn){
+  if(cp7ObsSpeechRecognitionDisponivel()) return cp7ObsToggleDitado(btn);
+  return cp7ObsToggleGravacaoServidor(btn);
+};
+// Ditado ao vivo: o texto reconhecido vai sendo escrito na caixa de observação em tempo real.
+function cp7ObsToggleDitado(btn){
+  const status = qs("#cp7ObsStatus");
+  if(_cp7ObsReco){
+    _cp7ObsReco.stop(); // onend cuida de limpar o estado e o texto do botão
+    return;
+  }
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ta = qs("#cp7ObsTexto");
+  _cp7ObsRecoTextoBase = (ta?.value || "").trim();
+  const reco = new SpeechRecognitionCtor();
+  reco.lang = "pt-BR";
+  reco.continuous = true;
+  reco.interimResults = true;
+  reco.onresult = (ev) => {
+    let final = "", interim = "";
+    for(let i = ev.resultIndex; i < ev.results.length; i++){
+      const trecho = ev.results[i]?.[0]?.transcript || "";
+      if(ev.results[i].isFinal) final += trecho;
+      else interim += trecho;
+    }
+    if(final.trim()) _cp7ObsRecoTextoBase = (_cp7ObsRecoTextoBase ? _cp7ObsRecoTextoBase + " " : "") + final.trim();
+    if(ta) ta.value = [_cp7ObsRecoTextoBase, interim.trim()].filter(Boolean).join(" ");
+  };
+  reco.onerror = (ev) => {
+    // "no-speech"/"aborted" acontecem o tempo todo em uso normal (silêncio, parar de propósito)
+    // — não é erro de verdade, só o reconhecimento aguardando ou sendo encerrado.
+    if(ev?.error === "no-speech" || ev?.error === "aborted") return;
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui ouvir: ' + escapeHtml(String(ev?.error||'')) + '</span>';
+  };
+  reco.onend = () => {
+    _cp7ObsReco = null;
+    const btnAtual = qs("#cp7ObsGravarBtn");
+    if(btnAtual) btnAtual.textContent = "🎙️ Gravar áudio";
+    if(status) status.innerHTML = '<span style="color:var(--acao)">Ditado parado. Revise o texto e toque em Salvar observação.</span>';
+  };
+  try{
+    reco.start();
+    _cp7ObsReco = reco;
+    if(btn) btn.textContent = "⏹ Parar ditado";
+    if(status) status.innerHTML = '<span style="color:var(--morno)">Ouvindo... fale à vontade, o texto vai aparecendo aqui embaixo.</span>';
+  }catch(err){
+    _cp7ObsReco = null;
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui iniciar o ditado: '+escapeHtml(String(err?.message||err))+'</span>';
+  }
+}
+// Caminho antigo (sem reconhecimento de fala no navegador): grava o áudio inteiro e manda
+// transcrever de uma vez quando o corretor toca em "Parar gravação".
+async function cp7ObsToggleGravacaoServidor(btn){
   const status = qs("#cp7ObsStatus");
   if(_cp7ObsRecorder && _cp7ObsRecorder.state === "recording"){
     _cp7ObsRecorder.stop();
@@ -10956,7 +11022,7 @@ window.cp7ObsToggleGravacao = async function(btn){
   }catch(err){
     if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui acessar o microfone: '+escapeHtml(String(err?.message||err))+'</span>';
   }
-};
+}
 async function cp7ObsTranscreverBlob(blob, btn){
   const status = qs("#cp7ObsStatus");
   const ta = qs("#cp7ObsTexto");

@@ -108,10 +108,19 @@ async function salvarTranscricaoCache(storage, hash, item, organizationId) {
 // outros clientes (nome de arquivo sozinho pode repetir entre conversas diferentes).
 const AUDIO_TRANSCRITO_PREFIXO = "[Áudio transcrito] ";
 
+// v1026 — "0 aproveitados" voltava a acontecer num lead recorrente MESMO com este reaproveitamento
+// por nome de arquivo já existente (v954): na 1ª reimportação que reaproveitava com sucesso, o
+// áudio reaproveitado virava status "transcrito_reaproveitado" na timeline (não mais "transcrito")
+// — e esta função só aceitava o status "transcrito" exato. Resultado: a partir da 2ª reimportação
+// de um mesmo lead recorrente, todo áudio já tinha virado "transcrito_reaproveitado" e nenhum era
+// mais reconhecido como reaproveitável, mesmo com o texto certinho disponível na conversa. O que
+// importa é ter o TEXTO transcrito de verdade (o prefixo abaixo já garante isso) — não por qual
+// dos dois status ele chegou até aqui.
+const AUDIO_STATUS_COM_TEXTO_REAL = new Set(["transcrito", "transcrito_reaproveitado"]);
 export function transcricoesDoLeadAnterior(timelineJson) {
   const mapa = {};
   for (const m of (Array.isArray(timelineJson) ? timelineJson : [])) {
-    if (!m || m.type !== "audio" || m.audioStatus !== "transcrito") continue;
+    if (!m || m.type !== "audio" || !AUDIO_STATUS_COM_TEXTO_REAL.has(m.audioStatus)) continue;
     const nome = normalizeName(m.mediaFile || "");
     const texto = String(m.text || "");
     if (!nome || !texto.startsWith(AUDIO_TRANSCRITO_PREFIXO)) continue;
