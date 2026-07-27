@@ -9,9 +9,15 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // v978 — o dono achou que os 92px da v976 ainda ficaram pequenos ("MAIORES HORIZONTALMENTE") —
 // aumentado de novo pra 180px (desktop) / 190px (mobile). Os valores abaixo já refletem a v978;
 // ver tests/v978-produto-curto-barra-maior.test.mjs pro detalhe completo dessa 2ª rodada.
+//
+// v1021 — no celular, um nome de produto mais longo (coluna "pr", que divide espaço com "bar"
+// nessa tela) podia deixar menos de 190px pra barra, que não encolhia (flex:0 0 auto) e vazava
+// por cima do texto do produto. A barra do CELULAR virou responsiva (flex, encolhe até 40px de
+// base/30px mínimo) — continua "comprida" quando cabe, mas cede espaço em vez de sobrepor texto.
+// O desktop (linha abaixo) não tem esse problema (coluna "bar" própria de 240px) e não mudou.
 
 assert.match(app, /\.cp-hoje-row \.chr-track\{width:180px;height:7px/, 'barra (desktop) continua mais comprida (180px na v978), altura continua 7px (não pediu mais grossa)');
-assert.match(app, /\.cp-hoje-row \.chr-track\{width:190px\}/, 'barra (mobile) continua mais comprida (190px na v978)');
+assert.match(app, /\.cp-hoje-row \.chr-track\{width:auto;flex:1 1 40px/, 'barra (mobile) virou responsiva na v1021 (não fixa mais em 190px, pra não sobrepor o produto)');
 assert.match(app, /\.cp-hoje-row \.chr-bar b\{font-size:11px;font-weight:900;min-width:20px/, 'o número ao lado da barra continua com a MESMA fonte de sempre (11px/900) — só a barra cresceu');
 
 // A coluna do grid que reserva espaço pra barra cresceu junto (senão a barra maior brigaria com
