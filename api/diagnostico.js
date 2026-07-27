@@ -1,4 +1,4 @@
-import { resolveOrganizationId } from "./_persistence.js";
+import { resolveOrganizationId, getSupabaseAdmin, getPlatformAdminUserId } from "./_persistence.js";
 // Endpoint de bastidor consolidado. Faz 3 trabalhos via ?mode=:
 //   ?mode=status (padrão) → checa variáveis de ambiente (OpenAI + Supabase)
 //   ?mode=openai          → testa a chave OpenAI de verdade (models.list + chat)
@@ -6,7 +6,13 @@ import { resolveOrganizationId } from "./_persistence.js";
 // Unifica os antigos api/status.js, api/diagnostico-openai.js e api/configurar-bucket.js
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
-import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError } from "./_pipeline.js";
+import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError, verificarLimiteDiario } from "./_pipeline.js";
+
+// v1013 — mode=openai faz uma chamada REAL (e paga) à OpenAI a cada clique no botão "Testar IA".
+// Sem nenhum teto, cliques repetidos (ou um script) gastavam crédito sem limite algum. Este é um
+// teto de segurança bem mais alto que qualquer uso manual real do botão (nunca deveria ser
+// alcançado num dia normal) — não é uma trava de plano comercial.
+const LIMITE_DIAGNOSTICO_OPENAI_DIA = 40;
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -18,13 +24,30 @@ export default async function handler(req, res) {
   const organizationId = await resolveOrganizationId(req, res);
   if (!organizationId) return;
   const mode = String(req.query?.mode || "status").toLowerCase();
-  if (mode === "openai") return modoOpenAI(res);
-  if (mode === "bucket") return modoBucket(res);
-  return modoStatus(res);
+  // mode=bucket reconfigura o bucket de Storage inteiro — infraestrutura COMPARTILHADA por
+  // todas as contas, sem nenhuma tela do app que precise disso pra um corretor comum. Exclusivo
+  // do administrador da plataforma (nunca de um corretor autenticado, mesmo em dia).
+  if (mode === "bucket") {
+    const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
+    if (!admin) return json(res, 403, { ok: false, error: "Ajustar o armazenamento é uma ação exclusiva do administrador da plataforma." });
+    return modoBucket(res);
+  }
+  // mode=status/openai continuam abertos a qualquer corretor autenticado (telas reais do app
+  // usam pra checar se a IA está respondendo) — mas sem revelar prefixo/final da chave OpenAI
+  // nem organização/projeto pra quem não é administrador da plataforma.
+  const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
+  if (mode === "openai") {
+    const limite = await verificarLimiteDiario(organizationId, "diagnostico-openai", LIMITE_DIAGNOSTICO_OPENAI_DIA);
+    if (!limite.permitido) {
+      return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} testes de IA foi atingido para esta conta. Tente novamente amanhã.` });
+    }
+    return modoOpenAI(res, !!admin);
+  }
+  return modoStatus(res, !!admin);
 }
 
 // ---------- mode=status (antigo api/status.js) ----------
-function modoStatus(res) {
+function modoStatus(res, isAdmin) {
   const openai = getOpenAIConfigSummary();
   return json(res, 200, {
     ok: true,
@@ -37,10 +60,10 @@ function modoStatus(res) {
       OPENAI_API_KEY: openai.configured,
       OPENAI_BASE_URL: openai.baseURL,
       OPENAI_HAS_CUSTOM_BASE: openai.baseURL !== "https://api.openai.com/v1",
-      OPENAI_KEY_PREFIX: openai.keyPrefix,
-      OPENAI_KEY_TAIL: openai.keyTail,
-      OPENAI_ORG: openai.organization,
-      OPENAI_PROJECT: openai.project,
+      OPENAI_KEY_PREFIX: isAdmin ? openai.keyPrefix : undefined,
+      OPENAI_KEY_TAIL: isAdmin ? openai.keyTail : undefined,
+      OPENAI_ORG: isAdmin ? openai.organization : undefined,
+      OPENAI_PROJECT: isAdmin ? openai.project : undefined,
       OPENAI_TRANSCRIPTION_MODEL: openai.transcriptionModel,
       DIRECIONA_MAIN_MODEL: openai.analysisModel,
       OPENAI_ANALYSIS_MODEL: openai.analysisModel,
@@ -79,8 +102,9 @@ async function timed(label, fn) {
   }
 }
 
-async function modoOpenAI(res) {
+async function modoOpenAI(res, isAdmin) {
   const summary = getOpenAIConfigSummary();
+  const config = isAdmin ? summary : { ...summary, keyPrefix: undefined, keyTail: undefined, organization: undefined, project: undefined };
   const testes = [];
   let testeAnalise;
 
@@ -112,7 +136,7 @@ async function modoOpenAI(res) {
   return json(res, analiseFunciona ? 200 : 500, {
     ok: allOk,
     analiseFunciona,
-    config: summary,
+    config,
     primeiroErro: primeiroErro
       ? {
           etapa: primeiroErro.label,

@@ -42,6 +42,7 @@ async function principal() {
         return {
           select() { return this; },
           eq(coluna, valor) { assert.equal(coluna, 'user_id'); assert.equal(valor, 'user-123'); return this; },
+          order() { return this; },
           limit() { return this; },
           async maybeSingle() { return { data: { organization_id: 'org-da-juliana' }, error: null }; }
         };
@@ -69,7 +70,7 @@ async function principal() {
   {
     const supabaseFake = {
       auth: { async getUser() { return { data: { user: { id: 'user-sem-vinculo' } }, error: null }; } },
-      from() { return { select() { return this; }, eq() { return this; }, limit() { return this; }, async maybeSingle() { return { data: null, error: null }; } }; }
+      from() { return { select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; }, async maybeSingle() { return { data: null, error: null }; } }; }
     };
     const req = { headers: { authorization: 'Bearer token-sem-vinculo' } };
     const res = fakeRes();

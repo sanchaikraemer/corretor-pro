@@ -31,7 +31,7 @@
     <div class="cartao painel-largo" id="areaPainel" style="display:none">
       <div class="rodape-conta">
         <div><b>Painel administrativo</b><div class="tag-empresa">Todos os corretores cadastrados</div></div>
-        <button class="secundario pequeno" onclick="location.reload()">Sair</button>
+        <button class="secundario pequeno" onclick="sairAdmin()">Sair</button>
       </div>
 
       <div class="stats-admin">
@@ -108,6 +108,15 @@ async function entrarAdmin() {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
   }
+}
+
+// v1013 — o botão só fazia location.reload(), que recarrega a tela mas NÃO encerra a sessão do
+// Supabase — num aparelho compartilhado, a sessão de administrador continuava salva e a próxima
+// pessoa a abrir o painel entrava direto, sem pedir login. Agora encerra a sessão de verdade
+// antes de recarregar (mesmo padrão já usado no botão Sair do app principal).
+async function sairAdmin() {
+  try { await supabaseClient.auth.signOut(); } catch (_) {}
+  location.reload();
 }
 
 const STATUS_LABEL = { teste: 'Teste', ativo: 'Ativo', bloqueado: 'Bloqueado' };

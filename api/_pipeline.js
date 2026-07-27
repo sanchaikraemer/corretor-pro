@@ -124,16 +124,22 @@ function mensagemSoSaudacao(txt) {
   return /^(?:[a-záàâãéèêíïóôõöúçñ .'-]+,?\s*)?(?:oi|ol[aá]|bom dia|boa tarde|boa noite),?\s*(?:tudo bem|td bem|tudo certo|como vai)\??$/i.test(String(txt || "").trim());
 }
 
-function autorPareceNegocioPipeline(author = "") {
-  return /\b(construtora|senger|corretor|corretora|imobili[áa]ria|atendimento|sanchai|miguel kirinus)\b/i.test(String(author || ""));
-}
-function autorPareceClientePipeline(author = "", lead = {}) {
+// corretorNome vem SEMPRE do Cérebro configurado por organização (nunca cravado no código —
+// ver CLAUDE.md). As palavras genéricas do regex (construtora/corretor/imobiliária/atendimento)
+// continuam porque são termos de PAPEL, não nome de pessoa/empresa parceira específica.
+function autorPareceNegocioPipeline(author = "", corretorNome = "") {
   const a = String(author || "").trim().toLowerCase();
-  if (!a || autorPareceNegocioPipeline(a)) return false;
+  const corretor = String(corretorNome || "").trim().toLowerCase();
+  if (corretor && (a.includes(corretor) || corretor.includes(a))) return true;
+  return /\b(construtora|corretor|corretora|imobili[áa]ria|atendimento)\b/i.test(a);
+}
+function autorPareceClientePipeline(author = "", lead = {}, corretorNome = "") {
+  const a = String(author || "").trim().toLowerCase();
+  if (!a || autorPareceNegocioPipeline(a, corretorNome)) return false;
   const nome = String(lead?.clientName || lead?.nomeCliente || lead?.contactName || lead?.name || lead?.title || "").toLowerCase();
   const primeiro = nome.replace(/^conversa\s+do\s+whatsapp\s+com\s+/i, "").split(/\s+/)[0] || "";
   if (primeiro && a.includes(primeiro)) return true;
-  return !/\b(construtora|senger|atendimento)\b/i.test(a);
+  return !/\b(construtora|atendimento)\b/i.test(a);
 }
 function textoPedeMaterialOuInfo(texto = "") {
   const t = String(texto || "").toLowerCase();
@@ -150,19 +156,19 @@ function extrairCompromissoMaterial(texto = "") {
   if (/(retorno|retornar|me dar um retorno|dou retorno)/.test(l)) return "me dar um retorno depois de avaliar";
   return "avaliar o material enviado";
 }
-function detectarOrdemMaterialTimeline(timeline = [], lead = {}) {
+function detectarOrdemMaterialTimeline(timeline = [], lead = {}, corretorNome = "") {
   let ultimoPedido = null, entregaDepois = null;
   for (let i = 0; i < (Array.isArray(timeline) ? timeline.length : 0); i++) {
     const m = timeline[i] || {};
     const texto = String(m.text || "").replace(/\s+/g, " ").trim();
     const author = String(m.author || "");
     if (!texto) continue;
-    if (autorPareceClientePipeline(author, lead) && textoPedeMaterialOuInfo(texto)) {
+    if (autorPareceClientePipeline(author, lead, corretorNome) && textoPedeMaterialOuInfo(texto)) {
       ultimoPedido = { index: i, texto, author, compromisso: extrairCompromissoMaterial(texto), data: m.date || "", hora: m.time || "" };
       entregaDepois = null;
       continue;
     }
-    if (ultimoPedido && i > ultimoPedido.index && autorPareceNegocioPipeline(author) && textoEntregaMaterialOuInfo(texto)) {
+    if (ultimoPedido && i > ultimoPedido.index && autorPareceNegocioPipeline(author, corretorNome) && textoEntregaMaterialOuInfo(texto)) {
       entregaDepois = { index: i, texto, author, data: m.date || "", hora: m.time || "" };
     }
   }
@@ -229,7 +235,7 @@ function mcAutorEhContato(author, lead, corretorNome) {
   const primeiroContato = contato.split(/\s+/)[0] || "";
   const corretor = String(corretorNome || "").trim().toLowerCase();
   if (corretor && (autor.includes(corretor) || corretor.includes(autor))) return false;
-  if (/\b(senger|construtora|atendimento|sanchai|miguel kirinus)\b/i.test(autor)) return false;
+  if (/\b(construtora|atendimento)\b/i.test(autor)) return false;
   // O nome completo/primeiro nome do contato vence palavras de profissão presentes no nome.
   if (contato && (autor.includes(contato) || contato.includes(autor))) return true;
   if (primeiroContato && autor.includes(primeiroContato)) return true;
@@ -859,23 +865,32 @@ function detectProduct(fullText = "") {
   return "Não identificado";
 }
 
-function pickClientName(authors = []) {
+function pickClientName(authors = [], corretorNome = "") {
   // O nome importado é dado de origem: deve permanecer exatamente como aparece no TXT.
   // Só excluímos autores inequivocamente pertencentes ao lado da empresa; não corrigimos,
   // abreviamos nem retiramos palavras que possam fazer parte do nome salvo no WhatsApp.
-  const businessHints = /^(?:sistema|construtora\s+senger|sanchai|atendimento\s*\(corretor\)|miguel\s+kirinus)$/i;
-  const raw = authors.find(a => String(a || "").trim() && !businessHints.test(String(a).trim()))
+  // corretorNome vem do Cérebro configurado por organização — nunca cravado no código.
+  const businessHints = /^(?:sistema|atendimento\s*\(corretor\))$/i;
+  const corretor = String(corretorNome || "").trim().toLowerCase();
+  const ehLadoDaEmpresa = (a) => {
+    const s = String(a || "").trim();
+    if (!s) return false;
+    if (businessHints.test(s)) return true;
+    const sLower = s.toLowerCase();
+    return !!(corretor && (sLower === corretor || sLower.includes(corretor)));
+  };
+  const raw = authors.find(a => String(a || "").trim() && !ehLadoDaEmpresa(a))
     || authors.find(Boolean)
     || "Cliente não identificado";
   return String(raw).trim() || "Cliente não identificado";
 }
 
-export function guessLeadData(timeline) {
+export function guessLeadData(timeline, corretorNome = "") {
   const authors = [...new Set(timeline.map(m => m.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
   const fullText = timeline.map(m => m.text).join(" ");
   const lastInteraction = [...timeline].reverse().find(m => m.type !== "audio_unlinked") || timeline[timeline.length - 1] || null;
   return {
-    clientName: pickClientName(authors),
+    clientName: pickClientName(authors, corretorNome),
     phone: detectPhone(fullText),
     participants: authors,
     product: detectProduct(fullText),
@@ -889,15 +904,18 @@ export function guessLeadData(timeline) {
 
 // Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
 // o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
-function exemplosDoCorretor(timeline) {
+function exemplosDoCorretor(timeline, corretorNome = "") {
   if (!Array.isArray(timeline)) return "";
-  const business = /(senger|construtora|corretor|imobili[áa]ria|direciona|atendimento)/i;
+  const business = /(construtora|corretor|imobili[áa]ria|direciona|atendimento)/i;
+  const corretor = String(corretorNome || "").trim().toLowerCase();
   const out = [];
   for (const m of timeline) {
     if (!m || m.system) continue;
     const autor = String(m.author || "").trim();
+    const autorLower = autor.toLowerCase();
     const texto = String(m.text || "").replace(/\s+/g, " ").trim();
-    if (!autor || autor === "Sistema" || !business.test(autor)) continue;
+    const ehCorretor = business.test(autor) || (!!corretor && (autorLower === corretor || autorLower.includes(corretor)));
+    if (!autor || autor === "Sistema" || !ehCorretor) continue;
     if (texto.length < 18 || texto.length > 300) continue;
     if (/<m[íi]dia|arquivo anexado|[áa]udio|https?:\/\//i.test(texto)) continue;
     out.push(texto);
@@ -1105,22 +1123,42 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
   return null;
 }
 
-// Carrega SÓ o banco de inteligência aprendida (as observações extraídas de "Aprender de
-// toda a carteira"). loadCerebroConfig/sanitizeCerebroConfig descartam esse campo de propósito;
-// aqui a gente lê o valor cru pra alimentar as SUGESTÕES DE MENSAGEM com o jeito real do corretor.
-async function loadInteligenciaAprendida() {
+// ─── LIMITE DIÁRIO DE USO DA IA (v1013) ──────────────────────────────────────────────
+// A auditoria de isolamento entre contas encontrou que não existia NENHUM controle de consumo
+// por conta: um bug, um script, ou um uso mal-intencionado podia gerar chamadas ilimitadas à
+// OpenAI (custo real) numa única organização — inclusive numa conta de teste grátis, sem nunca
+// pagar por isso. Isto não é um teto de plano comercial (não decide quanto cada conta "deveria"
+// usar — isso é decisão do dono do produto, configurável por variável de ambiente) — é só uma
+// rede de segurança técnica contra consumo descontrolado. Contagem por dia civil (fuso não
+// importa aqui — é só um limite de segurança, não uma cobrança), reiniciando sozinha a cada dia.
+const LIMITE_ANALISES_IA_DIA_PADRAO = 200;
+
+export function limiteAnalisesIADoDia() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_PADRAO;
+}
+
+// Não é atômico (lê, decide, grava) — condição de corrida sob concorrência alta deixaria passar
+// 1-2 chamadas a mais no pior caso. Aceitável: é uma rede de segurança contra abuso/loop
+// descontrolado, não uma trava de cobrança que precise ser exata.
+export async function verificarLimiteDiario(organizationId, chave, limite) {
+  const semTeto = { permitido: true, usado: 0, limite };
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
-    if (!supabase) return null;
-    const { data } = await supabase
-      .from("direciona_config")
-      .select("valor")
-      .eq("chave", "direciona-cerebro")
-      .maybeSingle();
-    const ia = data?.valor?.inteligenciaAprendida;
-    return ia && typeof ia === "object" ? ia : null;
-  } catch (_) { return null; }
+    if (!supabase || !organizationId) return semTeto;
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    const chaveConfig = `limite-diario:${chave}`;
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveConfig).eq("organization_id", organizationId).maybeSingle();
+    const atual = data?.valor && typeof data.valor === "object" ? data.valor : {};
+    const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
+    if (usado >= limite) return { permitido: false, usado, limite };
+    const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
+      chave: chaveConfig, valor: { dia: hojeStr, contagem: usado + 1 }, atualizado_em: new Date().toISOString()
+    }) || {};
+    if (error) return semTeto; // falha ao gravar a contagem nunca pode bloquear uma análise real
+    return { permitido: true, usado: usado + 1, limite };
+  } catch (_) { return semTeto; }
 }
 
 // ─── APRENDIZADO CONTÍNUO REAL v808 ──────────────────────────────────────────
@@ -1159,7 +1197,7 @@ function mensagemPodeEnsinar(m) {
   return texto.length >= 2;
 }
 
-function papelMensagemAprendizado(m, clientName = "") {
+function papelMensagemAprendizado(m, clientName = "", corretorNome = "") {
   const autor = String(m?.author || "").trim();
   const fonte = String(m?.source || "").toLowerCase();
   const tipo = String(m?.type || "").toLowerCase();
@@ -1167,21 +1205,21 @@ function papelMensagemAprendizado(m, clientName = "") {
   // comercial real, mesmo quando não vieram como mensagem do WhatsApp.
   if (["manual", "crm", "corretor-pro-manual"].includes(fonte) ||
       ["atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual", "proposta"].includes(tipo)) return "CORRETOR";
-  if (autorPareceNegocioPipeline(autor) || /voc[êe]|mensagem enviada|atendimento \(corretor\)|observa[cç][aã]o do corretor|anota[cç][aã]o importada/i.test(autor)) return "CORRETOR";
-  if (autorPareceClientePipeline(autor, { clientName })) return "CLIENTE";
+  if (autorPareceNegocioPipeline(autor, corretorNome) || /voc[êe]|mensagem enviada|atendimento \(corretor\)|observa[cç][aã]o do corretor|anota[cç][aã]o importada/i.test(autor)) return "CORRETOR";
+  if (autorPareceClientePipeline(autor, { clientName }, corretorNome)) return "CLIENTE";
   return "OUTRO";
 }
 
 // Constrói um material focado nas CONDUÇÕES REAIS: inclui cada mensagem do corretor
 // e o contexto ao redor. Assim uma conversa enorme não perde as ações do meio nem a
 // última mensagem, e não precisamos mandar anexos/ruídos inteiros para a IA.
-export function prepararTimelineParaAprendizado(timeline, clientName = "", memoriaManual = null) {
+export function prepararTimelineParaAprendizado(timeline, clientName = "", memoriaManual = null, corretorNome = "") {
   const arr = (Array.isArray(timeline) ? timeline : []).filter(mensagemPodeEnsinar);
   // Mesmo sem conversa suficiente, uma observação explicitamente digitada pelo corretor
   // ainda é material válido para o aprendizado contínuo.
   const escolhidos = new Set();
   arr.forEach((m, i) => {
-    if (papelMensagemAprendizado(m, clientName) !== "CORRETOR") return;
+    if (papelMensagemAprendizado(m, clientName, corretorNome) !== "CORRETOR") return;
     for (let j = Math.max(0, i - 5); j <= Math.min(arr.length - 1, i + 3); j++) escolhidos.add(j);
   });
   // Se não foi possível reconhecer o corretor, mantém começo e fim para não jogar
@@ -1196,7 +1234,7 @@ export function prepararTimelineParaAprendizado(timeline, clientName = "", memor
   for (const i of indices) {
     if (i > anterior + 1) linhas.push("[... outro trecho da mesma conversa ...]");
     const m = arr[i];
-    const papel = papelMensagemAprendizado(m, clientName);
+    const papel = papelMensagemAprendizado(m, clientName, corretorNome);
     const texto = String(m.text || "").replace(/\s+/g, " ").trim().slice(0, 900);
     linhas.push(`[${m.date || ""} ${m.time || ""}] ${papel} (${String(m.author || "").slice(0, 80)}): ${texto}`);
     anterior = i;
@@ -1521,8 +1559,11 @@ function observarCategoriaExportacao(ia, key, label, aliasesGlobais) {
 
 // Exportação manual para auditoria fora do sistema. Não chama IA, não altera o
 // Cérebro e não habilita o aprendizado automático na geração das mensagens.
-export async function obterExportacaoAprendizado(inteligenciaAprendida = {}, cerebroAtual = {}) {
-  const memoria = await loadMemoriaComercialV2(true);
+// organizationId é obrigatório: sem ele, cairia no padrão legado e exportaria o
+// aprendizado da conta principal para qualquer corretor que clicasse em exportar.
+export async function obterExportacaoAprendizado(inteligenciaAprendida = {}, cerebroAtual = {}, organizationId) {
+  if (!organizationId) return { erro: "organizationId é obrigatório para exportar o aprendizado." };
+  const memoria = await loadMemoriaComercialV2(true, organizationId);
   const aliasesGlobais = [];
   for (const caso of memoria.casos || []) {
     aliasesGlobais.push(...aliasesPrivadosDoArquivo(caso?.sourceFile || "", caso?.produto || ""));
@@ -1626,8 +1667,8 @@ export async function marcarBootstrapAprendizadoConcluido(totalCarteira, organiz
   } catch (_) { return false; }
 }
 
-export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", memoriaManual = null, openai = null, forcar = false, organizationId = ORGANIZACAO_PADRAO_LEGADA } = {}) {
-  const material = prepararTimelineParaAprendizado(timeline, clientName, memoriaManual);
+export async function aprenderComHistoricoReal({ timeline, clientName = "", leadId = "", nomeArquivo = "", produto = "", etapa = "", memoriaManual = null, openai = null, forcar = false, organizationId = ORGANIZACAO_PADRAO_LEGADA, corretorNome = "" } = {}) {
+  const material = prepararTimelineParaAprendizado(timeline, clientName, memoriaManual, corretorNome);
   if (material.trim().length < 40) return { ok: true, ignorado: true, motivo: "sem diálogo real", casosDoLead: 0 };
   const sourceHash = hashTextoAprendizado(material);
   const anterior = await loadFonteMemoriaV2(leadId, sourceHash, organizationId);
@@ -1758,7 +1799,7 @@ export function extrairRespostasCorretor(timeline, clientName) {
     // Notas/atendimentos manuais DESCRITIVOS ("liguei, ele disse...") não são mensagem — fora.
     // Mas "Mensagem enviada (WhatsApp)" (type "mensagem") É resposta real dele — entra.
     if (src === "manual" && tipo !== "mensagem") continue;
-    const marcadorCorretor = /voc[êe]|corretor|atendimento|mensagem enviada|senger/i.test(autorRaw) || tipo === "mensagem";
+    const marcadorCorretor = /voc[êe]|corretor|atendimento|mensagem enviada/i.test(autorRaw) || tipo === "mensagem";
     const autorFirst = _semAcento(autorRaw).split(/\s+/)[0] || "";
     if (cliFirst && autorFirst && autorFirst === cliFirst) continue; // é o cliente — nunca entra
     if (!marcadorCorretor && !autorFirst) continue; // sem como atribuir → pula
@@ -1863,9 +1904,13 @@ export async function registrarInteligenciaAprendida(intel, organizationId = ORG
     ia.movimentosTravaram = Array.isArray(ia.movimentosTravaram) ? ia.movimentosTravaram : [];
     ia.padroesFollowup = Array.isArray(ia.padroesFollowup) ? ia.padroesFollowup : [];
 
-    // Stopwords + nomes próprios comuns (pra normalizar antes de comparar tom)
+    // Stopwords (pra normalizar antes de comparar tom) — só palavras de função e termos
+    // genéricos de papel (cliente/corretor/construtora). Nunca nome próprio de pessoa real:
+    // essa lista já teve nomes de clientes/contatos reais cravados aqui (achado da auditoria
+    // de isolamento entre contas) — removidos porque violavam a regra do CLAUDE.md e, numa
+    // base multi-conta, vazariam nomes de uma conta pro código usado por todas as outras.
     const STOPWORDS = new Set([
-      "que","com","para","por","sem","mais","menos","muito","pouco","esta","esse","essa","este","seu","sua","você","voce","tudo","sobre","como","quando","onde","aqui","ali","jamil","isabela","amiel","victor","paty","taiany","laura","jean","thuane","jessica","rafael","gilmar","alison","emerson","gabriele","joel","daniele","julia","henrique","karoliny","ricardo","alberto","marcia","monique","sanchai","cristian","fabio","douglas","zuleica","cliente","corretor","corretora","sanger","senger","construtora"
+      "que","com","para","por","sem","mais","menos","muito","pouco","esta","esse","essa","este","seu","sua","você","voce","tudo","sobre","como","quando","onde","aqui","ali","cliente","corretor","corretora","construtora"
     ]);
     // Helper: similaridade entre textos (Jaccard) — ignora stopwords e nomes próprios
     const simTexto = (a, b) => {
@@ -1935,7 +1980,7 @@ export async function registrarInteligenciaAprendida(intel, organizationId = ORG
       if (!ehTextoValido(resposta, 4)) continue;
       // Rejeita "objeções" que são na verdade comentários operacionais do corretor
       const objNorm = objecao.toLowerCase();
-      const padraoCorretor = /\bcliente\s+n[ãa]o\s+(atend|respond|retorn)|n[ãa]o\s+conseguiu?\s+contato|dificuldade\s+(de\s+)?contato|\b(julia|amiel|isabela|sanchai|monique)\s+mencionou\b/;
+      const padraoCorretor = /\bcliente\s+n[ãa]o\s+(atend|respond|retorn)|n[ãa]o\s+conseguiu?\s+contato|dificuldade\s+(de\s+)?contato/;
       if (padraoCorretor.test(objNorm)) continue;
       // Rejeita status passageiros que não são objeção real
       const padraoStatus = /^(n[ãa]o\s+consegui|estou\s+com\s+(bastante\s+)?coisa|tempo\s+para\s+decidir|preciso\s+pensar|vou\s+pensar|aguardando\s+(aumento|retorno|resposta)|valor\s+da\s+folha)/;
@@ -2009,7 +2054,7 @@ export async function registrarInteligenciaAprendida(intel, organizationId = ORG
 // raciocínio só as que casam com a situação deste cliente — mantém a IA focada
 // sem perder memória.
 const _STOPWORDS_RANK = new Set([
-  "que","com","para","por","sem","mais","menos","muito","pouco","esta","esse","essa","este","seu","sua","você","voce","tudo","sobre","como","quando","onde","aqui","ali","cliente","corretor","corretora","sanger","senger","construtora","uma","uns","dos","das","nos","nas","ele","ela","isso","aquilo","tem","ter","foi","ser","esta","estou","entao","então","tambem","também","porque","pois","cada","entre","depois","antes","ainda","sim","nao","não","vou","vai","fica","ficar","pode","poder","tipo","coisa","gente"
+  "que","com","para","por","sem","mais","menos","muito","pouco","esta","esse","essa","este","seu","sua","você","voce","tudo","sobre","como","quando","onde","aqui","ali","cliente","corretor","corretora","construtora","uma","uns","dos","das","nos","nas","ele","ela","isso","aquilo","tem","ter","foi","ser","esta","estou","entao","então","tambem","também","porque","pois","cada","entre","depois","antes","ainda","sim","nao","não","vou","vai","fica","ficar","pode","poder","tipo","coisa","gente"
 ]);
 function _tokensRank(s) {
   return String(s || "").toLowerCase()
@@ -2299,41 +2344,22 @@ function montarMemoriaEAprendizado(memoria, aprendizado, evolucao) {
   return partes.length ? "\n\n" + partes.join("\n\n") + "\n" : "";
 }
 
-async function loadLeadMemoriaAprendizado(leadId) {
-  const vazio = { memoria: null, aprendizado: null, evolucao: null };
-  if (!leadId) return vazio;
-  try {
-    const { getSupabaseAdmin } = await import("./_persistence.js");
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return vazio;
-    const { data } = await supabase
-      .from("whatsapp_processamentos")
-      .select("resultado_analise, atualizado_em")
-      .eq("id", leadId)
-      .maybeSingle();
-    const r = data?.resultado_analise || {};
-    return {
-      memoria: r.memoria || null,
-      aprendizado: r.aprendizado || null,
-      evolucao: r.evolucao || null
-    };
-  } catch (_) { return vazio; }
-}
-
 // Calcula a faixa de horário em que o CLIENTE costuma responder/interagir,
 // a partir dos horários reais das mensagens dele na timeline. Retorna "" se
 // não houver dados suficientes.
-function calcularMelhorHorario(timeline, clientName) {
+function calcularMelhorHorario(timeline, clientName, corretorNome = "") {
   if (!Array.isArray(timeline) || !timeline.length) return "";
-  const business = /(senger|construtora|corretor|imobiliaria|imobiliária|direciona|atendimento)/i;
+  const business = /(construtora|corretor|imobiliaria|imobiliária|direciona|atendimento)/i;
   const cliente = String(clientName || "").trim().toLowerCase();
+  const corretor = String(corretorNome || "").trim().toLowerCase();
   const horas = [];
   for (const m of timeline) {
     const autor = String(m.author || "").trim();
     if (!autor || autor === "Sistema" || autor === "Áudio sem referência exata") continue;
     const autorLower = autor.toLowerCase();
+    const ehCorretor = business.test(autor) || (!!corretor && (autorLower.includes(corretor) || corretor.includes(autorLower)));
     // Considera mensagem do cliente: bate com o nome dele, OU não é claramente o negócio
-    const ehCliente = cliente ? (autorLower.includes(cliente) || cliente.includes(autorLower)) : !business.test(autor);
+    const ehCliente = cliente ? (autorLower.includes(cliente) || cliente.includes(autorLower)) : !ehCorretor;
     if (!ehCliente) continue;
     const t = String(m.time || "").match(/^(\d{1,2}):/);
     if (!t) continue;
@@ -2521,6 +2547,29 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       validacaoSugestoes: ["Cérebro Comercial sem instruções carregadas."],
       messages: emptyMessages,
       _cerebroFonte: configCerebro?._fonte || "ausente"
+    };
+  }
+  // v1013 — rede de segurança contra consumo descontrolado (ver verificarLimiteDiario acima):
+  // checa DEPOIS de confirmar que o Cérebro existe (não gasta a checagem à toa numa conta que
+  // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
+  const limiteDiario = await verificarLimiteDiario(organizationId, "analises-ia", limiteAnalisesIADoDia());
+  if (!limiteDiario.permitido) {
+    return {
+      mode: "limite_diario_excedido",
+      error: `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`,
+      summary: "Análise não gerada: limite diário de uso da IA foi atingido para esta conta.",
+      clientProfile: "—",
+      bestTime: "—",
+      objections: [],
+      risk: "—",
+      produtoInteresse: null,
+      produtosInteresse: [],
+      etapaSugerida: null,
+      nextAction: null,
+      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      sugestoesPendentes: true,
+      validacaoSugestoes: [`Limite diário de ${limiteDiario.limite} análises atingido.`],
+      messages: emptyMessages
     };
   }
   // v827 §7.4: o nome do corretor vem SEMPRE da configuração do Cérebro ("Seu nome
@@ -2727,7 +2776,7 @@ ${timelineText}`;
       contextoTemporalMensagens: contextoTemporal,
       _cerebroFonte: configCerebro?._fonte || "backend-default",
       _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
-      melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName)
+      melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName, configCerebro?.corretorNome)
     };
   } catch (error) {
     const detail = describeOpenAIError(error);
@@ -3047,10 +3096,12 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     }
   }
 
+  // Nome do corretor vem do Cérebro da própria organização — nunca cravado no código.
+  const corretorNomePreliminar = (await loadCerebroConfig(null, options.organizationId).catch(() => null))?.corretorNome || "";
   return {
     txtFile: txtName,
     messages,
-    leadPreliminar: guessLeadData(messages),
+    leadPreliminar: guessLeadData(messages, corretorNomePreliminar),
     audioFilesRelevantes: audioFilesRelevantes.map(normalizeName),
     audiosParaTranscrever: audiosParaTranscrever.map(normalizeName),
     audioFilesForaDaJanela: audioFilesForaDaJanela.map(normalizeName),
@@ -3209,7 +3260,10 @@ export async function finalizarAnaliseDaConversa(payload) {
   // rawText reconstruído da timeline final; o TXT completo não precisa trafegar de volta.
   const rawText = payload.rawText || timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author}: ${m.text}`).join("\n");
   const openai = getOpenAI();
-  const lead = guessLeadData(timeline);
+  // Nome do corretor vem do Cérebro da própria organização — nunca cravado no código — pra
+  // identificar corretamente quem é "o negócio" ao adivinhar o nome do cliente na conversa.
+  const corretorNomeGuess = (await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null))?.corretorNome || "";
+  const lead = guessLeadData(timeline, corretorNomeGuess);
 
   let analysis;
   let analiseReutilizada = false;

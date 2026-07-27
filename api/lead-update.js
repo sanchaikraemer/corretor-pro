@@ -865,7 +865,7 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
       const autor = String(m?.author || "").toLowerCase();
       if (!autor) return false;
       if (nomeLead && (autor.includes(nomeLead) || nomeLead.includes(autor))) return true;
-      return !/(senger|construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
+      return !/(construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
     });
     evolucaoEntry = {
       houveResposta: clienteFalou,
@@ -884,7 +884,7 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
       const autor = String(m?.author || "").toLowerCase();
       if (!autor) return false;
       if (nomeLead && (autor.includes(nomeLead) || nomeLead.includes(autor))) return true;
-      return !/(senger|construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
+      return !/(construtora|corretor|imobili|atendimento|sistema)/i.test(autor);
     });
     evolucaoEntry = novasMensagens.length ? {
       houveResposta: clienteFalou,
@@ -1308,7 +1308,7 @@ function contarContatosV685(timeline, eventos) {
   const msgs = Array.isArray(timeline) ? timeline : [];
   const mensagensVoce = msgs.filter(m => {
     const from = String(m?.from || m?.speaker || m?.autor || m?.role || "").toLowerCase();
-    return /você|voce|sanchai|corretor|construtora|atendente|eu|me/.test(from);
+    return /você|voce|corretor|construtora|atendente|eu|me/.test(from);
   }).length;
   const evs = Array.isArray(eventos) ? eventos : [];
   const contatosManuais = evs.filter(e => /contato_manual|mensagem_copiada|atendido|proposta/i.test(String(e?.evento || ""))).length;

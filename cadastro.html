@@ -70,7 +70,14 @@ async function cadastrar() {
   btn.textContent = 'Criando conta...';
 
   try {
-    const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password: senha });
+    // O nome informado aqui vai também nos metadados do login (options.data) — é o único
+    // jeito de recuperá-lo depois, no primeiro login, PARA QUANDO a confirmação de e-mail
+    // estiver ativada (ver comentário abaixo sobre !signUpData.session).
+    const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { nome_empresa: nomeEmpresa } }
+    });
     if (signUpError) throw signUpError;
 
     if (!signUpData.session) {
@@ -82,7 +89,11 @@ async function cadastrar() {
       msg.className = jaExiste ? 'erro' : 'ok';
       msg.textContent = jaExiste
         ? 'Esse e-mail já tem uma conta. Em vez de criar outra, clique em "Entrar".'
-        : 'Conta criada! Confirme seu e-mail (verifique a caixa de entrada) e depois faça login.';
+        // Com a confirmação de e-mail ativada, ainda NÃO existe sessão aqui — não dá pra criar
+        // a empresa agora (o comando exige login). O nome digitado já foi salvo junto com o
+        // cadastro (nome_empresa) e entrar.html cria a empresa sozinho no primeiro login, assim
+        // que a sessão de verdade existir — não é preciso repetir esse passo.
+        : 'Conta criada! Confirme seu e-mail (verifique a caixa de entrada) e depois faça login — sua empresa é criada automaticamente no primeiro acesso.';
       btn.disabled = false;
       btn.textContent = 'Criar conta e começar teste grátis';
       return;

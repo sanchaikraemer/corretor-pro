@@ -70,25 +70,27 @@ function hashAudio(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-function caminhoCacheTranscricao(hash) {
-  return `transcription-cache/${String(hash || "").slice(0, 2)}/${hash}.json`;
+// organizationId no caminho garante que o cache de transcrição de uma conta nunca seja lido
+// (nem apagado) por outra — antes disso era uma pasta única global no bucket.
+function caminhoCacheTranscricao(hash, organizationId) {
+  return `organizations/${organizationId}/transcription-cache/${String(hash || "").slice(0, 2)}/${hash}.json`;
 }
 
-async function carregarTranscricaoCache(storage, hash) {
-  if (!hash) return null;
-  const item = await carregarManifesto(storage, caminhoCacheTranscricao(hash));
+async function carregarTranscricaoCache(storage, hash, organizationId) {
+  if (!hash || !organizationId) return null;
+  const item = await carregarManifesto(storage, caminhoCacheTranscricao(hash, organizationId));
   return item?.text ? { status: "transcrito_reaproveitado", text: String(item.text), reused: true, hash } : null;
 }
 
-async function salvarTranscricaoCache(storage, hash, item) {
-  if (!hash || !item?.text) return;
+async function salvarTranscricaoCache(storage, hash, item, organizationId) {
+  if (!hash || !item?.text || !organizationId) return;
   const payload = Buffer.from(JSON.stringify({
     version: 1,
     hash,
     text: String(item.text),
     createdAt: new Date().toISOString()
   }), "utf8");
-  const { error } = await storage.upload(caminhoCacheTranscricao(hash), payload, {
+  const { error } = await storage.upload(caminhoCacheTranscricao(hash, organizationId), payload, {
     contentType: "application/octet-stream",
     upsert: true,
     cacheControl: "31536000"
@@ -130,7 +132,11 @@ async function salvarManifesto(storage, manifestPath, manifest) {
 }
 
 export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {}, organizationId }) {
-  const prefix = `imports/${importId}`;
+  if (!organizationId) throw new Error("organizationId é obrigatório para preparar a extração.");
+  // organizationId no prefixo isola manifesto e áudios extraídos de cada conta no bucket
+  // compartilhado — sem isso, uma conta conseguiria ler/sobrescrever dados de outra só
+  // adivinhando (ou reaproveitando) um importId.
+  const prefix = `organizations/${organizationId}/imports/${importId}`;
   const manifestPath = `${prefix}/manifest.json`;
   const existente = await carregarManifesto(storage, manifestPath);
   const janelaSolicitada = String(audioWindowDays || "90");
@@ -175,7 +181,7 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
     if (doLead) {
       transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
     } else {
-      const cached = await carregarTranscricaoCache(storage, hash);
+      const cached = await carregarTranscricaoCache(storage, hash, organizationId);
       if (cached) transcriptions[nome] = cached;
     }
     arquivosTemporarios.push(audioPath);
@@ -236,7 +242,7 @@ export default async function handler(req, res) {
     return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
   }
   if (action !== "limpar-antigos") {
-    const prefixoEsperado = `whatsapp/imports/${importId}/`;
+    const prefixoEsperado = `whatsapp/organizations/${organizationId}/imports/${importId}/`;
     if (!storagePath.startsWith(prefixoEsperado) || !/\.zip$/i.test(storagePath)) {
       return json(res, 400, { ok: false, error: "Caminho do ZIP não pertence à importação informada." });
     }
@@ -254,11 +260,11 @@ export default async function handler(req, res) {
       // áudios já feitos nesse MESMO cliente; não decide fusão de cadastro (isso continua
       // acontecendo depois, na análise/persistência, do jeito que já era).
       const nomeArquivoZip = storagePath.split("/").pop() || "";
-      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath }).catch(() => null);
+      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath, organizationId }).catch(() => null);
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
       const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, organizationId });
       return json(res, 200, {
-        ok: true, bucket, path: storagePath, importId, manifestPath: `imports/${importId}/manifest.json`,
+        ok: true, bucket, path: storagePath, importId, manifestPath: `organizations/${organizationId}/imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
         audioStorage: manifest.audioStorage,
         cachedTranscriptions: manifest.transcriptions || {}
@@ -269,7 +275,7 @@ export default async function handler(req, res) {
       const audioNames = Array.isArray(body?.audioNames) ? body.audioNames.map(normalizeName) : [];
       if (!audioNames.length) return json(res, 200, { ok: true, transcriptions: {} });
       if (!importId) return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
-      const manifestPath = `imports/${importId}/manifest.json`;
+      const manifestPath = `organizations/${organizationId}/imports/${importId}/manifest.json`;
       const manifest = await carregarManifesto(storage, manifestPath);
       if (!manifest?.audioStorage) return json(res, 409, { ok: false, error: "A extração desta importação não foi encontrada. Tente preparar novamente sem reenviar o ZIP." });
       const existentes = manifest.transcriptions && typeof manifest.transcriptions === "object" ? { ...manifest.transcriptions } : {};
@@ -277,7 +283,7 @@ export default async function handler(req, res) {
       for (const nome of audioNames) {
         if (existentes[nome]?.text) continue;
         const hash = manifest?.audioHashes?.[nome];
-        const cached = await carregarTranscricaoCache(storage, hash);
+        const cached = await carregarTranscricaoCache(storage, hash, organizationId);
         if (cached) {
           existentes[nome] = cached;
           continue;
@@ -291,7 +297,7 @@ export default async function handler(req, res) {
         : { transcriptions: {}, transcriptionEnabled: true };
       Object.assign(existentes, lote.transcriptions || {});
       for (const [nome, item] of Object.entries(lote.transcriptions || {})) {
-        if (item?.text) await salvarTranscricaoCache(storage, manifest?.audioHashes?.[nome], item);
+        if (item?.text) await salvarTranscricaoCache(storage, manifest?.audioHashes?.[nome], item, organizationId);
       }
       manifest.transcriptions = existentes;
       manifest.status = "prepared";
@@ -329,10 +335,10 @@ export default async function handler(req, res) {
         organizationId
       });
       const analysis = result?.analysis || null;
-      const manifestPath = importId ? `imports/${importId}/manifest.json` : "";
+      const manifestPath = importId ? `organizations/${organizationId}/imports/${importId}/manifest.json` : "";
       const manifest = importId ? await carregarManifesto(storage, manifestPath) : null;
       if (analysis && typeof analysis === "object") {
-        const cachePaths = [...new Set(Object.values(manifest?.audioHashes || {}).filter(Boolean).map(caminhoCacheTranscricao))];
+        const cachePaths = [...new Set(Object.values(manifest?.audioHashes || {}).filter(Boolean).map(hash => caminhoCacheTranscricao(hash, organizationId)))];
         analysis._storageRefs = {
           version: 1,
           bucket,
@@ -359,7 +365,7 @@ export default async function handler(req, res) {
 
     if (action === "finalizar") {
       if (!importId) return json(res, 400, { ok: false, error: "Identificador de importação ausente ou inválido." });
-      const manifestPath = `imports/${importId}/manifest.json`;
+      const manifestPath = `organizations/${organizationId}/imports/${importId}/manifest.json`;
       const manifest = await carregarManifesto(storage, manifestPath);
       if (manifest) {
         manifest.status = "completed";
@@ -373,15 +379,17 @@ export default async function handler(req, res) {
 
     if (action === "limpar-antigos") {
       // Limpeza conservadora: apenas manifestos com mais de 7 dias. Falhas não bloqueiam importações.
+      // Escopada por organizationId — antes disso a varredura listava "imports/" (pasta global do
+      // bucket) e uma conta podia disparar a limpeza de arquivos temporários de OUTRA conta.
       const limiteMs = 7 * 24 * 60 * 60 * 1000;
       const activeImportId = importIdSeguro(body?.activeImportId);
-      const { data: dirs, error } = await storage.list("imports", { limit: 100, sortBy: { column: "created_at", order: "asc" } });
+      const { data: dirs, error } = await storage.list(`organizations/${organizationId}/imports`, { limit: 100, sortBy: { column: "created_at", order: "asc" } });
       if (error) throw new Error(error.message);
       let removidas = 0;
       for (const dir of dirs || []) {
         const id = importIdSeguro(dir?.name);
         if (!id || id === activeImportId) continue;
-        const manifestPath = `imports/${id}/manifest.json`;
+        const manifestPath = `organizations/${organizationId}/imports/${id}/manifest.json`;
         const manifest = await carregarManifesto(storage, manifestPath);
         const referencia = Date.parse(manifest?.updatedAt || manifest?.createdAt || dir?.created_at || "");
         if (!referencia || Date.now() - referencia < limiteMs) continue;
@@ -395,7 +403,7 @@ export default async function handler(req, res) {
   } catch (error) {
     if (importId && ["preparar", "transcrever", "analisar"].includes(action)) {
       try {
-        const manifestPath = `imports/${importId}/manifest.json`;
+        const manifestPath = `organizations/${organizationId}/imports/${importId}/manifest.json`;
         const manifest = await carregarManifesto(storage, manifestPath);
         if (manifest) {
           manifest.status = "recoverable-failure";

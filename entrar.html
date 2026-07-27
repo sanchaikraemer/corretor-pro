@@ -28,6 +28,7 @@
       <button id="btnEntrar" onclick="entrar()">Entrar</button>
       <div id="msg"></div>
 
+      <div class="linkbar"><a href="recuperar-senha.html">Esqueci minha senha</a></div>
       <div class="linkbar">Não tem conta? <a href="cadastro.html">Criar conta grátis</a></div>
     </div>
   </div>
@@ -66,19 +67,39 @@ async function entrar() {
     // quem também é administrador da plataforma enxerga todas as empresas na admin_visao_empresas,
     // e ali não dava pra saber qual delas era a própria (podia mostrar o status de outra empresa
     // por engano). Filtrando por memberships.user_id = eu mesmo, é sempre a empresa certa.
+    // v1013: se o usuário tiver MAIS de um vínculo (não deveria acontecer no fluxo normal, mas
+    // pode ocorrer em bases antigas/migradas), busca todos e usa o mais recente — nunca "o
+    // primeiro que o banco devolver" (ordem não é garantida sem order()).
     const meuId = loginData.user.id;
-    const { data: vinculo, error: empError } = await supabaseClient
+    const buscarVinculo = () => supabaseClient
       .from('memberships')
-      .select('papel, organizations(id, nome, status, trial_expira_em)')
+      .select('papel, criado_em, organizations(id, nome, status, trial_expira_em)')
       .eq('user_id', meuId)
+      .order('criado_em', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    let { data: vinculo, error: empError } = await buscarVinculo();
     if (empError) throw empError;
+
+    // v1013 — com a confirmação de e-mail ativada no Supabase, o cadastro não tinha sessão pra
+    // criar a empresa na hora (RPC exige login). Ficava com o login pronto e SEM empresa pra
+    // sempre. Aqui, no primeiro login de verdade (sessão já existe), cria a empresa que faltou,
+    // usando o nome que o cadastro salvou em user_metadata.nome_empresa.
+    if (!vinculo || !vinculo.organizations) {
+      const nomeSalvoNoCadastro = String(loginData.user.user_metadata?.nome_empresa || '').trim();
+      const nomeParaEmpresa = nomeSalvoNoCadastro || String(email.split('@')[0] || 'Minha empresa').trim();
+      const { error: rpcError } = await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeParaEmpresa });
+      if (!rpcError) {
+        const retry = await buscarVinculo();
+        vinculo = retry.data;
+      }
+    }
 
     const minhaEmpresa = vinculo && vinculo.organizations;
     if (!minhaEmpresa) {
       msg.className = 'erro';
-      msg.textContent = 'Login ok, mas não encontrei nenhuma conta vinculada a este login.';
+      msg.textContent = 'Login ok, mas não encontrei nenhuma conta vinculada a este login. Tente novamente ou fale com o suporte.';
       btn.disabled = false; btn.textContent = 'Entrar';
       return;
     }

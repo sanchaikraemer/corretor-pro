@@ -149,7 +149,7 @@ export default async function handler(req, res) {
       try {
         const atual = await loadConfig(supabase, organizationId);
         const config = atual?.valor && typeof atual.valor === "object" ? atual.valor : { ...DEFAULTS };
-        const exportacao = await obterExportacaoAprendizado(config.inteligenciaAprendida || {}, config);
+        const exportacao = await obterExportacaoAprendizado(config.inteligenciaAprendida || {}, config, organizationId);
         return json(res, 200, { ok: true, exportacao });
       } catch (e) {
         return json(res, 500, { ok: false, error: e?.message || "Não foi possível preparar o aprendizado para exportação." });
@@ -197,6 +197,8 @@ export default async function handler(req, res) {
         return json(res, 200, { ok:true, removido:true, motivo:"lead não existe mais", leadId });
       }
       const a = lead.resultado_analise || {};
+      const cerebroAtual = await loadConfig(supabase, organizationId);
+      const corretorNome = cerebroAtual?.valor?.corretorNome || "";
       const r = await aprenderComHistoricoReal({
         timeline: Array.isArray(lead.timeline_json) ? lead.timeline_json : [],
         clientName: a.clientName || a?.lead?.clientName || a?.lead?.name || String(lead.nome_arquivo || "").replace(/\.(txt|zip)$/i, ""),
@@ -206,7 +208,8 @@ export default async function handler(req, res) {
         etapa: a.etapaSugerida || lead.etapa || a?.lead?.etapa || "",
         memoriaManual: a.memoria || {},
         openai,
-        organizationId
+        organizationId,
+        corretorNome
       });
       if (r?.ok) {
         await supabase.from("direciona_config").delete().eq("chave", fila.chave).eq("organization_id", organizationId);
@@ -273,6 +276,8 @@ export default async function handler(req, res) {
           .order("id", { ascending: true })
           .range(offset, offset + limite - 1);
         if (error) return json(res, 200, { ok: false, error: "Banco: " + error.message });
+        const cerebroAtual = await loadConfig(supabase, organizationId);
+        const corretorNome = cerebroAtual?.valor?.corretorNome || "";
         let aprendidas = 0, semConteudo = 0, falhasSalvar = 0, totalNoBanco = 0, errosIA = 0;
         let ultimoErroIA = "";
         const amostra = [];
@@ -293,6 +298,7 @@ export default async function handler(req, res) {
             etapa: a.etapaSugerida || a?.lead?.etapa || "",
             memoriaManual: a.memoria || {},
             openai,
+            corretorNome,
             forcar: body.forcar === true,
             organizationId
           });
