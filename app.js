@@ -2528,28 +2528,20 @@ function emJanelaDeEspera(l){
   if(lembreteVencido(l)) return false;
   const aps = l.analysis?.confirmedAppointments;
   if(Array.isArray(aps) && aps.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando||"").toLowerCase()))) return false;
-  let toque = l.daysSinceLastTouch; if(toque==null) toque = _diasDesdeMsg(l, false);
-  // v981 — bug real (print do dono): lead atendido pelo botão "Marcar atendimento" (ou por
-  // "copiar mensagem" sem observação) voltava a aparecer em prioridades/"Fazer agora" antes dos
-  // 3-5 dias de espera. Causa: esses dois gatilhos só gravam o evento contato_manual — não tocam
-  // timeline_json — então daysSinceLastTouch (calculado em cima da timeline no servidor) não
-  // sabia do atendimento e continuava com a idade da última mensagem real do WhatsApp. Mesma
-  // causa raiz já corrigida em diasParado (v882): usa o toque mais recente entre mensagem e
-  // atendimento manual, nunca o mais antigo.
+  // v1018 — pedido explícito e repetido do dono, com casos reais (ex.: "Adão — marquei
+  // atendimento quarta dia 22, ainda sim apresenta 26 dias"): a espera conta SÓ a partir do
+  // ÚLTIMO ATENDIMENTO MARCADO (botão "Marcar atendimento", observação, ligação, visita,
+  // proposta — tudo que ultimoAtendimentoTs já reconhece) — NUNCA a partir de mensagem, nem do
+  // cliente nem minha. Até aqui, "toque" vinha de daysSinceLastTouch (baseado na ÚLTIMA MENSAGEM
+  // da conversa, de qualquer lado) e só recuava pro atendimento se este fosse mais recente — uma
+  // mensagem nova (mesmo só uma despedida do cliente) reiniciava a contagem sozinha, sem que o
+  // corretor tivesse atendido de novo. "o prazo deve contar do último atendimento, e não da
+  // última mensagem do cliente" (palavras do dono). Sem NENHUM atendimento registrado, não há de
+  // onde contar — o lead fica elegível na hora (nunca foi "colocado em espera" por ninguém).
   const atTs = ultimoAtendimentoTs(l);
-  if(atTs){
-    const dAt = diasCalendarioBR(atTs);
-    if(dAt != null && Number.isFinite(dAt) && (toque == null || dAt < toque)) toque = dAt;
-  }
-  let resposta = l.daysSinceClientReply; if(resposta==null) resposta = _diasDesdeMsg(l, true);
-  if(toque == null) return false;
-  // Só espera se EU contatei por último (cliente ainda não respondeu DE VERDADE desde então).
-  // v1017 — "responder de verdade" exige que a fala do cliente PEÇA algo (pergunta/pedido) —
-  // ver ultimaMsgClientePedeResposta. Antes, um "Ok"/"Obrigada" do cliente (sem pedir nada) já
-  // encerrava a espera na hora e o lead voltava pra "Fazer agora" antes do prazo configurado.
-  const clienteRespondeuDeVerdade = resposta != null && toque >= resposta && ultimaMsgClientePedeResposta(l);
-  const euContateiPorUltimo = !clienteRespondeuDeVerdade;
-  return euContateiPorUltimo && toque < limiarRetomada(l);
+  if(!atTs) return false;
+  const dias = diasCalendarioBR(atTs);
+  return dias != null && dias < limiarRetomada(l);
 }
 
 // Um lead com contato MUITO recente (< 7 dias) ainda não deve entrar em "retomada" —
@@ -2712,7 +2704,20 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   let nivel = 0;
   try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
   const dotCor = nivel === 1 ? 'var(--accent)' : '#5a6a70'; // coral = cliente aguardando você
-  const diasNum = l.daysSinceLastInteraction;
+  // v1018 — pedido do dono (caso real: "Adão — marquei atendimento quarta dia 22, ainda sim
+  // apresenta 26 dias"): daysSinceLastInteraction só olha mensagem (nunca soube de atendimento
+  // marcado), então esse número podia ficar bem maior do que o esperado logo depois de atender —
+  // mesma causa raiz do bug de emJanelaDeEspera (ver ali). Aqui usa o atendimento quando ele for
+  // MAIS RECENTE que a última mensagem, igual o "toque" que a fila já calcula.
+  let diasNum = l.daysSinceLastInteraction;
+  let diasEhAtendimento = false;
+  try{
+    const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
+    if(atTs){
+      const diasAt = diasCalendarioBR(atTs);
+      if(diasAt != null && (diasNum == null || diasAt < diasNum)){ diasNum = diasAt; diasEhAtendimento = true; }
+    }
+  }catch(_){}
   const dias = diasNum != null ? `${diasNum}d` : '';
   // v972 — achado do dono: "78d"/"109d" solto do lado de "cliente esperando sua resposta" parecia
   // dizer "o cliente espera há 78/109 dias", mas o campo é dias desde a ÚLTIMA interação de
@@ -2720,7 +2725,9 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   // sem mudar o cálculo do dado (daysSinceLastInteraction continua vindo de onde sempre veio).
   const diasTitle = diasNum == null ? '' : (nivel === 1
     ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
-    : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
+    : diasEhAtendimento
+      ? `${diasNum} dia${diasNum===1?'':'s'} desde o último atendimento marcado`
+      : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
   // v978 — pedido do dono: aqui na Home só o nome do empreendimento (produtosLabelCurto), sem
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
   const prod = (typeof produtosLabelCurto === 'function') ? produtosLabelCurto(l) : ((typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || ''));

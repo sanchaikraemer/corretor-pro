@@ -37,6 +37,12 @@ import { resolveOrganizationId, listRecentProcessings } from '../api/_persistenc
 //    cpProbabilidadeFechamento (a função que ORDENA a fila), nunca nas funções que decidem QUEM
 //    ENTRA nela. Extraída a checagem compartilhada (ultimaMsgClientePedeResposta) e aplicada
 //    também em emJanelaDeEspera/entraEmRetomada.
+//    v1018 — o dono testou este v1017 e trouxe casos reais (Rafael, Adão) mostrando que mensagem
+//    NÃO PODE fazer parte dessa conta de jeito nenhum, nem pra encerrar nem pra manter a espera:
+//    "deve contar do último atendimento esse prazo, e não da última mensagem do cliente".
+//    emJanelaDeEspera foi reescrita de novo (ver tests/v1018-atendimento-e-nao-mensagem-define-espera.test.mjs
+//    e tests/v981-janela-espera-considera-atendimento.test.mjs, ambos atualizados) — conta só
+//    ultimoAtendimentoTs, sem nenhum sinal de mensagem.
 //
 // 6) Print à parte: o card "Fazer agora" de dentro do lead mostrava um texto motivo (cor coral)
 //    que o dono já tinha pedido pra tirar da Home (v975) e agora pediu pra tirar de vez, também
@@ -223,70 +229,19 @@ function parteJanelaDeEspera() {
     return m[0];
   }
   const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  const diasCal = extrai(/function diasCalendarioBR\(quando\)\{[\s\S]*?\n\}/, 'diasCalendarioBR');
-  const tipos = extrai(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/, 'TIPOS_ATENDIMENTO_TIMELINE');
-  const ultAt = extrai(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/, 'ultimoAtendimentoTs');
-  const lembTs = extrai(/function lembreteTs\(l\)\{[\s\S]*?\n\}/, 'lembreteTs');
-  const lembVenc = extrai(/function lembreteVencido\(l\)\{[^\n]*\}/, 'lembreteVencido');
-  const limiar = extrai(/function limiarRetomada\(l\)\{[\s\S]*?\n\}/, 'limiarRetomada');
-  const diasMsg = extrai(/function _diasDesdeMsg\(l, somenteCliente\)\{[\s\S]*?\n\}/, '_diasDesdeMsg');
-  const pedeResposta = extrai(/function ultimaMsgClientePedeResposta\(l\)\{[\s\S]*?\n\}/, 'ultimaMsgClientePedeResposta');
-  const janela = extrai(/function emJanelaDeEspera\(l\)\{[\s\S]*?\n\}/, 'emJanelaDeEspera');
 
-  // ultimaMsgClientePedeResposta precisa citar ui670UltimaMensagemReal (não pode virar outro
-  // helper duplicado — mesmo problema que causou este bug em primeiro lugar).
-  assert.match(pedeResposta, /ui670UltimaMensagemReal/, 'ultimaMsgClientePedeResposta usa a última mensagem real do cliente');
-  assert.match(janela, /ultimaMsgClientePedeResposta\(l\)/, 'emJanelaDeEspera usa a checagem de "pede resposta", não só quem falou por último');
-
-  const emJanelaDeEspera = eval(`
-    const ui670UltimaMensagemReal = (l) => l.__last || {m:null, falante:'desconhecido'};
-    ${diasCal}
-    ${tipos}
-    ${ultAt}
-    ${lembTs}
-    ${lembVenc}
-    ${limiar}
-    ${diasMsg}
-    ${pedeResposta}
-    ${janela}
-    emJanelaDeEspera
-  `);
-
-  // Lead estabelecido (limiar 5), contatado por mim há 2 dias — dentro do prazo de espera.
-  const base = { createdAt: isoDiasAtras(200), daysSinceLastTouch: 2, daysSinceClientReply: 1 };
-
-  // 1. Bug relatado: cliente respondeu (cronologicamente por último), mas só com uma despedida
-  // pura, sem pedir nada. ANTES desta correção, isso encerrava a espera na hora (lead voltava pra
-  // "Fazer agora" com só 2 dias, antes do prazo). Precisa CONTINUAR protegido.
-  const comDespedida = { ...base, __last: { falante: 'contato', m: { text: 'Obrigada, tudo certo!' } } };
-  assert.equal(emJanelaDeEspera(comDespedida), true,
-    'despedida pura do cliente NÃO pode encerrar a janela de espera antes do prazo (bug relatado várias vezes)');
-
-  // 2. Mesmo cenário, mas o cliente PERGUNTOU de verdade — aí sim a bola é minha, a espera acaba.
-  const comPergunta = { ...base, __last: { falante: 'contato', m: { text: 'Consegue me mandar a planta do apartamento?' } } };
-  assert.equal(emJanelaDeEspera(comPergunta), false,
-    'pergunta real do cliente encerra a janela de espera (a bola é minha, preciso responder)');
-
-  // 3. Um pedido explícito (sem "?") também encerra — mesma checagem da v944.
-  const comPedido = { ...base, __last: { falante: 'contato', m: { text: 'Me manda o valor atualizado' } } };
-  assert.equal(emJanelaDeEspera(comPedido), false, 'pedido explícito do cliente também encerra a janela de espera');
-
-  // 4. Sem como checar a última mensagem (ui670UltimaMensagemReal indisponível/sem dado) — mantém
-  // o comportamento anterior por padrão (não trava a espera à toa por falta de dado).
-  const semUltimaMsg = { ...base };
-  assert.equal(emJanelaDeEspera(semUltimaMsg), false,
-    'sem dado da última mensagem, mantém o comportamento de antes (não bloqueia por padrão)');
-
-  console.log('v1017 (janela de espera): despedida do cliente não encerra mais a espera antes da hora — ok');
-
-  // entraEmRetomada tem um segundo ramo com o MESMO bug (fallback quando ainda não passou do
-  // limiar) — corrigido com o "&& ultimaMsgClientePedeResposta(l)". Verifica só o padrão de
-  // código (o comportamento em si já é coberto pelos testes v906/v916/v938/v941/v981 existentes,
-  // que continuam verdes com esta mudança).
+  // v1018 substituiu de vez a checagem "despedida vs. pergunta real" aqui por uma regra mais
+  // simples e mais taxativa do dono: emJanelaDeEspera conta SÓ o último atendimento marcado,
+  // ponto — mensagem (do cliente ou minha) não entra mais nessa conta de jeito nenhum. Cobertura
+  // completa do comportamento atual está em tests/v981-janela-espera-considera-atendimento.test.mjs
+  // (reescrito) e tests/v1018-atendimento-e-nao-mensagem-define-espera.test.mjs (novo). Aqui só
+  // uma checagem rápida de que entraEmRetomada (usado por outra tela, cp786Categoria) continua
+  // exigindo que a última mensagem do cliente peça resposta no ramo dele — isso não mudou nesta
+  // versão.
   const retomadaSrc = extrai(/function entraEmRetomada\(l\)\{[\s\S]*?\n\}/, 'entraEmRetomada');
   assert.match(retomadaSrc, /ehMsgDoCliente\(m, primeiroNome\) && ultimaMsgClientePedeResposta\(l\)/,
     'entraEmRetomada também exige que a última mensagem do cliente peça resposta, não só que seja dele');
-  console.log('v1017 (entraEmRetomada): mesmo ajuste aplicado no ramo redundante — ok');
+  console.log('v1017 (entraEmRetomada): ramo redundante inalterado nesta versão — ok');
 }
 
 function parteCartaoLateral() {
