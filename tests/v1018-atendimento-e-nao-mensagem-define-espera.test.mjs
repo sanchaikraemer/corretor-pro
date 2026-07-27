@@ -76,9 +76,10 @@ const rafael = {
 assert.equal(emJanelaDeEspera(rafael), true,
   'caso Rafael: atendido há 2 dias continua protegido mesmo com mensagem nova depois do atendimento (mensagem não conta mais)');
 
-// Caso "Adão": atendido há 5 dias completos — no limiar exato (5), já não protege mais (mesma
-// regra dos cenários 4/5 de v981, dias < limiar). O ponto central do relato dele é o item 2
-// abaixo (o NÚMERO exibido, "26 dias", que não batia com a data do atendimento).
+// Caso "Adão", v1019: atendido há EXATAMENTE 5 dias — "5 dias de descanso" são 5 dias
+// INTEIROS, então ainda precisa estar protegido nesse dia (só libera no 6º dia). O dono viu esse
+// exato caso ao vivo (atendeu quarta 22, no 5º dia — domingo/segunda 27 — o lead já tinha
+// voltado) e apontou que 5 dias deveria significar 5 dias completos de folga.
 const adao = {
   createdAt: diasAtras(400),
   daysSinceLastTouch: 26,
@@ -88,8 +89,15 @@ const adao = {
     { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: diasAtras(5) }
   ] } }
 };
-assert.equal(emJanelaDeEspera(adao), false,
-  'atendido há exatamente 5 dias (limiar de estabelecido) já não protege mais — consistente com os outros cenários de limiar');
+assert.equal(emJanelaDeEspera(adao), true,
+  'atendido há exatamente 5 dias (limiar de estabelecido) AINDA precisa estar protegido — 5 dias de descanso são 5 dias inteiros');
+
+// No 6º dia (passou do limiar inteiro), aí sim libera.
+const adaoDiaSeguinte = { ...adao, analysis: { aprendizado: { eventos: [
+  { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: diasAtras(6) }
+] } } };
+assert.equal(emJanelaDeEspera(adaoDiaSeguinte), false,
+  'no 6º dia (passou dos 5 dias inteiros de descanso), o lead volta a ficar elegível');
 
 // --- 2. cpHomeLeadRow: o número "há Xd" exibido usa o atendimento quando ele for mais recente ---
 const rowSrc = extrai(/function cpHomeLeadRow\(l, ?pos, ?maxMsgs\)\{[\s\S]*?\n\}/, 'cpHomeLeadRow');

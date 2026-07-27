@@ -1460,7 +1460,15 @@ function prioridadeAtendimento(l){
     (Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando || "").toLowerCase())));
   const retomadaPorTempo = Number.isFinite(diasContato) && diasContato >= limiarRetomada(l);
   // "Cliente respondeu e ainda não recebeu resposta": o cliente falou por último.
-  const clienteAguardandoVoce = ultimoCliente;
+  // v1019 — este sinal furava a proteção de atendimento recente (linha do filaPorFatos que checa
+  // "!clienteAguardandoVoce") e o ponto vermelho "Cliente aguardando" (nivel 1, cpHomeLeadRow)
+  // disparava só por o cliente ter falado por último — mesmo (a) eu tendo atendido recentemente,
+  // ou (b) a fala dele sendo só uma despedida sem pedir nada. Mesmo bug já corrigido em
+  // emJanelaDeEspera/cpProbabilidadeFechamento, agora também aqui: exige não estar protegido por
+  // atendimento recente (protegidoPosAtendimento, a mesma checagem que atendidoRecente já usa
+  // logo abaixo) E que a fala realmente peça uma resposta.
+  const clienteAguardandoVoce = ultimoCliente && !protegidoPosAtendimento(l)
+    && (typeof ultimaMsgClientePedeResposta !== 'function' || ultimaMsgClientePedeResposta(l));
   const fmtDias = n => n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`;
 
   const { nivel, grupo, titulo } = filaPorFatos({
@@ -2541,7 +2549,13 @@ function emJanelaDeEspera(l){
   const atTs = ultimoAtendimentoTs(l);
   if(!atTs) return false;
   const dias = diasCalendarioBR(atTs);
-  return dias != null && dias < limiarRetomada(l);
+  if(dias == null) return false;
+  // v1019 — "5 dias de descanso" é 5 dias INTEIROS de folga (o dia do atendimento não conta
+  // como "esperado"): protegido do dia 1 ao dia 5, elegível de novo só no dia 6. Com "<" puro, um
+  // lead atendido há exatamente 5 dias (limiar 5) já saía da proteção no próprio 5º dia — foi
+  // exatamente o que aconteceu com o "Adão" logo depois da correção acima (atendido dia 22, no
+  // dia 27 — 5 dias — voltou a aparecer, um dia mais cedo do que o esperado).
+  return dias <= limiarRetomada(l);
 }
 
 // Um lead com contato MUITO recente (< 7 dias) ainda não deve entrar em "retomada" —
