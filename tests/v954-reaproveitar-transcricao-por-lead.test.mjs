@@ -70,8 +70,8 @@ const storage = fs.readFileSync(new URL('../api/processar-storage.js', import.me
 const preparoInicio = storage.indexOf('if (action === "preparar")');
 const preparoFim = storage.indexOf('if (action === "transcrever")');
 const blocoPreparar = storage.slice(preparoInicio, preparoFim);
-assert.match(blocoPreparar, /_buscarProcessamentoExistenteV681\(supabase, \{ result: \{\}, fileName: nomeArquivoZip, path: storagePath \}\)/,
-  'ação preparar busca o lead correspondente só pelo nome do arquivo, sem result/analysis ainda');
+assert.match(blocoPreparar, /_buscarProcessamentoExistenteV681\(supabase, \{ result: \{\}, fileName: nomeArquivoZip, path: storagePath, organizationId \}\)/,
+  'ação preparar busca o lead correspondente só pelo nome do arquivo (e sempre dentro da MESMA organização), sem result/analysis ainda');
 assert.match(blocoPreparar, /cacheDoLead/, 'passa o cache do lead anterior pra prepararExtracaoPersistente');
 
 // 8. Dentro da extração, o cache do lead é tentado ANTES do cache por hash de conteúdo (mais
@@ -80,7 +80,7 @@ const subirUmInicio = storage.indexOf('const subirUm = async');
 const subirUmFim = storage.indexOf('for (let i = 0; i < entradas.length', subirUmInicio);
 const blocoSubirUm = storage.slice(subirUmInicio, subirUmFim);
 const idxCacheDoLead = blocoSubirUm.indexOf('cacheDoLead[nome]');
-const idxCacheHash = blocoSubirUm.indexOf('carregarTranscricaoCache(storage, hash)');
+const idxCacheHash = blocoSubirUm.indexOf('carregarTranscricaoCache(storage, hash, organizationId)');
 assert.ok(idxCacheDoLead > -1 && idxCacheHash > -1 && idxCacheDoLead < idxCacheHash,
   'cache do lead é checado antes do cache por hash de conteúdo');
 

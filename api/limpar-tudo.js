@@ -74,7 +74,7 @@ async function deleteAllRows(supabase, table) {
   };
 }
 
-export async function emptyBucket(supabase, bucket) {
+export async function emptyBucket(supabase, bucket, prefix = "") {
   const todos = [];
   const PAGE = 1000;
   async function listFolder(prefix) {
@@ -103,7 +103,7 @@ export async function emptyBucket(supabase, bucket) {
     }
     return { ok: true };
   }
-  const walk = await listFolder("");
+  const walk = await listFolder(prefix);
   if (walk?.error) return { ok: false, error: walk.error, deleted: 0 };
   if (!todos.length) return { ok: true, deleted: 0 };
   // remove() em lotes de PAGE — mesma precaução, sem mudar quais arquivos são apagados.

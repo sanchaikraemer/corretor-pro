@@ -14,9 +14,11 @@ import assert from 'node:assert/strict';
 // pro sistema, inclusive fazendo ele aparecer como "esperando resposta" quando na verdade quem
 // falou por último foi o próprio corretor.
 //
-// Fix: ehMsgDoCliente passa a também reconhecer o autor como corretor quando bate com
-// corretorNome (campo "Seu nome" do Cérebro, configurado pelo usuário) — não só os dois nomes
-// hardcoded, que continuam valendo como fallback pra quem ainda não configurou o campo.
+// Fix: ehMsgDoCliente passa a reconhecer o autor como corretor quando bate com corretorNome
+// (campo "Seu nome" do Cérebro, configurado pelo usuário). v1013 — auditoria de isolamento entre
+// contas removeu de vez o fallback hardcoded ("sanchai"/"miguel kirinus"): numa base multi-conta,
+// presumir que qualquer conta sem o campo preenchido é "Sanchai" está errado e viola a regra do
+// CLAUDE.md. Sem corretorNome configurado, o autor cai no caminho genérico (ver cenário 3).
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
@@ -49,11 +51,14 @@ assert.equal(ehMsgDoCliente(msgDoCorretor, 'jamil'), false, 'mensagem do correto
 const msgDoCliente = { author: 'Jamil Contalex', type: 'texto', text: 'Legal, me manda sim.' };
 assert.equal(ehMsgDoCliente(msgDoCliente, 'jamil'), true, 'mensagem real do cliente continua batendo pelo nome dele');
 
-// 3. Sem corretorNome configurado (campo vazio no Cérebro), o fallback hardcoded ainda funciona
-// — não regride o comportamento de quem nunca preencheu o campo "Seu nome".
+// 3. Sem corretorNome configurado (campo vazio no Cérebro) e autor que não bate com o nome do
+// cliente nem com nenhuma palavra genérica de negócio: cai no caminho genérico ("qualquer outro
+// autor é o contato") — não presume mais que é "o corretor" só porque o rótulo é um nome
+// específico cravado no código (era o bug: assumir que toda conta sem Cérebro configurado é o
+// dono original da plataforma). Sem informação, o sistema não inventa quem é quem.
 corretorNomeConfigurado = '';
-const msgSanchaiExato = { author: 'sanchai', type: 'texto', text: 'Oi, tudo certo?' };
-assert.equal(ehMsgDoCliente(msgSanchaiExato, 'jamil'), false, 'fallback hardcoded "sanchai" continua funcionando sem Cérebro configurado');
+const msgSemConfig = { author: 'Qualquer Outro Nome', type: 'texto', text: 'Oi, tudo certo?' };
+assert.equal(ehMsgDoCliente(msgSemConfig, 'jamil'), true, 'sem corretorNome configurado, autor que não é o cliente nem termo de negócio cai no caminho genérico (contato)');
 
 // 4. Nome do corretor tem prioridade mesmo se, por coincidência, também "contém" o nome do
 // cliente como substring — não pode classificar errado nesse cruzamento raro.

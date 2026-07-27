@@ -22,6 +22,7 @@ function fakeSupabase(org) {
       return {
         select() { return this; },
         eq() { return this; },
+        order() { return this; },
         limit() { return this; },
         async maybeSingle() { return { data: { organization_id: 'org-1', organizations: org }, error: null }; }
       };

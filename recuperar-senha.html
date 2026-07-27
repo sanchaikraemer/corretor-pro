@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperar senha — Corretor Pro</title>
+<link rel="stylesheet" href="contas-estilo.css?v=__VERSION__">
+<script src="vendor/supabase.js?v=__VERSION__"></script>
+<script src="contas-config.js?v=__VERSION__"></script>
+</head>
+<body>
+  <div>
+    <div class="marca">
+      <img src="logo-cp.png" alt="">
+      <b>Corretor <strong>Pro</strong></b>
+    </div>
+    <div class="cartao">
+      <h1>Recuperar senha</h1>
+      <p class="sub">Informe o e-mail da sua conta. Vamos mandar um link pra você criar uma senha nova.</p>
+
+      <label>Seu e-mail</label>
+      <input id="email" type="email" placeholder="voce@email.com">
+      <button id="btnEnviar" onclick="enviarRecuperacao()">Enviar link de recuperação</button>
+      <div id="msg"></div>
+
+      <div class="linkbar"><a href="entrar.html">Voltar para o login</a></div>
+    </div>
+  </div>
+
+<script>
+const supabaseClient = supabase.createClient(window.CORRETOR_PRO_SUPABASE_URL, window.CORRETOR_PRO_SUPABASE_ANON_KEY);
+
+async function enviarRecuperacao() {
+  const email = document.getElementById('email').value.trim();
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btnEnviar');
+  msg.className = '';
+  msg.textContent = '';
+
+  if (!email) {
+    msg.className = 'erro';
+    msg.textContent = 'Informe seu e-mail.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    const redirectTo = new URL('redefinir-senha.html', window.location.href).toString();
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+
+    // O Supabase, por segurança, não informa se o e-mail existe ou não — sempre responde
+    // "sucesso" pra não revelar quais e-mails têm conta. A mensagem reflete isso.
+    msg.className = 'ok';
+    msg.textContent = 'Se este e-mail tiver uma conta, enviamos um link pra você criar uma senha nova. Confira sua caixa de entrada.';
+    btn.textContent = 'Link enviado ✓';
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Não foi possível enviar: ' + (e.message || e);
+    btn.disabled = false;
+    btn.textContent = 'Enviar link de recuperação';
+  }
+}
+</script>
+</body>
+</html>

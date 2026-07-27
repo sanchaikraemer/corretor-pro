@@ -192,7 +192,10 @@ export default async function handler(req, res) {
     }
 
     // Caminho idempotente: retries da mesma importação usam o mesmo objeto, sem criar cópias.
-    const storagePath = `whatsapp/imports/${importId}/${fileName}`;
+    // organizationId no caminho isola o arquivo de cada conta dentro do mesmo bucket
+    // compartilhado — sem isso, qualquer corretor com um importId adivinhado conseguiria
+    // baixar/sobrescrever o ZIP de outra conta.
+    const storagePath = `whatsapp/organizations/${organizationId}/imports/${importId}/${fileName}`;
 
     const { data: signed, error: signedError } = await supabase
       .storage

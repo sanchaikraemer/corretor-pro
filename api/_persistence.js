@@ -77,10 +77,14 @@ export async function resolveOrganizationId(req, res, { supabase } = {}) {
       authJson(res, 401, { ok: false, error: "Sessão inválida ou expirada. Faça login novamente." });
       return null;
     }
+    // Se o login tiver mais de um vínculo (não deveria no fluxo normal — ver migração 0006 —,
+    // mas pode ocorrer em bases antigas/migradas), usa sempre o MAIS RECENTE de forma
+    // determinística — nunca "o primeiro que o banco devolver" (ordem não é garantida sem order()).
     const { data: vinculo, error: vinculoError } = await client
       .from("memberships")
       .select("organization_id, organizations(status, trial_expira_em)")
       .eq("user_id", userData.user.id)
+      .order("criado_em", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (vinculoError || !vinculo?.organization_id) {
@@ -105,6 +109,36 @@ export async function resolveOrganizationId(req, res, { supabase } = {}) {
 
   if (!requireApiKey(req, res)) return null;
   return EMPRESA_PRINCIPAL_ID;
+}
+
+// Descobre se quem está chamando é administrador da PLATAFORMA (tabela platform_admins) —
+// não confundir com "dono" de uma organização (papel dentro de memberships). Exige sempre o
+// login novo (token Bearer do Supabase), nunca a chave compartilhada. Devolve "" (falsy) pra
+// qualquer caso que não seja um administrador confirmado — nunca lança, é seguro usar em
+// checagem condicional (ex.: esconder campo sensível) sem precisar de try/catch no chamador.
+export async function getPlatformAdminUserId(req, supabase) {
+  try {
+    const bearer = /^Bearer\s+(.+)$/i.exec(String(req.headers?.authorization || req.headers?.Authorization || "").trim())?.[1];
+    if (!bearer) return "";
+    const client = supabase || getSupabaseAdmin();
+    if (!client) return "";
+    const { data: u } = await client.auth.getUser(bearer);
+    const userId = u?.user?.id || "";
+    if (!userId) return "";
+    const { data: souAdmin } = await client.from("platform_admins").select("user_id").eq("user_id", userId).maybeSingle();
+    return souAdmin?.user_id ? userId : "";
+  } catch (_) { return ""; }
+}
+
+// Bloqueia de vez quem não é administrador da plataforma — usar em rotas que só fazem
+// sentido pra quem opera o produto (nunca pra um corretor comum, mesmo autenticado e em dia).
+export async function requirePlatformAdmin(req, res, supabase) {
+  const adminUserId = await getPlatformAdminUserId(req, supabase);
+  if (!adminUserId) {
+    authJson(res, 403, { ok: false, error: "Esta ação é exclusiva do administrador da plataforma. Entre com seu login de administrador." });
+    return null;
+  }
+  return adminUserId;
 }
 
 // Dias de CALENDÁRIO entre uma data e agora, no fuso de Brasília (NÃO "períodos de 24h" — senão
@@ -771,7 +805,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const daysSinceTouch = diasCalendarioBR(lastTouchIso);
 
     const nomeResolvido = nameFrom(fileName, analysis, row);
-    const ehBusinessMsg = /(senger|construtora|corretor|imobili|direciona|atendimento|sistema)/i;
+    const ehBusinessMsg = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
     const primeiroNome = String(nomeResolvido || "").trim().toLowerCase().split(/\s+/)[0] || "";
     const ehClienteMsg = (m) => {
       if (ehItemManual(m)) return false;

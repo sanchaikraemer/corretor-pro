@@ -71,7 +71,7 @@ import './js/pwa-install.js?v=__VERSION__';
       document.querySelectorAll(".cp-sair-conta").forEach(el => { el.style.display = ""; });
       // O nome da conta é o que a pessoa preencheu no cadastro (organizations.nome) —
       // a RLS garante que só o próprio vínculo é visível aqui.
-      const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").limit(1).maybeSingle();
+      const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").order("criado_em", { ascending: false }).limit(1).maybeSingle();
       const nome = String(vinculo?.organizations?.nome || "").trim();
       if (nome) { window.__cpContaNome = nome; }
       window.cpAtualizarIdentidadeVisivel();
@@ -1493,7 +1493,7 @@ function compararPrioridadeAtendimento(a,b){
 // ORDEM DE CONVERSÃO HOJE — separado da prioridade de atendimento.
 // Prioridade responde: "quem merece ação agora?"
 // Conversão responde: "quem está mais perto de virar venda se eu agir hoje?"
-// Isso evita caso como Jessica aparecer como maior avanço comercial só por ter lembrete/retomada.
+// Isso evita um lead aparecer como maior avanço comercial só por ter lembrete/retomada.
 // Lead em viabilidade financeira continua importante, mas fica abaixo de quem já visitou,
 // recebeu proposta/simulação ou está comparando decisão.
 function scoreConversaoHoje(l){
@@ -1551,7 +1551,7 @@ function scoreConversaoHoje(l){
   if(sc682.curioso && !sc682.compradorReal) score -= 28;
 
   // Viabilidade financeira é acionável, mas ainda NÃO é fechamento.
-  // Ex.: Jessica: boa prioridade, mas não deve superar proposta/visita/simulação.
+  // Ex.: lead em análise financeira tem boa prioridade, mas não deve superar proposta/visita/simulação.
   if(viabilidadeAntesDaProposta) score -= 18;
 
   // Parceiro só sobe se existe cliente/proposta/simulação real; senão é conversa operacional.
@@ -1610,13 +1610,16 @@ function horarioContatoLead(l){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return "";
   const nome = String(l.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
-  const business = /(senger|construtora|corretor|imobili|direciona|atendimento|sistema)/i;
+  const corretorNome = String(state?.cerebroCfg?.corretorNome || "").trim().toLowerCase();
+  const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
   const cont = new Array(24).fill(0);
   let achou = false;
   for(const m of msgs){
     const autor = String(m.author||"").trim();
     if(!autor) continue;
-    const ehCliente = nome ? autor.toLowerCase().includes(nome) : !business.test(autor);
+    const autorLower = autor.toLowerCase();
+    const ehCorretor = (corretorNome && (autorLower.includes(corretorNome) || corretorNome.includes(autorLower))) || business.test(autor);
+    const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
     if(!ehCliente) continue;
     const t = String(m.time||"").match(/^(\d{1,2}):/);
     if(!t) continue;
@@ -1637,13 +1640,16 @@ function _diasDesdeMsg(l, somenteCliente){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return null;
   const nome = String(l.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
-  const business = /(senger|construtora|corretor|imobili|direciona|atendimento|sistema)/i;
+  const corretorNome = String(state?.cerebroCfg?.corretorNome || "").trim().toLowerCase();
+  const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
   let maxTs = 0;
   for(const m of msgs){
     if(somenteCliente){
       const autor = String(m.author||"").trim();
       if(!autor) continue;
-      const ehCliente = nome ? autor.toLowerCase().includes(nome) : !business.test(autor);
+      const autorLower = autor.toLowerCase();
+      const ehCorretor = (corretorNome && (autorLower.includes(corretorNome) || corretorNome.includes(autorLower))) || business.test(autor);
+      const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
       if(!ehCliente) continue;
       const tp = String(m.type||""); const src = String(m.source||"");
       if(src==="manual" || ["atendimento","nota","ligacao","visita","presencial","print-whatsapp"].includes(tp)) continue;
@@ -1943,7 +1949,7 @@ function tagPermutaHTML(){
 }
 // "Reaquecer urgente": qualquer lead com SCORE COMERCIAL alto (engajamento real,
 // keywords de compra, vários dias distintos) que ficou parado 5+ dias.
-// Não importa a etapa — Isabela em "Atendimento" com 4 dias distintos e keywords
+// Não importa a etapa — um lead em "Atendimento" com 4 dias distintos e keywords
 // fortes ainda é reaquecimento urgente.
 function ehReaquecerUrgente(l){
   const dias = Number(l.daysSinceLastInteraction) || 0;
@@ -2174,7 +2180,7 @@ function temAtendimentoManual(l){
     return false;
   });
 }
-const BUSINESS_RE = /(senger|construtora|direciona|atendimento|sanchai|miguel\s+kirinus)/i;
+const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
 // visita etc.) — NUNCA é uma fala real na conversa, mesmo tendo texto e data.
 function ehMsgManualTimeline(m){
@@ -2196,16 +2202,17 @@ function ehMsgDoCliente(m, primeiroNomeCliente){
   const autorNorm = autor.toLowerCase();
   const nomeNorm = String(primeiroNomeCliente || "").trim().toLowerCase();
   // Nome do corretor vem do Cérebro (campo "Seu nome", configurado pelo próprio usuário) — não
-  // pode ficar cravado no código. O corte antigo só reconhecia EXATAMENTE "sanchai"/"miguel
-  // kirinus" (hardcoded); qualquer outro rótulo de autor do próprio corretor no export do
-  // WhatsApp caía no "qualquer outro autor é o cliente" logo abaixo, e uma mensagem do PRÓPRIO
-  // corretor virava "cliente esperando resposta" na fila de prioridade.
+  // pode ficar cravado no código. Removido de vez o corte antigo que só reconhecia dois nomes de
+  // pessoa cravados no código (achado da auditoria de isolamento entre contas); qualquer outro
+  // rótulo de autor do próprio corretor no export do WhatsApp caía no "qualquer outro autor é o
+  // cliente" logo abaixo, e uma mensagem do PRÓPRIO corretor virava "cliente esperando resposta"
+  // na fila de prioridade.
   let corretorNorm = "";
   try{
     const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
     corretorNorm = String(cfg?.corretorNome || "").trim().toLowerCase().split(/\s+/)[0] || "";
   }catch(_){ }
-  const ehAutorCorretor = (corretorNorm && autorNorm.includes(corretorNorm)) || /^(sanchai|miguel\s+kirinus)$/i.test(autorNorm);
+  const ehAutorCorretor = !!(corretorNorm && autorNorm.includes(corretorNorm));
   // O nome do contato tem prioridade sobre palavras de profissão no próprio nome
   // (ex.: "Anderson Ruviaro Corretor SM Gabro") — mas nunca sobre o autor ser o próprio corretor.
   if(nomeNorm && autorNorm.includes(nomeNorm) && !ehAutorCorretor) return true;
@@ -4183,7 +4190,7 @@ function abrirEditarLead(id, nome, telefone){
         <div style="margin-bottom:12px">
           <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
           <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${escapeHtml(produtoIni)}" value="${escapeHtml(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;box-sizing:border-box">
-          <datalist id="editLeadProdutoLista">${EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
+          <datalist id="editLeadProdutoLista">${EMPREENDIMENTOS_CATALOGO.map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Escolha da lista ou digite. Deixe em branco se ainda não souber.</div>
         </div>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
@@ -4225,14 +4232,14 @@ async function pedirExtracaoPrint(dataUrl){
 // (O print-reader do lead MANUAL segue existindo no fluxo de abrirNovoLead.)
 
 // Modal pra criar lead manualmente (alguém ligou, comentou pessoalmente, indicação)
-const EMPREENDIMENTOS_SENGER = []; // v827 §7.1: sem catálogo fixo de empreendimentos (autocomplete fica livre)
+const EMPREENDIMENTOS_CATALOGO = []; // v827 §7.1: sem catálogo fixo de empreendimentos (autocomplete fica livre)
 function abrirNovoLead(){
   novoLeadAvatarFoto = null;
   qs("#novoLeadModal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "novoLeadModal";
   overlay.className = "ui677-manual-modal";
-  const opcoes = EMPREENDIMENTOS_SENGER.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
+  const opcoes = EMPREENDIMENTOS_CATALOGO.map(p => `<option value="${escapeHtml(p)}"></option>`).join("");
   overlay.innerHTML = `
     <div class="ui677-manual-card" role="dialog" aria-modal="true" aria-labelledby="ui677ManualTitle">
       <div class="ui677-manual-head">
@@ -5694,7 +5701,7 @@ async function carregarAgendaTopo(){
       const nome = (it.lead.name||"Cliente").split(" ").slice(0,2).join(" ");
       const idJs = JSON.stringify(String(it.lead.id||""));
       const keyJs = JSON.stringify(String(it.key||""));
-      // Formato natural: "Visita hoje à tarde · Amiel" + um × pra remover se a IA errou.
+      // Formato natural: "Visita hoje à tarde · Nome do cliente" + um × pra remover se a IA errou.
       const frase = `${it.tipo} ${it.quando}${it.periodo}`;
       return `<span style="display:inline-flex;align-items:center;background:${bg};border:1px solid ${cor};border-radius:999px"><button type="button" onclick='abrirLead(${idJs})' style="background:none;border:none;color:var(--white);padding:7px 4px 7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><span style="color:${cor};font-weight:950">${escapeHtml(frase)}</span><span style="opacity:.5">·</span><span style="font-weight:700">${escapeHtml(nome)}</span></button><button type="button" title="Não é compromisso — remover" onclick='dispensarCompromisso(${keyJs})' style="margin:0 5px 0 2px;width:20px;height:20px;border-radius:999px;background:rgba(255,80,80,.22);border:1px solid rgba(255,120,120,.7);color:#ff8a8a;cursor:pointer;font-size:13px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto">×</button></span>`;
     }).join("");
@@ -10940,7 +10947,7 @@ window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove()
 window.ui670NovaOportunidade=function(){
   const lead=state.lead;if(!lead?.id){toast("Abra o contato parceiro antes de registrar a oportunidade.");return;}
   qs("#ui671NovaOppModal")?.remove();
-  const opts=(typeof EMPREENDIMENTOS_SENGER!=="undefined"?EMPREENDIMENTOS_SENGER:[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  const opts=(typeof EMPREENDIMENTOS_CATALOGO!=="undefined"?EMPREENDIMENTOS_CATALOGO:[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
   const el=document.createElement("div");el.id="ui671NovaOppModal";el.className="ui671-modal";
   el.innerHTML=`<div class="ui671-modal-card"><div class="ui671-modal-head"><div><small>Corretor parceiro</small><h3>Nova oportunidade</h3><p>${escapeHtml(lead.name||"Contato")}</p></div><button type="button" onclick="ui671FecharNovaOportunidade()">✕</button></div>
   <label>Comprador final *</label><input id="ui671OppComprador" type="text" placeholder="Nome ou identificação do novo cliente" autocomplete="off">
@@ -11435,7 +11442,7 @@ function ui670DetailRows(lead,mc){
     return '';
   }
   function opcoesProdutos(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER) ? window.EMPREENDIMENTOS_SENGER : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO) ? window.EMPREENDIMENTOS_CATALOGO : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
     return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
   }
 
@@ -11601,7 +11608,7 @@ function ui670DetailRows(lead,mc){
     return String(lead?.product || lead?.analysis?.produtoInteresse || lead?.analysis?.product || lead?.analysis?.lead?.product || '').trim();
   }
   function opcoesProdutos(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER) ? window.EMPREENDIMENTOS_SENGER : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO) ? window.EMPREENDIMENTOS_CATALOGO : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
     return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
   }
   function desfechoAtual(lead){
@@ -11739,9 +11746,9 @@ function ui670DetailRows(lead,mc){
     catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   }
   function produtosOptions(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_SENGER)
-      ? window.EMPREENDIMENTOS_SENGER
-      : (typeof EMPREENDIMENTOS_SENGER !== 'undefined' ? EMPREENDIMENTOS_SENGER : []);
+    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO)
+      ? window.EMPREENDIMENTOS_CATALOGO
+      : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
     return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
   }
   function produtoDoLead(lead){

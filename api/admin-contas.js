@@ -1,8 +1,9 @@
 // Rota do painel administrativo da PLATAFORMA (só o dono do produto usa): excluir uma conta
-// de corretor inteira — dados, vínculos, organização e login. Criada porque o painel só sabia
-// marcar pago/bloquear/estender; excluir conta de teste exigia SQL na mão.
-import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
+// de corretor inteira — dados, vínculos, organização, arquivos e login. Criada porque o painel
+// só sabia marcar pago/bloquear/estender; excluir conta de teste exigia SQL na mão.
+import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin } from "./_persistence.js";
 import { invalidarMemoriaComercialCache } from "./_pipeline.js";
+import { emptyBucket } from "./limpar-tudo.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -36,12 +37,7 @@ export default async function handler(req, res) {
 
   // Só o administrador da plataforma (tabela platform_admins) pode excluir contas — um dono
   // comum, mesmo logado, não pode. Exige o login novo (token), nunca só a chave compartilhada.
-  const bearer = /^Bearer\s+(.+)$/i.exec(String(req.headers?.authorization || "").trim())?.[1];
-  if (!bearer) return json(res, 403, { ok: false, error: "Entre com seu login de administrador pra usar o painel." });
-  const { data: u } = await supabase.auth.getUser(bearer);
-  const adminUserId = u?.user?.id || "";
-  const { data: souAdmin } = await supabase.from("platform_admins").select("user_id").eq("user_id", adminUserId).maybeSingle();
-  if (!souAdmin?.user_id) return json(res, 403, { ok: false, error: "Esta conta não é administradora da plataforma." });
+  if (!(await requirePlatformAdmin(req, res, supabase))) return;
 
   const body = await readJsonBody(req).catch(() => ({}));
   if (body?.action !== "excluir-conta") return json(res, 400, { ok: false, error: "Informe action excluir-conta." });
@@ -55,38 +51,70 @@ export default async function handler(req, res) {
   if (orgErr) return json(res, 500, { ok: false, error: orgErr.message });
   if (!org) return json(res, 404, { ok: false, error: "Conta não encontrada (talvez já excluída)." });
 
-  const { data: membros } = await supabase.from("memberships").select("user_id").eq("organization_id", alvo);
-  const userIds = [...new Set((membros || []).map(m => String(m.user_id)).filter(Boolean))];
+  // v1013 — as 4 tabelas (whatsapp_processamentos, direciona_config, memberships, organizations)
+  // agora são apagadas dentro de UMA function do banco (migração 0007_excluir_organizacao_
+  // transacional.sql), numa única transação: se qualquer uma falhar, TODAS são desfeitas — nunca
+  // mais fica pra trás uma conta "meio excluída" (leads apagados mas Cérebro ainda existente,
+  // organização órfã, painel informando erro depois de parte do dado já ter sido apagado).
+  const { data: resultado, error: rpcErr } = await supabase.rpc("excluir_organizacao", { p_organization_id: alvo }).maybeSingle();
+  if (rpcErr) {
+    return json(res, 500, {
+      ok: false,
+      error: `A exclusão não foi concluída — nada foi apagado (transação revertida): ${rpcErr.message}`,
+      dica: /function .* does not exist|schema cache/i.test(rpcErr.message || "")
+        ? "Rode a migração supabase/migrations/0007_excluir_organizacao_transacional.sql no SQL Editor do Supabase antes de excluir contas."
+        : undefined
+    });
+  }
+  const userIds = [...new Set((resultado?.ids_usuarios || []).map(String).filter(Boolean))];
+  invalidarMemoriaComercialCache(alvo);
 
-  const apagarDaConta = async (tabela) => {
-    const r = await supabase.from(tabela).delete().eq("organization_id", alvo);
-    if (r.error && !/does not exist|not find the table|schema cache/i.test(r.error.message || "")) {
-      throw new Error(`${tabela}: ${r.error.message}`);
-    }
+  // Apaga os ARQUIVOS da conta no Storage (ZIPs, áudios extraídos, manifestos, cache de
+  // transcrição) — antes disso a exclusão só apagava linhas do banco e os arquivos ficavam pra
+  // sempre ocupando espaço. Só é possível fazer isso de forma segura (sem risco de apagar
+  // arquivo de outra conta) porque os caminhos do Storage agora são isolados por organizationId.
+  // Best-effort: se falhar, a conta já está excluída no banco (não reverte) — o erro fica visível
+  // na resposta em vez de silenciosamente sumir.
+  const bucket = process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips";
+  const [zipStorage, dadosStorage] = await Promise.all([
+    emptyBucket(supabase, bucket, `whatsapp/organizations/${alvo}`).catch(e => ({ ok: false, error: e?.message || String(e), deleted: 0 })),
+    emptyBucket(supabase, bucket, `organizations/${alvo}`).catch(e => ({ ok: false, error: e?.message || String(e), deleted: 0 }))
+  ]);
+  const storageResultado = {
+    ok: zipStorage.ok !== false && dadosStorage.ok !== false,
+    arquivosApagados: (zipStorage.deleted || 0) + (dadosStorage.deleted || 0),
+    erro: [zipStorage.error, dadosStorage.error].filter(Boolean).join(" | ") || undefined
   };
 
-  try {
-    await apagarDaConta("whatsapp_processamentos");
-    await apagarDaConta("direciona_config");
-    await apagarDaConta("memberships");
-    const rOrg = await supabase.from("organizations").delete().eq("id", alvo);
-    if (rOrg.error) throw new Error(`organizations: ${rOrg.error.message}`);
-    invalidarMemoriaComercialCache(alvo);
-
-    // Apaga também o LOGIN de cada pessoa da conta — a menos que ele sirva outra conta
-    // (vínculo restante) ou seja administrador da plataforma (nunca se auto-apaga por engano).
-    let loginsApagados = 0;
-    for (const uid of userIds) {
+  // Apaga também o LOGIN de cada pessoa da conta — a menos que ele sirva outra conta (vínculo
+  // restante) ou seja administrador da plataforma (nunca se auto-apaga por engano). Erros aqui
+  // NÃO podem ser ignorados: antes disso, um erro do Supabase em auth.admin.deleteUser passava
+  // batido (só não incrementava o contador) e a resposta ainda dizia ok:true, deixando o login
+  // órfão existir enquanto o painel informava sucesso.
+  let loginsApagados = 0;
+  const loginsComErro = [];
+  for (const uid of userIds) {
+    try {
       const { data: outros } = await supabase.from("memberships").select("id").eq("user_id", uid).limit(1);
       if (Array.isArray(outros) && outros.length) continue;
       const { data: ehAdm } = await supabase.from("platform_admins").select("user_id").eq("user_id", uid).maybeSingle();
       if (ehAdm?.user_id) continue;
       const r = await supabase.auth.admin.deleteUser(uid);
-      if (!r?.error) loginsApagados++;
+      if (r?.error) { loginsComErro.push({ uid, erro: r.error.message }); continue; }
+      loginsApagados++;
+    } catch (e) {
+      loginsComErro.push({ uid, erro: e?.message || String(e) });
     }
-
-    return json(res, 200, { ok: true, conta: org.nome, loginsApagados });
-  } catch (e) {
-    return json(res, 500, { ok: false, error: `A exclusão não foi concluída: ${e?.message || String(e)}` });
   }
+
+  return json(res, 200, {
+    ok: true,
+    conta: resultado?.nome || org.nome,
+    storage: storageResultado,
+    loginsApagados,
+    loginsComErro: loginsComErro.length ? loginsComErro : undefined,
+    aviso: loginsComErro.length
+      ? `${loginsComErro.length} login(s) não puderam ser removidos e continuam existindo — veja loginsComErro.`
+      : (storageResultado.ok ? undefined : "Os dados da conta foram excluídos, mas alguns arquivos no Storage não puderam ser removidos — veja storage.erro.")
+  });
 }

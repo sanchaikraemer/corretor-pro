@@ -8,7 +8,8 @@ zip.file("Conversa do WhatsApp com Cliente.txt", `15/07/2026 10:00 - Cliente: Bo
 `);
 const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 
-const objects = new Map([["whatsapp/imports/imp-teste-8279/conversa.zip", zipBuffer]]);
+const ORG_ID = "org-teste-8279";
+const objects = new Map([[`whatsapp/organizations/${ORG_ID}/imports/imp-teste-8279/conversa.zip`, zipBuffer]]);
 const uploadTypes = new Map();
 const allowed = new Set(["application/zip", "application/x-zip-compressed", "application/octet-stream"]);
 const storage = {
@@ -30,13 +31,15 @@ const storage = {
 
 const result = await prepararExtracaoPersistente({
   storage,
-  storagePath: "whatsapp/imports/imp-teste-8279/conversa.zip",
+  storagePath: `whatsapp/organizations/${ORG_ID}/imports/imp-teste-8279/conversa.zip`,
   importId: "imp-teste-8279",
-  audioWindowDays: "90"
+  audioWindowDays: "90",
+  organizationId: ORG_ID
 });
 
+const manifestPath = `organizations/${ORG_ID}/imports/imp-teste-8279/manifest.json`;
 assert.equal(result.manifest.status, "prepared");
 assert.equal(result.manifest.prep.messages.length, 2);
-assert.ok(objects.has("imports/imp-teste-8279/manifest.json"), "manifesto precisa ser persistido");
-assert.equal(uploadTypes.get("imports/imp-teste-8279/manifest.json"), "application/octet-stream");
+assert.ok(objects.has(manifestPath), "manifesto precisa ser persistido");
+assert.equal(uploadTypes.get(manifestPath), "application/octet-stream");
 console.log("v827-9: manifesto interno salvo mesmo com bucket restrito a ZIP/áudio/octet-stream.");

@@ -91,6 +91,11 @@ function propRender(){
   const totalComposto = entrada + permuta + chaves + totalFinanciado + totalAportes;
   const saldo = totalVenda - totalComposto;
 
+  // v1013 — o subtítulo da proposta era um texto fixo ("Construtora Senger · Carazinho/RS")
+  // cravado no HTML: TODO corretor que usa o Corretor Pro imprimia a proposta com o nome de
+  // uma empresa/cidade que não é a dele. Agora vem do próprio nome configurado no Cérebro.
+  const ppSub = qs("#pp-sub");
+  if(ppSub) ppSub.textContent = String(state.cerebroCfg?.corretorNome || "").trim();
   qs("#pp-cliente").textContent = cliente;
   qs("#pp-empreendimento").textContent = empreend;
   qs("#pp-apto").textContent = apto;
