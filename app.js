@@ -5839,12 +5839,41 @@ async function carregarAgenda(){
     }
     const compromissos = [...compHoje, ...compAmanha, ...compFuturo];
 
-    if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesGeladeiraVencidos.length){
+    // v1011 — seção "Atrasados" no topo: é AQUI que mora a lista dos "N compromissos atrasados"
+    // que o sino anuncia (antes só existia o número, sem lugar pra ver quem são). Mesma régua
+    // da contagem (cp786CompromissoAtrasado): lembrete ou compromisso com data vencida em até
+    // 60 dias, de lead ativo ainda não atendido hoje.
+    const atrasados = items
+      .map(l => ({ l, at: (typeof cp786CompromissoAtrasado === 'function') ? cp786CompromissoAtrasado(l) : null }))
+      .filter(x => x.at);
+    atrasados.sort((a,b) => a.at.dias - b.at.dias);
+
+    if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesGeladeiraVencidos.length && !atrasados.length){
       box.innerHTML = '<div class="empty">Nada agendado. Quando você ou o cliente marcarem um retorno (ex.: "retomar em 60 dias"), aparece aqui.</div>';
       return;
     }
 
     let html = "";
+    if(atrasados.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--risco);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Atrasados — retome ou descarte (${atrasados.length})</div>`;
+      html += atrasados.map(({ l, at }) => {
+        const lem = l.analysis?.lembrete || null;
+        const lemTs = lem?.quando ? new Date(lem.quando).getTime() : NaN;
+        const lemVencido = Number.isFinite(lemTs) && lemTs < Date.now();
+        const vencidos = (typeof cpCompromissosVencidosDoLead === 'function') ? cpCompromissosVencidosDoLead(l) : [];
+        const linhas = [];
+        if(lemVencido){
+          linhas.push(`<div class="small" style="margin-top:4px">⏰ Lembrete vencido (${escapeHtml(new Date(lemTs).toLocaleDateString('pt-BR'))})${lem?.motivo ? ` — ${escapeHtml(_cortarFrase(String(lem.motivo), 70))}` : ''}</div>`);
+        }
+        for(const v of vencidos){
+          const keyJs = JSON.stringify(String(v.key));
+          linhas.push(`<div class="small" style="margin-top:4px;display:flex;align-items:center;gap:8px"><span style="min-width:0">${escapeHtml(v.oQue)} — era ${escapeHtml(v.dataBR)}${v.trecho ? ` · <i style="color:var(--muted)">"${escapeHtml(v.trecho.slice(0,60))}"</i>` : ''}</span><button type="button" title="Não é compromisso — descartar" onclick='dispensarCompromisso(${keyJs});carregarAgenda()' style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:rgba(255,80,80,.22);border:1px solid rgba(255,120,120,.7);color:#ff8a8a;cursor:pointer;font-size:13px;font-weight:900;line-height:1">×</button></div>`);
+        }
+        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,80,80,.06);border-left:3px solid var(--risco);border-radius:6px;font-size:12px"><b style="color:var(--risco)">Atrasado há ${at.dias} dia${at.dias===1?'':'s'} (era ${escapeHtml(at.dataLabel)})</b>${linhas.join('')}</div>`;
+        return agendaCardHTML(l, extra);
+      }).join("");
+      html += `</div>`;
+    }
     if(lembretesHoje.length){
       html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes de hoje (${lembretesHoje.length})</div>`;
       html += lembretesHoje.map(l => {
@@ -9513,6 +9542,28 @@ function cp786CompromissoAtrasado(l){
   return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) };
 }
 window.cp786CompromissoAtrasado=cp786CompromissoAtrasado;
+// v1011 — lista os compromissos VENCIDOS de um lead (mesmos critérios da contagem acima:
+// data concreta no passado até 60 dias, com trecho literal de prova, não dispensado). Usada
+// pela seção "Atrasados" da Agenda — o dono via "9 atrasados" no sino e não tinha ONDE ver quais.
+function cpCompromissosVencidosDoLead(l){
+  const out=[];
+  const apps=Array.isArray(l?.analysis?.confirmedAppointments)?l.analysis.confirmedAppointments:[];
+  let dispensados=null; try{dispensados=typeof compromissosDispensados==='function'?compromissosDispensados():null;}catch(_){}
+  for(const ap of apps){
+    const data=String(ap?.data||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data)) continue;
+    const prova=String(ap?.trechoLiteral||ap?.quando||ap?.oQue||'').trim();
+    if(!prova) continue;
+    const key=String(l?.id||'')+'|'+String(ap?.oQue||'')+'|'+data;
+    if(dispensados?.has?.(key)) continue;
+    const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
+    if(diff==null||diff>=0||diff< -60) continue;
+    out.push({ key, oQue:String(ap?.oQue||'compromisso'), trecho:String(ap?.trechoLiteral||'').trim(), dias:Math.abs(diff), dataBR:new Date(cp786DataTs(data,'12:00')).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) });
+  }
+  out.sort((a,b)=>a.dias-b.dias);
+  return out;
+}
+window.cpCompromissosVencidosDoLead=cpCompromissosVencidosDoLead;
 function cp786CompararConducao(a,b){
   const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
   const ca=cp786Categoria(a),cb=cp786Categoria(b);
@@ -12198,7 +12249,7 @@ function ui670DetailRows(lead,mc){
       : `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
-      ${d.atrasados?`<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Venceram e ainda não foram tratados — retome logo.</span></div></div>`:''}
+      ${d.atrasados?`<div class="cp687-notify-item" data-go="agenda"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Veja a lista na Agenda — retome ou descarte um a um.</span></div></div>`:''}
       ${itemAcao}
       <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${Math.max(0,(d.programados||0)-(d.atrasados||0))} na agenda</b><span>Compromissos com data marcada — hoje e próximos.</span></div></div>
       <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
