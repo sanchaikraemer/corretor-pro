@@ -20,12 +20,12 @@
 
       <label>Nova senha</label>
       <div class="campo-senha">
-        <input id="senha" type="password" placeholder="mínimo 6 caracteres">
+        <input id="senha" name="senha" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres">
         <button type="button" class="btn-olho" onclick="alternarSenha('senha', this)" aria-label="Mostrar senha"></button>
       </div>
       <label>Confirme a nova senha</label>
       <div class="campo-senha">
-        <input id="senha2" type="password" placeholder="repita a senha">
+        <input id="senha2" name="senha2" type="password" autocomplete="new-password" placeholder="repita a senha">
         <button type="button" class="btn-olho" onclick="alternarSenha('senha2', this)" aria-label="Mostrar senha"></button>
       </div>
       <button id="btnSalvar" onclick="salvarNovaSenha()">Salvar nova senha</button>

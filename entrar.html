@@ -19,10 +19,10 @@
       <p class="sub">Cada corretor entra com sua própria conta.</p>
 
       <label>E-mail</label>
-      <input id="email" type="email" placeholder="seuemail@email.com">
+      <input id="email" name="email" type="email" autocomplete="username" placeholder="seuemail@email.com">
       <label>Senha</label>
       <div class="campo-senha">
-        <input id="senha" type="password" placeholder="••••••">
+        <input id="senha" name="senha" type="password" autocomplete="current-password" placeholder="••••••">
         <button type="button" class="btn-olho" onclick="alternarSenha('senha', this)" aria-label="Mostrar senha"></button>
       </div>
       <button id="btnEntrar" onclick="entrar()">Entrar</button>

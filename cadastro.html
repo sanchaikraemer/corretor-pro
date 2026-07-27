@@ -21,10 +21,10 @@
       <label>Seu nome</label>
       <input id="nomeEmpresa" placeholder="Ex.: João da Silva">
       <label>Seu e-mail</label>
-      <input id="email" type="email" placeholder="voce@email.com">
+      <input id="email" name="email" type="email" autocomplete="username" placeholder="voce@email.com">
       <label>Crie uma senha</label>
       <div class="campo-senha">
-        <input id="senha" type="password" placeholder="mínimo 6 caracteres">
+        <input id="senha" name="senha" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres">
         <button type="button" class="btn-olho" onclick="alternarSenha('senha', this)" aria-label="Mostrar senha"></button>
       </div>
       <button id="btnCriar" onclick="cadastrar()">Criar conta e começar teste grátis</button>

@@ -828,8 +828,17 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     let clientMessageCount = 0;
     let clientQuestionCount = 0;
     const _diasComMsg = new Set();
+    // v1016 — "Total de mensagens" mostrado pro corretor contava o histórico INTEIRO (às vezes
+    // anos de conversa), destoando de tudo mais na tela (que já fala em dias/meses recentes) numa
+    // conversa antiga e parada. Conta também só os últimos 90 dias, na MESMA varredura (sem
+    // custo extra) — messageCount (histórico completo) continua existindo pra ranking/dedupe
+    // interno, só a exibição pro corretor passa a usar messageCount90d.
+    const cutoff90d = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    let messageCount90d = 0;
     for (let i = timeline.length - 1; i >= 0; i--) {
       const m = timeline[i];
+      const tMs = m?.iso ? Date.parse(m.iso) : NaN;
+      if (Number.isFinite(tMs) && tMs >= cutoff90d) messageCount90d++;
       if (!ehClienteMsg(m)) continue;
       if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
       const txt = String(m?.text || "").trim();
@@ -903,6 +912,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       audiosEncontrados: row.audios_encontrados ?? null,
       audiosTranscritos: row.audios_transcritos ?? null,
       messageCount: timeline.length,
+      messageCount90d,
       clientMessageCount,
       clientQuestionCount,
       clientMessageDays,
