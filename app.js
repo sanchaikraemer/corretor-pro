@@ -2885,7 +2885,7 @@ function renderBotoesHome(){
       filaRanqueada = filaRanqueada.filter(l => !pulados.has(String(l.id))).concat(filaRanqueada.filter(l => pulados.has(String(l.id))));
     }
   }
-  const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10);
+  const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof cpMetaAtendimentosDia==='function'?cpMetaAtendimentosDia():10);
   // "Atender mais um" (state.fazerAgoraExtra) puxa além da meta, sem esperar o dia seguinte.
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
   const quantosMostrar = Math.max(0, metaHoje) + extraHoje;
@@ -5980,6 +5980,8 @@ function sanitizeCerebroConfigV762(cfg) {
     diferenciais: typeof c.diferenciais === "string" ? c.diferenciais : "",
     evitar: typeof c.evitar === "string" ? c.evitar : "",
     diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
+    // v1012 — meta diária do "Fazer agora" configurável por corretor; fora de 1–50 vira 10.
+    atendimentosPorDia: (Number(c.atendimentosPorDia) >= 1 && Number(c.atendimentosPorDia) <= 50) ? Math.round(Number(c.atendimentosPorDia)) : 10,
     regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
     objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
@@ -6002,6 +6004,7 @@ function obterCerebroConfigParaAnalise() {
       diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
       diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
+      atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
       regras: [],
@@ -6768,6 +6771,8 @@ async function carregarCerebro(){
   qs("#cerebroEvitar").value = config.evitar || "";
   const inpDias = qs("#cerebroDiasImportacao");
   if(inpDias) inpDias.value = (config.diasImportacao && Number(config.diasImportacao) > 0) ? config.diasImportacao : 90;
+  const inpAtend = qs("#cerebroAtendimentosDia");
+  if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
   // Regras e objeções em blocos únicos de texto.
   if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
   if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
@@ -6788,6 +6793,8 @@ window.copiarSqlCerebro = copiarSqlCerebro;
 async function salvarCerebro(){
   const diasRaw = qs("#cerebroDiasImportacao")?.value;
   const diasN = Number(diasRaw);
+  const atendRaw = qs("#cerebroAtendimentosDia")?.value;
+  const atendN = Number(atendRaw);
   const config = {
     corretorNome: qs("#cerebroCorretorNome")?.value || "",
     metodo: qs("#cerebroMetodo").value,
@@ -6795,6 +6802,7 @@ async function salvarCerebro(){
     diferenciais: qs("#cerebroDiferenciais").value,
     evitar: qs("#cerebroEvitar").value,
     diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
+    atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
     objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
     regras: [],
@@ -6846,6 +6854,8 @@ async function zerarCerebroTudo(){
       metodo: "", tom: "", evitar: "",
       diferenciais: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
+      // Meta diária é preferência de trabalho (como o período dos áudios), não aprendizado — fica.
+      atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
@@ -9449,13 +9459,26 @@ function cpAtendidosHojeTotal(items){
   for(const l of (Array.isArray(base) ? base : [])) if(ehContatadoHoje(l)) n++;
   return n;
 }
-// Dose do dia (o número do card "Fazer agora"): meta de 10 menos quem já foi atendido hoje.
-function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.max(0, CP_DOSE_DIA - cpAtendidosHojeTotal(items)); }
+// v1012 — a meta diária deixou de ser fixa em 10: cada corretor escolhe a sua no Cérebro
+// Comercial (campo "Atendimentos por dia", 1–50). Sem valor salvo, vale o padrão histórico
+// CP_DOSE_DIA (10). Lê pela mesma fonte da análise (localStorage/form via
+// obterCerebroConfigParaAnalise) porque state.cerebroCfg nunca é preenchido.
+function cpMetaAtendimentosDia(){
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    const n = Number(cfg?.atendimentosPorDia);
+    if(Number.isFinite(n) && n >= 1 && n <= 50) return Math.round(n);
+  }catch(_){}
+  return CP_DOSE_DIA;
+}
+// Dose do dia (o número do card "Fazer agora"): meta do corretor menos quem já foi atendido hoje.
+function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.max(0, cpMetaAtendimentosDia() - cpAtendidosHojeTotal(items)); }
 window.cpNotaPrioridade = cpNotaPrioridade;
 window.cpFilaFazerAgora = cpFilaFazerAgora;
 window.cpFimDeSemana = cpFimDeSemana;
 window.cpAtendidosHojeTotal = cpAtendidosHojeTotal;
 window.cpFazerAgoraDose = cpFazerAgoraDose;
+window.cpMetaAtendimentosDia = cpMetaAtendimentosDia;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
@@ -12244,9 +12267,15 @@ function ui670DetailRows(lead,mc){
     // Central de atenção precisa contar a MESMA história da Condução, senão promete "31 pedem
     // ação", o dono abre a tela e encontra "nenhum" (aconteceu de verdade num sábado à noite).
     const fds = (typeof cpFimDeSemana==='function') && cpFimDeSemana();
+    // v1012 — o sino nunca promete mais que a DOSE do dia (meta configurável no Cérebro).
+    // Num sábado apareceu "34 atendimentos esperam por você na segunda" — 34 era o backlog
+    // inteiro, mas na segunda a tela só entrega a dose (ex.: 10). O número do aviso agora é
+    // min(meta, fila), a mesma conta do card "Fazer agora".
+    const metaDia = (typeof cpMetaAtendimentosDia==='function') ? cpMetaAtendimentosDia() : 10;
+    const doseAviso = Math.min(metaDia, Number(d.agora)||0);
     const itemAcao = fds
-      ? `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${d.agora?`${d.agora} atendimento${d.agora===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
-      : `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
+      ? `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
+      : `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
       ${d.atrasados?`<div class="cp687-notify-item" data-go="agenda"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Veja a lista na Agenda — retome ou descarte um a um.</span></div></div>`:''}
@@ -12636,7 +12665,7 @@ function ui670DetailRows(lead,mc){
       for(const l of all){ const c=cp786Categoria(l); if(grupos[c]) grupos[c].push(l); }
       // v914 — "Fazer agora" na Condução = a MESMA dose da home (top 10 por mensagens do cliente,
       // fim de semana vazio), pra o número e a lista baterem com o card.
-      grupos.agora = cpFilaFazerAgora(all).slice(0, CP_DOSE_DIA);
+      grupos.agora = cpFilaFazerAgora(all).slice(0, (typeof cpMetaAtendimentosDia==='function')?cpMetaAtendimentosDia():CP_DOSE_DIA);
       const filtrosValidos=['agora','programados','aguardando'];
       const filtro = filtrosValidos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
       state.pipelineVisualFiltro=filtro;
@@ -13457,7 +13486,7 @@ function ui670DetailRows(lead,mc){
       // atendido hoje (cpFazerAgoraDose), aplicada ao topo da fila ranqueada; o resto é backlog
       // (não some, só não conta pra meta de hoje).
       const filaAgora=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(leads):(grupos.agora||[]);
-      const doseCount=(typeof cpFazerAgoraDose==='function')?cpFazerAgoraDose(leads):Math.min(filaAgora.length,(typeof CP_DOSE_DIA==='number'?CP_DOSE_DIA:10));
+      const doseCount=(typeof cpFazerAgoraDose==='function')?cpFazerAgoraDose(leads):Math.min(filaAgora.length,(typeof cpMetaAtendimentosDia==='function'?cpMetaAtendimentosDia():10));
       // v885 — o H1 da tela acompanha a visão: chegar por "Total de leads" (filtro 'todos')
       // mostra "Carteira ativa", não "Condução / o que fazer agora" (confundia o dono).
       const pageT=document.querySelector('.pipeline-page-title'), pageS=document.querySelector('.pipeline-page-sub');

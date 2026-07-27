@@ -55,9 +55,11 @@ if(ehFds){
 }
 
 // 2. Dose helper + botão Atender +1 + fim de semana no card.
-// v924: a dose é a META do dia (10) menos quem já foi atendido hoje (cpAtendidosHojeTotal) —
+// v924: a dose é a META do dia menos quem já foi atendido hoje (cpAtendidosHojeTotal) —
 // ver tests/v924-fazer-agora-meta-decrescente.test.mjs pra cobertura completa do comportamento.
-assert.match(app, /function cpFazerAgoraDose\(items\)\{ return cpFimDeSemana\(\) \? 0 : Math\.max\(0, CP_DOSE_DIA - cpAtendidosHojeTotal\(items\)\); \}/, 'dose = meta menos atendidos hoje, 0 no fds');
+// v1012: a meta deixou de ser CP_DOSE_DIA fixo e virou cpMetaAtendimentosDia() (campo
+// "Atendimentos por dia" do Cérebro, padrão 10) — ver tests/v1012-meta-atendimentos-por-corretor.test.mjs.
+assert.match(app, /function cpFazerAgoraDose\(items\)\{ return cpFimDeSemana\(\) \? 0 : Math\.max\(0, cpMetaAtendimentosDia\(\) - cpAtendidosHojeTotal\(items\)\); \}/, 'dose = meta menos atendidos hoje, 0 no fds');
 assert.match(app, /Atender \+1/, 'botão "Atender +1"');
 assert.match(app, /Final de semana/, 'card mostra "Final de semana"');
 assert.match(css, /\.cp-atender-mais\{/, 'CSS do botão Atender +1');

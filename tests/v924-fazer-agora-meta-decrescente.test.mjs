@@ -22,6 +22,9 @@ assert.ok(fdsSrc && filaSrc && totalSrc && doseSrc, 'funções da dose de hoje n
 
 const sandbox = eval(`
   const CP_DOSE_DIA = 10;
+  // v1012: a meta virou configurável (cpMetaAtendimentosDia lê o Cérebro); aqui o teste é
+  // sobre a MATEMÁTICA da dose, então basta o stub devolvendo o padrão histórico (10).
+  const cpMetaAtendimentosDia = () => CP_DOSE_DIA;
   // v980: cpAtendidosHojeTotal passou a preferir state.todosLeads (base completa, incluindo
   // arquivados) e só cai pro "items" recebido quando essa base ainda não foi carregada — este
   // teste é sobre a MATEMÁTICA da dose a partir de "items", não sobre esse detalhe, então
