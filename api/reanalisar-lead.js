@@ -380,7 +380,10 @@ async function reanalisarLeadHandler702(req, res) {
       ...prev, ...novoC,
       venda: prev.venda || undefined,
       memoria: { ...(prev.memoria || {}), observacoes: texto },
-      aprendizado: prev.aprendizado || undefined
+      aprendizado: prev.aprendizado || undefined,
+      // v1023 — ver comentário completo perto de aplicarLembrete: agendamento só nasce de clique
+      // explícito em Agenda, nunca de texto (mesmo princípio da v988, agora também aqui).
+      confirmedAppointments: []
     };
     if (prev.lembrete && prev.lembrete.auto !== true) mergedC.lembrete = prev.lembrete; // preserva lembrete manual
     const updC = { resultado_analise: mergedC, timeline_json: novaTl, atualizado_em: new Date().toISOString() };
@@ -488,6 +491,14 @@ async function reanalisarLeadHandler702(req, res) {
     if (previous.lembreteRemovido) { obj.lembrete = null; return; }
     obj.lembrete = previous.lembrete && previous.lembrete.auto !== true ? previous.lembrete : null;
   }
+  // v1023 — mesmo princípio da v988, agora pra "compromisso confirmado": o dono foi taxativo e
+  // repetiu a ordem — "mesmo que haja algo na conversa sobre vamos agendar/visitar/conversar de
+  // novo, você não pode agendar; agendamento só se clicar em Agenda, sem exceção". Diferente do
+  // lembrete, aqui não existe um clique explícito equivalente a preservar — confirmedAppointments
+  // era só o palpite da IA lendo a conversa (nunca uma ação do corretor), então não sobra nada
+  // legítimo pra manter: fica sempre vazio, em toda gravação, mesmo que o registro anterior no
+  // banco (de antes desta correção) já tivesse algo ali.
+  function aplicarCompromisso(obj) { obj.confirmedAppointments = []; }
 
   // Se for apenas salvar (sem reanalisar): atualiza timeline e observações, mantém análise atual.
   if (apenasSalvar) {
@@ -505,6 +516,7 @@ async function reanalisarLeadHandler702(req, res) {
       memoria: { ...(previous.memoria || {}), observacoes: observacoesFinais }
     };
     aplicarLembrete(merged);
+    aplicarCompromisso(merged);
     // v826 §6.2: copiar uma sugestão conta como ATENDIMENTO (registra data/hora e entra
     // na fila como "atendido"), mas NUNCA altera a etapa comercial. Reaproveita o mesmo
     // evento contato_manual usado pelo botão "Marcar atendimento".
@@ -626,10 +638,10 @@ async function reanalisarLeadHandler702(req, res) {
   const m = merged.messages || {};
   if (semAcaoUrgente || (!merged.sugestoesPendentes && m.a && m.b && m.c)) merged.aprovada = true;
   aplicarLembrete(merged);
-  // Oportunidade encerrada não mantém lembrete/compromisso legado nem mensagem anterior.
+  aplicarCompromisso(merged);
+  // Oportunidade encerrada não mantém lembrete legado nem mensagem anterior.
   if (semAcaoUrgente && ["perdida","ganha","encerrada-sem-decisao"].includes(String(merged?.modeloComercial?.oportunidade?.status || ""))) {
     merged.lembrete = null;
-    merged.confirmedAppointments = [];
   }
 
   const agoraSalvar = new Date().toISOString();

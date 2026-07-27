@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID, timingSafeEqual } from "crypto";
-import { filtrarCompromissosReais } from "./_pipeline.js";
 
 
 function authJson(res, status, payload) {
@@ -538,6 +537,13 @@ export async function persistProcessingResult({
   const audiosTranscritos = result?.audiosTranscritos ?? Object.values(result?.audioTranscriptions || {}).filter(v => String(v?.status || "").includes("transcrito") && v?.text).length;
   const timeline = result?.timeline || [];
   let analysis = _semScoreComercial(result?.analysis || null);
+  // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto/reanálise (mesmo
+  // princípio da v988 pro lembrete) — mesmo aqui, no primeiro salvamento de um lead, onde
+  // "analysis" é o que o navegador reenviou de uma análise já processada. Nunca confia nesse
+  // campo vindo de fora; zera sempre, sem exceção.
+  if (analysis && analysis.confirmedAppointments !== undefined) {
+    analysis = { ...analysis, confirmedAppointments: [] };
+  }
   const lead = result?.lead || null;
 
   // Em uma criação explicitamente nova, nunca herda dados de outro registro com o mesmo nome.
@@ -853,12 +859,16 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
     const last = timeline.length ? timeline[timeline.length - 1] : null;
 
-    // Na lista leve, não reconstrói/varre o histórico inteiro para validar compromissos.
-    // Esse trabalho já é feito quando a análise é salva. A validação completa continua
-    // existindo ao abrir o detalhe do lead, quando o histórico integral é realmente necessário.
-    if (includeFullTimeline && analysis && Array.isArray(analysis.confirmedAppointments) && analysis.confirmedAppointments.length) {
-      const convText = timeline.map(m => m && m.text || "").join("\n") + "\n" + (row.texto_extraido || "");
-      analysis = { ...analysis, confirmedAppointments: filtrarCompromissosReais(analysis.confirmedAppointments, convText) };
+    // v1023 — pedido explícito e repetido do dono, mesmo princípio já aplicado ao lembrete
+    // (v988): "agendamento só pode ser feito se clicar em Agenda, sem exceção" — mesmo um
+    // compromisso com prova literal na conversa (o que filtrarCompromissosReais validava até
+    // aqui) não pode mais virar um "agendado" pro sistema. Isto aqui é o ÚNICO ponto por onde
+    // toda leitura de lead (lista e detalhe) passa, então é onde qualquer resíduo antigo de
+    // confirmedAppointments (leads salvos antes desta correção, ou de antes de qualquer uma das
+    // gravações já terem sido tocadas de novo) para de valer — sem depender de reanalisar cada
+    // lead antigo pra "limpar" no banco.
+    if (analysis && analysis.confirmedAppointments !== undefined) {
+      analysis = { ...analysis, confirmedAppointments: [] };
     }
 
     const fileName = row.nome_arquivo || row.arquivo_nome || "Conversa importada";

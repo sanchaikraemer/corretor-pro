@@ -144,7 +144,10 @@ async function acaoAnaliseComercialSet(id, analysis, res, organizationId) {
     memoria: { ...(anterior.memoria || {}), ...(analysis.memoria || {}) },
     aprendizado: anterior.aprendizado || analysis.aprendizado,
     venda: anterior.venda || analysis.venda,
-    reanalisadoEm: new Date().toISOString()
+    reanalisadoEm: new Date().toISOString(),
+    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto (mesmo
+    // princípio da v988 pro lembrete). confirmedAppointments nunca sobrevive a uma gravação.
+    confirmedAppointments: []
   };
   merged = stampCommercialSchema(finalizarAnaliseComercial(merged, lead, timeline));
 
@@ -184,6 +187,9 @@ async function acaoLembreteSet(id, body, res, organizationId) {
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
   const merged = { ...(current.resultado_analise || {}) };
+  // v1023 — agendamento (confirmedAppointments) só nasce de clique explícito em Agenda, nunca
+  // sobrevive a nenhuma gravação, nem a esta (que é sobre lembrete, não sobre compromisso).
+  merged.confirmedAppointments = [];
   merged.lembrete = {
     quando: lembreteEm.toISOString(),
     motivo: String(body?.motivo || "").slice(0, 200),
@@ -214,6 +220,8 @@ async function acaoLembreteClear(id, res, organizationId) {
 
   const merged = { ...(current.resultado_analise || {}) };
   delete merged.lembrete;
+  // v1023 — agendamento (confirmedAppointments) nunca sobrevive a uma gravação — sem exceção.
+  merged.confirmedAppointments = [];
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
@@ -725,6 +733,8 @@ async function acaoNovaOportunidadeParceiro(body, res, organizationId) {
   const origemAtualizada = {
     ...aOrigem,
     oportunidadesVinculadas: vinculadas,
+    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca sobrevive a uma gravação.
+    confirmedAppointments: [],
     modeloComercial: {
       ...(mcOrigem || {}),
       versao: Math.max(676, Number(mcOrigem?.versao || 0)),
@@ -805,7 +815,9 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
 
   // Primeiro salva a linha do tempo consolidada, preservando integralmente a análise e os
   // dados operacionais existentes. Só depois a IA é chamada sobre esta conversa já persistida.
-  const analiseDuranteReprocessamento = { ...anterior, _importacaoPendente: importacaoPendente };
+  // v1023 — exceção: confirmedAppointments não sobrevive nem neste estado intermediário
+  // (agendamento só por clique explícito em Agenda, nunca herdado de uma análise antiga).
+  const analiseDuranteReprocessamento = { ...anterior, confirmedAppointments: [], _importacaoPendente: importacaoPendente };
   const payloadConsolidacao = {
     resultado_analise: analiseDuranteReprocessamento,
     timeline_json: novaTimeline,
@@ -963,7 +975,9 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     _historicoImportacoes: historicoImportacoes,
     _ultimaImportacao: eventoImportacao,
     _storageRefs: mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs),
-    _atualizadoEm: concluidaEm
+    _atualizadoEm: concluidaEm,
+    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto/reanálise.
+    confirmedAppointments: []
   };
   delete merged._importacaoPendente;
 
@@ -1098,6 +1112,7 @@ async function acaoEtapa(id, etapa, res, organizationId) {
     if (getErr) return json(res, 500, { ok: false, error: getErr.message });
     if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
     const merged = { ...(current.resultado_analise || {}) };
+    merged.confirmedAppointments = []; // v1023 — nunca sobrevive a nenhuma gravação
     merged.lead = { ...(merged.lead || {}), etapa };
     const { error: putErr } = await supabase
       .from("whatsapp_processamentos")
@@ -1175,7 +1190,9 @@ async function acaoMemoriaSet(id, body, res, organizationId) {
     atualizadoEm: agora
   };
 
-  const merged = { ...anterior, memoria };
+  // v1023 — agendamento só nasce de clique explícito em Agenda, nunca sobrevive a uma gravação
+  // (isto aqui é só edição de memória/observação — nunca deveria mesmo tocar em agendamento).
+  const merged = { ...anterior, memoria, confirmedAppointments: [] };
   const { error: putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise: merged, atualizado_em: agora })
@@ -1255,7 +1272,8 @@ async function acaoObservacaoAdicionar(id, body, res, organizationId) {
     quando: iso
   });
   const aprendizado = { ...aprendizadoAnterior, eventos: eventosAnteriores.slice(-50) };
-  const merged = { ...analysis, memoria, aprendizado, _atualizadoEm:iso };
+  // v1023 — agendamento só nasce de clique explícito em Agenda, nunca sobrevive a uma gravação.
+  const merged = { ...analysis, memoria, aprendizado, _atualizadoEm:iso, confirmedAppointments:[] };
   const { error:putErr } = await supabase
     .from("whatsapp_processamentos")
     .update({ resultado_analise:merged, timeline_json:timeline, atualizado_em:iso })
@@ -1342,6 +1360,7 @@ async function acaoDesfecho(id, body, res, organizationId) {
 
   const now = new Date();
   const merged = { ...(current.resultado_analise || {}) };
+  merged.confirmedAppointments = []; // v1023 — nunca sobrevive a nenhuma gravação
   if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
   merged.lead.etapa = etapa;
   if (produto) {
@@ -1461,6 +1480,7 @@ async function acaoAprendizado(id, body, res, organizationId) {
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
   const merged = { ...(current.resultado_analise || {}) };
+  merged.confirmedAppointments = []; // v1023 — nunca sobrevive a nenhuma gravação
   const aprendizado = merged.aprendizado || { eventos: [] };
   aprendizado.eventos = aprendizado.eventos || [];
   const eventoLimpo = String(evento).slice(0, 100);
@@ -1517,6 +1537,7 @@ async function acaoEditarDados(id, body, res, organizationId) {
   if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
 
   const merged = { ...(current.resultado_analise || {}) };
+  merged.confirmedAppointments = []; // v1023 — nunca sobrevive a nenhuma gravação
   if (nome != null) merged.clientName = nome;
   if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
   if (nome != null) merged.lead.clientName = nome;
@@ -1694,7 +1715,8 @@ async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
     if (!analysis || typeof analysis !== "object" || !Array.isArray(analysis.oportunidadesVinculadas)) continue;
     const filtradas = analysis.oportunidadesVinculadas.filter(item => !alvo.has(String(item?.leadId || "")) && !alvo.has(String(item?.id || "")));
     if (filtradas.length === analysis.oportunidadesVinculadas.length) continue;
-    const atualizado = { ...analysis, oportunidadesVinculadas: filtradas };
+    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca sobrevive a uma gravação.
+    const atualizado = { ...analysis, oportunidadesVinculadas: filtradas, confirmedAppointments: [] };
     const { error: updateErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: atualizado, atualizado_em: new Date().toISOString() })
