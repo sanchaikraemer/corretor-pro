@@ -630,6 +630,11 @@
         <button class="btn secondary" type="button" onclick="testarIAOpenAI(this)" style="width:100%">Testar a IA agora</button>
         <div class="small" id="openaiDiagOut" style="margin-top:10px;line-height:1.5"></div>
       </div>
+      <div class="card compact cp-sair-conta" style="display:none">
+        <div class="label">Conta</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Você está logado como <b id="cpNomeUserMenu">—</b>. Sair encerra a sessão neste aparelho e volta pra tela de entrar.</div>
+        <button class="btn secondary" type="button" onclick="cpSairDaConta()" style="width:100%">Sair da conta</button>
+      </div>
       <div class="card danger-zone-visible" id="dangerZoneCard" style="display:block">
         <div class="label">Zona perigosa</div>
         <p class="small">Apaga todas as conversas processadas, leads importados e ZIPs guardados. Ação não tem volta.</p>

@@ -49,6 +49,8 @@ import './js/pwa-install.js?v=__VERSION__';
       if (b) b.textContent = primeiro || "Corretor";
       const av = document.getElementById("cpAvatarUser");
       if (av) av.textContent = (primeiro[0] || "C").toUpperCase();
+      const bm = document.getElementById("cpNomeUserMenu");
+      if (bm) bm.textContent = nome || "Corretor";
     } catch(_) {}
   };
   window.cpSairDaConta = async function(){
@@ -64,6 +66,9 @@ import './js/pwa-install.js?v=__VERSION__';
       if (!data?.session) return;
       const btn = document.getElementById("btnSairConta");
       if (btn) btn.style.display = "";
+      // O cartão "Conta" da tela Menu (Mais) só existe pra quem está logado — foi lá que o
+      // dono procurou o sair primeiro (v1009).
+      document.querySelectorAll(".cp-sair-conta").forEach(el => { el.style.display = ""; });
       // O nome da conta é o que a pessoa preencheu no cadastro (organizations.nome) —
       // a RLS garante que só o próprio vínculo é visível aqui.
       const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").limit(1).maybeSingle();
