@@ -12189,10 +12189,17 @@ function ui670DetailRows(lead,mc){
     let panel=$('.cp687-notify-panel');
     if(!panel){panel=document.createElement('div');panel.className='cp687-notify-panel';document.body.appendChild(panel);}
     const d=notifyData();
+    // v1010 — a fila do "Fazer agora" pausa no fim de semana (regra do dono, v914/v937); a
+    // Central de atenção precisa contar a MESMA história da Condução, senão promete "31 pedem
+    // ação", o dono abre a tela e encontra "nenhum" (aconteceu de verdade num sábado à noite).
+    const fds = (typeof cpFimDeSemana==='function') && cpFimDeSemana();
+    const itemAcao = fds
+      ? `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${d.agora?`${d.agora} atendimento${d.agora===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
+      : `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
       ${d.atrasados?`<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Venceram e ainda não foram tratados — retome logo.</span></div></div>`:''}
-      <div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${d.agora} atendimento${d.agora===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>
+      ${itemAcao}
       <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${Math.max(0,(d.programados||0)-(d.atrasados||0))} na agenda</b><span>Compromissos com data marcada — hoje e próximos.</span></div></div>
       <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
     panel.classList.add('open');
@@ -13414,7 +13421,12 @@ function ui670DetailRows(lead,mc){
       if(filtro==='agora'){
         const dose=filaAgora.slice(0,doseCount), resto=filaAgora.slice(doseCount);
         const divisor=resto.length?`<div style="margin:14px 4px 8px;color:var(--muted);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Fila de retomada — mais ${resto.length}</div>`:'';
-        listaHtml=(dose.length?dose.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>')+divisor+resto.map(cp788LinhaConducao).join('');
+        // v1010 — no fim de semana a fila pausa de propósito; o vazio precisa dizer ISSO,
+        // não o genérico "nenhum cliente" (parecia defeito vindo da Central de atenção).
+        const vazioAgora=(typeof cpFimDeSemana==='function'&&cpFimDeSemana())
+          ? '<div class="cp695-empty">Fim de semana — a fila do "Fazer agora" volta na segunda.</div>'
+          : '<div class="cp695-empty">Nenhum cliente nesta visão.</div>';
+        listaHtml=(dose.length?dose.map(cp788LinhaConducao).join(''):vazioAgora)+divisor+resto.map(cp788LinhaConducao).join('');
       }else{
         const lista=grupos[filtro]||[];
         listaHtml=lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>';
