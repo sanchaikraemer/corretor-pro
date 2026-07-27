@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-// v1032 — investigação de segundo nível sobre o caso "Wilson atendido mas continua em
+// v1033 — investigação de segundo nível sobre o caso "Wilson atendido mas continua em
 // Oportunidades esquecidas" (v1031 já tinha corrigido a causa mais comum: cópia de mensagem só
 // atualizando UMA cópia do lead em memória). Um agente dedicado foi checar se sobrava algum outro
 // caminho quebrado e achou uma causa bem mais funda, que explica por que o problema podia
@@ -111,4 +111,4 @@ const rodar = async (stateInicial, force) => {
   assert.ok((elementos['#leadFocoArea']?.innerHTML || '').includes('skel-loading'), 'primeira carga (tela vazia) ainda precisa mostrar o esqueleto de carregamento');
 }
 
-console.log('v1032-home-nunca-atualiza-sozinha: ok');
+console.log('v1033-home-nunca-atualiza-sozinha: ok');
