@@ -4837,7 +4837,18 @@ async function abrirLead(id, options={}){
     }
     showCard("resultCard", true);
     renderAnalysis(state.analysis, state.lead);
+    // v1028 — o detalhe completo do lead chega em 2 etapas (o que já está em memória primeiro,
+    // o servidor depois) e cada etapa reconstrói a tela do lead inteira do zero — inclusive o
+    // card "Últimas mensagens", que sempre volta pro estado padrão ("hidden", cravado no HTML)
+    // quando isso acontece. Se o corretor clicasse em "Mensagens" bem no meio dessa janela (o
+    // caso comum: quase sempre que se abre um lead), a 2ª reconstrução fechava o card sozinha
+    // sem ele perceber — parecia que o 1º clique "não tinha feito nada" (só o 2º clique, já
+    // depois dessa 2ª reconstrução, ficava aberto de vez). Preserva o estado aberto/fechado
+    // através da reconstrução.
+    const histAntes = qs("#cp704HistCard");
+    const histAbertoAntes = !!histAntes && !histAntes.hidden;
     renderLeadFoco(state.lead);
+    if(histAbertoAntes){ const hist = qs("#cp704HistCard"); if(hist) hist.hidden = false; }
     if(state.top3) renderTop3(state.top3);
     // v754: abrir/atualizar detalhe do lead não deve reconstruir a lista inteira.
     // Isso deixava cliques e expansão de abas lentos, principalmente com base grande.
@@ -7767,6 +7778,11 @@ async function confirmarAtualizacaoPersistida(id, importId, totalMensagensEspera
   let ultimoErro = null;
   for(let tentativa = 0; tentativa < 3; tentativa++){
     if(tentativa) await new Promise(r => setTimeout(r, 450 * tentativa));
+    // v1028 — esta espera (até 3 tentativas, cada uma com até 20s de tempo limite) não mostrava
+    // NENHUM progresso na tela — pra um lead com conversa longa (dezenas/centenas de áudios),
+    // a etiqueta "Salvando" ficava parada o tempo todo, parecendo travado. Agora atualiza a
+    // etapa visível a cada tentativa, mesmo sem nada de errado acontecer.
+    renderEtapas(5, tentativa === 0 ? "confirmando gravação no banco de dados..." : `confirmando gravação no banco de dados (tentativa ${tentativa + 1} de 3)...`);
     try{
       invalidarLeadDetail(leadId);
       const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(leadId)}&_=${Date.now()}`, { cache:"no-store" }, 20000);
@@ -7789,6 +7805,9 @@ async function atualizarLeadComEvolucao(){
   if(!existente?.id || !state.pendingSave){ toast("Nada pra atualizar."); return; }
   const btn = qs("#btnAtualizarLead");
   if(btn){ btn.disabled = true; btn.textContent = "Atualizando..."; }
+  // v1028 — mesma correção do salvamento novo: mostra progresso de verdade em vez de deixar a
+  // etiqueta "Salvando" parada (ver confirmarAtualizacaoPersistida logo acima).
+  renderEtapas(5, "salvando a atualização no banco de dados...");
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -7801,6 +7820,7 @@ async function atualizarLeadComEvolucao(){
     const confirmado = await confirmarAtualizacaoPersistida(existente.id, importacaoConcluida?.importId, totalEsperado);
     const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
+    renderEtapas(5, "liberando os arquivos temporários da importação...");
     const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
     state.activeImportId = null;
@@ -7856,6 +7876,10 @@ async function salvarLeadPendente(){
   if(!state.pendingSave){ toast("Nada pra salvar."); return; }
   const btn = qs("#btnSalvarLead");
   if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+  // v1028 — a etiqueta "aguardando confirmação para salvar" ficava parada a tela toda enquanto
+  // o lead (podendo ter uma conversa longa, com muitas mensagens/áudios) era gravado no banco —
+  // sem nenhum movimento visível, parecia que tinha travado. Mostra progresso de verdade.
+  renderEtapas(5, "salvando no banco de dados...");
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST",
@@ -7872,6 +7896,7 @@ async function salvarLeadPendente(){
     state.lead.status = "Conversa processada";
     const importacaoConcluida = state.pendingSave;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
+    renderEtapas(5, "liberando os arquivos temporários da importação...");
     const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
     state.pendingSave = null;
     state.activeImportId = null;
@@ -10935,7 +10960,7 @@ let _cp7ObsRecorder = null, _cp7ObsChunks = [], _cp7ObsStream = null;
 // disponível; onde não existir (ex.: alguns navegadores no iPhone), cai automaticamente no
 // caminho antigo (grava o áudio inteiro e manda transcrever no fim), sem trocar de botão nem
 // pedir nada diferente do corretor.
-let _cp7ObsReco = null, _cp7ObsRecoTextoBase = "";
+let _cp7ObsReco = null, _cp7ObsRecoTextoBase = "", _cp7ObsDitadoQuerido = false;
 function cp7ObsSpeechRecognitionDisponivel(){
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
@@ -10943,6 +10968,7 @@ function cp7ObsPararGravacaoSeAtiva(){
   try{ if(_cp7ObsRecorder && _cp7ObsRecorder.state === "recording") _cp7ObsRecorder.stop(); }catch(_){}
   try{ _cp7ObsStream?.getTracks()?.forEach(t => t.stop()); }catch(_){}
   _cp7ObsStream = null;
+  _cp7ObsDitadoQuerido = false;
   try{ if(_cp7ObsReco){ const r=_cp7ObsReco; _cp7ObsReco=null; r.onend=null; r.stop(); } }catch(_){}
 }
 window.cp7ObsToggleGravacao = async function(btn){
@@ -10951,14 +10977,28 @@ window.cp7ObsToggleGravacao = async function(btn){
 };
 // Ditado ao vivo: o texto reconhecido vai sendo escrito na caixa de observação em tempo real.
 function cp7ObsToggleDitado(btn){
-  const status = qs("#cp7ObsStatus");
-  if(_cp7ObsReco){
-    _cp7ObsReco.stop(); // onend cuida de limpar o estado e o texto do botão
+  if(_cp7ObsDitadoQuerido){
+    // Pedido do dono: só parar quando ELE tocar em "Parar" — _cp7ObsDitadoQuerido=false
+    // AQUI (antes do stop()) avisa cp7ObsIniciarDitado's onend que foi um pedido de parada
+    // de verdade, não silêncio, então não reinicia sozinho.
+    _cp7ObsDitadoQuerido = false;
+    if(_cp7ObsReco) _cp7ObsReco.stop();
     return;
   }
-  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   const ta = qs("#cp7ObsTexto");
   _cp7ObsRecoTextoBase = (ta?.value || "").trim();
+  _cp7ObsDitadoQuerido = true;
+  cp7ObsIniciarDitado(btn);
+}
+// v1028 — o reconhecimento de fala do navegador (Chrome/Android) para SOZINHO depois de uns
+// 1-2s de silêncio, mesmo com continuous:true — é uma limitação conhecida (o "continuous" não
+// é de verdade contínuo; a sessão com o serviço de reconhecimento se encerra sozinha depois de
+// um tempo sem áudio). O dono pediu que só pare quando ELE tocar em "Parar" — então, quando o
+// reconhecimento acaba SOZINHO (o corretor ainda não pediu pra parar), reinicia na hora,
+// sem cortar o fluxo nem perder o texto já ditado.
+function cp7ObsIniciarDitado(btn){
+  const status = qs("#cp7ObsStatus");
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   const reco = new SpeechRecognitionCtor();
   reco.lang = "pt-BR";
   reco.continuous = true;
@@ -10971,16 +11011,23 @@ function cp7ObsToggleDitado(btn){
       else interim += trecho;
     }
     if(final.trim()) _cp7ObsRecoTextoBase = (_cp7ObsRecoTextoBase ? _cp7ObsRecoTextoBase + " " : "") + final.trim();
+    const ta = qs("#cp7ObsTexto");
     if(ta) ta.value = [_cp7ObsRecoTextoBase, interim.trim()].filter(Boolean).join(" ");
   };
   reco.onerror = (ev) => {
     // "no-speech"/"aborted" acontecem o tempo todo em uso normal (silêncio, parar de propósito)
     // — não é erro de verdade, só o reconhecimento aguardando ou sendo encerrado.
     if(ev?.error === "no-speech" || ev?.error === "aborted") return;
+    if(!_cp7ObsDitadoQuerido) return;
     if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui ouvir: ' + escapeHtml(String(ev?.error||'')) + '</span>';
   };
   reco.onend = () => {
     _cp7ObsReco = null;
+    if(_cp7ObsDitadoQuerido){
+      // Parou sozinho (silêncio) — o corretor não pediu pra parar, recomeça na hora.
+      cp7ObsIniciarDitado(btn);
+      return;
+    }
     const btnAtual = qs("#cp7ObsGravarBtn");
     if(btnAtual) btnAtual.textContent = "🎙️ Gravar áudio";
     if(status) status.innerHTML = '<span style="color:var(--acao)">Ditado parado. Revise o texto e toque em Salvar observação.</span>';
@@ -10992,6 +11039,7 @@ function cp7ObsToggleDitado(btn){
     if(status) status.innerHTML = '<span style="color:var(--morno)">Ouvindo... fale à vontade, o texto vai aparecendo aqui embaixo.</span>';
   }catch(err){
     _cp7ObsReco = null;
+    _cp7ObsDitadoQuerido = false;
     if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui iniciar o ditado: '+escapeHtml(String(err?.message||err))+'</span>';
   }
 }
