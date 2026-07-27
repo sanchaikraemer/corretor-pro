@@ -11034,16 +11034,24 @@ function cp7ObsIniciarDitado(btn){
   reco.lang = "pt-BR";
   reco.continuous = true;
   reco.interimResults = true;
+  // v1032 — em vários Android o reconhecimento reenvia como "final" um trecho que já tinha vindo
+  // como final antes (bug conhecido do continuous:true; ev.resultIndex nem sempre pula o que já
+  // foi processado). Antes disso fazia o texto "recomeçar de novo" a cada reenvio ("vamos vamos
+  // Vamos Vamos retomar Vamos retomar..."), porque cada trecho final ia sendo SOMADO ao texto de
+  // novo. Guardando cada trecho pela posição (índice) que o navegador deu a ele, um reenvio só
+  // substitui o que já estava naquela posição, em vez de duplicar.
+  const finaisPorIndice = [];
   reco.onresult = (ev) => {
-    let final = "", interim = "";
+    let interim = "";
     for(let i = ev.resultIndex; i < ev.results.length; i++){
       const trecho = ev.results[i]?.[0]?.transcript || "";
-      if(ev.results[i].isFinal) final += trecho;
+      if(ev.results[i].isFinal) finaisPorIndice[i] = trecho.trim();
       else interim += trecho;
     }
-    if(final.trim()) _cp7ObsRecoTextoBase = (_cp7ObsRecoTextoBase ? _cp7ObsRecoTextoBase + " " : "") + final.trim();
+    const finalDaSessao = finaisPorIndice.filter(Boolean).join(" ");
+    const textoFinal = [_cp7ObsRecoTextoBase, finalDaSessao].filter(Boolean).join(" ");
     const ta = qs("#cp7ObsTexto");
-    if(ta) ta.value = [_cp7ObsRecoTextoBase, interim.trim()].filter(Boolean).join(" ");
+    if(ta) ta.value = [textoFinal, interim.trim()].filter(Boolean).join(" ");
   };
   reco.onerror = (ev) => {
     // "no-speech"/"aborted" acontecem o tempo todo em uso normal (silêncio, parar de propósito)
@@ -11054,6 +11062,8 @@ function cp7ObsIniciarDitado(btn){
   };
   reco.onend = () => {
     _cp7ObsReco = null;
+    const finalDaSessao = finaisPorIndice.filter(Boolean).join(" ");
+    if(finalDaSessao) _cp7ObsRecoTextoBase = (_cp7ObsRecoTextoBase ? _cp7ObsRecoTextoBase + " " : "") + finalDaSessao;
     if(_cp7ObsDitadoQuerido){
       // Parou sozinho (silêncio) — o corretor não pediu pra parar, recomeça na hora.
       cp7ObsIniciarDitado(btn);
