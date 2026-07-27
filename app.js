@@ -11153,7 +11153,6 @@ window.cp7ObsSalvar = async function(btn){
   if(!texto){ toast("Escreva ou grave a observação primeiro."); return; }
   const original = btn?.textContent || "Salvar observação";
   if(btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
-  if(status) status.innerHTML = '<span style="color:var(--morno)">Salvando observação…</span>';
   const enviarObservacao = async () => {
     const res = await fetchComTimeout("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -11164,14 +11163,18 @@ window.cp7ObsSalvar = async function(btn){
     return data;
   };
   try{
-    let data;
-    try{ data = await enviarObservacao(); }
-    catch(err){
-      // v1034 — voltar do WhatsApp pra escrever a observação pode pegar a rede ainda reconectando
-      // (mesmo caso já resolvido em registrarAtendimentoDaCopia, ver v1020): tenta mais uma vez
-      // antes de desistir, em vez de mostrar "signal is aborted"/"Failed to fetch" cru na tela.
-      data = await enviarObservacao();
+    // v1036 — o dono confirmou que 2 tentativas (v1034) ainda não bastavam quando a rede demora
+    // mais pra reconectar depois de voltar do WhatsApp ("só na terceira tentativa salvou"). Sobe
+    // pra 3 tentativas, com uma pausa curta entre elas (dá tempo real da rede reconectar, em vez
+    // de bater de novo instantaneamente contra a mesma rede ainda caída) e mostra o progresso.
+    const TENTATIVAS = 3;
+    let data = null, ultimoErro = null;
+    for(let tentativa=1; tentativa<=TENTATIVAS && !data; tentativa++){
+      if(status) status.innerHTML = '<span style="color:var(--morno)">'+(tentativa===1 ? "Salvando observação…" : `Rede instável, tentando de novo (tentativa ${tentativa} de ${TENTATIVAS})…`)+'</span>';
+      try{ data = await enviarObservacao(); }
+      catch(err){ ultimoErro = err; if(tentativa<TENTATIVAS) await new Promise(r=>setTimeout(r,1500)); }
     }
+    if(!data) throw ultimoErro || new Error("Não foi possível salvar a observação.");
 
     // Patch imediato: a observação aparece sem fechar/reabrir abas. As sugestões atuais
     // permanecem intactas; só uma reanálise futura vai gerar novas respostas.
