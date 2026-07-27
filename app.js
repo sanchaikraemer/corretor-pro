@@ -11289,6 +11289,18 @@ window.ui670Reanalisar=async function(btn){
 
     setTimeout(async()=>{
       try{
+        // v1033 — se o corretor copiar uma mensagem sugerida (o que já marca atendido na hora,
+        // localmente) bem na janela entre a reanálise terminar e este refresh de fundo rodar
+        // (até 600ms depois), o refresh substituía o lead e as 3 listas INTEIRAS por dados
+        // frescos do servidor — que podem não ter pego a marcação de atendido ainda (ela é
+        // gravada em paralelo, por uma chamada separada). A marcação sumia sem nenhum aviso
+        // ("copiei a mensagem sugerida e não marcou atendimento"). Guarda o atendimento mais
+        // recente já conhecido ANTES de buscar os dados frescos, pra reaplicá-lo se o servidor
+        // vier mais "antigo" que isso — mesma ideia da v1031 (ui667AplicarAtendidoLocal), só que
+        // aqui não existe um "quando" próprio: o candidato é o que já estava marcado localmente.
+        const antes = (state.lead && String(state.lead.id) === String(lead.id)) ? state.lead
+          : [state.itemsAtivos, state.todosLeads, state.leads].flat().find(x => x && String(x.id) === String(lead.id));
+        const eventoAntes = (antes?.analysis?.aprendizado?.eventos||[]).find(e => e?.evento === "contato_manual" && e?.quando === antes.lastAttendanceAt);
         const base=await getLeadsData(true);
         if(base?.ok&&Array.isArray(base.items)){
           const itens=base.items.map(limparLead);state.todosLeads=itens;state.leads=itens.slice(0,8);
@@ -11296,6 +11308,16 @@ window.ui670Reanalisar=async function(btn){
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
           if(fresco&&freshSchema>=COMMERCIAL_SCHEMA_VERSION){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
+          if(eventoAntes && (!fresco?.lastAttendanceAt || new Date(antes.lastAttendanceAt) > new Date(fresco.lastAttendanceAt))){
+            const [dataLocal, horaLocal] = String(antes.lastAttendanceText||"").split(" ");
+            if(dataLocal && horaLocal){
+              if(state.lead && String(state.lead.id) === String(lead.id)) ui667AplicarAtendidoLocal(state.lead, eventoAntes.quando, dataLocal, horaLocal, eventoAntes.detalhes);
+              for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
+                const item = Array.isArray(lista) ? lista.find(x => String(x.id) === String(lead.id)) : null;
+                if(item) ui667AplicarAtendidoLocal(item, eventoAntes.quando, dataLocal, horaLocal, eventoAntes.detalhes);
+              }
+            }
+          }
         }
       }catch(_){}
     },600);
