@@ -149,11 +149,23 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const fnMatch = app.match(/function voltarDoLead\(\)\{[\s\S]*?\n\}/);
   assert.ok(fnMatch, 'voltarDoLead não encontrada por inteiro');
   const fn = fnMatch[0];
-  assert.doesNotMatch(fn, /history\.back\(\)/, 'Voltar não pode mais depender do histórico do navegador (levava pra "última ação", não pra Home)');
+  // Ignora comentários (linhas "// ...") pra checar só CÓDIGO de verdade — o comentário do v1030
+  // explica por que history.back() saiu, e citar o nome dele ali não pode contar como "voltou".
+  const fnSemComentarios = fn.split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  assert.doesNotMatch(fnSemComentarios, /history\.back\(\)/, 'Voltar não pode mais depender do histórico do navegador (levava pra "última ação", não pra Home)');
   assert.match(fn, /cpClearLeadState\(\)/, 'precisa limpar o lead aberto');
   assert.match(fn, /cpReplaceRoute\(cpRouteForScreen\("home"\)\)/, 'precisa sincronizar a rota salva como Home (senão um refresh logo depois voltaria pro lead)');
+  // v1030 — regressão real desta mesma correção: sem passar por show("home"), o painel (cartões
+  // "Total de leads"/Agenda/etc. e as listas) nunca era recarregado — depois de "Voltar", a Home
+  // ficava com o painel vazio/parado (relatado: só a busca de lead aparecia, mais nada).
+  assert.match(fn, /show\("home",\s*\{\s*skipHistory:\s*true\s*\}\)/, 'precisa chamar show("home") pra recarregar o painel — é isso que dispara carregarDashboard() (cartões e listas), não só renderBotoesHome/abrirGrupoHome');
+  const idxShow = fn.indexOf('show("home"');
+  const idxBotoes = fn.search(/renderBotoesHome\(\)|abrirGrupoHome\(/);
+  const idxReplace = fn.indexOf('cpReplaceRoute(');
+  assert.ok(idxShow > -1 && idxShow < idxBotoes && idxBotoes < idxReplace,
+    'ordem precisa ser: show("home") primeiro (recarrega o painel), depois renderBotoesHome/abrirGrupoHome (mostra a fila certa), só então sincronizar a rota — mesma ordem já usada com sucesso em cpRestoreRoute pro botão físico de voltar');
 
-  console.log('v1026 (botão Voltar): sempre cai na Home, sem depender de history.back() — ok');
+  console.log('v1026/v1030 (botão Voltar): sempre cai na Home E recarrega o painel, sem depender de history.back() — ok');
 }
 
 // ===================== Parte E — registrar proposta no lead não perde o vínculo silenciosamente =====================
