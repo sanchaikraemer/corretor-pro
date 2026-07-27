@@ -3094,8 +3094,15 @@ function renderBotoesHome(){
         .cp-hoje-row{grid-template-columns:14px minmax(0,1fr) auto;grid-template-areas:"dot nm dd" "dot bar pr";column-gap:10px;row-gap:5px;padding:12px 0}
         .cp-hoje-row .chr-dot{align-self:center}
         .cp-hoje-row .chr-nm{font-size:14.5px}
-        .cp-hoje-row .chr-bar{justify-self:start;gap:9px}
-        .cp-hoje-row .chr-track{width:190px}
+        /* v1021 — print do dono: no celular, o número da barra ("29", "232"...) aparecia por
+           cima do texto do produto ("Ren29aissance"). Causa: chr-track tinha largura FIXA
+           (190px) e nunca encolhia (flex:0 0 auto) — nessa linha, a coluna "bar" divide espaço
+           com "pr" (produto), e quando o produto era mais longo, sobrava menos que 190px pra
+           barra, que vazava por cima do texto ao lado em vez de encolher. Agora a barra tem
+           max-width:100% (nunca passa do espaço da própria coluna) e o track encolhe (flex) até
+           um mínimo de 30px, sempre deixando o produto legível do lado. */
+        .cp-hoje-row .chr-bar{justify-self:start;gap:9px;max-width:100%;min-width:0}
+        .cp-hoje-row .chr-track{width:auto;flex:1 1 40px;min-width:30px}
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
       }
