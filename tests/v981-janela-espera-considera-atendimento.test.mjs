@@ -11,6 +11,13 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // desse atendimento e continuava com a idade da ÚLTIMA MENSAGEM real do WhatsApp, que pode ser
 // bem mais antiga. emJanelaDeEspera confiava só nesse campo. Mesma causa raiz já corrigida em
 // diasParado (v882) — replicada aqui, no outro lugar do código que tinha o mesmo problema.
+//
+// v1018 — o dono voltou com casos reais (Adão: atendeu dia 22, sistema mostrava "26 dias" e
+// liberava o lead antes da hora) e foi taxativo: "deve contar do último atendimento esse prazo, e
+// não da última mensagem do cliente". emJanelaDeEspera parou de olhar mensagem/resposta do
+// cliente OU do corretor — conta SÓ o último atendimento marcado (ultimoAtendimentoTs). A
+// mensagem deixou de "ajudar" (não usa mais o toque mais recente entre os dois) — só o
+// atendimento importa; sem atendimento nenhum, o lead fica elegível na hora.
 
 const diasCal = app.match(/function diasCalendarioBR\(quando\)\{[\s\S]*?\n\}/);
 const tipos = app.match(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/);
@@ -18,10 +25,14 @@ const ultAt = app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/);
 const lembTs = app.match(/function lembreteTs\(l\)\{[\s\S]*?\n\}/);
 const lembVenc = app.match(/function lembreteVencido\(l\)\{[^\n]*\}/);
 const limiar = app.match(/function limiarRetomada\(l\)\{[\s\S]*?\n\}/);
-const diasMsg = app.match(/function _diasDesdeMsg\(l, somenteCliente\)\{[\s\S]*?\n\}/);
 const janela = app.match(/function emJanelaDeEspera\(l\)\{[\s\S]*?\n\}/);
-assert.ok(diasCal && tipos && ultAt && lembTs && lembVenc && limiar && diasMsg && janela,
+assert.ok(diasCal && tipos && ultAt && lembTs && lembVenc && limiar && janela,
   'não achei emJanelaDeEspera + dependências em app.js');
+// Remove as linhas de comentário (podem citar os nomes antigos pra explicar a história) antes de
+// checar o CÓDIGO em si.
+const janelaSemComentarios = janela[0].split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+assert.doesNotMatch(janelaSemComentarios, /\bl\.daysSinceLastTouch\b|\bl\.daysSinceClientReply\b|_diasDesdeMsg\(/,
+  'o CÓDIGO de emJanelaDeEspera não pode mais olhar nenhum campo baseado em mensagem — só o último atendimento');
 
 const emJanelaDeEspera = eval(`
   ${diasCal[0]}
@@ -30,16 +41,14 @@ const emJanelaDeEspera = eval(`
   ${lembTs[0]}
   ${lembVenc[0]}
   ${limiar[0]}
-  ${diasMsg[0]}
   ${janela[0]}
   emJanelaDeEspera
 `);
 
 const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString();
 
-// 1. Bug do print: mensagem real do WhatsApp é antiga (20 dias — fora da janela), mas o corretor
-// marcou atendimento (botão) há 2 dias. Precisa CONTINUAR protegido (dentro da janela), porque o
-// toque mais recente é o atendimento manual, não a mensagem velha.
+// 1. Bug do print original: mensagem real do WhatsApp é antiga (20 dias), mas o corretor marcou
+// atendimento (botão) há 2 dias. Precisa CONTINUAR protegido — conta a partir do atendimento.
 const mariana = {
   createdAt: diasAtras(200), // lead estabelecido → limiarRetomada = 5
   daysSinceLastTouch: 20,
@@ -51,23 +60,25 @@ const mariana = {
 assert.equal(emJanelaDeEspera(mariana), true,
   'lead atendido pelo botão há 2 dias precisa continuar na janela de espera, mesmo com a última mensagem real sendo antiga');
 
-// 2. Sem NENHUM atendimento manual: comportamento de antes, baseado só na mensagem (não quebrou nada).
+// 2. Sem NENHUM atendimento manual registrado: nada de onde contar — elegível na hora, mesmo com
+// mensagem recente ou antiga (mensagem não entra mais nessa conta desde a v1018).
 const semAtendimento = { createdAt: diasAtras(200), daysSinceLastTouch: 20, daysSinceClientReply: null, analysis: {} };
 assert.equal(emJanelaDeEspera(semAtendimento), false,
-  'sem atendimento manual, continua usando só o sinal de mensagem (20 dias > limiar de 5 → fora da janela)');
+  'sem nenhum atendimento marcado, o lead nunca foi "colocado em espera" por ninguém — fica elegível na hora');
 
-// 3. Atendimento manual ANTIGO (ex.: 2020) não pode "proteger" um lead cuja mensagem real é mais
-// recente — usa sempre o toque mais recente entre os dois, nunca o mais antigo.
+// 3. v1018 — Atendimento manual ANTIGO (2020) NÃO é mais "ajudado" por uma mensagem recente (2
+// dias): mensagem não conta mais pra nada aqui. Só o atendimento manda, e 2020 já passou muito do
+// limiar — não protege.
 const atendimentoAntigo = {
   createdAt: diasAtras(200),
   daysSinceLastTouch: 2,
-  daysSinceClientReply: null,
+  daysSinceClientReply: 1,
   analysis: { aprendizado: { eventos: [
     { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: '2020-01-01T12:00:00Z' }
   ] } }
 };
-assert.equal(emJanelaDeEspera(atendimentoAntigo), true,
-  'com mensagem mais recente (2 dias) que o atendimento de 2020, usa a mensagem — resultado bate mesmo assim (2 < limiar 5)');
+assert.equal(emJanelaDeEspera(atendimentoAntigo), false,
+  'atendimento de 2020 é o único sinal que conta — muito além do limiar, não protege mais (mensagem recente não "ressuscita" a proteção)');
 
 // 4. Lead novo (limiar 3 dias): atendido manualmente há 2 dias → ainda dentro da janela.
 const leadNovo = {
@@ -91,5 +102,20 @@ const passouDaJanela = {
   ] } }
 };
 assert.equal(emJanelaDeEspera(passouDaJanela), false, 'atendimento manual de 6 dias atrás (> limiar de 5) já não protege mais');
+
+// 6. v1018 — caso real "Adão": atendido há 5 dias (dentro do limiar de 5 só até o 4º dia
+// completo — no 5º dia exato já não protege mais, que é o comportamento consistente com os
+// cenários 4/5 acima). O ponto central do relato do dono é o Nº 3: mensagem não "atrapalha" nem
+// "ajuda" mais essa conta, só o atendimento.
+const adao = {
+  createdAt: diasAtras(400),
+  daysSinceLastTouch: 26, // "a tela mostrava 26 dias" — o bug era ESSA exibição, agora corrigida à parte (cpHomeLeadRow)
+  daysSinceClientReply: null,
+  analysis: { aprendizado: { eventos: [
+    { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: diasAtras(4) }
+  ] } }
+};
+assert.equal(emJanelaDeEspera(adao), true,
+  'atendido há 4 dias (dentro do limiar de 5) continua protegido, mesmo com a última mensagem/interação sendo de 26 dias atrás');
 
 console.log('v981-janela-espera-considera-atendimento: ok');
