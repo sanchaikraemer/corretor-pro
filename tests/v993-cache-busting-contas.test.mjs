@@ -7,8 +7,13 @@ import assert from 'node:assert/strict';
 // "?v=__VERSION__". Sem isso, o service worker (staleWhileRevalidate) serve esses arquivos do
 // cache do celular pra sempre, porque a URL nunca muda entre versões. Além disso, essas 3 páginas
 // HTML não tinham entrada própria no vercel.json, então também podiam ficar em cache HTTP comum.
+//
+// v1013 — mesmo padrão aplicado às duas páginas novas de recuperação de senha
+// (recuperar-senha.html/redefinir-senha.html), criadas pela auditoria de isolamento entre contas.
 
-for (const arquivo of ['cadastro.html', 'entrar.html', 'admin-plataforma.html']) {
+const PAGINAS_CONTAS = ['cadastro.html', 'entrar.html', 'admin-plataforma.html', 'recuperar-senha.html', 'redefinir-senha.html'];
+
+for (const arquivo of PAGINAS_CONTAS) {
   const html = fs.readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
   assert.match(html, /contas-estilo\.css\?v=__VERSION__/, `${arquivo} precisa versionar contas-estilo.css`);
   assert.match(html, /vendor\/supabase\.js\?v=__VERSION__/, `${arquivo} precisa versionar vendor/supabase.js`);
@@ -16,7 +21,7 @@ for (const arquivo of ['cadastro.html', 'entrar.html', 'admin-plataforma.html'])
 }
 
 const vercelConfig = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
-for (const pagina of ['/cadastro.html', '/entrar.html', '/admin-plataforma.html']) {
+for (const pagina of PAGINAS_CONTAS.map(p => `/${p}`)) {
   const regra = vercelConfig.headers.find(h => h.source === pagina);
   assert.ok(regra, `vercel.json precisa ter uma regra de headers pra ${pagina}`);
   const cacheControl = regra.headers.find(h => h.key === 'Cache-Control');
