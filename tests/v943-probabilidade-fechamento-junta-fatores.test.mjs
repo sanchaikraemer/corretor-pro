@@ -51,8 +51,13 @@ assert.match(persistence, /clientQuestionCount,\n\s*clientMessageDays,/, 'os doi
 
 // 1d. cpFilaFazerAgora ordena por cpProbabilidadeFechamento (a fila usada pelo "Fazer agora" e
 // "Puxar da fila").
+// v1024 — o cálculo passou a ser feito uma vez por lead ANTES do .sort() (não mais dentro do
+// comparador, que recalculava a mesma conta a cada comparação — achado de lentidão real numa
+// carteira de 227 leads). Mesma ordenação de resultado, só sem recomputação redundante.
 const filaSrc = app.match(/function cpFilaFazerAgora\(items\)\{[\s\S]*?\n\}/)[0];
-assert.match(filaSrc, /cpProbabilidadeFechamento\(b\) - cpProbabilidadeFechamento\(a\)/, 'a fila ordena pela probabilidade de fechamento');
+assert.match(filaSrc, /score:\s*cpProbabilidadeFechamento\(l\)/, 'a fila calcula a probabilidade de fechamento uma vez por lead, antes de ordenar');
+assert.match(filaSrc, /comScore\.sort\(\(x,y\) => \(y\.score - x\.score\) \|\| \(y\.msgs - x\.msgs\)\)/,
+  'a ordenação usa os valores já calculados (score/msgs), não chama cpProbabilidadeFechamento de novo no comparador');
 
 // 2. Barra de mensagens relativa ao maior da lista mostrada (não um teto fixo).
 const barFn = app.match(/function cpBarraMensagensMini\(l, ?maxMsgs\)\{[\s\S]*?\n\}/);

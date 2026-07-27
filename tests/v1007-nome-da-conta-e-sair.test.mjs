@@ -5,10 +5,14 @@ import assert from 'node:assert/strict';
 // NOME de quem se cadastrou, não "corretor" genérico; (2) precisa existir "Sair da conta" pra
 // trocar de login no mesmo aparelho. De quebra, saiu um nome de pessoa cravado no código da
 // lateral (proibido pelas regras do projeto — todo corretor novo veria o nome do dono ali).
+//
+// v1024 — o cartão da conta na lateral (que tinha o espaço cpNomeUser) foi removido de vez
+// (duplicava "Sair da conta", pedido repetido do dono — ver tests/v1015-...). O nome dinâmico
+// da conta continua existindo, só que agora só dentro da tela Menu (cpNomeUserMenu).
 
 const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.ok(!/>Sanchai</.test(index), 'nome de pessoa não pode ficar cravado no index.html');
-assert.match(index, /id="cpNomeUser"/, 'a lateral precisa do espaço dinâmico pro nome da conta');
+assert.match(index, /id="cpNomeUserMenu"/, 'a tela Menu precisa do espaço dinâmico pro nome da conta');
 assert.match(index, /id="btnSairConta"/, 'precisa existir o botão "Sair da conta"');
 assert.match(index, /Sair da conta/, 'o botão precisa se chamar "Sair da conta"');
 

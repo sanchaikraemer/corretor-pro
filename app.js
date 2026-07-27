@@ -39,16 +39,13 @@ import './js/pwa-install.js?v=__VERSION__';
     } catch(_) { return ""; }
   }
 
-  // v1007 — identidade visível de quem está logado: nome da conta na saudação e na lateral,
+  // v1007 — identidade visível de quem está logado: nome da conta na saudação e no menu,
   // e o botão "Sair da conta" (só aparece quando existe sessão de login neste aparelho).
+  // v1024 — o cartão da lateral (cpNomeUser/cpAvatarUser) foi removido de vez (duplicava
+  // "Sair da conta", pedido repetido do dono); só sobra o nome dentro da tela Menu.
   window.cpAtualizarIdentidadeVisivel = function(){
     try {
       const nome = String(state?.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim();
-      const primeiro = nome.split(/\s+/)[0] || "";
-      const b = document.getElementById("cpNomeUser");
-      if (b) b.textContent = primeiro || "Corretor";
-      const av = document.getElementById("cpAvatarUser");
-      if (av) av.textContent = (primeiro[0] || "C").toUpperCase();
       const bm = document.getElementById("cpNomeUserMenu");
       if (bm) bm.textContent = nome || "Corretor";
     } catch(_) {}
@@ -1411,7 +1408,24 @@ function filaPorFatos(f = {}){
 // PRIORIDADE DE ATENDIMENTO — separada da chance de venda.
 // Chance de venda responde: "esse lead pode comprar?"
 // Prioridade de atendimento responde: "vale falar com ele AGORA?"
+// v1024 — dono reportou lentidão persistente (mouse/clique travando por segundos, mesmo depois
+// de caches já terem sido adicionados no v1017 do lado do servidor). Achado real do lado do
+// CLIENTE: esta função (bem pesada — várias dezenas de regex por lead) é chamada de novo a cada
+// COMPARAÇÃO dentro de .sort() (compararPrioridadeAtendimento/cpFilaFazerAgora), várias vezes
+// PARA O MESMO lead (score voltava a ser recalculado do zero em cada comparação, em vez de uma
+// vez só) — para 227 leads (carteira real do dono), isso é milhares de recomputações
+// redundantes por render, travando a aba principal do navegador bem no meio de um clique.
+// prioridadeAtendimento agora cacheia o resultado por objeto de lead (WeakMap — some sozinho
+// quando os dados são recarregados e os objetos antigos somem da memória, sem precisar limpar
+// nada manualmente). O cálculo de verdade continua em _prioridadeAtendimentoCalcular, intacto.
+const _prioridadeCache = new WeakMap();
 function prioridadeAtendimento(l){
+  if(l && typeof l === "object" && _prioridadeCache.has(l)) return _prioridadeCache.get(l);
+  const resultado = _prioridadeAtendimentoCalcular(l);
+  if(l && typeof l === "object") _prioridadeCache.set(l, resultado);
+  return resultado;
+}
+function _prioridadeAtendimentoCalcular(l){
   const e = normalizarEtapa(l.etapa);
   if(e === "Vendido" || e === "Perdido" || e === "Geladeira") {
     return { score:-999, grupo:"baixa-prioridade", titulo:"Fora da fila", motivo:"lead finalizado ou arquivado" };
@@ -1562,7 +1576,17 @@ function compararPrioridadeAtendimento(a,b){
 // Isso evita um lead aparecer como maior avanço comercial só por ter lembrete/retomada.
 // Lead em viabilidade financeira continua importante, mas fica abaixo de quem já visitou,
 // recebeu proposta/simulação ou está comparando decisão.
+// v1024 — mesmo achado de lentidão do prioridadeAtendimento (ver comentário lá): compararPrioridadeAtendimento
+// chama scoreConversaoHoje até 2x por lead (direto + via scoreRankingHoje), e o comparador roda
+// dentro de vários .sort() — cache por objeto de lead evita recomputar a mesma conta à toa.
+const _conversaoHojeCache = new WeakMap();
 function scoreConversaoHoje(l){
+  if(l && typeof l === "object" && _conversaoHojeCache.has(l)) return _conversaoHojeCache.get(l);
+  const resultado = _scoreConversaoHojeCalcular(l);
+  if(l && typeof l === "object") _conversaoHojeCache.set(l, resultado);
+  return resultado;
+}
+function _scoreConversaoHojeCalcular(l){
   const a = l?.analysis || {};
   const e = normalizarEtapa(l?.etapa);
   const txt = textoSinais(l);
@@ -5511,9 +5535,16 @@ function cp704Css(){
       state.cp704HistoryFull = true;
       state.timelineVisibleCount = Math.max(Number(totalMensagensLead(lead)||0), Array.isArray(lead.recentMessages)?lead.recentMessages.length:0, 9999);
       renderLeadFoco(state.lead || lead);
+      // v1024 — "Ver conversa completa" (ver mais) reconstrói o card do lead inteiro pra trazer
+      // as mensagens completas — só que isso recriava #cp704HistCard sempre com "hidden" (o
+      // estado padrão no HTML), perdendo se o corretor já tinha aberto "Mensagens" antes. Dono
+      // via a tela "voltar pro topo e apagar" as mensagens que já apareciam, precisando clicar em
+      // "Mensagens" de novo pra ver a lista completa que já tinha carregado. O código antigo
+      // tentava rolar até lá, mas procurava a classe ERRADA (.cp704-details, usada só em
+      // "Detalhes comerciais") — nunca encontrava #cp704HistCard, então nunca rolava de verdade.
       requestAnimationFrame(()=>{
-        const details=[...document.querySelectorAll('.cp704-details')].find(d=>/Últimas mensagens/i.test(d.textContent||''));
-        if(details){ details.open=true; details.scrollIntoView({behavior:'smooth',block:'center'}); }
+        const hist=document.querySelector('#cp704HistCard');
+        if(hist){ hist.hidden=false; hist.scrollIntoView({behavior:'smooth',block:'start'}); }
       });
     }catch(err){
       toast('Não consegui carregar o histórico completo: ' + (err?.message || err));
@@ -7424,7 +7455,20 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
 
   renderEtapas(2, "baixando e extraindo uma única vez");
-  const prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000);
+  // v1024 — dono relatou "tempo esgotado" em várias importações hoje, resolvido só ao tentar de
+  // novo manualmente (2ª/3ª vez). Achado real: os prazos daqui (90s/70s/150s) são maiores que o
+  // limite de 60s configurado pro servidor (vercel.json, maxDuration:60) — um ZIP grande o
+  // bastante pra passar de 60s aqui é MORTO pela Vercel antes do navegador desistir sozinho, sem
+  // chance de terminar. "transcrever" já tentava de novo automaticamente (1x); preparar/analisar
+  // não tinham essa rede — agora têm, igual à transcrição. Reaproveita o manifesto já preparado
+  // (prepararExtracaoPersistente é idempotente pro mesmo importId) e não repete cobrança de IA
+  // além do necessário ("analisar" não grava nada no banco; só "Salvar lead" grava).
+  let prep = null, erroPrep = null;
+  for(let tentativa=1; tentativa<=2 && !prep; tentativa++){
+    try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000); }
+    catch(error){ erroPrep=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
+  }
+  if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
   const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().toLowerCase().trim();
@@ -7449,22 +7493,31 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
 
   renderEtapas(4, "validando as três mensagens pelo Cérebro");
-  const result = await chamar({
-    action:"analisar",
-    txtFile:prep.txtFile,
-    messages:prep.messages,
-    audioFilesRelevantes:prep.audioFilesRelevantes,
-    audioFilesForaDaJanela:prep.audioFilesForaDaJanela,
-    transcriptionMap,
-    janelaConversa:prep.janelaConversa,
-    ignoredFilesCount:prep.ignoredFilesCount,
-    ignoredFiles:prep.ignoredFiles,
-    audiosTotalNoZip:prep.audiosTotalNoZip,
-    audiosDescartadosPorJanela:prep.audiosDescartadosPorJanela,
-    metricsBase:prep.metricsBase,
-    audiosReaproveitados,
-    audiosNovosSolicitados:audios.length
-  }, 150000);
+  // v1024 — mesma rede de segurança da etapa "preparar" acima: "analisar" não grava nada no
+  // banco (só devolve o resultado pro navegador — quem grava é "Salvar lead", ação separada e
+  // explícita), então repetir aqui não duplica nem gasta 2x à toa em caso de sucesso.
+  let result = null, erroAnalise = null;
+  for(let tentativa=1; tentativa<=2 && !result; tentativa++){
+    try{
+      result = await chamar({
+        action:"analisar",
+        txtFile:prep.txtFile,
+        messages:prep.messages,
+        audioFilesRelevantes:prep.audioFilesRelevantes,
+        audioFilesForaDaJanela:prep.audioFilesForaDaJanela,
+        transcriptionMap,
+        janelaConversa:prep.janelaConversa,
+        ignoredFilesCount:prep.ignoredFilesCount,
+        ignoredFiles:prep.ignoredFiles,
+        audiosTotalNoZip:prep.audiosTotalNoZip,
+        audiosDescartadosPorJanela:prep.audiosDescartadosPorJanela,
+        metricsBase:prep.metricsBase,
+        audiosReaproveitados,
+        audiosNovosSolicitados:audios.length
+      }, 150000);
+    }catch(error){ erroAnalise=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
+  }
+  if(!result) throw erroAnalise || new Error("Falha recuperável ao analisar a conversa.");
   const msgs = result?.analysis?.messages || {};
   if(result?.analysis?.sugestoesPendentes === true || ![msgs.a,msgs.b,msgs.c].every(v=>String(v||"").trim().length>=10)){
     throw new Error("A análise permanece pendente porque uma das três mensagens não passou pelas regras do Cérebro.");
@@ -9562,8 +9615,14 @@ function cpFilaFazerAgora(items){
   // ainda esteja tecnicamente do lado dele — é a MESMA regra que entraEmRetomada usa). Corrigido
   // pra usar essa regra existente em vez de inventar um bloqueio que nunca é revisto.
   const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
-  pool.sort((a,b) => cpProbabilidadeFechamento(b) - cpProbabilidadeFechamento(a) || mensagensDoCliente(b) - mensagensDoCliente(a));
-  return pool;
+  // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
+  // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
+  // cada COMPARAÇÃO — pra 227 leads isso é milhares de recomputações redundantes por render;
+  // achado real por trás da lentidão reportada pelo dono mesmo após os caches do servidor v1017).
+  // Mesmo resultado de ordenação de antes, só sem o trabalho repetido.
+  const comScore = pool.map(l => ({ l, score: cpProbabilidadeFechamento(l), msgs: mensagensDoCliente(l) }));
+  comScore.sort((x,y) => (y.score - x.score) || (y.msgs - x.msgs));
+  return comScore.map(x => x.l);
 }
 // v1017 — cpFatoresRankingLead/cpMotivoFechamento (o "motivo" do "Fazer agora" — v945/946,
 // sobrevivia só dentro do card do lead desde a v975) foram REMOVIDAS: o dono pediu de vez ("só

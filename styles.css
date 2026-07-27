@@ -1138,11 +1138,7 @@ button,input,textarea,select{font-family:inherit}
 .sb-item .ic svg{width:17px!important;height:17px!important;stroke:currentColor!important}
 .sb-item:hover{background:rgba(255,255,255,.065)!important;color:#fff!important}
 .sb-item.active{background:var(--accent-soft)!important;color:#fff!important;box-shadow:inset 3px 0 0 var(--accent)!important}
-.cp-sidebar-user{display:flex!important;align-items:center!important;gap:8px!important;width:100%!important;margin-top:18px!important;padding:9px 10px!important;border:1px solid rgba(255,255,255,.10)!important;border-radius:8px!important;background:rgba(255,255,255,.025)!important;color:#fff!important;font:inherit!important;text-align:left!important}
-.cp-avatar,.cp-profile span{display:grid!important;place-items:center!important;border-radius:50%!important;background:linear-gradient(145deg,#efb28c,#8b5d4a)!important;color:#fff!important;font-weight:750!important}
-.cp-avatar{width:28px!important;height:28px!important;font-size:10px!important}
-.cp-sidebar-user b{display:block!important;font-size:9px!important;line-height:1.15!important}
-.cp-sidebar-user small{display:block!important;margin-top:3px!important;color:#8ca4ae!important;font-size:7px!important}
+.cp-profile span{display:grid!important;place-items:center!important;border-radius:50%!important;background:linear-gradient(145deg,#efb28c,#8b5d4a)!important;color:#fff!important;font-weight:750!important}
 
 /* TOPBAR */
 .cp-topbar{display:flex!important;align-items:center!important;gap:15px!important;height:58px!important;min-height:58px!important;margin:0!important;padding:0 28px!important;border-bottom:1px solid var(--cp-border)!important;background:var(--cp-panel)!important;box-shadow:none!important}
@@ -1537,7 +1533,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   box-shadow:var(--cp687-shadow-soft);
 }
 .card:hover,.menu-card:hover,.top3-mini:hover,.fila-row:hover,.ui670-card:hover,.ui670-status-card:hover{box-shadow:var(--cp687-shadow);border-color:rgba(255,98,88,.28)!important}
-.sb-item{min-height:48px;position:relative;overflow:hidden}.sb-item::after{content:"";position:absolute;inset:0;background:rgba(255,98,88,.08);opacity:0;transition:opacity .18s var(--cp687-ease);pointer-events:none}.sb-item:hover::after,.sb-item.active::after{opacity:1}.sb-item.active{background:var(--accent-soft)!important;color:#fff!important;border-color:rgba(255,98,88,.30)!important;box-shadow:inset 3px 0 0 var(--accent)!important}.sb-item.active .ic{color:#fff}.sb-brand,.cp-sidebar-user{transition:transform .16s var(--cp687-ease),background .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.sb-brand:hover,.cp-sidebar-user:hover{transform:translateY(-1px);background:rgba(255,255,255,.035)}
+.sb-item{min-height:48px;position:relative;overflow:hidden}.sb-item::after{content:"";position:absolute;inset:0;background:rgba(255,98,88,.08);opacity:0;transition:opacity .18s var(--cp687-ease);pointer-events:none}.sb-item:hover::after,.sb-item.active::after{opacity:1}.sb-item.active{background:var(--accent-soft)!important;color:#fff!important;border-color:rgba(255,98,88,.30)!important;box-shadow:inset 3px 0 0 var(--accent)!important}.sb-item.active .ic{color:#fff}.sb-brand{transition:transform .16s var(--cp687-ease),background .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.sb-brand:hover{transform:translateY(-1px);background:rgba(255,255,255,.035)}
 .cp-topbar{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(151,197,211,.10)}
 .cp-search input,#buscaCarteira,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
 .cp-search input:focus,#buscaCarteira:focus,.ui677-search-wrap>input:focus{background:rgba(255,255,255,.045)!important;box-shadow:0 0 0 3px rgba(255,98,88,.14)!important}
@@ -1564,8 +1560,8 @@ body{overflow-x:hidden;}
 .cp687-screen-polish{animation:none!important;}
 .card:hover,.menu-card:hover,.top3-mini:hover,.fila-row:hover,.ui670-card:hover,.ui670-status-card:hover,
 .resumo-dia .item:hover,.dash-card:hover,.metric-card:hover,
-button:hover,.sb-brand:hover,.cp-sidebar-user:hover{transform:none!important;}
-button,.card,.menu-card,.top3-mini,.fila-row,.ui670-card,.ui670-status-card,.resumo-dia .item,.dash-card,.metric-card,.sb-brand,.cp-sidebar-user{
+button:hover,.sb-brand:hover{transform:none!important;}
+button,.card,.menu-card,.top3-mini,.fila-row,.ui670-card,.ui670-status-card,.resumo-dia .item,.dash-card,.metric-card,.sb-brand{
   transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease,opacity .14s ease!important;
 }
 .cp-topbar{transform:none!important;will-change:auto!important;}
