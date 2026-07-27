@@ -696,7 +696,7 @@ function carregarTelaAtiva(t, force=false){
       const rev = Number(state.dataRevision) || 0;
       if(!force && VIEW_CACHEABLE.has(t) && state.viewRendered?.[t] === rev) return;
       try{
-        if(t === "home") await carregarDashboard();
+        if(t === "home") await carregarDashboard(force);
         else if(t === "pipeline") await carregarPipeline();
         else if(t === "agenda") await carregarAgenda();
         else if(t === "cerebro"){
@@ -3986,28 +3986,33 @@ function renderHomeFallbackSeguro(items){
   </div>`;
 }
 
-async function carregarDashboard(){
+async function carregarDashboard(force=false){
   if(state.active !== "home") return;
   try{
-    // Usa os dados já carregados. Atualização de rede acontece só quando o cache vence
-    // ou depois de uma mutação explícita; navegar entre telas não baixa a carteira de novo.
-    const cached = state.itemsAtivos?.length ? { items: state.itemsAtivos } : null;
+    // Usa os dados já carregados. Atualização de rede acontece só quando o cache vence,
+    // depois de uma mutação explícita, ou quando force=true pede leitura nova de propósito
+    // (sincronização a cada 30s / aba voltando a ficar visível — v1032: antes force era
+    // ignorado aqui, então essas duas sincronizações nunca atualizavam a lista de verdade).
+    const cached = (!force && state.itemsAtivos?.length) ? { items: state.itemsAtivos } : null;
     if(cached){
       _processarDashboard({ items: state.todosLeads || cached.items });
       return;
     }
 
-    // Sem cache: mostra skeleton imediatamente pra não parecer travado
-    const focoSkel = qs("#leadFocoArea");
-    if(focoSkel) focoSkel.innerHTML = `<div class="skel-loading"><div class="skel-kpis"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
+    // Skeleton só quando a tela ainda está mesmo vazia — uma sincronização de fundo
+    // (force=true com a lista já visível) não pode apagar o que já está na tela.
+    if(!state.itemsAtivos?.length){
+      const focoSkel = qs("#leadFocoArea");
+      if(focoSkel) focoSkel.innerHTML = `<div class="skel-loading"><div class="skel-kpis"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
+    }
 
-    const data = await getLeadsData();
+    const data = await getLeadsData(force);
     if(data && data.ok === false){
       const foco = qs("#leadFocoArea");
       if(foco && !state.itemsAtivos?.length){
         foco.innerHTML = `<div class="card compact"><div class="empty" style="padding:24px 16px;text-align:center;color:var(--muted)">Reconectando… puxando seus leads. <button type="button" onclick="invalidarLeadsCache();carregarDashboard()" style="margin-left:6px;background:transparent;border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--lime);font-weight:950;cursor:pointer">Tentar agora</button></div></div>`;
       }
-      setTimeout(() => { if(state.active === "home") carregarDashboard(); }, 3000);
+      setTimeout(() => { if(state.active === "home") carregarDashboard(force); }, 3000);
       return;
     }
     _processarDashboard(data);
