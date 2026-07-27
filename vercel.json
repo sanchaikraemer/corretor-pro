@@ -25,6 +25,9 @@
     },
     "api/admin-contas.js": {
       "maxDuration": 60
+    },
+    "api/receber-zip-atalho.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

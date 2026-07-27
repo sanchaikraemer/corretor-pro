@@ -1,4 +1,4 @@
-import { qs, toast } from './dom.js?v=__VERSION__';
+import { qs, toast, escapeHtml } from './dom.js?v=__VERSION__';
 import { state } from './state.js?v=__VERSION__';
 
 // ===== Instalar app (PWA) =====
@@ -113,3 +113,73 @@ window.addEventListener("appinstalled", () => {
 // (Mesmo sem o evento do navegador — no iPhone ou quando já houve registro — o
 // caminho manual aparece, então o usuário nunca fica sem opção.)
 if(!ehStandalone) mostrarOpcoesInstalar();
+
+// ===== Atalho do iPhone: mandar o ZIP do WhatsApp direto pro Corretor Pro (v1035) =====
+// A Apple não deixa um site "instalado" aparecer no botão Compartilhar de outro app (isso só
+// existe pra apps de verdade da App Store) — então quem tem iPhone não consegue o mesmo
+// "compartilhar direto pro ícone" que o Android já tem. Um Atalho (Shortcuts, de fábrica no
+// iPhone) chega bem perto disso sem custo de loja de aplicativo: o corretor cola uma chave
+// pessoal dentro dele, e o Atalho manda o ZIP direto pra api/receber-zip-atalho.
+let atalhoChaveAtual = "";
+function atalhoEndpointUrl(){ return `${window.location.origin}/api/receber-zip-atalho`; }
+function atalhoMontarInstrucoes(){
+  const url = atalhoEndpointUrl();
+  return `<ol style="padding-left:18px;margin:0">
+    <li>Abra o app <b>Atalhos</b> (já vem no iPhone) e toque em <b>+</b> pra criar um atalho novo.</li>
+    <li>Toque em <b>Adicionar Ação</b>, procure <b>"Obter Conteúdo de URL"</b> e adicione.</li>
+    <li>Toque na ação e configure: <b>URL</b> = <code style="word-break:break-all">${escapeHtml(url)}</code>, <b>Método</b> = POST.</li>
+    <li>Em <b>Cabeçalhos</b>, adicione um com nome <code>X-Corretor-Pro-Atalho-Token</code> e valor a chave acima (copiada).</li>
+    <li>No <b>Corpo da Requisição</b>, escolha <b>Arquivo</b> e selecione o <b>Conteúdo Compartilhado</b> (a entrada do Atalho).</li>
+    <li>Toque no nome do atalho (ou no ícone <b>ⓘ</b>), dê o nome <b>"Corretor Pro"</b>, ative <b>"Mostrar no Menu Compartilhar"</b> e marque <b>"Arquivos"</b> nos tipos aceitos.</li>
+    <li>Pronto: no WhatsApp, abra a conversa → <b>⋮</b> → <b>Mais</b> → <b>Exportar conversa</b> → Compartilhar → escolha <b>"Corretor Pro"</b>.</li>
+  </ol>`;
+}
+function atalhoAtualizarTela(token){
+  atalhoChaveAtual = token || "";
+  const status = qs("#atalhoChaveStatus");
+  const btnCopiar = qs("#btnAtalhoCopiarChave");
+  const instrucoes = qs("#atalhoInstrucoes");
+  if(token){
+    if(status) status.innerHTML = 'Sua chave: <code style="word-break:break-all">'+escapeHtml(token)+'</code>';
+    if(btnCopiar) btnCopiar.hidden = false;
+    if(instrucoes){ instrucoes.innerHTML = atalhoMontarInstrucoes(); instrucoes.hidden = false; }
+  }else{
+    if(status) status.textContent = "Você ainda não gerou uma chave.";
+    if(btnCopiar) btnCopiar.hidden = true;
+    if(instrucoes) instrucoes.hidden = true;
+  }
+}
+async function atalhoCarregarChaveExistente(){
+  try{
+    const res = await fetch("./api/atalho-zip-token");
+    const data = await res.json().catch(()=>({ok:false}));
+    if(data?.ok) atalhoAtualizarTela(data.token);
+  }catch(_){}
+}
+qs("#btnAtalhoGerarChave")?.addEventListener("click", async () => {
+  const btn = qs("#btnAtalhoGerarChave");
+  if(btn){ btn.disabled = true; btn.textContent = "Gerando..."; }
+  try{
+    const res = await fetch("./api/atalho-zip-token", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({action:"gerar"}) });
+    const data = await res.json().catch(()=>({ok:false}));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível gerar a chave.");
+    atalhoAtualizarTela(data.token);
+    toast(atalhoChaveAtual && btn?.dataset.jaTinhaChave === "1"
+      ? "Nova chave gerada. Se você já tinha um Atalho configurado, cole a chave nova nele — a antiga parou de funcionar."
+      : "Chave gerada. Copie e siga o passo a passo abaixo pra criar o Atalho.");
+    if(btn) btn.dataset.jaTinhaChave = "1";
+  }catch(err){
+    toast(String(err?.message||"Não foi possível gerar a chave. Tente de novo em instantes."));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = "Gerar minha chave"; }
+  }
+});
+qs("#btnAtalhoCopiarChave")?.addEventListener("click", async () => {
+  if(!atalhoChaveAtual) return;
+  try{ await navigator.clipboard.writeText(atalhoChaveAtual); toast("Chave copiada."); }
+  catch(_){ toast("Não consegui copiar automaticamente. Selecione o texto da chave e copie manualmente."); }
+});
+if(ehIOS()){
+  const card = qs("#cardAtalhoIphone");
+  if(card){ card.hidden = false; atalhoCarregarChaveExistente(); }
+}

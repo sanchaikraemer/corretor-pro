@@ -596,6 +596,16 @@
         </div>
         <div class="small" id="instalarDica" style="margin-top:10px;color:var(--muted);display:none">Pra instalar manualmente: toque no menu do navegador (⋮) e em <b>"Adicionar à tela inicial"</b> ou <b>"Instalar app"</b>.</div>
       </div>
+      <div class="card compact" id="cardAtalhoIphone" hidden>
+        <div class="label">Compartilhar direto do WhatsApp (iPhone)</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">O iPhone não deixa mandar a conversa direto pro ícone do Corretor Pro (é uma trava da Apple, não tem contorno gratuito). Mas dá pra criar um <b>Atalho</b> (app Atalhos, já vem no iPhone) que faz quase a mesma coisa: você toca em Compartilhar no WhatsApp, escolhe o Atalho, e a conversa já chega processada aqui — sem precisar abrir o app nem escolher arquivo.</div>
+        <div class="small" id="atalhoChaveStatus" style="margin-bottom:10px">Você ainda não gerou uma chave.</div>
+        <div class="btns btns-row">
+          <button class="btn secondary" type="button" id="btnAtalhoGerarChave">Gerar minha chave</button>
+          <button class="btn secondary" type="button" id="btnAtalhoCopiarChave" hidden>Copiar chave</button>
+        </div>
+        <div id="atalhoInstrucoes" hidden style="margin-top:14px;font-size:12.5px;line-height:1.65;color:var(--soft)"></div>
+      </div>
       <div class="card theme-settings-card" id="themeSettingsCard">
         <div class="label">Aparência</div>
         <div class="theme-settings-head">
