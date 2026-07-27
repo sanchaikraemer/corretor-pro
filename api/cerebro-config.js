@@ -10,6 +10,7 @@ const DEFAULTS = {
   diferenciais: "",
   evitar: "",
   diasImportacao: 90,
+  atendimentosPorDia: 10,
   regrasTexto: "",
   objecoesTexto: "",
   regras: [],
@@ -30,6 +31,13 @@ function capTexto(v, limite = MAX_CAMPO_LIVRE) {
 function clampDiasImportacao(v) {
   const n = Number(v);
   return (Number.isFinite(n) && n > 0 && n <= 365) ? Math.round(n) : 90;
+}
+
+// v1012 — meta diária do "Fazer agora" é escolha de cada corretor (5, 10, 15...), salva no
+// Cérebro dele. Fora da faixa 1–50 (ou vazio) cai no padrão histórico de 10.
+function clampAtendimentosDia(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 1 && n <= 50) ? Math.round(n) : 10;
 }
 
 function regrasLegadasParaTexto(arr) {
@@ -56,6 +64,7 @@ function sanitizeCerebroConfig(valor = {}) {
     diferenciais: typeof v.diferenciais === "string" ? capTexto(v.diferenciais) : "",
     evitar: typeof v.evitar === "string" ? capTexto(v.evitar) : "",
     diasImportacao: clampDiasImportacao(v.diasImportacao),
+    atendimentosPorDia: clampAtendimentosDia(v.atendimentosPorDia),
     regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
     objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? capTexto(v.objecoesTexto, MAX_BLOCO_REGRAS) : capTexto(objecoesLegadasParaTexto(v.objecoes), MAX_BLOCO_REGRAS),
     regras: Array.isArray(v.regras) ? v.regras : [],
@@ -354,6 +363,7 @@ export default async function handler(req, res) {
       diferenciais: typeof body.diferenciais === "string" ? capTexto(body.diferenciais) : DEFAULTS.diferenciais,
       evitar: typeof body.evitar === "string" ? capTexto(body.evitar) : DEFAULTS.evitar,
       diasImportacao: clampDiasImportacao(body.diasImportacao),
+      atendimentosPorDia: clampAtendimentosDia(body.atendimentosPorDia),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
       objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
       regras: [],
