@@ -16,9 +16,12 @@ const fim = app.indexOf('\nwindow.ui670Reanalisar', ini);
 assert.ok(fim > ini, 'fim de cp7ObsSalvar não encontrado');
 const bloco = app.slice(ini, fim);
 
-// 1. Tenta de novo pelo menos uma vez antes de desistir (mesmo padrão do v1020).
-const chamadas = bloco.match(/enviarObservacao\(\)/g) || [];
-assert.ok(chamadas.length >= 2, 'precisa tentar enviar a observação pelo menos DUAS vezes antes de desistir');
+// 1. Tenta de novo antes de desistir (mesmo padrão do v1020) — a contagem exata de tentativas
+//    subiu de 2 pra 3 na v1036 (ver tests/v1036-observacao-mais-tentativas.test.mjs); aqui só
+//    confirma que existe alguma repetição em caso de falha (um laço em volta de
+//    enviarObservacao(), com try/catch dentro dele), não fica preso a um número fixo.
+assert.match(bloco, /for\([^)]*\)\{[\s\S]*try\{\s*data\s*=\s*await\s*enviarObservacao\(\)[\s\S]*catch\(err\)/,
+  'precisa tentar enviar a observação de novo em caso de falha, não desistir na primeira tentativa');
 
 // 2. O erro final mostrado ao corretor passa pela tradução amigável (não mais err.message cru).
 assert.match(bloco, /status\.innerHTML\s*=\s*'<span style="color:var\(--risco\)">'\+escapeHtml\(userFriendlyError\(err\)\)/,
