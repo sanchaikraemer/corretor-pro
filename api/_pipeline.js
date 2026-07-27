@@ -291,90 +291,11 @@ function mcUltimaMensagemPedeResposta(ultimo) {
   return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|voc[eê] sabe|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
 }
 
-// Localiza compromisso REAL ainda aberto antes de considerar uma despedida cordial.
-// Isso evita o erro "vou analisar e te retorno sexta" + "muito obrigado" virar
-// "sem ação urgente". Compromissos com data futura aguardam; vencidos recentemente
-// viram retomada. Sem prova na timeline, a camada não inventa compromisso.
-function mcCompromissoAberto(parsed, timeline, lead, corretorNome) {
-  const hojeIso = mcHojeIsoBR();
-  const apps = Array.isArray(parsed?.confirmedAppointments) ? parsed.confirmedAppointments : [];
-  const concretos = /visita|caf[eé]|reuni[aã]o|liga[cç][aã]o|videochamada|assinatura|contrato|banco/i;
-  const retorno = /retorno|retornar|respondo|responder|aviso|avisar|chamo|chamar|analiso|analisar|avalio|avaliar|converso|conversar|vejo|verificar|esperar|espero|aguardar|aguardo|aguardando|quando (sair|resolver|finalizar|terminar|acabar)|invent[aá]rio/i;
-
-  for (let i = apps.length - 1; i >= 0; i--) {
-    const ap = apps[i] || {};
-    const prova = mcTexto(ap.trechoLiteral || ap.quando || ap.oQue);
-    if (!prova) continue;
-    const diff = mcDiasEntreIso(String(ap.data || "").slice(0, 10), hojeIso);
-    const combinadoPorContato = /cliente|contato/i.test(String(ap.combinadoPor || ""));
-    const compromissoConcreto = concretos.test(`${ap.oQue || ""} ${prova}`);
-    if (diff != null && diff >= 0) {
-      const quando = diff === 0 ? "hoje" : diff === 1 ? "amanhã" : `em ${diff} dias`;
-      return {
-        status: compromissoConcreto ? "compromisso-agendado" : (combinadoPorContato ? "aguardando-resposta" : "compromisso-agendado"),
-        responsavel: combinadoPorContato ? "contato" : "ambos",
-        urgencia: diff <= 1 ? "media" : "baixa",
-        descricao: compromissoConcreto
-          ? `Compromisso confirmado para ${quando}. Acompanhe sem criar uma nova abordagem antes da hora.`
-          : `Aguardar o retorno combinado do contato para ${quando}.`,
-        texto: prova,
-        data: String(ap.data || "").slice(0, 10)
-      };
-    }
-    if (diff != null && diff < 0 && diff >= -30) {
-      return {
-        status: "retomar",
-        responsavel: "corretor",
-        urgencia: Math.abs(diff) >= 3 ? "alta" : "media",
-        descricao: `O compromisso combinado venceu há ${Math.abs(diff)} ${Math.abs(diff) === 1 ? "dia" : "dias"}. Retome usando exatamente essa pendência como gancho.`,
-        texto: prova,
-        data: String(ap.data || "").slice(0, 10)
-      };
-    }
-  }
-
-  // Fallback determinístico para compromissos explícitos ainda não estruturados pela IA.
-  // Examina apenas falas do contato nas últimas mensagens, nunca um resumo inventado.
-  const reais = (Array.isArray(timeline) ? timeline : []).filter(m => m && String(m.text || "").trim());
-  const cancelar = /\b(desisti|n[aã]o vou|n[aã]o precisa|j[aá] resolvi|comprei|fechei com outro|comprou outro|sem interesse)\b/i;
-  for (let i = reais.length - 1; i >= Math.max(0, reais.length - 24); i--) {
-    const m = reais[i];
-    if (mcAutorEhContato(m.author, lead, corretorNome) !== true) continue;
-    const t = String(m.text || "").trim();
-    if (!retorno.test(t) || !/(\b(vou|iremos|vamos|fico de|dou|darei|te|lhe)\b)/i.test(t)) continue;
-    const houveCancelamentoDepois = reais.slice(i + 1).some(x => mcAutorEhContato(x.author, lead, corretorNome) === true && cancelar.test(String(x.text || "")));
-    if (houveCancelamentoDepois) continue;
-    const idadeDias = mcDiasDesdeMensagem(m);
-    if (idadeDias != null && idadeDias > 180) continue;
-    if (idadeDias != null && idadeDias > 30) {
-      return {
-        status: "retomar", responsavel: "corretor", urgencia: "alta",
-        descricao: `O retorno combinado está vencido há ${idadeDias} ${idadeDias === 1 ? "dia" : "dias"}. Retome pela pendência, sem tratar como conversa encerrada.`,
-        texto: t, data: ""
-      };
-    }
-    const prazo = prazoEmDias(t);
-    if (prazo) {
-      return {
-        status: prazo.dias === 0 ? "aguardando-resposta" : "aguardando-resposta",
-        responsavel: "contato",
-        urgencia: prazo.dias <= 1 ? "media" : "baixa",
-        descricao: prazo.dias === 0 ? "Aguardar o retorno combinado para hoje." : `Aguardar o retorno combinado do contato em ${prazo.dias} ${prazo.dias === 1 ? "dia" : "dias"}.`,
-        texto: t,
-        data: ""
-      };
-    }
-    return {
-      status: "aguardando-resposta",
-      responsavel: "contato",
-      urgencia: "baixa",
-      descricao: "Aguardar o retorno que o contato se comprometeu a dar.",
-      texto: t,
-      data: ""
-    };
-  }
-  return null;
-}
+// v1023 — mcCompromissoAberto (lia confirmedAppointments/texto da conversa pra inferir um
+// "compromisso em aberto") foi removida: já estava sem nenhum chamador (dead code), e o
+// conceito que ela representava — tratar uma menção na conversa como um agendamento real —
+// é exatamente o que o dono baniu por completo (ver aplicarCompromisso em
+// api/reanalisar-lead.js e o corte em listRecentProcessings, api/_persistence.js).
 
 export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
   // v724-2: reset total. Mantida apenas por compatibilidade com APIs antigas; não altera análise.
@@ -477,20 +398,6 @@ function normalizeComparable(text = "") {
     .trim();
 }
 
-// Mantém só os compromissos que têm PROVA na conversa real:
-// 1) o trechoLiteral citado pela IA bate com uma sequência de palavras que de fato
-//    aparece no texto da conversa; e
-// 2) se o tipo é uma refeição concreta (café/almoço/jantar), essa palavra TEM que
-//    aparecer na conversa — senão é a IA chamando de "café" algo que ninguém marcou
-//    (ex.: trecho real "te chamo amanhã" rotulado como café).
-// Sem prova = compromisso inventado/deduzido pela IA → descartado.
-function termoObrigatorioDoTipo(oQue) {
-  const s = normalizeComparable(oQue || "");
-  if (/cafe/.test(s)) return /(^| )cafe( |$)/;
-  if (/almoco/.test(s)) return /(^| )almoco( |$)/;
-  if (/jantar/.test(s)) return /(^| )jantar( |$)/;
-  return null; // visita/ligação/reunião/genérico podem ser implícitos — não exige a palavra
-}
 // Tipos de material que o app sabe renderizar/mandar (espelha MATERIAL_LABEL no front).
 const MATERIAIS_VALIDOS = new Set([
   "planta", "tabela", "video", "folder", "localizacao", "memorial",
@@ -517,27 +424,11 @@ export function sanitizarMateriais(materiais) {
 
 // v724-2: bloco antigo de análise/mensagem removido.
 
-
-export function filtrarCompromissosReais(appointments, conversaText) {
-  if (!Array.isArray(appointments) || !appointments.length) return [];
-  const tl = normalizeComparable(conversaText || "").split(/\s+/).filter(Boolean);
-  if (!tl.length) return [];
-  const tlJoin = " " + tl.join(" ") + " ";
-  return appointments.filter(ap => {
-    // (2) refeição concreta: a palavra do tipo precisa existir na conversa real.
-    const termo = termoObrigatorioDoTipo(ap && ap.oQue);
-    if (termo && !termo.test(tlJoin)) return false;
-    // (1) prova literal: trechoLiteral tem que bater uma sequência real do texto.
-    const trecho = normalizeComparable(ap && ap.trechoLiteral || "").split(/\s+/).filter(t => t.length >= 2);
-    if (trecho.length < 2) return false; // sem citação literal útil = sem prova
-    const win = Math.min(3, trecho.length); // exige uma sequência de palavras real
-    for (let i = 0; i + win <= trecho.length; i++) {
-      const seq = " " + trecho.slice(i, i + win).join(" ") + " ";
-      if (tlJoin.includes(seq)) return true;
-    }
-    return false;
-  });
-}
+// v1023 — filtrarCompromissosReais (validava se um confirmedAppointments tinha "prova
+// literal" na conversa antes de mostrar) foi removida: o dono baniu por completo qualquer
+// compromisso inferido da conversa virar um agendamento, mesmo com prova — só clique
+// explícito em Agenda conta. Sem chamador desde que api/_persistence.js passou a zerar
+// confirmedAppointments incondicionalmente em toda leitura de lead.
 
 export function parseDateTime(date, time) {
   const [d, m, yRaw] = String(date).split("/").map(Number);
