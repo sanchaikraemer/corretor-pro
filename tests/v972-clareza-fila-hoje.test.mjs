@@ -27,6 +27,11 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // Cor do motivo (--accent/coral) e os limiares de cpBarraMensagensMini foram DELIBERADAMENTE
 // mantidos: são decisão explícita do dono (v949, corrigindo a v948 que tinha ido pra cyan) e
 // travados pelos testes v942/v943/v946 — mudar isso de novo repetiria um erro já corrigido.
+//
+// v1017 — cpFatoresRankingLead/cpMotivoFechamento (citadas acima) foram removidas de vez do app
+// (o dono pediu pra tirar o motivo de todo lugar, nem dentro do lead sobrou — ver
+// tests/v975-motivo-so-no-lead.test.mjs e tests/v946-ranking-explicavel.test.mjs). cpHomeLeadRow
+// nunca dependeu delas (só citava o nome em comentário), então nada aqui precisou mudar.
 
 function extrai(nome) {
   const m = app.match(new RegExp(`function ${nome}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}`));
@@ -34,8 +39,6 @@ function extrai(nome) {
   return m[0];
 }
 
-const fatoresSrc = extrai('cpFatoresRankingLead');
-const motivoSrc = extrai('cpMotivoFechamento');
 const rowSrc = extrai('cpHomeLeadRow');
 const barSrc = extrai('cpBarraMensagensMini');
 
@@ -56,9 +59,7 @@ assert.match(rowSrc, /há \$\{escapeHtml\(dias\)\}/, 'texto visível do contador
 // 3. chr-pr: title com o produto completo (mesmo texto que é exibido, sem truncar no title).
 assert.match(rowSrc, /chr-pr" title="\$\{escapeHtml\(prod\|\|''\)\}"/, 'chr-pr expõe o texto completo via title (não trunca no hover)');
 
-// 4. motivo: cpMotivoFechamento continua devolvendo só texto puro (v946) — quem decide como
-// destacar isso na tela é cpHomeLeadRow, e essa parte mudou na v974 (ver aquele teste).
-assert.doesNotMatch(motivoSrc, /<b>/, 'cpMotivoFechamento continua devolvendo só texto puro (destaque é responsabilidade de quem renderiza)');
+// 4. (removido na v1017 — cpMotivoFechamento não existe mais; ver tests/v946-ranking-explicavel.test.mjs)
 
 // 5. cpBarraMensagensMini permanece bit-a-bit a mesma lógica travada pelos testes v942/v943
 // (só ganhou comentário) — garante que a "correção" não tentou remendar o número errado.
@@ -68,6 +69,7 @@ assert.match(barSrc, /n \/ teto \* 100/, 'proporção da barra continua intocada
 // 6. Comportamento real via sandbox (mesmos stubs do teste v946).
 const sandbox = `
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
+  const mensagensDoClienteRecente = (l) => Number(l.__msgs||0);
   const contextoPrioridadeIA = (l) => ({ propostaAtiva: !!l.__proposta, retornoProposta: !!l.__retorno });
   const ui670UltimaMensagemReal = (l) => l.__last || {m:null, falante:'desconhecido'};
   const escapeHtml = (s) => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -76,8 +78,6 @@ const sandbox = `
   const prioridadeAtendimento = (l) => ({ nivel: l.__nivel||0 });
   const RAIO_SVG = '<svg class="raio-stub"></svg>';
   ${barSrc}
-  ${fatoresSrc}
-  ${motivoSrc}
   ${rowSrc}
   ({ cpHomeLeadRow });
 `;

@@ -11,17 +11,28 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // não pode ser ponderado". O bônus agora só conta quando a última mensagem real do cliente pede
 // resposta de fato (pergunta ou pedido — mesma checagem que ui670ModeloComercial já usa em
 // "ultimaPedeResposta").
+//
+// v1017 — essa mesma checagem foi extraída pra ultimaMsgClientePedeResposta (agora compartilhada
+// com emJanelaDeEspera/entraEmRetomada, que tinham o MESMO bug: um "Ok" do cliente encerrava a
+// janela de espera antes da hora). cpProbabilidadeFechamento passou a CHAMAR essa função, em vez
+// de repetir a lógica — os testes abaixo extraem as duas funções.
 
 const fnSrc = app.match(/function cpProbabilidadeFechamento\(l\)\{[\s\S]*?\n\}/);
 assert.ok(fnSrc, 'cpProbabilidadeFechamento não encontrada em app.js');
 const fn = fnSrc[0];
-assert.match(fn, /ui670UltimaMensagemReal/, 'usa a última mensagem real do cliente pra decidir se o bônus de "cliente esperando" vale');
-assert.match(fn, /falante === "contato"/, 'só avalia a despedida quando quem falou por último foi o contato');
+assert.match(fn, /ultimaMsgClientePedeResposta\(l\)/, 'usa a checagem compartilhada de "última mensagem pede resposta" pro bônus de "cliente esperando"');
+
+const helperSrc = app.match(/function ultimaMsgClientePedeResposta\(l\)\{[\s\S]*?\n\}/);
+assert.ok(helperSrc, 'ultimaMsgClientePedeResposta não encontrada em app.js');
+const helperFn = helperSrc[0];
+assert.match(helperFn, /ui670UltimaMensagemReal/, 'usa a última mensagem real do cliente pra decidir se pede resposta');
+assert.match(helperFn, /falante !== "contato"/, 'só avalia a despedida quando quem falou por último foi o contato');
 
 const cpProbabilidadeFechamento = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
   const contextoPrioridadeIA = (l) => ({});
   const ui670UltimaMensagemReal = (l) => l.__last || {m:null, falante:'desconhecido'};
+  ${helperFn}
   ${fn}
   cpProbabilidadeFechamento;
 `);

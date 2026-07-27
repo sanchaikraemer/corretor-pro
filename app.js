@@ -487,6 +487,18 @@ function mensagensDoCliente(l){
   }
   return n;
 }
+// v1017 — mesma métrica de cima, mas só dos ÚLTIMOS 90 DIAS (clientMessageCount90d, calculado no
+// servidor na mesma varredura). Usada SÓ na barra do "Fazer agora" (cpBarraMensagensMini): o dono
+// pediu que essa barra passasse a respeitar os 90 dias, igual "Total de mensagens" (v1016).
+// NÃO usar isto pra ranking/elegibilidade (cpProbabilidadeFechamento, dose, leadsEsquecidos) —
+// essas continuam com mensagensDoCliente (histórico inteiro) de propósito: leadsEsquecidos existe
+// justamente pra resgatar lead antigo que esfriou (ver comentário da v942 acima), e uma janela de
+// 90 dias zeraria exatamente esses leads.
+function mensagensDoClienteRecente(l){
+  const stored = Number(l?.clientMessageCount90d);
+  if(Number.isFinite(stored)) return stored;
+  return mensagensDoCliente(l); // fallback pra dado antigo em cache, sem o campo novo ainda
+}
 // (v911) leadTemProposta removida: só o Raio-X / "Oportunidades esquecidas" antigos usavam, e
 // ambos deixaram de depender de "recebeu proposta" (dado que o app não sabe).
 const TIMELINE_PAGE_SIZE = 100;
@@ -2486,6 +2498,21 @@ window.boxErro = boxErro;
 // Quantos dias de espera antes do lead voltar pra fila de prioridade.
 // Lead NOVO / exportado nos últimos 7 dias (acabei de falar com ele) → 3 dias: dá tempo pro
 // cliente pensar, só aparece no 3º dia. Lead já ESTABELECIDO no sistema → regra do 5º dia.
+// v1017 — bug relatado várias vezes pelo dono ("o lead volta pra Fazer agora antes do prazo de
+// espera") e nunca resolvido de vez: quem falou por último (emJanelaDeEspera/entraEmRetomada,
+// abaixo) nunca checava O QUE o cliente disse — um simples "Ok"/"Obrigada"/"Perfeito", sem pedir
+// nada, já encerrava a espera na hora, igual a uma pergunta de verdade. Esse MESMO problema já
+// tinha sido identificado e corrigido na v944 — só que só dentro de cpProbabilidadeFechamento (a
+// função que ORDENA a fila), nunca aqui (as funções que decidem QUEM ENTRA na fila). Extraído pra
+// as duas pararem de divergir de novo no futuro.
+function ultimaMsgClientePedeResposta(l){
+  try{
+    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
+    if(!last || last.falante !== "contato") return true; // sem como checar: não trava a espera à toa
+    const t = String(last.m?.text || "");
+    return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
+  }catch(_){ return true; }
+}
 function limiarRetomada(l){
   const iso = l && l.createdAt;
   if(iso){
@@ -2516,8 +2543,12 @@ function emJanelaDeEspera(l){
   }
   let resposta = l.daysSinceClientReply; if(resposta==null) resposta = _diasDesdeMsg(l, true);
   if(toque == null) return false;
-  // Só espera se EU contatei por último (cliente ainda não respondeu desde então).
-  const euContateiPorUltimo = resposta == null || toque < resposta;
+  // Só espera se EU contatei por último (cliente ainda não respondeu DE VERDADE desde então).
+  // v1017 — "responder de verdade" exige que a fala do cliente PEÇA algo (pergunta/pedido) —
+  // ver ultimaMsgClientePedeResposta. Antes, um "Ok"/"Obrigada" do cliente (sem pedir nada) já
+  // encerrava a espera na hora e o lead voltava pra "Fazer agora" antes do prazo configurado.
+  const clienteRespondeuDeVerdade = resposta != null && toque >= resposta && ultimaMsgClientePedeResposta(l);
+  const euContateiPorUltimo = !clienteRespondeuDeVerdade;
   return euContateiPorUltimo && toque < limiarRetomada(l);
 }
 
@@ -2537,13 +2568,15 @@ function entraEmRetomada(l){
   const limiar = limiarRetomada(l);
   if(Number.isFinite(dias) && dias < limiar){
     // contato recente (< limiar dias: 3 p/ lead novo, 5 p/ estabelecido): só entra se o CLIENTE
-    // falou por último (devemos uma resposta)
+    // falou por último E de fato PEDIU uma resposta (v1017 — mesma checagem usada em
+    // emJanelaDeEspera/ultimaMsgClientePedeResposta; antes, um "Ok"/"Obrigada" do cliente já
+    // bastava pra liberar o lead antes da hora).
     const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
     const primeiroNome = String(l.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
     for(let i = msgs.length - 1; i >= 0; i--){
       const m = msgs[i];
       if(!m || !String(m.text||"").trim()) continue;
-      return ehMsgDoCliente(m, primeiroNome);
+      return ehMsgDoCliente(m, primeiroNome) && ultimaMsgClientePedeResposta(l);
     }
     return false; // recém-criado, sem conversa → espera
   }
@@ -2655,7 +2688,10 @@ function filaRowHTML(l, pos){
 // essa contradição (nº maior aqui ≠ topo da lista) e o conserto foi dar à linha um indicador de
 // posição PRÓPRIO (chr-rank, em cpHomeLeadRow) — não mexer nestes limiares/cores.
 function cpBarraMensagensMini(l, maxMsgs){
-  const n = (typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0;
+  // v1017 — pedido do dono: essa barra passa a respeitar os últimos 90 dias, igual "Total de
+  // mensagens" (v1016) — mensagensDoCliente (histórico inteiro) continua existindo pro ranking/
+  // outras telas (ver comentário de mensagensDoClienteRecente), só esta barra usa a versão nova.
+  const n = (typeof mensagensDoClienteRecente === 'function') ? mensagensDoClienteRecente(l) : 0;
   const cor = n >= 15 ? '#ff6258' : n >= 5 ? '#ff8f88' : '#8a99a0';
   // v973 — pedido do dono: barra em gradiente, não mais cor chapada. Os 3 níveis/limiares de
   // "cor" continuam os mesmos de sempre (intocados, travados pelo teste v942).
@@ -2666,7 +2702,7 @@ function cpBarraMensagensMini(l, maxMsgs){
   const BRANCO_GRADIENTE = '#F7FAFB';
   const teto = Math.max(1, Number(maxMsgs) || 1);
   const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
-  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
+  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente nos últimos 90 dias"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
 }
 // Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
 // produto, barra de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a
@@ -2689,10 +2725,11 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
   const prod = (typeof produtosLabelCurto === 'function') ? produtosLabelCurto(l) : ((typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || ''));
   // v975 — pedido do dono: a linha da Home NÃO mostra mais o motivo do ranking (v945/946, depois
-  // reformatado em v972/v974). Ele achou redundante — a mesma explicação já mora dentro do lead
-  // (renderLeadFoco/cp704-motivo, que continua existindo, intocado) e repeti-la resumida aqui só
-  // poluía a tela sem ajudar a decidir nada. cpMotivoFechamento continua existindo e sendo usada
-  // ali dentro — só parou de ser chamada AQUI.
+  // reformatado em v972/v974). Ele achou redundante — a mesma explicação já mora dentro do lead —
+  // e repeti-la resumida aqui só poluía a tela sem ajudar a decidir nada.
+  // v1017 — o dono voltou a achar esse motivo poluição mesmo dentro do lead ("só serve pra
+  // incomodar, não me ajuda em nada") — cpMotivoFechamento e o card de destaque que o mostrava
+  // foram removidos de vez, não sobrevivem em lugar nenhum do app.
   // v972 — achado do dono: o nº da barra de mensagens (ao lado) é o mais chamativo da linha mas
   // NÃO é a prioridade (ver aviso em cpBarraMensagensMini) — por isso pode "parecer maior" num
   // lead que está mais abaixo na lista. pos É a ordem real (cpFilaFazerAgora já ordenou por
@@ -2936,7 +2973,10 @@ function renderBotoesHome(){
     // Lista compacta: um lead embaixo do outro, 1 coluna, sem quebra lateral (opção 1 + lista
     // densa que o dono escolheu). Cada linha traz a barra de status das mensagens do cliente,
     // relativa ao maior da lista (maxMsgsDose) pra as diferenças aparecerem.
-    const maxMsgsDose = dose.reduce((m,l)=>Math.max(m, (typeof mensagensDoCliente==='function'?mensagensDoCliente(l):0)), 1);
+    // v1017 — mesma métrica que a barra agora usa (mensagensDoClienteRecente, 90 dias), pro
+    // "maior da lista" ser calculado com a MESMA régua exibida (senão a barra nunca chegaria a
+    // 100%, ou o menor lead pareceria proporcionalmente maior/menor do que realmente é).
+    const maxMsgsDose = dose.reduce((m,l)=>Math.max(m, (typeof mensagensDoClienteRecente==='function'?mensagensDoClienteRecente(l):0)), 1);
     top3Html = `<div class="cp-hoje-list">${dose.map((l, i) => cpHomeLeadRow(l, i+1, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
@@ -5044,7 +5084,7 @@ function cp704Css(){
       .cp704-card{border:1px solid rgba(255,255,255,.10);background:rgba(7,52,64,.72);border-radius:16px;padding:14px}.cp704-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.cp704-card-title h2{font-size:17px;margin:0;font-weight:950}.cp704-card-title small{font-size:11px;color:var(--muted);font-weight:850}
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
-      .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-motivo{margin:0 0 12px;padding:9px 12px;border-radius:10px;background:rgba(255,98,88,.08);border:1px solid rgba(255,98,88,.26);color:var(--accent);font-size:12.5px;font-weight:800;line-height:1.4}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
+      .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
       .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:#ff7f74!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
@@ -5520,8 +5560,6 @@ function renderLeadFoco(lead){
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     // Ranking explicável (v945): mesmo motivo mostrado na Home, agora dentro do card "Fazer
     // agora" — vazio quando nenhum fator real se aplica (nunca inventa razão).
-    let motivoFazerAgora='';
-    try{ motivoFazerAgora=(typeof cpMotivoFechamento==='function')?cpMotivoFechamento(lead):''; }catch(_){}
     area.innerHTML=`<div class="cp704-lead">
       <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
@@ -5547,7 +5585,6 @@ function renderLeadFoco(lead){
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
           <section class="cp704-card">
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
-            ${motivoFazerAgora?`<div class="cp704-motivo">${escapeHtml(motivoFazerAgora)}</div>`:''}
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
@@ -9404,17 +9441,10 @@ function cpProbabilidadeFechamento(l){
   const toque = Number(l?.daysSinceLastTouch);
   // v944: falar por último não basta — se a última mensagem do cliente foi só uma despedida/
   // agradecimento ("Claro", "Obrigado pela atenção"), sem pergunta nem pedido, não existe bola
-  // com o cliente esperando resposta. Só pondera quando a última fala dele de fato pede resposta
-  // (mesma checagem que ui670ModeloComercial usa pra "ultimaPedeResposta").
-  let ultimaMsgPedeResposta = true;
-  try{
-    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
-    if(last && last.falante === "contato"){
-      const t = String(last.m?.text || "");
-      ultimaMsgPedeResposta = /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
-    }
-  }catch(_){}
-  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgPedeResposta;
+  // com o cliente esperando resposta. Só pondera quando a última fala dele de fato pede resposta.
+  // v1017 — extraído pra ultimaMsgClientePedeResposta (compartilhada com emJanelaDeEspera/
+  // entraEmRetomada, que tinham o MESMO problema sem essa checagem — ver comentário ali).
+  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgClientePedeResposta(l);
   return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0);
 }
 // candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
@@ -9436,50 +9466,10 @@ function cpFilaFazerAgora(items){
   pool.sort((a,b) => cpProbabilidadeFechamento(b) - cpProbabilidadeFechamento(a) || mensagensDoCliente(b) - mensagensDoCliente(a));
   return pool;
 }
-// Espelha os MESMOS fatores de cpProbabilidadeFechamento (recorrência/perguntas/negociação/
-// cliente-espera-você), mas só pra virar TEXTO explicando o motivo — duplicado de propósito, não
-// fatorado num helper comum, porque cpProbabilidadeFechamento tem o corpo travado por regex nos
-// testes v943/v944 (eles extraem a função inteira e checam substrings literais nela); chamar uma
-// função nova de dentro dela quebraria esses testes. Qualquer mudança de peso/limiar lá precisa
-// ser replicada aqui.
-function cpFatoresRankingLead(l){
-  const recorrencia = Number(l?.clientMessageDays) || 0;
-  const perguntas = Number(l?.clientQuestionCount) || 0;
-  let propostaAtiva = false, retornoProposta = false;
-  try{
-    const ctx = (typeof contextoPrioridadeIA === 'function') ? contextoPrioridadeIA(l) : null;
-    propostaAtiva = !!ctx?.propostaAtiva;
-    retornoProposta = !!ctx?.retornoProposta;
-  }catch(_){}
-  const resp = Number(l?.daysSinceClientReply);
-  const toque = Number(l?.daysSinceLastTouch);
-  let ultimaMsgPedeResposta = true;
-  try{
-    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
-    if(last && last.falante === "contato"){
-      const t = String(last.m?.text || "");
-      ultimaMsgPedeResposta = /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
-    }
-  }catch(_){}
-  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgPedeResposta;
-  return { recorrencia, perguntas, propostaAtiva, retornoProposta, clienteEsperaVoce };
-}
-// Frase curta explicando por que o lead está classificado como está no "Fazer agora" — os mesmos
-// fatores que ordenam a fila, em texto. NÃO mostra contagem bruta de mensagens de propósito: é
-// exatamente o fator que menos deve pesar (v943 — "Henrique" tinha 218 mensagens e não devia
-// liderar); exibi-la como "motivo" recriaria a confusão que a v943/v944 corrigiram. Vazio quando
-// nenhum fator real se aplica (nunca inventa razão).
-function cpMotivoFechamento(l){
-  const f = cpFatoresRankingLead(l);
-  const razoes = [];
-  if(f.retornoProposta) razoes.push("negociação avançada — proposta em aberto");
-  else if(f.propostaAtiva) razoes.push("já se falou de valor ou condição de pagamento");
-  if(f.clienteEsperaVoce) razoes.push("cliente esperando sua resposta");
-  if(f.recorrencia >= 2) razoes.push(`voltou a conversar em ${f.recorrencia} dias diferentes`);
-  if(f.perguntas >= 1) razoes.push(`fez ${f.perguntas} pergunta${f.perguntas===1?'':'s'}`);
-  const texto = razoes.slice(0, 3).join(" · ");
-  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "";
-}
+// v1017 — cpFatoresRankingLead/cpMotivoFechamento (o "motivo" do "Fazer agora" — v945/946,
+// sobrevivia só dentro do card do lead desde a v975) foram REMOVIDAS: o dono pediu de vez ("só
+// serve pra incomodar, não me ajuda em nada, só polui a tela"). O card "Fazer agora" do detalhe
+// do lead (renderLeadFoco) não calcula nem mostra mais esse texto.
 // v922 tentou uma "dose fixa" persistida no aparelho (localStorage) pra parar de repor
 // automaticamente quem era atendido. Só que criou um problema novo: publicar a atualização no
 // meio do dia fazia o app montar essa lista fixa NAQUELE momento (excluindo só quem já tinha

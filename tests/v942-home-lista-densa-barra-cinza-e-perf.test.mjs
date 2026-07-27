@@ -24,7 +24,9 @@ assert.match(rowFn[0], /chr-nm[\s\S]*chr-pr[\s\S]*chr-dd/, 'linha tem nome, prod
 
 const barFn = app.match(/function cpBarraMensagensMini\(l, ?maxMsgs\)\{[\s\S]*?\n\}/);
 assert.ok(barFn, 'cpBarraMensagensMini não encontrada');
-assert.match(barFn[0], /mensagensDoCliente\(l\)/, 'a barra usa a contagem de mensagens do cliente');
+// v1017 — pedido do dono: a barra passou a usar só os últimos 90 dias (mensagensDoClienteRecente),
+// igual "Total de mensagens" (v1016) — ver tests/v1017-lentidao-cache-90dias-fazer-agora-cartao-duplicado.test.mjs.
+assert.match(barFn[0], /mensagensDoClienteRecente\(l\)/, 'a barra usa a contagem de mensagens do cliente dos últimos 90 dias');
 assert.match(barFn[0], /n >= 15 \? '#ff6258' : n >= 5 \? '#ff8f88' : '#8a99a0'/, 'cor por nível: cinza (baixo) → coral (alto), sem amarelo');
 assert.match(barFn[0], /n \/ teto \* 100/, 'a barra enche relativa ao maior da lista (não satura com contagens altas)');
 
@@ -50,7 +52,7 @@ assert.doesNotMatch(mdc, /janelaDias|CP_JANELA_INTERESSE_DIAS/, 'sem janela de 9
 assert.match(mdc, /const stored = Number\(l\?\.clientMessageCount\)/, 'na lista usa clientMessageCount do servidor');
 // servidor manda clientMessageCount, também sem janela.
 assert.match(persistence, /clientMessageCount,/, 'o item da lista carrega clientMessageCount');
-const persBlock = persistence.slice(persistence.indexOf('let clientMessageCount = 0;'), persistence.indexOf('const lastClientIso'));
+const persBlock = persistence.slice(persistence.indexOf('clientMessageCount = 0;'), persistence.indexOf('const lastClientIso'));
 assert.doesNotMatch(persBlock, /_janela90ms|90 \* 86400000/, 'servidor conta o total, sem janela de 90 dias');
 
 // 5. Performance: service worker com stale-while-revalidate pros assets estáticos.

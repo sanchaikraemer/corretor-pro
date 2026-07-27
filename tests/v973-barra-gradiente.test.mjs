@@ -25,6 +25,7 @@ assert.match(barSrc, /background:linear-gradient\(90deg,/, 'a barra usa gradient
 
 const cpBarraMensagensMini = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
+  const mensagensDoClienteRecente = (l) => Number(l.__msgs||0);
   ${barSrc}
   cpBarraMensagensMini;
 `);
