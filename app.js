@@ -77,6 +77,13 @@ import './js/pwa-install.js?v=__VERSION__';
       window.cpAtualizarIdentidadeVisivel();
     } catch(_) {}
   })();
+  // v1013 — em aparelho compartilhado entre contas, o navegador pode restaurar a página "congelada"
+  // da memória (botão voltar/avançar, ou trocar de aba e voltar) SEM recarregar o script — o nome
+  // da conta é atualizado (a IIFE acima roda de novo), mas caches em memória de outra tela (lista
+  // de leads, dashboard) podem continuar com o snapshot da conta anterior até a próxima navegação
+  // de verdade. Forçar recarregamento completo nesse caso garante que a tela nunca mistura dado
+  // de duas contas diferentes no mesmo aparelho.
+  addEventListener("pageshow", (ev) => { if (ev.persisted) location.reload(); });
   window.definirChaveSegurancaCorretorPro = function(){
     const atual = getKey();
     const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
