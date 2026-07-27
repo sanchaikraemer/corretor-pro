@@ -36,7 +36,9 @@ assert.doesNotMatch(appJs, /el\.textContent\s*=\s*\(h<12\?"Bom dia":h<18\?"Boa t
   'o placeholder genérico "Bom dia, corretor!" escrito às cegas antes dos dados carregarem precisa ter sido removido');
 
 // 2) messageCount90d calculado no servidor (mesma varredura, sem passada extra) e usado na exibição
-assert.match(persistence, /let messageCount90d = 0;/, 'precisa existir o contador de mensagens dos últimos 90 dias');
+// v1017 — a varredura ganhou um cache (_statsCache); messageCount90d agora é declarado uma vez
+// fora do if/cache e zerado dentro do ramo que recalcula (sem "let" de novo ali).
+assert.match(persistence, /messageCount90d = 0;/, 'precisa existir o contador de mensagens dos últimos 90 dias');
 assert.match(persistence, /cutoff90d/, 'precisa existir o corte de 90 dias usado no filtro');
 assert.match(persistence, /messageCount90d,\s*\n\s*clientMessageCount,/,
   'messageCount90d precisa estar no objeto retornado pro cliente, junto dos outros contadores');

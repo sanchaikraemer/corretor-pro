@@ -26,6 +26,7 @@ assert.match(barSrc, /BRANCO_GRADIENTE\s*=\s*'#F7FAFB'/, 'o branco usado é o me
 // 3. Comportamento real: os 3 níveis usam o MESMO branco no início e a cor de sempre no fim.
 const cpBarraMensagensMini = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
+  const mensagensDoClienteRecente = (l) => Number(l.__msgs||0);
   ${barSrc}
   cpBarraMensagensMini;
 `);

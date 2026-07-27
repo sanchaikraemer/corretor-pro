@@ -56,17 +56,56 @@ export function getSupabaseAdmin() {
 // e hoje é exatamente o que ela já representa (todos os dados de hoje já pertencem a ela).
 export const EMPRESA_PRINCIPAL_ID = "00000000-0000-0000-0000-000000000001";
 
+// v1017 — cache em memória do processo (mesmo padrão já usado no cache de 5s de leads-recentes.js)
+// pra não bater duas vezes no Supabase (auth.getUser + memberships) EM TODO clique que chama a
+// API. Investigação da lentidão relatada pelo dono achou que resolveOrganizationId roda como
+// primeiro passo em praticamente toda rota de /api — e pagava essas duas idas e voltas de rede de
+// novo a cada chamada, mesmo sem nenhum lead na conta (é por isso que o travamento acontecia igual
+// numa conta vazia: o custo nunca foi proporcional à quantidade de dado). TTL curto (30s): rápido
+// o bastante pra não perceber numa sequência de cliques, mas ainda revalida bloqueio/teste vencido
+// em menos de meio minuto — não é uma trava de segurança instantânea (é status de teste/cobrança,
+// não credencial vazada), então esse atraso é aceitável. Chave = o próprio token (string opaca e
+// única por sessão): nunca mistura o resultado de um usuário com o de outro.
+const ORG_CACHE_TTL_MS = 30000;
+const ORG_CACHE_MAX = 500;
+const _orgResolveCache = new Map();
+function _emModoTeste() {
+  return process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event === "test";
+}
+function _orgCacheGet(token) {
+  if (_emModoTeste()) return null; // testes esperam resolução fresca a cada chamada (ver v1003/v997)
+  const hit = _orgResolveCache.get(token);
+  if (!hit) return null;
+  if ((Date.now() - hit.ts) > ORG_CACHE_TTL_MS) { _orgResolveCache.delete(token); return null; }
+  return hit.result;
+}
+function _orgCacheSet(token, result) {
+  if (_emModoTeste()) return;
+  if (_orgResolveCache.size >= ORG_CACHE_MAX) {
+    const maisAntiga = _orgResolveCache.keys().next().value;
+    if (maisAntiga !== undefined) _orgResolveCache.delete(maisAntiga);
+  }
+  _orgResolveCache.set(token, { ts: Date.now(), result });
+}
+
 // v997 — primeiro passo pra cada corretor só ver os próprios dados: descobre de qual conta é a
 // chamada. Se vier um login de verdade (token do Supabase, header Authorization: Bearer ...),
 // confirma o token e busca a empresa vinculada àquele usuário — NUNCA aceita um id de empresa
 // mandado pelo próprio cliente (isso deixaria qualquer chamada fingir ser de outra conta).
 // Sem token, cai no caminho antigo (chave compartilhada), sempre resolvendo pra EMPRESA_PRINCIPAL_ID.
-// Ainda não é usado por nenhuma rota — vem como próxima etapa, uma tabela por vez.
 export async function resolveOrganizationId(req, res, { supabase } = {}) {
   const authHeader = String(req.headers?.authorization || req.headers?.Authorization || "").trim();
   const bearer = /^Bearer\s+(.+)$/i.exec(authHeader)?.[1];
 
   if (bearer) {
+    const cached = _orgCacheGet(bearer);
+    if (cached) {
+      if (cached.bloqueado) {
+        authJson(res, 403, { ok: false, bloqueado: true, error: "Seu teste grátis acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento." });
+        return null;
+      }
+      return cached.organizationId;
+    }
     const client = supabase || getSupabaseAdmin();
     if (!client) {
       authJson(res, 500, { ok: false, error: "Supabase não configurado no ambiente." });
@@ -96,13 +135,16 @@ export async function resolveOrganizationId(req, res, { supabase } = {}) {
     // Sem a organização carregada (bancos de teste antigos), segue sem travar: a trava real é
     // pra contas novas, que sempre têm status/trial preenchidos pela migração 0003.
     const org = vinculo.organizations;
+    let bloqueado = false;
     if (org && typeof org === "object") {
       const trialFim = org.trial_expira_em ? new Date(org.trial_expira_em).getTime() : null;
       const trialVencido = org.status === "teste" && Number.isFinite(trialFim) && trialFim <= Date.now();
-      if (org.status === "bloqueado" || trialVencido) {
-        authJson(res, 403, { ok: false, bloqueado: true, error: "Seu teste grátis acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento." });
-        return null;
-      }
+      bloqueado = org.status === "bloqueado" || trialVencido;
+    }
+    _orgCacheSet(bearer, { organizationId: vinculo.organization_id, bloqueado });
+    if (bloqueado) {
+      authJson(res, 403, { ok: false, bloqueado: true, error: "Seu teste grátis acabou. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento." });
+      return null;
     }
     return vinculo.organization_id;
   }
@@ -151,6 +193,15 @@ function diasCalendarioBR(iso) {
   const civil = (d) => { const [y, m, dd] = fmt.format(d).split("-").map(Number); return Date.UTC(y, m - 1, dd); };
   const diff = Math.round((civil(new Date()) - civil(t)) / 86400000);
   return diff < 0 ? 0 : diff;
+}
+
+// v1017 — "dia calendário" de hoje (fuso de Brasília), usado como parte da chave de validade do
+// cache de estatísticas por lead (ver listRecentProcessings/_statsCache): números como
+// messageCount90d dependem da data de HOJE, não só do conteúdo da conversa — precisam envelhecer
+// mesmo num lead sem mensagem nova.
+function hojeCalendarioBR() {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+  return fmt.format(new Date());
 }
 
 function compact(value) {
@@ -632,6 +683,30 @@ export async function persistProcessingResult({
   };
 }
 
+// v1017 — grava de volta (melhor esforço) o _statsCache calculado pra leads cujo cache estava
+// frio/vencido, pra próxima listagem já ler pronto (ver comentário em listRecentProcessings).
+// STATS_CACHE_MAX_WRITEBACKS limita o pior caso — ex.: primeira carga depois de publicar esta
+// versão, com milhares de leads sem cache ainda — o resto fica pra ser calculado (e gravado) nas
+// próximas cargas, sem segurar esta resposta. Nunca lança: falha de gravação não pode derrubar a
+// listagem, que já foi montada corretamente em memória de qualquer jeito.
+const STATS_CACHE_MAX_WRITEBACKS = 500;
+const STATS_CACHE_WRITE_CONCURRENCY = 20;
+async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) {
+  const lote = pendentes.slice(0, STATS_CACHE_MAX_WRITEBACKS);
+  for (let i = 0; i < lote.length; i += STATS_CACHE_WRITE_CONCURRENCY) {
+    const fatia = lote.slice(i, i + STATS_CACHE_WRITE_CONCURRENCY);
+    await Promise.all(fatia.map(async (item) => {
+      try {
+        await supabase.from("whatsapp_processamentos")
+          .update({ resultado_analise: item.resultado_analise })
+          .eq("id", item.id).eq("organization_id", organizationId);
+      } catch (_) {
+        // melhor esforço — a próxima carga recalcula e tenta gravar de novo.
+      }
+    }));
+  }
+}
+
 export async function listRecentProcessings(limit = 12, options = {}) {
   const supabase = options?.supabase || getSupabaseAdmin();
   if (!supabase) return { ok: false, items: [], error: "Supabase não configurado." };
@@ -770,8 +845,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     return out;
   }
 
+  const statsCacheWriteBacks = [];
+  const hoje = hojeCalendarioBR();
   const mapped = (data || []).map(row => {
-    let analysis = _semScoreComercial(row.resultado_analise || row.analysis || {});
+    const analysisOriginal = row.resultado_analise || row.analysis || {};
+    let analysis = _semScoreComercial(analysisOriginal);
     const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
     const last = timeline.length ? timeline[timeline.length - 1] : null;
 
@@ -793,17 +871,6 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         || ["atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual"].includes(type);
     };
 
-    // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
-    // aumentando muito memória e CPU quando havia centenas de mensagens por lead.
-    let lastReal = null;
-    for (let i = timeline.length - 1; i >= 0; i--) {
-      if (!ehItemManual(timeline[i])) { lastReal = timeline[i]; break; }
-    }
-    const lastIso = lastReal?.iso || last?.iso || row.atualizado_em || row.updated_at || row.criado_em || row.created_at || null;
-    const daysSince = diasCalendarioBR(lastIso);
-    const lastTouchIso = last?.iso || lastIso;
-    const daysSinceTouch = diasCalendarioBR(lastTouchIso);
-
     const nomeResolvido = nameFrom(fileName, analysis, row);
     const ehBusinessMsg = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
     const primeiroNome = String(nomeResolvido || "").trim().toLowerCase().split(/\s+/)[0] || "";
@@ -814,41 +881,106 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       const al = autor.toLowerCase();
       return primeiroNome ? (al.includes(primeiroNome) || primeiroNome.includes(al)) : !ehBusinessMsg.test(autor);
     };
-    // v942 — conta o TOTAL de mensagens DO CLIENTE sobre o histórico INTEIRO (no servidor) e manda
-    // esse número pronto (clientMessageCount). A lista do navegador só recebe uma prévia (~8 msgs),
-    // então contar lá subestimava — a barra de "interesse" na Home ficava sempre quase vazia. Faz
-    // na MESMA varredura que já achava a última msg do cliente (sem custo extra de loop). Sem
-    // janela de tempo: a janela de 90 dias zerava leads que esfriaram há 3+ meses (parecia bug pro
-    // dono — ex.: cliente que escreveu ~15 msgs aparecia com "0"). A coldness fica nos "dias parado".
-    // v943 — pedido do dono: a ORDEM do "Fazer agora" precisa juntar VÁRIOS fatores reais da
-    // conversa (não só quantidade de mensagens nem só tempo parado) — quantas vezes o cliente
-    // voltou a conversar em dias DIFERENTES (recorrência = interesse sustentado), quantas
-    // perguntas ele fez (dúvida real = engajamento ativo). Mesma varredura, sem custo extra.
-    let lastClient = null;
-    let clientMessageCount = 0;
-    let clientQuestionCount = 0;
-    const _diasComMsg = new Set();
-    // v1016 — "Total de mensagens" mostrado pro corretor contava o histórico INTEIRO (às vezes
-    // anos de conversa), destoando de tudo mais na tela (que já fala em dias/meses recentes) numa
-    // conversa antiga e parada. Conta também só os últimos 90 dias, na MESMA varredura (sem
-    // custo extra) — messageCount (histórico completo) continua existindo pra ranking/dedupe
-    // interno, só a exibição pro corretor passa a usar messageCount90d.
-    const cutoff90d = Date.now() - 90 * 24 * 60 * 60 * 1000;
-    let messageCount90d = 0;
-    for (let i = timeline.length - 1; i >= 0; i--) {
-      const m = timeline[i];
-      const tMs = m?.iso ? Date.parse(m.iso) : NaN;
-      if (Number.isFinite(tMs) && tMs >= cutoff90d) messageCount90d++;
-      if (!ehClienteMsg(m)) continue;
-      if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
-      const txt = String(m?.text || "").trim();
-      if (!txt) continue;
-      clientMessageCount++;
-      if (txt.includes("?")) clientQuestionCount++;
-      const diaChave = m?.date || (m?.iso ? String(m.iso).slice(0, 10) : "");
-      if (diaChave) _diasComMsg.add(diaChave);
+
+    // v1017 — a varredura abaixo (achar a última mensagem real, contar mensagens do cliente,
+    // achar proposta) reprocessava o histórico INTEIRO de cada lead TODA VEZ que a lista
+    // carregava — mesmo leads com anos de conversa e nenhuma mensagem nova — e era a causa real
+    // da lentidão ao abrir a Carteira/Home com muitos leads importados. Agora o resultado dessa
+    // varredura fica guardado dentro do próprio resultado_analise (chave _statsCache — nenhuma
+    // coluna/tabela nova) e só é recalculado quando: (a) o histórico mudou de tamanho (chegou
+    // mensagem nova), ou (b) virou o dia (messageCount90d/clientMessageCount90d dependem da data
+    // de HOJE, não só do conteúdo — precisam envelhecer mesmo sem mensagem nova). Fora isso, lê
+    // direto o que já foi calculado, sem percorrer a timeline.
+    const cacheStats = (analysisOriginal && typeof analysisOriginal === "object") ? analysisOriginal._statsCache : null;
+    const cacheValido = !!(cacheStats && cacheStats.v === 1 && cacheStats.len === timeline.length && cacheStats.dia === hoje);
+
+    let lastReal, lastClient, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, hasProposal;
+    if (cacheValido) {
+      lastReal = cacheStats.lastIso ? { iso: cacheStats.lastIso } : null;
+      lastClient = cacheStats.lastClientIso ? { iso: cacheStats.lastClientIso } : null;
+      clientMessageCount = cacheStats.clientMessageCount;
+      clientQuestionCount = cacheStats.clientQuestionCount;
+      clientMessageDays = cacheStats.clientMessageDays;
+      messageCount90d = cacheStats.messageCount90d;
+      clientMessageCount90d = cacheStats.clientMessageCount90d;
+      hasProposal = cacheStats.hasProposal;
+    } else {
+      // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
+      // aumentando muito memória e CPU quando havia centenas de mensagens por lead.
+      lastReal = null;
+      for (let i = timeline.length - 1; i >= 0; i--) {
+        if (!ehItemManual(timeline[i])) { lastReal = timeline[i]; break; }
+      }
+      // v942 — conta o TOTAL de mensagens DO CLIENTE sobre o histórico INTEIRO (no servidor) e manda
+      // esse número pronto (clientMessageCount). A lista do navegador só recebe uma prévia (~8 msgs),
+      // então contar lá subestimava — a barra de "interesse" na Home ficava sempre quase vazia. Faz
+      // na MESMA varredura que já achava a última msg do cliente (sem custo extra de loop). Sem
+      // janela de tempo: a janela de 90 dias zerava leads que esfriaram há 3+ meses (parecia bug pro
+      // dono — ex.: cliente que escreveu ~15 msgs aparecia com "0"). A coldness fica nos "dias parado".
+      // v943 — pedido do dono: a ORDEM do "Fazer agora" precisa juntar VÁRIOS fatores reais da
+      // conversa (não só quantidade de mensagens nem só tempo parado) — quantas vezes o cliente
+      // voltou a conversar em dias DIFERENTES (recorrência = interesse sustentado), quantas
+      // perguntas ele fez (dúvida real = engajamento ativo). Mesma varredura, sem custo extra.
+      lastClient = null;
+      clientMessageCount = 0;
+      clientQuestionCount = 0;
+      const _diasComMsg = new Set();
+      // v1016 — "Total de mensagens" mostrado pro corretor contava o histórico INTEIRO (às vezes
+      // anos de conversa), destoando de tudo mais na tela (que já fala em dias/meses recentes) numa
+      // conversa antiga e parada. Conta também só os últimos 90 dias, na MESMA varredura (sem
+      // custo extra) — messageCount (histórico completo) continua existindo pra ranking/dedupe
+      // interno, só a exibição pro corretor passa a usar messageCount90d.
+      // v1017 — mesma ideia, mas só das mensagens DO CLIENTE (clientMessageCount90d): alimenta a
+      // barra de "interesse do cliente" do Fazer Agora, que o dono pediu pra também respeitar os
+      // 90 dias. Isso NÃO muda clientMessageCount (continua histórico inteiro, de propósito — ver
+      // comentário da v942 acima): leadsEsquecidos/radar de resgate (app.js) dependem do total
+      // histórico pra reconhecer um lead antigo que esfriou; zerar isso quebraria aquele recurso.
+      const cutoff90d = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      messageCount90d = 0;
+      clientMessageCount90d = 0;
+      for (let i = timeline.length - 1; i >= 0; i--) {
+        const m = timeline[i];
+        const tMs = m?.iso ? Date.parse(m.iso) : NaN;
+        const dentro90d = Number.isFinite(tMs) && tMs >= cutoff90d;
+        if (dentro90d) messageCount90d++;
+        if (!ehClienteMsg(m)) continue;
+        if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
+        const txt = String(m?.text || "").trim();
+        if (!txt) continue;
+        clientMessageCount++;
+        if (dentro90d) clientMessageCount90d++;
+        if (txt.includes("?")) clientQuestionCount++;
+        const diaChave = m?.date || (m?.iso ? String(m.iso).slice(0, 10) : "");
+        if (diaChave) _diasComMsg.add(diaChave);
+      }
+      clientMessageDays = _diasComMsg.size;
+
+      hasProposal = false;
+      for (let i = timeline.length - 1; i >= 0; i--) {
+        if (timeline[i]?.proposta) { hasProposal = true; break; }
+      }
+
+      statsCacheWriteBacks.push({
+        id: row.id,
+        resultado_analise: {
+          ...(analysisOriginal && typeof analysisOriginal === "object" ? analysisOriginal : {}),
+          _statsCache: {
+            v: 1,
+            len: timeline.length,
+            dia: hoje,
+            lastIso: lastReal?.iso || null,
+            lastClientIso: lastClient?.iso || null,
+            clientMessageCount, clientQuestionCount, clientMessageDays,
+            messageCount90d, clientMessageCount90d, hasProposal
+          }
+        }
+      });
     }
-    const clientMessageDays = _diasComMsg.size;
+
+    const lastIso = lastReal?.iso || last?.iso || row.atualizado_em || row.updated_at || row.criado_em || row.created_at || null;
+    const daysSince = diasCalendarioBR(lastIso);
+    const lastTouchIso = last?.iso || lastIso;
+    const daysSinceTouch = diasCalendarioBR(lastTouchIso);
     const lastClientIso = lastClient?.iso || null;
     const daysSinceClientReply = diasCalendarioBR(lastClientIso);
 
@@ -883,11 +1015,6 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       order: m?.order ?? null
     }));
 
-    let hasProposal = false;
-    for (let i = timeline.length - 1; i >= 0; i--) {
-      if (timeline[i]?.proposta) { hasProposal = true; break; }
-    }
-
     return {
       id: row.id,
       dedupeKey,
@@ -914,6 +1041,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       messageCount: timeline.length,
       messageCount90d,
       clientMessageCount,
+      clientMessageCount90d,
       clientQuestionCount,
       clientMessageDays,
       hasProposal,
@@ -923,6 +1051,16 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       analysis: includeFullTimeline ? analysis : compactAnalysisForList(analysis)
     };
   });
+
+  // v1017 — persiste o _statsCache calculado nesta carga (só dos leads que estavam com cache
+  // frio/vencido) de volta no resultado_analise, pra próxima carga já ler pronto em vez de
+  // varrer a timeline de novo. Melhor esforço: se a gravação falhar, nada muda pra quem está
+  // usando o app agora (a resposta já foi montada com os números certos) — a próxima carga só
+  // tenta recalcular e gravar de novo. Lote e concorrência limitados pra não segurar a resposta
+  // caso a base inteira esteja com cache frio de uma vez (ex.: logo após publicar esta versão).
+  if (statsCacheWriteBacks.length) {
+    await persistStatsCacheWriteBacks(supabase, statsCacheWriteBacks, organizationId);
+  }
 
   // Dedupe mantendo a ORDEM (mais recente primeiro) mas guardando, por chave, o registro mais
   // completo: o que tem mais mensagens/histórico e já foi analisado. Assim, se o mesmo cliente

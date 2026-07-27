@@ -42,7 +42,10 @@ assert.ok(cpProbabilidadeFechamento(qualificado) > cpProbabilidadeFechamento(hen
 
 // 1c. O servidor calcula clientMessageDays/clientQuestionCount sobre o histórico INTEIRO (mesma
 // varredura que já calcula clientMessageCount, v942) — não a prévia que chega no navegador.
-assert.match(persistence, /let clientQuestionCount = 0;/, 'servidor conta perguntas do cliente');
+// v1017 — a varredura ganhou um cache (_statsCache); clientQuestionCount agora é declarado uma
+// vez fora do if/cache e zerado dentro do ramo que recalcula (sem "let" de novo ali), por isso o
+// regex não exige mais a palavra "let" colada no "= 0".
+assert.match(persistence, /clientQuestionCount = 0;/, 'servidor conta perguntas do cliente');
 assert.match(persistence, /const _diasComMsg = new Set\(\);/, 'servidor rastreia dias distintos com mensagem do cliente');
 assert.match(persistence, /clientQuestionCount,\n\s*clientMessageDays,/, 'os dois campos são enviados no item do lead');
 
@@ -57,6 +60,7 @@ assert.ok(barFn, 'cpBarraMensagensMini não encontrada');
 assert.match(barFn[0], /n \/ teto \* 100/, 'a barra é proporcional ao maior da lista (maxMsgs), não a um teto fixo');
 const cpBarraMensagensMini = eval(`
   const mensagensDoCliente = (l) => Number(l.__msgs||0);
+  const mensagensDoClienteRecente = (l) => Number(l.__msgs||0);
   ${barFn[0]}
   cpBarraMensagensMini;
 `);
