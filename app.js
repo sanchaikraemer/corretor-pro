@@ -2835,10 +2835,23 @@ async function registrarMensagemEnviada(id, msg){
     const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
     if(lead) ui667AplicarAtendidoLocal(lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`);
   }catch(_){}
-  try{
-    await fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
-  }catch(_){ /* a cópia já foi feita; o registro é best-effort */ }
+  // v1019 — "copiar mensagem" marca atendimento nesta MESMA chamada (registrarAtendimento:true).
+  // Antes, uma falha aqui (timeout, instabilidade) era engolida em silêncio — a tela já tinha
+  // mostrado "Mensagem copiada" e marcado atendido NA HORA (otimista, acima), então o corretor
+  // nunca ficava sabendo que o atendimento não foi gravado de verdade: o lead voltava a aparecer
+  // depois como se nunca tivesse sido atendido ("assim como Adão, vários outros atendi e não
+  // marca corretamente as datas"). Agora tenta de novo uma vez antes de desistir, e avisa se
+  // mesmo assim não conseguir — em vez de deixar o corretor sem saber.
+  const registrarAtendimentoDaCopia = () => fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
+  let respAtendimento = null;
+  try{ respAtendimento = await registrarAtendimentoDaCopia(); }catch(_){ respAtendimento = null; }
+  if(!respAtendimento || !respAtendimento.ok){
+    try{ respAtendimento = await registrarAtendimentoDaCopia(); }catch(_){ respAtendimento = null; }
+  }
+  if(!respAtendimento || !respAtendimento.ok){
+    toast("Mensagem copiada, mas não consegui confirmar o atendimento agora. Se este lead voltar a aparecer antes da hora, marque \"Atendido\" manualmente.");
+  }
   invalidarLeadsCache();
   try{ loadRecentLeads(false); }catch(_){}
   if(state.lead && String(state.lead.id) === String(id)) try{ recarregarLeadFoco(id); }catch(_){}
