@@ -2863,13 +2863,25 @@ function renderHeroLead(l){
 async function registrarMensagemEnviada(id, msg){
   const texto = String(msg || "").trim();
   if(!id || !texto) return;
-  const lead = (state.lead && String(state.lead.id) === String(id)) ? state.lead
-    : (state.itemsAtivos || []).find(x => String(x.id) === String(id)) || null;
   // Feedback imediato (§6.7 / atualização sem reload): já marca como atendido agora.
+  // v1031 — bug real (relatado: "Wilson" atendido pela cópia de mensagem continuava em
+  // Oportunidades esquecidas): antes, só UMA cópia em memória do lead era marcada (o detalhe
+  // aberto OU a entrada em itemsAtivos, nunca as duas) — mas abrirLead monta state.lead como um
+  // objeto SEPARADO (spread), nunca a MESMA referência que está dentro de itemsAtivos/todosLeads.
+  // Marcar só state.lead (o caso comum: copiar mensagem de DENTRO do lead aberto) não mudava nada
+  // na entrada real que a Home lê depois — e ao fechar o lead essa marcação local se perdia de
+  // vez. Agora marca TODAS as cópias em memória, igual ui667MarcarAtendido já fazia.
+  let quando = "", dataLocal = "", horaLocal = "";
   try{
-    const quando = new Date().toISOString();
+    quando = new Date().toISOString();
     const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
-    if(lead) ui667AplicarAtendidoLocal(lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`);
+    dataLocal = `${p.day}/${p.month}/${p.year}`;
+    horaLocal = `${p.hour}:${p.minute}`;
+    if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, dataLocal, horaLocal);
+    for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
+      const item = Array.isArray(lista) ? lista.find(x => String(x.id) === String(id)) : null;
+      if(item) ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal);
+    }
   }catch(_){}
   // v1019 — "copiar mensagem" marca atendimento nesta MESMA chamada (registrarAtendimento:true).
   // Antes, uma falha aqui (timeout, instabilidade) era engolida em silêncio — a tela já tinha
@@ -2889,7 +2901,15 @@ async function registrarMensagemEnviada(id, msg){
     toast("Mensagem copiada, mas não consegui confirmar o atendimento agora. Se este lead voltar a aparecer antes da hora, marque \"Atendido\" manualmente.");
   }
   invalidarLeadsCache();
-  try{ loadRecentLeads(false); }catch(_){}
+  // v1031 — mesma rede de segurança do ui667MarcarAtendido: o recarregamento pode responder com
+  // uma versão de alguns instantes atrás (antes da marcação terminar de persistir no banco) — sem
+  // reaplicar a marcação local depois, ela se perdia de novo, silenciosamente, exatamente como
+  // reaplicá-la aqui evita.
+  if(quando){
+    loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(id, item => ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal))).catch(()=>{});
+  } else {
+    try{ loadRecentLeads(false); }catch(_){}
+  }
   if(state.lead && String(state.lead.id) === String(id)) try{ recarregarLeadFoco(id); }catch(_){}
 }
 
