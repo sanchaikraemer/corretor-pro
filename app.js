@@ -2765,12 +2765,13 @@ function cpHomeLeadRow(l, maxMsgs){
     : nivel === 1
       ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
       : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
-  // v1054 — pedido do dono: a diferença entre "atendimento registrado" e "só teve mensagem" só
-  // aparecia no title (invisível no celular, sem hover). Deixa isso visível no texto mesmo, pra
-  // dar pra ver direto na lista, sem abrir o lead, se aquele "há Xd" é de um atendimento
-  // reconhecido pelo app ou só da última mensagem trocada (nesse caso, o lead nunca foi
-  // atendido dentro do app nenhuma vez).
-  const diasRotulo = diasEhAtendimento ? "atendido há" : "há";
+  // v1054 tentou diferenciar "atendido há" de "há" pra dar pra ver, sem abrir o lead, se o app
+  // reconhecia atendimento pra aquele lead. v1055 — pedido do dono: "tenque ficar tudo padrão".
+  // Texto visível volta a ser sempre "há Xd" pra todo mundo, igual — o NÚMERO continua vindo do
+  // atendimento quando ele existe (regra da v1053, essa continua valendo); só o rótulo que virou
+  // uniforme de novo. Quem quiser saber se é atendimento ou só mensagem, o title (passar o mouse)
+  // ainda diferencia isso, como sempre foi.
+  const diasRotulo = "há";
   // v978 — pedido do dono: aqui na Home só o nome do empreendimento (produtosLabelCurto), sem
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
   const prod = (typeof produtosLabelCurto === 'function') ? produtosLabelCurto(l) : ((typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || ''));
@@ -5734,6 +5735,7 @@ function renderLeadFoco(lead){
             <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
           </div>
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
+          ${typeof renderHistoricoContatos==='function'?renderHistoricoContatos(lead):''}
         </aside>
       </div>
       <section class="cp704-card cp704-hist-card" id="cp704HistCard" hidden>
