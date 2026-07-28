@@ -506,7 +506,12 @@ export function parseWhatsappTxt(txt) {
         if (HIDDEN_MEDIA_ONLY_RE.test(trimmed)) continue;
         if (ATTACHED_SUFFIX_RE.test(trimmed)) {
           if (AUDIO_INLINE_RE.test(trimmed)) { kept.push(trimmed); continue; }
-          if (IMAGE_INLINE_RE.test(trimmed) || VIDEO_INLINE_RE.test(trimmed) || DOC_INLINE_RE.test(trimmed)) continue;
+          // v1058: antes a linha inteira era descartada — a IA perdia até o FATO de que um
+          // arquivo foi enviado ali (não só o conteúdo, que já era certo não inventar). Mantém
+          // um marcador factual, sem tentar descrever o que tem na imagem/vídeo/documento.
+          if (IMAGE_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
+          if (VIDEO_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]"); continue; }
+          if (DOC_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]"); continue; }
           continue;
         }
         if (HIDDEN_MEDIA_TAG_RE.test(trimmed)) {
@@ -853,6 +858,15 @@ function _clampDiasImportacaoPipeline(v) {
   return (Number.isFinite(n) && n > 0 && n <= 365) ? Math.round(n) : 90;
 }
 
+// Mesma faixa/padrão de clampDiasDescanso em api/cerebro-config.js (1–60, padrão 5).
+// Precisa existir aqui também porque este sanitizador (usado por loadCerebroConfig,
+// que alimenta o prompt da análise) é uma cópia separada daquele — sem isso o valor
+// salvo pelo corretor some antes de chegar em analyzeWithBrain.
+function _clampDiasDescansoPipeline(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 1 && n <= 60) ? Math.round(n) : 5;
+}
+
 function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
   const temRegrasTexto = Object.prototype.hasOwnProperty.call(v, "regrasTexto");
@@ -864,6 +878,7 @@ function sanitizeCerebroConfig(valor = {}) {
     diferenciais: typeof v.diferenciais === "string" ? _capTextoCerebroPipeline(v.diferenciais) : "",
     evitar: typeof v.evitar === "string" ? _capTextoCerebroPipeline(v.evitar) : "",
     diasImportacao: _clampDiasImportacaoPipeline(v.diasImportacao),
+    diasDescansoPosAtendimento: _clampDiasDescansoPipeline(v.diasDescansoPosAtendimento),
     regrasTexto: temRegrasTexto && typeof v.regrasTexto === "string"
       ? _capTextoCerebroPipeline(v.regrasTexto, MAX_BLOCO_CEREBRO)
       : _capTextoCerebroPipeline(_regrasLegadasParaTextoPipeline(v.regras), MAX_BLOCO_CEREBRO),
@@ -2004,6 +2019,7 @@ const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE (sempre vale; aprend
 - OBRA DE TERCEIROS: pede orçamento de construção/ampliação. Não é venda de imóvel; encaminhar para a engenharia e acompanhar o orçamento.
 
 2) QUALIFICAR antes de empurrar produto: morar ou investir? tipologia/dormitórios? faixa de valor? prazo (pronto x planta)? permuta (imóvel/carro) ou dinheiro/financiamento? Se o orçamento for menor que a faixa do produto pedido, redirecione para uma opção que caiba — SEMPRE com base no que existir no Cérebro e na conversa, nunca em produtos ou valores fixos.
+CUIDADO com a palavra "investir": em fala coloquial ("se a gente for investir", "se formos investir nisso") pode significar só "se a gente topar comprar/se comprometer", sem indicar perfil de investidor. Não rotule o objetivo do cliente como investimento só por essa palavra — confirme pelo contexto inteiro da conversa (ex.: quem já mudou para a cidade e pede dormitórios pensando na família tende a buscar moradia, não renda/revenda) e, se ficar ambíguo, pergunte antes de assumir.
 
 3) ARGUMENTOS POR SITUAÇÃO (use o que casa com o sinal do cliente):
 - Acha caro o pronto / não tem pressa / investidor → planta de lançamento: "compra na planta, congela o preço e valoriza até a entrega; quanto mais cedo no lançamento, mais barato e maior o prazo".
@@ -2013,7 +2029,7 @@ const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE (sempre vale; aprend
 - Decisão conjunta (cônjuge/filho/mãe) → não pressione; ofereça café na construtora pra apresentar junto e mantenha contato leve até a novidade/material.
 - Não viu o decorado → insista com leveza: "sem ver o decorado não dá pra entender a planta"; ofereça visita/chave sem compromisso, horário flexível.
 
-4) Conduza sempre pra UMA próxima ação concreta (visita, café na construtora, simulação, escolher unidade). Reserva só com negociação avançada (isso gera urgência saudável).`;
+4) Conduza sempre pra UMA próxima ação concreta (visita, café na construtora, simulação, escolher unidade), seguindo o que o Cérebro Comercial abaixo definir sobre quais dessas ações essa organização realmente usa.`;
 
 function montarOrientacoes(config, contextoCliente = "") {
   config = config || {};
@@ -2504,6 +2520,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
 
   const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
   const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro);
+  // v1058: número real pro Cérebro comparar quando ele tiver uma regra do tipo "depois de X dias
+  // sem interação, reconheça o intervalo antes de retomar" — sem isso a IA não tinha como saber
+  // qual prazo o corretor quis dizer. Reaproveita o mesmo "descanso pós-atendimento" que o corretor
+  // já configura pra fila Fazer agora, em vez de criar um segundo número pra manter sincronizado.
+  const diasParaRetomada = Number(configCerebro?.diasDescansoPosAtendimento) || 5;
 
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a única autoridade sobre análise, estratégia e criação das mensagens.
@@ -2527,6 +2548,7 @@ Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? 
 Fuso horário da análise: ${fusoAnalise}
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
+Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -2559,6 +2581,15 @@ bloco etc.). O cliente já sabe o que ele escolheu; repetir esses números pra e
 não avança a conversa. Nas mensagens, refira-se às unidades de forma natural ("os lotes que você
 separou", "as opções que você escolheu"), sem recitar os números de volta.
 
+PEDIDO SEM RESPOSTA DIRETA: se o cliente pediu algo específico (um produto/característica, uma
+informação, um tipo de opção) e a ÚLTIMA resposta do corretor no histórico não atendeu diretamente
+esse pedido (respondeu outra coisa, ofereceu produto diferente do pedido, ou só prometeu enviar sem
+enviar), preencha "pedidoSemResposta" descrevendo de forma factual o que ainda está em aberto (ex.:
+"Cliente pediu opções prontas com 2 dormitórios; a última resposta ofereceu um produto na planta,
+sem opção pronta equivalente"). Se o pedido já foi atendido ou não há pedido específico em aberto,
+use exatamente "Nenhum". Isso é diferente de "compromissoCorretorNaoCumprido" (uma promessa que o
+CORRETOR fez e não cumpriu) — aqui é sobre um PEDIDO DO CLIENTE que ainda não teve resposta direta.
+
 Formato JSON obrigatório:
 {
   "summary":"texto",
@@ -2567,6 +2598,7 @@ Formato JSON obrigatório:
     "ultimoCompromissoCliente":"texto",
     "ultimaInformacaoPrometida":"texto",
     "compromissoCorretorNaoCumprido":"texto",
+    "pedidoSemResposta":"texto",
     "produtoPrincipal":"texto",
     "produtosParalelos":"texto",
     "objecaoPrincipal":"texto",
@@ -2639,6 +2671,7 @@ ${timelineText}`;
         ultimaInformacaoEnviada: clean(d.ultimaInformacaoEnviada || d.ultimaInformacaoPrometida, "Não identificado"),
         ultimaInformacaoPrometida: clean(d.ultimaInformacaoPrometida || d.ultimaInformacaoEnviada, "Não identificado"),
         compromissoCorretorNaoCumprido: clean(d.compromissoCorretorNaoCumprido, "Não identificado"),
+        pedidoSemResposta: clean(d.pedidoSemResposta, "Nenhum"),
         produtoAtual,
         produtoPrincipalInteresse: produtoAtual,
         produtosParalelos: clean(d.produtosParalelos, "Não identificado"),
