@@ -12,7 +12,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // v939 — a correção da v938 usou cpAguardandoResposta, uma checagem que NUNCA expira (bloqueio
 // permanente, mesmo depois de 150 dias esperando). Isso ignorava a regra que o app JÁ TEM pra
 // decidir quando um lead "aguardando" volta a ser candidato: emJanelaDeEspera/limiarRetomada —
-// a MESMA regra que entraEmRetomada usa (espera 3 dias se o lead é novo, 5 se não é; depois
+// a MESMA regra que entraEmRetomada usa (espera um prazo configurável — ver v1048 — depois
 // disso volta ao jogo). Corrigido pra usar essa regra existente em vez de inventar uma nova.
 
 const filaSrc = app.match(/function cpFilaFazerAgora\(items\)\{[\s\S]*?\n\}/)[0];

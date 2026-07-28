@@ -360,6 +360,9 @@
             <label>Atendimentos por dia <span class="small" style="color:var(--muted);font-weight:400">(meta do "Fazer agora")</span></label>
             <input type="number" id="cerebroAtendimentosDia" min="1" max="50" placeholder="10" style="max-width:120px">
             <div class="small" style="color:var(--muted);margin-top:4px">Quantos clientes entram na sua fila "Fazer agora" por dia. Cada corretor escolhe a sua meta (de 1 a 50). Padrão: 10.</div>
+            <label>Descanso após atender <span class="small" style="color:var(--muted);font-weight:400">(dias fora da fila)</span></label>
+            <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
+            <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5.</div>
           </div>
         </div>
         <div class="btns btns-row" style="margin-top:14px">

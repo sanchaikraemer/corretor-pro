@@ -2508,13 +2508,22 @@ function boxErro(retryJs){
 window.boxErro = boxErro;
 
 // Janela de espera depois que EU já contatei: não dá pra chamar o cliente todo dia.
-// Se mandei mensagem e a bola está com ele (não respondeu), esperamos pelo menos 3 dias;
-// só volta a aparecer como ação a partir do 4º dia sem resposta. Exceções (NÃO espera):
+// Se mandei mensagem e a bola está com ele (não respondeu), esperamos pelo menos alguns dias;
+// só volta a aparecer como ação depois desse prazo. Exceções (NÃO espera):
 //  - lembrete pra hoje / compromisso hoje ou amanhã (motivo agendado manda);
 //  - o cliente respondeu DEPOIS do meu último toque (aí a bola é minha, devo agir).
-// Quantos dias de espera antes do lead voltar pra fila de prioridade.
-// Lead NOVO / exportado nos últimos 7 dias (acabei de falar com ele) → 3 dias: dá tempo pro
-// cliente pensar, só aparece no 3º dia. Lead já ESTABELECIDO no sistema → regra do 5º dia.
+// v1048 — pedido do dono: quantos dias de "descanso" um lead ganha depois de atendido antes de
+// voltar pra fila "Fazer agora" — era fixo (3 dias pra lead novo, criado há ≤7 dias; 5 pra
+// estabelecido), sem opção de mudar. Agora é UM número, escolhido por cada corretor no Cérebro
+// (campo "Descanso após atender"); sem valor configurado, cai no padrão histórico de 5.
+function cpDiasDescansoPosAtendimento(){
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    const n = Number(cfg?.diasDescansoPosAtendimento);
+    if(Number.isFinite(n) && n >= 1 && n <= 60) return Math.round(n);
+  }catch(_){}
+  return 5;
+}
 // v1017 — bug relatado várias vezes pelo dono ("o lead volta pra Fazer agora antes do prazo de
 // espera") e nunca resolvido de vez: quem falou por último (emJanelaDeEspera/entraEmRetomada,
 // abaixo) nunca checava O QUE o cliente disse — um simples "Ok"/"Obrigada"/"Perfeito", sem pedir
@@ -2531,15 +2540,7 @@ function ultimaMsgClientePedeResposta(l){
   }catch(_){ return true; }
 }
 function limiarRetomada(l){
-  const iso = l && l.createdAt;
-  if(iso){
-    const t = new Date(iso).getTime();
-    if(!isNaN(t)){
-      const dCriado = Math.floor((Date.now() - t) / 86400000);
-      if(dCriado <= 7) return 3;
-    }
-  }
-  return 5;
+  return cpDiasDescansoPosAtendimento();
 }
 function emJanelaDeEspera(l){
   if(lembreteVencido(l)) return false;
@@ -6182,6 +6183,8 @@ function sanitizeCerebroConfigV762(cfg) {
     diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
     // v1012 — meta diária do "Fazer agora" configurável por corretor; fora de 1–50 vira 10.
     atendimentosPorDia: (Number(c.atendimentosPorDia) >= 1 && Number(c.atendimentosPorDia) <= 50) ? Math.round(Number(c.atendimentosPorDia)) : 10,
+    // v1048 — dias de "descanso" pós-atendimento, configurável por corretor; fora de 1–60 vira 5.
+    diasDescansoPosAtendimento: (Number(c.diasDescansoPosAtendimento) >= 1 && Number(c.diasDescansoPosAtendimento) <= 60) ? Math.round(Number(c.diasDescansoPosAtendimento)) : 5,
     regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
     objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
@@ -6205,6 +6208,7 @@ function obterCerebroConfigParaAnalise() {
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
       diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
+      diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || cfg?.diasDescansoPosAtendimento || 5,
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
       regras: [],
@@ -6973,6 +6977,8 @@ async function carregarCerebro(){
   if(inpDias) inpDias.value = (config.diasImportacao && Number(config.diasImportacao) > 0) ? config.diasImportacao : 90;
   const inpAtend = qs("#cerebroAtendimentosDia");
   if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
+  const inpDescanso = qs("#cerebroDiasDescanso");
+  if(inpDescanso) inpDescanso.value = (Number(config.diasDescansoPosAtendimento) >= 1) ? config.diasDescansoPosAtendimento : 5;
   // Regras e objeções em blocos únicos de texto.
   if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
   if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
@@ -6995,6 +7001,8 @@ async function salvarCerebro(){
   const diasN = Number(diasRaw);
   const atendRaw = qs("#cerebroAtendimentosDia")?.value;
   const atendN = Number(atendRaw);
+  const descansoRaw = qs("#cerebroDiasDescanso")?.value;
+  const descansoN = Number(descansoRaw);
   const config = {
     corretorNome: qs("#cerebroCorretorNome")?.value || "",
     metodo: qs("#cerebroMetodo").value,
@@ -7003,6 +7011,7 @@ async function salvarCerebro(){
     evitar: qs("#cerebroEvitar").value,
     diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
+    diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
     objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
     regras: [],
@@ -7054,8 +7063,10 @@ async function zerarCerebroTudo(){
       metodo: "", tom: "", evitar: "",
       diferenciais: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-      // Meta diária é preferência de trabalho (como o período dos áudios), não aprendizado — fica.
+      // Meta diária e dias de descanso são preferência de trabalho (como o período dos áudios),
+      // não aprendizado — ficam.
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,
+      diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || 5,
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
