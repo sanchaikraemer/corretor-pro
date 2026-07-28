@@ -5,7 +5,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
 // v981 — print do dono: "mariana planta p/morar lançamento" foi atendida (botão "Marcar
 // atendimento") há 2 dias e voltou a aparecer nas prioridades/"Fazer agora" antes do prazo de
-// espera (3 ou 5 dias, conforme limiarRetomada). Causa raiz: "Marcar atendimento" (botao_atendido)
+// espera (limiarRetomada). Causa raiz: "Marcar atendimento" (botao_atendido)
 // e "copiar mensagem" sem observação só gravam o evento contato_manual — NUNCA tocam
 // timeline_json — então daysSinceLastTouch (calculado no servidor em cima da timeline) não sabia
 // desse atendimento e continuava com a idade da ÚLTIMA MENSAGEM real do WhatsApp, que pode ser
@@ -18,15 +18,22 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // cliente OU do corretor — conta SÓ o último atendimento marcado (ultimoAtendimentoTs). A
 // mensagem deixou de "ajudar" (não usa mais o toque mais recente entre os dois) — só o
 // atendimento importa; sem atendimento nenhum, o lead fica elegível na hora.
+//
+// v1048 — o dono pediu pra tornar o prazo de descanso configurável (campo novo no Cérebro,
+// "Descanso após atender") — limiarRetomada deixou de ter a distinção fixa "3 dias pra lead
+// novo, 5 pra estabelecido" e virou um valor só (cpDiasDescansoPosAtendimento), com padrão 5
+// quando não há Cérebro configurado (exatamente o caso destes testes, que não simulam o
+// formulário/localStorage do Cérebro).
 
 const diasCal = app.match(/function diasCalendarioBR\(quando\)\{[\s\S]*?\n\}/);
 const tipos = app.match(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/);
 const ultAt = app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/);
 const lembTs = app.match(/function lembreteTs\(l\)\{[\s\S]*?\n\}/);
 const lembVenc = app.match(/function lembreteVencido\(l\)\{[^\n]*\}/);
+const diasDescanso = app.match(/function cpDiasDescansoPosAtendimento\(\)\{[\s\S]*?\n\}/);
 const limiar = app.match(/function limiarRetomada\(l\)\{[\s\S]*?\n\}/);
 const janela = app.match(/function emJanelaDeEspera\(l\)\{[\s\S]*?\n\}/);
-assert.ok(diasCal && tipos && ultAt && lembTs && lembVenc && limiar && janela,
+assert.ok(diasCal && tipos && ultAt && lembTs && lembVenc && diasDescanso && limiar && janela,
   'não achei emJanelaDeEspera + dependências em app.js');
 // Remove as linhas de comentário (podem citar os nomes antigos pra explicar a história) antes de
 // checar o CÓDIGO em si.
@@ -40,6 +47,7 @@ const emJanelaDeEspera = eval(`
   ${ultAt[0]}
   ${lembTs[0]}
   ${lembVenc[0]}
+  ${diasDescanso[0]}
   ${limiar[0]}
   ${janela[0]}
   emJanelaDeEspera
@@ -50,7 +58,7 @@ const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString();
 // 1. Bug do print original: mensagem real do WhatsApp é antiga (20 dias), mas o corretor marcou
 // atendimento (botão) há 2 dias. Precisa CONTINUAR protegido — conta a partir do atendimento.
 const mariana = {
-  createdAt: diasAtras(200), // lead estabelecido → limiarRetomada = 5
+  createdAt: diasAtras(200), // limiarRetomada = 5 (padrão, sem Cérebro configurado no teste)
   daysSinceLastTouch: 20,
   daysSinceClientReply: null,
   analysis: { aprendizado: { eventos: [
@@ -80,16 +88,17 @@ const atendimentoAntigo = {
 assert.equal(emJanelaDeEspera(atendimentoAntigo), false,
   'atendimento de 2020 é o único sinal que conta — muito além do limiar, não protege mais (mensagem recente não "ressuscita" a proteção)');
 
-// 4. Lead novo (limiar 3 dias): atendido manualmente há 2 dias → ainda dentro da janela.
+// 4. Lead recém-criado: atendido manualmente há 2 dias → ainda dentro da janela (limiar 5,
+// v1048 — deixou de ter regra especial por idade do lead; é o mesmo valor pra qualquer lead).
 const leadNovo = {
-  createdAt: diasAtras(1), // < 7 dias → limiarRetomada = 3
+  createdAt: diasAtras(1),
   daysSinceLastTouch: 20,
   daysSinceClientReply: null,
   analysis: { aprendizado: { eventos: [
     { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: diasAtras(2) }
   ] } }
 };
-assert.equal(emJanelaDeEspera(leadNovo), true, 'lead novo (limiar 3 dias) atendido há 2 dias ainda está dentro da janela');
+assert.equal(emJanelaDeEspera(leadNovo), true, 'lead recém-criado atendido há 2 dias ainda está dentro da janela (limiar 5)');
 
 // 5. Atendimento manual há MAIS tempo que o limiar (ex.: 6 dias, limiar 5): não protege mais —
 // passou da janela, volta a ser candidato normalmente (comportamento correto, não deve travar pra sempre).

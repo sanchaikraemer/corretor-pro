@@ -45,6 +45,9 @@ const tipos = extrai(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/
 const ultAt = extrai(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/, 'ultimoAtendimentoTs');
 const lembTs = extrai(/function lembreteTs\(l\)\{[\s\S]*?\n\}/, 'lembreteTs');
 const lembVenc = extrai(/function lembreteVencido\(l\)\{[^\n]*\}/, 'lembreteVencido');
+// v1048 — limiarRetomada passou a delegar pra cpDiasDescansoPosAtendimento (valor configurável no
+// Cérebro, padrão 5 quando não há config — o caso destes testes).
+const diasDescanso = extrai(/function cpDiasDescansoPosAtendimento\(\)\{[\s\S]*?\n\}/, 'cpDiasDescansoPosAtendimento');
 const limiar = extrai(/function limiarRetomada\(l\)\{[\s\S]*?\n\}/, 'limiarRetomada');
 
 const emJanelaDeEspera = eval(`
@@ -53,6 +56,7 @@ const emJanelaDeEspera = eval(`
   ${ultAt}
   ${lembTs}
   ${lembVenc}
+  ${diasDescanso}
   ${limiar}
   ${janela}
   emJanelaDeEspera

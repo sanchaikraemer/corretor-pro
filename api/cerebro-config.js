@@ -11,6 +11,7 @@ const DEFAULTS = {
   evitar: "",
   diasImportacao: 90,
   atendimentosPorDia: 10,
+  diasDescansoPosAtendimento: 5,
   regrasTexto: "",
   objecoesTexto: "",
   regras: [],
@@ -40,6 +41,15 @@ function clampAtendimentosDia(v) {
   return (Number.isFinite(n) && n >= 1 && n <= 50) ? Math.round(n) : 10;
 }
 
+// v1048 — pedido do dono: quantos dias de "descanso" um lead ganha depois de atendido, antes de
+// voltar a disputar a fila "Fazer agora" — era um valor fixo (3 dias pra lead novo, 5 pra
+// estabelecido, sem opção de mudar). Agora é UM número, escolhido por cada corretor no Cérebro.
+// Fora da faixa 1–60 (ou vazio) cai no padrão histórico de 5.
+function clampDiasDescanso(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 1 && n <= 60) ? Math.round(n) : 5;
+}
+
 function regrasLegadasParaTexto(arr) {
   if (!Array.isArray(arr)) return "";
   return arr.map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim()).filter(Boolean).join("\n\n");
@@ -65,6 +75,7 @@ function sanitizeCerebroConfig(valor = {}) {
     evitar: typeof v.evitar === "string" ? capTexto(v.evitar) : "",
     diasImportacao: clampDiasImportacao(v.diasImportacao),
     atendimentosPorDia: clampAtendimentosDia(v.atendimentosPorDia),
+    diasDescansoPosAtendimento: clampDiasDescanso(v.diasDescansoPosAtendimento),
     regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
     objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? capTexto(v.objecoesTexto, MAX_BLOCO_REGRAS) : capTexto(objecoesLegadasParaTexto(v.objecoes), MAX_BLOCO_REGRAS),
     regras: Array.isArray(v.regras) ? v.regras : [],
@@ -370,6 +381,7 @@ export default async function handler(req, res) {
       evitar: typeof body.evitar === "string" ? capTexto(body.evitar) : DEFAULTS.evitar,
       diasImportacao: clampDiasImportacao(body.diasImportacao),
       atendimentosPorDia: clampAtendimentosDia(body.atendimentosPorDia),
+      diasDescansoPosAtendimento: clampDiasDescanso(body.diasDescansoPosAtendimento),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
       objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
       regras: [],
