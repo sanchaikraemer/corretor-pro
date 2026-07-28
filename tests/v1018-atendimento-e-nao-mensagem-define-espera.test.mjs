@@ -135,7 +135,7 @@ const adaoParaExibicao = {
   ] } }
 };
 const htmlAdao = cpHomeLeadRow(adaoParaExibicao, 100);
-assert.match(htmlAdao, />há 5d</, 'com atendimento mais recente (5 dias) que a última interação (26 dias), o card mostra 5, não 26');
+assert.match(htmlAdao, />atendido há 5d</, 'com atendimento mais recente (5 dias) que a última interação (26 dias), o card mostra 5, não 26 (v1054: rótulo "atendido há")');
 assert.match(htmlAdao, /desde o último atendimento marcado/, 'o title explica que o número vem do atendimento marcado, não da conversa');
 
 // Sem atendimento registrado: continua mostrando a última interação normalmente (nada mudou).
