@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — Corretor Pro</title>
+<link rel="stylesheet" href="contas-estilo.css?v=__VERSION__">
+<style>
+  .cartao.legal{ max-width:760px; text-align:left; }
+  .cartao.legal h1{ margin-bottom:4px; }
+  .cartao.legal .atualizado{ color:var(--cp-soft); font-size:13px; margin-top:0; margin-bottom:22px; }
+  .cartao.legal h2{ font-size:17px; margin:26px 0 8px; }
+  .cartao.legal h3{ font-size:14.5px; margin:16px 0 6px; }
+  .cartao.legal p, .cartao.legal li{ font-size:14px; line-height:1.6; color:var(--cp-text, #2a2a2a); }
+  .cartao.legal ul{ margin:6px 0 6px 20px; padding:0; }
+  .cartao.legal li{ margin-bottom:4px; }
+  .cartao.legal .aviso{ background:rgba(255,180,60,.12); border:1px solid rgba(255,180,60,.4); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:20px; }
+  .cartao.legal .placeholder{ background:rgba(255,120,120,.12); padding:1px 5px; border-radius:4px; font-family:monospace; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="marca">
+      <img src="logo-cp.png" alt="">
+      <b>Corretor <strong>Pro</strong></b>
+    </div>
+    <div class="cartao legal">
+      <h1>Política de Privacidade</h1>
+      <p class="atualizado">Última atualização: 28/07/2026 — versão 1045</p>
+
+      <div class="aviso">
+        Este texto foi escrito pra refletir com fidelidade o que o sistema realmente faz hoje.
+        Antes de considerar definitivo, recomendamos que um advogado revise este documento — em
+        especial os campos ainda marcados como <span class="placeholder">[preencher]</span>.
+      </div>
+
+      <p>
+        Esta Política de Privacidade explica como o <b>Corretor Pro</b> coleta, usa, armazena e
+        protege os dados de quem usa o sistema (o "corretor" ou "cliente do Corretor Pro") e os
+        dados dos leads/clientes desse corretor, presentes nas conversas de WhatsApp importadas.
+      </p>
+
+      <h2>1. Quem é o responsável pelos dados</h2>
+      <p>
+        O Corretor Pro é operado por <span class="placeholder">[razão social / CNPJ ou CPF do responsável]</span>.
+        Em caso de dúvida sobre esta política ou sobre o tratamento dos seus dados, entre em
+        contato pelo e-mail <span class="placeholder">[e-mail de contato/DPO]</span>.
+      </p>
+
+      <h2>2. Quais dados o sistema coleta</h2>
+      <h3>2.1 Do corretor que usa o sistema</h3>
+      <ul>
+        <li>Nome, e-mail e senha de acesso (armazenados pelo Supabase Auth, provedor de autenticação).</li>
+        <li>Configurações do Cérebro Comercial: método de venda, tom de voz, diferenciais, regras e objeções que o próprio corretor cadastra.</li>
+        <li>Metadados de uso: quando entrou, quantas análises fez, status da conta (teste ou ativa).</li>
+      </ul>
+      <h3>2.2 Dos leads/clientes do corretor (contidos nas conversas importadas)</h3>
+      <ul>
+        <li>Nome e telefone, quando aparecem na conversa.</li>
+        <li>O conteúdo da conversa de WhatsApp exportada pelo corretor: mensagens de texto, áudios (e sua transcrição), e o que puder ser lido de imagens/prints compartilhados.</li>
+        <li>Informações comerciais mencionadas na conversa: interesse em produto/imóvel, condição de pagamento, objeções, observações que o corretor registra manualmente sobre o atendimento.</li>
+      </ul>
+      <p>
+        O corretor é quem decide importar uma conversa pro sistema — o Corretor Pro não acessa o
+        WhatsApp do corretor nem coleta conversas por conta própria.
+      </p>
+
+      <h2>3. Para que os dados são usados</h2>
+      <ul>
+        <li>Gerar o diagnóstico comercial de cada atendimento e sugestões de mensagem pro corretor continuar a conversa.</li>
+        <li>Transcrever áudios enviados na conversa, pra que o texto entre na análise.</li>
+        <li>Organizar a carteira de leads do corretor (histórico, agenda, retomadas).</li>
+        <li>Medir o uso do sistema (quantas análises, quanto de IA foi consumido) — inclusive pra fins de cobrança e prevenção de abuso.</li>
+        <li>Melhorar a qualidade das sugestões ao longo do tempo, a partir do que o próprio corretor ensina ao Cérebro Comercial (dados de um corretor nunca são usados pra ensinar o Cérebro de outro).</li>
+      </ul>
+
+      <h2>4. Com quem os dados são compartilhados</h2>
+      <p>Os dados passam por dois prestadores de serviço (nenhum deles pode usar os dados pra fins próprios):</p>
+      <ul>
+        <li><b>OpenAI</b> — recebe o texto da conversa (e o áudio, pra transcrição) no momento da análise, processa e devolve o resultado. A OpenAI não recebe o telefone completo do lead nem dados de outros corretores.</li>
+        <li><b>Supabase</b> — armazena o banco de dados, os logins e os arquivos (ZIPs exportados do WhatsApp, áudios extraídos) de forma isolada por corretor.</li>
+      </ul>
+      <p>O Corretor Pro não vende, aluga nem compartilha esses dados com nenhum outro terceiro pra fins de marketing ou publicidade.</p>
+
+      <h2>5. Por quanto tempo os dados ficam guardados</h2>
+      <p>
+        Os dados de um corretor ficam armazenados enquanto a conta estiver ativa. Arquivos
+        temporários de processamento (ZIP recém-importado, antes da análise terminar) são
+        removidos automaticamente após o processamento. Ao excluir a conta pelo painel
+        administrativo, os dados dessa empresa (leads, Cérebro, arquivos) são apagados de forma
+        definitiva e transacional — não fica resquício.
+      </p>
+
+      <h2>6. Seus direitos (Lei Geral de Proteção de Dados — LGPD)</h2>
+      <p>Qualquer corretor, ou qualquer lead cujo dado esteja numa conversa importada, pode solicitar:</p>
+      <ul>
+        <li><b>Acesso</b> aos dados que temos sobre você.</li>
+        <li><b>Correção</b> de dados incompletos, inexatos ou desatualizados.</li>
+        <li><b>Exclusão</b> definitiva dos dados (respeitando obrigações legais de guarda, quando houver).</li>
+        <li><b>Portabilidade</b> — o corretor já pode exportar os próprios dados a qualquer momento pelo botão "Backup" dentro do sistema.</li>
+        <li><b>Informação</b> sobre com quem os dados são compartilhados (ver seção 4).</li>
+        <li><b>Revogação do consentimento</b>, quando o tratamento depender dele.</li>
+      </ul>
+      <p>Pra exercer qualquer um desses direitos, entre em contato pelo e-mail informado na seção 1.</p>
+
+      <h2>7. Segurança</h2>
+      <ul>
+        <li>Os dados de cada empresa/corretor são isolados dos demais — um corretor nunca vê dados de outro.</li>
+        <li>Conexões com o sistema usam HTTPS.</li>
+        <li>O acesso administrativo (painel da plataforma) é restrito a quem opera o produto.</li>
+      </ul>
+      <p>Nenhum sistema é 100% livre de risco. Se você identificar uma falha de segurança, entre em contato imediatamente pelo e-mail da seção 1.</p>
+
+      <h2>8. Cookies e armazenamento local</h2>
+      <p>
+        O Corretor Pro funciona como um aplicativo instalável (PWA) e usa armazenamento local do
+        navegador (localStorage) pra manter você conectado e guardar preferências de tela — não
+        usa cookies de rastreamento nem compartilha esses dados com redes de publicidade.
+      </p>
+
+      <h2>9. Menores de idade</h2>
+      <p>O Corretor Pro é uma ferramenta profissional, destinada a corretores de imóveis maiores de 18 anos. Não é direcionado a crianças ou adolescentes.</p>
+
+      <h2>10. Alterações nesta política</h2>
+      <p>Esta política pode ser atualizada conforme o sistema evolui. A data no topo do documento sempre indica a versão mais recente.</p>
+
+      <div class="linkbar"><a href="entrar.html">Voltar</a> · <a href="termos.html">Termos de Uso</a></div>
+    </div>
+  </div>
+</body>
+</html>
