@@ -14,13 +14,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 //
 // Dois bugs distintos, mesma causa raiz (usar sinal de MENSAGEM em vez de ATENDIMENTO):
 //
-// 1) emJanelaDeEspera deixava uma mensagem nova (do cliente, cronologicamente mais recente
-//    que o atendimento) "vencer" um atendimento antigo de um jeito que AFROUXAVA a proteção —
-//    bastava o cliente escrever qualquer coisa pra "toque" ficar recente, mesmo sem NENHUM
-//    atendimento novo, só que usando um campo (daysSinceLastTouch) que na época nem sabia da
-//    existência do atendimento marcado por botão. Corrigido então: conta SÓ ultimoAtendimentoTs.
-//    v1051 revisitou isso (ver comentário dedicado abaixo) — mensagem voltou a contar, mas só
-//    pra REFORÇAR a proteção, nunca pra afrouxar; o bug desta versão continua corrigido.
+// 1) emJanelaDeEspera ainda deixava uma mensagem nova (do cliente, cronologicamente mais recente
+//    que o atendimento) "vencer" um atendimento antigo — bastava o cliente escrever qualquer
+//    coisa depois do atendimento pra "toque" (usado pra decidir a espera) voltar a ficar recente,
+//    mesmo sem NENHUM atendimento novo. Corrigido: conta SÓ ultimoAtendimentoTs, nunca mensagem.
 //
 // 2) O número "há Xd" mostrado no card (cpHomeLeadRow) vinha de daysSinceLastInteraction, que só
 //    olha a ÚLTIMA MENSAGEM da conversa — nunca soube de atendimento marcado. Por isso o Adão
@@ -28,13 +25,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 //    atendimento é recente). Corrigido: usa o atendimento quando ele for mais recente que a
 //    última interação, igual ao "toque" que a fila já calcula.
 //
-// v1051 — caso real "Karine": atendida no app, mas o descanso configurado (7 dias) não estava
-// valendo de verdade porque uma troca de mensagem mais recente (fora do botão "Copiar" do app)
-// não era reconhecida como toque nenhum — ela reapareceu com só 5 dias. Pedido taxativo do dono:
-// "7 dias é 7 e ponto final". emJanelaDeEspera passou a considerar TAMBÉM a interação mais
-// recente (mensagem, de qualquer lado) — mas só usa esse número quando ele for MENOR (mais
-// recente) que os dias desde o atendimento, nunca maior. Ver
-// tests/v981-janela-espera-considera-atendimento.test.mjs pros cenários completos dessa regra.
+// v1051 tentou fazer mensagem também contar (só pra reforçar) depois do caso real "Karine" — mas
+// v1052 — pedido explícito e definitivo do dono: "esquece 2 regras, vamos usar uma só, que é de
+// marcar atendimento, esquece a data da última msg". Esta versão (v1018) volta a valer
+// integralmente, sem nenhuma exceção — mensagem não conta pra nada aqui, nunca mais.
 
 function extrai(padrao, nome) {
   const m = app.match(padrao);
@@ -42,12 +36,14 @@ function extrai(padrao, nome) {
   return m[0];
 }
 
-// --- 1. emJanelaDeEspera continua usando ultimoAtendimentoTs como base ---
+// --- 1. emJanelaDeEspera não pode ter sinal nenhum de mensagem ---
 const janela = extrai(/function emJanelaDeEspera\(l\)\{[\s\S]*?\n\}/, 'emJanelaDeEspera');
+// Remove as linhas de comentário (podem citar os nomes antigos pra explicar a história) antes de
+// checar o CÓDIGO em si — só o código não pode mais usar esses campos.
+const janelaSemComentarios = janela.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+assert.doesNotMatch(janelaSemComentarios, /\bl\.daysSinceLastTouch\b|\bl\.daysSinceClientReply\b|_diasDesdeMsg\(|ultimaMsgClientePedeResposta\(/,
+  'o CÓDIGO de emJanelaDeEspera não pode mais usar nenhum campo baseado em mensagem (nem do cliente, nem meu) — só o último atendimento (v1052)');
 assert.match(janela, /ultimoAtendimentoTs\(l\)/, 'emJanelaDeEspera precisa continuar usando ultimoAtendimentoTs');
-// v1051 — mensagem (daysSinceLastTouch) pode aparecer no código agora, mas só como REFORÇO
-// (nunca deixa os dias subirem, só descerem) — ver a trava explícita no teste v981.
-assert.match(janela, /diasMsg < dias/, 'a mensagem só pode diminuir os dias (reforçar), nunca aumentar (afrouxar) a proteção');
 
 const diasCal = extrai(/function diasCalendarioBR\(quando\)\{[\s\S]*?\n\}/, 'diasCalendarioBR');
 const tipos = extrai(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/, 'TIPOS_ATENDIMENTO_TIMELINE');
@@ -73,10 +69,10 @@ const emJanelaDeEspera = eval(`
 
 const diasAtras = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
-// Caso "Rafael": atendido há 2 dias (dentro do limiar de 5), e o CLIENTE escreveu de novo ontem
-// (1 dia atrás) — sem nenhum atendimento novo. Continua protegido nos dois sentidos: pela
-// v1018 (o atendimento sozinho já bastava) e pela v1051 (a mensagem de ontem, sendo ainda mais
-// recente, só reforça — nunca destrava a proteção mais cedo).
+// Caso "Rafael": atendido há 2 dias (dentro do limiar de 5), mas o CLIENTE escreveu de novo
+// ontem (1 dia atrás) — sem nenhum atendimento novo. ANTES desta versão, essa mensagem nova
+// fazia "toque" voltar a ficar recente e a espera acabava (ou nem começava de verdade). Agora
+// precisa continuar protegido: mensagem não conta, só o atendimento (2 dias, dentro do limiar).
 const rafael = {
   createdAt: diasAtras(300),
   daysSinceLastTouch: 1, // mensagem (do cliente ou minha) de ontem
