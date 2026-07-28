@@ -11,10 +11,11 @@ import assert from 'node:assert/strict';
 //
 // v965 — app.js tinha o mesmo padrão em exatamente 3 pontos (normalizarEtapa, semAcento,
 // _normpc) — corrigido e incluído aqui.
+// v1039 — api/criar-upload-url.js foi absorvido por api/processar-storage.js (ver NOTAS-v1039.md).
 const ARQUIVOS_JA_CORRIGIDOS = [
   '../api/_persistence.js',
   '../api/_pipeline.js',
-  '../api/criar-upload-url.js',
+  '../api/processar-storage.js',
   '../app.js'
 ];
 

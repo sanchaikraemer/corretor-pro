@@ -34,6 +34,200 @@ function importIdSeguro(value = "") {
   return id;
 }
 
+// ---------- criar URL de upload grande (antigo api/criar-upload-url.js) ----------
+// v1039 — o plano Hobby da Vercel só permite 12 Serverless Functions; esta rota passou a
+// acumular também a criação da URL assinada de upload (ver NOTAS-v1039.md). O app continua
+// chamando exatamente a mesma URL (/api/criar-upload-url) — vercel.json redireciona pra este
+// arquivo. Distingue pela AUSÊNCIA do campo "action" (as ações desta rota sempre mandam
+// "action"; a criação de URL de upload nunca mandou esse campo) — ver dispatch no handler().
+const DEFAULT_MAX_ZIP_BYTES = 150 * 1024 * 1024;
+const CONFIGURED_MAX_ZIP_BYTES = Number(process.env.SUPABASE_ZIP_MAX_BYTES);
+const BUCKET_MAX_BYTES = Number.isFinite(CONFIGURED_MAX_ZIP_BYTES) && CONFIGURED_MAX_ZIP_BYTES > 0
+  ? Math.min(CONFIGURED_MAX_ZIP_BYTES, 300 * 1024 * 1024)
+  : DEFAULT_MAX_ZIP_BYTES;
+const ALLOWED_ZIP_MIME_TYPES = [
+  "application/zip", "application/x-zip-compressed", "application/octet-stream"
+];
+
+let bucketConfigured = false;
+
+function errorMessage(value) {
+  return value?.message || value?.error_description || value?.error || String(value || "Erro desconhecido");
+}
+
+function isMissingBucket(error) {
+  const msg = errorMessage(error).toLowerCase();
+  return error?.statusCode === "404" || error?.status === 404 || error?.code === "404" ||
+    msg.includes("bucket not found") || msg.includes("not found") || msg.includes("does not exist");
+}
+
+async function createBucketWithFallback(supabase, bucket) {
+  const attempts = [
+    { public: false, fileSizeLimit: BUCKET_MAX_BYTES, allowedMimeTypes: ALLOWED_ZIP_MIME_TYPES },
+    { public: false, allowedMimeTypes: ALLOWED_ZIP_MIME_TYPES },
+    { public: false }
+  ];
+
+  const failures = [];
+  for (const options of attempts) {
+    try {
+      const { error } = await supabase.storage.createBucket(bucket, options);
+      if (!error) return { created: true, warning: failures[0] || null };
+
+      const msg = errorMessage(error);
+      // Outro processo/deploy pode ter criado o bucket entre o GET e o CREATE.
+      if (/already exists|duplicate/i.test(msg)) return { created: false, warning: null };
+      failures.push(msg);
+    } catch (error) {
+      failures.push(errorMessage(error));
+    }
+  }
+
+  return { created: false, error: failures.filter(Boolean).join(" | ") || "Não foi possível criar o bucket." };
+}
+
+async function ensureBucketReady(supabase, bucket) {
+  if (bucketConfigured) return { ok: true, existed: true, configured: true };
+
+  let existed = false;
+  try {
+    const { data, error } = await supabase.storage.getBucket(bucket);
+    if (!error && data) {
+      existed = true;
+    } else if (error && !isMissingBucket(error)) {
+      return { ok: false, step: "consultar bucket", error: errorMessage(error) };
+    }
+  } catch (error) {
+    return { ok: false, step: "consultar bucket", error: errorMessage(error) };
+  }
+
+  if (!existed) {
+    const created = await createBucketWithFallback(supabase, bucket);
+    if (created.error) {
+      return { ok: false, step: "criar bucket", error: created.error };
+    }
+  }
+
+  // A configuração do limite pode variar por plano do Supabase. Uma falha aqui vira aviso;
+  // a autorização do upload continua protegida pelo limite validado acima.
+  let warning = null;
+  try {
+    const { error } = await supabase.storage.updateBucket(bucket, {
+      public: false,
+      fileSizeLimit: BUCKET_MAX_BYTES,
+      allowedMimeTypes: ALLOWED_ZIP_MIME_TYPES
+    });
+    if (error) warning = errorMessage(error);
+  } catch (error) {
+    warning = errorMessage(error);
+  }
+
+  bucketConfigured = true;
+  return { ok: true, existed, configured: !warning, warning };
+}
+
+function sanitizeFileNameUpload(name = "conversa-whatsapp.zip") {
+  return String(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120) || "conversa-whatsapp.zip";
+}
+
+async function criarUploadUrl(req, res, organizationId, body) {
+  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const bucket = String(process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips").trim() || "whatsapp-zips";
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json(res, 500, {
+      ok: false,
+      error: "Supabase ainda não configurado. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY na Vercel.",
+      missing: { SUPABASE_URL: !!supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: !!serviceRoleKey }
+    });
+  }
+
+  const fileName = sanitizeFileNameUpload(body?.fileName);
+  const importId = importIdSeguro(body?.importId);
+  if (!body?.probe && !importId) {
+    return json(res, 400, { ok: false, error: "Identificador da importação não informado." });
+  }
+  if (!body?.probe && !/\.zip$/i.test(fileName)) {
+    return json(res, 400, { ok: false, error: "Tipo de arquivo não suportado. Envie somente o ZIP exportado pelo WhatsApp." });
+  }
+  const declaredSize = Number(body?.size || 0);
+  if (!body?.probe && (!Number.isFinite(declaredSize) || declaredSize <= 0)) {
+    return json(res, 400, { ok: false, error: "Tamanho do ZIP não informado." });
+  }
+  if (!body?.probe && declaredSize > BUCKET_MAX_BYTES) {
+    return json(res, 413, {
+      ok: false,
+      error: `ZIP maior que o limite permitido de ${Math.round(BUCKET_MAX_BYTES / 1024 / 1024)} MB.`,
+      maxBytes: BUCKET_MAX_BYTES
+    });
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
+    const bucketState = await ensureBucketReady(supabase, bucket);
+    if (!bucketState.ok) {
+      return json(res, 500, {
+        ok: false,
+        error: `Não foi possível preparar o armazenamento “${bucket}”.`,
+        details: `${bucketState.step}: ${bucketState.error}`,
+        bucket
+      });
+    }
+
+    if (body && body.probe) {
+      return json(res, 200, { ok: true, bucket, bucketState });
+    }
+
+    // Caminho idempotente: retries da mesma importação usam o mesmo objeto, sem criar cópias.
+    // organizationId no caminho isola o arquivo de cada conta dentro do mesmo bucket
+    // compartilhado — sem isso, qualquer corretor com um importId adivinhado conseguiria
+    // baixar/sobrescrever o ZIP de outra conta.
+    const storagePathUpload = `whatsapp/organizations/${organizationId}/imports/${importId}/${fileName}`;
+
+    const { data: signed, error: signedError } = await supabase
+      .storage
+      .from(bucket)
+      .createSignedUploadUrl(storagePathUpload, { upsert: true });
+
+    if (signedError || !signed?.signedUrl) {
+      return json(res, 500, {
+        ok: false,
+        error: "Não foi possível gerar a URL de upload no Supabase Storage.",
+        details: errorMessage(signedError || "createSignedUploadUrl não retornou signedUrl."),
+        bucket,
+        bucketWarning: bucketState.warning || null
+      });
+    }
+
+    return json(res, 200, {
+      ok: true,
+      bucket,
+      path: storagePathUpload,
+      token: signed.token,
+      signedUrl: signed.signedUrl,
+      importId,
+      bucketWarning: bucketState.warning || undefined
+    });
+  } catch (error) {
+    return json(res, 500, {
+      ok: false,
+      error: "Não foi possível preparar o upload grande.",
+      details: errorMessage(error),
+      bucket
+    });
+  }
+}
+
 function nomeStorageSeguro(value = "audio") {
   return String(value || "audio")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -240,6 +434,14 @@ export default async function handler(req, res) {
   let body;
   try { body = await readJsonBody(req); }
   catch (_) { return json(res, 400, { ok: false, error: "Não foi possível ler o corpo da requisição." }); }
+
+  // v1039 — /api/criar-upload-url foi absorvida por esta rota (ver comentário perto de
+  // criarUploadUrl acima). O corpo dela NUNCA tem "action" — é o único jeito seguro de
+  // reconhecer essa chamada aqui, já que ela chega com o mesmo método (POST) e o mesmo body
+  // JSON de sempre, sem nenhuma mudança no app.
+  if (body && typeof body === "object" && !body.action) {
+    return criarUploadUrl(req, res, organizationId, body);
+  }
 
   const bucket = defaultBucket;
   const storagePath = String(body?.path || "").trim();

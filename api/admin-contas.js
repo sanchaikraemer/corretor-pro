@@ -1,9 +1,14 @@
 // Rota do painel administrativo da PLATAFORMA (só o dono do produto usa): excluir uma conta
 // de corretor inteira — dados, vínculos, organização, arquivos e login. Criada porque o painel
 // só sabia marcar pago/bloquear/estender; excluir conta de teste exigia SQL na mão.
+//
+// v1039 — também acumula o relatório de uso de IA por empresa (antes em api/admin-uso-ia.js,
+// separado — ver NOTAS-v1039.md: o plano Hobby da Vercel só permite 12 Serverless Functions).
+// GET ?relatorio=uso-ia devolve o relatório; POST {action:"excluir-conta"} continua igual.
 import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin } from "./_persistence.js";
 import { invalidarMemoriaComercialCache } from "./_pipeline.js";
 import { emptyBucket } from "./limpar-tudo.js";
+import { estimarCustoUsd, cotacaoUsdBrl } from "./_iaCusto.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -25,7 +30,119 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw || "{}"); } catch (_) { return {}; }
 }
 
+// ---------- relatório de uso de IA por empresa (antigo api/admin-uso-ia.js) ----------
+function novoAcumuladorUsoIA() {
+  return { chamadas: 0, tokensEntrada: 0, tokensSaida: 0, audioSegundos: 0, custoUsd: 0 };
+}
+
+function somarUsoIA(acc, evento) {
+  acc.chamadas += 1;
+  acc.tokensEntrada += Number(evento.prompt_tokens || 0);
+  acc.tokensSaida += Number(evento.completion_tokens || 0);
+  acc.audioSegundos += Number(evento.audio_seconds || 0);
+  // Acumula em USD; converte pra BRL só na formatação final (uma cotação só por resposta, não
+  // uma por evento — evita que uma cotação mudando no meio do cálculo desalinhe a soma).
+  acc.custoUsd += estimarCustoUsd({
+    kind: evento.kind,
+    model: evento.model,
+    promptTokens: evento.prompt_tokens,
+    completionTokens: evento.completion_tokens,
+    audioSeconds: evento.audio_seconds
+  });
+}
+
+function formatarAcumuladorUsoIA(acc) {
+  return {
+    chamadas: acc.chamadas,
+    tokensEntrada: acc.tokensEntrada,
+    tokensSaida: acc.tokensSaida,
+    audioMinutos: Math.round((acc.audioSegundos / 60) * 10) / 10,
+    custoEstimadoBRL: Math.round(acc.custoUsd * cotacaoUsdBrl() * 100) / 100
+  };
+}
+
+// Lê a tabela em páginas de 1000 (mesmo padrão de api/leads-recentes.js) — os últimos N dias de
+// telemetria de uma plataforma nova não devem passar disso tão cedo, mas não é seguro assumir.
+async function lerEventosUsoIA(supabase, desdeISO) {
+  const pageSize = 1000;
+  const rows = [];
+  for (let from = 0; from < 200000; from += pageSize) {
+    const { data, error } = await supabase
+      .from("ai_usage_events")
+      .select("organization_id,kind,model,rota,prompt_tokens,completion_tokens,audio_seconds,criado_em")
+      .gte("criado_em", desdeISO)
+      .order("criado_em", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) return { ok: false, error: error.message, rows };
+    if (!Array.isArray(data) || !data.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return { ok: true, rows };
+}
+
+async function relatorioUsoIA(req, res, supabase) {
+  const dias = Math.min(90, Math.max(1, Number(req.query?.dias) || 30));
+  const agora = new Date();
+  const inicioHoje = new Date(agora); inicioHoje.setUTCHours(0, 0, 0, 0);
+  const inicioPeriodo = new Date(agora.getTime() - dias * 86400000);
+
+  const [{ data: organizacoes, error: orgErro }, eventos] = await Promise.all([
+    supabase.from("organizations").select("id,nome"),
+    lerEventosUsoIA(supabase, inicioPeriodo.toISOString())
+  ]);
+  if (orgErro) return json(res, 500, { ok: false, error: orgErro.message });
+  if (!eventos.ok) return json(res, 500, { ok: false, error: eventos.error });
+
+  const nomesPorOrg = new Map((organizacoes || []).map(o => [String(o.id), o.nome]));
+  const porEmpresa = new Map(); // organization_id -> { hoje, periodo }
+
+  for (const evento of eventos.rows) {
+    const orgId = String(evento.organization_id || "");
+    if (!orgId) continue;
+    if (!porEmpresa.has(orgId)) porEmpresa.set(orgId, { hoje: novoAcumuladorUsoIA(), periodo: novoAcumuladorUsoIA() });
+    const entrada = porEmpresa.get(orgId);
+    somarUsoIA(entrada.periodo, evento);
+    if (new Date(evento.criado_em) >= inicioHoje) somarUsoIA(entrada.hoje, evento);
+  }
+
+  const empresas = [...porEmpresa.entries()]
+    .map(([organizationId, acc]) => ({
+      organizationId,
+      nome: nomesPorOrg.get(organizationId) || "(empresa não encontrada)",
+      hoje: formatarAcumuladorUsoIA(acc.hoje),
+      periodo: formatarAcumuladorUsoIA(acc.periodo)
+    }))
+    .sort((a, b) => b.periodo.custoEstimadoBRL - a.periodo.custoEstimadoBRL);
+
+  const totalHoje = novoAcumuladorUsoIA();
+  const totalPeriodo = novoAcumuladorUsoIA();
+  for (const evento of eventos.rows) {
+    somarUsoIA(totalPeriodo, evento);
+    if (new Date(evento.criado_em) >= inicioHoje) somarUsoIA(totalHoje, evento);
+  }
+
+  return json(res, 200, {
+    ok: true,
+    geradoEm: agora.toISOString(),
+    diasNoPeriodo: dias,
+    cotacaoUsdBrl: cotacaoUsdBrl(),
+    aviso: "Custo estimado a partir de tabela de preço de referência (api/_iaCusto.js) — não é nota fiscal.",
+    totalGeral: { hoje: formatarAcumuladorUsoIA(totalHoje), periodo: formatarAcumuladorUsoIA(totalPeriodo) },
+    empresas
+  });
+}
+
 export default async function handler(req, res) {
+  // GET com relatorio=uso-ia é exclusivo do administrador da plataforma — nenhum organizationId
+  // de chamador comum entra em jogo aqui (requirePlatformAdmin usa só o login do próprio token).
+  if (req.method === "GET" && String(req.query?.relatorio || "") === "uso-ia") {
+    const supabaseUsoIA = getSupabaseAdmin();
+    if (!supabaseUsoIA) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+    if (!(await requirePlatformAdmin(req, res, supabaseUsoIA))) return;
+    return relatorioUsoIA(req, res, supabaseUsoIA);
+  }
+
   // Valida o login de quem chama (e a conta dele estar em dia). O id resolvido aqui NÃO é o
   // alvo da exclusão — o alvo vem do corpo, e só depois da checagem de administrador abaixo.
   const organizationId = await resolveOrganizationId(req, res);

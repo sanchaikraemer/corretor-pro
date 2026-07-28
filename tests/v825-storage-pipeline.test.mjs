@@ -20,9 +20,10 @@ assert.match(storage, /status = \"recoverable-failure\"/);
 assert.match(storage, /activeImportId/);
 assert.match(storage, /manifest\?\.updatedAt \|\| manifest\?\.createdAt/);
 
-const upload = fs.readFileSync(new URL('../api/criar-upload-url.js', import.meta.url), 'utf8');
-assert.match(upload, /Identificador da importação não informado/);
-assert.match(upload, /\$\{importId\}\/\$\{fileName\}/, 'retry usa caminho idempotente');
+// v1039 — a criação da URL de upload foi absorvida por processar-storage.js (mesmo arquivo já
+// lido acima como `storage`) pra caber no limite de 12 Serverless Functions do plano Hobby.
+assert.match(storage, /Identificador da importação não informado/);
+assert.match(storage, /\$\{importId\}\/\$\{fileName\}/, 'retry usa caminho idempotente');
 
 const sw = fs.readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
 assert.match(sw, /if \(!debug\.idbSaved\)/, 'cache só é usado se IndexedDB falhar');
