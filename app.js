@@ -2721,14 +2721,15 @@ function cpBarraMensagensMini(l, maxMsgs){
   const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
   return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente nos últimos 90 dias"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
 }
-// Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
-// produto, barra de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a
-// largura toda; barra + produto vão embaixo) — via grid-template-areas, sem quebra lateral.
+// Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): nome, produto, barra
+// de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a largura toda;
+// barra + produto vão embaixo) — via grid-template-areas, sem quebra lateral.
 function cpHomeLeadRow(l, maxMsgs){
   const idJs = JSON.stringify(String(l.id||""));
+  // v1050 — pedido do dono: tirou a "bolinha" (indicador colorido de status) da linha; nivel
+  // continua existindo só pra decidir o texto do title de "dias" logo abaixo.
   let nivel = 0;
   try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
-  const dotCor = nivel === 1 ? 'var(--accent)' : '#5a6a70'; // coral = cliente aguardando você
   // v1018 — pedido do dono (caso real: "Adão — marquei atendimento quarta dia 22, ainda sim
   // apresenta 26 dias"): daysSinceLastInteraction só olha mensagem (nunca soube de atendimento
   // marcado), então esse número podia ficar bem maior do que o esperado logo depois de atender —
@@ -2768,7 +2769,6 @@ function cpHomeLeadRow(l, maxMsgs){
   // v1046 — pedido do dono: tirar de vez o número de posição (1º/2º/3º...) da linha — ele achou
   // desnecessário; a lista em si (com a quantidade certa, configurada no Cérebro) já basta.
   return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
-    <span class="chr-dot" style="background:${dotCor}"></span>
     <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
@@ -3092,11 +3092,10 @@ function renderBotoesHome(){
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
-      /* Desktop: 1 linha (dot · nome · produto · barra · dias) via grid-areas. */
-      .cp-hoje-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1.05fr) minmax(0,.7fr) 240px 42px;grid-template-areas:"dot nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+      /* Desktop: 1 linha (nome · produto · barra · dias) via grid-areas. */
+      .cp-hoje-row{width:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.7fr) 240px 42px;grid-template-areas:"nm pr bar dd";column-gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid rgba(255,255,255,.05);background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
       .cp-hoje-row:last-child{border-bottom:0}
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
-      .cp-hoje-row .chr-dot{grid-area:dot;width:8px;height:8px;border-radius:50%}
       .cp-hoje-row .chr-nm{grid-area:nm;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row .chr-pr{grid-area:pr;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row .chr-bar{grid-area:bar;display:flex;align-items:center;gap:8px;justify-content:flex-end}
@@ -3120,8 +3119,7 @@ function renderBotoesHome(){
       .cp-hoje-vazio{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center;margin-bottom:8px}
       /* Mobile: 2 linhas — nome + dias em cima (nome ocupa a largura toda), barra + produto embaixo. */
       @media(max-width:560px){
-        .cp-hoje-row{grid-template-columns:14px minmax(0,1fr) auto;grid-template-areas:"dot nm dd" "dot bar pr";column-gap:10px;row-gap:5px;padding:12px 0}
-        .cp-hoje-row .chr-dot{align-self:center}
+        .cp-hoje-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm dd" "bar pr";column-gap:10px;row-gap:5px;padding:12px 0}
         .cp-hoje-row .chr-nm{font-size:14.5px}
         /* v1021 — print do dono: no celular, o número da barra ("29", "232"...) aparecia por
            cima do texto do produto ("Ren29aissance"). Causa: chr-track tinha largura FIXA

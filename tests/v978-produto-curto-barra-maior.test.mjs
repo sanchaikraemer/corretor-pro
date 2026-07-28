@@ -44,7 +44,7 @@ assert.match(rowSrc, /produtosLabelCurto\(l\)/, 'cpHomeLeadRow usa a versão cur
 assert.match(app, /\.cp-hoje-row \.chr-track\{width:180px;height:7px/, 'barra (desktop) 180px, 7px de altura (só comprimento, não grossura)');
 assert.match(app, /\.cp-hoje-row \.chr-track\{width:auto;flex:1 1 40px/, 'barra (mobile) responsiva desde a v1021');
 assert.match(app, /\.cp-hoje-row \.chr-bar b\{font-size:11px;font-weight:900/, 'número ao lado da barra não mudou de tamanho');
-assert.match(app, /grid-template-columns:10px minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px 42px/, 'coluna "bar" cresceu (240px) e "pr" encolheu (.7fr) pra caber');
+assert.match(app, /grid-template-columns:minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px 42px/, 'coluna "bar" cresceu (240px) e "pr" encolheu (.7fr) pra caber');
 
 // 4. Comportamento real do encurtador — casos no mesmo PADRÃO do print real do dono, com nomes
 // fictícios (Bosque Aurora, Vila Horizonte etc.) no lugar dos empreendimentos reais dele.

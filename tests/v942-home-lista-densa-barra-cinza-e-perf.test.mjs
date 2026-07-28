@@ -33,7 +33,7 @@ assert.match(barFn[0], /n \/ teto \* 100/, 'a barra enche relativa ao maior da l
 // CSS da lista: 1 coluna (sem quebra lateral), com layout mobile de 2 linhas.
 assert.match(app, /\.cp-hoje-list\{display:flex;flex-direction:column/, 'lista compacta é uma coluna (flex column)');
 assert.match(app, /\.cp-hoje-row\{width:100%;display:grid/, 'cada linha ocupa a largura toda');
-assert.match(app, /grid-template-areas:"dot nm dd" "dot bar pr"/, 'no mobile a linha vira 2 linhas (nome em cima, barra+produto embaixo)');
+assert.match(app, /grid-template-areas:"nm dd" "bar pr"/, 'no mobile a linha vira 2 linhas (nome em cima, barra+produto embaixo)');
 
 // 2. lista-leads-grid (tela expandida do "Fazer agora") = 1 coluna sempre, sem 2/3 colunas.
 assert.match(css, /\.lista-leads-grid\{display:grid;grid-template-columns:1fr;gap:8px\}/, 'lista-leads-grid é 1 coluna');

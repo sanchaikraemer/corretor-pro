@@ -23,6 +23,6 @@ assert.match(app, /\.cp-hoje-row \.chr-bar b\{font-size:11px;font-weight:900;min
 // A coluna do grid que reserva espaço pra barra cresceu junto (senão a barra maior brigaria com
 // o número/dias). A coluna "pr" (produto) ENCOLHEU na v978 (1.3fr→.7fr) — o texto ficou bem mais
 // curto (produtosLabelCurto), sobrando espaço pra "bar" crescer ainda mais sem espremer nada.
-assert.match(app, /grid-template-columns:10px minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px 42px/, 'coluna "bar" do grid cresceu de novo (144px→240px) e "pr" encolheu (1.3fr→.7fr) na v978');
+assert.match(app, /grid-template-columns:minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 240px 42px/, 'coluna "bar" do grid cresceu de novo (144px→240px) e "pr" encolheu (1.3fr→.7fr) na v978');
 
 console.log('v976-barra-mais-comprida: ok');
