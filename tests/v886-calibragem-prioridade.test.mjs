@@ -25,7 +25,10 @@ assert.match(app, /const CP_MIN_MSGS_PRIORIDADE = 5;/, 'G: mínimo de mensagens 
 assert.match(app, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'sem-acao'/,
   'v906: lead cru (poucas msgs do cliente) sai dos cards (sem-acao), não é mais "aguardando"');
 
-// H: proteção pós-atendimento continua em 5 dias.
-assert.match(app, /const PRAZO_PROTECAO_ATENDIDO = 5;/, 'H: proteção pós-atendimento = 5 dias');
+// H: proteção pós-atendimento — v1049, virou configurável por corretor no Cérebro (padrão
+// continua 5 dias); ver tests/v1048-descanso-configuravel-por-corretor.test.mjs e
+// tests/v1049-protecao-pos-atendimento-usa-descanso-configurado.test.mjs.
+assert.match(app, /function protegidoPosAtendimento\(l\)\{[\s\S]*?cpDiasDescansoPosAtendimento\(\)/,
+  'H: proteção pós-atendimento usa o descanso configurável (padrão 5 dias)');
 
 console.log('v886-calibragem-prioridade: ok');

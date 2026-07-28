@@ -88,7 +88,9 @@ assert.equal(temAgendaDe({ confirmedAppointments: [{ quando: 'semana que vem' }]
 const diasCalSrc = extrai(/function diasCalendarioBR\(quando\)\{[\s\S]*?\n\}/, 'diasCalendarioBR');
 const tiposSrc = extrai(/const TIPOS_ATENDIMENTO_TIMELINE = new Set\(\[[^\]]*\]\);/, 'TIPOS_ATENDIMENTO_TIMELINE');
 const ultAtSrc = extrai(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/, 'ultimoAtendimentoTs');
-const prazoSrc = extrai(/const PRAZO_PROTECAO_ATENDIDO = 5;/, 'PRAZO_PROTECAO_ATENDIDO');
+// v1049 — o prazo fixo virou cpDiasDescansoPosAtendimento (configurável no Cérebro, padrão 5
+// quando não há config — o caso deste teste, que não simula o formulário/localStorage).
+const diasDescansoSrc = extrai(/function cpDiasDescansoPosAtendimento\(\)\{[\s\S]*?\n\}/, 'cpDiasDescansoPosAtendimento');
 const protegidoSrc = extrai(/function protegidoPosAtendimento\(l\)\{[\s\S]*?\n\}/, 'protegidoPosAtendimento');
 
 assert.doesNotMatch(app, /function diasDesdeAtendimentoManual/,
@@ -98,7 +100,7 @@ const protegidoPosAtendimento = eval(`
   ${diasCalSrc}
   ${tiposSrc}
   ${ultAtSrc}
-  ${prazoSrc}
+  ${diasDescansoSrc}
   ${protegidoSrc}
   protegidoPosAtendimento
 `);
@@ -125,7 +127,7 @@ assert.equal(protegidoPosAtendimento({
 // 4. Sem nenhum atendimento: não protegido.
 assert.equal(protegidoPosAtendimento({ analysis: {} }), false, 'sem atendimento nenhum, não protegido');
 
-// 5. Atendimento antigo (6 dias, > PRAZO_PROTECAO_ATENDIDO=5): não protege mais.
+// 5. Atendimento antigo (6 dias, > descanso padrão de 5): não protege mais.
 assert.equal(protegidoPosAtendimento({ lastAttendanceAt: diasAtras(6), analysis: {} }), false,
   'atendimento de 6 dias atrás já passou do prazo de proteção (5 dias)');
 
