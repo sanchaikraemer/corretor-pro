@@ -11094,6 +11094,25 @@ function cp7ObsToggleDitado(btn){
 // um tempo sem áudio). O dono pediu que só pare quando ELE tocar em "Parar" — então, quando o
 // reconhecimento acaba SOZINHO (o corretor ainda não pediu pra parar), reinicia na hora,
 // sem cortar o fluxo nem perder o texto já ditado.
+// v1065 — em alguns Android, cada trecho "final" novo que chega não traz só a palavra nova: traz a
+// frase INTEIRA dita até ali de novo, crescendo (ex.: "ofereci", depois "ofereci o", depois
+// "ofereci o gabro"...). Como cada um vai pra uma posição NOVA do array (não repete a mesma posição
+// — isso o v1032 já cobria), juntar todos os trechos vira uma cascata de repetição: "ofereci
+// ofereci o ofereci o gabro...". Quando o trecho novo já começa com o trecho anterior inteiro, é a
+// MESMA frase crescendo — substitui em vez de somar.
+function cp7ObsMesclarFinais(lista){
+  const mesclado = [];
+  for(const trecho of lista){
+    if(!trecho) continue;
+    const anterior = mesclado[mesclado.length - 1];
+    if(anterior && trecho.toLowerCase().startsWith(anterior.toLowerCase())){
+      mesclado[mesclado.length - 1] = trecho;
+    } else {
+      mesclado.push(trecho);
+    }
+  }
+  return mesclado.join(" ");
+}
 function cp7ObsIniciarDitado(btn){
   const status = qs("#cp7ObsStatus");
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -11115,7 +11134,7 @@ function cp7ObsIniciarDitado(btn){
       if(ev.results[i].isFinal) finaisPorIndice[i] = trecho.trim();
       else interim += trecho;
     }
-    const finalDaSessao = finaisPorIndice.filter(Boolean).join(" ");
+    const finalDaSessao = cp7ObsMesclarFinais(finaisPorIndice.filter(Boolean));
     const textoFinal = [_cp7ObsRecoTextoBase, finalDaSessao].filter(Boolean).join(" ");
     const ta = qs("#cp7ObsTexto");
     if(ta) ta.value = [textoFinal, interim.trim()].filter(Boolean).join(" ");
@@ -11129,7 +11148,7 @@ function cp7ObsIniciarDitado(btn){
   };
   reco.onend = () => {
     _cp7ObsReco = null;
-    const finalDaSessao = finaisPorIndice.filter(Boolean).join(" ");
+    const finalDaSessao = cp7ObsMesclarFinais(finaisPorIndice.filter(Boolean));
     if(finalDaSessao) _cp7ObsRecoTextoBase = (_cp7ObsRecoTextoBase ? _cp7ObsRecoTextoBase + " " : "") + finalDaSessao;
     if(_cp7ObsDitadoQuerido){
       // Parou sozinho (silêncio) — o corretor não pediu pra parar, recomeça na hora.

@@ -25,6 +25,8 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.ok(iniciarMatch, 'cp7ObsIniciarDitado não encontrada por inteiro');
   const toggleMatch = app.match(/function cp7ObsToggleDitado\(btn\)\{[\s\S]*?\n\}/);
   assert.ok(toggleMatch, 'cp7ObsToggleDitado não encontrada por inteiro');
+  const mesclarMatch = app.match(/function cp7ObsMesclarFinais\(lista\)\{[\s\S]*?\n\}/);
+  assert.ok(mesclarMatch, 'cp7ObsMesclarFinais não encontrada por inteiro');
 
   class FakeRecognition {
     constructor(){ FakeRecognition.instancias.push(this); }
@@ -40,6 +42,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   };
   const fnCorpo = new Function('qs', 'escapeHtml', 'window', `
     let _cp7ObsReco = null, _cp7ObsRecoTextoBase = "", _cp7ObsDitadoQuerido = false;
+    ${mesclarMatch[0]}
     ${iniciarMatch[0]}
     ${toggleMatch[0]}
     return { iniciar: (btn) => cp7ObsToggleDitado(btn), querido: () => _cp7ObsDitadoQuerido, base: () => _cp7ObsRecoTextoBase };
