@@ -827,6 +827,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   if (error) return { ok: false, items: [], error: error.message };
 
+  // v1063 — pedido explícito e repetido do dono: o ÚNICO filtro permitido no nome do lead é
+  // tirar a "embalagem" do arquivo que o WhatsApp exporta (".zip", "-enxuto", "Conversa do
+  // WhatsApp com ...") — NUNCA mexer em palavra nenhuma do nome real da pessoa (a v1062 tirou o
+  // filtro que apagava "terreno"/"cel"/etc. de dentro do nome; isto aqui não é aquilo e não pode
+  // virar aquilo de novo).
   function cleanFileName(value = "") {
     return String(value || "")
       .replace(/\.zip$/i, "")
