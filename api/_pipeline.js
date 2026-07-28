@@ -1055,6 +1055,40 @@ export function limiteAnalisesIADoDiaTeste() {
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_TESTE_PADRAO;
 }
 
+// v1068 — auditoria de segurança achou que a leitura de print (extrair dados de um lead novo,
+// detectar rosto pro avatar, ler várias telas de conversa) e a transcrição de voz avulsa (ensinar
+// o Cérebro por voz) chamam a OpenAI sem NENHUM teto — diferente da análise principal, que já
+// tinha essa rede de segurança desde a v1013. Números bem mais generosos que o de análises (são
+// ações rápidas e comuns por lead, ao longo do dia inteiro), só pra travar um script/loop
+// realmente descontrolado — não é um limite de uso normal.
+const LIMITE_VISAO_IA_DIA_PADRAO = 300;
+const LIMITE_VISAO_IA_DIA_TESTE_PADRAO = 60;
+
+export function limiteVisaoIADoDia() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_VISAO_DIA);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_VISAO_IA_DIA_PADRAO;
+}
+
+export function limiteVisaoIADoDiaTeste() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_VISAO_DIA_TESTE);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_VISAO_IA_DIA_TESTE_PADRAO;
+}
+
+// Transcrição de voz avulsa (ensinar o Cérebro por voz) — não é a mesma coisa que transcrever o
+// áudio de uma importação normal (essa já cai dentro do teto de "analises-ia").
+const LIMITE_TRANSCRICAO_VOZ_DIA_PADRAO = 100;
+const LIMITE_TRANSCRICAO_VOZ_DIA_TESTE_PADRAO = 20;
+
+export function limiteTranscricaoVozDoDia() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_TRANSCRICAO_VOZ_DIA_PADRAO;
+}
+
+export function limiteTranscricaoVozDoDiaTeste() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_TRANSCRICAO_VOZ_DIA_TESTE_PADRAO;
+}
+
 // Não é atômico (lê, decide, grava) — condição de corrida sob concorrência alta deixaria passar
 // 1-2 chamadas a mais no pior caso. Aceitável: é uma rede de segurança contra abuso/loop
 // descontrolado, não uma trava de cobrança que precise ser exata.
@@ -2229,6 +2263,12 @@ export async function transcreverBuffer(buffer, ext, openai, organizationId = OR
   let e = (ext || ".ogg").toLowerCase();
   if (!e.startsWith(".")) e = "." + e;
   e = WHISPER_EXT_MAP[e] || e;
+  // "ext" chega direto do corpo da requisição (cerebro-config.js, ação "transcrever-audio") —
+  // sem essa validação, um valor como "../../../../home/user/.ssh/authorized_keys" faz o
+  // path.join abaixo escrever (e depois tentar apagar) um arquivo fora de os.tmpdir() com o
+  // conteúdo que o próprio chamador mandou como "áudio" (path traversal / escrita arbitrária,
+  // CWE-22). Só aceita extensão de verdade: um ponto seguido de 1 a 5 letras/números.
+  if (!/^\.[a-z0-9]{1,5}$/.test(e)) e = ".ogg";
   const tempPath = path.join(os.tmpdir(), `direciona-cerebro-${Date.now()}-${Math.random().toString(16).slice(2)}${e}`);
   fs.writeFileSync(tempPath, buffer);
   try {
