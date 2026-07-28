@@ -9080,6 +9080,43 @@ async function testarIAOpenAI(btn){
 }
 window.testarIAOpenAI = testarIAOpenAI;
 
+// v1064 — pedido do dono: uma lista simples da carteira ATIVA (sem arquivados) pra imprimir,
+// pra olhar/guardar uma vez. Usa os mesmos dados/filtro/ordem já carregados na tela "Carteira
+// ativa" (leadEhAtivo + cp786OrdenarConducao) — é a MESMA lista que aparece ali, só formatada
+// pra impressão. Sem chamada nova ao servidor: se a tela já foi aberta uma vez, os dados
+// já estão em memória (state.todosLeads/itemsAtivos/carteiraLeads).
+function imprimirCarteiraAtiva(){
+  const origem = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].find(a => Array.isArray(a) && a.length) || [];
+  let ativos = origem.filter(l => typeof leadEhAtivo === "function" ? leadEhAtivo(l) : true);
+  if (typeof cp786OrdenarConducao === "function") ativos = cp786OrdenarConducao(ativos);
+  if (!ativos.length) { toast("Nenhum cliente ativo pra listar ainda. Abra a Condução primeiro."); return; }
+  const linhas = ativos.map((l, i) => `<tr>
+    <td>${i + 1}</td>
+    <td>${escapeHtml(l.name || "Cliente")}</td>
+    <td>${escapeHtml(l.phone || "—")}</td>
+    <td>${escapeHtml(l.product || "—")}</td>
+    <td>${escapeHtml(normalizarEtapa(l.etapa) || "—")}</td>
+  </tr>`).join("");
+  let box = document.getElementById("cpImprimirLista");
+  if (!box) { box = document.createElement("div"); box.id = "cpImprimirLista"; document.body.appendChild(box); }
+  box.innerHTML = `
+    <h1>Clientes ativos — Corretor Pro</h1>
+    <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))} · ${ativos.length} cliente${ativos.length === 1 ? "" : "s"}</p>
+    <table>
+      <thead><tr><th>#</th><th>Nome</th><th>Telefone</th><th>Produto</th><th>Etapa</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
+  // A classe liga a folha impressa só durante ESTA impressão (ver styles.css) — sem isso, a
+  // tela "Gerador de proposta" (que também usa @media print) brigaria pela mesma folha na
+  // próxima vez que o corretor imprimisse uma proposta. Só solta no "afterprint" (nunca logo
+  // depois de chamar print()): no celular o print()/compartilhar não trava a execução como no
+  // desktop, e soltar cedo trocaria o conteúdo da folha antes do navegador terminar de capturá-la.
+  document.body.classList.add("cp1064-imprimindo");
+  window.addEventListener("afterprint", () => document.body.classList.remove("cp1064-imprimindo"), { once: true });
+  window.print();
+}
+window.imprimirCarteiraAtiva = imprimirCarteiraAtiva;
+
 async function baixarRelatorioCarteira(){
   let all = Array.isArray(state.carteiraLeads) ? state.carteiraLeads : [];
   if(!all.length){ toast("Nada pra exportar ainda. Abra a Carteira primeiro."); return; }
@@ -13956,7 +13993,7 @@ function ui670DetailRows(lead,mc){
           <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Agenda</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
           <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
         </div>
-        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><button type="button" onclick="${filtro==='todos'?"setPipelineVisualFiltro('agora')":"cp788AbrirCarteiraAtiva()"}">${filtro==='todos'?'Voltar às prioridades':'Ver clientes ativos'}</button></div><div class="ui-priority-list cp695-list">${listaHtml}</div></section>`;
+        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><div class="cp1064-head-actions">${filtro==='todos'?'<button type="button" onclick="imprimirCarteiraAtiva()">🖨️ Imprimir lista</button><button type="button" onclick="setPipelineVisualFiltro(\'agora\')">Voltar às prioridades</button>':'<button type="button" onclick="cp788AbrirCarteiraAtiva()">Ver clientes ativos</button>'}</div></div><div class="ui-priority-list cp695-list">${listaHtml}</div></section>`;
     };
     const memoria=[state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
     if(memoria) render(memoria);
