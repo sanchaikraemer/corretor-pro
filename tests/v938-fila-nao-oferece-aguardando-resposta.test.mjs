@@ -32,6 +32,9 @@ const fila = eval(`
   // v914/v941); este teste é sobre a EXCLUSÃO por janela de espera, não sobre ordem — stub simples.
   const cpProbabilidadeFechamento = (l) => mensagensDoCliente(l);
   const diasParado = (l) => Number(l.__parado||0);
+  // v1057 — cpFilaFazerAgora exige atendimento marcado; este teste é sobre a janela de espera,
+  // não sobre atendimento, então todo mundo "já foi atendido alguma vez" por padrão.
+  const ultimoAtendimentoTs = () => 1;
   ${fdsSrc}
   ${filaSrc}
   cpFilaFazerAgora;

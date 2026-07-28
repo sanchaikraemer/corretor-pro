@@ -2,7 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseWhatsappTxt, analyzeWithBrain } from "../api/_pipeline.js";
 
-// v1056 — a conversa real da Karine (lead da Construtora Senger, usada como caso de teste na
+// v1058 — a conversa real da Karine (lead da Construtora Senger, usada como caso de teste na
 // revisão dos prompts do Cérebro) expôs 4 furos concretos:
 // 1) o piso comercial fixo (INTELIGENCIA_CARTEIRA) citava "reserva de unidade" como tática de
 //    negociação avançada — direto contra a regra do corretor de nunca falar em reserva.
@@ -120,4 +120,4 @@ assert.equal(resultadoSemCampo.diagnostico.pedidoSemResposta, "Nenhum", "sem o c
 assert.match(app, /\['Pedido do cliente ainda sem resposta direta'/, "a tela do lead precisa ter a linha nova");
 assert.match(app, /a\?\.diagnostico\?\.pedidoSemResposta/, "a linha nova precisa ler diagnostico.pedidoSemResposta");
 
-console.log("v1056-cerebro-midia-prazo-e-pedido-sem-resposta: ok");
+console.log("v1058-cerebro-midia-prazo-e-pedido-sem-resposta: ok");

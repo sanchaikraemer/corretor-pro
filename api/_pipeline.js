@@ -506,7 +506,7 @@ export function parseWhatsappTxt(txt) {
         if (HIDDEN_MEDIA_ONLY_RE.test(trimmed)) continue;
         if (ATTACHED_SUFFIX_RE.test(trimmed)) {
           if (AUDIO_INLINE_RE.test(trimmed)) { kept.push(trimmed); continue; }
-          // v1056: antes a linha inteira era descartada — a IA perdia até o FATO de que um
+          // v1058: antes a linha inteira era descartada — a IA perdia até o FATO de que um
           // arquivo foi enviado ali (não só o conteúdo, que já era certo não inventar). Mantém
           // um marcador factual, sem tentar descrever o que tem na imagem/vídeo/documento.
           if (IMAGE_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
@@ -2520,7 +2520,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
 
   const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
   const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro);
-  // v1056: número real pro Cérebro comparar quando ele tiver uma regra do tipo "depois de X dias
+  // v1058: número real pro Cérebro comparar quando ele tiver uma regra do tipo "depois de X dias
   // sem interação, reconheça o intervalo antes de retomar" — sem isso a IA não tinha como saber
   // qual prazo o corretor quis dizer. Reaproveita o mesmo "descanso pós-atendimento" que o corretor
   // já configura pra fila Fazer agora, em vez de criar um segundo número pra manter sincronizado.

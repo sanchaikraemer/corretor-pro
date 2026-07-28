@@ -129,6 +129,9 @@ function extrairFn(nome) {
     const mensagensDoCliente = (l) => Number(l.__msgs||0);
     const cp786TemCompromisso = () => false;
     const emJanelaDeEspera = () => false;
+    // v1057 — cpFilaFazerAgora exige atendimento marcado (ultimoAtendimentoTs); stub simples pra
+    // não afetar o que este teste realmente cobre (nº de chamadas de cpProbabilidadeFechamento).
+    const ultimoAtendimentoTs = (l) => l.__atendido ? 1 : 0;
     function cpProbabilidadeFechamento(l){ contarChamada(); return Number(l.__msgs||0); }
     ${fdsSrc}
     ${filaSrc}
@@ -137,8 +140,8 @@ function extrairFn(nome) {
   // eval acima referencia contarChamada — precisa existir no escopo antes de rodar a fila.
   globalThis.contarChamada = () => { chamadas++; };
   const pool = [
-    { id: 'a', __msgs: 5 }, { id: 'b', __msgs: 12 }, { id: 'c', __msgs: 1 },
-    { id: 'd', __msgs: 8 }, { id: 'e', __msgs: 20 }
+    { id: 'a', __msgs: 5, __atendido: true }, { id: 'b', __msgs: 12, __atendido: true }, { id: 'c', __msgs: 1, __atendido: true },
+    { id: 'd', __msgs: 8, __atendido: true }, { id: 'e', __msgs: 20, __atendido: true }
   ];
   const ordenado = fila(pool).map(l => l.id);
   assert.deepEqual(ordenado, ['e', 'b', 'd', 'a', 'c'], 'ordenação continua igual (maior probabilidade primeiro)');

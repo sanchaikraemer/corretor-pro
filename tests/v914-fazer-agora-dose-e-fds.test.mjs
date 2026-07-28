@@ -27,6 +27,10 @@ const fila = eval(`
   const cp786TemCompromisso = () => false;
   const emJanelaDeEspera = () => false;
   const contextoPrioridadeIA = (l) => ({ propostaAtiva: !!l.__proposta, retornoProposta: !!l.__retorno });
+  // v1057 — cpFilaFazerAgora exige atendimento marcado; stub simples (mesmo "tempo parado" pra
+  // todo mundo) pra não interferir na ordenação por junção de fatores que este teste cobre.
+  const ultimoAtendimentoTs = (l) => l.__atendido ? 1 : 0;
+  const diasCalendarioBR = () => 5;
   ${fdsSrc}
   ${notaSrc}
   ${filaSrc}
@@ -37,14 +41,14 @@ const ehFds = hoje.getDay() === 0 || hoje.getDay() === 6;
 const pool = [
   // Poucas mensagens, mas voltou a conversar em 6 dias diferentes E já discutiram valor/condição
   // (negociação avançada) — probabilidade de fechamento alta mesmo sem ser quem tem mais msgs.
-  { id:'qualificado', __msgs:12, clientMessageDays:6, clientQuestionCount:4, __proposta:true, __retorno:true },
+  { id:'qualificado', __msgs:12, clientMessageDays:6, clientQuestionCount:4, __proposta:true, __retorno:true, __atendido:true },
   // Muitas mensagens (explosão num período curto), sem recorrência, sem sinal de negociação —
   // é o caso do "Henrique 218 msgs, contatado há 2 dias, sem retomada real" que o dono apontou.
-  { id:'volume-sem-fundo', __msgs:218, clientMessageDays:1, clientQuestionCount:0 },
+  { id:'volume-sem-fundo', __msgs:218, clientMessageDays:1, clientQuestionCount:0, __atendido:true },
   // Pouco de tudo — fica por último.
-  { id:'fraco', __msgs:6, clientMessageDays:1, clientQuestionCount:0 },
-  { id:'d', __msgs:5, __hoje:true }, // atendido hoje → fora
-  { id:'e', __msgs:0 },              // sem msg do cliente → fora
+  { id:'fraco', __msgs:6, clientMessageDays:1, clientQuestionCount:0, __atendido:true },
+  { id:'d', __msgs:5, __hoje:true, __atendido:true }, // atendido hoje → fora
+  { id:'e', __msgs:0, __atendido:true },              // sem msg do cliente → fora
 ];
 const r = fila(pool).map(l => l.id);
 if(ehFds){

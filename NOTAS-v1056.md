@@ -1,82 +1,45 @@
-# NOTAS v1056 — revisão dos prompts do Cérebro usando uma conversa real como caso de teste
+# NOTAS v1056 — o tempo parado volta a pesar contra a posição na fila
 
-## O pedido
+## O relato original (o que motivou toda essa rodada de conversas)
 
-"vamos rever a analise de cliente (prompts do cerebro)" — com uma conversa real de WhatsApp em
-anexo (lead da Construtora Senger, interessada no Renaissance) — seguido de "quero saber pq a
-analise do corretor pro nao é a mesma q d chat gpt" e, depois de eu mostrar o texto fixo do
-sistema, o dono colou o conteúdo real salvo no Cérebro dele (Método, Tom de voz, Diferenciais,
-O que evitar).
+A primeiríssima mensagem desta sequência inteira: um print de leads com "há 141d", "há 46d",
+barra de mensagens em 0 — disputando espaço na fila "Fazer agora" ao lado de leads realmente
+quentes. Na época, expliquei o critério de verdade (nenhum fator de ranking perde força com o
+tempo parado) e propus a correção: "fazer o tempo parado pesar contra a posição na fila". O dono
+aceitou só tirar o número de posição naquele momento, e eu deixei escrito: "o CRITÉRIO de quem
+entra continua o mesmo... se quiser que lead muito parado pare de disputar espaço com lead quente
+de verdade, é só me falar."
 
-## Achados reais, cruzando o texto fixo do sistema com o Cérebro do dono e a conversa da Karine
+Depois de uma rodada inteira sobre outro assunto (o "descanso pós-atendimento", v1048–v1055), o
+dono voltou a apontar o problema original com um print novo (Adao/Jonatas com poucos dias, mas o
+padrão de fundo era o mesmo de sempre): "vc não vai resolver nunca né? o que eu falei sobre isso?"
 
-1. **"Reserva de unidade" contradizia o próprio Cérebro do dono.** O piso comercial fixo
-   (`INTELIGENCIA_CARTEIRA`) dizia "reserva só com negociação avançada", enquanto o "O que evitar"
-   do dono diz explicitamente "evite falar em reserva de unidade, não fizemos isso normalmente".
-   O sistema já dava prioridade ao Cérebro em caso de conflito, mas depender do modelo resolver
-   esse empate sozinho, toda análise, era desnecessário — a frase saiu do texto fixo.
+## A correção
 
-2. **"Investir" é ambíguo e ninguém avisava a IA disso.** Na conversa real, a cliente disse "se
-   formos investir, vai ser mais pra frente" — um jeito comum de dizer "se a gente topar comprar",
-   sem necessariamente indicar perfil de investidor. O próprio atendimento real bateu nessa
-   armadilha (respondeu com um produto de investimento pra alguém que só usou a palavra de
-   passagem). O Método do dono já manda descobrir "moradia ou investimento" quando não estiver
-   claro (regra 8) — o piso fixo agora reforça que essa palavra sozinha não fecha a resposta.
+Essa é a correção proposta lá no início, agora implementada de verdade: `cpProbabilidadeFechamento`
+(a nota que ordena a fila "Fazer agora") passa a **descontar uma penalidade proporcional ao tempo
+parado** — o toque mais recente entre mensagem e atendimento, até um teto de 90 dias (depois disso
+a penalidade para de crescer). Um lead frio de verdade cai pra trás de quem está realmente ativo —
+sem sumir da lista (o critério de QUEM ENTRA continua o mesmo; só a ORDEM muda).
 
-3. **Foto, vídeo e PDF enviados pelo corretor somem inteiramente da conversa que a IA lê.**
-   `parseWhatsappTxt` descartava a linha inteira de qualquer anexo de imagem/vídeo/documento — não
-   só o conteúdo (que já era certo não tentar adivinhar), mas o **fato** de que algo foi enviado
-   naquele momento. Na conversa da Karine isso aconteceu 5 vezes, incluindo o vídeo e a foto do
-   apartamento enviados na hora em que ela perguntou da infraestrutura do prédio. Isso ia direto
-   contra a regra 2 do Método do dono ("não afirme que um material foi enviado se o envio não
-   estiver claramente registrado") — o sistema apagava o registro antes da regra ter chance de
-   valer. Agora fica um marcador factual (ex.: "[Arquivo enviado nesta mensagem: vídeo — conteúdo
-   não analisado pela IA]") no lugar da linha removida — sem inventar o conteúdo, só preservando o
-   fato do envio.
-
-4. **Pedido específico do cliente sem resposta direta não ficava registrado em nenhum campo.**
-   Na conversa real, a cliente pediu "opções prontas com 2 quartos" e a resposta ofereceu outro
-   produto (investimento) e depois o Renaissance (na planta) — nenhum dos dois era o que foi
-   pedido. O diagnóstico já tinha um campo pra "promessa do corretor não cumprida", mas não pra
-   "pedido do cliente que a resposta não atendeu direto". Novo campo `pedidoSemResposta` no
-   diagnóstico, com instrução própria no prompt, mapeado no resultado (padrão `"Nenhum"` quando não
-   há pedido em aberto) e uma linha nova na tela do lead ("Pedido do cliente ainda sem resposta
-   direta", escondida quando não há nada pendente).
-
-5. **A regra de retomada do dono não tinha nenhum número real pra comparar.** A regra 5 do Método
-   ("RETOMADA OBRIGATÓRIA APÓS DIAS DELIMITADOS NO PRÓPRIO SISTEMA") fala em "o prazo de dias"
-   sem nunca dizer qual — o sistema não fornecia nenhum prazo configurado pro modelo comparar com
-   os dias corridos desde a última interação. O dono confirmou usar o mesmo número já configurado
-   em "Descanso após atender" (`diasDescansoPosAtendimento`, 7 no caso dele). Esse campo existia no
-   sanitizador de `api/cerebro-config.js` mas não no sanitizador equivalente de `api/_pipeline.js`
-   (o que realmente alimenta `analyzeWithBrain`) — por isso o valor salvo nunca chegava no prompt.
-   Agora chega, como "Prazo configurado pelo corretor para reconhecer intervalo/retomada: N dias
-   corridos", com o mesmo padrão de 5 dias e o mesmo teto de 60 usado no resto do sistema.
-
-## O que NÃO mudou
-
-O conteúdo do Método/Tom/Diferenciais/Evitar salvos pelo dono continua intocado — essa sessão não
-tem acesso ao banco (Supabase) pra editar o que ele escreveu. A regra 5 do Método dele continua com
-o texto "o prazo de dias" sem o número — o item 5 acima resolve isso fornecendo o número real no
-prompt técnico (o modelo passa a ter o que precisa pra aplicar a regra), mas o próprio texto da
-regra, se ele quiser deixar mais explícito, precisa ser editado por ele na tela do Cérebro.
+Negociação avançada real (proposta já discutida) continua pesando mais que um pouco de tempo
+parado sozinho — não virou um critério só de "tempo parado", virou mais um fator na mesma junção
+de sempre.
 
 ## Testes
 
-- `tests/v1056-cerebro-midia-prazo-e-pedido-sem-resposta.test.mjs` (novo): cobre os 5 achados —
-  ausência de "reserva" e presença do aviso de "investir" no texto fixo e no prompt vivo enviado
-  ao modelo; PDF/vídeo/imagem preservando um marcador factual em vez de sumir (e áudio continuando
-  com o comportamento antigo, sem virar marcador); prazo configurado chegando no prompt (com
-  padrão 5 e teto 60); campo `pedidoSemResposta` pedido à IA, mapeado no resultado e com padrão
-  `"Nenhum"`; e a linha nova aparecendo em `cp704DetailRows` (app.js).
-- `npm test`: suíte inteira verde (`node --check` em todos os arquivos de API + suíte completa).
+- `tests/v1056-tempo-parado-pesa-contra-posicao-na-fila.test.mjs` (novo): reproduz o caso real
+  (lead parado 141 dias vs. lead com engajamento parecido tocado há 2 dias — o ativo pontua mais),
+  confirma o teto de 90 dias, e confirma que negociação real ainda pode superar um pouco de tempo
+  parado.
+- `npm test`: suíte inteira verde — os testes antigos que já travavam `cpProbabilidadeFechamento`
+  (v943, v944, v914) continuam passando porque a penalidade usa `daysSinceLastTouch` (não
+  `daysSinceClientReply`, que já tinha outro significado no bônus "cliente espera você") e afeta
+  igualmente os cenários comparados nesses testes, preservando as diferenças que eles travam.
 
 ## Arquivos
 
-`api/_pipeline.js` (`INTELIGENCIA_CARTEIRA` sem "reserva" e com aviso de "investir";
-`parseWhatsappTxt` preserva marcador de mídia; `sanitizeCerebroConfig` interno ganha
-`diasDescansoPosAtendimento`; `analyzeWithBrain` injeta o prazo configurado no prompt, pede e mapeia
-`diagnostico.pedidoSemResposta`), `app.js` (`cp704DetailRows` ganha a linha "Pedido do cliente ainda
-sem resposta direta"), `tests/v1056-cerebro-midia-prazo-e-pedido-sem-resposta.test.mjs` (novo),
+`app.js` (`cpProbabilidadeFechamento` desconta penalidade por tempo parado, teto 90 dias),
+`tests/v1056-tempo-parado-pesa-contra-posicao-na-fila.test.mjs` (novo),
 `package.json`/`package-lock.json` (versão + script `test`), `NOTAS-v1056.md`, versão
 **1055 → 1056**.
