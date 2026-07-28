@@ -336,55 +336,66 @@
       <div id="icCerebro">
       <div class="card compact">
         <div class="label">Cérebro Comercial</div>
-        <div class="small" style="color:var(--muted);margin-bottom:12px">Estas instruções entram no prompt da OpenAI a cada análise. Edite pra moldar o tom e o método das respostas geradas.</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Estas instruções entram no prompt da OpenAI a cada análise. Toque em cada campo pra abrir e editar.</div>
         <div style="margin-bottom:14px">
           <label>Seu nome (como aparece no WhatsApp)</label>
           <input type="text" id="cerebroCorretorNome" placeholder="Ex.: João Silva" style="width:100%;box-sizing:border-box">
           <div class="small" style="color:var(--muted);margin-top:4px">Pra IA saber que VOCÊ é o corretor e escrever as mensagens pro cliente — não pra você.</div>
         </div>
-        <div class="form-grid-2">
-          <div>
-            <label>Método (passo a passo que o agente deve seguir)</label>
-            <textarea id="cerebroMetodo" rows="14"></textarea>
+
+        <div class="small cerebro-grupo-label">Estilo</div>
+        <details class="bloco-recolhe cerebro-campo" open>
+          <summary>Método <span class="small">passo a passo que o agente deve seguir</span></summary>
+          <div class="cerebro-campo-body"><textarea id="cerebroMetodo" rows="14"></textarea></div>
+        </details>
+        <details class="bloco-recolhe cerebro-campo">
+          <summary>Tom de voz</summary>
+          <div class="cerebro-campo-body"><textarea id="cerebroTom" rows="5"></textarea></div>
+        </details>
+        <details class="bloco-recolhe cerebro-campo">
+          <summary>Diferenciais a destacar</summary>
+          <div class="cerebro-campo-body"><textarea id="cerebroDiferenciais" rows="6"></textarea></div>
+        </details>
+        <details class="bloco-recolhe cerebro-campo">
+          <summary>O que evitar</summary>
+          <div class="cerebro-campo-body"><textarea id="cerebroEvitar" rows="5"></textarea></div>
+        </details>
+
+        <div class="small cerebro-grupo-label">Regras e objeções</div>
+        <details class="bloco-recolhe cerebro-campo">
+          <summary>Regras comerciais</summary>
+          <div class="cerebro-campo-body">
+            <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as regras em um único bloco, no mesmo padrão dos demais campos do Cérebro. A IA recebe o conteúdo integralmente em cada análise.</div>
+            <textarea id="cerebroRegrasTexto" rows="14" placeholder="Cole aqui todas as regras comerciais..."></textarea>
           </div>
-          <div>
-            <label>Tom de voz</label>
-            <textarea id="cerebroTom" rows="3"></textarea>
-            <label>Diferenciais a destacar</label>
-            <textarea id="cerebroDiferenciais" rows="4"></textarea>
-            <label>O que evitar</label>
-            <textarea id="cerebroEvitar" rows="3"></textarea>
-            <label>Período padrão dos áudios <span class="small" style="color:var(--muted);font-weight:400">(30, 60 ou 90 dias)</span></label>
-            <input type="number" id="cerebroDiasImportacao" min="1" max="365" placeholder="90" style="max-width:120px">
-            <div class="small" style="color:var(--muted);margin-top:4px">As mensagens escritas entram completas. Este campo define apenas o período padrão dos áudios que serão transcritos quando você não escolher outro período na importação. Padrão: 90 dias.</div>
-            <label>Atendimentos por dia <span class="small" style="color:var(--muted);font-weight:400">(meta do "Fazer agora")</span></label>
-            <input type="number" id="cerebroAtendimentosDia" min="1" max="50" placeholder="10" style="max-width:120px">
-            <div class="small" style="color:var(--muted);margin-top:4px">Quantos clientes entram na sua fila "Fazer agora" por dia. Cada corretor escolhe a sua meta (de 1 a 50). Padrão: 10.</div>
-            <label>Descanso após atender <span class="small" style="color:var(--muted);font-weight:400">(dias fora da fila)</span></label>
-            <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
-            <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5.</div>
+        </details>
+        <details class="bloco-recolhe cerebro-campo">
+          <summary>Sinais de objeção → como conduzir</summary>
+          <div class="cerebro-campo-body">
+            <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as objeções e as respectivas formas de condução em um único bloco. A IA identifica os sinais pelo sentido da conversa e recebe o texto integralmente.</div>
+            <textarea id="cerebroObjecoesTexto" rows="18" placeholder="Cole aqui todas as objeções e como conduzir cada uma..."></textarea>
           </div>
+        </details>
+
+        <div class="small cerebro-grupo-label">Configurações técnicas</div>
+        <div style="margin-top:2px">
+          <label>Período padrão dos áudios <span class="small" style="color:var(--muted);font-weight:400">(30, 60 ou 90 dias)</span></label>
+          <input type="number" id="cerebroDiasImportacao" min="1" max="365" placeholder="90" style="max-width:120px">
+          <div class="small" style="color:var(--muted);margin-top:4px">As mensagens escritas entram completas. Este campo define apenas o período padrão dos áudios que serão transcritos quando você não escolher outro período na importação. Padrão: 90 dias.</div>
+          <label>Atendimentos por dia <span class="small" style="color:var(--muted);font-weight:400">(meta do "Fazer agora")</span></label>
+          <input type="number" id="cerebroAtendimentosDia" min="1" max="50" placeholder="10" style="max-width:120px">
+          <div class="small" style="color:var(--muted);margin-top:4px">Quantos clientes entram na sua fila "Fazer agora" por dia. Cada corretor escolhe a sua meta (de 1 a 50). Padrão: 10.</div>
+          <label>Descanso após atender <span class="small" style="color:var(--muted);font-weight:400">(dias fora da fila)</span></label>
+          <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
+          <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5.</div>
         </div>
+
         <div class="btns btns-row" style="margin-top:14px">
           <button class="btn" id="cerebroSalvar" type="button">Salvar</button>
           <button class="btn secondary" id="cerebroResetar" type="button">Restaurar padrão</button>
           <button class="btn danger" id="cerebroZerar" type="button">Zerar Cérebro + Aprendizado</button>
         </div>
         <div class="small" id="cerebroStatus" style="margin-top:8px;color:var(--muted)"></div>
-      </div>
-
-      <!-- BASE DE REGRAS COMERCIAIS -->
-      <div class="card compact">
-        <div class="label">Regras comerciais</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as regras em um único bloco, no mesmo padrão dos demais campos do Cérebro. A IA recebe o conteúdo integralmente em cada análise.</div>
-        <textarea id="cerebroRegrasTexto" rows="14" placeholder="Cole aqui todas as regras comerciais..."></textarea>
-      </div>
-
-      <!-- BIBLIOTECA OBJEÇÃO → RESPOSTA -->
-      <div class="card compact">
-        <div class="label">Sinais de objeção → como conduzir</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Cole todas as objeções e as respectivas formas de condução em um único bloco. A IA identifica os sinais pelo sentido da conversa e recebe o texto integralmente.</div>
-        <textarea id="cerebroObjecoesTexto" rows="18" placeholder="Cole aqui todas as objeções e como conduzir cada uma..."></textarea>
       </div>
       </div><!--/icCerebro-->
     </section>
