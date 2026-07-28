@@ -16,7 +16,7 @@ const persistence = fs.readFileSync(new URL('../api/_persistence.js', import.met
 //  5) Performance: service worker serve os assets do cache na hora (stale-while-revalidate).
 
 // 1. Linha densa + barra existem e renderizam os campos certos.
-const rowFn = app.match(/function cpHomeLeadRow\(l, ?pos, ?maxMsgs\)\{[\s\S]*?\n\}/);
+const rowFn = app.match(/function cpHomeLeadRow\(l, ?maxMsgs\)\{[\s\S]*?\n\}/);
 assert.ok(rowFn, 'cpHomeLeadRow não encontrada');
 assert.match(rowFn[0], /class="cp-hoje-row"/, 'linha usa a classe da lista compacta');
 assert.match(rowFn[0], /cpBarraMensagensMini\(l, ?maxMsgs\)/, 'a linha inclui a barra de mensagens (relativa ao maior da lista)');

@@ -2699,9 +2699,8 @@ function filaRowHTML(l, pos){
 // lado.
 // v972 — ATENÇÃO, não "corrigir" isto pra bater com a ordem da fila: este número é volume bruto
 // de mensagens (engajamento), o MESMO fator que v943/v944 baixaram de propósito no peso do
-// ranking (cpProbabilidadeFechamento) — não é, e nunca foi, a nota de prioridade. O dono já viu
-// essa contradição (nº maior aqui ≠ topo da lista) e o conserto foi dar à linha um indicador de
-// posição PRÓPRIO (chr-rank, em cpHomeLeadRow) — não mexer nestes limiares/cores.
+// ranking (cpProbabilidadeFechamento) — não é, e nunca foi, a nota de prioridade. Não mexer
+// nestes limiares/cores.
 function cpBarraMensagensMini(l, maxMsgs){
   // v1017 — pedido do dono: essa barra passa a respeitar os últimos 90 dias, igual "Total de
   // mensagens" (v1016) — mensagensDoCliente (histórico inteiro) continua existindo pro ranking/
@@ -2722,7 +2721,7 @@ function cpBarraMensagensMini(l, maxMsgs){
 // Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): dot de status, nome,
 // produto, barra de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a
 // largura toda; barra + produto vão embaixo) — via grid-template-areas, sem quebra lateral.
-function cpHomeLeadRow(l, pos, maxMsgs){
+function cpHomeLeadRow(l, maxMsgs){
   const idJs = JSON.stringify(String(l.id||""));
   let nivel = 0;
   try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
@@ -2762,11 +2761,12 @@ function cpHomeLeadRow(l, pos, maxMsgs){
   // foram removidos de vez, não sobrevivem em lugar nenhum do app.
   // v972 — achado do dono: o nº da barra de mensagens (ao lado) é o mais chamativo da linha mas
   // NÃO é a prioridade (ver aviso em cpBarraMensagensMini) — por isso pode "parecer maior" num
-  // lead que está mais abaixo na lista. pos É a ordem real (cpFilaFazerAgora já ordenou por
-  // cpProbabilidadeFechamento); o badge chr-rank dá um número que nunca contradiz a posição.
+  // lead que está mais abaixo na lista.
+  // v1046 — pedido do dono: tirar de vez o número de posição (1º/2º/3º...) da linha — ele achou
+  // desnecessário; a lista em si (com a quantidade certa, configurada no Cérebro) já basta.
   return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
     <span class="chr-dot" style="background:${dotCor}"></span>
-    <span class="chr-nm"><b class="chr-rank" title="Prioridade ${pos} de hoje — vale a ORDEM da lista, não o número da barra ao lado">${pos}º</b> ${escapeHtml(l.name||'Cliente')}</span>
+    <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`há ${escapeHtml(dias)}`:''}</span>
@@ -3040,7 +3040,7 @@ function renderBotoesHome(){
     // "maior da lista" ser calculado com a MESMA régua exibida (senão a barra nunca chegaria a
     // 100%, ou o menor lead pareceria proporcionalmente maior/menor do que realmente é).
     const maxMsgsDose = dose.reduce((m,l)=>Math.max(m, (typeof mensagensDoClienteRecente==='function'?mensagensDoClienteRecente(l):0)), 1);
-    top3Html = `<div class="cp-hoje-list">${dose.map((l, i) => cpHomeLeadRow(l, i+1, maxMsgsDose)).join("")}</div>`
+    top3Html = `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
           : "");
@@ -3095,9 +3095,6 @@ function renderBotoesHome(){
       .cp-hoje-row:hover{background:rgba(255,255,255,.03)}
       .cp-hoje-row .chr-dot{grid-area:dot;width:8px;height:8px;border-radius:50%}
       .cp-hoje-row .chr-nm{grid-area:nm;font-size:13.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      /* v972 — badge de posição (1º/2º/...): número que NUNCA contradiz a ordem da lista, tom
-         neutro de propósito (não compete com o coral do resto da linha). */
-      .cp-hoje-row .chr-rank{display:inline-block;min-width:15px;margin-right:2px;color:var(--muted);font-weight:900;font-size:.9em}
       .cp-hoje-row .chr-pr{grid-area:pr;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .cp-hoje-row .chr-bar{grid-area:bar;display:flex;align-items:center;gap:8px;justify-content:flex-end}
       /* v976 — pedido do dono: só a barra mais COMPRIDA; o número ao lado (chr-bar b) fica do
