@@ -2733,26 +2733,37 @@ function cpHomeLeadRow(l, maxMsgs){
   // v1018 — pedido do dono (caso real: "Adão — marquei atendimento quarta dia 22, ainda sim
   // apresenta 26 dias"): daysSinceLastInteraction só olha mensagem (nunca soube de atendimento
   // marcado), então esse número podia ficar bem maior do que o esperado logo depois de atender —
-  // mesma causa raiz do bug de emJanelaDeEspera (ver ali). Aqui usa o atendimento quando ele for
-  // MAIS RECENTE que a última mensagem, igual o "toque" que a fila já calcula.
-  let diasNum = l.daysSinceLastInteraction;
+  // mesma causa raiz do bug de emJanelaDeEspera (ver ali).
+  // v1053 — pedido do dono (caso real "Karine"): o número mostrado aqui ficava confuso perto da
+  // regra de descanso (v1052, que conta SÓ do atendimento) porque só usava a data do atendimento
+  // quando ela era MAIS RECENTE que a última mensagem — sobrando casos em que a tela mostrava
+  // "há 5d" (da mensagem) enquanto a regra de verdade contava de um atendimento de 10+ dias,
+  // dando a impressão de que o sistema estava ignorando a regra. Agora, sempre que existe um
+  // atendimento marcado, o número mostrado é dele — nunca mais da mensagem — pra bater com o
+  // que a regra de descanso realmente usa. Sem NENHUM atendimento registrado (lead nunca
+  // atendido), aí sim mostra a última interação, que é a única data que existe.
+  let diasNum = null;
   let diasEhAtendimento = false;
   try{
     const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
     if(atTs){
       const diasAt = diasCalendarioBR(atTs);
-      if(diasAt != null && (diasNum == null || diasAt < diasNum)){ diasNum = diasAt; diasEhAtendimento = true; }
+      if(diasAt != null){ diasNum = diasAt; diasEhAtendimento = true; }
     }
   }catch(_){}
+  if(diasNum == null) diasNum = l.daysSinceLastInteraction;
   const dias = diasNum != null ? `${diasNum}d` : '';
   // v972 — achado do dono: "78d"/"109d" solto do lado de "cliente esperando sua resposta" parecia
   // dizer "o cliente espera há 78/109 dias", mas o campo é dias desde a ÚLTIMA interação de
   // QUALQUER lado (nem sempre é a mesma coisa). Rótulo "há" + title explicam o que é de fato,
   // sem mudar o cálculo do dado (daysSinceLastInteraction continua vindo de onde sempre veio).
-  const diasTitle = diasNum == null ? '' : (nivel === 1
-    ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
-    : diasEhAtendimento
-      ? `${diasNum} dia${diasNum===1?'':'s'} desde o último atendimento marcado`
+  // v1053 — o título passa a bater sempre com o número visível: quando há atendimento marcado,
+  // o texto é sempre sobre o atendimento (mesmo em nível 1) — só cai pro texto de "cliente
+  // esperando"/"última interação" quando não existe atendimento nenhum pra mostrar.
+  const diasTitle = diasNum == null ? '' : (diasEhAtendimento
+    ? `${diasNum} dia${diasNum===1?'':'s'} desde o último atendimento marcado`
+    : nivel === 1
+      ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
       : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
   // v978 — pedido do dono: aqui na Home só o nome do empreendimento (produtosLabelCurto), sem
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
