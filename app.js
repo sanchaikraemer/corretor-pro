@@ -2187,8 +2187,8 @@ function rotuloTempoAtendimento(ts){
   return `há ${dias} dias`;
 }
 
-// Prazo de proteção: lead atendido não volta pra fila de prioritários antes de PRAZO_PROTECAO_ATENDIDO dias.
-const PRAZO_PROTECAO_ATENDIDO = 5;
+// Prazo de proteção: lead atendido não volta pra fila de prioritários antes do descanso escolhido
+// pelo corretor no Cérebro (cpDiasDescansoPosAtendimento — ver comentário perto de limiarRetomada).
 // v1022 — usava diasDesdeAtendimentoManual (função removida aqui), que só olhava
 // aprendizado.eventos/contato_manual — uma fonte MAIS ESTREITA que ultimoAtendimentoTs (que
 // também olha lastAttendanceAt/ultimoAtendimentoEm e mensagens manuais da timeline; a mesma
@@ -2196,12 +2196,14 @@ const PRAZO_PROTECAO_ATENDIDO = 5;
 // recentemente" tinham divergido: um atendimento salvo por um desses outros caminhos contava
 // pra emJanelaDeEspera mas não pra esta proteção — clienteAguardandoVoce (ponto vermelho) e o
 // grupo "Atendidos recentemente" podiam discordar da janela de espera sobre o MESMO lead.
-// Agora as duas usam a mesma fonte de verdade.
+// v1049 — pedido do dono: essas duas checagens também discordavam quando o corretor mudava o
+// prazo padrão (5 dias) — agora as duas usam a MESMA fonte de verdade (a mesma escolhida no
+// Cérebro), nunca mais dois números diferentes pro mesmo conceito.
 function protegidoPosAtendimento(l){
   const ts = ultimoAtendimentoTs(l);
   if(!ts) return false;
   const dias = diasCalendarioBR(ts);
-  return dias != null && dias < PRAZO_PROTECAO_ATENDIDO;
+  return dias != null && dias < cpDiasDescansoPosAtendimento();
 }
 
 // Última resposta do cliente registrada pelo corretor (fecha o ciclo: a mensagem funcionou?).
@@ -2612,7 +2614,7 @@ const GRUPOS_HOME = {
   "boa-sem-urgencia":   { titulo: "Boa oportunidade, sem urgência", sub: "Leads bons, mas travados por venda, safra, decisão de terceiros ou prazo." },
   "pode-aguardar":      { titulo: "Pode aguardar", sub: "Você já chamou, há lembrete futuro ou o cliente pediu tempo — não precisa insistir agora." },
   "baixa-prioridade":   { titulo: "Baixa prioridade", sub: "Pouco sinal comercial ou conversa ainda rasa." },
-  "tratado-hoje":       { titulo: "Atendidos recentemente", sub: `Leads que você já atendeu nos últimos ${PRAZO_PROTECAO_ATENDIDO} dias — voltam pra fila de prioritários depois disso.` },
+  "tratado-hoje":       { titulo: "Atendidos recentemente", sub: `Leads que você já atendeu nos últimos ${cpDiasDescansoPosAtendimento()} dias — voltam pra fila de prioritários depois disso.` },
   "hoje":               { titulo: "Atender hoje", sub: "Fila ordenada por prioridade de atendimento, não apenas por chance de venda." },
   "todos":              { titulo: "Todos os leads ativos", sub: "Todos os leads em aberto, com prioridade comercial calculada pela conversa." }
 };
