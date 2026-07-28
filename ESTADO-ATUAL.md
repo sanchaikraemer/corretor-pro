@@ -10,7 +10,10 @@
 > Regras de trabalho (como versionar, como rodar os testes, convenções já estabelecidas) continuam
 > em `CLAUDE.md`, na raiz do projeto — este arquivo não repete aquilo, só descreve o estado técnico.
 
-_Atualizado pela última vez na v1043 (28/07/2026)._
+_Atualizado pela última vez na v1067 (28/07/2026) — a seção 8 (pendências) estava desatualizada
+desde a v1043: apontava que política de privacidade e termos de uso "ainda não existiam", mas as
+duas páginas já foram publicadas na v1045 (só faltam os dois campos de identificação do responsável
+e a revisão jurídica, ver seção 8)._
 
 ## 1. Arquitetura
 
@@ -179,7 +182,12 @@ montar isso:
 - **`app.js` é um arquivo só, com ~14 mil linhas** — funciona, mas dificulta manutenção e pode
   esconder funções duplicadas/substituídas (achado da auditoria, ver seção 03 do relatório). Ainda
   não foi dividido em módulos.
-- **Política de privacidade e termos de uso** formais — ainda não existem como páginas publicadas.
+- **Política de privacidade e termos de uso** — publicadas desde a v1045 (`privacidade.html`,
+  `termos.html`, linkadas no rodapé do cadastro). Ainda faltam dois passos manuais do dono: (1)
+  preencher os campos `[razão social / CNPJ ou CPF do responsável]` e `[e-mail de contato/DPO]`
+  nas duas páginas — são dados que só ele tem, não podem ser inventados; (2) uma revisão jurídica
+  de verdade antes de tratar o texto como definitivo (aviso disso já fica visível no topo das duas
+  páginas).
 - **Cobrança/assinatura automatizada** — hoje o "virar pago" é manual, pelo botão "Marcar pago" no
   painel administrativo. Não há integração com nenhum meio de pagamento.
 - **App nativo pro iPhone** (aparecer direto no botão Compartilhar do WhatsApp, como no Android) —

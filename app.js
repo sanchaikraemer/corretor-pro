@@ -669,7 +669,7 @@ function carregarTelaAtiva(t, force=false){
       const rev = Number(state.dataRevision) || 0;
       if(!force && VIEW_CACHEABLE.has(t) && state.viewRendered?.[t] === rev) return;
       try{
-        if(t === "home") await carregarDashboard();
+        if(t === "home") await carregarDashboard(force);
         else if(t === "pipeline") await carregarPipeline();
         else if(t === "agenda") await carregarAgenda();
         else if(t === "cerebro"){
@@ -3975,22 +3975,29 @@ function renderHomeFallbackSeguro(items){
   </div>`;
 }
 
-async function carregarDashboard(){
+async function carregarDashboard(force){
   if(state.active !== "home") return;
   try{
-    // Usa os dados já carregados. Atualização de rede acontece só quando o cache vence
-    // ou depois de uma mutação explícita; navegar entre telas não baixa a carteira de novo.
-    const cached = state.itemsAtivos?.length ? { items: state.itemsAtivos } : null;
+    // Usa os dados já carregados. Atualização de rede acontece só quando o cache vence,
+    // depois de uma mutação explícita, ou quando o chamador força (sync de fundo a cada 30s e
+    // aba voltando a ficar visível chamam carregarDashboard(true) — antes desta correção o
+    // parâmetro nem existia aqui, então essas duas sincronizações eram ignoradas em silêncio
+    // sempre que a Home já tinha carregado uma vez na sessão: o dashboard só se atualizava de
+    // verdade com um F5 completo).
+    const cached = !force && state.itemsAtivos?.length ? { items: state.itemsAtivos } : null;
     if(cached){
       _processarDashboard({ items: state.todosLeads || cached.items });
       return;
     }
 
-    // Sem cache: mostra skeleton imediatamente pra não parecer travado
-    const focoSkel = qs("#leadFocoArea");
-    if(focoSkel) focoSkel.innerHTML = `<div class="skel-loading"><div class="skel-kpis"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
+    // Só mostra o esqueleto quando a tela está mesmo vazia — uma sincronização de fundo forçada
+    // com a lista já visível não pode apagar o que o corretor já está vendo enquanto busca.
+    if(!state.itemsAtivos?.length){
+      const focoSkel = qs("#leadFocoArea");
+      if(focoSkel) focoSkel.innerHTML = `<div class="skel-loading"><div class="skel-kpis"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
+    }
 
-    const data = await getLeadsData();
+    const data = await getLeadsData(force);
     if(data && data.ok === false){
       const foco = qs("#leadFocoArea");
       if(foco && !state.itemsAtivos?.length){
@@ -9531,7 +9538,13 @@ addEventListener("resize",()=>{if(!isDesktop()){qsa(".screen").forEach(e=>e.clas
 function refreshAllSections(){
   // Nunca monta telas escondidas. Atualiza a home/sino e somente a tela que o usuário está vendo.
   carregarAgendaTopo();
-  if(state.active === "home") carregarDashboard();
+  // force=true é essencial aqui: prioridadeAtendimento/scoreConversaoHoje (app.js) cacheiam o
+  // score por OBJETO de lead (WeakMap) pra performance — sem forçar uma busca nova (que sempre
+  // cria objetos novos), a Home continuaria reaproveitando os MESMOS objetos e os MESMOS scores
+  // já calculados com a config antiga, mesmo com o valor novo já salvo no localStorage. Foi
+  // exatamente esse detalhe que deixava a correção da v1066 (sincronizar Cérebro entre aparelhos)
+  // incompleta: a config chegava certa, mas a fila só reordenava depois de um F5 manual.
+  if(state.active === "home") carregarDashboard(true);
   else carregarTelaAtiva(state.active, true);
 }
 window.refreshAllSections = refreshAllSections;
