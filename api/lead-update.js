@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial,
   ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
-  upsertConfigComOrganizacao
+  upsertConfigComOrganizacao, verificarLimiteDiario, limiteVisaoIADoDia, limiteVisaoIADoDiaTeste
 } from "./_pipeline.js";
 import { registrarUsoIA } from "./_iaCusto.js";
 
@@ -294,6 +294,10 @@ function telefoneBRSuspeito(tel) {
 async function acaoExtrairPrint(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Leitura de print indisponível agora." });
+  // v1068 — esta ação nunca teve nenhum teto diário (achado da auditoria de segurança): sem
+  // isso, um script podia chamar a visão da OpenAI indefinidamente sem nenhuma rede de segurança.
+  const limite = await verificarLimiteDiario(organizationId, "visao-extrair-print", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
+  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} leituras de print foi atingido para esta conta. Tente novamente amanhã.` });
   const dataUrl = String(body?.imagemBase64 || "");
   if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem não recebida no formato esperado." });
   const instrucao = `Você lê o PRINT de uma conversa de WhatsApp ou formulário de um possível cliente (lead) de uma imobiliária. Extraia SÓ os dados do CLIENTE (nunca do corretor/da empresa).
@@ -378,6 +382,9 @@ Responda APENAS JSON: { "nome":"", "nomeFonte":"", "telefone":"", "email":"", "p
 async function acaoDetectarRosto(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Detecção de rosto indisponível agora." });
+  // v1068 — mesma rede de segurança da leitura de print (ver comentário lá): sem teto nenhum.
+  const limite = await verificarLimiteDiario(organizationId, "visao-detectar-rosto", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
+  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} detecções de rosto foi atingido para esta conta. Tente novamente amanhã.` });
   const dataUrl = String(body?.imagemBase64 || "");
   if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem inválida." });
 
@@ -429,6 +436,10 @@ Responda APENAS JSON: { "faceBox": null }.`;
 async function acaoLerPrintsConversa(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Leitura de prints indisponível agora." });
+  // v1068 — mesma rede de segurança das outras duas ações de visão (ver comentário acima):
+  // sem teto nenhum, e esta é a mais cara das três (até 6 imagens numa chamada só).
+  const limite = await verificarLimiteDiario(organizationId, "visao-ler-prints", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
+  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} leituras de conversa por print foi atingido para esta conta. Tente novamente amanhã.` });
   let imgs = Array.isArray(body?.imagens) ? body.imagens : [];
   imgs = imgs.filter(u => typeof u === "string" && /^data:image\//.test(u)).slice(0, 6);
   if (!imgs.length) return json(res, 400, { ok: false, error: "Nenhuma imagem recebida." });

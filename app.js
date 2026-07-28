@@ -976,65 +976,6 @@ async function buscarSimilares(produto, etapa, leadAtual){
   }catch(_){ return []; }
 }
 
-function analiseComercialPrincipalHTML(a){
-  a = a || {};
-  const ac = (a.analiseComercial && typeof a.analiseComercial === "object") ? a.analiseComercial : null;
-  const camposObrigatorios = ac ? [
-    ac.ultimaPessoaFalar,
-    ac.ultimoCompromissoCliente,
-    ac.ultimaInformacaoPrometida,
-    ac.produtoPrincipalInteresse,
-    ac.objecaoPrincipal,
-    ac.pendenciaFinanceira,
-    ac.proximoPassoDeQuem,
-    ac.etapaFunil,
-    ac.nivelInteresse,
-    ac.percepcaoTodaConversa,
-    ac.mensagemIdealHoje
-  ].filter(v => String(v || "").trim()) : [];
-
-  if(!ac || !camposObrigatorios.length){
-    return `<section style="border:1px solid rgba(184,194,201,.45);border-radius:14px;padding:13px;background:rgba(184,194,201,.07)">
-      <div style="font-size:15px;font-weight:950;color:#fff">Diagnóstico comercial completo</div>
-      <div style="margin-top:6px;color:var(--soft);font-size:12px;line-height:1.45">Este lead ainda está com a análise antiga. Toque em <b style="color:var(--morno)">Reanalisar</b> para gerar a leitura completa da conversa e as mensagens comerciais.</div>
-    </section>`;
-  }
-
-  const paralelos = Array.isArray(ac.produtosParalelosApresentados)
-    ? ac.produtosParalelosApresentados.join(" · ")
-    : ac.produtosParalelosApresentados;
-  const itens = [
-    ["1. Última pessoa a falar", ac.ultimaPessoaFalar],
-    ["2. Último compromisso assumido pelo cliente", ac.ultimoCompromissoCliente],
-    ["3. Última informação prometida", ac.ultimaInformacaoPrometida],
-    ["4. Produto principal de interesse", ac.produtoPrincipalInteresse],
-    ["5. Produtos paralelos apresentados", paralelos || "Nenhum"],
-    ["6. Objeção principal", ac.objecaoPrincipal],
-    ["7. Permuta / entrada com imóvel", ac.pendenciaFinanceira],
-    ["8. Próximo passo é de quem", ac.proximoPassoDeQuem],
-    ["9. Etapa do funil", ac.etapaFunil],
-    ["10. Nível de interesse", ac.nivelInteresse]
-  ];
-  const linhas = itens.map(([lab,val]) => `<div style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-    <div style="font-size:10px;line-height:1.25;letter-spacing:.08em;text-transform:uppercase;font-weight:950;color:var(--muted)">${escapeHtml(lab)}</div>
-    <div style="margin-top:4px;font-size:13px;line-height:1.45;color:var(--text)">${escapeHtml(String(val || "Não identificado"))}</div>
-  </div>`).join("");
-  const bloco = (titulo, valor, destaque) => valor ? `<div style="margin-top:10px;padding:11px 12px;border:1px solid ${destaque ? 'rgba(255,98,88,.35)' : 'var(--line)'};border-radius:11px;background:${destaque ? 'rgba(255,98,88,.06)' : 'rgba(255,255,255,.025)'}">
-    <div style="font-size:10px;line-height:1.25;letter-spacing:.08em;text-transform:uppercase;font-weight:950;color:${destaque ? 'var(--lime)' : 'var(--muted)'}">${escapeHtml(titulo)}</div>
-    <div style="margin-top:5px;font-size:13px;line-height:1.5;color:#fff;white-space:pre-wrap">${escapeHtml(String(valor))}</div>
-  </div>` : "";
-
-  return `<section style="border:1px solid rgba(0,212,255,.28);border-radius:14px;padding:13px;background:linear-gradient(180deg,rgba(0,212,255,.055),rgba(255,255,255,.018))">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-      <div style="font-size:16px;font-weight:950;color:#fff">Diagnóstico comercial completo</div>
-      <span style="padding:3px 8px;border:1px solid rgba(0,212,255,.35);border-radius:999px;color:var(--cyan);font-size:9px;font-weight:950;letter-spacing:.08em;text-transform:uppercase">análise da conversa inteira</span>
-    </div>
-    <div style="margin-top:7px">${linhas}</div>
-    ${bloco("O que o Corretor Pro percebeu analisando toda a conversa", ac.percepcaoTodaConversa, false)}
-    ${bloco("Mensagem que eu enviaria hoje", ac.mensagemIdealHoje, true)}
-  </section>`;
-}
-
 // "Leitura do cliente" — diagnóstico do que a IA LEU da conversa (nada inventado): objetivo,
 // motivo real, sinais, o que já sabemos x o que falta (com % de conhecimento), a próxima pergunta
 // mais importante e alerta de conversa superficial. Campos vazios não aparecem; lead antigo (sem
@@ -2233,15 +2174,15 @@ function temVendaCondicionada(l){
 }
 // Atendimento REGISTRADO pelo corretor (presencial, visita, ligação, anotação) = engajamento REAL
 // de primeira mão, mesmo sem o cliente ter digitado nada no WhatsApp. Vale mais que mensagem de texto.
+// v1068 — achado da auditoria comercial: esta função só olhava l.recentMessages, então um lead
+// marcado atendido SÓ pelo botão de um clique "Marcar atendimento" (que grava o evento em
+// analysis.aprendizado.eventos/lastAttendanceAt, NUNCA na timeline — ver api/reanalisar-lead.js)
+// voltava false aqui, mesmo com ultimoAtendimentoTs(l) > 0 (usada por emJanelaDeEspera desde a
+// v1018/v1022 e considerada a fonte de verdade de "isso foi atendido"). Na prática, esse lead
+// nunca saía de "Oportunidades esquecidas" mesmo depois de esfriar, e mostrava "N msgs do
+// cliente" em vez de "você já atendeu" — as duas checagens de "atendido" precisam concordar.
 function temAtendimentoManual(l){
-  const tl = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
-  return tl.some(m => {
-    if(!m) return false;
-    if(m.source === "manual" || m.source === "crm") return true;
-    if(["atendimento","nota","ligacao","visita","presencial"].includes(String(m.type||""))) return true;
-    if(/atendimento.*\(corretor\)/i.test(String(m.author||""))) return true;
-    return false;
-  });
+  return !!(typeof ultimoAtendimentoTs === 'function' ? ultimoAtendimentoTs(l) : 0);
 }
 const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
@@ -7266,9 +7207,6 @@ function startProgresso(){
   };
 }
 
-// Compat: mantém o nome antigo pra não quebrar quem ainda chama
-function startBusy(){ return startProgresso(); }
-
 function userFriendlyError(err,file){
   const raw=String(err?.message||err||"");
   if(raw.includes("Supabase") && raw.includes("configurado")){
@@ -9815,7 +9753,19 @@ function cpFilaFazerAgora(items){
   // que ir lá nas oportunidades esquecidas". Lead sem NENHUM atendimento marcado no app não entra
   // mais aqui — ele aparece em "Oportunidades esquecidas" (leadsEsquecidos, que já existe e já
   // ordena pelo mais parado primeiro, exatamente como pedido).
-  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !!(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l)) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
+  // v1068 — achado da auditoria comercial: recomendacaoContato.aguardar (v1059, "a IA acabou de
+  // dizer 'aguarde, sem mandar mensagem'") só era lido dentro do lead já aberto (renderLeadFoco)
+  // — a própria fila que decide QUEM aparece no topo do "Fazer agora" nunca checava esse sinal.
+  // Um lead com negociação avançada e atendimento recente podia subir ao topo mesmo com a IA
+  // recomendando esperar — o corretor via "atenda este agora" contradizendo o aviso dentro do
+  // lead. Mesmo gate usado lá (analiseAtualValida752, pra nunca confiar num sinal de análise
+  // desatualizada) — um lead "aguardar" continua existindo (não vira Perdido/arquivado), só não
+  // compete mais pelo topo da fila de contato ativo.
+  const pool = ativos.filter(l => {
+    const a = l?.analysis || {};
+    const aguardarContato = (typeof analiseAtualValida752 === 'function' && analiseAtualValida752(a)) && a?.recomendacaoContato?.aguardar === true;
+    return !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !!(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l)) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)) && !aguardarContato;
+  });
   // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
   // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
   // cada COMPARAÇÃO — pra 227 leads isso é milhares de recomputações redundantes por render;

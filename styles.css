@@ -1211,13 +1211,12 @@ html[data-theme="dark"] .cp-topbar{background:#002633!important}
   .cp-met-num{font-size:16px!important}
 }
 
-.cp-dashboard-grid{display:grid!important;grid-template-columns:1.12fr .94fr .94fr!important;grid-template-areas:"appointments performance stages" "running running activities"!important;gap:10px!important}
+.cp-dashboard-grid{display:grid!important;grid-template-columns:1.12fr .94fr .94fr!important;grid-template-areas:"appointments performance stages" "running running running"!important;gap:10px!important}
 .cp-card{min-width:0!important;padding:12px!important;border:1px solid var(--cp-border)!important;border-radius:8px!important;background:var(--cp-panel)!important;color:var(--cp-text)!important;box-shadow:var(--cp-card-shadow)!important}
 .cp-appointments-card{grid-area:appointments!important;height:220px!important}
 .cp-performance-card{grid-area:performance!important;height:220px!important}
 .cp-stages-card{grid-area:stages!important;height:220px!important}
 .cp-running-card{grid-area:running!important;height:220px!important}
-.cp-activities-card{grid-area:activities!important;height:220px!important}
 .cp-card-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px!important;margin:0 0 8px!important}
 .cp-card-head h3{margin:0!important;color:var(--cp-text)!important;font-size:10px!important;font-weight:750!important;line-height:1.1!important;letter-spacing:-.01em!important}
 .cp-card-head p{margin:3px 0 0!important;color:var(--cp-muted)!important;font-size:7px!important;line-height:1.2!important}
@@ -1259,7 +1258,6 @@ html[data-theme="dark"] .cp-topbar{background:#002633!important}
 .cp-running-row:last-child{border-bottom:0!important}
 .cp-running-lead{display:flex!important;align-items:center!important;gap:7px!important;min-width:0!important}.cp-running-lead strong{display:block!important;overflow:hidden!important;color:var(--cp-text)!important;font-size:7.5px!important;text-overflow:ellipsis!important;white-space:nowrap!important}.cp-running-lead small{display:block!important;overflow:hidden!important;margin-top:2px!important;color:var(--cp-muted)!important;font-size:6px!important;text-overflow:ellipsis!important;white-space:nowrap!important}
 .cp-chip,.cp-priority{justify-self:start!important;padding:3px 5px!important;border:1px solid currentColor!important;border-radius:3px!important;background:transparent!important;font-size:6px!important;font-weight:650!important;white-space:nowrap!important}
-.cp-activities-card{display:flex!important;flex-direction:column!important}.cp-activity-row{height:154px!important}.cp-donut-activity{background:conic-gradient(var(--cp-green) 0 70%,var(--cp-slate) 70% 100%)!important}
 
 /* LEAD ABERTO E TELAS INTERNAS */
 .cp-lead-workspace{display:none!important;padding:20px 28px 34px!important;max-width:1180px!important;margin:0 auto!important}
@@ -1312,7 +1310,7 @@ html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{bac
   .cp-card-head{margin-bottom:7px!important}.cp-card-head h3{font-size:10.5px!important}.cp-card-head p{font-size:7px!important}.cp-card-head button{font-size:7px!important}
   .cp-appointments-card{height:auto!important;min-height:116px!important}.cp-appointment{grid-template-columns:32px 24px minmax(0,1fr) auto!important;min-height:37px!important;gap:6px!important}.cp-time{font-size:7px!important}.cp-lead-avatar{width:22px!important;height:22px!important}.cp-appointment strong{font-size:7.8px!important}.cp-appointment small{font-size:6.2px!important}.cp-status{font-size:5.8px!important;padding:3px 5px!important}.cp-empty-compact{min-height:70px!important}
   .cp-performance-card{display:flex!important;flex-direction:column!important;height:205px!important}.cp-chart-row{height:139px!important;justify-content:flex-start!important;gap:24px!important;padding:0 8px!important}.cp-donut{width:92px!important;height:92px!important}.cp-donut::after{inset:19px!important}.cp-legend{min-width:112px!important;gap:8px!important}.cp-legend-row{font-size:6.8px!important}.cp-card-link{height:24px!important;line-height:24px!important;font-size:7px!important}
-  .cp-stages-card,.cp-running-card,.cp-activities-card{display:none!important}
+  .cp-stages-card,.cp-running-card{display:none!important}
   .cp-lead-workspace{padding:12px 12px 88px!important}
   .cp-bottom-nav{display:block!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:1000!important;padding:0 6px calc(env(safe-area-inset-bottom) + 4px)!important;border-top:1px solid var(--cp-border)!important;background:color-mix(in srgb,var(--cp-panel) 96%,transparent)!important;backdrop-filter:blur(16px)!important}
   .cp-bottom-nav .nav-inner{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:center!important;width:100%!important;max-width:520px!important;height:58px!important;margin:0 auto!important;gap:0!important}
@@ -1852,8 +1850,6 @@ html[data-theme="light"] button.secondary{
 html[data-theme="light"] .empty,
 html[data-theme="light"] .notice{background:#ffffff!important;border-color:var(--cp-border)!important;color:var(--cp-soft)!important}
 
-/* A pedido: remover o bloco Atendidos hoje / Movimentação da carteira da Home. */
-.cp-activities-card{display:none!important}
 
 /* ============================================================
    ATUALIZAÇÃO #752 — TEMA CLARO REVISADO + REANÁLISE LEGÍVEL

@@ -42,6 +42,7 @@ const cpFilaFazerAgora = eval(`
   const emJanelaDeEspera = () => false;
   const contextoPrioridadeIA = () => ({});
   const ultimaMsgClientePedeResposta = () => false;
+  const analiseAtualValida752 = () => false;
   ${tiposSrc}
   ${diasCalSrc}
   ${ultAtSrc}

@@ -132,6 +132,7 @@ function extrairFn(nome) {
     // v1057 — cpFilaFazerAgora exige atendimento marcado (ultimoAtendimentoTs); stub simples pra
     // não afetar o que este teste realmente cobre (nº de chamadas de cpProbabilidadeFechamento).
     const ultimoAtendimentoTs = (l) => l.__atendido ? 1 : 0;
+    const analiseAtualValida752 = () => false;
     function cpProbabilidadeFechamento(l){ contarChamada(); return Number(l.__msgs||0); }
     ${fdsSrc}
     ${filaSrc}

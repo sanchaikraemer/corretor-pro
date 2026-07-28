@@ -35,6 +35,7 @@ const fila = eval(`
   // v1057 — cpFilaFazerAgora exige atendimento marcado; este teste é sobre a janela de espera,
   // não sobre atendimento, então todo mundo "já foi atendido alguma vez" por padrão.
   const ultimoAtendimentoTs = () => 1;
+  const analiseAtualValida752 = () => false;
   ${fdsSrc}
   ${filaSrc}
   cpFilaFazerAgora;

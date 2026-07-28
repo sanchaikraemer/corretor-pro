@@ -1,5 +1,5 @@
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -251,6 +251,12 @@ export default async function handler(req, res) {
     if (body.action === "transcrever-audio") {
       const openai = getOpenAI();
       if (!openai) return json(res, 200, { ok: false, error: "Transcrição não configurada — não dá para transcrever áudio agora." });
+      // v1068 — auditoria de segurança achou que esta ação nunca teve nenhum teto diário
+      // (diferente da transcrição de áudio de uma importação normal, que já cai no teto de
+      // "analises-ia" desde a v1013) — sem isso, um script podia gerar custo real de Whisper
+      // sem nenhuma rede de segurança, inclusive numa conta em teste grátis.
+      const limite = await verificarLimiteDiario(organizationId, "cerebro-transcricao-voz", limiteTranscricaoVozDoDia(), limiteTranscricaoVozDoDiaTeste());
+      if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} transcrições de voz foi atingido para esta conta. Tente novamente amanhã.` });
       try {
         const b64 = String(body.audioBase64 || "").replace(/^data:[^;]+;base64,/, "");
         if (!b64) return json(res, 400, { ok: false, error: "Áudio não recebido." });

@@ -10,10 +10,11 @@
 > Regras de trabalho (como versionar, como rodar os testes, convenções já estabelecidas) continuam
 > em `CLAUDE.md`, na raiz do projeto — este arquivo não repete aquilo, só descreve o estado técnico.
 
-_Atualizado pela última vez na v1067 (28/07/2026) — a seção 8 (pendências) estava desatualizada
+_Atualizado pela última vez na v1068 (28/07/2026) — a seção 8 (pendências) estava desatualizada
 desde a v1043: apontava que política de privacidade e termos de uso "ainda não existiam", mas as
 duas páginas já foram publicadas na v1045 (só faltam os dois campos de identificação do responsável
-e a revisão jurídica, ver seção 8)._
+e a revisão jurídica, ver seção 8). A v1068 também trouxe uma nova auditoria completa (segurança,
+comercial e código morto) — ver `NOTAS-v1068.md` e a seção 8 atualizada._
 
 ## 1. Arquitetura
 
@@ -81,6 +82,12 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 ### Custo e limites de IA
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia por empresa (padrão 200).
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE` — mesmo teto, mas pra contas em teste grátis (padrão 25 — ver `NOTAS-v1041.md`).
+- `CORRETOR_PRO_LIMITE_VISAO_DIA` / `CORRETOR_PRO_LIMITE_VISAO_DIA_TESTE` — mesmo tipo de teto,
+  pras 3 ações de visão (extrair print, detectar rosto, ler prints de conversa) — padrão 300/dia
+  (60/dia em teste, ver `NOTAS-v1068.md`).
+- `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
+  mesmo tipo de teto, pra transcrição de voz avulsa (ensinar o Cérebro por voz) — padrão 100/dia
+  (20/dia em teste, ver `NOTAS-v1068.md`).
 - `CORRETOR_PRO_COTACAO_USD_BRL` — cotação usada pra estimar custo de IA em reais no painel administrativo (padrão 5,50).
 - `SUPABASE_ZIP_BUCKET` — nome do bucket de Storage (padrão `whatsapp-zips`).
 - `SUPABASE_ZIP_MAX_BYTES` — tamanho máximo de ZIP aceito.
@@ -181,7 +188,17 @@ montar isso:
   conta num provedor externo — combinar com o dono antes.
 - **`app.js` é um arquivo só, com ~14 mil linhas** — funciona, mas dificulta manutenção e pode
   esconder funções duplicadas/substituídas (achado da auditoria, ver seção 03 do relatório). Ainda
-  não foi dividido em módulos.
+  não foi dividido em módulos. Caso concreto já identificado (auditoria de código morto,
+  `NOTAS-v1068.md`): `abrirVenda`/`marcarPerdido` são redefinidas 3 vezes (só a última,
+  "v685-final", vale — as ~500 linhas anteriores viraram código morto inalcançável) e
+  `abrirEditarLead`/`salvarEditarLead` 2 vezes — não removidas ainda porque exige validar os
+  fluxos de venda/perda/edição de lead num navegador de verdade antes de apagar, não só testes
+  automatizados. Fica como tarefa pra uma sessão dedicada a isso.
+- **`limpar-tudo.js` sem checagem de "dono" da empresa** — qualquer membro autenticado de uma
+  empresa pode disparar "Apagar tudo" da própria empresa (não só o dono dela), uma vez que a
+  variável de ambiente global `DIRECIONA_DANGER_LIMPAR_TUDO=ativo` esteja ligada. Isso é uma
+  decisão de acesso/produto, não só um bug — fica registrado pra decisão explícita do dono (ver
+  `NOTAS-v1068.md`, item 3).
 - **Política de privacidade e termos de uso** — publicadas desde a v1045 (`privacidade.html`,
   `termos.html`, linkadas no rodapé do cadastro). Ainda faltam dois passos manuais do dono: (1)
   preencher os campos `[razão social / CNPJ ou CPF do responsável]` e `[e-mail de contato/DPO]`

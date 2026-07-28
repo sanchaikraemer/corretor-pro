@@ -31,6 +31,9 @@ const fila = eval(`
   // todo mundo) pra não interferir na ordenação por junção de fatores que este teste cobre.
   const ultimoAtendimentoTs = (l) => l.__atendido ? 1 : 0;
   const diasCalendarioBR = () => 5;
+  // v1068 — cpFilaFazerAgora passou a checar recomendacaoContato.aguardar (via
+  // analiseAtualValida752); nenhum lead deste teste usa esse campo, então o stub sempre nega.
+  const analiseAtualValida752 = () => false;
   ${fdsSrc}
   ${notaSrc}
   ${filaSrc}
