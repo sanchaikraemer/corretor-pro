@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 // corrigido antes, só que reintroduzido de outro jeito.
 
 const src = fs.readFileSync(new URL('../api/diagnostico.js', import.meta.url), 'utf8');
-const modoOpenAISrc = src.match(/async function modoOpenAI\(res, isAdmin\) \{[\s\S]*?\n\}/)?.[0];
+const modoOpenAISrc = src.match(/async function modoOpenAI\(res, isAdmin, organizationId\) \{[\s\S]*?\n\}/)?.[0];
 assert.ok(modoOpenAISrc, 'achei a função modoOpenAI em api/diagnostico.js');
 
 // 1. analiseFunciona não pode mais vir de "algum teste passou" (.some / algumaIaOk).

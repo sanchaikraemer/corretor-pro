@@ -14,6 +14,7 @@ import {
   ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
   upsertConfigComOrganizacao
 } from "./_pipeline.js";
+import { registrarUsoIA } from "./_iaCusto.js";
 
 const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
 
@@ -81,9 +82,9 @@ export default async function handler(req, res) {
   if (action === "salvar-novo") return await acaoSalvarNovo(body, res, organizationId);
   if (action === "criar-manual") return await acaoCriarManual(body, res, organizationId);
   if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, organizationId);
-  if (action === "extrair-print") return await acaoExtrairPrint(body, res);
-  if (action === "detectar-rosto") return await acaoDetectarRosto(body, res);
-  if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res);
+  if (action === "extrair-print") return await acaoExtrairPrint(body, res, organizationId);
+  if (action === "detectar-rosto") return await acaoDetectarRosto(body, res, organizationId);
+  if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res, organizationId);
   if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
@@ -290,7 +291,7 @@ function telefoneBRSuspeito(tel) {
   return false;
 }
 
-async function acaoExtrairPrint(body, res) {
+async function acaoExtrairPrint(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Leitura de print indisponível agora." });
   const dataUrl = String(body?.imagemBase64 || "");
@@ -343,6 +344,7 @@ Responda APENAS JSON: { "nome":"", "nomeFonte":"", "telefone":"", "email":"", "p
         max_tokens: 900,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 32000 : 22000, maxRetries: 0 });
+      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-extrair-print", usage: completion?.usage });
       const raw = completion?.choices?.[0]?.message?.content || "{}";
       let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
       // Foto de perfil num print de CONVERSA do WhatsApp fica SEMPRE no TOPO, ao lado do nome
@@ -373,7 +375,7 @@ Responda APENAS JSON: { "nome":"", "nomeFonte":"", "telefone":"", "email":"", "p
 
 // Detecta o ROSTO da pessoa numa imagem qualquer (foto, print de perfil, card) pra usar como
 // avatar do lead. Devolve a caixa NORMALIZADA (0–1) só do rosto, bem justa. Ignora logos/texto/fundo.
-async function acaoDetectarRosto(body, res) {
+async function acaoDetectarRosto(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Detecção de rosto indisponível agora." });
   const dataUrl = String(body?.imagemBase64 || "");
@@ -404,6 +406,7 @@ Responda APENAS JSON: { "faceBox": null }.`;
         max_tokens: 200,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 28000 : 20000, maxRetries: 0 });
+      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-detectar-rosto", usage: completion?.usage });
       const raw = completion?.choices?.[0]?.message?.content || "{}";
       let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
       const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null; };
@@ -423,7 +426,7 @@ Responda APENAS JSON: { "faceBox": null }.`;
 
 // Lê VÁRIOS prints de uma conversa (WhatsApp) com a visão da IA e devolve um registro
 // fiel da conversa, pra entrar como anotação de atendimento (timeline + observação) do lead.
-async function acaoLerPrintsConversa(body, res) {
+async function acaoLerPrintsConversa(body, res, organizationId) {
   const openai = getOpenAI();
   if (!openai) return json(res, 200, { ok: false, error: "Leitura de prints indisponível agora." });
   let imgs = Array.isArray(body?.imagens) ? body.imagens : [];
@@ -462,6 +465,7 @@ Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por 
         max_tokens: 4096,
         response_format: { type: "json_object" }
       }, { timeout: i === 0 ? 44000 : 30000, maxRetries: 0 });
+      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-ler-prints-conversa", usage: completion?.usage });
       const raw = completion?.choices?.[0]?.message?.content || "{}";
       let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
       const texto = String(p.texto || "");

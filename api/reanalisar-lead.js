@@ -507,7 +507,7 @@ async function reanalisarLeadHandler702(req, res) {
     // Só vale pra atendimento ditado; mensagem copiada/proposta/sistema antigo/print ficam como vieram.
     if (openai && novoAtendimento && tipoManual === "atendimento") {
       try {
-        const resumo = await resumirAtendimento(novoAtendimento, openai);
+        const resumo = await resumirAtendimento(novoAtendimento, openai, organizationId);
         if (resumo) observacoesFinais = (observacoesBase ? observacoesBase + "\n" : "") + stampAtend + resumo;
       } catch (_) { /* mantém a nota crua já montada */ }
     }
@@ -553,7 +553,7 @@ async function reanalisarLeadHandler702(req, res) {
   // 2º melhora a observação com um resumo da IA (se der) — não bloqueia: se falhar, fica a nota crua já salva.
   if (openai && novoAtendimento) {
     try {
-      const resumo = await resumirAtendimento(novoAtendimento, openai);
+      const resumo = await resumirAtendimento(novoAtendimento, openai, organizationId);
       if (resumo) observacoesFinais = (observacoesBase ? observacoesBase + "\n" : "") + stampAtend + resumo;
     } catch (_) { /* mantém a nota crua */ }
   }

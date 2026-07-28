@@ -302,7 +302,7 @@ export default async function handler(req, res) {
         arquivos.push({ name: nome, buffer: await baixarBuffer(storage, audioPath) });
       }
       const lote = arquivos.length
-        ? await transcreverArquivosExtraidos(arquivos)
+        ? await transcreverArquivosExtraidos(arquivos, organizationId)
         : { transcriptions: {}, transcriptionEnabled: true };
       Object.assign(existentes, lote.transcriptions || {});
       for (const [nome, item] of Object.entries(lote.transcriptions || {})) {

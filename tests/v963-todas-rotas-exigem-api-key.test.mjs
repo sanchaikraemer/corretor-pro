@@ -13,8 +13,10 @@ import assert from 'node:assert/strict';
 // garante que cada um chama requireApiKey (ou, a partir da v998, resolveOrganizationId — que
 // por dentro sempre passa por requireApiKey no caminho sem login novo, e é mais forte que ela
 // quando existe login; ou, a partir da v1035, resolveOrganizationIdByAtalhoToken — mesma força,
-// mas pra chamadas do Atalho do iPhone, que não tem sessão do Supabase) — pra um endpoint novo
-// nunca nascer sem alguma dessas checagens.
+// mas pra chamadas do Atalho do iPhone, que não tem sessão do Supabase; ou, a partir da v1038,
+// requirePlatformAdmin — mais forte ainda, exige login real de administrador da plataforma, usada
+// em rotas que não fazem sentido pra nenhum corretor comum) — pra um endpoint novo nunca nascer
+// sem alguma dessas checagens.
 
 const apiDir = new URL('../api/', import.meta.url);
 const arquivos = fs.readdirSync(apiDir).filter(f => f.endsWith('.js'));
@@ -28,7 +30,7 @@ for (const nome of arquivos) {
   const ehRota = /export default async function handler\s*\(/.test(src);
   if (!ehRota) { rotasSemHandler.push(nome); continue; }
   rotasVerificadas.push(nome);
-  if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src) && !/resolveOrganizationIdByAtalhoToken\s*\(/.test(src)) rotasSemApiKey.push(nome);
+  if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src) && !/resolveOrganizationIdByAtalhoToken\s*\(/.test(src) && !/requirePlatformAdmin\s*\(/.test(src)) rotasSemApiKey.push(nome);
 }
 
 assert.ok(rotasVerificadas.includes('analisar.js'), 'api/analisar.js precisa ser reconhecida como rota (tem handler default)');
