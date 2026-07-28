@@ -7012,6 +7012,34 @@ async function carregarCerebro(){
   if(!status.innerHTML) status.textContent = "Configuração carregada.";
 }
 
+// v1066 — o dono mandou prints mostrando o computador e o celular escolhendo um lead DIFERENTE
+// como "o" prioritário do dia, mesmo com os mesmos números (225 leads, 96 aguardando cliente):
+// no PC aparecia um lead atendido há só 6 dias (Adão), no celular só apareciam leads muito mais
+// parados (Silvana, há 18 dias). Causa: o "tempo de descanso" e a "meta por dia" configurados no
+// Cérebro (usados por cpFilaFazerAgora pra decidir quem já pode voltar à fila) são lidos de uma
+// cópia salva SÓ NAQUELE APARELHO (localStorage) — e essa cópia só era atualizada quando o
+// corretor abria a tela "Cérebro" NAQUELE MESMO aparelho. Um computador onde ele nunca abriu essa
+// tela ficava preso no valor padrão (5 dias), mesmo tendo ajustado esse número há tempos no
+// celular — e nem um F5 forçado resolvia, porque o valor mora no armazenamento local, não no
+// cache de rede. Busca a configuração salva no servidor assim que o app abre, em qualquer
+// aparelho, e atualiza a Home na hora se isso muda quem entra na fila.
+async function cp7SincronizarCerebroConfigInicial(){
+  try{
+    const res = await fetch("./api/cerebro-config", { cache:"no-store" });
+    const data = await res.json();
+    if(!data?.ok || !data.config) return;
+    let anterior = null;
+    try{ anterior = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
+    const fresco = sanitizeCerebroConfigV762(data.config);
+    localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(fresco));
+    const mudouRegraDeFila = !anterior
+      || Number(anterior.diasDescansoPosAtendimento) !== Number(fresco.diasDescansoPosAtendimento)
+      || Number(anterior.atendimentosPorDia) !== Number(fresco.atendimentosPorDia);
+    if(mudouRegraDeFila && typeof refreshAllSections === "function") refreshAllSections();
+  }catch(_){ /* sem rede/sessão ainda — a Home continua com o que já tinha */ }
+}
+cp7SincronizarCerebroConfigInicial();
+
 let ultimoSqlCerebro = "";
 function copiarSqlCerebro(){
   if(!ultimoSqlCerebro){ toast("Nada para copiar."); return; }
