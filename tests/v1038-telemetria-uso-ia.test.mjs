@@ -164,6 +164,12 @@ try {
     const openaiMock = {
       audio: { transcriptions: { create: async (payload) => {
         payloadEnviado = payload;
+        // transcreverBuffer apaga o arquivo temporário assim que esta chamada retorna (ver
+        // finally em api/_pipeline.js) — o SDK real da OpenAI já leu o stream inteiro antes de
+        // devolver a resposta; este mock não lê, então precisa pelo menos escutar o stream (senão
+        // o Node emite um "error" (ENOENT) sem ouvinte quando o arquivo some, derrubando o teste).
+        payload?.file?.on?.("error", () => {});
+        payload?.file?.resume?.();
         return { text: "Olá, tudo bem?", duration: 42.5 };
       } } }
     };
@@ -180,7 +186,9 @@ try {
     console.log("v1038 (transcreverBuffer pede duração e registra uso): ok");
   });
 
-  // 5. api/admin-uso-ia.js: exige administrador da plataforma e agrega por empresa sem misturar.
+  // 5. api/admin-contas.js?relatorio=uso-ia (v1039: absorveu api/admin-uso-ia.js pra caber no
+  // limite de 12 Serverless Functions do plano Hobby — ver NOTAS-v1039.md): exige administrador
+  // da plataforma e agrega por empresa sem misturar.
   await comServidor(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -191,12 +199,12 @@ try {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: `rota simulada não atendida: ${req.method} ${url.pathname}` }));
   }, async () => {
-    const { default: handler } = await import(`../api/admin-uso-ia.js?v1038a=${Date.now()}`);
-    const req = { method: "GET", headers: { authorization: "Bearer token-nao-admin" }, query: {} };
+    const { default: handler } = await import(`../api/admin-contas.js?v1038a=${Date.now()}`);
+    const req = { method: "GET", headers: { authorization: "Bearer token-nao-admin" }, query: { relatorio: "uso-ia" } };
     const res = fakeRes();
     await handler(req, res);
     assert.equal(res.statusCode, 403, res.payload);
-    console.log("v1038 (admin-uso-ia.js recusa quem não é administrador): ok");
+    console.log("v1038 (admin-contas.js?relatorio=uso-ia recusa quem não é administrador): ok");
   });
 
   await comServidor(async (req, res) => {
@@ -223,8 +231,8 @@ try {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: `rota simulada não atendida: ${req.method} ${url.pathname}` }));
   }, async () => {
-    const { default: handler } = await import(`../api/admin-uso-ia.js?v1038b=${Date.now()}`);
-    const req = { method: "GET", headers: { authorization: "Bearer token-admin" }, query: { dias: "30" } };
+    const { default: handler } = await import(`../api/admin-contas.js?v1038b=${Date.now()}`);
+    const req = { method: "GET", headers: { authorization: "Bearer token-admin" }, query: { relatorio: "uso-ia", dias: "30" } };
     const res = fakeRes();
     await handler(req, res);
     assert.equal(res.statusCode, 200, res.payload);
@@ -239,7 +247,7 @@ try {
     assert.equal(empresaA.hoje.custoEstimadoBRL > 0, true, "custo de hoje da empresa A precisa ser maior que zero");
     assert.equal(empresaB.periodo.audioMinutos, 10, "empresa B: 600s de áudio = 10 minutos");
     assert.equal(empresaB.hoje.tokensEntrada, 0, "empresa B não teve tokens de chat, só áudio");
-    console.log("v1038 (admin-uso-ia.js agrega por empresa, hoje vs período): ok");
+    console.log("v1039 (admin-contas.js?relatorio=uso-ia agrega por empresa, hoje vs período): ok");
   });
 } finally {
   restaurarEnv();

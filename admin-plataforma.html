@@ -295,7 +295,7 @@ async function estenderTeste(id) {
 }
 
 // v1038 — quanto cada empresa está custando de IA de verdade (achado da auditoria: sem isso não
-// dá pra definir plano/preço com segurança). Vem de api/admin-uso-ia.js (exclusivo do
+// dá pra definir plano/preço com segurança). Vem de api/admin-contas.js?relatorio=uso-ia (exclusivo do
 // administrador da plataforma) — nunca do banco direto, porque o cálculo de custo (tabela de
 // preço por modelo, cotação do dólar) mora no servidor, não faz sentido duplicar aqui.
 function formatarReais(valor) {
@@ -309,7 +309,7 @@ async function carregarUsoIA() {
   const token = data?.session?.access_token;
   if (!token) return;
   try {
-    const resp = await fetch('/api/admin-uso-ia?dias=30', { headers: { 'Authorization': `Bearer ${token}` } });
+    const resp = await fetch('/api/admin-contas?relatorio=uso-ia&dias=30', { headers: { 'Authorization': `Bearer ${token}` } });
     const r = await resp.json().catch(() => ({}));
     if (!resp.ok || !r.ok) {
       msg.className = 'erro';

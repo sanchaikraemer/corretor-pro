@@ -4,6 +4,12 @@
   "installCommand": "npm ci",
   "buildCommand": "node build.js",
   "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/api/criar-upload-url",
+      "destination": "/api/processar-storage"
+    }
+  ],
   "functions": {
     "api/processar-storage.js": {
       "maxDuration": 60
