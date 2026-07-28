@@ -2327,3 +2327,32 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
 .cp903-acoes button{padding:10px 18px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--soft)}
 .cp903-acoes .cp903-ok{background:var(--accent);border-color:var(--accent);color:#fff}
 .cp903-acoes .cp903-ok.perigo{background:var(--timing);border-color:var(--timing);color:#fff}
+
+/* v1064 — botão de imprimir a lista de clientes ativos (mesmo lugar do "Ver clientes ativos") */
+.cp1064-head-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;flex-shrink:0}
+.cp1064-head-actions button{border:0;background:transparent;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+
+/* v1064 — folha impressa da carteira ativa: fica escondida na tela normal, só aparece no
+   momento de imprimir (window.print()), escondendo o resto do app nesse momento. Tudo abaixo
+   fica atrás da classe body.cp1064-imprimindo (ligada só durante essa impressão específica,
+   ver imprimirCarteiraAtiva em app.js) — sem essa trava, a regra ficaria "sempre ligada" em
+   qualquer impressão da página, inclusive a da tela "Gerador de proposta" (index.html, que
+   imprime #prop-paper), e as duas brigariam pela mesma folha. */
+#cpImprimirLista{display:none}
+@media print{
+  /* !important porque a tela de Proposta já tem seu próprio "body *{visibility:hidden!important}"
+     pra imprimir só o papel da proposta — sem !important aqui, aquela regra ganharia. */
+  body.cp1064-imprimindo *{visibility:hidden!important}
+  body.cp1064-imprimindo #cpImprimirLista,body.cp1064-imprimindo #cpImprimirLista *{visibility:visible!important}
+  /* "visibility:hidden" sozinho mantém o espaço do resto do app na página — soltava uma 2ª
+     folha em branco na impressão. display:none nos outros filhos diretos do body tira esse
+     espaço do fluxo de vez (cobre tudo: menu, telas, modais — tudo no app é filho direto do
+     body). */
+  body.cp1064-imprimindo>*:not(#cpImprimirLista){display:none!important}
+  body.cp1064-imprimindo #cpImprimirLista{display:block;position:static;width:100%;color:#000;background:#fff}
+  body.cp1064-imprimindo #cpImprimirLista h1{font-size:18px;margin:0 0 4px}
+  body.cp1064-imprimindo #cpImprimirLista p{font-size:12px;margin:0 0 14px;color:#333}
+  body.cp1064-imprimindo #cpImprimirLista table{width:100%;border-collapse:collapse;font-size:12px}
+  body.cp1064-imprimindo #cpImprimirLista th,body.cp1064-imprimindo #cpImprimirLista td{border:1px solid #999;padding:6px 8px;text-align:left}
+  body.cp1064-imprimindo #cpImprimirLista th{background:#eee}
+}
