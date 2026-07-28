@@ -2549,19 +2549,26 @@ function emJanelaDeEspera(l){
   const aps = l.analysis?.confirmedAppointments;
   if(Array.isArray(aps) && aps.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando||"").toLowerCase()))) return false;
   // v1018 — pedido explícito e repetido do dono, com casos reais (ex.: "Adão — marquei
-  // atendimento quarta dia 22, ainda sim apresenta 26 dias"): a espera conta SÓ a partir do
-  // ÚLTIMO ATENDIMENTO MARCADO (botão "Marcar atendimento", observação, ligação, visita,
-  // proposta — tudo que ultimoAtendimentoTs já reconhece) — NUNCA a partir de mensagem, nem do
-  // cliente nem minha. Até aqui, "toque" vinha de daysSinceLastTouch (baseado na ÚLTIMA MENSAGEM
-  // da conversa, de qualquer lado) e só recuava pro atendimento se este fosse mais recente — uma
-  // mensagem nova (mesmo só uma despedida do cliente) reiniciava a contagem sozinha, sem que o
-  // corretor tivesse atendido de novo. "o prazo deve contar do último atendimento, e não da
-  // última mensagem do cliente" (palavras do dono). Sem NENHUM atendimento registrado, não há de
-  // onde contar — o lead fica elegível na hora (nunca foi "colocado em espera" por ninguém).
+  // atendimento quarta dia 22, ainda sim apresenta 26 dias"): a espera conta a partir do ÚLTIMO
+  // ATENDIMENTO MARCADO (botão "Marcar atendimento", observação, ligação, visita, proposta —
+  // tudo que ultimoAtendimentoTs já reconhece). Sem NENHUM atendimento registrado, não há de onde
+  // contar — o lead fica elegível na hora (nunca foi "colocado em espera" por ninguém).
   const atTs = ultimoAtendimentoTs(l);
   if(!atTs) return false;
-  const dias = diasCalendarioBR(atTs);
+  let dias = diasCalendarioBR(atTs);
   if(dias == null) return false;
+  // v1051 — caso real "Karine": ela tinha sido marcada como atendida, mas depois disso trocou
+  // mensagens (o dono mandou pelo WhatsApp direto, sem usar o botão "Copiar" do app) — o app não
+  // reconhecia isso como toque nenhum, então o descanso configurado (7 dias) não valia de verdade:
+  // contava só a partir do clique antigo, e ela reapareceu com só 5 dias. Pedido do dono, taxativo:
+  // "7 dias é 7 e ponto final, não pode aparecer com menos que isso". Diferente da v1018 (que
+  // TIROU a mensagem da conta pra não AFROUXAR uma proteção que devia valer), aqui a mensagem só
+  // pode REFORÇAR: usa a interação mais recente entre atendimento e mensagem (a que der o MENOR
+  // número de dias, ou seja, a mais recente) — nunca a mais antiga. Isso só aumenta a proteção,
+  // nunca diminui (dias só pode ficar menor, nunca maior), então o mínimo configurado é sempre
+  // respeitado, sem reabrir o bug antigo do Rafael/Adão (perder proteção que já existia).
+  const diasMsg = Number(l?.daysSinceLastTouch != null ? l.daysSinceLastTouch : l?.daysSinceLastInteraction);
+  if(Number.isFinite(diasMsg) && diasMsg < dias) dias = diasMsg;
   // v1019 — "5 dias de descanso" é 5 dias INTEIROS de folga (o dia do atendimento não conta
   // como "esperado"): protegido do dia 1 ao dia 5, elegível de novo só no dia 6. Com "<" puro, um
   // lead atendido há exatamente 5 dias (limiar 5) já saía da proteção no próprio 5º dia — foi
