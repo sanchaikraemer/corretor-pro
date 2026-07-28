@@ -614,6 +614,10 @@ async function reanalisarLeadHandler702(req, res) {
     ...novoAnalysis,
     clientName: freshPrevious.clientName || freshPrevious?.lead?.clientName || freshPrevious?.lead?.name || nomeRecuperado,
     lead: freshPrevious.lead || leadModelo,
+    // Preserva o aviso de "nome editado à mão" (api/lead-update.js editar-dados) — sem isso,
+    // reanalisar apagava a marca e a tela voltava a passar o nome pelo filtro de ruído de
+    // WhatsApp (limparRuidoNome em _persistence.js), mesmo com o clientName certo salvo.
+    nomeEditadoManualmente: freshPrevious.nomeEditadoManualmente || undefined,
     venda: freshPrevious.venda || undefined,
     memoria: { observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,

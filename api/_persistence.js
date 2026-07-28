@@ -875,6 +875,15 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // acontece quando o export do WhatsApp traz só o número no lugar do contato. Aí cai pro nome do arquivo.
     const pareceTelefone = (n) => { const s = String(n || "").trim(); const dig = s.replace(/\D/g, ""); const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, ""); return dig.length >= 8 && letras.length < 3; };
     let analyzedName = analysis?.clientName || analysis?.lead?.clientName || row.nome_cliente || row.nome;
+    // Nome editado à mão pelo corretor (tela Editar lead) é a fonte da verdade: mostra
+    // EXATAMENTE como ele digitou, sem passar pelos filtros abaixo — eles existem só pra limpar
+    // nome bruto de contato salvo no WhatsApp na importação automática (ex.: "Fulano Cel"), mas
+    // vinham apagando pra sempre palavras digitadas de propósito numa edição manual (ex.: editar
+    // pra "Cristiano Terreno Nvr" salvava certo no banco e a tela sempre mostrava "Cristiano Nvr",
+    // porque limparRuidoNome tira "terreno" do nome toda vez que a tela carrega).
+    if (analysis?.nomeEditadoManualmente && analyzedName && !pareceTelefone(analyzedName)) {
+      return String(analyzedName).trim();
+    }
     // Às vezes a análise gravou o NOME DO ARQUIVO como nome do cliente
     // ("Conversa do com Fulano-enxuto.zip"). Limpa antes de usar, senão o card fica com o arquivo.
     if (analyzedName && (/\.zip$/i.test(analyzedName) || /^conversa\s+d/i.test(analyzedName))) {
