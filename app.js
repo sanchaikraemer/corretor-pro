@@ -9690,7 +9690,23 @@ function cpProbabilidadeFechamento(l){
   // v1017 — extraído pra ultimaMsgClientePedeResposta (compartilhada com emJanelaDeEspera/
   // entraEmRetomada, que tinham o MESMO problema sem essa checagem — ver comentário ali).
   const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgClientePedeResposta(l);
-  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0);
+  // v1056 — pedido original do dono, do início desta rodada, só agora implementado: "fazer o
+  // tempo parado pesar contra a posição na fila" — sem tirar o lead da lista de vez, só derrubar
+  // pra trás de quem está ativo de verdade. Usa o toque mais recente entre mensagem
+  // (daysSinceLastTouch — não daysSinceClientReply, que já tem outro significado logo acima, no
+  // bônus "cliente espera você") e atendimento (ultimoAtendimentoTs), até um teto de 90 dias —
+  // depois disso a penalidade para de crescer (não precisa ficar infinitamente pior).
+  let diasFrio = Number(l?.daysSinceLastTouch != null ? l.daysSinceLastTouch : l?.daysSinceLastInteraction);
+  if(!Number.isFinite(diasFrio)) diasFrio = 90;
+  try{
+    const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
+    if(atTs){
+      const dAt = diasCalendarioBR(atTs);
+      if(dAt != null && Number.isFinite(dAt) && dAt < diasFrio) diasFrio = dAt;
+    }
+  }catch(_){}
+  diasFrio = Math.min(diasFrio, 90);
+  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0) - diasFrio*2;
 }
 // candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
 // falou) e fora da janela de espera. Ordem = probabilidade de fechamento (cpProbabilidadeFechamento,
