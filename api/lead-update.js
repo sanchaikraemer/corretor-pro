@@ -1552,10 +1552,6 @@ async function acaoEditarDados(id, body, res, organizationId) {
   if (nome != null) merged.clientName = nome;
   if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
   if (nome != null) merged.lead.clientName = nome;
-  // Marca que este nome veio de edição manual do corretor: a leitura (nameFrom em
-  // _persistence.js) para de "limpar" o nome (tirar "terreno", "cel" etc. como se fosse ruído
-  // de contato importado) — o corretor digitou de propósito, mostra exatamente como está.
-  if (nome != null) merged.nomeEditadoManualmente = true;
   if (telefone != null) merged.lead.phone = telefone;
   if (avatarFoto) merged.avatarFoto = avatarFoto;
   // Produto definido na mão tem prioridade máxima na exibição (productFrom usa produtoInteresse primeiro).

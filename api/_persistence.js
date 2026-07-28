@@ -858,47 +858,26 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     return analysis?.product || analysis?.lead?.product || row.produto || "Produto não identificado";
   }
 
-  // Tira do nome o RUÍDO de como o contato costuma ser salvo no WhatsApp: palavras
-  // genéricas como "cell/celular/terreno/lote/apto/whatsapp/fone". Não mexe no nome real.
-  // v827 §7.1: sem lista fixa de empreendimentos aqui.
-  function limparRuidoNome(s) {
-    let out = String(s || "");
-    out = out
-      .replace(/\b(cel(?:ular)?|cell|whats?app?|whats|terrenos?|lotes?|aptos?|apartamentos?|fone|tel)\b/ig, " ")
-      .replace(/\s{2,}/g, " ")
-      .replace(/^[\s\-–·.]+|[\s\-–·.]+$/g, "")
-      .trim();
-    return out;
-  }
   function nameFrom(fileName = "", analysis = {}, row = {}) {
     // "Nome" que na verdade é um telefone (muitos dígitos, quase sem letras) NÃO serve como nome —
     // acontece quando o export do WhatsApp traz só o número no lugar do contato. Aí cai pro nome do arquivo.
     const pareceTelefone = (n) => { const s = String(n || "").trim(); const dig = s.replace(/\D/g, ""); const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, ""); return dig.length >= 8 && letras.length < 3; };
     let analyzedName = analysis?.clientName || analysis?.lead?.clientName || row.nome_cliente || row.nome;
-    // Nome editado à mão pelo corretor (tela Editar lead) é a fonte da verdade: mostra
-    // EXATAMENTE como ele digitou, sem passar pelos filtros abaixo — eles existem só pra limpar
-    // nome bruto de contato salvo no WhatsApp na importação automática (ex.: "Fulano Cel"), mas
-    // vinham apagando pra sempre palavras digitadas de propósito numa edição manual (ex.: editar
-    // pra "Cristiano Terreno Nvr" salvava certo no banco e a tela sempre mostrava "Cristiano Nvr",
-    // porque limparRuidoNome tira "terreno" do nome toda vez que a tela carrega).
-    if (analysis?.nomeEditadoManualmente && analyzedName && !pareceTelefone(analyzedName)) {
-      return String(analyzedName).trim();
-    }
+    // Pedido explícito do dono: o nome mostra EXATAMENTE como está salvo — como digitou na
+    // edição manual, ou como está salvo no celular na hora de importar. Nenhum filtro de
+    // "limpeza" mexe no conteúdo do nome (existiu um que apagava palavras como "terreno", "cel",
+    // "whatsapp" de dentro do nome — removido).
     // Às vezes a análise gravou o NOME DO ARQUIVO como nome do cliente
     // ("Conversa do com Fulano-enxuto.zip"). Limpa antes de usar, senão o card fica com o arquivo.
     if (analyzedName && (/\.zip$/i.test(analyzedName) || /^conversa\s+d/i.test(analyzedName))) {
       analyzedName = cleanFileName(analyzedName);
     }
     if (analyzedName && !/^cliente importado$/i.test(String(analyzedName)) && !pareceTelefone(analyzedName)) {
-      const limpo = limparRuidoNome(analyzedName);
-      return limpo || analyzedName;
+      return String(analyzedName).trim();
     }
     // Nome analisado ruim (vazio / "cliente importado" / telefone): tenta o nome do arquivo.
     const cleaned = cleanFileName(fileName);
-    if (cleaned && !pareceTelefone(cleaned)) {
-      const withoutProduct = limparRuidoNome(cleaned);
-      return withoutProduct || cleaned;
-    }
+    if (cleaned && !pareceTelefone(cleaned)) return cleaned;
     // Sem nome em lugar nenhum: usa o telefone que veio (mais útil que "Cliente importado"), senão genérico.
     return (analyzedName && String(analyzedName).trim()) || cleaned || "Cliente importado";
   }
