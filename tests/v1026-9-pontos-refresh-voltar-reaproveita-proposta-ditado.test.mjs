@@ -78,6 +78,8 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.ok(toggleMatch, 'cp7ObsToggleDitado não encontrada por inteiro');
   const iniciarMatch = app.match(/function cp7ObsIniciarDitado\(btn\)\{[\s\S]*?\n\}/);
   assert.ok(iniciarMatch, 'cp7ObsIniciarDitado não encontrada por inteiro');
+  const mesclarMatch = app.match(/function cp7ObsMesclarFinais\(lista\)\{[\s\S]*?\n\}/);
+  assert.ok(mesclarMatch, 'cp7ObsMesclarFinais não encontrada por inteiro');
   const toggleSrc = toggleMatch[0], iniciarSrc = iniciarMatch[0];
   assert.match(iniciarSrc, /reco\.interimResults\s*=\s*true/, 'precisa pedir resultados parciais (aparecer enquanto fala, não só no fim)');
   assert.match(iniciarSrc, /reco\.continuous\s*=\s*true/, 'precisa continuar ouvindo além da primeira pausa');
@@ -97,6 +99,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   };
   const fnCorpo = new Function('qs', 'escapeHtml', 'window', `
     let _cp7ObsReco = null, _cp7ObsRecoTextoBase = "", _cp7ObsDitadoQuerido = false;
+    ${mesclarMatch[0]}
     ${iniciarSrc}
     ${toggleSrc}
     return { iniciar: (btn) => cp7ObsToggleDitado(btn), querido: () => _cp7ObsDitadoQuerido };
