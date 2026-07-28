@@ -147,6 +147,13 @@ details.ficha-cliente>summary::-webkit-details-marker,details.bloco-recolhe>summ
 details.ficha-cliente>summary::before,details.bloco-recolhe>summary::before{content:"▸";color:var(--muted);font-size:12px;transition:transform .15s ease}
 details[open].ficha-cliente>summary::before,details[open].bloco-recolhe>summary::before{transform:rotate(90deg)}
 details.ficha-cliente>summary:hover,details.bloco-recolhe>summary:hover{border-color:var(--line2);color:var(--text)}
+/* Cérebro Comercial: cada campo é um bloco-recolhe; "Estilo"/"Regras e objeções"/"Configurações
+   técnicas" são só rótulos de agrupamento visual, sem esconder nada. */
+.cerebro-grupo-label{text-transform:uppercase;letter-spacing:.1em;font-weight:800;font-size:11px;margin:20px 0 8px}
+.cerebro-grupo-label:first-of-type{margin-top:6px}
+details.cerebro-campo{margin-bottom:8px}
+details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--muted)}
+.cerebro-campo-body{padding:12px 2px 4px}
 .nav-inner{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
 .nav{border:0;background:transparent;color:var(--muted);border-radius:18px;padding:8px 4px;font-size:12px;font-weight:950;min-height:58px;cursor:pointer;position:relative}.nav span{display:block;font-size:18px;margin-bottom:2px}.nav.active{color:var(--accent);background:var(--accent-soft)}
 .nav-badge{display:inline-block;position:absolute;top:6px;right:10px;background:var(--risco);color:#fff;font-size:9px;font-weight:950;border-radius:999px;padding:2px 6px;min-width:18px;text-align:center;line-height:1.2}
