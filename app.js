@@ -5484,6 +5484,7 @@ function cp704Css(){
       ['Permuta / entrada com imóvel',/^não identificado$/i.test(cp704Text(a?.diagnostico?.pendenciaFinanceira))?'':a?.diagnostico?.pendenciaFinanceira],
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
+      ['Pedido do cliente ainda sem resposta direta',/^(nenhum|não identificado)$/i.test(cp704Text(a?.diagnostico?.pedidoSemResposta))?'':a?.diagnostico?.pedidoSemResposta],
       ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
