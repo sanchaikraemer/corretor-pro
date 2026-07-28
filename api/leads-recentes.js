@@ -1,18 +1,24 @@
-import { requireApiKey, resolveOrganizationId, getSupabaseAdmin, listRecentProcessings } from "./_persistence.js";
+import { resolveOrganizationId, getSupabaseAdmin, listRecentProcessings, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 
 const CACHE_TTL_MS = 5000; // no máximo 5 s; sincronização entre celular e PC tem prioridade
 const responseCache = new Map();
 
 
-async function readTable(supabase, table, orderColumn = "criado_em") {
+// organizationId, quando informado, filtra a tabela por essa empresa — nunca lê outra. Passe
+// null só pras tabelas legadas (leads/direciona_leads/corretor_pro_backups) que não têm coluna
+// organization_id e por isso só entram no backup da empresa original (ver exportarTudo abaixo).
+async function readTable(supabase, table, orderColumn = "criado_em", organizationId = null) {
   const pageSize = 1000;
   const rows = [];
   for (let from = 0; from < 20000; from += pageSize) {
     let query = supabase.from(table).select("*").range(from, from + pageSize - 1);
+    if (organizationId) query = query.eq("organization_id", organizationId);
     if (orderColumn) query = query.order(orderColumn, { ascending: false });
     let { data, error } = await query;
     if (error && orderColumn !== "created_at") {
-      ({ data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false }).range(from, from + pageSize - 1));
+      let retry = supabase.from(table).select("*").order("created_at", { ascending: false }).range(from, from + pageSize - 1);
+      if (organizationId) retry = retry.eq("organization_id", organizationId);
+      ({ data, error } = await retry);
     }
     if (error) return { ok: false, table, error: error.message, rows };
     if (!Array.isArray(data) || data.length === 0) break;
@@ -131,28 +137,35 @@ export function gerarAuditoriaDados(rows = []) {
   };
 }
 
-async function auditarDados(req, res) {
+async function auditarDados(req, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-  const main = await readTable(supabase, "whatsapp_processamentos", "criado_em");
+  const main = await readTable(supabase, "whatsapp_processamentos", "criado_em", organizationId);
   if (!main.ok) return json(res, 500, { ok: false, error: main.error, table: main.table });
   return json(res, 200, gerarAuditoriaDados(main.rows));
 }
 
-async function exportarTudo(req, res) {
+async function exportarTudo(req, res, organizationId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
   const generatedAt = new Date().toISOString();
-  const main = await readTable(supabase, "whatsapp_processamentos", "criado_em");
+  const main = await readTable(supabase, "whatsapp_processamentos", "criado_em", organizationId);
   if (!main.ok) return json(res, 500, { ok: false, error: main.error, table: main.table });
   const extras = {};
   // direciona_config guarda o Cérebro (persona/regras/conhecimento configurado pelo corretor —
   // ver CLAUDE.md). Sem essa tabela, um "backup completo" recupera os leads mas perde toda a
   // configuração que a IA depende pra responder certo — o nome "full backup" não cumpria a
   // promessa.
-  for (const table of ["direciona_leads", "leads", "corretor_pro_backups", "direciona_config"]) {
-    const result = await readTable(supabase, table, "criado_em");
-    if (result.ok && result.rows.length) extras[table] = result.rows;
+  const configResult = await readTable(supabase, "direciona_config", "criado_em", organizationId);
+  if (configResult.ok && configResult.rows.length) extras.direciona_config = configResult.rows;
+  // leads/direciona_leads/corretor_pro_backups são tabelas legadas de antes do multiempresa e
+  // não têm coluna organization_id — pertencem só à empresa original. Incluí-las no backup de
+  // qualquer outra empresa vazaria dado de fora dela, então só entram no backup da principal.
+  if (organizationId === EMPRESA_PRINCIPAL_ID) {
+    for (const table of ["direciona_leads", "leads", "corretor_pro_backups"]) {
+      const result = await readTable(supabase, table, "criado_em");
+      if (result.ok && result.rows.length) extras[table] = result.rows;
+    }
   }
   const payload = {
     ok: true,
@@ -184,15 +197,16 @@ export default async function handler(req, res) {
   const organizationId = await resolveOrganizationId(req, res);
   if (!organizationId) return;
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Use GET." });
-  // audit/export continuam só pelo caminho da chave compartilhada (uso interno de operação,
-  // não uma tela que um corretor comum acessa) — mantém requireApiKey aqui de propósito.
+  // audit/export usam a MESMA identidade já resolvida acima por resolveOrganizationId (login
+  // real do corretor, ou a empresa principal no caminho antigo da chave compartilhada) — nunca
+  // mais leem a base inteira de todas as empresas. Antes disso, qualquer corretor logado
+  // conseguia baixar o backup/auditoria de TODAS as contas do sistema (a chave compartilhada é
+  // anexada automaticamente em toda chamada do app — ver app.js), não só a própria.
   if (String(req.query?.audit || "") === "1") {
-    if (requireApiKey(req, res) !== true) return;
-    return auditarDados(req, res);
+    return auditarDados(req, res, organizationId);
   }
   if (String(req.query?.export || "") === "full") {
-    if (requireApiKey(req, res) !== true) return;
-    return exportarTudo(req, res);
+    return exportarTudo(req, res, organizationId);
   }
   const limit = Math.min(2000, Math.max(1, Number(req.query?.limit || 8)));
   const fresh = String(req.query?.fresh || "") === "1";

@@ -1,5 +1,4 @@
-import { requireApiKey } from "./_persistence.js";
-import { createClient } from "@supabase/supabase-js";
+import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -21,15 +20,18 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw || "{}"); } catch (_) { return {}; }
 }
 
-async function tableCount(supabase, table) {
-  const { count, error } = await supabase
-    .from(table)
-    .select("*", { count: "exact", head: true });
+async function tableCount(supabase, table, organizationId) {
+  let query = supabase.from(table).select("*", { count: "exact", head: true });
+  if (organizationId) query = query.eq("organization_id", organizationId);
+  const { count, error } = await query;
   return { count, error };
 }
 
-async function deleteAllRows(supabase, table) {
-  const beforeResult = await tableCount(supabase, table);
+// organizationId, quando informado, limita a limpeza só às linhas daquela empresa — nunca
+// apaga o resto do SaaS. Passe null só pras tabelas legadas (leads/direciona_leads) que não
+// têm coluna organization_id e só existem pra empresa original.
+async function deleteAllRows(supabase, table, organizationId) {
+  const beforeResult = await tableCount(supabase, table, organizationId);
   // Se o count deu erro com codigo de tabela inexistente, marca como nao existe.
   if (beforeResult.error) {
     const msg = beforeResult.error.message || "";
@@ -45,7 +47,9 @@ async function deleteAllRows(supabase, table) {
 
   // Tenta varias estrategias sempre. Mesmo que before=0, tenta — pode ser
   // count bloqueado por RLS mas delete liberado, ou vice-versa.
-  const strategies = [
+  const strategies = organizationId ? [
+    { how: "eq organization_id", run: () => supabase.from(table).delete().eq("organization_id", organizationId) }
+  ] : [
     { how: "gte uuid zero", run: () => supabase.from(table).delete().gte("id", "00000000-0000-0000-0000-000000000000") },
     { how: "not id is null", run: () => supabase.from(table).delete().not("id", "is", null) },
     { how: "neq uuid max", run: () => supabase.from(table).delete().neq("id", "ffffffff-ffff-ffff-ffff-ffffffffffff") }
@@ -56,11 +60,11 @@ async function deleteAllRows(supabase, table) {
     attempts.push({ how: s.how, error: error?.message || null });
     if (error) continue;
     // Conferir se ainda sobrou — se zerou, podemos parar.
-    const check = await tableCount(supabase, table);
+    const check = await tableCount(supabase, table, organizationId);
     if ((check.count || 0) === 0 && !check.error) break;
   }
 
-  const afterResult = await tableCount(supabase, table);
+  const afterResult = await tableCount(supabase, table, organizationId);
   const after = afterResult.count || 0;
 
   return {
@@ -180,7 +184,6 @@ function inspectKey(raw) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Use POST para limpar tudo." });
   }
@@ -190,6 +193,13 @@ export default async function handler(req, res) {
     return json(res, 403, { ok: false, error: "Rota desativada. Defina DIRECIONA_DANGER_LIMPAR_TUDO=ativo no ambiente para habilitar." });
   }
 
+  // Identifica de qual empresa é o pedido (login real do corretor, ou a empresa principal no
+  // caminho antigo da chave compartilhada) — "Apagar tudo" apaga só a PRÓPRIA conta de quem
+  // chamou, nunca a base inteira do SaaS. Antes disso, esse botão (usado por qualquer corretor
+  // logado, não só pelo dono da plataforma) apagava os dados de TODAS as empresas do sistema.
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
+
   const body = await readJsonBody(req).catch(() => ({}));
   if (body?.confirm !== "APAGAR TUDO") {
     return json(res, 400, {
@@ -198,27 +208,36 @@ export default async function handler(req, res) {
     });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const bucket = process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips";
+  const supabase = getSupabaseAdmin();
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabase) {
     return json(res, 500, { ok: false, error: "Supabase nao configurado." });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-
-  const tabelas = [];
-  for (const t of ["whatsapp_processamentos", "leads", "direciona_leads"]) {
-    tabelas.push(await deleteAllRows(supabase, t));
+  const tabelas = [await deleteAllRows(supabase, "whatsapp_processamentos", organizationId)];
+  // leads/direciona_leads são tabelas legadas sem coluna organization_id — só têm dado da
+  // empresa original, então só entram na limpeza quando é ela quem está pedindo.
+  if (organizationId === EMPRESA_PRINCIPAL_ID) {
+    tabelas.push(await deleteAllRows(supabase, "leads", null));
+    tabelas.push(await deleteAllRows(supabase, "direciona_leads", null));
   }
 
   let storage = null;
   if (body.includeStorage !== false) {
-    storage = await emptyBucket(supabase, bucket);
-    storage.bucket = bucket;
+    // Mesmos dois prefixos usados na exclusão de conta (api/admin-contas.js) — cobre tanto os
+    // ZIPs originais quanto os manifestos/áudios extraídos, sem tocar em nenhuma outra empresa.
+    const [zipStorage, dadosStorage] = await Promise.all([
+      emptyBucket(supabase, bucket, `whatsapp/organizations/${organizationId}`).catch(e => ({ ok: false, error: e?.message || String(e), deleted: 0 })),
+      emptyBucket(supabase, bucket, `organizations/${organizationId}`).catch(e => ({ ok: false, error: e?.message || String(e), deleted: 0 }))
+    ]);
+    storage = {
+      ok: zipStorage.ok !== false && dadosStorage.ok !== false,
+      deleted: (zipStorage.deleted || 0) + (dadosStorage.deleted || 0),
+      error: [zipStorage.error, dadosStorage.error].filter(Boolean).join(" | ") || undefined,
+      bucket
+    };
   }
 
   const totalLinhas = tabelas.reduce((acc, t) => acc + (t.deleted || 0), 0);
