@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import JSZip from "jszip";
 import OpenAI from "openai";
+import { registrarUsoIA } from "./_iaCusto.js";
 
 const ATTACHED_SUFFIX_RE = /\s*\((arquivo anexado|file attached)\)\s*$/i;
 const AUDIO_INLINE_RE = /\.(opus|ogg|mp3|m4a|wav|aac)\b/i;
@@ -1568,7 +1569,7 @@ export async function aprenderComHistoricoReal({ timeline, clientName = "", lead
   }
   const oa = openai || getOpenAI();
   if (!oa) return { ok: false, error: "Análise não configurada." };
-  const intel = await extrairInteligenciaObservada(material, oa);
+  const intel = await extrairInteligenciaObservada(material, oa, organizationId);
   if (intel?._erroIA) return { ok: false, error: intel._erroIA };
   if (!intel || typeof intel !== "object") return { ok: false, error: "A IA não devolveu aprendizado válido." };
   // v827 §7.3: guarda a ORIGEM do que foi aprendido (de qual lead/arquivo veio), para
@@ -1658,11 +1659,13 @@ CONVERSA DO CORRETOR COM CLIENTE:
 ${timelineText.slice(0, 5000)}
 
 Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa: regras de produto, condições de pagamento, FGTS, financiamento, empreendimentos, respostas a objeções reais. Se um fato já está no conhecimento atual, não repita. Funda tudo em texto corrido simples, máximo 400 palavras, sem títulos formais. Se não houver nada novo de concreto, devolva o CONHECIMENTO ATUAL sem alterar. Retorne SOMENTE o texto final.`;
+    const modeloUsado = modeloTarefasSimples();
     const completion = await openai.chat.completions.create({
-      model: modeloTarefasSimples(),
+      model: modeloUsado,
       messages: [{ role: "user", content: promptAtualizar }],
       max_tokens: 700
     });
+    await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "conhecimento-corretor", usage: completion?.usage });
     const novo = String(completion.choices?.[0]?.message?.content || "").trim();
     if (!novo || novo.length < 20) return;
     await upsertConfigComOrganizacao(supabase, organizationId, { chave: "corretor-conhecimento", valor: { texto: novo }, atualizado_em: new Date().toISOString() });
@@ -2104,7 +2107,7 @@ function jeitoAprendidoCompacto(config, contexto) {
 // Extrai a INTELIGÊNCIA OBSERVADA de UMA conversa já salva (timeline em texto), pra ensinar o
 // Cérebro com os leads que JÁ estão no Corretor Pro — sem reanalisar o lead inteiro. Prompt curto e
 // focado, mesma forma que o campo inteligenciaObservada da análise. Retorna {} se não der pra extrair.
-export async function extrairInteligenciaObservada(timelineText, openai) {
+export async function extrairInteligenciaObservada(timelineText, openai, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   if (!timelineText || timelineText.trim().length < 40) return {};
   // O material já vem filtrado para conter as mensagens reais do corretor e o
   // contexto ao redor. Mantemos até 48 mil caracteres, priorizando também o final,
@@ -2167,6 +2170,7 @@ ${textoConversa}`;
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" }
         }, { timeout: 18000, maxRetries: 0 });
+        await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloTarefasSimples(), rota: "inteligencia-observada", usage: completion?.usage });
         const raw = completion?.choices?.[0]?.message?.content || "{}";
         let p = null; try { p = JSON.parse(_extrairJson(raw)); } catch (_) { parseFalhou = true; }
         if (p && typeof p === "object") return p;
@@ -2184,7 +2188,7 @@ ${textoConversa}`;
 }
 
 // Transcreve um áudio avulso (buffer) — usado pra ensinar o Cérebro por voz.
-export async function transcreverBuffer(buffer, ext, openai) {
+export async function transcreverBuffer(buffer, ext, openai, organizationId = ORGANIZACAO_PADRAO_LEGADA, rota = "ensinar-cerebro-por-voz") {
   if (!openai) throw new Error("Transcrição não configurada.");
   if (!buffer || !buffer.length) throw new Error("Áudio vazio.");
   if (buffer.length > 24 * 1024 * 1024) throw new Error("Áudio grande demais (máx 24 MB).");
@@ -2194,11 +2198,17 @@ export async function transcreverBuffer(buffer, ext, openai) {
   const tempPath = path.join(os.tmpdir(), `direciona-cerebro-${Date.now()}-${Math.random().toString(16).slice(2)}${e}`);
   fs.writeFileSync(tempPath, buffer);
   try {
+    const modeloUsado = modeloTranscricao();
+    // response_format verbose_json: mesmo campo .text de sempre, mas também devolve .duration
+    // (segundos) — o Whisper cobra por minuto de áudio, não por token, então sem isso não dá
+    // pra medir custo real desta chamada (ver api/_iaCusto.js).
     const result = await withRetries(() => openai.audio.transcriptions.create({
       file: fs.createReadStream(tempPath),
-      model: modeloTranscricao(),
-      language: "pt"
+      model: modeloUsado,
+      language: "pt",
+      response_format: "verbose_json"
     }));
+    await registrarUsoIA({ organizationId, kind: "whisper", model: modeloUsado, rota, audioSeconds: result?.duration });
     return stripEmojis(result.text || "");
   } finally {
     try { fs.unlinkSync(tempPath); } catch {}
@@ -2274,18 +2284,20 @@ function calcularMelhorHorario(timeline, clientName, corretorNome = "") {
 }
 
 // Resume um atendimento (texto longo ditado pelo corretor) em 1-2 frases pra guardar nas observações.
-export async function resumirAtendimento(texto, openai) {
+export async function resumirAtendimento(texto, openai, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   const limpo = String(texto || "").trim();
   if (!limpo) return "";
   if (!openai) return limpo.slice(0, 280); // sem IA, guarda um trecho
   try {
+    const modeloUsado = modeloTarefasSimples();
     const completion = await withRetries(() => openai.chat.completions.create({
-      model: modeloTarefasSimples(),
+      model: modeloUsado,
       messages: [{
         role: "user",
         content: `Resuma em 1 ou 2 frases curtas, em português, o atendimento abaixo que um corretor registrou. Foque na SITUAÇÃO e no que importa pra venda (o que o cliente quer, objeções, próximos passos combinados). Não escreva na íntegra, não invente. Responda só o resumo, sem rótulos.\n\nAtendimento:\n${limpo.slice(0, 4000)}`
       }],
     }));
+    await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "resumir-atendimento", usage: completion?.usage });
     return stripEmojis(completion.choices[0].message.content || "").trim() || limpo.slice(0, 280);
   } catch (_) {
     return limpo.slice(0, 280);
@@ -2579,6 +2591,7 @@ ${timelineText}`;
     }), { tries: 2, baseDelayMs: 800 });
     const parsedRaw = r.parsed;
     const completion = r.response;
+    await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloAnalise(), rota: "analise", usage: completion?.usage });
 
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
@@ -3016,7 +3029,7 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   };
 }
 
-export async function transcreverArquivosExtraidos(arquivos = []) {
+export async function transcreverArquivosExtraidos(arquivos = [], organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   const openai = getOpenAI();
   const resultado = {};
   const entradas = Array.isArray(arquivos) ? arquivos : [];
@@ -3029,7 +3042,7 @@ export async function transcreverArquivosExtraidos(arquivos = []) {
     const buffer = Buffer.isBuffer(item?.buffer) ? item.buffer : Buffer.from(item?.buffer || []);
     if (!base || !buffer.length) return;
     try {
-      const text = await transcreverBuffer(buffer, path.extname(base) || ".ogg", openai);
+      const text = await transcreverBuffer(buffer, path.extname(base) || ".ogg", openai, organizationId, "transcricao-import");
       resultado[base] = { status: text ? "transcrito" : "audio_grande_ou_vazio", text: text || "" };
     } catch (error) {
       resultado[base] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
@@ -3233,7 +3246,7 @@ export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebro
   const extracted = prep._extractedFiles || {};
   const arquivos = Object.entries(extracted).map(([name, audioBuffer]) => ({ name, buffer: audioBuffer }));
   const lote = arquivos.length
-    ? await transcreverArquivosExtraidos(arquivos)
+    ? await transcreverArquivosExtraidos(arquivos, organizationId)
     : { transcriptions: {}, transcriptionEnabled: true };
   return finalizarAnaliseDaConversa({
     txtFile: prep.txtFile,

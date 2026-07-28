@@ -92,7 +92,7 @@ const diagSrc = fs.readFileSync(new URL('../api/diagnostico.js', import.meta.url
 assert.match(diagSrc, /getPlatformAdminUserId/, 'diagnostico.js precisa usar getPlatformAdminUserId');
 const blocoBucket = diagSrc.slice(diagSrc.indexOf('if (mode === "bucket")'), diagSrc.indexOf('mode=status/openai continuam'));
 assert.match(blocoBucket, /if \(!admin\) return json\(res, 403/, 'mode=bucket bloqueia com 403 quem não é admin');
-assert.match(diagSrc, /modoOpenAI\(res, !!admin\)/, 'mode=openai recebe a flag de admin calculada');
+assert.match(diagSrc, /modoOpenAI\(res, !!admin, organizationId\)/, 'mode=openai recebe a flag de admin calculada');
 assert.match(diagSrc, /modoStatus\(res, !!admin\)/, 'mode=status recebe a flag de admin calculada');
 assert.match(diagSrc, /OPENAI_KEY_PREFIX: isAdmin \? openai\.keyPrefix : undefined/, 'prefixo da chave só aparece pra admin em mode=status');
 assert.match(diagSrc, /keyPrefix: undefined, keyTail: undefined, organization: undefined, project: undefined/, 'mode=openai redige os mesmos campos sensíveis pra quem não é admin');

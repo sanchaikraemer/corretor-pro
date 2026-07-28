@@ -7,6 +7,7 @@ import { resolveOrganizationId, getSupabaseAdmin, getPlatformAdminUserId } from 
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
 import { getOpenAIRaw, getOpenAIConfigSummary, describeOpenAIError, verificarLimiteDiario } from "./_pipeline.js";
+import { registrarUsoIA } from "./_iaCusto.js";
 
 // v1013 — mode=openai faz uma chamada REAL (e paga) à OpenAI a cada clique no botão "Testar IA".
 // Sem nenhum teto, cliques repetidos (ou um script) gastavam crédito sem limite algum. Este é um
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     if (!limite.permitido) {
       return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} testes de IA foi atingido para esta conta. Tente novamente amanhã.` });
     }
-    return modoOpenAI(res, !!admin);
+    return modoOpenAI(res, !!admin, organizationId);
   }
   return modoStatus(res, !!admin);
 }
@@ -102,7 +103,7 @@ async function timed(label, fn) {
   }
 }
 
-async function modoOpenAI(res, isAdmin) {
+async function modoOpenAI(res, isAdmin, organizationId) {
   const summary = getOpenAIConfigSummary();
   const config = isAdmin ? summary : { ...summary, keyPrefix: undefined, keyTail: undefined, organization: undefined, project: undefined };
   const testes = [];
@@ -120,6 +121,9 @@ async function modoOpenAI(res, isAdmin) {
       max_tokens: 16
     }));
     testes.push(testeAnalise);
+    if (testeAnalise.ok) {
+      await registrarUsoIA({ organizationId, kind: "chat", model: testeAnalise.result?.model || summary.analysisModel, rota: "diagnostico-testar-ia", usage: testeAnalise.result?.usage });
+    }
   } else {
     testeAnalise = { label: "OpenAI", ok: false, ms: 0, error: "OPENAI_API_KEY ausente no servidor.", status: null, code: null, type: null };
     testes.push(testeAnalise);

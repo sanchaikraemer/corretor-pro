@@ -61,6 +61,26 @@
       </div>
       <div id="msgPainel"></div>
     </div>
+
+    <div class="cartao painel-largo" id="areaUsoIA" style="display:none">
+      <div class="rodape-conta">
+        <div><b>Uso de IA por empresa</b><div class="tag-empresa">Estimativa de custo (últimos 30 dias) — não é nota fiscal</div></div>
+        <button class="secundario pequeno" onclick="carregarUsoIA()">Atualizar</button>
+      </div>
+      <div class="stats-admin">
+        <div class="stat-tile"><span>Chamadas hoje (todas as empresas)</span><b id="usoIaChamadasHoje">0</b></div>
+        <div class="stat-tile"><span>Custo estimado hoje</span><b id="usoIaCustoHoje">R$ 0,00</b></div>
+        <div class="stat-tile"><span>Chamadas nos últimos 30 dias</span><b id="usoIaChamadas30d">0</b></div>
+        <div class="stat-tile"><span>Custo estimado nos últimos 30 dias</span><b id="usoIaCusto30d">R$ 0,00</b></div>
+      </div>
+      <div class="tabela-admin">
+        <table>
+          <thead><tr><th>Empresa</th><th>Chamadas hoje</th><th>Custo hoje</th><th>Chamadas 30d</th><th>Custo 30d</th><th>Áudio transcrito (min, 30d)</th></tr></thead>
+          <tbody id="linhasUsoIA"></tbody>
+        </table>
+      </div>
+      <div id="msgUsoIA"></div>
+    </div>
   </div>
 
 <script>
@@ -103,7 +123,9 @@ async function entrarAdmin() {
 
     document.getElementById('areaLogin').style.display = 'none';
     document.getElementById('areaPainel').style.display = '';
+    document.getElementById('areaUsoIA').style.display = '';
     carregarEmpresas();
+    carregarUsoIA();
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
@@ -270,6 +292,49 @@ async function estenderTeste(id) {
   const { error } = await supabaseClient.from('organizations').update({ status: 'teste', trial_expira_em: base.toISOString() }).eq('id', id);
   if (error) return alert('Erro: ' + error.message);
   carregarEmpresas();
+}
+
+// v1038 — quanto cada empresa está custando de IA de verdade (achado da auditoria: sem isso não
+// dá pra definir plano/preço com segurança). Vem de api/admin-uso-ia.js (exclusivo do
+// administrador da plataforma) — nunca do banco direto, porque o cálculo de custo (tabela de
+// preço por modelo, cotação do dólar) mora no servidor, não faz sentido duplicar aqui.
+function formatarReais(valor) {
+  return 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function carregarUsoIA() {
+  const msg = document.getElementById('msgUsoIA');
+  msg.className = ''; msg.textContent = '';
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return;
+  try {
+    const resp = await fetch('/api/admin-uso-ia?dias=30', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok || !r.ok) {
+      msg.className = 'erro';
+      msg.textContent = 'Erro ao carregar uso de IA: ' + (r.error || `código ${resp.status}`);
+      return;
+    }
+    document.getElementById('usoIaChamadasHoje').textContent = r.totalGeral.hoje.chamadas;
+    document.getElementById('usoIaCustoHoje').textContent = formatarReais(r.totalGeral.hoje.custoEstimadoBRL);
+    document.getElementById('usoIaChamadas30d').textContent = r.totalGeral.periodo.chamadas;
+    document.getElementById('usoIaCusto30d').textContent = formatarReais(r.totalGeral.periodo.custoEstimadoBRL);
+    const linhas = document.getElementById('linhasUsoIA');
+    linhas.innerHTML = (r.empresas || []).length ? r.empresas.map(e => `
+      <tr>
+        <td data-rotulo="Empresa">${escapeHtml(e.nome)}</td>
+        <td data-rotulo="Chamadas hoje">${e.hoje.chamadas}</td>
+        <td data-rotulo="Custo hoje">${formatarReais(e.hoje.custoEstimadoBRL)}</td>
+        <td data-rotulo="Chamadas 30d">${e.periodo.chamadas}</td>
+        <td data-rotulo="Custo 30d">${formatarReais(e.periodo.custoEstimadoBRL)}</td>
+        <td data-rotulo="Áudio (min, 30d)">${e.periodo.audioMinutos}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="6">Nenhum uso de IA registrado ainda.</td></tr>';
+  } catch (e) {
+    msg.className = 'erro';
+    msg.textContent = 'Erro ao carregar uso de IA: ' + (e?.message || e);
+  }
 }
 </script>
 </body>

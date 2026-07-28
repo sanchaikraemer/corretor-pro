@@ -244,7 +244,7 @@ export default async function handler(req, res) {
         const b64 = String(body.audioBase64 || "").replace(/^data:[^;]+;base64,/, "");
         if (!b64) return json(res, 400, { ok: false, error: "Áudio não recebido." });
         const buffer = Buffer.from(b64, "base64");
-        const texto = await transcreverBuffer(buffer, body.ext || ".ogg", openai);
+        const texto = await transcreverBuffer(buffer, body.ext || ".ogg", openai, organizationId);
         return json(res, 200, { ok: true, texto });
       } catch (e) {
         return json(res, 200, { ok: false, error: e?.message || "Falha ao transcrever áudio." });
