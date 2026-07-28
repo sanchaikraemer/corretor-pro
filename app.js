@@ -9690,19 +9690,21 @@ function cpProbabilidadeFechamento(l){
   // v1017 — extraído pra ultimaMsgClientePedeResposta (compartilhada com emJanelaDeEspera/
   // entraEmRetomada, que tinham o MESMO problema sem essa checagem — ver comentário ali).
   const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgClientePedeResposta(l);
-  // v1056 — pedido original do dono, do início desta rodada, só agora implementado: "fazer o
-  // tempo parado pesar contra a posição na fila" — sem tirar o lead da lista de vez, só derrubar
-  // pra trás de quem está ativo de verdade. Usa o toque mais recente entre mensagem
-  // (daysSinceLastTouch — não daysSinceClientReply, que já tem outro significado logo acima, no
-  // bônus "cliente espera você") e atendimento (ultimoAtendimentoTs), até um teto de 90 dias —
-  // depois disso a penalidade para de crescer (não precisa ficar infinitamente pior).
-  let diasFrio = Number(l?.daysSinceLastTouch != null ? l.daysSinceLastTouch : l?.daysSinceLastInteraction);
-  if(!Number.isFinite(diasFrio)) diasFrio = 90;
+  // v1056 — pedido original do dono, do início desta rodada: "fazer o tempo parado pesar contra
+  // a posição na fila" — sem tirar o lead da lista de vez, só derrubar pra trás de quem está
+  // ativo de verdade. v1057 — corrigido pra usar SÓ o último atendimento (ultimoAtendimentoTs),
+  // nunca mensagem: "não interessa a contagem de última mensagem, somente de último atendimento,
+  // ponto final" (palavras do dono). Isso deixou de ser um problema pra quem nunca foi atendido
+  // porque, desde a v1057, cpFilaFazerAgora só deixa entrar aqui quem JÁ tem atendimento marcado
+  // (quem não tem vai pra "Oportunidades esquecidas") — então todo lead que chega até aqui tem
+  // uma data de atendimento de verdade pra medir. Teto de 90 dias: depois disso a penalidade para
+  // de crescer (não precisa ficar infinitamente pior).
+  let diasFrio = 90;
   try{
     const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
     if(atTs){
       const dAt = diasCalendarioBR(atTs);
-      if(dAt != null && Number.isFinite(dAt) && dAt < diasFrio) diasFrio = dAt;
+      if(dAt != null && Number.isFinite(dAt)) diasFrio = dAt;
     }
   }catch(_){}
   diasFrio = Math.min(diasFrio, 90);
@@ -9723,7 +9725,12 @@ function cpFilaFazerAgora(items){
   // novo, 5 se não é; depois disso o lead volta a ser candidato normalmente, mesmo que a bola
   // ainda esteja tecnicamente do lado dele — é a MESMA regra que entraEmRetomada usa). Corrigido
   // pra usar essa regra existente em vez de inventar um bloqueio que nunca é revisto.
-  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
+  // v1057 — pedido taxativo do dono: "na lista de prioridades só pode aparecer clientes que já
+  // foram atendidos e que respeita o tempo descrito no cérebro... quem não tem atendimento tem
+  // que ir lá nas oportunidades esquecidas". Lead sem NENHUM atendimento marcado no app não entra
+  // mais aqui — ele aparece em "Oportunidades esquecidas" (leadsEsquecidos, que já existe e já
+  // ordena pelo mais parado primeiro, exatamente como pedido).
+  const pool = ativos.filter(l => !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !!(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l)) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)));
   // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
   // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
   // cada COMPARAÇÃO — pra 227 leads isso é milhares de recomputações redundantes por render;

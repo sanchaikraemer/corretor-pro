@@ -38,6 +38,9 @@ const sandbox = eval(`
   // v943 — a ordem da fila passou a ser cpProbabilidadeFechamento (junção de fatores); este
   // teste é sobre a CONTAGEM da dose, não a ordem, então um stub simples (por mensagens) basta.
   const cpProbabilidadeFechamento = (l) => mensagensDoCliente(l);
+  // v1057 — cpFilaFazerAgora exige atendimento marcado; este teste é sobre a MATEMÁTICA da dose
+  // (não sobre atendimento), então todo mundo "já foi atendido alguma vez" por padrão.
+  const ultimoAtendimentoTs = () => 1;
   ${fdsSrc}
   ${filaSrc}
   ${totalSrc}
