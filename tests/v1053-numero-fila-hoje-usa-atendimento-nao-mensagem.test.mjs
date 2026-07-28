@@ -49,7 +49,7 @@ const karine = {
   ] } }
 };
 const htmlKarine = cpHomeLeadRow(karine, 100);
-assert.match(htmlKarine, />atendido há 10d</, "o número mostrado precisa ser o do atendimento (10 dias), não o da última mensagem (5 dias) — v1054: rótulo 'atendido há'");
+assert.match(htmlKarine, />há 10d</, "o número mostrado precisa ser o do atendimento (10 dias), não o da última mensagem (5 dias)");
 assert.match(htmlKarine, /desde o último atendimento marcado/, "o title explica que o número é do atendimento, mesmo a mensagem sendo mais recente");
 assert.doesNotMatch(htmlKarine, />há 5d</, "o número da última mensagem não pode mais aparecer quando existe atendimento marcado");
 
@@ -62,7 +62,7 @@ const atendimentoAntigoMsgNova = {
   ] } }
 };
 const htmlAntigo = cpHomeLeadRow(atendimentoAntigoMsgNova, 100);
-assert.match(htmlAntigo, />atendido há 40d</, "mesmo com mensagem de ontem, o número mostrado continua sendo o do atendimento (40 dias)");
+assert.match(htmlAntigo, />há 40d</, "mesmo com mensagem de ontem, o número mostrado continua sendo o do atendimento (40 dias)");
 
 // Sem NENHUM atendimento marcado: continua mostrando a última interação normalmente (única data
 // que existe nesse caso).
