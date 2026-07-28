@@ -1,0 +1,25 @@
+name: CI
+
+# Roda a suíte de testes do projeto (npm test — node --check em toda API + a suíte inteira de
+# tests/*.test.mjs) em toda alteração enviada ao GitHub. A auditoria técnica/comercial de
+# 27/07/2026 apontou que os testes dependiam de execução manual antes de publicar — isso corrige
+# esse ponto sem mudar nada do fluxo de publicação em si (a Vercel continua publicando por conta
+# própria a cada push em main; este workflow só avisa, com o "x" ou "✓" no commit/PR, se algo
+# quebrou).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
