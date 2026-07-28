@@ -54,9 +54,9 @@ assert.match(app, /não é, e nunca foi, a nota de prioridade/, 'aviso sobre cpB
 assert.doesNotMatch(rowSrc, /chr-rank/, 'badge de posição (chr-rank) não pode mais existir na linha da Home');
 assert.doesNotMatch(app, /\.chr-rank\{/, 'nenhuma regra CSS de .chr-rank sobrou em app.js');
 
-// 2. chr-dd: prefixo "há" quando há dias, e title explicando o que o número mede.
+// 2. chr-dd: prefixo "há" (ou "atendido há", v1054) quando há dias, e title explicando o número.
 assert.match(rowSrc, /chr-dd" title=\"\$\{escapeHtml\(diasTitle\)\}/, 'chr-dd carrega title explicativo (diasTitle)');
-assert.match(rowSrc, /há \$\{escapeHtml\(dias\)\}/, 'texto visível do contador de dias ganha o prefixo "há"');
+assert.match(rowSrc, /\$\{diasRotulo\} \$\{escapeHtml\(dias\)\}/, 'texto visível do contador de dias ganha o prefixo "há" (ou "atendido há")');
 
 // 3. chr-pr: title com o produto completo (mesmo texto que é exibido, sem truncar no title).
 assert.match(rowSrc, /chr-pr" title="\$\{escapeHtml\(prod\|\|''\)\}"/, 'chr-pr expõe o texto completo via title (não trunca no hover)');

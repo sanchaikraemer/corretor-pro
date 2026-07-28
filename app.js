@@ -2765,6 +2765,12 @@ function cpHomeLeadRow(l, maxMsgs){
     : nivel === 1
       ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
       : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
+  // v1054 — pedido do dono: a diferença entre "atendimento registrado" e "só teve mensagem" só
+  // aparecia no title (invisível no celular, sem hover). Deixa isso visível no texto mesmo, pra
+  // dar pra ver direto na lista, sem abrir o lead, se aquele "há Xd" é de um atendimento
+  // reconhecido pelo app ou só da última mensagem trocada (nesse caso, o lead nunca foi
+  // atendido dentro do app nenhuma vez).
+  const diasRotulo = diasEhAtendimento ? "atendido há" : "há";
   // v978 — pedido do dono: aqui na Home só o nome do empreendimento (produtosLabelCurto), sem
   // dormitório/condição/preço — detalhe completo (produtosLabel) fica só pra dentro do lead.
   const prod = (typeof produtosLabelCurto === 'function') ? produtosLabelCurto(l) : ((typeof produtosLabel === 'function') ? produtosLabel(l) : (l.product || ''));
@@ -2783,7 +2789,7 @@ function cpHomeLeadRow(l, maxMsgs){
     <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
     ${cpBarraMensagensMini(l, maxMsgs)}
-    <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`há ${escapeHtml(dias)}`:''}</span>
+    <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`${diasRotulo} ${escapeHtml(dias)}`:''}</span>
   </button>`;
 }
 // Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
