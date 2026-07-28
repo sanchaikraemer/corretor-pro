@@ -16,12 +16,14 @@ const styles = ler("styles.css");
 const index = ler("index.html");
 const app = ler("app.js");
 const sw = ler("service-worker.js");
+// v1046: a lógica de tema (e o theme-color por tema) saiu de app.js para js/tema.js.
+const tema = ler("js/tema.js");
 
 // 1. O coral antigo e os petróleos antigos NÃO podem existir em nenhum arquivo publicado.
 //    Inclui as três variantes de coral que conviviam (#FF6B5C do :root legado e #FF5B50/#FF704F
 //    da "camada final #657") e os petróleos inconsistentes (#001E2B do boot, #001A25 da cp).
 const antigos = /#ff6b5c|#ff6257|#ff5b50|#ff704f|255\s*,\s*107\s*,\s*92|255\s*,\s*91\s*,\s*80|#001e2b|#001a25/i;
-for (const [nome, txt] of [["styles.css", styles], ["index.html", index], ["app.js", app], ["service-worker.js", sw]]) {
+for (const [nome, txt] of [["styles.css", styles], ["index.html", index], ["app.js", app], ["service-worker.js", sw], ["js/tema.js", tema]]) {
   assert.ok(!antigos.test(txt), `Identidade antiga (coral #FF6B5C/#FF5B50 ou petróleo #001E2B/#001A25) reapareceu em ${nome}`);
 }
 
@@ -50,7 +52,7 @@ for (const tok of ["--space-4:16px", "--radius-lg:16px", "--control-height-md:44
   assert.ok(styles.includes(tok), `Token de design system ausente: ${tok}`);
 }
 
-// 6. theme-color por tema alinhado aos fundos oficiais.
-assert.ok(app.includes("#052B36") && app.includes("#F3F6F7"), "theme-color por tema não aponta para os fundos oficiais");
+// 6. theme-color por tema alinhado aos fundos oficiais (hoje vive em js/tema.js).
+assert.ok(tema.includes("#052B36") && tema.includes("#F3F6F7"), "theme-color por tema não aponta para os fundos oficiais");
 
 console.log("v874-identidade-tokens: OK");

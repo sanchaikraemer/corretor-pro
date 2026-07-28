@@ -1,6 +1,7 @@
 import { state } from './js/state.js?v=__VERSION__';
 import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commercial-schema.js?v=__VERSION__';
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
+import { configurarEscolhaTema } from './js/tema.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
 import './js/pwa-install.js?v=__VERSION__';
 
@@ -649,43 +650,6 @@ async function slimZipKeepingTextAndAudio(file, onProgress){
   const slim = new File([blob], file.name.replace(/\.zip$/i,"")+"-enxuto.zip", {type:"application/zip"});
   return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size };
 }
-
-// ===== Aparência: somente Tema claro e Tema escuro =====
-const DIRECIONA_THEME_KEY = "direciona_tema";
-function temaDirecionaAtual(){
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
-function sincronizarControlesTema(){
-  const atual = temaDirecionaAtual();
-  qsa("[data-theme-choice]").forEach(btn => {
-    const ativo = btn.dataset.themeChoice === atual;
-    btn.setAttribute("aria-pressed", ativo ? "true" : "false");
-    btn.classList.toggle("active", ativo);
-  });
-  const rotulo = qs("#themeCurrentLabel");
-  if(rotulo) rotulo.textContent = atual === "light" ? "Tema claro" : "Tema escuro";
-}
-function aplicarTemaDireciona(tema, salvar=true){
-  const proximo = tema === "light" ? "light" : "dark";
-  document.documentElement.dataset.theme = proximo;
-  document.documentElement.style.colorScheme = proximo;
-  if(salvar){
-    try{ localStorage.setItem(DIRECIONA_THEME_KEY, proximo); }catch(_){ }
-  }
-  const meta = qs("#themeColorMeta");
-  if(meta) meta.setAttribute("content", proximo === "light" ? "#F3F6F7" : "#052B36");
-  sincronizarControlesTema();
-}
-function configurarEscolhaTema(){
-  aplicarTemaDireciona(temaDirecionaAtual(), false);
-  qsa("[data-theme-choice]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      aplicarTemaDireciona(btn.dataset.themeChoice, true);
-      toast(btn.dataset.themeChoice === "light" ? "Tema claro aplicado." : "Tema escuro aplicado.");
-    });
-  });
-}
-window.aplicarTemaDireciona = aplicarTemaDireciona;
 
 const VIEW_CACHEABLE = new Set(["pipeline","agenda","vendas","perdidos","geladeira","relatorio","carteira"]);
 let _viewLoadSeq = 0;
