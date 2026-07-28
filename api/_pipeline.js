@@ -2022,12 +2022,12 @@ const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE (sempre vale; aprend
 CUIDADO com a palavra "investir": em fala coloquial ("se a gente for investir", "se formos investir nisso") pode significar só "se a gente topar comprar/se comprometer", sem indicar perfil de investidor. Não rotule o objetivo do cliente como investimento só por essa palavra — confirme pelo contexto inteiro da conversa (ex.: quem já mudou para a cidade e pede dormitórios pensando na família tende a buscar moradia, não renda/revenda) e, se ficar ambíguo, pergunte antes de assumir.
 
 3) ARGUMENTOS POR SITUAÇÃO (use o que casa com o sinal do cliente):
-- Acha caro o pronto / não tem pressa / investidor → planta de lançamento: "compra na planta, congela o preço e valoriza até a entrega; quanto mais cedo no lançamento, mais barato e maior o prazo".
+- Acha caro o pronto / não tem pressa / investidor → planta de lançamento: "compra na planta, congela o preço, e historicamente imóveis na planta valorizam até a entrega; quanto mais cedo no lançamento, mais barato e maior o prazo". Isso é um mecanismo geral do mercado — não prometa nem crave número/percentual de valorização para o imóvel específico sem confirmação no Cérebro ou na conversa.
 - Travado em pagamento → explore as formas de pagamento que a construtora realmente oferecer (entrada + saldo, parcelamento direto, condições de correção), sempre "ajustável pra ficar confortável" — sem prometer condição que não conste no Cérebro ou na conversa.
 - Quer dar imóvel na troca (permuta) → só vale imóvel LÍQUIDO e de MENOR valor que o comprado ("tem que virar dinheiro rápido"); não pegar bem que vale mais que o imóvel. Reenquadre: "entrada + financiamento, bota o imóvel à venda e quita quando vender — pega desconto e ainda vende o seu por mais depois".
 - Investidor → foque em opção comercial/de renda quando houver; para quem quer decidir depois (morar/alugar/revender), a opção mais flexível. Reative indeciso com comparativo histórico real de valorização. Cite apenas empreendimentos que apareçam no Cérebro ou na conversa.
 - Decisão conjunta (cônjuge/filho/mãe) → não pressione; ofereça café na construtora pra apresentar junto e mantenha contato leve até a novidade/material.
-- Não viu o decorado → insista com leveza: "sem ver o decorado não dá pra entender a planta"; ofereça visita/chave sem compromisso, horário flexível.
+- Não viu o decorado (e ainda não houve recusa) → retome com leveza: "sem ver o decorado não dá pra entender a planta"; ofereça visita/chave sem compromisso, horário flexível.
 
 4) Conduza sempre pra UMA próxima ação concreta (visita, café na construtora, simulação, escolher unidade), seguindo o que o Cérebro Comercial abaixo definir sobre quais dessas ações essa organização realmente usa.`;
 
@@ -2590,6 +2590,17 @@ sem opção pronta equivalente"). Se o pedido já foi atendido ou não há pedid
 use exatamente "Nenhum". Isso é diferente de "compromissoCorretorNaoCumprido" (uma promessa que o
 CORRETOR fez e não cumpriu) — aqui é sobre um PEDIDO DO CLIENTE que ainda não teve resposta direta.
 
+RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
+pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
+desistiu, não quer continuar), E não houver nenhum fato novo e concreto na conversa que justifique
+contato agora (pergunta em aberto do cliente, prazo combinado que já venceu, material pendente de
+enviar), preencha "recomendacaoContato":{"aguardar":true,"motivo":"texto explicando por quê, com
+base no que o cliente disse"}. Nesse caso as três mensagens continuam sendo geradas normalmente —
+ficam prontas como opção caso o corretor decida entrar em contato mesmo assim — mas a recomendação
+atual é não mandar nenhuma agora. Quando houver motivo real para contato (pergunta em aberto,
+compromisso vencendo, prazo batendo, material a enviar, ou simplesmente nenhum sinal de que o
+cliente pediu espaço), preencha "recomendacaoContato":{"aguardar":false,"motivo":""}.
+
 Formato JSON obrigatório:
 {
   "summary":"texto",
@@ -2611,6 +2622,10 @@ Formato JSON obrigatório:
     "recomendada":"texto",
     "maisSuave":"texto",
     "maisDireta":"texto"
+  },
+  "recomendacaoContato":{
+    "aguardar":false,
+    "motivo":"texto"
   },
   "produtoInteresse":"texto",
   "produtosInteresse":["texto"],
@@ -2694,6 +2709,10 @@ ${timelineText}`;
       etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
       clientProfile: clean(raw.clientProfile),
       nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
+      recomendacaoContato: {
+        aguardar: raw?.recomendacaoContato?.aguardar === true,
+        motivo: raw?.recomendacaoContato?.aguardar === true ? clean(raw?.recomendacaoContato?.motivo) : ""
+      },
       messages: {
         a: msgA,
         b: msgB,

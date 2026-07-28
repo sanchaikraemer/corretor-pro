@@ -5685,6 +5685,11 @@ function renderLeadFoco(lead){
     const stale=!analiseAtualValida752(a);
     const messagesReady=cp705MessagesReady(msgs);
     const semAcaoUrgente=analiseAtualValida752(a) && String(mc?.acao?.status||'')==='sem-acao-urgente';
+    // v1059 — a análise pode recomendar não mandar nenhuma mensagem agora (cliente pediu espaço,
+    // "vai pensar", recusa clara) mesmo com as 3 sugestões prontas — elas continuam disponíveis
+    // caso o corretor decida contatar mesmo assim, só que com esse aviso em destaque acima.
+    const aguardarContato=analiseAtualValida752(a) && a?.recomendacaoContato?.aguardar===true;
+    const motivoAguardar=cp704Text(a?.recomendacaoContato?.motivo)||'A leitura da conversa aponta que ainda não é a hora de retomar contato.';
     const needsAnalysis=stale;
     const attended=(typeof ehContatadoHoje==='function') ? ehContatadoHoje(lead) : false;
     // v937 — "Última mensagem" puxa a hora da PRÓPRIA última mensagem real (mesma fonte do
@@ -5726,6 +5731,7 @@ function renderLeadFoco(lead){
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
+            ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
             <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
           </section>
