@@ -405,7 +405,16 @@ async function garantirRestauracaoLeadsAntigos(){
   let done = false;
   try{ done = !!localStorage.getItem(LEGACY_RESTORE_KEY); }catch(_){ }
   if(done) return null;
-  try{ return await restaurarLeadsAntigos(false); }catch(_){ return null; }
+  try{
+    return await restaurarLeadsAntigos(false);
+  }catch(_){
+    // v1042 — essa restauração só é possível pra empresa original (dona das tabelas legadas);
+    // pra qualquer outra empresa a chamada sempre vai falhar (403), sem nunca ficar diferente.
+    // Sem marcar como "tentado" aqui, toda outra conta repetiria essa chamada perdida em todo
+    // carregamento, pra sempre — marca como feito mesmo em erro, é tentativa única por navegador.
+    try{ localStorage.setItem(LEGACY_RESTORE_KEY, JSON.stringify({at:new Date().toISOString(), falhou:true})); }catch(_){ }
+    return null;
+  }
 }
 window.restaurarLeadsAntigos = restaurarLeadsAntigos;
 
