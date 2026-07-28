@@ -26,8 +26,10 @@ const rowSrc = extrai('cpHomeLeadRow');
 assert.doesNotMatch(rowSrc, /cpMotivoFechamento\(/, 'cpHomeLeadRow não invoca cpMotivoFechamento');
 assert.doesNotMatch(rowSrc, /chr-exp|data-exp|RAIO_SVG/, 'cpHomeLeadRow não referencia chr-exp/data-exp/RAIO_SVG');
 
-// 2. O que continua na linha da Home: rank, nome, produto, barra de mensagens, dias — nessa ordem.
-assert.match(rowSrc, /chr-rank[\s\S]*chr-nm[\s\S]*chr-pr[\s\S]*chr-dd/, 'linha continua com rank+nome, produto e dias, na ordem (trava v942/v972)');
+// 2. O que continua na linha da Home: nome, produto, barra de mensagens, dias — nessa ordem.
+// (v1046: o badge de posição, "1º"/"2º"/..., foi removido de vez — pedido do dono.)
+assert.match(rowSrc, /chr-nm[\s\S]*chr-pr[\s\S]*chr-dd/, 'linha continua com nome, produto e dias, na ordem (trava v942/v972)');
+assert.doesNotMatch(rowSrc, /chr-rank/, 'badge de posição (chr-rank) não existe mais na linha (v1046)');
 assert.match(rowSrc, /cpBarraMensagensMini\(l, ?maxMsgs\)/, 'barra de mensagens continua na linha');
 
 // 3. CSS do motivo (chr-exp e a variação de altura data-exp) segue removido — nenhuma regra
@@ -60,9 +62,8 @@ const sandbox = `
 `;
 const cpHomeLeadRow = eval(sandbox);
 const leadComTudo = { __msgs: 12, clientMessageDays: 6, clientQuestionCount: 4, __proposta: true, __retorno: true, product: 'Apartamento Evolutti Prime', daysSinceLastInteraction: 8 };
-const html = cpHomeLeadRow(leadComTudo, 1, 218);
+const html = cpHomeLeadRow(leadComTudo, 218);
 assert.doesNotMatch(html, /chr-exp|data-exp|Já se falou de valor/i, 'nem lead com todos os fatores de ranking mostra qualquer vestígio de motivo na Home');
-assert.match(html, /class="chr-rank"[^>]*>1º</, 'a linha continua com o badge de posição (v972), independente do motivo');
 assert.match(html, /há 8d/, 'a linha continua com o contador de dias (v972)');
 
 console.log('v975-motivo-so-no-lead: ok (atualizado na v1017 — motivo removido de vez, nem dentro do lead sobrevive)');

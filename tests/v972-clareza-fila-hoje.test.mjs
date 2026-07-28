@@ -8,9 +8,12 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // 1) O número mais chamativo da linha (barra de mensagens) não bate com a ordem da fila — é
 //    contagem bruta de mensagens (engajamento), NUNCA foi a nota de prioridade (v943/v944 já
 //    baixaram esse peso de propósito no ranking). Um lead com número maior podia aparecer ABAIXO
-//    de outro com número menor, quebrando a confiança na lista. Correção: cada linha ganha um
-//    badge de POSIÇÃO (chr-rank, "1º"/"2º"/...) que nunca contradiz a ordem — sem mexer em
-//    cpBarraMensagensMini (travada pelos testes v942/v943).
+//    de outro com número menor, quebrando a confiança na lista. Correção NA ÉPOCA: cada linha
+//    ganhava um badge de POSIÇÃO (chr-rank, "1º"/"2º"/...) que nunca contradizia a ordem.
+//    v1046 — o dono pediu pra tirar esse badge de vez ("não quero número de posição, isso é
+//    desnecessário"): a lista já mostra a quantidade certa (a meta configurada no Cérebro), sem
+//    precisar numerar. Os testes que travavam o badge foram substituídos por testes que travam a
+//    AUSÊNCIA dele.
 // 2) O contador de dias ("78d") aparecia sem rótulo do lado de "cliente esperando sua resposta",
 //    ambíguo (dias desde a última interação DE QUALQUER LADO, não necessariamente quanto tempo o
 //    cliente espera). Correção: prefixo "há" + title explicando o que o número mede.
@@ -47,10 +50,9 @@ const barSrc = extrai('cpBarraMensagensMini');
 // chr-exp deixou de fazer sentido na v975 (o elemento inteiro foi retirado da Home).
 assert.match(app, /não é, e nunca foi, a nota de prioridade/, 'aviso sobre cpBarraMensagensMini não ser prioridade está documentado');
 
-// 1. Badge de posição: existe, usa a classe chr-rank, mostra "pos" + "º" e não depende de haver
-// motivo (aparece sempre, mesmo em lead sem nenhum fator de ranking).
-assert.match(rowSrc, /class="chr-rank"[^>]*>\$\{pos\}º/, 'badge de posição mostra pos + º dentro de chr-rank');
-assert.match(rowSrc, /chr-rank" title="[^"]*[Pp]rioridade/, 'badge de posição tem title explicando que é a prioridade/ordem');
+// 1. v1046 — o badge de posição (chr-rank, "1º"/"2º"/...) foi removido de vez, a pedido do dono.
+assert.doesNotMatch(rowSrc, /chr-rank/, 'badge de posição (chr-rank) não pode mais existir na linha da Home');
+assert.doesNotMatch(app, /\.chr-rank\{/, 'nenhuma regra CSS de .chr-rank sobrou em app.js');
 
 // 2. chr-dd: prefixo "há" quando há dias, e title explicando o que o número mede.
 assert.match(rowSrc, /chr-dd" title=\"\$\{escapeHtml\(diasTitle\)\}/, 'chr-dd carrega title explicativo (diasTitle)');
@@ -86,31 +88,26 @@ const { cpHomeLeadRow } = eval(sandbox);
 // 6a. Lead qualificado (mesmo caso do teste v946) — o formato do resumo do motivo em si (ícone +
 // 1ª razão) é coberto em tests/v974-motivo-icone-resumo.test.mjs; aqui só o que continua igual.
 const qualificado = { __msgs: 12, clientMessageDays: 6, clientQuestionCount: 4, __proposta: true, __retorno: true, product: 'Apartamento Evolutti Prime' };
-const htmlQualificado = cpHomeLeadRow(qualificado, 4, 218);
+const htmlQualificado = cpHomeLeadRow(qualificado, 218);
+assert.doesNotMatch(htmlQualificado, /chr-rank/, 'lead qualificado não mostra badge de posição (v1046)');
 
-// 6b. O badge de posição usa o "pos" recebido (4), não o índice interno nem a contagem de
-// mensagens (12) — é exatamente esse descolamento que criava a confusão original.
-assert.match(htmlQualificado, /class="chr-rank"[^>]*>4º</, 'badge mostra a posição real recebida (4º), não a contagem de mensagens');
-assert.doesNotMatch(htmlQualificado.match(/class="chr-rank"[^<]*</)[0], /12/, 'badge de posição não mistura com a contagem de mensagens');
-
-// 6c. Lead SEM motivo (Henrique, v943/v946) ainda ganha o badge de posição — a posição na fila
-// não depende de haver "motivo" explicável.
+// 6c. Lead SEM motivo (Henrique, v943/v946) continua sem o span chr-exp (v946) e sem badge de
+// posição (v1046) — a linha não numera nem explica ranking, só mostra os dados do lead.
 const henrique = { __msgs: 218, clientMessageDays: 1, clientQuestionCount: 0 };
-const htmlHenrique = cpHomeLeadRow(henrique, 7, 218);
-assert.match(htmlHenrique, /class="chr-rank"[^>]*>7º</, 'lead sem motivo ainda mostra a posição real na fila (7º)');
-assert.doesNotMatch(htmlHenrique, /chr-exp/, 'lead sem motivo continua sem o span chr-exp (trava v946)');
+const htmlHenrique = cpHomeLeadRow(henrique, 218);
+assert.doesNotMatch(htmlHenrique, /chr-exp|chr-rank/, 'lead sem motivo continua sem chr-exp (trava v946) e sem badge de posição (v1046)');
 
 // 6d. Produto longo: o title carrega o texto completo, igual ao visível (não corta).
 const produtoLongo = 'Apartamento Personalité, Apartamento Prime, Apartamento Quality, Apartamento Evolutti';
-const htmlProdutoLongo = cpHomeLeadRow({ __msgs: 5, product: produtoLongo }, 1, 218);
+const htmlProdutoLongo = cpHomeLeadRow({ __msgs: 5, product: produtoLongo }, 218);
 assert.ok(htmlProdutoLongo.includes(`title="${produtoLongo}"`), 'title do produto tem o texto completo, sem truncar');
 
 // 6e. Dias com rótulo: "há Xd" no texto visível, title muda conforme nível (cliente esperando x
 // só parado).
-const semNivel = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78 }, 1, 218);
+const semNivel = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78 }, 218);
 assert.match(semNivel, />há 78d</, 'texto visível vem com o prefixo "há"');
 assert.match(semNivel, /desde a última intera[çc][ãa]o \(sua ou do cliente\)/, 'title genérico explica que é desde a última interação de qualquer lado, quando não é "cliente espera você"');
-const comNivel1 = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78, __nivel: 1 }, 1, 218);
+const comNivel1 = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78, __nivel: 1 }, 218);
 assert.match(comNivel1, /Cliente esperando sua resposta há 78 dias/, 'title específico quando o dot indica "cliente aguardando você" (nivel 1)');
 
 console.log('v972-clareza-fila-hoje: ok');

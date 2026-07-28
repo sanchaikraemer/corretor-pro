@@ -100,7 +100,7 @@ assert.equal(emJanelaDeEspera(adaoDiaSeguinte), false,
   'no 6º dia (passou dos 5 dias inteiros de descanso), o lead volta a ficar elegível');
 
 // --- 2. cpHomeLeadRow: o número "há Xd" exibido usa o atendimento quando ele for mais recente ---
-const rowSrc = extrai(/function cpHomeLeadRow\(l, ?pos, ?maxMsgs\)\{[\s\S]*?\n\}/, 'cpHomeLeadRow');
+const rowSrc = extrai(/function cpHomeLeadRow\(l, ?maxMsgs\)\{[\s\S]*?\n\}/, 'cpHomeLeadRow');
 assert.match(rowSrc, /ultimoAtendimentoTs/, 'cpHomeLeadRow precisa considerar o atendimento pro número exibido');
 
 const cpHomeLeadRow = eval(`
@@ -125,13 +125,13 @@ const adaoParaExibicao = {
     { evento: 'contato_manual', detalhes: { tipo: 'Atendido', de: 'botao_atendido' }, quando: diasAtras(5) }
   ] } }
 };
-const htmlAdao = cpHomeLeadRow(adaoParaExibicao, 2, 100);
+const htmlAdao = cpHomeLeadRow(adaoParaExibicao, 100);
 assert.match(htmlAdao, />há 5d</, 'com atendimento mais recente (5 dias) que a última interação (26 dias), o card mostra 5, não 26');
 assert.match(htmlAdao, /desde o último atendimento marcado/, 'o title explica que o número vem do atendimento marcado, não da conversa');
 
 // Sem atendimento registrado: continua mostrando a última interação normalmente (nada mudou).
 const semAtendimentoExibicao = { __msgs: 0, daysSinceLastInteraction: 12, analysis: {} };
-const htmlSemAtendimento = cpHomeLeadRow(semAtendimentoExibicao, 3, 100);
+const htmlSemAtendimento = cpHomeLeadRow(semAtendimentoExibicao, 100);
 assert.match(htmlSemAtendimento, />há 12d</, 'sem atendimento marcado, mostra a última interação normalmente (comportamento de antes)');
 assert.match(htmlSemAtendimento, /desde a última interação \(sua ou do cliente\)/, 'title genérico continua igual quando não há atendimento mais recente');
 
