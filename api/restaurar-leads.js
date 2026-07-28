@@ -1,4 +1,4 @@
-import { requireApiKey, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
+import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -272,7 +272,18 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
 }
 
 export default async function handler(req, res) {
-  if (requireApiKey(req, res) !== true) return;
+  // v1042 — esta rota só faz sentido pra empresa principal (é o único lugar de onde as tabelas
+  // legadas "leads"/"direciona_leads" têm dado — ver api/leads-recentes.js e api/limpar-tudo.js,
+  // mesma razão). Antes, só checava a chave compartilhada — como o app anexa essa chave
+  // automaticamente em toda chamada de QUALQUER corretor logado, qualquer conta conseguia
+  // disparar (inclusive com force:true, via console do navegador) uma reescrita dos dados da
+  // empresa principal. Agora identifica de qual empresa é o pedido e recusa qualquer uma que não
+  // seja a principal.
+  const organizationId = await resolveOrganizationId(req, res);
+  if (!organizationId) return;
+  if (organizationId !== EMPRESA_PRINCIPAL_ID) {
+    return json(res, 403, { ok: false, error: "Esta restauração é exclusiva da conta original." });
+  }
   if (!["GET", "POST"].includes(req.method)) return json(res, 405, { ok: false, error: "Use GET ou POST." });
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
