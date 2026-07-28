@@ -107,8 +107,8 @@ await comServidor(null, async ({ chamadas }) => {
 // 8. analyzeWithBrain e api/diagnostico.js realmente usam a checagem (não ficou só declarada).
 const fs = await import("node:fs");
 const pipelineSrc = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
-assert.match(pipelineSrc, /verificarLimiteDiario\(organizationId, "analises-ia", limiteAnalisesIADoDia\(\)\)/,
-  "analyzeWithBrain precisa checar o limite diário antes de gastar com a OpenAI");
+assert.match(pipelineSrc, /verificarLimiteDiario\(organizationId, "analises-ia", limiteAnalisesIADoDia\(\), limiteAnalisesIADoDiaTeste\(\)\)/,
+  "analyzeWithBrain precisa checar o limite diário (com teto reduzido em teste) antes de gastar com a OpenAI");
 const diagSrc = fs.readFileSync(new URL("../api/diagnostico.js", import.meta.url), "utf8");
 assert.match(diagSrc, /verificarLimiteDiario\(organizationId, "diagnostico-openai", LIMITE_DIAGNOSTICO_OPENAI_DIA\)/,
   "mode=openai do diagnóstico também precisa checar o limite diário antes de chamar a OpenAI de verdade");

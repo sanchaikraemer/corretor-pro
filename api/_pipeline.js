@@ -1024,21 +1024,39 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
 // rede de segurança técnica contra consumo descontrolado. Contagem por dia civil (fuso não
 // importa aqui — é só um limite de segurança, não uma cobrança), reiniciando sozinha a cada dia.
 const LIMITE_ANALISES_IA_DIA_PADRAO = 200;
+// v1041 — auditoria item 6.3 ("Abuso do período de teste"): uma conta em teste grátis custava
+// exatamente o mesmo que uma conta paga, em análises por dia. Isso torna criar várias contas de
+// teste (mesmo sem confirmação de e-mail robusta ainda) um jeito barato de consumir IA de graça.
+// Teto bem menor SÓ durante o teste — quando a conta vira "ativo" (paga), volta pro limite normal.
+const LIMITE_ANALISES_IA_DIA_TESTE_PADRAO = 25;
 
 export function limiteAnalisesIADoDia() {
   const configurado = Number(process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA);
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_PADRAO;
 }
 
+export function limiteAnalisesIADoDiaTeste() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_TESTE_PADRAO;
+}
+
 // Não é atômico (lê, decide, grava) — condição de corrida sob concorrência alta deixaria passar
 // 1-2 chamadas a mais no pior caso. Aceitável: é uma rede de segurança contra abuso/loop
 // descontrolado, não uma trava de cobrança que precise ser exata.
-export async function verificarLimiteDiario(organizationId, chave, limite) {
-  const semTeto = { permitido: true, usado: 0, limite };
+// limiteTeste (opcional): quando informado, consulta o status da organização e usa esse teto
+// menor no lugar de `limitePadrao` enquanto a conta ainda está em "teste" — falha na consulta
+// (ou organização sem status, ex. bases antigas) nunca bloqueia: cai no limite padrão normal.
+export async function verificarLimiteDiario(organizationId, chave, limitePadrao, limiteTeste = null) {
+  const semTeto = { permitido: true, usado: 0, limite: limitePadrao };
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
     if (!supabase || !organizationId) return semTeto;
+    let limite = limitePadrao;
+    if (limiteTeste != null) {
+      const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+      if (org?.status === "teste") limite = limiteTeste;
+    }
     const hojeStr = new Date().toISOString().slice(0, 10);
     const chaveConfig = `limite-diario:${chave}`;
     const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveConfig).eq("organization_id", organizationId).maybeSingle();
@@ -1048,7 +1066,7 @@ export async function verificarLimiteDiario(organizationId, chave, limite) {
     const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: chaveConfig, valor: { dia: hojeStr, contagem: usado + 1 }, atualizado_em: new Date().toISOString()
     }) || {};
-    if (error) return semTeto; // falha ao gravar a contagem nunca pode bloquear uma análise real
+    if (error) return { ...semTeto, limite }; // falha ao gravar a contagem nunca pode bloquear uma análise real
     return { permitido: true, usado: usado + 1, limite };
   } catch (_) { return semTeto; }
 }
@@ -2455,7 +2473,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // v1013 — rede de segurança contra consumo descontrolado (ver verificarLimiteDiario acima):
   // checa DEPOIS de confirmar que o Cérebro existe (não gasta a checagem à toa numa conta que
   // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
-  const limiteDiario = await verificarLimiteDiario(organizationId, "analises-ia", limiteAnalisesIADoDia());
+  const limiteDiario = await verificarLimiteDiario(organizationId, "analises-ia", limiteAnalisesIADoDia(), limiteAnalisesIADoDiaTeste());
   if (!limiteDiario.permitido) {
     return {
       mode: "limite_diario_excedido",
