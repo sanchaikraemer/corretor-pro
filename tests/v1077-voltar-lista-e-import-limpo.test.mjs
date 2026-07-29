@@ -32,6 +32,13 @@ assert.match(app, /if\(!cpReabrirGrupoEspecial\(r\.grupoAtivo\)\) abrirGrupoHome
   'o voltar do navegador (popstate) reconstrói a lista especial');
 assert.match(app, /if\(!cpReabrirGrupoEspecial\(state\.grupoAtivo\)\) abrirGrupoHome\(state\.grupoAtivo,\{fromHistory:true\}\)/,
   'o voltar de dentro do lead reconstrói a lista especial');
+// v1078 — o pintor do "carregando"/erro da Home não pode cobrir uma lista de grupo aberta
+// (flagrado em verificação de navegador real: o voltar reconstruía a lista e o loader
+// pintava por cima quando os dados ainda não estavam em memória).
+assert.match(app, /if\(!state\.itemsAtivos\?\.length && !state\.grupoAtivo\)\{\s*\n\s*const focoSkel/,
+  'o loader da Home respeita uma lista de grupo aberta');
+assert.match(app, /if\(foco && !state\.itemsAtivos\?\.length && !state\.grupoAtivo\)/,
+  'o erro de carga da Home respeita uma lista de grupo aberta');
 // E se algum grupo desconhecido escapar, o título nunca mostra o nome interno cru.
 assert.match(app, /String\(grupo\|\|"Leads"\)\.replace\(\/\^__\+\/, ""\)/,
   'o título de grupo sem meta não pode mostrar o prefixo interno "__"');

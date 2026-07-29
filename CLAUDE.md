@@ -21,6 +21,16 @@ Convenção de versão a partir de agora (chega de fração `-M`):
   de `version`) e substitui `__VERSION__` nos arquivos publicados — não crave versão em
   nenhum outro lugar do código.
 
+## Verificação visual obrigatória antes de publicar
+
+Mudança que altera O QUE APARECE NA TELA (CSS, layout, telas, componentes) não pode ser
+publicada só com a suíte verde: abra o app publicado (`public/`) num Chromium headless
+(playwright-core + executablePath /opt/pw-browsers/chromium, servindo `public/` com
+`python3 -m http.server`) e confira o RESULTADO COMPUTADO no(s) tamanho(s) de tela
+relevantes. Lição da v1077→v1078: uma regra nova de CSS pode ser atropelada por blocos
+antigos com `!important` (ex.: o bloco de tema #664 do desktop, que manda em `#home`) e a
+suíte estática não enxerga isso — o dono flagrou com print o que o teste não pegou.
+
 ## Como rodar a suíte antes de finalizar
 
 ```

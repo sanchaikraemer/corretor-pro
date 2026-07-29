@@ -3716,7 +3716,7 @@ async function carregarDashboard(force){
 
     // Só mostra o esqueleto quando a tela está mesmo vazia — uma sincronização de fundo forçada
     // com a lista já visível não pode apagar o que o corretor já está vendo enquanto busca.
-    if(!state.itemsAtivos?.length){
+    if(!state.itemsAtivos?.length && !state.grupoAtivo){
       const focoSkel = qs("#leadFocoArea");
       if(focoSkel) focoSkel.innerHTML = `<div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>`;
     }
@@ -3724,7 +3724,7 @@ async function carregarDashboard(force){
     const data = await getLeadsData(force);
     if(data && data.ok === false){
       const foco = qs("#leadFocoArea");
-      if(foco && !state.itemsAtivos?.length){
+      if(foco && !state.itemsAtivos?.length && !state.grupoAtivo){
         foco.innerHTML = `<div class="card compact"><div class="empty" style="padding:24px 16px;text-align:center;color:var(--muted)">Reconectando… puxando seus leads. <button type="button" onclick="invalidarLeadsCache();carregarDashboard()" style="margin-left:6px;background:transparent;border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--lime);font-weight:950;cursor:pointer">Tentar agora</button></div></div>`;
       }
       setTimeout(() => { if(state.active === "home") carregarDashboard(); }, 3000);
