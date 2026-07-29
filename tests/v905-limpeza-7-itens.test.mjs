@@ -43,9 +43,10 @@ assert.match(app, /id="editLeadTelefone"/, 'Telefone fica');
 assert.match(app, /id="editLeadProduto"/, 'Produto fica');
 // v1073 — o fluxo inteiro de EDITAR/COLAR avatar (imagemQuadradaParaAvatar/editarAvatarLead/
 // colarAvatarLead) saiu do código: não tinha nenhum botão vivo desde a reforma do Editar lead.
-// A EXIBIÇÃO do avatar salvo continua viva (avatarLead) — fotos já gravadas seguem aparecendo.
+// v1074 — a foto salva saiu por inteiro (o dono autorizou perder as gravadas); o círculo de
+// INICIAIS (avatarLead) é o que continua vivo nas listas.
 assert.doesNotMatch(app, /function imagemQuadradaParaAvatar\(/, 'fluxo morto de editar avatar não volta');
-assert.match(app, /function avatarLead\(/, 'a exibição do avatar salvo continua viva');
+assert.match(app, /function avatarLead\(/, 'o avatar por iniciais continua vivo');
 
 // 7. Card "Registrar observação": caixa de texto maior.
 assert.match(app, /id="cp7ObsTexto"[^>]*min-height:120px/, 'textarea da observação ficou maior');

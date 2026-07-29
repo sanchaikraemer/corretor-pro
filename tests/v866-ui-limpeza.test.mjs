@@ -11,7 +11,9 @@ assert.doesNotMatch(html, /id="relatorioBody"/, 'o painel duplicado (#relatorioB
 // v866 #7 / v873: o Menu não pode DUPLICAR o menu lateral no DESKTOP — mas no MOBILE (que não
 // tem menu lateral) essas funções PRECISAM estar no Menu. Solução: os cards existem com a classe
 // menu-nav-item e um CSS os esconde no desktop (min-width:1000px). Aqui garantimos as duas coisas.
-for(const titulo of ['Condução do atendimento', 'Gerador de proposta', 'Cérebro Comercial', 'Desempenho', 'Arquivados']){
+// (v1074: o card "Condução do atendimento" saiu do Menu — o dono pediu, era a mesma coisa que
+// o painel da Home, que continua com o botão "Abrir Condução".)
+for(const titulo of ['Gerador de proposta', 'Cérebro Comercial', 'Desempenho', 'Arquivados']){
   assert.match(
     html,
     new RegExp('menu-card menu-nav-item[^>]*>\\s*<div class="menu-card-ico">[^<]*</div><div class="menu-card-txt"><div class="menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),

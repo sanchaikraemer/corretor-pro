@@ -377,12 +377,6 @@ function _normNome(value = "") {
     .trim();
 }
 
-// Re-importação ("exportar de novo pra atualizar"): a foto (avatar) que o corretor já colou
-// fica salva no resultado_analise do lead anterior. Como cada importação cria um registro novo,
-// sem isso a foto sumia. Aqui buscamos o lead equivalente (mesmo telefone OU mesmo nome) que já
-// tenha avatarFoto e devolvemos pra carregar no registro novo.
-
-
 export function _digitsIdentity(value = "") {
   return String(value || "").replace(/\D/g, "");
 }
@@ -544,7 +538,7 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   const storageRefs = mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs);
   if (storageRefs) merged._storageRefs = storageRefs;
   merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
-  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "avatarFoto"]) {
+  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda"]) {
     if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];
   }
   // v1069 — bug real relatado (lead com lembrete que o corretor nunca agendou): "lembrete" saiu
@@ -573,30 +567,6 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   return _semScoreComercial(merged);
 }
 
-async function buscarAvatarAnterior(supabase, lead, analysis, organizationId) {
-  try {
-    const phone = String(lead?.phone || analysis?.lead?.phone || "").replace(/\D/g, "");
-    const nomeNovo = _normNome(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || "");
-    if (!phone && !nomeNovo) return "";
-    const { data } = await supabase
-      .from("whatsapp_processamentos")
-      .select("resultado_analise, telefone, criado_em")
-      .eq("organization_id", organizationId)
-      .order("criado_em", { ascending: false })
-      .limit(500);
-    if (!Array.isArray(data)) return "";
-    for (const r of data) {
-      const ra = r.resultado_analise || {};
-      if (!ra.avatarFoto) continue;
-      const rPhone = String(ra?.lead?.phone || r.telefone || "").replace(/\D/g, "");
-      const rNome = _normNome(ra?.clientName || ra?.lead?.clientName || "");
-      const matchPhone = phone && rPhone && phone.slice(-8) === rPhone.slice(-8);
-      const matchNome = nomeNovo && rNome && nomeNovo === rNome;
-      if (matchPhone || matchNome) return ra.avatarFoto;
-    }
-  } catch (_) { /* sem foto anterior, segue sem */ }
-  return "";
-}
 
 export async function persistProcessingResult({
   result,
@@ -629,13 +599,6 @@ export async function persistProcessingResult({
     analysis = { ...analysis, confirmedAppointments: [] };
   }
   const lead = result?.lead || null;
-
-  // Em uma criação explicitamente nova, nunca herda dados de outro registro com o mesmo nome.
-  // Reaproveitamento de avatar continua disponível apenas nos fluxos legados que não pediram forceNew.
-  if (!forceNew && analysis && !analysis.avatarFoto) {
-    const fotoAnterior = await buscarAvatarAnterior(supabase, lead, analysis, organizationId);
-    if (fotoAnterior) analysis = { ...analysis, avatarFoto: fotoAnterior };
-  }
 
   const attempts = [];
   let processingRow = null;
@@ -911,7 +874,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const keys = [
       "summary", "nextAction", "messages", "bestTime",
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
-      "tipoRetomada", "tipoContato", "avatarFoto", "venda", "motivoPerda", "motivo_perda",
+      "tipoRetomada", "tipoContato", "venda", "motivoPerda", "motivo_perda",
       "permuta", "risk", "produtoInteresse", "produtosInteresse", "mode",
       "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
       "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
@@ -1161,15 +1124,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   // foi cadastrado duas vezes, fica o card já trabalhado — não o cadastro novo vazio.
   const riqueza = (it) => (Number(it.messageCount) || 0) + (it.analyzed ? 1 : 0);
   const bestByKey = new Map();
-  const fotoByKey = new Map(); // foto (avatar) de QUALQUER registro do cliente, pra não depender de qual ficou líder
   const idsByKey = new Map();  // TODOS os ids juntados sob o mesmo cliente (pra apagar duplicados de uma vez)
   const ordem = [];
   for (const item of mapped) {
     const k = item.dedupeKey;
-    if (!fotoByKey.has(k)) {
-      const f = item.analysis?.avatarFoto || item.avatarFoto;
-      if (f) fotoByKey.set(k, f);
-    }
     if (item.id != null) {
       if (!idsByKey.has(k)) idsByKey.set(k, []);
       idsByKey.get(k).push(String(item.id));
@@ -1184,13 +1142,6 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // Todos os registros duplicados desse mesmo cliente — o front usa pra apagar tudo de uma vez.
     const dupeIds = idsByKey.get(k) || [];
     if (dupeIds.length > 1) clean.dupeIds = dupeIds;
-    // A foto pode ter sido salva num registro diferente do que virou líder da dedupe
-    // (mesmo cliente, várias importações). Se o líder não tem foto mas outro registro
-    // dele tem, herda — assim o avatar nunca "some" ao reabrir/recarregar a lista.
-    const foto = fotoByKey.get(k);
-    if (foto && !(clean.analysis && clean.analysis.avatarFoto)) {
-      clean.analysis = { ...(clean.analysis || {}), avatarFoto: foto };
-    }
     // A listagem envia apenas uma PRÉVIA leve para navegação e ranking.
     // O histórico não é cortado no banco: ao abrir o lead, o front solicita este mesmo
     // registro com includeFullTimeline=true e recebe TODAS as mensagens.

@@ -557,11 +557,6 @@ function patchLeadCache(id, patch){
       it.analysis.lead = it.analysis.lead || {};
       it.analysis.lead.phone = patch.phone;
     }
-    if(patch.avatarFoto){
-      it.avatarFoto = patch.avatarFoto;
-      it.analysis = it.analysis || {};
-      it.analysis.avatarFoto = patch.avatarFoto;
-    }
   }catch(_){}
 }
 
@@ -789,20 +784,9 @@ function show(t, options={}){
   const activeKey = state.navKey || t;
   qsa(".nav").forEach(b=>b.classList.toggle("active",(b.dataset.navKey||b.dataset.target)===activeKey));
   qsa(".sb-item").forEach(b=>b.classList.toggle("active",(b.dataset.navKey||b.dataset.target)===activeKey));
-  destacarMenuPipeline();
   if(!options.skipLoad) carregarTelaAtiva(t, false);
 }
 window.show = show;
-// A tela "pipeline" tem 2 portas no menu: "Carteira" (aba oportunidades) e "Últimos atendimentos"
-// (aba ultimos). Destaca a porta certa conforme a aba ativa, em vez de acender sempre a Carteira.
-function destacarMenuPipeline(){
-  const ehUlt = pipelineTabAtiva === "ultimos";
-  qsa(".sb-item,.nav").forEach(b=>{
-    if(b.dataset.tab === "ultimos") b.classList.toggle("active", ehUlt && state.active === "pipeline");
-    else if(b.dataset.target === "pipeline") b.classList.toggle("active", !ehUlt && state.active === "pipeline");
-  });
-}
-window.destacarMenuPipeline = destacarMenuPipeline;
 // Abas internas do menu "Inteligência Comercial": Cérebro (o que você ensina) x Aprendizado (o que a IA captou).
 function icTab(which, dadosJaCarregados=false){
   const cer = which !== "aprendizado";
@@ -3124,17 +3108,13 @@ window.importarTelefonesCSV = importarTelefonesCSV;
 window.abrirMaisAcoes = abrirMaisAcoes;
 
 // Avatar com a(s) inicial(is) do lead.
-function avatarInicial(name, pctClass, foto){
+function avatarInicial(name, pctClass){
   const n = String(name||"Cliente").trim();
-  // Foto recortada do print (dataURL) — quando existe, mostra a imagem no lugar das iniciais.
-  if(foto && /^data:image\//.test(String(foto))){
-    return `<div class="lead-avatar ${pctClass||""} has-foto"><img src="${escapeHtml(foto)}" alt="" loading="lazy"></div>`;
-  }
   const ini = (n.split(/\s+/).map(w=>w[0]).filter(Boolean).slice(0,2).join("") || "C").toUpperCase();
   return `<div class="lead-avatar ${pctClass||""}">${escapeHtml(ini)}</div>`;
 }
-// Atalho: avatar a partir do objeto lead (pega a foto recortada se houver).
-function avatarLead(l, pctClass){ return avatarInicial(l?.name, pctClass, l?.analysis?.avatarFoto || l?.avatarFoto); }
+// Atalho: avatar a partir do objeto lead — só as iniciais (v1074: o suporte a foto salva saiu do app).
+function avatarLead(l, pctClass){ return avatarInicial(l?.name, pctClass); }
 // Botão WhatsApp padrão (mesmo em todas as telas).
 function btnWhatsApp(waLink){
   // Bolinha verde só com o ícone (logo do WhatsApp) — não espreme o nome do cliente, que é o principal.
@@ -3878,7 +3858,6 @@ function setPipelineTab(tab){
     else titulo.textContent = "Todos os contatos · base completa";
   }
   if(state.active === "pipeline") carregarTelaAtiva("pipeline", true);
-  destacarMenuPipeline();
 }
 window.setPipelineTab = setPipelineTab;
 
@@ -7864,8 +7843,6 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
   // "abra a partir de um lead". Reclicar no mesmo item de navegação, já estando nela, não pode
   // apagar um vínculo em andamento.
   if(b.dataset.target === "propostas" && state.active !== "propostas"){ state.propLeadId = null; state.propLeadNome = ""; atualizarVoltarProposta(); }
-  // "Carteira" sempre abre na aba Oportunidades (priorizada), não na última aba usada (ex.: Últimos).
-  if(b.dataset.target === "pipeline"){ setPipelineTab("oportunidades"); }
   show(b.dataset.target,{navKey});
   if(!estavaNaGaveta) fecharMenuGaveta({fromHistory:true}); // garante gaveta fechada sem criar nova navegação
 }));
