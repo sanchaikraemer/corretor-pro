@@ -194,7 +194,33 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 }
 /* v942 — sempre 1 coluna (leads um embaixo do outro, sem quebra lateral). Antes ia pra 2/3
    colunas em telas largas e a 2ª coluna estourava a lateral, cortando os nomes (pedido do dono). */
-.lista-leads-grid{display:grid;grid-template-columns:1fr;gap:8px}
+/* v1076 — listas dos cards da Home no modelo aprovado: tabela "com próximo passo". */
+.lgt{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(255,255,255,.015)}
+.lgt-th,.lgt-row{display:grid;grid-template-columns:30px minmax(0,1.05fr) minmax(0,1.3fr) 84px 16px;gap:14px;align-items:center;padding:12px 16px}
+.lgt-th{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;font-weight:800;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+.lgt-th .lgt-dias{color:var(--muted);font-size:10.5px}
+.lgt-row{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--text);font-family:inherit;cursor:pointer;transition:background .12s}
+.lgt-row:last-child{border-bottom:0}
+.lgt-row:nth-child(odd){background:rgba(255,255,255,.016)}
+.lgt-row:hover{background:rgba(255,98,88,.05)}
+.lgt-pos{color:var(--muted);font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
+.lgt-cli{min-width:0}
+.lgt-nm{display:block;font-weight:800;font-size:14.5px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lgt-cli small{display:block;color:var(--muted);font-size:11.8px;margin-top:2px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lgt-passo{color:var(--soft);font-size:12.6px;line-height:1.5;font-weight:400;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lgt-dias{text-align:right;white-space:nowrap;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.lgt-dias b{color:var(--lime);font-weight:900;font-size:14px;margin-right:3px}
+.lgt-dias i{font-style:normal;color:var(--muted);font-size:11px}
+.lgt-chev{color:var(--muted);font-size:15px;text-align:right}
+@media(max-width:720px){
+  .lgt-th{display:none}
+  .lgt-row{grid-template-columns:26px minmax(0,1fr) 74px 14px;gap:10px;padding:12px 12px}
+  .lgt-row .lgt-passo{display:none}
+}
+html[data-theme="light"] .lgt{background:#ffffff;border-color:var(--cp-border)}
+html[data-theme="light"] .lgt-th{background:#f2f5f7}
+html[data-theme="light"] .lgt-row:nth-child(odd){background:#fafcfd}
+html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 @media(min-width:900px){
   body{padding-bottom:0}.app{max-width:1320px;padding:24px}.desktop-layout{display:block}.bottom-nav{display:none}.desktop-only{display:block !important}.screen{display:block}.title{font-size:32px}.card{margin-bottom:18px}.sticky{position:sticky;top:18px;background:#11151d;z-index:5;max-height:calc(100vh - 36px);overflow:auto}.mobile-only{display:none}
   .agenda-topo{display:flex}

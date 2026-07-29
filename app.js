@@ -3176,50 +3176,55 @@ function abrirGrupoHome(grupo, options={}){
   const meta = options.meta || GRUPOS_HOME[grupo] || { titulo: String(grupo||"Leads"), sub: "" };
   const arr = avulsa ? options.leads : ((state.gruposHome && state.gruposHome[grupo]) || []);
 
-  const cardHtml = (l) => {
-    const idStr = String(l.id||"");
-    const idJs = JSON.stringify(idStr);
-    const contatadoHoje = ehContatadoHoje(l);
-    const dias = (!contatadoHoje && l.daysSinceLastInteraction != null) ? l.daysSinceLastInteraction + "d parado" : "";
-    const etapa = normalizarEtapa(l.etapa);
-    const motivo = motivoCurto(l);
-
-    const tags = [];
-    if(contatadoHoje) tags.push(`<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:950;color:var(--on-accent);background:var(--lime);border:1px solid var(--lime);letter-spacing:.04em;vertical-align:1px">✓ HOJE</span>`);
-    if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
-    if(ehPermuta(l)) tags.push(tagPermutaHTML());
-    if(ehSumicoPosPreco(l)) tags.push(tagSumicoPrecoHTML());
-
-    const waLink = l.phone ? whatsappLink(l.phone||"", "") : "";
-    return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
+  // v1076 — modelo escolhido pelo dono (print aprovado): TABELA "com próximo passo"
+  // (nº · cliente com interesse embaixo · próximo passo recomendado · dias parado), igual em
+  // TODAS as listas abertas pelos cards da Home. Sem botão de WhatsApp na linha (o WhatsApp
+  // vive dentro do atendimento) e sem etiquetas coloridas.
+  const linhaGrupo = (l, pos) => {
+    const idJs = JSON.stringify(String(l.id||""));
+    const interesse = produtosLabel(l) || "Não identificado";
+    let passo = "";
+    try{ passo = cp786ResumoAcao(l) || ""; }catch(_){ passo = ""; }
+    const d = l.daysSinceLastInteraction;
+    const dias = ehContatadoHoje(l)
+      ? '<i>atendido hoje</i>'
+      : (d != null ? `<b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
+    return `<button type="button" class="lgt-row" onclick='abrirLead(${idJs})'>
+      <span class="lgt-pos">${pos}</span>
+      <span class="lgt-cli"><span class="lgt-nm">${escapeHtml(l.name||"Cliente")}</span><small>${escapeHtml(interesse)}</small></span>
+      <span class="lgt-passo">${escapeHtml(passo)}</span>
+      <span class="lgt-dias">${dias}</span>
+      <span class="lgt-chev">›</span>
+    </button>`;
   };
+  const tabelaGrupo = (leads, posInicial) => `<div class="lgt">
+    <div class="lgt-th"><span>#</span><span>Cliente</span><span class="lgt-passo">Próximo passo</span><span class="lgt-dias">Parado há</span><span></span></div>
+    ${leads.map((l, i) => linhaGrupo(l, posInicial + i)).join("")}
+  </div>`;
 
   const vazio = `<div class="small" style="color:var(--muted);opacity:.7;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center">Nenhum lead aqui no momento.</div>`;
   let listaHtml;
-  // Mostra todos. Só esconde num expansor quando o "resto" tem MAIS de 2 leads
-  // (esconder 1-2 não vale a pena — cabem na grid mesmo).
+  // Listas longas ficam num expansor pra não poluir a visão principal — a numeração continua.
   if(grupo === "acao-hoje" && arr.length > 12){
     const topo = arr.slice(0, 12);
     const resto = arr.slice(12);
     listaHtml =
-      `<div class="small" style="color:var(--lime);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:10px;margin:0 0 8px">Ataca agora — top 12</div>
-       <div class="lista-leads-grid">${topo.map(cardHtml).join("")}</div>
-       <details style="margin-top:12px">
+      tabelaGrupo(topo, 1) +
+      `<details style="margin-top:12px">
          <summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Ver mais ${resto.length}</summary>
-         <div class="lista-leads-grid" style="margin-top:10px">${resto.map(cardHtml).join("")}</div>
+         <div style="margin-top:10px">${tabelaGrupo(resto, 13)}</div>
        </details>`;
   } else {
     // options.resto = backlog (ex.: a fila de retomada além da dose de 10 do "Fazer agora").
-    // Fica num expansor pra não sumir, sem poluir a dose principal.
     const restoArr = Array.isArray(options.resto) ? options.resto : [];
-    const gridPrincipal = arr.length ? `<div class="lista-leads-grid">${arr.map(cardHtml).join("")}</div>` : vazio;
+    const principal = arr.length ? tabelaGrupo(arr, 1) : vazio;
     const backlog = restoArr.length
       ? `<details style="margin-top:14px">
            <summary style="cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--soft);font-size:12px;font-weight:950;letter-spacing:.04em;text-transform:uppercase;list-style:none">Fila de retomada — ver mais ${restoArr.length}</summary>
-           <div class="lista-leads-grid" style="margin-top:10px">${restoArr.map(cardHtml).join("")}</div>
+           <div style="margin-top:10px">${tabelaGrupo(restoArr, arr.length + 1)}</div>
          </details>`
       : "";
-    listaHtml = gridPrincipal + backlog;
+    listaHtml = principal + backlog;
   }
 
   foco.innerHTML =
