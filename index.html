@@ -65,7 +65,7 @@
 </head>
 <body data-app-version="__VERSION__">
 <div id="bootPaint" style="position:fixed;inset:0;background:var(--boot-bg,#052B36);color:var(--boot-fg,#F4F7FB);z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
-  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:var(--boot-sub,#8FB1BF);font-size:14px">Carregando sua carteira...</div></div>
+  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:var(--boot-sub,#8FB1BF);font-size:14px">Carregando os leads...</div></div>
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
 
@@ -132,7 +132,7 @@
           <div id="resumoDia" class="resumo-dia"></div>
           <div id="top3Area" style="display:none"></div>
           <div id="filaPrioridade" style="display:none"></div>
-          <div id="leadFocoArea"><div class="cp-db-loading"><div class="cp-db-spinner"></div><div><b>Carregando banco de dados</b><span>Organizando sua carteira, prioridades e indicadores.</span></div></div><div class="cp-home-skeleton"><span></span><span></span><span></span><span></span></div></div>
+          <div id="leadFocoArea"><div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div></div>
         </div><aside class="home-right" id="homeRight" hidden></aside></div>
       </div>
       <div id="bannerOnboarding" hidden></div>
@@ -258,7 +258,7 @@
     </section>
 
     <section id="carteira" class="screen">
-      <div id="carteiraBody"><div class="empty">Carregando…</div></div>
+      <div id="carteiraBody"><div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div></div>
     </section>
 
     <section id="linhaTempo" class="screen">
