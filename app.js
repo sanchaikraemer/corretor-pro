@@ -7158,10 +7158,12 @@ async function atualizarLeadComEvolucao(){
   // etiqueta "Salvando" parada (ver confirmarAtualizacaoPersistida logo acima).
   renderEtapas(5, "salvando a atualização no banco de dados...");
   try{
-    const res = await fetch("./api/lead-update", {
+    // v1080 — mesma correção do salvamento novo: este fetch não tinha limite de tempo e podia
+    // travar a tela em "Salvando..." pra sempre se a rede engasgasse.
+    const res = await fetchComTimeout("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ action: "atualizar-com-evolucao", id: existente.id, result: state.pendingSave.result, importId: state.pendingSave.importId, cerebroConfig: state.pendingSave.cerebroConfig })
-    });
+    }, 45000);
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
     const importacaoConcluida = state.pendingSave;
@@ -7213,11 +7215,15 @@ async function atualizarLeadComEvolucao(){
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     qs("#pendingActions")?.remove();
     renderEtapas(6, "lead atualizado e importação confirmada");
+    // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
+    // aparecer; ver a marcação "concluidaComSucesso" em processFile.
+    qs("#importCard")?.classList.remove("cp-import-rodando");
     setTimeout(() => { if(existente.id) abrirLead(existente.id); }, 800);
   }catch(err){
     if(btn){ btn.disabled = false; btn.textContent = "Atualizar"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
-    toast("Não foi possível atualizar: " + (err.message||err));
+    qs("#importCard")?.classList.remove("cp-import-rodando");
+    toast("Não foi possível atualizar: " + userFriendlyError(err));
   }
 }
 
@@ -7230,11 +7236,15 @@ async function salvarLeadPendente(){
   // sem nenhum movimento visível, parecia que tinha travado. Mostra progresso de verdade.
   renderEtapas(5, "salvando no banco de dados...");
   try{
-    const res = await fetch("./api/lead-update", {
+    // v1080 — este fetch não tinha NENHUM limite de tempo: se a rede travasse (ex.: celular
+    // reconectando depois de voltar de outro app), a tela ficava presa em "Salvando..." pra
+    // sempre, sem erro nenhum aparecer (print do dono: parada em 94% por minutos). Agora usa
+    // o mesmo limite generoso das outras gravações no banco (Desmarcar atendimento etc.).
+    const res = await fetchComTimeout("./api/lead-update", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ action: "salvar-novo", ...state.pendingSave })
-    });
+    }, 45000);
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok){
       const warnings = data.persistence?.warnings || [];
@@ -7267,12 +7277,16 @@ async function salvarLeadPendente(){
     loadRecentLeads(true); refreshAllSections();
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     renderEtapas(6, "lead salvo e importação confirmada");
+    // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
+    // aparecer; ver a marcação "concluidaComSucesso" em processFile.
+    qs("#importCard")?.classList.remove("cp-import-rodando");
     // Após salvar, abre o lead da home pra mostrar o card de foco completo (com badges, materiais, etc).
     setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id); }, 800);
   }catch(err){
     if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
-    toast("Não foi possível salvar: " + (err.message||err));
+    qs("#importCard")?.classList.remove("cp-import-rodando");
+    toast("Não foi possível salvar: " + userFriendlyError(err));
   }
 }
 
@@ -7297,6 +7311,7 @@ async function descartarLeadPendente(){
 async function processFile(file, options = {}){
   if(!file) return false;
   if(state.processing) return false;
+  let concluidaComSucesso = false;
   const pendingShareId = String(options.shareId || state.pendingSharedRecordId || "").trim();
   // v1022 — se a página recarregou desde a última tentativa (state.activeImportId se perdeu),
   // busca no aparelho se ESTE MESMO arquivo (nome+tamanho) já tinha uma importação em
@@ -7357,6 +7372,13 @@ async function processFile(file, options = {}){
     try{ cpRegistrarAtividade("importacao"); }catch(_){}
     // Não elimina o ZIP ainda: a importação só termina quando o lead é salvo/atualizado
     // ou quando o corretor descarta explicitamente a análise.
+    // v1080 — renderProcessedResult (chamado dentro de uploadLargeZipToSupabase) dispara o
+    // salvamento automático (salvarLeadPendente/atualizarLeadComEvolucao) SEM esperar
+    // (sem await): esta função já retorna aqui, antes do salvamento terminar. Marca que deu
+    // certo pra o "finally" abaixo não desligar o modo limpo do card agora — só quando o
+    // salvamento de verdade terminar (ver as duas funções), senão as etapas "Salvando" e
+    // "Concluído" reexibiam título/instruções/botões do card por cima (print do dono).
+    concluidaComSucesso = true;
     return true;
   }catch(err){
     // Mantém o ZIP disponível no botão "Tentar novamente", mas remove imediatamente a
@@ -7389,7 +7411,7 @@ async function processFile(file, options = {}){
     return false;
   }finally{
     state.processing=false;
-    qs("#importCard")?.classList.remove("cp-import-rodando");
+    if(!concluidaComSucesso) qs("#importCard")?.classList.remove("cp-import-rodando");
   }
 }
 async function readShareDebug(){
