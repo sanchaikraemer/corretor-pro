@@ -7130,6 +7130,12 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     throw new Error("A análise permanece pendente porque uma das três mensagens não passou pelas regras do Cérebro.");
   }
   result.importId = importId;
+  // v1069 — bug real relatado pelo dono: "Análises feitas" (Desempenho) só contava reanálise
+  // manual de um lead já existente (ui670Reanalisar/"Reanalisar todos"); a análise que a IA faz
+  // em TODA importação nova (esta etapa "analisar", que roda pra cada ZIP processado) nunca
+  // registrava atividade — por isso "Importações" (90) e "Análises feitas" (19) nunca batiam,
+  // mesmo cada importação passando pela IA. Conta aqui, no sucesso real da análise.
+  try{ cpRegistrarAtividade("analise"); }catch(_){}
   renderEtapas(5, "aguardando confirmação para salvar");
   return result;
 }
