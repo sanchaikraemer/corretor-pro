@@ -30,7 +30,8 @@ assert.equal(app.match(/const CP_DOSE_DIA = (\d+);/)[1], '10', 'a dose do dia de
 const cat = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
 assert.match(cat, /if\(cp786TemCompromisso\(l\)\) return 'programados'/, 'compromisso => Agenda');
 // v906: "Aguardando cliente" = atendi e o cliente não respondeu (não é mais balde de lead cru).
-assert.match(cat, /if\(cpAguardandoResposta\(l\)\) return 'aguardando'/, 'aguardando = atendi e cliente não respondeu');
+// v1071: só vale dentro do prazo de descanso (emJanelaDeEspera) — depois disso "vence".
+assert.match(cat, /if\(cpAguardandoResposta\(l\) && emJanelaDeEspera\(l\)\) return 'aguardando'/, 'aguardando = atendi, cliente não respondeu, e ainda no prazo');
 assert.match(cat, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'sem-acao'/, 'lead cru sai dos cards (sem-acao)');
 assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'sem-acao'/, 'precisa de retomada => Fazer agora; senão sem-acao');
 assert.doesNotMatch(cat, /responder-agora|precisaCorretor|responsavel==='corretor'/,

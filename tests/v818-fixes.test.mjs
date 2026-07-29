@@ -7,8 +7,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // v906: "Aguardando cliente" tem um significado só — VOCÊ atendeu (copiou msg / marcou) e o
 // cliente ainda não respondeu (a bola está com ele). Deixou de ser balde de lead cru/parado.
 assert.match(app, /function cpAguardandoResposta\(l\)\{/, 'existe o teste de "atendi e cliente não respondeu"');
-assert.match(app, /if\(cpAguardandoResposta\(l\)\) return 'aguardando'/,
-  'aguardando = atendi e o cliente não respondeu depois');
+// v1071 — "aguardando" agora também exige estar dentro do prazo de descanso (emJanelaDeEspera);
+// passado o prazo, o lead "vence" e sai desse balde (ver v906-aguardando-cliente-real.test.mjs).
+assert.match(app, /if\(cpAguardandoResposta\(l\) && emJanelaDeEspera\(l\)\) return 'aguardando'/,
+  'aguardando = atendi, o cliente não respondeu depois, e ainda está dentro do prazo');
 
 // --- Item 2: resumo do lead sem corte (sem cp705Short no hero) ---
 assert.doesNotMatch(app, /cp705Short\(cp705SanitizeFactText\(imped,lead\),\s*180\)/,

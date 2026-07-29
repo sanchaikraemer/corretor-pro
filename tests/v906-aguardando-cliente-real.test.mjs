@@ -35,8 +35,9 @@ assert.equal(cpAguardandoResposta({ __at: 0, recentMessages:[ msgCli('2026-07-18
   'lead nunca atendido não é "aguardando cliente"');
 
 // 2. cp786Categoria usa a nova regra e manda lead raso/sem-retomada pra "sem-acao".
+// v1071 — "aguardando" também exige estar dentro do prazo de descanso (emJanelaDeEspera).
 const cat = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
-assert.match(cat, /if\(cpAguardandoResposta\(l\)\) return 'aguardando'/, 'aguardando = atendi e cliente não respondeu');
+assert.match(cat, /if\(cpAguardandoResposta\(l\) && emJanelaDeEspera\(l\)\) return 'aguardando'/, 'aguardando = atendi, cliente não respondeu, e ainda no prazo');
 assert.match(cat, /mensagensDoCliente\(l\) < CP_MIN_MSGS_PRIORIDADE\) return 'sem-acao'/, 'lead raso → sem-acao (fora dos cards)');
 assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'sem-acao'/, 'vale toque → agora; senão sem-acao');
 assert.doesNotMatch(cat, /ehContatadoHoje\(l\)\) return 'aguardando'/, 'não usa mais o balde antigo');
