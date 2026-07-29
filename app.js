@@ -9282,10 +9282,24 @@ window.ui667MarcarAtendido=async function(btn){
   const lead=state.lead;
   if(!lead?.id){toast("Não consegui identificar este lead.");return;}
   if(btn){btn.disabled=true;btn.classList.add('cp704-ico-loading');}
-  try{
-    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))});
+  const registrarAtendido=async()=>{
+    const res=await fetchComTimeout("./api/reanalisar-lead",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payloadComCerebro({id:lead.id,action:"marcar-atendido"}))},30000);
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao registrar");
+    return d;
+  };
+  try{
+    // v1079 — mesmo cenário do v1034/v1036 (rede "pendurada" reconectando ao voltar do
+    // WhatsApp): sem repetir a tentativa, o corretor via o erro técnico cru do AbortController
+    // ("signal is aborted without reason") já na primeira instabilidade e achava que o
+    // atendimento não tinha sido marcado. Repete até 3x com pausa curta antes de desistir.
+    const TENTATIVAS=3;
+    let d=null, ultimoErro=null;
+    for(let tentativa=1; tentativa<=TENTATIVAS && !d; tentativa++){
+      try{ d=await registrarAtendido(); }
+      catch(err){ ultimoErro=err; if(tentativa<TENTATIVAS){ toast(`Rede instável, tentando marcar de novo (tentativa ${tentativa+1} de ${TENTATIVAS})…`); await new Promise(r=>setTimeout(r,1500)); } }
+    }
+    if(!d) throw ultimoErro||new Error("Não foi possível marcar o atendimento.");
     const quando=d.quando||new Date().toISOString();
     const agoraFmt=new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,p)=>(p.type!=="literal"&&(o[p.type]=p.value),o),{});
     const dataLocal=d.dataBR||`${agoraFmt.day}/${agoraFmt.month}/${agoraFmt.year}`;
@@ -9305,7 +9319,7 @@ window.ui667MarcarAtendido=async function(btn){
     toast(d.atualizado?`Atendimento atualizado às ${horaLocal}.`:`Atendimento marcado às ${horaLocal}.`);
   }catch(err){
     if(btn){btn.disabled=false;btn.classList.remove('cp704-ico-loading');}
-    toast("Não consegui marcar: "+(err?.message||err));
+    toast("Não consegui marcar: "+userFriendlyError(err));
   }
 };
 
