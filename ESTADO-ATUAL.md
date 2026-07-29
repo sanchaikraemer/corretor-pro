@@ -49,7 +49,7 @@ está exatamente nessas 12:
 | `atalho-zip-token.js` | Gera/mostra a chave pessoal do Atalho do iPhone (ver `NOTAS-v1035.md`). |
 | `cerebro-config.js` | Configuração do Cérebro Comercial + aprendizado contínuo. |
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
-| `lead-update.js` | Ações sobre um lead: etapa, memória, aprendizado, desfecho, lembrete, apagar, editar, salvar novo, criar manual, leitura de prints (visão), etc. |
+| `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
 | `limpar-tudo.js` | Apaga todos os dados de uma empresa (rota destrutiva, desativada por padrão — exige `DIRECIONA_DANGER_LIMPAR_TUDO=ativo`). |
 | `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. |
@@ -82,12 +82,11 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 ### Custo e limites de IA
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia por empresa (padrão 200).
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE` — mesmo teto, mas pra contas em teste grátis (padrão 25 — ver `NOTAS-v1041.md`).
-- `CORRETOR_PRO_LIMITE_VISAO_DIA` / `CORRETOR_PRO_LIMITE_VISAO_DIA_TESTE` — mesmo tipo de teto,
-  pras 3 ações de visão (extrair print, detectar rosto, ler prints de conversa) — padrão 300/dia
-  (60/dia em teste, ver `NOTAS-v1068.md`).
 - `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
-  mesmo tipo de teto, pra transcrição de voz avulsa (ensinar o Cérebro por voz) — padrão 100/dia
-  (20/dia em teste, ver `NOTAS-v1068.md`).
+  mesmo tipo de teto, pra transcrição de voz avulsa (observação por voz do lead, `cp7Obs`) —
+  padrão 100/dia (20/dia em teste, ver `NOTAS-v1068.md`). As 3 ações de visão (extrair print,
+  detectar rosto, ler prints de conversa) e o teto que tinham (`CORRETOR_PRO_LIMITE_VISAO_DIA`)
+  foram removidos do código na v1069 — o dono nunca usou essas 3 funções.
 - `CORRETOR_PRO_COTACAO_USD_BRL` — cotação usada pra estimar custo de IA em reais no painel administrativo (padrão 5,50).
 - `SUPABASE_ZIP_BUCKET` — nome do bucket de Storage (padrão `whatsapp-zips`).
 - `SUPABASE_ZIP_MAX_BYTES` — tamanho máximo de ZIP aceito.

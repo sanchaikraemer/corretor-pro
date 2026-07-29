@@ -544,9 +544,20 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   const storageRefs = mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs);
   if (storageRefs) merged._storageRefs = storageRefs;
   merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
-  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "lembrete", "avatarFoto"]) {
+  for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda", "avatarFoto"]) {
     if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];
   }
+  // v1069 — bug real relatado (lead com lembrete que o corretor nunca agendou): "lembrete" saiu
+  // do loop genérico acima de propósito. Aquele loop só restaura anterior[key] quando merged[key]
+  // já está vazio — mas o spread {...anterior, ...nova} logo no início já carrega
+  // anterior.lembrete pra dentro de merged.lembrete sempre que "nova" não mexe nesse campo (o
+  // caso comum: reimportar/mesclar não toca lembrete, que só muda pelas ações explícitas
+  // reagendar-lembrete/remover-lembrete) — então merged.lembrete NUNCA chegava vazio ali, e a
+  // checagem de auto:true nunca era executada. Filtra direto o que sobrou em merged.lembrete
+  // (seja de nova ou herdado de anterior via spread): um lembrete "auto" (resíduo da extração
+  // automática por texto, removida na v988) nunca sobrevive a uma mesclagem. Mesma regra que
+  // api/reanalisar-lead.js (aplicarLembrete) já usa.
+  if (merged.lembrete && merged.lembrete.auto === true) merged.lembrete = undefined;
   const nomeAnt = anterior?.clientName || anterior?.lead?.clientName || "";
   const nomeNovo = nova?.clientName || nova?.lead?.clientName || "";
   if (_nomeRuimIdentity(nomeNovo) && !_nomeRuimIdentity(nomeAnt)) {
@@ -935,6 +946,13 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // lead antigo pra "limpar" no banco.
     if (analysis && analysis.confirmedAppointments !== undefined) {
       analysis = { ...analysis, confirmedAppointments: [] };
+    }
+    // v1069 — mesma rede de segurança de leitura, agora pra "lembrete": um lembrete "auto"
+    // (resíduo da extração automática por texto, removida na v988) que tenha sobrevivido no
+    // banco de antes das correções em acaoAtualizarComEvolucao/_mesclarAnaliseV681 nunca mais
+    // aparece como agendado, sem precisar reanalisar/tocar em cada lead antigo pra limpar.
+    if (analysis && analysis.lembrete && analysis.lembrete.auto === true) {
+      analysis = { ...analysis, lembrete: null };
     }
 
     const fileName = row.nome_arquivo || row.arquivo_nome || "Conversa importada";

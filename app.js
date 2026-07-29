@@ -839,7 +839,6 @@ function clearAnalysis(){
   if(window._colarAvatarHandler){ document.removeEventListener("paste", window._colarAvatarHandler); window._colarAvatarHandler=null; }
   state.analysis=null;
   state.msgStyle="direta";
-  qs("#zipInput").value="";
   qs("#fileName").textContent="";
   qs("#fileName").classList.remove("show");
   qs("#processingBox").classList.remove("show");
@@ -949,11 +948,6 @@ async function buscarSimilares(produto, etapa, leadAtual){
     // Cada lead recebe um score de similaridade com o leadAtual.
     const scored = items.filter(l => l.id && (!leadAtual?.id || String(l.id) !== String(leadAtual.id)) && normalizarEtapa(l.etapa) !== "Geladeira").map(l => {
       let score = 0;
-      const e = normalizarEtapa(l.etapa);
-      // Etapa avançada vale mais (já fechou ou está perto)
-      if(e === "Vendido") score += 30;
-      else if(e === "Negociação") score += 18;
-      else if(e === "Visita/Proposta") score += 10;
       // Mesmo produto vale muito
       if(produto && l.product && (l.product||"").toLowerCase() === produto.toLowerCase()) score += 25;
       // Mesmo tipo de retomada
@@ -1244,11 +1238,10 @@ function contextoPrioridadeIA(l){
 
 // v682 — Prioridade Comercial refinada.
 // Este bloco separa lead comprador real de curioso e puxa para cima casos que tinham
-// conversa forte, mas ficavam escondidos por estarem em etapa baixa ou sem lembrete.
+// conversa forte, mas ficavam escondidos por não terem lembrete.
 function sinaisPrioridadeComercial682(l){
   const a = l?.analysis || {};
   const txt = textoSinais(l);
-  const e = normalizarEtapa(l?.etapa);
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   const diasDistintos = (() => {
     const set = new Set();
@@ -1264,16 +1257,16 @@ function sinaisPrioridadeComercial682(l){
   const objecaoKeywords = /(caro|pre[çc]o|valor|entrada|parcela|financiamento|renda|banco|caixa|aprov|or[çc]amento|teto|localiza[çc][ãa]o|prazo|entrega|permuta|vender meu|vender a casa|vender o apartamento|juros)/;
   const pendenciaKeywords = /(ficou de|promet|vou te mandar|vou te enviar|te envio|te mando|retorno|retornar|aguardando|esperando|preciso te passar|vou validar|vou ver|vou falar|proposta|simula[çc][ãa]o|condi[çc][ãa]o)/;
 
-  const compradorReal = compradorKeywords.test(txt) || ["Visita/Proposta","Negociação"].includes(e);
+  const compradorReal = compradorKeywords.test(txt);
   const curioso = curiosoKeywords.test(txt) && !/(proposta|simula|entrada|parcela|visita|unidade|financi|reserva|fechar)/.test(txt);
   const urgencia = urgenciaKeywords.test(txt) || Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length > 0;
   const objecao = objecaoKeywords.test(txt);
   const pendencia = pendenciaKeywords.test(txt);
-  // Caso tipo Isabela: muito sinal comercial espalhado na conversa, mas etapa ainda "Atendimento".
-  const quenteEscondido = compradorReal && !curioso && e === "Atendimento" && diasDistintos >= 3 && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
+  // Caso tipo Isabela: muito sinal comercial espalhado na conversa, mesmo sem lembrete marcado.
+  const quenteEscondido = compradorReal && !curioso && diasDistintos >= 3 && /(entrada|parcela|financi|simula|proposta|unidade|visita|valor|planta|metragem|box|vaga)/.test(txt);
 
   const motivos = [];
-  if(quenteEscondido) motivos.push("oportunidade com sinais fortes: conversa forte mesmo ainda em Atendimento");
+  if(quenteEscondido) motivos.push("oportunidade com sinais fortes espalhados pela conversa");
   if(compradorReal && !curioso) motivos.push("sinais de comprador real");
   if(curioso) motivos.push("parece curioso/pesquisa inicial");
   if(urgencia) motivos.push("há urgência ou compromisso próximo");
@@ -1341,8 +1334,8 @@ function prioridadeAtendimento(l){
 }
 function _prioridadeAtendimentoCalcular(l){
   const e = normalizarEtapa(l.etapa);
-  if(e === "Vendido" || e === "Perdido" || e === "Geladeira") {
-    return { score:-999, grupo:"baixa-prioridade", titulo:"Fora da fila", motivo:"lead finalizado ou arquivado" };
+  if(e === "Geladeira") {
+    return { score:-999, grupo:"baixa-prioridade", titulo:"Fora da fila", motivo:"lead arquivado" };
   }
 
   const a = l.analysis || {};
@@ -1381,10 +1374,9 @@ function _prioridadeAtendimentoCalcular(l){
     if(diff != null) return diff >= 0;
     return /\b(hoje|amanh[ãa])\b/.test(String(ap?.quando || "").toLowerCase());
   });
-  const etapaAvancada = ["Visita/Proposta","Negociação"].includes(e);
   const tipo = String(a.tipoRetomada||"").toLowerCase();
   const ctxIA = contextoPrioridadeIA(l);
-  const negociacaoAguardandoRetorno = !!(ctxIA.retornoProposta && (ctxIA.propostaAtiva || etapaAvancada));
+  const negociacaoAguardandoRetorno = !!(ctxIA.retornoProposta && ctxIA.propostaAtiva);
   const parceiroComClienteFinal = !!(ctxIA.contatoParceiro && ctxIA.aguardandoTerceiro && ctxIA.propostaAtiva);
   // v826 §6.6 — FILA POR FATOS. Sem pesos subjetivos (+120, +92, -38 etc.): a posição
   // vem de uma precedência DETERMINÍSTICA e cada card mostra o motivo factual.
@@ -1502,7 +1494,6 @@ function scoreConversaoHoje(l){
 }
 function _scoreConversaoHojeCalcular(l){
   const a = l?.analysis || {};
-  const e = normalizarEtapa(l?.etapa);
   const txt = textoSinais(l);
   const dias = Number(l?.daysSinceLastInteraction);
   let diasResposta = l?.daysSinceClientReply; if(diasResposta==null) diasResposta = _diasDesdeMsg(l, true);
@@ -1522,16 +1513,11 @@ function _scoreConversaoHojeCalcular(l){
   const visitaOuApresentacao = /visit(ou|a feita|amos|aram)|decorado|apresenta(?:ção|cao)|foi conhecer|conheceu|passou no loteamento|mostrei|apresentei/.test(txt);
   const comparandoConcorrente = /outro im[óo]vel|concorrente|comparando|estamos vendo|estou vendo outro|olhando outro|op[çc][ãa]o/.test(txt);
   const travaFinanceira = /entrada|parcela|financeir|financi|banco|caixa|or[çc]amento|teto|renda|capacidade/.test(txt);
-  const viabilidadeAntesDaProposta = travaFinanceira && !propostaOuSimulacao && !["Visita/Proposta","Negociação"].includes(e);
+  const viabilidadeAntesDaProposta = travaFinanceira && !propostaOuSimulacao;
   const clientePediuTempo = /vou pensar|vou analisar|estamos analisando|vou conversar|vou ver com|te aviso|te retorno|qualquer coisa te chamo|mais pra frente|semana que vem|m[êe]s que vem/.test(txt);
   const parceiro = /parceir|corretor/i.test(String(a.tipoContato||""));
 
   let score = 0;
-
-  // Etapa pesa mais para CONVERSÃO do que para simples atendimento.
-  if(e === "Negociação") score += 30;
-  else if(e === "Visita/Proposta") score += 24;
-  else if(e === "Atendimento") score += 4;
 
   if(propostaOuSimulacao) score += 32;
   if(visitaOuApresentacao) score += 24;
@@ -1672,85 +1658,6 @@ function _cortarFrase(s, max){
   const sp = cut.lastIndexOf(" ");
   if(sp > max*0.5) cut = cut.slice(0, sp);
   return cut.replace(/[\s,;:.–—-]+$/,"") + "…";
-}
-
-function motivoPrioridade(l){
-  const a = l.analysis || {};
-  const e = normalizarEtapa(l.etapa);
-  const dias = Number(l.daysSinceLastInteraction);
-  const partes = [];
-  const sc682 = sinaisPrioridadeComercial682(l);
-  if(sc682.quenteEscondido) partes.push("oportunidade com sinais fortes: há sinais fortes de compra mesmo sem etapa avançada");
-  else if(sc682.compradorReal && !sc682.curioso) partes.push("sinais de comprador real");
-  if(sc682.curioso && !sc682.compradorReal) partes.push("parece curioso/pesquisa inicial");
-  if(sc682.urgencia) partes.push("há urgência ou compromisso próximo");
-  if(sc682.objecao) partes.push("objeção identificada para tratar");
-
-  // SINAL COMERCIAL primeiro — o motivo de verdade pra atender (ou não) hoje.
-  const txt = textoSinais(l);
-  const ctxIA = contextoPrioridadeIA(l);
-  const negociacaoAguardandoRetorno = !!(ctxIA.retornoProposta && (ctxIA.propostaAtiva || ["Visita/Proposta","Negociação"].includes(e)));
-  let jaFalouDoTempo = false; // evita repetir "X dias" no motivo quando já citei no contexto de retomada
-
-  if(negociacaoAguardandoRetorno){
-    partes.push(ctxIA.contatoParceiro
-      ? "corretor parceiro ficou de apresentar a condição ao cliente final — cobrar retorno da proposta"
-      : "condição/proposta apresentada — cobrar retorno sem reiniciar descoberta");
-    jaFalouDoTempo = true;
-  }
-  // Quem ficou de retornar é o CLIENTE? (ele disse que ia calcular/definir/avisar, ou a
-  // ação minha é CONDICIONAL a ele: "montar simulação ASSIM QUE ela definir os valores").
-  // Nesse caso NÃO posso dizer "você ficou de retornar algo" — a bola está com o cliente.
-  const clienteRetorna = /assim que\b[^·.]{0,60}(definir|calcular|passar|avisar|decidir|retornar|conversar|me (avisar|chamar))|\b(cliente|ela|ele|eles|noiv[oa]|o casal|voc[êe]s|vcs)\b[^·.]{0,30}(vai|v[ãa]o|ficou de|ficaram de|disse que (vai|ia))[^·.]{0,30}(calcular|definir|avisar|retornar|chamar|procurar|pensar|me (avisar|chamar))|\b(te|lhe|me)\s+(aviso|avisa|chamo|chama|retorno|retorna|ligo|liga)\s+(quando|assim que|depois)|quando\b[^·.]{0,40}(definir|calcular|tiver os valores|decidir)/.test(txt);
-  // A IA (diagnóstico) manda na direção de quem deve o próximo passo — a regex acima é só fallback
-  // pra quando a IA não disse. Isso corrige o "você ficou de retornar" invertido.
-  const quemDeve = String((a.diagnostico && a.diagnostico.quemDeveProximoPasso) || "").toLowerCase();
-  const bolaCliente = quemDeve === "cliente" ? true : quemDeve === "corretor" ? false : clienteRetorna;
-  if(!negociacaoAguardandoRetorno && bolaCliente){
-    // A bola está com o cliente. MAS: eu já retomei depois que ele sumiu? Se sim, não faz
-    // sentido pedir pra "dar um toque" de novo — é aguardar. Usa o ÚLTIMO contato (qualquer
-    // toque, inclui meu atendimento/follow-up) comparado à última resposta dela.
-    let diasContato = l.daysSinceLastTouch; if(diasContato==null) diasContato = _diasDesdeMsg(l, false);
-    let diasResposta = l.daysSinceClientReply; if(diasResposta==null) diasResposta = _diasDesdeMsg(l, true);
-    const jaRetomei = diasContato!=null && diasResposta!=null && diasContato < diasResposta;
-    // Só o motivo qualitativo aqui — os números (dias de contato / sem resposta) ficam nas caixas, sem repetir.
-    if(jaRetomei && diasContato<=5){
-      partes.push("você já retomou — aguardando o retorno dela");
-      jaFalouDoTempo = true;
-    } else if(jaRetomei){
-      partes.push("você já retomou, sem resposta — vale um lembrete leve");
-      jaFalouDoTempo = true;
-    } else
-      partes.push("cliente ficou de te retornar — dá um toque pra manter o ritmo");
-  }
-  else if(quemDeve === "corretor" || (quemDeve !== "cliente" && /promet|ficou de (te |lhe )?(enviar|mandar|passar|retornar)|enviar (a |uma )?simula|preparar (a |uma )?(proposta|simula)|montar (a |uma )?(proposta|simula)|mandar (o |os |as )?(material|plantas?|tabela)|aguard(a|ando) (o |um |meu |nosso )?retorno|cliente (aguarda|espera|esperando)|devo (enviar|mandar|retornar)/.test(txt)))
-    partes.push("você ficou de retornar algo — cliente te esperando");
-  else if(ehPermuta(l) || /depende (da|de) (venda|safra|colheita)|quando vender|assim que vender|precisa vender (a |o |seu |sua )?(casa|im[óo]vel|apartamento)|vender (a |o |seu |sua )?(casa|im[óo]vel) (antes|primeiro)/.test(txt))
-    partes.push("depende de evento externo (vender imóvel/safra) — não fecha agora");
-  else if(/visit(ou|a feita)|decorado|colocou (a |o )?(casa|im[óo]vel) (à|a) venda|escolheu (as |a )?unidade|aprov(ou|ado) (o )?cr[ée]dito/.test(txt))
-    partes.push("cliente já se esforçou — comprometido");
-
-  // Contexto real da conversa (resumo da IA). v890: mostra o resumo INTEIRO — o dono não quer
-  // corte "..." no "POR QUE ATENDER" (motivoPrioridade só é usado no hero da Home).
-  const resumoReal = (a.summary || l.summary || "").trim();
-  if(resumoReal && resumoReal.length > 10 && !/importada com sucesso|análise disponível|importado do histórico/i.test(resumoReal)){
-    partes.push(resumoReal);
-  }
-
-  // Timing como complemento (pulado quando já contei o tempo na frase de retomada — não repetir)
-  if(!jaFalouDoTempo && !isNaN(dias) && dias != null){
-    if(dias === 0) partes.push("último contato hoje");
-    else if(dias === 1) partes.push("último contato ontem");
-    else if(dias <= 7) partes.push(`${dias} dias parado`);
-    else if(dias <= 30) partes.push(`${dias} dias parado — janela fechando`);
-    else partes.push(`${dias} dias parado`);
-  }
-
-  // Etapa como contexto adicional
-  if(e === "Negociação") partes.push("em negociação");
-  else if(e === "Visita/Proposta") partes.push("com proposta em jogo");
-
-  return partes.join(" · ") || "Importado, aguardando análise";
 }
 
 function whatsappLink(phone, msg){
@@ -1895,10 +1802,9 @@ function motivoCurto(l){
     if(sc682.compradorReal && sc682.objecao) return "comprador real — tratar objeção";
     if(sc682.curioso && !sc682.compradorReal) return "curioso/pesquisa inicial — baixa prioridade";
     const txt = textoSinais(l);
-    const e = normalizarEtapa(l.etapa);
     const propostaOuSimulacao = /proposta|simula(?:ção|cao|r)|condi[çc][ãa]o enviada|tabela enviada|or[çc]amento enviado/.test(txt);
     const travaFinanceira = /entrada|parcela|financeir|financi|banco|caixa|or[çc]amento|teto|renda|capacidade/.test(txt);
-    if(travaFinanceira && !propostaOuSimulacao && !["Visita/Proposta","Negociação"].includes(e)){
+    if(travaFinanceira && !propostaOuSimulacao){
       return "prioridade de ação — ainda precisa validar entrada/viabilidade";
     }
     const pa = prioridadeAtendimento(l);
@@ -1926,8 +1832,7 @@ function ehEsfriando(l){
   const dias = Number(l.daysSinceLastInteraction) || 0;
   const tipo = String(l?.analysis?.tipoRetomada || "").toLowerCase();
   const interesse = String(l?.analysis?.diagnostico?.interesse || "").toLowerCase();
-  const avancado = ["Visita/Proposta","Negociação"].includes(normalizarEtapa(l?.etapa));
-  return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente" || avancado);
+  return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente");
 }
 
 // Detecta (SEM reanalisar — usa a análise já salva) leads que provavelmente sumiram
@@ -1953,8 +1858,6 @@ function tagPermutaHTML(){
 }
 // "Reaquecer urgente": qualquer lead com SCORE COMERCIAL alto (engajamento real,
 // keywords de compra, vários dias distintos) que ficou parado 5+ dias.
-// Não importa a etapa — um lead em "Atendimento" com 4 dias distintos e keywords
-// fortes ainda é reaquecimento urgente.
 function ehReaquecerUrgente(l){
   const dias = Number(l.daysSinceLastInteraction) || 0;
   if(dias < 5) return false;
@@ -2017,19 +1920,6 @@ function produtosLabelCurto(l){
     nomes.push(curto);
   }
   return nomes.length ? nomes.join(" - ") : arr.join(", ");
-}
-
-// Data + hora da última atualização do lead (qualquer edição/inclusão; abrir/fechar não conta).
-// Formato curto pt-BR no fuso de Brasília. Vazio quando não há data.
-function fmtUltimaAtualizacao(iso){
-  if(!iso) return "";
-  const d = new Date(iso);
-  if(isNaN(d.getTime())) return "";
-  try{
-    const data = d.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric", timeZone:"America/Sao_Paulo" });
-    const hora = d.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"America/Sao_Paulo" });
-    return `${data} ${hora}`;
-  }catch(_){ return ""; }
 }
 
 // Início do dia de HOJE no fuso de Brasília (UTC-3 fixo, sem horário de verão desde 2019),
@@ -2370,7 +2260,7 @@ function scoreSinais(l){
 // 'oi/beleza/opa', recebeu material e sumiu — nunca respondeu, nunca negociou". Esses NÃO
 // podem ter % alto de fechamento (super estimado). Só conta como diálogo real quando há
 // sinal concreto: várias mensagens do cliente, em vários dias, palavra-chave de compra,
-// compromisso confirmado, etapa avançada, ou retomada quente/morna.
+// compromisso confirmado, ou retomada quente/morna.
 function semDialogoReal(l){
   const a = l.analysis || {};
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
@@ -2382,12 +2272,11 @@ function semDialogoReal(l){
   let kwHits = 0;
   for(const m of msgsCli){ const t = String(m.text || ""); if(!t) continue; for(const re of KEYWORDS_COMPRA){ if(re.test(t)){ kwHits++; break; } } }
   const temAgenda = Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length > 0;
-  const etapaAvancada = ["Visita/Proposta","Negociação","Vendido"].includes(normalizarEtapa(l.etapa));
   const tipo = String(a.tipoRetomada||"").toLowerCase();
   const quente = tipo === "quente-fechar" || tipo === "morno-confirmar" || tipo === "objecao-tratar";
   // Mensagem substancial do cliente (não só "oi/beleza/opa") já conta como engajamento.
   const maxLenCli = msgsCli.reduce((mx,m)=>Math.max(mx, String(m.text||"").trim().length), 0);
-  const houveDialogo = msgsCli.length >= 5 || dSet.size >= 3 || kwHits >= 1 || temAgenda || etapaAvancada || quente || maxLenCli >= 30 || temAtendimentoManual(l);
+  const houveDialogo = msgsCli.length >= 5 || dSet.size >= 3 || kwHits >= 1 || temAgenda || quente || maxLenCli >= 30 || temAtendimentoManual(l);
   return !houveDialogo;
 }
 
@@ -2426,23 +2315,6 @@ async function contateiAgora(id, btn){
   }
 }
 window.contateiAgora = contateiAgora;
-
-// Ação rápida da fila/hero: "já falei com esse" — registra o contato (sai da fila de hoje
-// pelo ehContatadoHoje e respeita a janela de espera), tira da lista na hora e mostra o próximo.
-async function jaFaleiLead(id){
-  if(!id) return;
-  await marcarContatoManualPorId(id);
-  invalidarLeadsCache();
-  const grupos = state.gruposHome || {};
-  for(const k of Object.keys(grupos)){
-    const arr = grupos[k];
-    if(Array.isArray(arr)){ const i = arr.findIndex(l => String(l.id) === String(id)); if(i >= 0) arr.splice(i, 1); }
-  }
-  toast("Boa! Marquei que você já falou — ele volta pra fila em alguns dias.");
-  if(state.grupoAtivo) abrirGrupoHome(state.grupoAtivo);
-  else if(!state.lead?.id){ renderBotoesHome(); if(window.renderHomeRight) renderHomeRight(state.itemsAtivos); }
-}
-window.jaFaleiLead = jaFaleiLead;
 
 // Caixa de erro amigável com "Tentar de novo" — evita "Carregando..." preso e texto técnico.
 function boxErro(retryJs){
@@ -2608,32 +2480,6 @@ function renderListasHome(ordenados){
 // Home M1: chips de triagem + top 3 com motivo/WhatsApp + compromissos confirmados + KPI strip.
 // Ícone do WhatsApp (igual ao desenho — círculo verde com o glifo).
 const WA_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.7-.3-1.5-.6-2.1-1.5-.5-.6-.8-1.3-.9-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4 0-.1 0-.3 0-.4 0-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.7 4.2 3.7.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1 .1-1.2z"/></svg>`;
-const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>`;
-// Uma linha da Fila inteligente (porte do layout-alvo). Reaproveita dados/cliques reais.
-function filaRowHTML(l, pos){
-  const idJs = JSON.stringify(String(l.id||""));
-  const ehSel = state.lead?.id && String(l.id) === String(state.lead.id);
-  const prioridade = prioridadeAtendimento(l) || {};
-  const dias = l.daysSinceLastInteraction != null ? `<span class="fd-n">${l.daysSinceLastInteraction}d</span><span class="fd-l">sem resposta</span>` : "";
-  const etapa = normalizarEtapa(l.etapa);
-  const waLink = l.phone ? whatsappLink(l.phone, "") : "";
-  return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
-    <div class="fila-rank">${pos}</div>
-    <div class="fila-info">
-      <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
-      <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
-    </div>
-    <div class="fila-days">${dias}</div>
-    <div class="fila-pcwrap">
-      <div class="fila-pc" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</div>
-    </div>
-    <button type="button" class="fila-done" title="Já falei — tira da fila de hoje" onclick='event.stopPropagation();jaFaleiLead(${idJs})'>${CHECK_SVG}</button>
-    ${waLink
-      ? `<a class="fila-wa" href="${escapeHtml(waLink)}" target="_blank" rel="noopener" title="Abrir WhatsApp" onclick="event.stopPropagation()">${WA_SVG}</a>`
-      : `<span class="fila-wa" title="Sem telefone">${WA_SVG}</span>`}
-    <div class="fila-chev">›</div>
-  </div>`;
-}
 // v942 — barra de status das mensagens do cliente (Modelo A escolhido pelo dono: barra
 // horizontal + número, cor por nível). Mesma métrica do "Interesse do cliente" que já existe
 // dentro do lead (mensagensDoCliente). Cor: baixo = cinza, médio/alto = coral. v942.1 — a barra
@@ -2734,63 +2580,7 @@ function cpHomeLeadRow(l, maxMsgs){
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`${diasRotulo} ${escapeHtml(dias)}`:''}</span>
   </button>`;
 }
-// Ícones do "por que é prioridade" (quadrinho com ícone, igual ao desenho — varia por linha).
-const HERO_WHY_ICONS = [
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>`,
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7v18h10V8z"/><path d="M14 3v5h5"/></svg>`,
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16L17 7M9 7h8v8"/></svg>`
-];
-// Ícones dos 3 quadros de fato.
-const HERO_FACT_CAL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>`;
-const HERO_FACT_CLK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
-const HERO_FACT_HEART = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21S3.5 15.5 3.5 9.5A4 4 0 0 1 12 7a4 4 0 0 1 8.5 2.5C20.5 15.5 12 21 12 21z"/></svg>`;
-// Card "hero" do lead nº1 (o de maior prioridade do dia) — espelha o design dos prints,
-// com dados REAIS (motivo, próxima ação, melhor horário, mensagem sugerida no WhatsApp).
-function renderHeroLead(l){
-  const a = l.analysis || {};
-  const idJs = JSON.stringify(String(l.id||""));
-  const dias = l.daysSinceLastInteraction;
-  // "Por que é prioridade": sinais reais (motivo + objeções), sem repetir, no máx 4.
-  const porque = [];
-  if(lembreteVencido(l)) porque.push("Lembrete marcado pra hoje");
-  String(motivoPrioridade(l)||"").split(" · ").forEach(p => { p=p.trim(); if(p) porque.push(p.charAt(0).toUpperCase()+p.slice(1)); });
-  (Array.isArray(a.objections) ? a.objections.slice(0,2) : []).forEach(o => { o=String(o||"").trim(); if(o) porque.push(o); });
-  const porqueU = [...new Set(porque)].slice(0,4);
-  // "Último contato" = o último TOQUE de verdade (inclui meu follow-up), não o tempo de silêncio
-  // dela — senão diria "23 dias atrás" mesmo eu tendo falado anteontem. O silêncio já aparece
-  // no "por que atender".
-  // Duas medidas JUNTAS numa caixa só: há quanto tempo EU contatei x há quanto a CLIENTE não responde.
-  let toque = l.daysSinceLastTouch; if(toque==null) toque = dias;
-  let resposta = l.daysSinceClientReply; if(resposta==null) resposta = dias;
-  const toqueN = toque==null ? "—" : toque===0 ? "hoje" : toque===1 ? "ontem" : toque+" dias";
-  const respN  = resposta==null ? "—" : resposta===0 ? "hoje" : resposta===1 ? "ontem" : resposta+" dias";
-  const interesse = produtosLabel(l) || "—";
-  const proxima = a.nextAction || motivoCurto(l) || "Retomar o contato";
-  return `<section class="hero-real" onclick='abrirLead(${idJs})'>
-    <div class="h-top">
-      <span class="h-badge max">Prioridade agora</span>
-    </div>
-    <div class="h-grid">
-      <div style="min-width:0">
-        <div class="h-nm">${escapeHtml(l.name||"Cliente")}</div>
-        <div class="h-un">${escapeHtml(interesse)}</div>
-      </div>
-    </div>
-    ${porqueU.length ? `<div class="h-why"><div class="t">POR QUE ATENDER</div><ul>${porqueU.slice(0,3).map((p)=>`<li><span>${escapeHtml(p)}</span></li>`).join("")}</ul></div>` : ""}
-    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:13px;font-weight:800;line-height:1;margin:2px 0 2px">
-      <span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:7px;vertical-align:middle"></span><span style="color:var(--lime)">${escapeHtml(toqueN)}</span> <span style="color:var(--muted);font-weight:600">de contato</span></span>
-      <span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:7px;vertical-align:middle"></span><span style="color:#ef4444">${escapeHtml(respN)}</span> <span style="color:var(--muted);font-weight:600">sem resposta</span></span>
-      ${fmtUltimaAtualizacao(l.updatedAt) ? `<span style="white-space:nowrap;margin-left:auto;color:var(--muted);font-weight:600;font-size:12px">Atualizado em ${escapeHtml(fmtUltimaAtualizacao(l.updatedAt))}</span>` : ""}
-    </div>
-    ${fmtUltimaAtualizacao(a.reanalisadoEm) ? `<div style="font-size:11px;color:var(--muted);opacity:.85;margin:0 0 4px">Reanalisado em ${escapeHtml(fmtUltimaAtualizacao(a.reanalisadoEm))}</div>` : ""}
-    <div class="h-next">
-      <div class="l">PRÓXIMA AÇÃO</div>
-      <div class="x">${escapeHtml(proxima)}</div>
-    </div>
-  </section>`;
-}
-// Copia a mensagem sugerida (direta, com saudação) de um lead — usada no botão do hero.
+// Copia a mensagem sugerida (direta, com saudação) de um lead.
 // v826 §6.2/§6.5 — Copiar uma sugestão significa que ela VAI ser enviada. Então conta
 // como atendimento (data/hora, entra em Últimos atendimentos e na fila) E entra na
 // linha do tempo do cliente como "Mensagem enviada". Nunca altera a etapa comercial e
@@ -2884,7 +2674,7 @@ function leadsEsquecidos(items){
   const out = [];
   for(const l of (items || [])){
     const etapa = normalizarEtapa(l.etapa);
-    if(["Vendido","Perdido","Geladeira"].includes(etapa)) continue;
+    if(etapa === "Geladeira") continue;
     if(doseHoje.has(String(l.id))) continue; // já está no "Fazer agora" de hoje = não está esquecido
     // v911 — só FATO real (o app não sabe etapa/proposta/visita, que o dono mandou tirar): entra
     // quem VOCÊ já atendeu (dinheiro investido) OU teve conversa real (5+ mensagens do cliente).
@@ -3101,7 +2891,7 @@ function renderBotoesHome(){
     ${esquecidosHtml}
   `;
   qsa(".pickZipShortcut").forEach(b => {
-    if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", () => qs("#zipInput")?.click()); }
+    if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", () => show("zip")); }
   });
 }
 
@@ -3257,7 +3047,7 @@ function abrirMaisAcoes(){
   document.body.appendChild(ov);
   const close = () => ov.remove();
   ov.addEventListener("click", (e) => { if(e.target === ov) close(); });
-  qs("#maAcImportar").onclick = () => { close(); qs("#zipInput")?.click(); };
+  qs("#maAcImportar").onclick = () => { close(); show("zip"); };
   qs("#maAcLead").onclick = () => { close(); if(window.abrirNovoLead) abrirNovoLead(); };
   qs("#maAcReanalisar").onclick = () => { close(); if(window.reanalisarTudo) reanalisarTudo(); };
   qs("#maAcAprender").onclick = () => { close(); if(window.aprenderDaCarteira) aprenderDaCarteira(); };
@@ -3860,7 +3650,7 @@ async function atualizarSinoAgenda(leadsAll){
   let agendaN = 0;
   for(const l of all){
     const e = normalizarEtapa(l.etapa);
-    if(e === "Vendido" || e === "Perdido" || e === "Geladeira") continue;
+    if(e === "Geladeira") continue;
     const q = l.analysis?.lembrete?.quando;
     if(q){ const t = new Date(q).getTime(); if(!isNaN(t) && t >= ini && t <= fim){ agendaN++; continue; } }
     const aps = l.analysis?.confirmedAppointments;
@@ -3954,7 +3744,7 @@ async function _processarDashboard(data){
   if(!data?.items) return;
   try{
     const all = (data?.items || []).map(limparLead);
-    const items = all.filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; });
+    const items = all.filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Geladeira"; });
     state.itemsAtivos = items;
     state.todosLeads = all;
     try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
@@ -4019,7 +3809,7 @@ async function _processarDashboard(data){
         qsa(".pickZipShortcut").forEach(b => {
           if(!b.dataset.bound){
             b.dataset.bound = "1";
-            b.addEventListener("click", () => qs("#zipInput")?.click());
+            b.addEventListener("click", () => show("zip"));
           }
         });
       }
@@ -4038,25 +3828,19 @@ async function _processarDashboard(data){
   }, 600);
 }
 
-// ============ PIPELINE ============
-const ETAPAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
-const ETAPAS_PRINCIPAIS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação"];
-const ETAPAS_OCULTAS = ["Standby", "Geladeira", "Perdido", "Vendido"];
+// ============ ATIVO / ARQUIVADO ============
+// v1069 — pedido direto do dono: acabar de vez com etapas de funil (Novo/Atendimento/
+// Visita-Proposta/Negociação/Standby) e com Vendido/Perdido como categorias separadas. Só
+// existem dois estados possíveis pra um lead: Ativo ou Arquivado (valor interno "Geladeira",
+// mesmo nome que a tela "Arquivados" já usava — evita renomear coluna/telas que dependem dele).
+// Todo valor antigo de Vendido/Perdido/qualquer variação de "arquivado" cai em Geladeira; todo o
+// resto (inclusive etapas de funil antigas, se sobrar em dado legado) cai em Ativo.
+const ETAPAS = ["Ativo", "Geladeira"];
 
 function normalizarEtapa(raw){
   const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  if(/vendido|venda concluida|venda fechada/.test(s)) return "Vendido";
-  if(/perdido|desistiu|recusou/.test(s)) return "Perdido";
-  if(/geladeira|arquivad/.test(s)) return "Geladeira";
-  if(/standby|stand[\s-]?by|congelado|pausado/.test(s)) return "Standby";
-  if(/negocia/.test(s)) return "Negociação";
-  if(/visita|proposta/.test(s)) return "Visita/Proposta";
-  if(/atendim|em atendimento|conversando/.test(s)) return "Atendimento";
-  // Migração de etapas antigas
-  if(/fechado/.test(s)) return "Vendido";
-  if(/aguard|esperando|retomar/.test(s)) return "Standby";
-  if(/em proposta/.test(s)) return "Visita/Proposta";
-  return "Novo";
+  if(/vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return "Geladeira";
+  return "Ativo";
 }
 
 let pipelineBuscaTermo = "";
@@ -4104,29 +3888,15 @@ function setPipelineTab(tab){
 }
 window.setPipelineTab = setPipelineTab;
 
-// Pipeline = lista única de todos os leads ativos, ordenada por prioridade.
-// Vendido, Perdido e Standby ficam fora (Standby tem grupo próprio na home; perdidos e vendidos têm tela dedicada).
-// Resumo do funil pro topo da tela Leads: quantos leads em cada etapa + onde estão mais parados.
-function renderFunilResumo(allActive){
-  const ORDEM = ["Novo","Atendimento","Visita/Proposta","Negociação","Standby"];
-  const cor = { "Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)" };
-  const cont = {}; ORDEM.forEach(e => cont[e] = 0);
-  for(const l of allActive){ const e = normalizarEtapa(l.etapa); if(cont[e] != null) cont[e]++; else cont["Atendimento"]++; }
-  let gargalo = null, max = 0;
-  for(const e of ["Atendimento","Visita/Proposta","Negociação","Standby"]){ if(cont[e] > max){ max = cont[e]; gargalo = e; } }
-  const chips = ORDEM.map(e => `<span class="funil-chip" style="color:${cor[e]}"><b>${cont[e]}</b> ${e}</span>`).join("");
-  const g = (gargalo && max >= 2) ? `<span class="funil-gargalo">▲ mais parados em ${gargalo}</span>` : "";
-  return `<div class="funil-resumo">${chips}${g}</div>`;
-}
-window.setLeadsView = function(v){ state.leadsView = (v === "etapa" ? "etapa" : "prioridade"); carregarPipeline(); };
-
+// Pipeline = lista única de todos os leads ativos, ordenada por prioridade. Arquivados ficam
+// fora (têm tela própria, "Arquivados").
 async function carregarPipeline(){
   if(state.active !== "pipeline") return;
   const board = qs("#pipelineBoard");
   if(!board) return;
   const renderPipeline = (data) => {
     try{
-    const ehAtivo = (l) => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido" && e !== "Geladeira"; };
+    const ehAtivo = (l) => { const e = normalizarEtapa(l.etapa); return e !== "Geladeira"; };
     const allActive = (data?.items || []).map(limparLead).filter(ehAtivo);
     let items = allActive.slice();
     if(pipelineBuscaTermo){
@@ -4321,31 +4091,13 @@ function abrirEditarLead(id, nome, telefone){
 function fecharEditarLead(){ qs("#editarLeadModal")?.remove(); }
 window.abrirEditarLead = abrirEditarLead;
 
-// Lê o print no modal Editar: completa nome/telefone que estiverem vazios e joga o
-// conteúdo na observação (que será anexada ao histórico no salvar).
-// Manda o print pro backend extrair os dados, com teto de tempo (nunca trava no "Lendo...").
-async function pedirExtracaoPrint(dataUrl){
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 58000);
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action:"extrair-print", imagemBase64: dataUrl }),
-      signal: ctrl.signal
-    });
-    return await res.json().catch(() => ({ ok:false, error:"resposta inválida do servidor" }));
-  }catch(e){
-    if(e?.name === "AbortError") return { ok:false, error:"demorou demais — tenta de novo ou um print menor" };
-    return { ok:false, error: e?.message || "falha de rede" };
-  }finally{ clearTimeout(t); }
-}
-// (v905) lerPrintEditarLead removida junto com o "Atualizar por print" do modal Editar lead.
-// (O print-reader do lead MANUAL segue existindo no fluxo de abrirNovoLead.)
+// (v905) leitura de print no modal Editar removida junto com o "Atualizar por print".
+// (v1069) leitura de print no lead manual também removida — o dono não usa mais essa função
+// em lugar nenhum; sobra só o cadastro manual simples (Nome/Interesse/Telefone).
 
 // Modal pra criar lead manualmente (alguém ligou, comentou pessoalmente, indicação)
 const EMPREENDIMENTOS_CATALOGO = []; // v827 §7.1: sem catálogo fixo de empreendimentos (autocomplete fica livre)
 function abrirNovoLead(){
-  novoLeadAvatarFoto = null;
   qs("#novoLeadModal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "novoLeadModal";
@@ -4377,53 +4129,6 @@ function abrirNovoLead(){
   setTimeout(() => qs("#novoLeadNome")?.focus(), 100);
 }
 function fecharNovoLead(){ qs("#novoLeadModal")?.remove(); }
-// Lê o print da conversa/formulário e preenche os campos do lead manual (IA faz a leitura).
-// Lê um arquivo de imagem e devolve um dataURL JPEG REDIMENSIONADO (pra não estourar o
-// envio quando manda vários prints de uma vez). Cai no original se algo falhar.
-function fileParaDataUrlRedim(file, maxDim, quality){
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onerror = () => reject(new Error("não consegui abrir a imagem"));
-    r.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve(r.result); // fallback: manda original
-      img.onload = () => {
-        try{
-          let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-          const escala = Math.min(1, (maxDim||1400) / Math.max(w, h));
-          w = Math.round(w*escala); h = Math.round(h*escala);
-          const c = document.createElement("canvas"); c.width = w; c.height = h;
-          c.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL("image/jpeg", quality || 0.82));
-        }catch(_){ resolve(r.result); }
-      };
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
-// Foto do cliente recortada do print (dataURL), pra salvar com o lead manual / na edição.
-let novoLeadAvatarFoto = null;
-// Recorta a região da foto (caixa normalizada 0–1 que a IA devolveu) do print original,
-// em quadrado ~200px. Roda no navegador. Devolve dataURL JPEG ou null se falhar.
-// Detecta se o recorte é uma "foto" sem rosto (avatar padrão do WhatsApp): mede o desvio
-// de cor dos pixels amostrados. Foto real tem variação alta; silhueta cinza/branca tem variação baixa.
-function fotoQuaseVazia(ctx, size){
-  try{
-    const d = ctx.getImageData(0, 0, size, size).data;
-    let n = 0, somaL = 0, somaL2 = 0;
-    for(let i = 0; i < d.length; i += 16){ // amostra 1 a cada 4 pixels
-      const L = (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114);
-      somaL += L; somaL2 += L*L; n++;
-    }
-    if(!n) return true;
-    const media = somaL/n;
-    const variancia = somaL2/n - media*media;
-    const desvio = Math.sqrt(Math.max(0, variancia));
-    // desvio baixo = imagem chapada (cinza/branco uniforme) → não é rosto
-    return desvio < 18;
-  }catch(_){ return false; }
-}
 // Recebe um arquivo de imagem e devolve um dataURL QUADRADO (recorte central),
 // pronto pro avatar redondo. Sem IA: o corretor manda a imagem já enquadrada.
 function imagemQuadradaParaAvatar(file){
@@ -4519,110 +4224,6 @@ function ligarColarAvatarGlobal(id){
 window.editarAvatarLead = editarAvatarLead;
 window.colarAvatarLead = colarAvatarLead;
 
-function recortarAvatar(file, box){
-  return new Promise((resolve) => {
-    if(!file || !box) return resolve(null);
-    const r = new FileReader();
-    r.onerror = () => resolve(null);
-    r.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve(null);
-      img.onload = () => {
-        try{
-          const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
-          let sw = box.w*W, sh = box.h*H;
-          const side = Math.max(sw, sh);                 // quadrado, sem distorcer (o recorte já é a foto: a IA devolve a caixa justa só no círculo)
-          const cx = box.x*W + sw/2, cy = box.y*H + sh/2; // centro da caixa = centro da foto
-          let s = side, sx = cx - s/2, sy = cy - s/2;
-          if(sx < 0) sx = 0; if(sy < 0) sy = 0;
-          if(sx + s > W) s = W - sx; if(sy + s > H) s = Math.min(s, H - sy);
-          s = Math.max(8, s);
-          const out = 200;
-          const c = document.createElement("canvas"); c.width = out; c.height = out;
-          const ctx = c.getContext("2d");
-          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, out, out); // fundo PRETO (combina com o tema escuro; nunca branco)
-          ctx.drawImage(img, sx, sy, s, s, 0, 0, out, out);
-          // Descarta avatar "vazio" (silhueta/ícone padrão do WhatsApp): se a imagem tem
-          // pouquíssima variação de cor (quase tudo cinza/branco igual), não é foto real.
-          if(fotoQuaseVazia(ctx, out)){ resolve(null); return; }
-          resolve(c.toDataURL("image/jpeg", 0.85));
-        }catch(_){ resolve(null); }
-      };
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
-// Mostra/esconde a prévia da foto recortada no modal de novo lead.
-function mostrarPreviaFoto(){
-  const wrap = qs("#novoLeadFotoWrap"), prev = qs("#novoLeadFotoPrev");
-  if(!wrap || !prev) return;
-  if(novoLeadAvatarFoto){
-    prev.innerHTML = `<img src="${escapeHtml(novoLeadAvatarFoto)}" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--lime)">`;
-    wrap.style.display = "flex";
-  } else {
-    prev.innerHTML = ""; wrap.style.display = "none";
-  }
-}
-async function lerPrintLead(ev){
-  const file = ev.target.files?.[0];
-  if(!file){ return; }
-  const btn = qs("#novoLeadPrint");
-  const orig = btn ? btn.textContent : "";
-  if(btn){ btn.disabled = true; btn.textContent = "⏳ Lendo o print..."; }
-  setPrintStatus("#novoLeadPrintStatus", "info", "⏳ Lendo o print...");
-  try{
-    const dataUrl = await fileParaDataUrlRedim(file, 1900, 0.88);
-    const d = await pedirExtracaoPrint(dataUrl);
-    if(d?.ok){
-      const algum = !!(d.nome || d.telefone || d.produto || d.email || d.observacao);
-      if(d.nome && qs("#novoLeadNome")) qs("#novoLeadNome").value = d.nome;
-      if(d.telefone && qs("#novoLeadTel")) qs("#novoLeadTel").value = d.telefone;
-      if(d.produto){
-        const sel = qs("#novoLeadProduto");
-        const opt = sel ? [...sel.options].find(o => o.value.toLowerCase() === String(d.produto).toLowerCase()) : null;
-        if(sel && opt) sel.value = opt.value;
-      }
-      const extras = [d.email ? ("E-mail: " + d.email) : "", d.observacao || ""].filter(Boolean).join(" · ");
-      if(extras){
-        const obs = qs("#novoLeadObs");
-        if(obs) obs.value = obs.value ? (obs.value + " · " + extras) : extras;
-      }
-      // Tenta recortar a foto do cliente (a IA devolve onde ela está no print).
-      novoLeadAvatarFoto = d.avatarBox ? await recortarAvatar(file, d.avatarBox) : null;
-      mostrarPreviaFoto();
-      const comFoto = novoLeadAvatarFoto ? " (foto incluída — confira na prévia)" : "";
-      if(algum && d.telefoneSuspeito && d.telefone){
-        setPrintStatus("#novoLeadPrintStatus", "warn", "⚠️ Confira o TELEFONE — pode ter vindo com um dígito a menos." + comFoto);
-        toast("⚠️ Confira o telefone — pode ter vindo errado do print.");
-      }
-      else if(algum){ setPrintStatus("#novoLeadPrintStatus", "ok", "✓ Dados lidos do print. Confira e salve." + comFoto); toast("✓ Dados lidos do print. Confira e salve."); }
-      else { setPrintStatus("#novoLeadPrintStatus", "warn", "Li o print mas não achei dados de cliente nele. Tenta um print que mostre nome/telefone."); }
-    } else {
-      setPrintStatus("#novoLeadPrintStatus", "err", "Não consegui ler. Motivo: " + (d?.error || "desconhecido"));
-    }
-  }catch(err){
-    setPrintStatus("#novoLeadPrintStatus", "err", "Erro ao ler o print: " + (err?.message || err));
-  }finally{
-    if(btn){ btn.disabled = false; btn.textContent = orig; }
-    if(ev.target) ev.target.value = "";
-  }
-}
-// Mostra um aviso FIXO embaixo do botão de print (não some como o toast).
-function setPrintStatus(sel, tipo, msg){
-  const el = qs(sel); if(!el) return;
-  const cores = {
-    info: ["rgba(0,212,255,.10)", "#7fe3ff"],
-    ok:   ["rgba(0,200,120,.12)", "#7CFFB0"],
-    warn: ["rgba(255,190,0,.12)", "#FFD66B"],
-    err:  ["rgba(255,80,80,.12)", "#FF9C9C"]
-  };
-  const [bg, fg] = cores[tipo] || cores.info;
-  el.style.display = "block";
-  el.style.background = bg;
-  el.style.color = fg;
-  el.textContent = msg;
-}
 async function salvarNovoLead(){
   const nome = (qs("#novoLeadNome")?.value || "").trim();
   const interesse = (qs("#novoLeadInteresse")?.value || "").trim();
@@ -5277,7 +4878,7 @@ function cp704Css(){
   function cp704Jornada(lead, mc){
     const normal = (typeof normalizarEtapa==='function') ? normalizarEtapa(lead?.etapa) : String(lead?.etapa||'');
     // v904: Vendido/Perdido/Geladeira não existem mais como desfecho separado — todos "Arquivado".
-    if(normal==='Vendido' || normal==='Perdido' || normal==='Geladeira')
+    if(normal==='Geladeira')
       return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
     const st = String(mc?.oportunidade?.status || lead?.etapa || 'descoberta').toLowerCase();
     const etapas = [
@@ -5703,51 +5304,6 @@ function renderLeadFoco(lead){
 
 window.renderLeadFoco = renderLeadFoco;
 
-async function abrirVenda(id, nome){
-  if(!id) return;
-  if(!confirm(`Marcar ${nome || "este lead"} como VENDIDO?`)) return;
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Vendido" })
-    });
-    const data = await res.json();
-    if(data?.ok){
-      invalidarLeadsCache();
-      toast("Lead movido pra Vendido.");
-      carregarPipeline();
-      if(typeof carregarDashboard === "function") carregarDashboard();
-    } else {
-      toast("Erro: " + (data?.error || "falha"));
-    }
-  }catch(err){ toast("Erro de rede: " + (err?.message||err)); }
-}
-window.abrirVenda = abrirVenda;
-
-async function moverEtapa(select){
-  const id = select.dataset.leadId;
-  const etapa = select.value;
-  const original = select.dataset.original || select.value;
-  if(!id) return;
-  select.disabled = true;
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa })
-    });
-    const data = await res.json().catch(()=>({ok:false}));
-    if(!res.ok || !data.ok){ throw new Error(data.error || "falha ao salvar"); }
-    invalidarLeadsCache();
-    toast("Movido para "+etapa);
-    carregarPipeline();
-  }catch(err){
-    toast("Erro: "+(err?.message||err));
-    select.value = original;
-  }finally{
-    select.disabled = false;
-  }
-}
-window.moverEtapa = moverEtapa;
 
 // ============ AGENDA / RETOMADAS ============
 function urgenciaDeDias(d){
@@ -5984,7 +5540,7 @@ async function carregarAgenda(){
   const renderAgenda = async (data) => {
   try{
     // itemsAll inclui GELADEIRA (pra os lembretes continuarem valendo lá); items = só ativos (pras outras seções).
-    const itemsAll = (data?.items || []).map(limparLead).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido"; });
+    const itemsAll = (data?.items || []).map(limparLead);
     const items = itemsAll.filter(l => normalizarEtapa(l.etapa) !== "Geladeira");
 
     const agoraTs = Date.now();
@@ -8410,10 +7966,7 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
 }));
 // Qualquer item da lista lateral/gaveta fecha a gaveta do celular ao ser tocado (inclui os que usam onclick, como "Últimos atendimentos").
 qsa(".sb-item").forEach(b=>b.addEventListener("click", fecharMenuGaveta));
-qsa(".pickZipShortcut").forEach(b=>b.addEventListener("click",()=>qs("#zipInput").click()));
-qs("#pickZip").addEventListener("click",()=>qs("#zipInput").click());
-qs("#uploadBox").addEventListener("click",e=>{if(e.target.id!=="pickZip")qs("#zipInput").click()});
-qs("#zipInput").addEventListener("change",()=>processFile(qs("#zipInput").files[0]));
+qsa(".pickZipShortcut").forEach(b=>b.addEventListener("click",()=>show("zip")));
 qs("#clearAnalysis").addEventListener("click",clearAnalysis);
 qs("#diagnoseOpenAI").addEventListener("click",runOpenAIDiagnostics);
 qsa(".msg-tab").forEach(btn => btn.addEventListener("click", () => setMsgStyle(btn.dataset.style)));
@@ -8458,7 +8011,7 @@ function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").repla
 window.semAcento = semAcento;
 // Lead arquivado (arquivo morto / Perdido) ou na geladeira NÃO aparece na busca —
 // fica só na tela dedicada (arquivo morto). Busca é pra leads ativos.
-function foraDaBusca(l){ const e = normalizarEtapa(l?.etapa); return e === "Geladeira" || e === "Perdido"; }
+function foraDaBusca(l){ return normalizarEtapa(l?.etapa) === "Geladeira"; }
 function renderBuscaGlobal(termo){
   const box = qs("#buscaGlobalResults");
   if(!box) return;
@@ -8481,7 +8034,7 @@ function renderBuscaGlobal(termo){
   box.innerHTML = matches.map(l => {
     const idJs = JSON.stringify(String(l.id||""));
     return `<div onclick='abrirLead(${idJs});qs("#buscaGlobal").value="";qs("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
-      <div><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
+      <div><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px">${escapeHtml(l.product||"--")}</div></div>
     </div>`;
   }).join("");
 }
@@ -8538,7 +8091,7 @@ function buscaLeadInline(termo, boxId){
     box.innerHTML = matches.map(l => {
       const idJs = JSON.stringify(String(l.id||""));
       return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")} · ${escapeHtml(l.etapa||"Novo")}</div></div>
+        <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")}</div></div>
       </div>`;
     }).join("");
   }, 200);
@@ -8565,7 +8118,6 @@ qs("#pipelineBusca")?.addEventListener("input", (e)=>{
 });
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
-qs("#perdidosRefresh")?.addEventListener("click", carregarPerdidos);
 qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#carteiraExport")?.addEventListener("click", baixarRelatorioCarteira);
@@ -8757,7 +8309,7 @@ async function salvarMemoria(){
 // ===== Carteira completa: todos os leads num lugar (panorama + contatar hoje + ranking) =====
 // Reusa o mesmo dado (leads-recentes limit=2000) e os mesmos critérios da Hoje (scoreLead,
 // entraEmRetomada, etapas). Não cria função nova no servidor — tudo no cliente, em cima do cache.
-function carteiraEhFinal(e){ return e === "Vendido" || e === "Perdido" || e === "Geladeira"; }
+function carteiraEhFinal(e){ return e === "Geladeira"; }
 function carteiraLinhaLead(l, pos){
   const idJs = JSON.stringify(String(l.id||""));
   const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d" : "—";
@@ -8798,84 +8350,6 @@ async function carregarCarteira(force){
 }
 window.carregarCarteira = carregarCarteira;
 
-// ---- Carteira em tabela (visual #480): Cliente · Empreendimento · Score · Resposta · Próxima ação ----
-const CART_FILTROS = [["todos","Todos"],["quentes","Agora"],["reaquecer","Reativar"],["geladeira","Arquivados"]];
-const ETAPA_DOT = {"Novo":"var(--soft)","Atendimento":"var(--dados)","Visita/Proposta":"var(--lime)","Negociação":"var(--acao)","Standby":"var(--muted)","Geladeira":"var(--muted)","Vendido":"var(--acao)","Perdido":"var(--risco)"};
-const CART_AV_CORES = ["#7DD3FC","#86EFAC","#F0ABFC","#FCA5A5","#FDE047","#A5B4FC","#5EEAD4","#FDBA74"];
-function carteiraAvatarCor(s){ let h = 0; const t = String(s||""); for(let i=0;i<t.length;i++) h = (h*31 + t.charCodeAt(i))|0; return CART_AV_CORES[Math.abs(h) % CART_AV_CORES.length]; }
-function carteiraPassaFiltro(l, f){
-  const e = normalizarEtapa(l.etapa);
-  if(f === "geladeira") return e === "Geladeira";
-  if(!leadEhAtivo(l)) return false;
-  if(f === "reaquecer") return leadEhReaquecer(l);
-  if(f === "quentes") return leadEhQuente(l);
-  return true;
-}
-const CARTEIRA_PAGE_SIZE = 80;
-function setCarteiraFiltro(f){
-  state.carteiraFiltro = f;
-  state.carteiraVisibleCount = CARTEIRA_PAGE_SIZE;
-  if(state.active === "carteira") cpReplaceRoute(cpRouteForScreen("carteira"));
-  renderCarteiraTabela();
-}
-function carregarMaisCarteira(){
-  state.carteiraVisibleCount = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE)) + CARTEIRA_PAGE_SIZE;
-  renderCarteiraTabela();
-}
-window.setCarteiraFiltro = setCarteiraFiltro;
-window.carregarMaisCarteira = carregarMaisCarteira;
-function renderCarteiraTabela(){
-  const _perfStart = cpPerfNow();
-  const box = qs("#carteiraBody");
-  if(!box) return;
-  const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Vendido" && e !== "Perdido"; });
-  const filtro = state.carteiraFiltro || "todos";
-  const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
-  const chips = CART_FILTROS.map(([k,lbl]) => `<button type="button" class="${k===filtro?"active":""}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join("");
-  const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
-  const lote = lista.slice(0, visiveis);
-  const faltam = Math.max(0, lista.length - lote.length);
-  const linhas = lista.length ? lote.map(carteiraRowHTML).join("") : '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>';
-  const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : "";
-  box.innerHTML = `
-    ${ui677ToolbarHTML("atendimentos")}
-    <div class="cart-head">
-      <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?"s":""} neste filtro · ordenados por prioridade de contato</div></div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="cart-filtros">${chips}</div>
-        <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-        <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
-        <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
-      </div>
-    </div>
-    <div class="cart-table">
-      <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
-      ${linhas}
-      ${carregarMais}
-    </div>`;
-  cpPerfMark("renderCarteira", _perfStart, { total:lista.length, visiveis:lote.length });
-}
-function carteiraRowHTML(l){
-  const idJs = JSON.stringify(String(l.id||""));
-  const prioridade = prioridadeAtendimento(l) || {};
-  const etapa = normalizarEtapa(l.etapa);
-  const dot = ETAPA_DOT[etapa] || "var(--muted)";
-  const resp = l.lastInteractionAt ? formatarTempoRelativo(l.lastInteractionAt).replace(/ atrás$/,"") : (l.daysSinceLastInteraction!=null ? l.daysSinceLastInteraction+"d" : "—");
-  const acao = l.nextAction ? String(l.nextAction) : motivoCurto(l);
-  return `<div class="cart-row" onclick='abrirLead(${idJs})'>
-    <div class="cart-cli">
-      <div style="min-width:0">
-        <div class="cart-nm">${escapeHtml(l.name||"Cliente")}</div>
-        <div class="cart-etapa"><span class="cart-dot" style="background:${dot}"></span>${escapeHtml(etapa)}</div>
-      </div>
-    </div>
-    <div class="cart-emp">${escapeHtml(l.product||"—")}</div>
-    <div class="cart-priority" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</div>
-    <div class="cart-resp">${escapeHtml(resp)}</div>
-    <div class="cart-acao">${escapeHtml(acao)}</div>
-    <div class="cart-chev">›</div>
-  </div>`;
-}
 
 // Carrega históricos completos apenas quando o usuário pede uma exportação.
 // A navegação normal continua leve; a operação pesada fica restrita ao botão de exportar.
@@ -9199,70 +8673,6 @@ async function registrarRespostaCliente(valor){
 }
 window.registrarRespostaCliente = registrarRespostaCliente;
 
-// Lista os leads marcados como Perdido, com motivo (quando há) e botão Reabrir.
-async function carregarPerdidos(){
-  const box = qs("#perdidosList");
-  if(!box) return;
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const res = { ok:true, json: async () => await getLeadsData() };
-    const data = await res.json();
-    const items = (data?.items || []).map(limparLead).filter(l => normalizarEtapa(l.etapa) === "Perdido");
-    if(!items.length){
-      box.innerHTML = '<div class="empty">Nenhum lead perdido no momento.</div>';
-      return;
-    }
-    box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} lead${items.length>1?"s":""} perdido${items.length>1?"s":""}.</div>` + items.map(l => {
-      const idJs = JSON.stringify(String(l.id||""));
-      const motivo = l.analysis?.motivoPerda || l.analysis?.motivo_perda || "";
-      const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "";
-      return `
-        <div data-perdido-id="${escapeHtml(String(l.id||""))}" style="border:1px solid var(--line);background:rgba(255,91,122,.04);border-radius:14px;padding:12px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <div style="flex:1;min-width:0">
-              <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||"Cliente")}</strong>
-              <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?" · "+dias:""}</div>
-              ${motivo ? `<div class="small" style="margin-top:6px"><b>Motivo:</b> ${escapeHtml(motivo)}</div>` : ""}
-            </div>
-            <span class="tag" style="background:rgba(255,91,122,.12);color:#ffdbe2;border-color:rgba(255,91,122,.32);font-size:10px">PERDIDO</span>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-            <button type="button" onclick='reabrirLeadPerdido(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reabrir</button>
-          </div>
-        </div>`;
-    }).join("");
-  }catch(err){
-    box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
-  }
-}
-window.carregarPerdidos = carregarPerdidos;
-
-async function reabrirLeadPerdido(id, btn){
-  if(!id) return;
-  const msg = "Reabrir este cliente? Ele volta para os atendimentos ativos.";
-  const ok = (typeof cp903Confirm === "function")
-    ? await cp903Confirm({ titulo: "Reabrir lead", mensagem: msg, ok: "Reabrir" })
-    : confirm(msg);
-  if(!ok) return;
-  if(btn){ btn.disabled = true; btn.textContent = "Reabrindo..."; }
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Atendimento" })
-    });
-    if(!res.ok) throw new Error("falha");
-    toast("Lead reaberto em Atendimento.");
-    const card = document.querySelector(`[data-perdido-id="${id}"]`);
-    if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
-    loadRecentLeads();
-  }catch(err){
-    if(btn){ btn.disabled = false; btn.textContent = "Reabrir"; }
-    toast("Erro ao reabrir.");
-  }
-}
-window.reabrirLeadPerdido = reabrirLeadPerdido;
-
 // v952: a renderização real de Arquivados (com paginação e busca) vive só dentro da IIFE
 // #724-2, exposta em window.carregarGeladeira. Existia uma segunda função de mesmo nome aqui
 // (mais antiga, sem paginação nem suporte a busca) que nenhuma chamada `window.`-qualificada
@@ -9327,27 +8737,6 @@ async function arquivarLead(id, nome){
   }catch(err){ toast("Erro de rede: " + (err?.message||err)); }
 }
 window.arquivarLead = arquivarLead;
-
-async function marcarPerdido(id, nome){
-  if(!id) return;
-  if(!confirm(`Arquivar ${nome || "este lead"}? Ele sai do total de leads ativos e da busca, e vai pro arquivo morto (dá pra reabrir depois).`)) return;
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Perdido" })
-    });
-    const data = await res.json().catch(()=>({ok:false}));
-    if(data?.ok){
-      removerLeadDosCaches(id); // tira da busca e do total na hora (sem esperar reload)
-      toast("Lead arquivado (arquivo morto).");
-      voltarDoLead();
-      carregarDashboard();
-    } else {
-      toast("Erro: " + (data?.error || "falha"));
-    }
-  }catch(err){ toast("Erro de rede: " + (err?.message||err)); }
-}
-window.marcarPerdido = marcarPerdido;
 
 qs("#copyMessage").addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText(qs("#messageText").value);toast("Mensagem copiada.")}
@@ -9529,14 +8918,13 @@ function ui631Icon(nome){
 // Antes cada tela tinha uma regra diferente, por isso a Home mostrava 5 quentes
 // e Atendimentos mostrava zero.
 function leadEhAtivo(l){
-  return !["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l?.etapa));
+  return normalizarEtapa(l?.etapa) !== "Geladeira";
 }
 function leadEhQuente(l){
   if(!leadEhAtivo(l)) return false;
   const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
   const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
-  const etapa = normalizarEtapa(l?.etapa);
-  return tipo === "quente-fechar" || interesse === "alto" || etapa === "Negociação";
+  return tipo === "quente-fechar" || interesse === "alto";
 }
 function leadEhReaquecer(l){
   return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
@@ -9715,13 +9103,12 @@ function cpProbabilidadeFechamento(l){
   const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgClientePedeResposta(l);
   // v1056 — pedido original do dono, do início desta rodada: "fazer o tempo parado pesar contra
   // a posição na fila" — sem tirar o lead da lista de vez, só derrubar pra trás de quem está
-  // ativo de verdade. v1057 — corrigido pra usar SÓ o último atendimento (ultimoAtendimentoTs),
-  // nunca mensagem: "não interessa a contagem de última mensagem, somente de último atendimento,
-  // ponto final" (palavras do dono). Isso deixou de ser um problema pra quem nunca foi atendido
-  // porque, desde a v1057, cpFilaFazerAgora só deixa entrar aqui quem JÁ tem atendimento marcado
-  // (quem não tem vai pra "Oportunidades esquecidas") — então todo lead que chega até aqui tem
-  // uma data de atendimento de verdade pra medir. Teto de 90 dias: depois disso a penalidade para
-  // de crescer (não precisa ficar infinitamente pior).
+  // ativo de verdade. Corrigido pra usar SÓ o último atendimento (ultimoAtendimentoTs), nunca
+  // mensagem: "não interessa a contagem de última mensagem, somente de último atendimento, ponto
+  // final" (palavras do dono). v1069 — quem NUNCA foi atendido (ultimoAtendimentoTs cai no ramo
+  // "sem data") fica no teto de 90 dias (o mais frio possível), então não domina o topo da fila
+  // só por entrar sem data — mas continua elegível a aparecer (regra v1069 de cpFilaFazerAgora).
+  // Teto de 90 dias: depois disso a penalidade para de crescer (não precisa ficar infinitamente pior).
   let diasFrio = 90;
   try{
     const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
@@ -9748,23 +9135,15 @@ function cpFilaFazerAgora(items){
   // novo, 5 se não é; depois disso o lead volta a ser candidato normalmente, mesmo que a bola
   // ainda esteja tecnicamente do lado dele — é a MESMA regra que entraEmRetomada usa). Corrigido
   // pra usar essa regra existente em vez de inventar um bloqueio que nunca é revisto.
-  // v1057 — pedido taxativo do dono: "na lista de prioridades só pode aparecer clientes que já
-  // foram atendidos e que respeita o tempo descrito no cérebro... quem não tem atendimento tem
-  // que ir lá nas oportunidades esquecidas". Lead sem NENHUM atendimento marcado no app não entra
-  // mais aqui — ele aparece em "Oportunidades esquecidas" (leadsEsquecidos, que já existe e já
-  // ordena pelo mais parado primeiro, exatamente como pedido).
-  // v1068 — achado da auditoria comercial: recomendacaoContato.aguardar (v1059, "a IA acabou de
-  // dizer 'aguarde, sem mandar mensagem'") só era lido dentro do lead já aberto (renderLeadFoco)
-  // — a própria fila que decide QUEM aparece no topo do "Fazer agora" nunca checava esse sinal.
-  // Um lead com negociação avançada e atendimento recente podia subir ao topo mesmo com a IA
-  // recomendando esperar — o corretor via "atenda este agora" contradizendo o aviso dentro do
-  // lead. Mesmo gate usado lá (analiseAtualValida752, pra nunca confiar num sinal de análise
-  // desatualizada) — um lead "aguardar" continua existindo (não vira Perdido/arquivado), só não
-  // compete mais pelo topo da fila de contato ativo.
+  // v1069 — regra definitiva pedida pelo dono (revoga a v1057 e o gate de aguardar da v1068):
+  // "Fazer agora" mostra o lead se, e só se, ele NUNCA foi atendido OU já passou do prazo de
+  // descanso configurado no Cérebro (emJanelaDeEspera). O aviso da IA em
+  // recomendacaoContato.aguardar (v1059/v1068) NÃO gate mais essa fila — "esquece o que está
+  // escrito", nas palavras do dono: só data de atendimento decide.
   const pool = ativos.filter(l => {
-    const a = l?.analysis || {};
-    const aguardarContato = (typeof analiseAtualValida752 === 'function' && analiseAtualValida752(a)) && a?.recomendacaoContato?.aguardar === true;
-    return !ehContatadoHoje(l) && mensagensDoCliente(l) > 0 && !cp786TemCompromisso(l) && !!(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l)) && !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l)) && !aguardarContato;
+    const nuncaAtendido = !(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l));
+    const passouPrazo = !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l));
+    return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (nuncaAtendido || passouPrazo);
   });
   // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
   // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
@@ -10153,71 +9532,6 @@ renderListasHome = function(ordenados){
     </div>`;
 };
 
-window.setPipelineVisualFiltro = function(f){ state.pipelineVisualFiltro=f||"todos"; state.pipelineVisibleCount=60; if(state.active === "pipeline") cpReplaceRoute(cpRouteForScreen("pipeline")); carregarPipeline(); };
-window.carregarMaisPipelineVisual = function(){ state.pipelineVisibleCount = Math.max(60, Number(state.pipelineVisibleCount||60)) + 60; carregarPipeline(); };
-function ui631EtapaFunil(l){
-  const raw=String(l.analysis?.diagnostico?.etapa||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  if(raw.includes("descob")) return "Descoberta";
-  if(raw.includes("interesse")) return "Interesse";
-  if(raw.includes("compar")) return "Comparação";
-  if(raw.includes("finance")) return "Análise financeira";
-  if(raw.includes("negoci")) return "Negociação";
-  if(raw.includes("decis")) return "Decisão";
-  const e=normalizarEtapa(l.etapa);
-  if(e==="Novo") return "Descoberta";
-  if(e==="Atendimento") return "Interesse";
-  if(e==="Visita/Proposta") return "Comparação";
-  if(e==="Negociação") return "Negociação";
-  return "Análise financeira";
-}
-carregarPipeline = async function(){
-  if(state.active!=="pipeline") return;
-  const board=qs("#pipelineBoard"); if(!board) return;
-
-  // Usa dados em memória se disponíveis — evita fetch a cada troca de filtro
-  const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
-  const renderPipeline = (data) => {
-    const _perfStart = cpPerfNow();
-    const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
-    const hot=leadEhQuente;
-    const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
-    const reaquecer=leadEhReaquecer;
-    const filtros={todos:all,quentes:all.filter(hot),esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)),compromisso:all.filter(compromisso),reaquecer:all.filter(reaquecer)};
-    const filtro=state.pipelineVisualFiltro||"todos";
-    const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
-    const listaPrioritaria=lista.filter(l=>ui670ModeloComercial(l)?.acao?.status!=="sem-acao-urgente");
-    const limiteLista = Math.max(60, Number(state.pipelineVisibleCount || 60));
-    const listaVisivel = listaPrioritaria.slice(0, limiteLista);
-    const faltamLista = Math.max(0, listaPrioritaria.length - listaVisivel.length);
-    const btnMaisLista = faltamLista > 0 ? `<button type="button" class="btn secondary" style="width:100%;margin-top:10px" onclick="carregarMaisPipelineVisual()">Mostrar mais ${Math.min(60, faltamLista)} leads <span>(${listaVisivel.length} de ${listaPrioritaria.length})</span></button>` : "";
-    const etapas=["Novo","Atendimento","Visita/Proposta","Negociação","Standby"];
-    const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
-    all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
-    const tabs=[["todos","Todos"],["quentes","Agora"],["esfriando","Parando"],["compromisso","Agenda"],["reaquecer","Reativar"]];
-    const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Agora':'Retomar';
-    board.innerHTML=`
-      <div class="ui-pipeline-kpis">
-        <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-        <div class="ui-kpi${filtros.quentes.length>0?' active':''}"><span>Agora</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
-        <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${ui631Icon('compromisso')}</i></div></div>
-        <div class="ui-kpi"><span>Reativar</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
-      </div>
-      <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-      <div class="ui-pipeline-grid">
-        <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
-        <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
-      </div>
-      <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento.</p></div></div><div class="ui-priority-list">${listaPrioritaria.length?listaVisivel.map(l=>ui631LeadRow(l,acaoRow(l))).join('')+btnMaisLista:'<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>'}</div></section>`;
-    cpPerfMark("renderPipeline", _perfStart, { total:listaPrioritaria.length, visiveis:listaVisivel.length });
-  };
-
-  if(emMemoria){
-    renderPipeline({ items: emMemoria });
-  } else {
-    board.innerHTML='<div class="small ui-loading">Carregando...</div>';
-    getLeadsData().then(renderPipeline).catch(()=>{ board.innerHTML=boxErro("carregarPipeline()"); });
-  }
-};
 
 function ui631UltimoFalante(lead){
   const msgs=Array.isArray(lead.recentMessages)?lead.recentMessages:[];
@@ -10434,7 +9748,6 @@ document.addEventListener("visibilitychange", () => {
    ============================================================= */
 function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
 function cpInitials(name){ return String(name||"C").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "C"; }
-function cpStage(lead){ return normalizarEtapa(lead?.etapa) || "Atendimento"; }
 function cpPriorityMeta(lead){
   const categoria=typeof cp786Categoria==='function'?cp786Categoria(lead):'';
   if(categoria==='respondeu') return {label:'Responder',cls:'hot',cor:'var(--cp-coral)'};
@@ -10477,7 +9790,7 @@ function cpAppointmentData(lead){
     time=`${prefixo} · ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
     text=[lead?.analysis?.lembrete?.motivo||'Lembrete',produtosLabel(lead)||''].filter(Boolean).join(' · ');
   }
-  return {time,text:text||cpStage(lead),sortTs:escolhido?.ts||lembreteTs||Number.MAX_SAFE_INTEGER};
+  return {time,text:text||'Compromisso',sortTs:escolhido?.ts||lembreteTs||Number.MAX_SAFE_INTEGER};
 }
 function cpDaysText(lead){ const d=Number(lead?.daysSinceLastInteraction); if(Number.isFinite(d)) return d<=0?"Hoje":d===1?"Há 1 dia":`Há ${d} dias`; return "—"; }
 function cpNextAction(lead){
@@ -10856,7 +10169,11 @@ function ui670ModeloComercial(lead){
   const despedida=last.falante==="contato"&&/^(muito obrigado|obrigado|obrigada|um abra[cç]o|abra[cç]o|valeu|perfeito|certo)[.! ]*$/i.test(String(last.m?.text||"").trim());
   const ultimaPedeResposta=last.falante==="contato"&&(/\?/.test(String(last.m?.text||""))||/^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(String(last.m?.text||"")));
   const compromisso=ui671CompromissoAberto(lead);
-  const etapaLegacy=String(a?.diagnostico?.etapa||normalizarEtapa(lead?.etapa)||"descoberta").toLowerCase().replace(/\s+/g,"-");
+  // v1069 — etapaLegacy usava normalizarEtapa(lead.etapa) como reserva, mas essa função só
+  // devolve "Ativo"/"Geladeira" agora (fim das etapas de funil) — nenhum dos dois encaixa no
+  // vocabulário de jornada aqui (descoberta/interesse/comparação/etc). Reserva passa a ser
+  // sempre "descoberta" quando a IA não classificou (a?.diagnostico?.etapa).
+  const etapaLegacy=String(a?.diagnostico?.etapa||"descoberta").toLowerCase().replace(/\s+/g,"-");
   mc.versao=Number(mc.versao||a._schemaComercial||0);
   mc.contato=mc.contato||{};
   mc.contato.tipo=mc.contato.tipo||(parceiro?"corretor-parceiro":"comprador-direto");
@@ -10864,7 +10181,7 @@ function ui670ModeloComercial(lead){
   // lista de detalhes; a descrição de parceiro (informativa) continua.
   mc.contato.papel=mc.contato.papel||(parceiro?"Intermedeia compradores e pode gerar novas oportunidades":"");
   mc.oportunidade=mc.oportunidade||{};
-  mc.oportunidade.status=mc.oportunidade.status||(["Novo","Atendimento"].includes(normalizarEtapa(lead?.etapa))?"descoberta":etapaLegacy);
+  mc.oportunidade.status=mc.oportunidade.status||etapaLegacy;
   mc.oportunidade.resultado=mc.oportunidade.resultado||"em-andamento";
   mc.oportunidade.produto=mc.oportunidade.produto||a.produtoInteresse||lead?.product||"Não identificado";
   mc.oportunidade.motivo=mc.oportunidade.motivo||a.summary||"Situação ainda não consolidada.";
@@ -11395,7 +10712,7 @@ window.ui670Reanalisar=async function(btn){
         const base=await getLeadsData(true);
         if(base?.ok&&Array.isArray(base.items)){
           const itens=base.items.map(limparLead);state.todosLeads=itens;state.leads=itens.slice(0,8);
-          state.itemsAtivos=itens.filter(l=>!["Vendido","Perdido","Geladeira"].includes(normalizarEtapa(l.etapa)));
+          state.itemsAtivos=itens.filter(leadEhAtivo);
           const fresco=itens.find(x=>String(x.id)===String(lead.id));
           const freshSchema=Number(fresco?.analysis?._schemaComercial||fresco?.analysis?.modeloComercial?.versao||0);
           if(fresco&&freshSchema>=COMMERCIAL_SCHEMA_VERSION){state.lead={...atualizado,...fresco,historyLoaded:atualizado.historyLoaded,recentMessages:atualizado.recentMessages};}
@@ -11560,60 +10877,6 @@ function ui670DetailRows(lead,mc){
     window.buildDesempenhoInsightsHTML = buildDesempenhoInsightsHTML;
   }
 
-  const __ui683CarteiraPassaFiltro = typeof carteiraPassaFiltro==='function' ? carteiraPassaFiltro : null;
-  if(__ui683CarteiraPassaFiltro){
-    carteiraPassaFiltro = function(l,f){ if(f==='atendidos-hoje') return !!ehContatadoHoje(l); return __ui683CarteiraPassaFiltro(l,f); };
-    window.carteiraPassaFiltro = carteiraPassaFiltro;
-  }
-
-  const __ui683CarteiraRowHTML = typeof carteiraRowHTML==='function' ? carteiraRowHTML : null;
-  if(__ui683CarteiraRowHTML){
-    carteiraRowHTML = function(l){
-      const ev=ui683UltimoAtendimento(l);
-      let html=__ui683CarteiraRowHTML(l);
-      if(ev?.quando){
-        html=html.replace('class="cart-row"', 'class="cart-row is-atendido-hoje"');
-        html=html.replace('<div class="cart-etapa">', `<span class="cart-last-att">✓ Atendido ${escapeHtml(ui683DataHoraBR(ev.quando))}</span><div class="cart-etapa">`);
-      }
-      return html;
-    };
-    window.carteiraRowHTML = carteiraRowHTML;
-  }
-
-  const __ui683RenderCarteiraTabela = typeof renderCarteiraTabela==='function' ? renderCarteiraTabela : null;
-  if(__ui683RenderCarteiraTabela){
-    renderCarteiraTabela = function(){
-      const box = qs('#carteiraBody');
-      if(!box) return;
-      const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== 'Vendido' && e !== 'Perdido'; });
-      const filtro = state.carteiraFiltro || 'todos';
-      const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(filtro==='atendidos-hoje' ? ((a,b)=>{const ea=ui683UltimoAtendimento(a), eb=ui683UltimoAtendimento(b); return new Date(eb?.quando||0)-new Date(ea?.quando||0);}) : compararPrioridadeAtendimento);
-      const filtros683 = [['todos','Todos'],['atendidos-hoje','✓ Atendidos hoje'],['geladeira','Arquivados']];
-      const chips = filtros683.map(([k,lbl]) => `<button type="button" class="${k===filtro?'active':''}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join('');
-      const visiveis = Math.max(CARTEIRA_PAGE_SIZE, Number(state.carteiraVisibleCount || CARTEIRA_PAGE_SIZE));
-      const lote = lista.slice(0, visiveis);
-      const faltam = Math.max(0, lista.length - lote.length);
-      const linhas = lista.length ? lote.map(carteiraRowHTML).join('') : `<div class="empty" style="margin:14px">${filtro==='atendidos-hoje'?'Nenhum lead atendido hoje.':'Nenhum lead nesse filtro.'}</div>`;
-      const carregarMais = faltam > 0 ? `<button type="button" class="cart-load-more" onclick="carregarMaisCarteira()">Carregar mais ${Math.min(CARTEIRA_PAGE_SIZE, faltam)} <span>(${lote.length} de ${lista.length})</span></button>` : '';
-      box.innerHTML = `${ui677ToolbarHTML('atendimentos')}<div class="cart-head"><div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?'s':''} neste filtro · ${filtro==='atendidos-hoje'?'ordenados pelo horário atendido':'ordenados por prioridade de contato'}</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="cart-filtros">${chips}</div><button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button><button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button><button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button></div></div><div class="cart-table"><div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>${linhas}${carregarMais}</div>`;
-    };
-    window.renderCarteiraTabela = renderCarteiraTabela;
-  }
-
-  window.ui683MarcarEtapaRapida = async function(id, etapa, label){
-    if(!id) return toast('Lead não identificado.');
-    if(!confirm(`Marcar este lead como ${label||etapa}?`)) return;
-    try{
-      const res=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'etapa',etapa})});
-      const data=await res.json().catch(()=>({}));
-      if(!res.ok||!data?.ok) throw new Error(data?.error||'falha');
-      invalidarLeadsCache();
-      toast(`Lead marcado como ${label||etapa}.`);
-      const atualizado=await getLeadDetail(id).catch(()=>null);
-      if(atualizado){ state.lead=atualizado; renderLeadFoco(atualizado); }
-      if(typeof carregarDashboard==='function') carregarDashboard();
-    }catch(err){ toast('Não consegui atualizar: '+(err?.message||err)); }
-  };
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
 
   function ui683EnhanceLead(lead){
@@ -11725,37 +10988,37 @@ function ui670DetailRows(lead,mc){
 
   async function ui683MoverEtapaComEvento(id, etapa, label, evento){
     if(!id) return toast('Lead não identificado.');
-    // Estados "de saída" (Arquivado/Perdido/Vendido) tiram o lead das listas ativas e da
-    // busca. Depois do OK o lead deve SUMIR da tela e voltar pra home — "arquivou, acabou".
-    const saiDaLista = etapa === 'Geladeira' || etapa === 'Perdido' || etapa === 'Vendido';
-    // Dois destinos "de saída" (Geladeira e Perdido) explicados na hora, pra ninguém
-    // confundir "guardar pra depois" com "encerrar sem venda".
-    const confirmMsg = etapa === 'Geladeira'
+    // v1069 — só existem dois estados de etapa agora: Ativo e Geladeira (arquivado); o backend
+    // rejeita qualquer outro valor (ver ETAPAS_VALIDAS em api/lead-update.js). "Geladeira" é a
+    // única transição de etapa de verdade aqui (Arquivar); qualquer outro rótulo (ex.: "Proposta
+    // feita") vira só um evento registrado na timeline, sem chamar a ação "etapa".
+    const arquivando = etapa === 'Geladeira';
+    const confirmMsg = arquivando
       ? 'Arquivar este lead? Ele sai das prioridades e da busca, mas fica guardado nos arquivados pra você reativar depois.'
-      : etapa === 'Perdido'
-        ? 'Marcar este lead como Perdido? Ele sai das listas ativas e da busca (dá pra reabrir depois).'
-        : `Marcar este lead como ${label || etapa}?`;
+      : `Marcar este lead como ${label || etapa}?`;
     const okConfirm = (typeof cp903Confirm === 'function')
       ? await cp903Confirm({
-          titulo: etapa === 'Geladeira' ? 'Arquivar lead' : (label || etapa),
+          titulo: arquivando ? 'Arquivar lead' : (label || etapa),
           mensagem: confirmMsg,
-          ok: etapa === 'Geladeira' ? 'Arquivar' : (etapa === 'Perdido' ? 'Marcar perdido' : (label || 'OK')),
-          perigo: etapa === 'Perdido'
+          ok: arquivando ? 'Arquivar' : (label || 'OK'),
+          perigo: false
         })
       : confirm(confirmMsg);
     if(!okConfirm) return;
     try{
-      const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
-      const data = await res.json().catch(()=>({}));
-      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
+      if(arquivando){
+        const res = await fetch('./api/lead-update', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, action:'etapa', etapa }) });
+        const data = await res.json().catch(()=>({}));
+        if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
+      }
       await ui683RegistrarEvento(id, evento || 'etapa_alterada', { etapa, label: label || etapa, de:'botao_rapido' });
       invalidarLeadsCache();
-      if(saiDaLista){
+      if(arquivando){
         // Some da busca/listas na hora (sem esperar refresh) e volta pra home. "Acabou."
         try{ removerLeadDosCaches(id); }catch(_){}
         state.lead = null; state.focoLeadId = null; state.grupoAtivo = null;
         document.body.classList.remove('lead-foco-aberto');
-        toast(etapa === 'Geladeira' ? 'Lead arquivado.' : etapa === 'Perdido' ? 'Lead marcado como perdido.' : 'Venda registrada.');
+        toast('Lead arquivado.');
         try{ if(typeof show === 'function') show('home'); }catch(_){}
         try{ await carregarDashboard(); }catch(_){}
         return;
@@ -11770,16 +11033,6 @@ function ui670DetailRows(lead,mc){
   window.ui683MarcarEtapaRapida = function(id, etapa, label){
     const evento = etapa === 'Visita/Proposta' ? 'proposta_feita' : 'etapa_alterada';
     return ui683MoverEtapaComEvento(id, etapa, label, evento);
-  };
-
-  const antigoAbrirVenda = window.abrirVenda;
-  window.abrirVenda = function(id, nome){
-    return ui683MoverEtapaComEvento(id, 'Vendido', 'Vendido', 'venda_registrada');
-  };
-
-  const antigoMarcarPerdido = window.marcarPerdido;
-  window.marcarPerdido = function(id, nome){
-    return ui683MoverEtapaComEvento(id, 'Perdido', 'Perdido', 'perda_registrada');
   };
 
   const antigoArquivarLead = window.arquivarLead;
@@ -11904,535 +11157,8 @@ function ui670DetailRows(lead,mc){
 })();
 
 
-// ===== v685-1 — Edição do lead + início do Aprendizado Contínuo =====
-// Escopo fechado desta etapa:
-// 1) Editar lead simples: nome, telefone e produto.
-// 2) Registrar desfecho básico de venda/perda para iniciar o aprendizado contínuo.
-(function(){
-  function el(sel){ return document.querySelector(sel); }
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-  }
-  function produtoLeadAtual(id){
-    try{
-      if(state.lead && String(state.lead.id) === String(id)) return String(state.lead.product || state.lead.analysis?.produtoInteresse || state.lead.analysis?.product || '');
-    }catch(_){ }
-    return '';
-  }
-  function opcoesProdutos(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO) ? window.EMPREENDIMENTOS_CATALOGO : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
-    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
-  }
-
-  window.abrirEditarLead = function(id, nome, telefone){
-    if(!id) return;
-    document.getElementById('editarLeadModal')?.remove();
-    const overlay=document.createElement('div');
-    overlay.id='editarLeadModal';
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
-    let nomeIni=String(nome||'');
-    let telIni=String(telefone||'');
-    try{ if(typeof parecePhone === 'function' && parecePhone(nomeIni)){ if(!telIni) telIni=nomeIni; nomeIni=''; } }catch(_){ }
-    const produtoIni=produtoLeadAtual(id);
-    overlay.innerHTML=`
-      <div style="width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
-          <div><div style="font-size:16px;font-weight:950;color:var(--text)">Editar lead</div><div style="font-size:12px;color:var(--muted);margin-top:3px">Ajuste só os dados principais do atendimento.</div></div>
-          <button type="button" id="editLeadFechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
-        </div>
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
-        <input type="text" id="editLeadNome" value="${esc(nomeIni)}" placeholder="Nome do cliente" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
-        <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" autocomplete="off" inputmode="tel" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" data-orig="${esc(produtoIni)}" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:16px">
-        <datalist id="editLeadProdutoLista">${opcoesProdutos()}</datalist>
-        <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">Salvar alterações</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e=>{ if(e.target===overlay) fecharEditarLead(); });
-    el('#editLeadFechar')?.addEventListener('click', fecharEditarLead);
-    el('#editLeadSalvar')?.addEventListener('click', ()=>salvarEditarLead(String(id)));
-    setTimeout(()=>el('#editLeadNome')?.focus(),100);
-  };
-
-  window.salvarEditarLead = async function(id){
-    const nome=(el('#editLeadNome')?.value||'').trim();
-    const telefone=(el('#editLeadTelefone')?.value||'').trim();
-    const produto=(el('#editLeadProduto')?.value||'').trim();
-    if(!nome && !telefone && !produto){ toast('Informe nome, telefone ou produto.'); return; }
-    const btn=el('#editLeadSalvar');
-    if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
-    try{
-      const res=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'editar-dados',nome,telefone,produto})});
-      const data=await res.json().catch(()=>({}));
-      if(!res.ok || !data?.ok) throw new Error(data?.error||'falha ao salvar');
-      try{ await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'aprendizado',evento:'dados_lead_editados',estilo:'operacional',detalhes:{nome,telefone,produto,de:'editar_lead_v685'}})}); }catch(_){ }
-      fecharEditarLead();
-      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
-      try{ patchLeadCache(id,{name:nome,phone:telefone,product:produto}); }catch(_){ }
-      if(state.lead && String(state.lead.id)===String(id)){
-        state.lead.name=nome || state.lead.name;
-        state.lead.phone=telefone || state.lead.phone;
-        state.lead.product=produto || state.lead.product;
-        if(state.lead.analysis){
-          if(nome) state.lead.analysis.clientName=nome;
-          if(produto){ state.lead.analysis.produtoInteresse=produto; state.lead.analysis.product=produto; }
-          state.lead.analysis.lead=state.lead.analysis.lead||{};
-          if(nome) state.lead.analysis.lead.clientName=nome;
-          if(telefone) state.lead.analysis.lead.phone=telefone;
-          if(produto) state.lead.analysis.lead.product=produto;
-        }
-      }
-      toast('Lead atualizado.');
-      try{ await loadRecentLeads(); }catch(_){ }
-      try{ await carregarDashboard(); }catch(_){ }
-      try{ await abrirLead(id); }catch(_){ if(state.lead) renderLeadFoco(state.lead); }
-    }catch(err){
-      toast('Erro ao salvar: '+(err?.message||err));
-      if(btn){ btn.disabled=false; btn.textContent='Salvar alterações'; }
-    }
-  };
-
-  function abrirModalDesfecho(id, tipo){
-    const lead=state.lead||{};
-    const nome=lead.name||'Lead';
-    const produto=produtoLeadAtual(id);
-    const vendido=tipo==='vendido';
-    document.getElementById('ui685DesfechoModal')?.remove();
-    const overlay=document.createElement('div');
-    overlay.id='ui685DesfechoModal';
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
-    overlay.innerHTML=`
-      <div style="width:min(460px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
-        <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px">
-          <div><div style="font-size:16px;font-weight:950;color:var(--text)">${vendido?'Registrar venda':'Registrar perda'}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(nome)}</div></div>
-          <button type="button" onclick="document.getElementById('ui685DesfechoModal')?.remove()" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
-        </div>
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-        <input id="ui685Produto" list="ui685Produtos" value="${esc(produto)}" placeholder="Produto relacionado" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
-        ${vendido?`
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Valor vendido (opcional)</label>
-          <input id="ui685Valor" inputmode="decimal" placeholder="Ex.: 650000" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        `:`
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Motivo da perda</label>
-          <select id="ui685Motivo" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-            <option value="não respondeu">Não respondeu</option>
-            <option value="preço">Preço</option>
-            <option value="financiamento/renda">Financiamento / renda</option>
-            <option value="comprou concorrente">Comprou concorrente</option>
-            <option value="produto não aderente">Produto não aderente</option>
-            <option value="desistiu/adiou">Desistiu / adiou</option>
-            <option value="outro">Outro</option>
-          </select>
-        `}
-        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'var(--acao)':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
-    el('#ui685SalvarDesfecho')?.addEventListener('click', ()=>salvarDesfecho(id,tipo));
-  }
-
-  async function salvarDesfecho(id,tipo){
-    const vendido=tipo==='vendido';
-    const etapa=vendido?'Vendido':'Perdido';
-    const produto=(el('#ui685Produto')?.value||'').trim();
-    const valor=(el('#ui685Valor')?.value||'').trim();
-    const motivo=(el('#ui685Motivo')?.value||'').trim();
-    const btn=el('#ui685SalvarDesfecho'); if(btn){btn.disabled=true;btn.textContent='Salvando...';}
-    try{
-      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'etapa',etapa})});
-      const d=await r.json().catch(()=>({}));
-      if(!r.ok || !d?.ok) throw new Error(d?.error||'falha ao alterar etapa');
-      await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'aprendizado',evento:vendido?'venda_registrada':'perda_registrada',estilo:'desfecho',detalhes:{produto,valorVendido:valor,motivoPerda:motivo,registradoEm:new Date().toISOString(),de:'v685-1'}})}).catch(()=>null);
-      if(produto){
-        await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'editar-dados',produto})}).catch(()=>null);
-      }
-      document.getElementById('ui685DesfechoModal')?.remove();
-      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
-      toast(vendido?'Venda registrada.':'Perda registrada.');
-      try{ await carregarDashboard(); }catch(_){ }
-      try{ await abrirLead(id); }catch(_){ }
-    }catch(err){ toast('Não consegui registrar: '+(err?.message||err)); if(btn){btn.disabled=false;btn.textContent=vendido?'Confirmar venda':'Confirmar perda';} }
-  }
-
-  window.abrirVenda = function(id){ abrirModalDesfecho(String(id),'vendido'); };
-  window.marcarPerdido = function(id){ abrirModalDesfecho(String(id),'perdido'); };
-  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '685-1';
-})();
-
-// ===== v685-final — Aprendizado Contínuo completo =====
-// Fecha o módulo 685: venda/perda com produto, valor/motivo, tempo, contatos e funil real.
-(function(){
-  function q(sel){ return document.querySelector(sel); }
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function moedaBR(v){
-    const n = Number(v);
-    if(!Number.isFinite(n) || n <= 0) return 'não informado';
-    try{ return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }catch(_){ return 'R$ '+String(n); }
-  }
-  function diasTexto(n){
-    const d = Number(n);
-    if(!Number.isFinite(d) || d < 0) return 'não calculado';
-    if(d === 0) return 'no mesmo dia';
-    if(d === 1) return '1 dia';
-    return `${d} dias`;
-  }
-  function produtoAtual(lead){
-    return String(lead?.product || lead?.analysis?.produtoInteresse || lead?.analysis?.product || lead?.analysis?.lead?.product || '').trim();
-  }
-  function opcoesProdutos(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO) ? window.EMPREENDIMENTOS_CATALOGO : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
-    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
-  }
-  function desfechoAtual(lead){
-    const a = lead?.analysis || {};
-    if(a.venda) return { tipo:'vendido', ...a.venda };
-    if(a.perda) return { tipo:'perdido', ...a.perda };
-    const evs = Array.isArray(a?.aprendizado?.eventos) ? a.aprendizado.eventos : [];
-    const ev = [...evs].reverse().find(e => /venda_registrada|perda_registrada/.test(String(e?.evento||'')));
-    if(!ev) return null;
-    const d = ev.detalhes || {};
-    return ev.evento === 'venda_registrada'
-      ? { tipo:'vendido', produto:d.produto, valor:d.valorVendido, vendidoEm:ev.quando, tempoAteFechamentoDias:d.tempoAteFechamentoDias, contatosAteVenda:d.contatosAteVenda, funilReal:d.funilReal }
-      : { tipo:'perdido', produto:d.produto, motivo:d.motivoPerda, perdidoEm:ev.quando, tempoAtePerdaDias:d.tempoAteFechamentoDias || d.tempoAtePerdaDias, contatosAtePerda:d.contatosAtePerda, funilReal:d.funilReal };
-  }
-  function cardAprendizado(lead){
-    const d = desfechoAtual(lead);
-    if(!d) return '';
-    const vendido = d.tipo === 'vendido';
-    const titulo = vendido ? 'Venda registrada' : 'Perda registrada';
-    const data = vendido ? (d.vendidoEm || d.funilReal?.dataDesfecho) : (d.perdidoEm || d.funilReal?.dataDesfecho);
-    const tempo = vendido ? d.tempoAteFechamentoDias : (d.tempoAtePerdaDias ?? d.funilReal?.tempoAteFechamentoDias);
-    const contatos = vendido ? d.contatosAteVenda : d.contatosAtePerda;
-    return `<section class="card ui685-final-card" style="margin-top:14px;border-color:${vendido?'rgba(124,240,165,.28)':'rgba(255,107,122,.28)'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
-        <div>
-          <div style="font-size:18px;font-weight:950;color:var(--text)">${vendido?'✅':'⚠️'} Aprendizado contínuo</div>
-          <div style="color:var(--muted);font-size:12px;margin-top:3px">Este desfecho alimenta o aprendizado comercial e as próximas recomendações da IA.</div>
-        </div>
-        <span style="font-size:12px;font-weight:950;border:1px solid ${vendido?'rgba(124,240,165,.35)':'rgba(255,107,122,.35)'};color:${vendido?'var(--acao)':'#ff8b8b'};border-radius:999px;padding:7px 10px">${titulo}</span>
-      </div>
-      <div class="grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-        <div class="mini"><b>Produto</b><span>${esc(d.produto || d.funilReal?.produto || produtoAtual(lead) || 'não informado')}</span></div>
-        ${vendido ? `<div class="mini"><b>Valor vendido</b><span>${esc(moedaBR(d.valor))}</span></div>` : `<div class="mini"><b>Motivo da perda</b><span>${esc(d.motivo || 'não informado')}</span></div>`}
-        <div class="mini"><b>Tempo até ${vendido?'fechamento':'perda'}</b><span>${esc(diasTexto(tempo))}</span></div>
-        <div class="mini"><b>Contatos até ${vendido?'venda':'perda'}</b><span>${esc(contatos ?? 'não calculado')}</span></div>
-      </div>
-      <div style="margin-top:10px;color:var(--muted);font-size:12px">Registrado em: ${esc(typeof formatarQuandoLead === 'function' ? formatarQuandoLead(data) : (data || 'agora'))}</div>
-    </section>`;
-  }
-  function injectStyles(){
-    if(document.getElementById('ui685FinalStyle')) return;
-    const st=document.createElement('style'); st.id='ui685FinalStyle'; st.textContent=`
-      .ui685-final-card .mini{border:1px solid var(--line);border-radius:13px;padding:10px;background:rgba(255,255,255,.025)}
-      .ui685-final-card .mini b{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px}
-      .ui685-final-card .mini span{display:block;color:var(--text);font-weight:850;font-size:13px;line-height:1.35}
-      @media(max-width:620px){.ui685-final-card .grid{grid-template-columns:1fr!important}}
-    `; document.head.appendChild(st);
-  }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-  function abrirModalDesfechoFinal(id, tipo){
-    const lead = (state && state.lead) || {};
-    const vendido = tipo === 'vendido';
-    document.getElementById('ui685DesfechoModal')?.remove();
-    const overlay=document.createElement('div');
-    overlay.id='ui685DesfechoModal';
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
-    overlay.innerHTML=`
-      <div style="width:min(460px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
-        <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px">
-          <div><div style="font-size:16px;font-weight:950;color:var(--text)">${vendido?'Registrar venda':'Registrar perda'}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(lead.name || 'Lead')}</div></div>
-          <button type="button" id="ui685Fechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
-        </div>
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Empreendimento</label>
-        <input id="ui685Produto" list="ui685Produtos" value="${esc(produtoAtual(lead))}" placeholder="Ex.: nome do empreendimento" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        <datalist id="ui685Produtos">${opcoesProdutos()}</datalist>
-        ${vendido ? `
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Unidade <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700">(opcional)</span></label>
-          <input id="ui685Unidade" placeholder="Ex.: 903, 1801, lote 22" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Valor vendido</label>
-          <input id="ui685Valor" inputmode="decimal" placeholder="Ex.: 650000" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Comissão <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:700">(opcional)</span></label>
-          <input id="ui685Comissao" inputmode="decimal" placeholder="Ex.: 19500" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        ` : `
-          <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Motivo da perda</label>
-          <select id="ui685Motivo" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-            <option value="Comprou concorrente">Comprou concorrente</option>
-            <option value="Valor">Valor</option>
-            <option value="Financiamento">Financiamento</option>
-            <option value="Produto inadequado">Produto inadequado</option>
-            <option value="Desistiu">Desistiu</option>
-            <option value="Sem retorno">Sem retorno</option>
-            <option value="Outro">Outro</option>
-          </select>
-        `}
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Data</label>
-        <input id="ui685Data" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Observação</label>
-        <textarea id="ui685Observacao" rows="3" placeholder="Anote o que pesou nesse desfecho" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:12px;resize:vertical"></textarea>
-        <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px">O sistema calculará tempo até o desfecho, quantidade de contatos e registrará isso no aprendizado do lead.</div>
-        <button type="button" id="ui685SalvarDesfecho" style="width:100%;padding:12px;background:${vendido?'var(--acao)':'rgba(255,255,255,.05)'};color:${vendido?'var(--on-accent)':'var(--text)'};border:1px solid ${vendido?'transparent':'var(--line)'};border-radius:12px;font-size:14px;font-weight:950;cursor:pointer">${vendido?'Confirmar venda':'Confirmar perda'}</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
-    q('#ui685Fechar')?.addEventListener('click', ()=>overlay.remove());
-    q('#ui685SalvarDesfecho')?.addEventListener('click', ()=>salvarDesfechoFinal(id, tipo));
-  }
-  async function salvarDesfechoFinal(id,tipo){
-    const vendido = tipo === 'vendido';
-    const produto = (q('#ui685Produto')?.value || '').trim();
-    const unidade = (q('#ui685Unidade')?.value || '').trim();
-    const valor = (q('#ui685Valor')?.value || '').trim();
-    const comissao = (q('#ui685Comissao')?.value || '').trim();
-    const motivo = (q('#ui685Motivo')?.value || '').trim();
-    const data = (q('#ui685Data')?.value || '').trim();
-    const observacao = (q('#ui685Observacao')?.value || '').trim();
-    if(vendido && !valor){ toast('Informe o valor vendido.'); return; }
-    if(!vendido && !motivo){ toast('Informe o motivo da perda.'); return; }
-    const btn=q('#ui685SalvarDesfecho'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
-    try{
-      const r=await fetch('./api/lead-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action:'desfecho',tipo,produto,unidade,valorVendido:valor,comissao,motivoPerda:motivo,data,observacao})});
-      const d=await r.json().catch(()=>({}));
-      if(!r.ok || !d?.ok) throw new Error(d?.error || 'falha ao registrar desfecho');
-      document.getElementById('ui685DesfechoModal')?.remove();
-      try{ if(typeof invalidarLeadsCache==='function') invalidarLeadsCache(); }catch(_){ }
-      toast(vendido ? 'Venda registrada e aprendizado atualizado.' : 'Perda registrada e aprendizado atualizado.');
-      try{ await loadRecentLeads(true); }catch(_){ }
-      try{ await carregarDashboard(); }catch(_){ }
-      try{ await abrirLead(id); }catch(_){ }
-    }catch(err){ toast('Não consegui registrar: '+(err?.message||err)); if(btn){ btn.disabled=false; btn.textContent=vendido?'Confirmar venda':'Confirmar perda'; } }
-  }
-  window.abrirVenda = function(id){ abrirModalDesfechoFinal(String(id),'vendido'); };
-  window.marcarPerdido = function(id){ abrirModalDesfechoFinal(String(id),'perdido'); };
-  window.CORRETOR_PRO_VERSAO_APRENDIZADO = '686-2';
-})();
-
-// ===== v685-ajustes — Editar lead e exibir telefone =====
-// Escopo fechado: editar apenas Nome, Telefone e Produto; exibir telefone no lead; sem misturar com v686-2.
-(function(){
-  if(window.__cp685AjustesLead) return;
-  window.__cp685AjustesLead = true;
-
-  function q(sel){ return document.querySelector(sel); }
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function produtosOptions(){
-    const lista = Array.isArray(window.EMPREENDIMENTOS_CATALOGO)
-      ? window.EMPREENDIMENTOS_CATALOGO
-      : (typeof EMPREENDIMENTOS_CATALOGO !== 'undefined' ? EMPREENDIMENTOS_CATALOGO : []);
-    return lista.map(p => `<option value="${esc(p)}"></option>`).join('');
-  }
-  function produtoDoLead(lead){
-    return String(lead?.product || lead?.analysis?.produtoInteresse || lead?.analysis?.product || lead?.analysis?.lead?.product || '').trim();
-  }
-  function telefoneDoLead(lead){
-    return String(lead?.phone || lead?.analysis?.lead?.phone || lead?.analysis?.telefone || '').trim();
-  }
-  function nomeDoLead(lead){
-    return String(lead?.name || lead?.analysis?.clientName || lead?.analysis?.lead?.clientName || '').trim();
-  }
-  function atualizarLeadLocal(id, patch){
-    try{ patchLeadCache(id, { name: patch.nome, phone: patch.telefone, product: patch.produto }); }catch(_){ }
-    try{
-      if(state.lead && String(state.lead.id) === String(id)){
-        if(patch.nome) state.lead.name = patch.nome;
-        if(patch.telefone) state.lead.phone = patch.telefone;
-        if(patch.produto) state.lead.product = patch.produto;
-        state.lead.analysis = state.lead.analysis || {};
-        state.lead.analysis.lead = state.lead.analysis.lead || {};
-        if(patch.nome){ state.lead.analysis.clientName = patch.nome; state.lead.analysis.lead.clientName = patch.nome; }
-        if(patch.telefone){ state.lead.analysis.lead.phone = patch.telefone; }
-        if(patch.produto){ state.lead.analysis.produtoInteresse = patch.produto; state.lead.analysis.product = patch.produto; state.lead.analysis.lead.product = patch.produto; }
-      }
-    }catch(_){ }
-  }
-
-  window.fecharEditarLead = function(){ document.getElementById('editarLeadModal')?.remove(); };
-
-  window.abrirEditarLead = function(id, nome, telefone){
-    const lead = (state && state.lead && String(state.lead.id) === String(id)) ? state.lead : {};
-    const nomeIni = String(nome || nomeDoLead(lead) || '').trim();
-    const telIni = String(telefone || telefoneDoLead(lead) || '').trim();
-    const produtoIni = produtoDoLead(lead);
-    document.getElementById('editarLeadModal')?.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'editarLeadModal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:auto';
-    overlay.innerHTML = `
-      <div style="width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px">
-          <div>
-            <div style="font-size:18px;font-weight:950;color:var(--text)">Editar lead</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px">Altere somente os dados principais.</div>
-          </div>
-          <button type="button" id="editLeadFechar" style="border:0;background:transparent;color:var(--muted);font-size:24px;cursor:pointer;line-height:1">×</button>
-        </div>
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Nome</label>
-        <input type="text" id="editLeadNome" value="${esc(nomeIni)}" placeholder="Nome do cliente" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Telefone / WhatsApp</label>
-        <input type="tel" id="editLeadTelefone" value="${esc(telIni)}" placeholder="(54) 99999-9999" inputmode="tel" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:12px">
-        <label style="display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:5px">Produto / empreendimento</label>
-        <input type="text" id="editLeadProduto" list="editLeadProdutoLista" value="${esc(produtoIni)}" placeholder="Ex.: nome do empreendimento" autocomplete="off" style="width:100%;box-sizing:border-box;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:15px;margin-bottom:16px">
-        <datalist id="editLeadProdutoLista">${produtosOptions()}</datalist>
-        <button type="button" id="editLeadSalvar" style="width:100%;padding:13px;background:var(--accent);color:var(--on-accent);border:0;border-radius:12px;font-size:15px;font-weight:950;cursor:pointer">Salvar</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if(e.target === overlay) fecharEditarLead(); });
-    q('#editLeadFechar')?.addEventListener('click', fecharEditarLead);
-    q('#editLeadSalvar')?.addEventListener('click', () => salvarEditarLead(String(id)));
-    setTimeout(() => q('#editLeadNome')?.focus(), 80);
-  };
-
-  window.salvarEditarLead = async function(id){
-    const nome = (q('#editLeadNome')?.value || '').trim();
-    const telefone = (q('#editLeadTelefone')?.value || '').trim();
-    const produto = (q('#editLeadProduto')?.value || '').trim();
-    if(!nome && !telefone && !produto){ toast('Informe nome, telefone ou produto.'); return; }
-    const btn = q('#editLeadSalvar');
-    if(btn){ btn.disabled = true; btn.textContent = 'Salvando...'; }
-    try{
-      const res = await fetch('./api/lead-update', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ id, action:'editar-dados', nome, telefone, produto })
-      });
-      const data = await res.json().catch(() => ({}));
-      if(!res.ok || !data?.ok) throw new Error(data?.error || 'falha ao salvar');
-      try{
-        await fetch('./api/lead-update', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ id, action:'aprendizado', evento:'dados_lead_editados', estilo:'operacional', detalhes:{ nome, telefone, produto, de:'v685-ajustes' } })
-        });
-      }catch(_){ }
-      fecharEditarLead();
-      atualizarLeadLocal(id, { nome, telefone, produto });
-      try{ if(typeof invalidarLeadsCache === 'function') invalidarLeadsCache(); }catch(_){ }
-      toast('Lead atualizado.');
-      try{ await loadRecentLeads(true); }catch(_){ }
-      try{ await carregarDashboard(); }catch(_){ }
-      try{ await abrirLead(id); }catch(_){ if(state.lead) renderLeadFoco(state.lead); }
-    }catch(err){
-      toast('Erro ao salvar: ' + (err?.message || err));
-      if(btn){ btn.disabled = false; btn.textContent = 'Salvar'; }
-    }
-  };
-
-  function injetarAjustesLead(lead){
-    const root = document.querySelector('#leadFocoArea .lead-foco');
-    if(!root || !lead?.id) return;
-    document.querySelectorAll('#ui685AjustesPhone,#ui685AjustesEditQuick,#ui685AjustesEditAdmin').forEach(el => el.remove());
-    const telefone = telefoneDoLead(lead);
-    const id = String(lead.id);
-    const nome = nomeDoLead(lead);
-    const editar = () => abrirEditarLead(id, nome, telefone);
-
-    const lastAnalysis = root.querySelector('.ui682-last-analysis');
-    if(telefone && lastAnalysis){
-      const tel = document.createElement('div');
-      tel.id = 'ui685AjustesPhone';
-      tel.className = 'ui685-phone-line';
-      tel.innerHTML = `<b>Telefone:</b> ${esc(telefone)}`;
-      lastAnalysis.insertAdjacentElement('afterend', tel);
-    }
-
-    const actions = document.getElementById('ui683LeadTools');
-    if(actions){
-      const btn = document.createElement('button');
-      btn.id = 'ui685AjustesEditQuick';
-      btn.type = 'button';
-      btn.textContent = 'Editar lead';
-      btn.addEventListener('click', editar);
-      actions.insertBefore(btn, actions.firstElementChild);
-    }
-
-    const admin = root.querySelector('.ui670-admin-actions');
-    if(admin){
-      const btn = document.createElement('button');
-      btn.id = 'ui685AjustesEditAdmin';
-      btn.type = 'button';
-      btn.textContent = 'Editar lead';
-      btn.addEventListener('click', editar);
-      admin.insertBefore(btn, admin.firstElementChild);
-    }
-  }
-
-  function injetarEstiloAjustes(){
-    if(document.getElementById('ui685AjustesStyle')) return;
-    const st = document.createElement('style');
-    st.id = 'ui685AjustesStyle';
-    st.textContent = `
-      .ui685-phone-line{margin-top:6px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.35}
-      .ui685-phone-line b{color:var(--text);font-weight:950}
-      #ui685AjustesEditQuick{border-color:rgba(255,98,88,.45)!important;color:var(--text)!important}
-      #ui685AjustesEditAdmin{font-weight:950!important}
-    `;
-    document.head.appendChild(st);
-  }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-
-  window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes';
-})();
 
 
-/* ============================================================
-   V685-AJUSTES-2 — correção do botão Editar lead
-   O botão era inserido com addEventListener, mas outro ajuste da v683
-   reescrevia o innerHTML dos botões rápidos e removia o listener.
-   Esta delegação captura o clique mesmo após re-render/innerHTML.
-   ============================================================ */
-(function(){
-  if(window.__cp685Ajustes2EditarLeadClick) return;
-  window.__cp685Ajustes2EditarLeadClick = true;
-
-  function leadAtual(){
-    try { return state && state.lead ? state.lead : null; } catch(_) { return null; }
-  }
-  function nomeLead(lead){
-    return String(lead?.name || lead?.analysis?.clientName || lead?.analysis?.lead?.clientName || '').trim();
-  }
-  function telefoneLead(lead){
-    return String(lead?.phone || lead?.analysis?.lead?.phone || lead?.analysis?.telefone || '').trim();
-  }
-  function abrirEditorDoLeadAtual(ev){
-    const btn = ev.target && ev.target.closest ? ev.target.closest('#ui685AjustesEditQuick,#ui685AjustesEditAdmin,[data-action="editar-lead"]') : null;
-    if(!btn) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    const lead = leadAtual();
-    if(!lead || !lead.id){
-      try { toast('Abra um lead antes de editar.'); } catch(_) {}
-      return;
-    }
-    if(typeof window.abrirEditarLead !== 'function'){
-      try { toast('Editor do lead não carregou. Recarregue a página.'); } catch(_) {}
-      return;
-    }
-    window.abrirEditarLead(String(lead.id), nomeLead(lead), telefoneLead(lead));
-  }
-
-  document.addEventListener('click', abrirEditorDoLeadAtual, true);
-
-  function reforcarBotaoEditar(){
-    try{
-      document.querySelectorAll('#ui685AjustesEditQuick,#ui685AjustesEditAdmin').forEach(btn => {
-        btn.setAttribute('data-action','editar-lead');
-        btn.onclick = null;
-        btn.style.pointerEvents = 'auto';
-      });
-    }catch(_){}
-  }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-
-  setTimeout(reforcarBotaoEditar, 0);
-  window.CORRETOR_PRO_VERSAO_AJUSTES = '685-ajustes-2';
-})();
 
 
 /* ============================================================
@@ -12483,46 +11209,12 @@ function ui670DetailRows(lead,mc){
       ? `<button type="button" class="cart-load-more" onclick="${fnName}()">Carregar mais ${Math.min(PAGE, faltam)} <span>(${visible} de ${total})</span></button>`
       : "";
   }
-  window.cp6862MaisPerdidos = function(){ loadMore('perdidosVisibleCount', window.carregarPerdidos); };
   window.cp6862MaisGeladeira = function(){ loadMore('geladeiraVisibleCount', window.carregarGeladeira); };
 
   // v928 — window.carregarVendas/cp6862MaisVendas removidos: alvo #vendasList não existe no
   // HTML desde a v904 (tela "Vendas registradas" removida) — nunca renderizava nada.
-
-  window.carregarPerdidos = async function(){
-    const start = cpPerfNow();
-    const box = qs('#perdidosList');
-    if(!box) return;
-    box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-    try{
-      const data = await getLeadsData(false);
-      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Perdido');
-      const limite = ensureVisibleKey('perdidosVisibleCount');
-      const lote = items.slice(0, limite);
-      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum lead perdido no momento.</div>'; cpPerfMark('renderPerdidos', start, { total:0, visiveis:0 }); return; }
-      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} lead${items.length>1?'s':''} perdido${items.length>1?'s':''}.</div>` + lote.map(l => {
-        const idJs = leadId(l);
-        const motivo = l.analysis?.motivoPerda || l.analysis?.motivo_perda || l.analysis?.perda?.motivo || '';
-        const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
-        return `
-          <div data-perdido-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(255,91,122,.04);border-radius:14px;padding:12px;margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-              <div style="flex:1;min-width:0">
-                <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
-                <div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(produtosLabel(l))}${dias?' · '+dias:''}</div>
-                ${motivo ? `<div class="small" style="margin-top:6px"><b>Motivo:</b> ${escapeHtml(motivo)}</div>` : ''}
-              </div>
-              <span class="tag" style="background:rgba(255,91,122,.12);color:#ffdbe2;border-color:rgba(255,91,122,.32);font-size:10px">PERDIDO</span>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-              <button type="button" onclick='reabrirLeadPerdido(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reabrir</button>
-            </div>
-          </div>`;
-      }).join('') + renderLoadMore('perdidosVisibleCount', items.length, lote.length, 'cp6862MaisPerdidos');
-      cpPerfMark('renderPerdidos', start, { total:items.length, visiveis:lote.length });
-    }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderPerdidos', start, { error:true }); }
-  };
+  // v1069 — window.carregarPerdidos/cp6862MaisPerdidos removidos pelo mesmo motivo: alvo
+  // #perdidosList não existe no HTML desde a v952 (tela "Perdidos" virou parte de Arquivados).
 
   window.carregarGeladeira = async function(){
     const start = cpPerfNow();
@@ -12531,7 +11223,7 @@ function ui670DetailRows(lead,mc){
     box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
     try{
       const data = await getLeadsData(false);
-      const items = baseRows(data?.items).filter(l => ['Geladeira','Perdido'].includes(normalizarEtapa(l.etapa)));
+      const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Geladeira');
       state.geladeiraItemsTodos = items;
       const buscaAtiva = qs('#buscaArquivados');
       if(buscaAtiva && buscaAtiva.value.trim().length >= 2){
@@ -12584,120 +11276,6 @@ function ui670DetailRows(lead,mc){
    - Autoajuste por scroll, mantendo identidade visual e comportamento dos cliques.
    ============================================================ */
 (function(){
-  if(window.__cp6863VirtualPatch) return;
-  window.__cp6863VirtualPatch = true;
-  const ROW_H = 82;
-  const BUFFER = 10;
-  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
-  function metric(name, t0, meta){ try{ cpPerfMark(name, t0, meta || {}); }catch(_){} }
-  function virtualHtml(key, items, rowFn, emptyHtml, opts){
-    opts = opts || {};
-    const total = Array.isArray(items) ? items.length : 0;
-    if(!total) return emptyHtml || '<div class="empty">Nenhum item encontrado.</div>';
-    const top = Number(state[key+'ScrollTop'] || 0);
-    const viewport = Number(state[key+'Viewport'] || opts.viewport || 620);
-    const start = clamp(Math.floor(top / ROW_H) - BUFFER, 0, Math.max(0, total - 1));
-    const visible = clamp(Math.ceil(viewport / ROW_H) + BUFFER * 2, 20, 90);
-    const end = clamp(start + visible, start, total);
-    const slice = items.slice(start, end);
-    const before = start * ROW_H;
-    const after = Math.max(0, (total - end) * ROW_H);
-    state[key+'Rendered'] = { total, start, end, rendered: slice.length };
-    return `<div class="cp-virtual-wrap" data-vkey="${key}" onscroll="cp6863VirtualScroll(this,'${key}')" style="max-height:min(72vh,720px);overflow:auto;contain:content;overscroll-behavior:contain">
-      <div style="height:${before}px"></div>
-      ${slice.map(rowFn).join('')}
-      <div style="height:${after}px"></div>
-    </div>`;
-  }
-  window.cp6863VirtualScroll = function(el, key){
-    state[key+'ScrollTop'] = el.scrollTop || 0;
-    state[key+'Viewport'] = el.clientHeight || 620;
-    if(state[key+'Raf']) cancelAnimationFrame(state[key+'Raf']);
-    state[key+'Raf'] = requestAnimationFrame(()=>{
-      if(key === 'carteira') renderCarteiraTabela();
-      if(key === 'pipeline') carregarPipeline();
-    });
-  };
-  try{
-    const oldSetFiltro = window.setCarteiraFiltro;
-    window.setCarteiraFiltro = function(f){ state.carteiraScrollTop = 0; if(typeof oldSetFiltro === 'function') return oldSetFiltro(f); };
-  }catch(_){}
-  try{
-    renderCarteiraTabela = function(){
-      const t0 = cpPerfNow();
-      const box = qs('#carteiraBody');
-      if(!box) return;
-      const base = (state.carteiraLeads||[]).filter(l => { const e = normalizarEtapa(l.etapa); return e !== 'Vendido' && e !== 'Perdido'; });
-      const filtro = state.carteiraFiltro || 'todos';
-      const lista = base.filter(l => carteiraPassaFiltro(l, filtro)).map(l => ({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento);
-      const chips = CART_FILTROS.map(([k,lbl]) => `<button type="button" class="${k===filtro?'active':''}" onclick="setCarteiraFiltro('${k}')">${lbl}</button>`).join('');
-      const rows = virtualHtml('carteira', lista, carteiraRowHTML, '<div class="empty" style="margin:14px">Nenhum lead nesse filtro.</div>');
-      const r = state.carteiraRendered || {};
-      box.innerHTML = `
-        ${ui677ToolbarHTML('atendimentos')}
-        <div class="cart-head">
-          <div><h2>Atendimentos</h2><div class="sub">${lista.length} lead${lista.length!==1?'s':''} neste filtro · renderizando ${Number(r.rendered||Math.min(lista.length,90))} por janela</div></div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div class="cart-filtros">${chips}</div>
-            <button type="button" class="cart-export" onclick="exportarLeadsCSV(this)" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-            <button type="button" class="cart-export" onclick="exportarBackupCompletoV681(this)" title="Backup completo em JSON, com dados brutos do banco e auditoria de integridade">🛡 Backup</button>
-            <button type="button" class="cart-export" onclick="auditarDadosV681(this)" title="Conferir possíveis duplicidades, leads sem histórico e inconsistências">✓ Auditar</button>
-          </div>
-        </div>
-        <div class="cart-table">
-          <div class="cart-thead"><span>Cliente</span><span>Empreendimento</span><span>Prioridade</span><span>Resposta</span><span>Próxima ação</span><span></span></div>
-          ${rows}
-        </div>`;
-      const sc = box.querySelector('.cp-virtual-wrap[data-vkey="carteira"]');
-      if(sc) sc.scrollTop = Number(state.carteiraScrollTop || 0);
-      metric('renderCarteiraVirtual', t0, { total: lista.length, rendered: state.carteiraRendered?.rendered || 0 });
-    };
-  }catch(e){ console.warn('686-3 carteira virtual não aplicada', e); }
-
-  try{
-    const oldSetPipe = window.setPipelineVisualFiltro;
-    window.setPipelineVisualFiltro = function(f){ state.pipelineScrollTop = 0; if(typeof oldSetPipe === 'function') return oldSetPipe(f); state.pipelineVisualFiltro=f||'todos'; carregarPipeline(); };
-    carregarPipeline = async function(){
-      if(state.active !== 'pipeline') return;
-      const board = qs('#pipelineBoard'); if(!board) return;
-      const emMemoria = [state.todosLeads, state.itemsAtivos].find(a=>Array.isArray(a)&&a.length);
-      const render = (data) => {
-        const t0 = cpPerfNow();
-        const all=(data?.items||[]).map(limparLead).filter(leadEhAtivo);
-        const hot=leadEhQuente;
-        const compromisso=l=>{const a=l.analysis?.confirmedAppointments;return (Array.isArray(a)&&a.length)||!!l.analysis?.lembrete?.quando};
-        const reaquecer=leadEhReaquecer;
-        const filtros={todos:all,quentes:all.filter(hot),esfriando:all.filter(l=>(Number(l.daysSinceLastInteraction)||0)>=7&&hot(l)),compromisso:all.filter(compromisso),reaquecer:all.filter(reaquecer)};
-        const filtro=state.pipelineVisualFiltro||'todos';
-        const lista=(filtros[filtro]||all).slice().sort(compararPrioridadeAtendimento);
-        const listaPrioritaria=lista.filter(l=>ui670ModeloComercial(l)?.acao?.status!=='sem-acao-urgente');
-        const etapas=['Novo','Atendimento','Visita/Proposta','Negociação','Standby'];
-        const cnt=Object.fromEntries(etapas.map(e=>[e,0]));
-        all.forEach(l=>{const e=normalizarEtapa(l.etapa);if(cnt[e]!==undefined)cnt[e]++;});
-        const tabs=[['todos','Todos'],['quentes','Agora'],['esfriando','Parando'],['compromisso','Agenda'],['reaquecer','Reativar']];
-        const acaoRow=l=>compromisso(l)?'Agenda':hot(l)?'Agora':'Retomar';
-        const listHtml = virtualHtml('pipeline', listaPrioritaria, l=>ui631LeadRow(l, acaoRow(l)), '<div class="empty">Nenhum lead com ação pendente nesse filtro.</div>', {viewport:620});
-        const r = state.pipelineRendered || {};
-        board.innerHTML=`
-          <div class="ui-pipeline-kpis">
-            <div class="ui-kpi"><span>Ativos</span><div><b>${all.length}</b><i>${ui631Icon('ativos')}</i></div></div>
-            <div class="ui-kpi${filtros.quentes.length>0?' active':''}"><span>Agora</span><div><b>${filtros.quentes.length}</b><i>${ui631Icon('quente')}</i></div></div>
-            <div class="ui-kpi"><span>Agenda</span><div><b>${filtros.compromisso.length}</b><i>${ui631Icon('compromisso')}</i></div></div>
-            <div class="ui-kpi"><span>Reativar</span><div><b>${filtros.reaquecer.length}</b><i>${ui631Icon('reaquecer')}</i></div></div>
-          </div>
-          <div class="ui-filter-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-          <div class="ui-pipeline-grid">
-            <section class="ui-funnel-card"><h3>Funil por etapa</h3>${etapas.map(e=>{const n=cnt[e]||0,p=all.length?Math.round(n/all.length*100):0;return `<div class="ui-funnel-row"><div><span>${e}</span><b>${n}</b><em>${p}%</em></div><i><u style="width:${Math.max(3,p)}%"></u></i></div>`}).join('')}</section>
-            <aside class="ui-pipe-summary"><div><span>Base filtrada</span><b>${lista.length}</b><small>lead${lista.length===1?'':'s'}</small></div><button type="button" onclick="reanalisarTudo()">↻ Reanalisar todos</button><button type="button" onclick="show('carteira')">Ver carteira completa</button></aside>
-          </div>
-          <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Leads prioritários</h3><p>Ordenados por prioridade de atendimento · ${Number(r.rendered||Math.min(listaPrioritaria.length,90))} renderizados por janela.</p></div></div><div class="ui-priority-list">${listHtml}</div></section>`;
-        const sc = board.querySelector('.cp-virtual-wrap[data-vkey="pipeline"]');
-        if(sc) sc.scrollTop = Number(state.pipelineScrollTop || 0);
-        metric('renderPipelineVirtual', t0, { total: listaPrioritaria.length, rendered: state.pipelineRendered?.rendered || 0 });
-      };
-      if(emMemoria) render({items:emMemoria}); else { board.innerHTML='<div class="small ui-loading">Carregando...</div>'; getLeadsData().then(render).catch(()=>{ board.innerHTML=boxErro('carregarPipeline()'); }); }
-    };
-  }catch(e){ console.warn('686-3 pipeline virtual não aplicado', e); }
 
   try{
     const oldResumo = window.cpPerformanceResumo;
@@ -12907,7 +11485,7 @@ function ui670DetailRows(lead,mc){
       (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
     return arr.filter(l=>{
       const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+      return e !== 'Geladeira';
     }).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
       .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
   }
@@ -13054,7 +11632,7 @@ function ui670DetailRows(lead,mc){
       (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
     return arr.filter(l=>{
       const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-      return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+      return e !== 'Geladeira';
     });
   }
   function sortedLeads(list){
@@ -13226,7 +11804,7 @@ function ui670DetailRows(lead,mc){
   }
   function isAtivo(l){
     const e = normalEtapa(l);
-    return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    return e !== 'Geladeira';
   }
   function sortLeads(list){
     const arr = Array.isArray(list) ? list.slice() : [];
@@ -13393,7 +11971,7 @@ function ui670DetailRows(lead,mc){
   }
   function isAtivo697(l){
     const e = normalEtapa(l);
-    return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    return e !== 'Geladeira';
   }
   function recentCount(l){
     const candidates = [l?.recentMessages, l?.timeline, l?.messages, l?.history, l?.mensagens].filter(Array.isArray);
@@ -13650,7 +12228,7 @@ function ui670DetailRows(lead,mc){
   }
   function isActiveLead(l){
     const e = normalizeStage(l);
-    return e !== 'Vendido' && e !== 'Perdido' && e !== 'Geladeira';
+    return e !== 'Geladeira';
   }
   function msgCount(l){
     const arrays = [l?.recentMessages, l?.timeline, l?.messages, l?.history, l?.mensagens].filter(Array.isArray);

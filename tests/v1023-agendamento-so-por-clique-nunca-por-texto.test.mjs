@@ -113,10 +113,13 @@ console.log('v1023 (reanalisar-lead.js): todo caminho de gravação zera confirm
 
 // ===================== Parte D — lead-update.js: cada ação que grava lead neutraliza também =====================
 
+// v1069 — acaoDesfecho (Marcar venda/Marcar perda) foi removida: era código morto sem nenhum
+// caminho no front que ainda chamasse a ação "desfecho" (as telas que a usavam já tinham saído
+// do app antes disso).
 const acoesQueGravamLead = [
   'acaoAnaliseComercialSet', 'acaoLembreteSet', 'acaoLembreteClear', 'acaoNovaOportunidadeParceiro',
   'acaoAtualizarComEvolucao', 'acaoEtapa', 'acaoMemoriaSet', 'acaoObservacaoAdicionar',
-  'acaoDesfecho', 'acaoAprendizado', 'acaoEditarDados', 'removerVinculosComLeadsApagados'
+  'acaoAprendizado', 'acaoEditarDados', 'removerVinculosComLeadsApagados'
 ];
 for (const nome of acoesQueGravamLead) {
   const corpo = extrairFn(leadUpdateSrc, nome, 'lead-update.js');

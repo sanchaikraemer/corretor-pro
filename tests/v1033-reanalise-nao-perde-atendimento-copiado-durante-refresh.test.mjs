@@ -32,16 +32,19 @@ function montarCallback({ state, lead, atualizado, itensFrescos }){
   const getLeadsData = async () => ({ ok: true, items: itensFrescos });
   const limparLead = (l) => l;
   const normalizarEtapa = (e) => e || "";
+  // v1069 — itemsAtivos passou a filtrar por leadEhAtivo (a mesma checagem "não é Geladeira" de
+  // sempre, só nomeada); no app real é uma função de módulo em escopo, aqui precisa de um stub.
+  const leadEhAtivo = (l) => normalizarEtapa(l?.etapa) !== "Geladeira";
   const COMMERCIAL_SCHEMA_VERSION = 700;
   const fabricar = new Function('qs','escapeHtml','window', `
     ${iniciarAplicar[0]}
     return { ui667AplicarAtendidoLocal };
   `)(() => null, (v) => String(v), {});
   const rodar = new Function(
-    'state','lead','atualizado','getLeadsData','limparLead','normalizarEtapa','COMMERCIAL_SCHEMA_VERSION','ui667AplicarAtendidoLocal',
+    'state','lead','atualizado','getLeadsData','limparLead','normalizarEtapa','leadEhAtivo','COMMERCIAL_SCHEMA_VERSION','ui667AplicarAtendidoLocal',
     `return (async () => { ${corpo} })();`
   );
-  return rodar(state, lead, atualizado, getLeadsData, limparLead, normalizarEtapa, COMMERCIAL_SCHEMA_VERSION, fabricar.ui667AplicarAtendidoLocal);
+  return rodar(state, lead, atualizado, getLeadsData, limparLead, normalizarEtapa, leadEhAtivo, COMMERCIAL_SCHEMA_VERSION, fabricar.ui667AplicarAtendidoLocal);
 }
 
 // ===================== Cenário 1: cópia marcou atendido, servidor ainda não pegou =====================

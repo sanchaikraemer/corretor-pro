@@ -1055,27 +1055,11 @@ export function limiteAnalisesIADoDiaTeste() {
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_TESTE_PADRAO;
 }
 
-// v1068 — auditoria de segurança achou que a leitura de print (extrair dados de um lead novo,
-// detectar rosto pro avatar, ler várias telas de conversa) e a transcrição de voz avulsa (ensinar
-// o Cérebro por voz) chamam a OpenAI sem NENHUM teto — diferente da análise principal, que já
-// tinha essa rede de segurança desde a v1013. Números bem mais generosos que o de análises (são
-// ações rápidas e comuns por lead, ao longo do dia inteiro), só pra travar um script/loop
-// realmente descontrolado — não é um limite de uso normal.
-const LIMITE_VISAO_IA_DIA_PADRAO = 300;
-const LIMITE_VISAO_IA_DIA_TESTE_PADRAO = 60;
-
-export function limiteVisaoIADoDia() {
-  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_VISAO_DIA);
-  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_VISAO_IA_DIA_PADRAO;
-}
-
-export function limiteVisaoIADoDiaTeste() {
-  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_VISAO_DIA_TESTE);
-  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_VISAO_IA_DIA_TESTE_PADRAO;
-}
-
-// Transcrição de voz avulsa (ensinar o Cérebro por voz) — não é a mesma coisa que transcrever o
-// áudio de uma importação normal (essa já cai dentro do teto de "analises-ia").
+// v1069 — extrair-print/detectar-rosto/ler-prints-conversa (e os tetos de visão criados pra elas
+// na v1068) foram removidas do sistema inteiro — nenhuma tela chama mais essas ações.
+// Transcrição de voz avulsa (usada hoje pela nota de voz de um lead, não por "ensinar o Cérebro")
+// — não é a mesma coisa que transcrever o áudio de uma importação normal (essa já cai dentro do
+// teto de "analises-ia").
 const LIMITE_TRANSCRICAO_VOZ_DIA_PADRAO = 100;
 const LIMITE_TRANSCRICAO_VOZ_DIA_TESTE_PADRAO = 20;
 

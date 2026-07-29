@@ -142,14 +142,8 @@
     <section id="zip" class="screen">
       <div class="card compact" id="importCard">
         <div class="label">Importar conversa</div>
-        <input class="file-native" type="file" id="zipInput" accept=".zip,application/zip,application/octet-stream">
-        <div class="upload-card" id="uploadBox">
-          <div class="upload-main">
-            <div><div class="upload-title">Selecionar ZIP do WhatsApp</div><div class="upload-sub">Texto + áudios. Ignora imagens, vídeos e docs.</div></div>
-            <button class="upload-action" type="button" id="pickZip">Anexar</button>
-          </div>
-          <div class="file-name" id="fileName"></div>
-        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px;line-height:1.6">Sempre direto do WhatsApp: abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia" e compartilhe o ZIP com o Corretor Pro. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.<br><br>No iPhone (que não deixa compartilhar direto pro app), use o <b>Atalho</b> — configure em Menu, no card "Compartilhar direto do WhatsApp (iPhone)".</div>
+        <div class="file-name" id="fileName"></div>
         <div class="btns btns-row" style="margin-top:10px">
           <button class="btn secondary" id="clearAnalysis" type="button">Nova análise</button>
           <button class="btn secondary" id="diagnoseOpenAI" type="button">Diagnóstico</button>
@@ -581,7 +575,7 @@
         <h2 class="title">Menu</h2>
         <div class="menu-grid menu-grid-primary">
           <button type="button" class="menu-card go" data-target="zip">
-            <div class="menu-card-ico">⇪</div><div class="menu-card-txt"><div class="menu-card-titulo">Importar conversa</div><div class="menu-card-desc">Importe conversas do WhatsApp a partir de um ZIP.</div></div><div class="menu-card-seta">›</div>
+            <div class="menu-card-ico">⇪</div><div class="menu-card-txt"><div class="menu-card-titulo">Importar conversa</div><div class="menu-card-desc">Envie a conversa direto do WhatsApp pro app.</div></div><div class="menu-card-seta">›</div>
           </button>
           <button type="button" class="menu-card menu-nav-item go" data-target="pipeline">
             <div class="menu-card-ico">▦</div><div class="menu-card-txt"><div class="menu-card-titulo">Condução do atendimento</div><div class="menu-card-desc">Veja quem precisa de você e qual é a próxima ação.</div></div><div class="menu-card-seta">›</div>

@@ -100,11 +100,6 @@ label{display:block;color:var(--muted);font-size:14px;margin:14px 0 7px}
 .notice{padding:13px;border-radius:18px;border:1px solid rgba(255,98,88,.22);background:rgba(255,98,88,.08);color:#edfbc4;font-size:13px;line-height:1.42;margin:12px 0}
 .notice.error{border-color:rgba(255,91,122,.28);background:rgba(255,91,122,.10);color:#ffdbe2}
 .empty{border:1px dashed rgba(255,255,255,.16);border-radius:18px;padding:18px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.45}
-.file-native{position:absolute;left:-9999px;opacity:0;pointer-events:none}
-.upload-card{border:1px solid rgba(55,232,255,.22);background:rgba(255,255,255,.035);border-radius:18px;padding:14px;display:grid;gap:10px}
-.upload-main{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.upload-title{font-weight:950;font-size:16px}.upload-sub{font-size:13px;color:var(--muted);line-height:1.35;margin-top:3px}
-.upload-action{border:0;border-radius:12px;padding:12px 13px;font-weight:700;color:var(--on-accent);background:var(--accent);white-space:nowrap;cursor:pointer}
 .file-name{display:none;border-top:1px solid var(--line);padding-top:10px;color:#dffbff;font-size:13px;line-height:1.35;word-break:break-word}.file-name.show{display:block}
 .processing{display:none;margin-top:10px}.processing.show{display:block}
 .progress{height:10px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;margin-top:8px;position:relative}.progress-bar{width:0%;height:100%;background:var(--accent);transition:.35s;position:relative;overflow:hidden}.progress-bar.busy::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.55) 50%,transparent 100%);background-size:35% 100%;background-repeat:no-repeat;animation:shimmer 1.2s linear infinite}@keyframes shimmer{0%{background-position:-35% 0}100%{background-position:135% 0}}.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.18);border-top-color:var(--cyan);border-radius:50%;animation:spin .9s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}
@@ -271,48 +266,9 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 @media(max-width:380px){ .fila-temp{display:none} }
 
 /* === Hero do lead nº1 na Home (porte do layout-alvo #298) === */
-.hero-real{display:block;background:rgba(255,255,255,.022);border:1px solid var(--line);border-radius:18px;padding:20px;cursor:pointer;margin-bottom:16px}
-.hero-real .h-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.hero-real .h-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;border-radius:999px;padding:4px 10px;letter-spacing:.06em;text-transform:uppercase}
-.hero-real .h-badge.max{background:transparent;color:var(--muted);border:1px solid var(--line)}
-.hero-real .h-grid{display:flex;gap:16px;align-items:center}
-.hero-real .lead-avatar{width:64px;height:64px;font-size:24px;flex:none}
-.hero-real .h-nm{font-family:var(--font-display);font-size:21px;font-weight:800;line-height:1.15;word-break:break-word}
-.hero-real .h-un{color:var(--muted);font-size:13px;margin-top:3px}
-.hero-real .h-pct{font-size:12px;font-weight:600;line-height:1.05;margin-top:6px;color:var(--muted)}
-.hero-real .h-pct .h-pct-num{color:var(--accent);font-weight:700;font-family:var(--font-num);font-variant-numeric:tabular-nums}
-.hero-real .h-pctl{display:none}
-.hero-real .h-chip{display:none}
-.hero-real .h-why{display:block;margin-top:14px;padding:12px 14px;background:rgba(255,255,255,.02);border-left:2px solid var(--line);border-radius:8px}
-.hero-real .h-why .t{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
-.hero-real .h-why ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.hero-real .h-why li{font-size:13px;color:var(--soft);line-height:1.4}
-.hero-real .h-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
-.hero-real .h-fact{border:1px solid var(--line);border-radius:11px;padding:9px 12px}
-.hero-real .h-fact .v{font-weight:700;font-size:13px;line-height:1.2}
-.hero-real .h-fact .k{font-size:10px;color:var(--muted);margin-top:3px}
-.hero-real .h-next{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.02);margin-top:14px}
-.hero-real .h-next .l{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted)}
-.hero-real .h-next .x{font-size:15px;font-weight:600;margin-top:4px;line-height:1.4}
-.hero-real .h-acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.hero-real .h-wa{flex:1;min-width:160px;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,var(--wa),var(--green));color:var(--on-accent);border:0;border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;box-shadow:0 6px 20px rgba(166,224,0,.22)}
-.hero-real .h-out{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:12px;padding:11px 16px;font-weight:700;font-size:13px;cursor:pointer}
-.hero-real .h-copy{flex:1;min-width:160px;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:800;font-size:15px;cursor:pointer}
 @media(max-width:560px){
-  .hero-real{padding:16px}
-  .hero-real .lead-avatar{width:56px;height:56px;font-size:22px}
-  .hero-real .h-nm{font-size:19px}
-  .hero-real .h-acts{flex-direction:column} .hero-real .h-out{width:100%}
 }
 
-/* === Tela Leads unificada (funil + alternância de visão) === */
-.funil-resumo{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.funil-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800;background:rgba(255,255,255,.03)}
-.funil-chip b{font-family:var(--font-display);font-size:14px}
-.funil-gargalo{font-size:11px;color:var(--morno);font-weight:800;margin-left:2px}
-.leads-toggle{display:inline-flex;gap:4px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:12px}
-.leads-toggle button{border:0;background:transparent;color:var(--muted);font-weight:800;font-size:12px;padding:7px 16px;border-radius:999px;cursor:pointer}
-.leads-toggle button.active{background:var(--lime);color:var(--on-accent)}
 .leads-list{display:grid;grid-template-columns:1fr;gap:10px}
 @media(min-width:760px){.leads-list{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1100px){.leads-list{grid-template-columns:repeat(3,1fr)}}
@@ -410,12 +366,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
   body.lead-foco-aberto .home-grid{grid-template-columns:minmax(0,1fr)}
   body.lead-foco-aberto .home-right{display:none}
   /* Hero em 2 colunas: avatar/% à esquerda, "por que" à direita */
-  .hero-real{display:grid;grid-template-columns:1.1fr 1fr;column-gap:24px;row-gap:0}
-  .hero-real .h-top{grid-column:1/-1;grid-row:1}
-  .hero-real .h-grid{grid-column:1;grid-row:2;align-self:center}
-  .hero-real .h-why{grid-column:2;grid-row:2;align-self:center;margin-top:0}
-  .hero-real .h-facts{grid-column:1/-1;grid-row:3}
-  .hero-real .h-next{grid-column:1/-1;grid-row:4}
 }
 
 /* === Ajustes finos pro desenho (#306) === */
@@ -481,9 +431,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 /* Saudação/KPI antigos não aparecem na home (a saudação grande os substitui) */
 #home #saudacao,#home #resumoDia{display:none !important}
 /* Avatar do hero: anel verde + selo de fogo */
-.hero-real .h-av{position:relative;flex:none}
-.hero-real .h-av .lead-avatar{border:3px solid var(--lime);box-shadow:0 0 0 4px rgba(255,98,88,.12)}
-.hero-real .h-av .h-fire{position:absolute;left:-3px;bottom:-3px;width:30px;height:30px;border-radius:50%;background:#0e131a;border:1px solid var(--line);display:grid;place-items:center;font-size:14px}
 /* Fila: rótulo da faixa embaixo do %, ícone WhatsApp e setinha */
 .fila-pcwrap{text-align:right;min-width:54px;flex:none;line-height:1.1}
 .fila-faixa{font-size:10px;font-weight:800;margin-top:2px;opacity:.9}
@@ -491,16 +438,7 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .fila-chev{display:none}
 @media(max-width:560px){.fila-chev{display:none}}
 /* Hero: quadrinho com ícone em cada motivo (igual ao desenho) */
-.hero-real .h-why ul{gap:11px}
-.hero-real .h-why li{align-items:center;gap:11px}
-.hero-real .h-why-ic{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.28);color:var(--cyan)}
-.hero-real .h-why-ic.ok{background:rgba(124,255,73,.14);border-color:rgba(124,255,73,.32);color:var(--acao)}
-.hero-real .h-why-ic svg{width:15px;height:15px;display:block}
 /* Hero: ícone dentro de cada quadro de fato */
-.hero-real .h-facts .h-fact{display:flex;align-items:center;gap:10px;text-align:left}
-.hero-real .h-fact-ic{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted)}
-.hero-real .h-fact-ic.heart{color:var(--timing)}
-.hero-real .h-fact-ic svg{width:16px;height:16px;display:block}
 /* Menu lateral: ícones de linha, compacto (sem negrito, sem rolagem) */
 .sb-nav{gap:1px}
 .sb-item{padding:6px 11px;gap:11px;font-weight:500}
@@ -520,19 +458,8 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 /* Logo em maiúsculas (igual ao desenho: DIRECIONA) */
 .sb-brand h1,.top .brand h1{text-transform:uppercase;letter-spacing:.02em}
 /* Hero: os 3 quadros de fato não estouram a borda no celular */
-.hero-real .h-facts{min-width:0}
-.hero-real .h-fact{min-width:0;overflow:hidden}
-.hero-real .h-fact > div{min-width:0}
-.hero-real .h-fact .v,.hero-real .h-fact .k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 @media(max-width:560px){
   /* No celular: ícone em cima, texto embaixo com largura cheia e SEM cortar (legível) */
-  .hero-real .h-facts{gap:7px}
-  .hero-real .h-fact{flex-direction:column;align-items:flex-start;gap:5px;padding:9px 8px}
-  .hero-real .h-fact > div{width:100%}
-  .hero-real .h-fact-ic{width:26px;height:26px}
-  .hero-real .h-fact .v,.hero-real .h-fact .k{white-space:normal;overflow:visible;text-overflow:clip}
-  .hero-real .h-fact .v{font-size:12px;line-height:1.15}
-  .hero-real .h-fact .k{font-size:9px;line-height:1.15}
 }
 /* Versão embaixo do logo (aparece no celular; no PC fica na lateral) */
 .mob-ver{display:none;font-size:10px;color:var(--lime);opacity:.85;font-weight:800;margin-top:2px;letter-spacing:.03em}
@@ -571,14 +498,12 @@ button:focus-visible,.btn:focus-visible,.sb-item:focus-visible,.nav:focus-visibl
 }
 .tag{ color:var(--soft); background:rgba(255,255,255,.05); border-color:var(--line); }
 .tag.warn{ color:var(--morno); background:rgba(184,194,201,.12); border-color:rgba(184,194,201,.26); }
-.upload-card{ border-color:var(--line); }
 .timeline{ border-left-color:var(--line2); }
 .kanban .col h4 .count{ background:rgba(255,255,255,.06); color:var(--soft); }
 .fila-wa,.fila-done{ border-color:var(--line); }
-.hero-real .h-why-ic{ background:rgba(255,255,255,.04); border-color:var(--line); color:var(--soft); }
 .agenda-item .urgency.medio{ background:rgba(184,194,201,.14); color:var(--morno); border-color:rgba(184,194,201,.28); }
 .agenda-item .urgency.baixo{ background:rgba(255,255,255,.05); color:var(--soft); border-color:var(--line); }
-.lead,.menu-item,.mini,.upload-card,.notice,.empty,.agenda-item,.fila-row,.hero-real,.dash-card{ border-radius:var(--radius); }
+.lead,.menu-item,.mini,.notice,.empty,.agenda-item,.fila-row,.dash-card{ border-radius:var(--radius); }
 input,textarea{ border-radius:12px; border-color:var(--line); background:var(--input); }
 input:focus,textarea:focus{ border-color:var(--accent-line); }
 .sb-item.active{ box-shadow:inset 3px 0 0 var(--accent); }
@@ -841,8 +766,8 @@ html[data-theme="light"] .logo,html[data-theme="light"] .sb-logo{background-imag
   box-shadow:var(--shadow-soft);
 }
 .card{border-radius:18px}
-.mini,.lead,.menu-item,.top3-mini,.fila-row,.hero-real,.kanban .col,.kanban .lead-card,
-.funil-chip,.leads-toggle,.dash-btn,.upload-card,.empty,.resumo-dia,.menu-card{
+.mini,.lead,.menu-item,.top3-mini,.fila-row,.kanban .col,.kanban .lead-card,
+.dash-btn,.empty,.resumo-dia,.menu-card{
   background:var(--surface-soft);
   border-color:var(--line);
 }
@@ -866,14 +791,14 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 .progress-bar{background:var(--accent)}
 
 /* Botões e estados da nova identidade */
-.btn,.upload-action{
+.btn{
   background:var(--accent);
   color:var(--on-accent);
   box-shadow:0 9px 22px rgba(255,98,88,.19);
   transition:transform .14s ease,filter .14s ease,box-shadow .14s ease;
 }
-.btn:hover,.upload-action:hover{filter:brightness(1.035);box-shadow:0 12px 28px rgba(255,98,88,.25)}
-.btn:active,.upload-action:active{transform:translateY(1px)}
+.btn:hover{filter:brightness(1.035);box-shadow:0 12px 28px rgba(255,98,88,.25)}
+.btn:active{transform:translateY(1px)}
 .btn.secondary,.dash-btn{background:var(--surface-soft);color:var(--text);border-color:var(--line);box-shadow:none}
 .btn.cyan{background:var(--accent);color:#fff}
 .foco-acao{background:color-mix(in srgb,var(--ac) 11%,transparent)}
@@ -973,7 +898,6 @@ html[data-theme="light"] .analysis-row{border-color:var(--line)}
 html[data-theme="light"] details.ficha-cliente>summary,
 html[data-theme="light"] details.bloco-recolhe>summary{background:var(--panel2)}
 html[data-theme="light"] .gauge{background:conic-gradient(var(--accent) calc(var(--p)*3.6deg),var(--surface-strong) 0)}
-html[data-theme="light"] .hero-real,
 html[data-theme="light"] .menu-card{background:var(--panel)}
 html[data-theme="light"] .menu-card:hover{box-shadow:var(--shadow-soft)}
 html[data-theme="light"] .diag-card{background:color-mix(in srgb,var(--dados) 7%,var(--panel));border-color:color-mix(in srgb,var(--dados) 27%,transparent)}
@@ -981,7 +905,7 @@ html[data-theme="light"] .insight-foco{background:var(--accent-soft);border-colo
 html[data-theme="light"] .toast{background:#0C1D24;color:#F4F8F9;border-color:rgba(255,255,255,.14)}
 html[data-theme="light"] .prop-form{background:var(--panel) !important}
 
-@media(prefers-reduced-motion:reduce){html,body,.btn,.upload-action,.theme-option{transition:none}}
+@media(prefers-reduced-motion:reduce){html,body,.btn,.theme-option{transition:none}}
 
 /* ============================================================
    ATUALIZAÇÃO #631 — NOVO FORMATO DAS TELAS
