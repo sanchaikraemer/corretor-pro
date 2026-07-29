@@ -10,13 +10,15 @@ import { resolveOrganizationId } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
-  getOpenAI, marcarAprendizadoPendente, modeloVisao, finalizarAnaliseComercial,
+  getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial,
   ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
-  upsertConfigComOrganizacao, verificarLimiteDiario, limiteVisaoIADoDia, limiteVisaoIADoDiaTeste
+  upsertConfigComOrganizacao
 } from "./_pipeline.js";
 import { registrarUsoIA } from "./_iaCusto.js";
 
-const ETAPAS_VALIDAS = ["Novo", "Atendimento", "Visita/Proposta", "Negociação", "Standby", "Geladeira", "Perdido", "Vendido"];
+// v1069 — fim das etapas de funil e de Vendido/Perdido como categorias separadas (pedido
+// direto do dono): só existem dois estados possíveis pra um lead.
+const ETAPAS_VALIDAS = ["Ativo", "Geladeira"];
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -82,9 +84,6 @@ export default async function handler(req, res) {
   if (action === "salvar-novo") return await acaoSalvarNovo(body, res, organizationId);
   if (action === "criar-manual") return await acaoCriarManual(body, res, organizationId);
   if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, organizationId);
-  if (action === "extrair-print") return await acaoExtrairPrint(body, res, organizationId);
-  if (action === "detectar-rosto") return await acaoDetectarRosto(body, res, organizationId);
-  if (action === "ler-prints-conversa") return await acaoLerPrintsConversa(body, res, organizationId);
   if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
@@ -101,7 +100,6 @@ export default async function handler(req, res) {
     case "memoria-set":   return await acaoMemoriaSet(id, body, res, organizationId);
     case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res, organizationId);
     case "aprendizado":   return await acaoAprendizado(id, body, res, organizationId);
-    case "desfecho":      return await acaoDesfecho(id, body, res, organizationId);
     case "lembrete-set":  return await acaoLembreteSet(id, body, res, organizationId);
     case "lembrete-clear":return await acaoLembreteClear(id, res, organizationId);
     case "apagar":        return await acaoApagar(id, res, body?.ids, organizationId);
@@ -278,239 +276,6 @@ async function acaoSalvarNovo(body, res, organizationId) {
 
 // Cria lead manualmente — alguém ligou, comentou pessoalmente, indicação. Sem ZIP de WhatsApp.
 // Recebe { nome, telefone, produto, observacao }. Gera registro mínimo com etapa Novo.
-// Lê o PRINT de uma conversa/formulário (lead do Meta etc.) com a visão da IA
-// e devolve os campos do cliente pra pré-preencher o modal de lead manual.
-// Não salva nada — o corretor confere e salva pelo fluxo criar-manual.
-// Celular brasileiro completo via WhatsApp = +55 + DDD(2 dígitos) + 9 dígitos = 13 dígitos.
-// Se o número vier com +55 (ou começando por 55) e não fechar 13 dígitos, é provável que a
-// leitura do print tenha comido/colado um dígito — devolve true pra pedir conferência (sem bloquear).
-function telefoneBRSuspeito(tel) {
-  const d = String(tel || "").replace(/\D/g, "");
-  if (!d) return false;
-  if (d.startsWith("55")) return d.length !== 13;
-  return false;
-}
-
-async function acaoExtrairPrint(body, res, organizationId) {
-  const openai = getOpenAI();
-  if (!openai) return json(res, 200, { ok: false, error: "Leitura de print indisponível agora." });
-  // v1068 — esta ação nunca teve nenhum teto diário (achado da auditoria de segurança): sem
-  // isso, um script podia chamar a visão da OpenAI indefinidamente sem nenhuma rede de segurança.
-  const limite = await verificarLimiteDiario(organizationId, "visao-extrair-print", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
-  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} leituras de print foi atingido para esta conta. Tente novamente amanhã.` });
-  const dataUrl = String(body?.imagemBase64 || "");
-  if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem não recebida no formato esperado." });
-  const instrucao = `Você lê o PRINT de uma conversa de WhatsApp ou formulário de um possível cliente (lead) de uma imobiliária. Extraia SÓ os dados do CLIENTE (nunca do corretor/da empresa).
-
-REGRA CRÍTICA — separe o que o CLIENTE disse do que é ANÚNCIO/PROPAGANDA:
-- Em prints aparece muito um POST/ANÚNCIO compartilhado (card com imagem, título, legenda, link do Instagram/Facebook, slogan tipo "Seu terreno ficou possível", "Lotes em 60x"). Esse texto é PROPAGANDA do empreendimento — NÃO é fala do cliente.
-- NUNCA escreva "o cliente mencionou/disse/falou que..." baseado em texto de anúncio. Só atribua ao cliente o que ELE realmente digitou/falou (balões de mensagem dele, campos do formulário que ele preencheu).
-- Se um anúncio foi compartilhado, registre assim: "Veio de um anúncio do [empreendimento]" — sem transformar o slogan em fala dele.
-
-Campos:
-- nome: o nome COMPLETO do cliente (nome + sobrenome quando houver) — se aparecer mais de uma palavra, NUNCA devolva só a primeira.
-  - FONTE PRINCIPAL = o campo de FORMULÁRIO/CADASTRO ("full_name") quando ele existir: é o nome que o PRÓPRIO cliente registrou, use ELE (ex.: full_name "Adm. Evandro Zibetti Meira" → "Evandro Zibetti Meira"). Só use o nome do TOPO da conversa / do perfil ("~ Nome", aviso "está na sua lista de contatos") QUANDO NÃO HOUVER formulário com nome. O "~ Nome" do topo costuma ser apelido/abreviação invertida (ex.: "~ Meira E. Z.") — NÃO use ele se houver full_name.
-  - REMOVA "~", emojis, símbolos e SIGLAS/tags que o corretor acrescentou ao contato (ex.: "Mauricio Berlando NVRIII" → "Mauricio Berlando"; "~ BRUNA🦋🕺" → "Bruna").
-  - REMOVA também TÍTULOS/pronomes de tratamento no começo do nome (Adm., Dr., Dra., Sr., Sra., Eng., Arq., Prof., Cel., Pe.) — eles não fazem parte do nome (ex.: "Adm. Evandro Zibetti Meira" → "Evandro Zibetti Meira").
-  - ORDEM: o formulário às vezes traz o sobrenome na frente ("Berlando Mauricio"). Quando der pra perceber que está invertido (o primeiro nome é a última palavra), reordene pra "Nome Sobrenome" (ex.: "Berlando Mauricio" → "Mauricio Berlando"). Se já está em ordem natural (primeiro nome + sobrenomes), mantenha como está (ex.: "Evandro Zibetti Meira" fica igual).
-  - Aceite primeiro nome sozinho quando só houver um. Se só aparecer um número e nenhum nome em lugar algum, "".
-- telefone: telefone/WhatsApp do cliente, com DDI/DDD quando aparecer (ex.: "phone: +55..."). Mantenha só dígitos e "+". COPIE EXATAMENTE os dígitos que aparecem no print — NÃO troque o DDD nem invente/remova o nono dígito.
-  - LEIA DÍGITO POR DÍGITO, da esquerda pra direita, e confira DUAS VEZES. O erro mais comum é COLAPSAR dígitos repetidos (ler "555" como "55", ou "9907" como "907") — JAMAIS junte/elimine dígitos iguais seguidos; conte cada um.
-  - Um celular brasileiro completo tem DDI 55 + DDD de 2 dígitos + 9 dígitos = 13 dígitos no total (ex.: "+55 54 99706-7229" = "+5554997067229", repare nos TRÊS cincos seguidos: 55 do país + 54 do DDD). Se o celular com +55 que você leu tiver MENOS de 13 dígitos, você provavelmente comeu um dígito repetido — releia o campo e corrija.
-  - Se o número estiver num campo de FORMULÁRIO ("phone: +55..."), copie a sequência EXATA daquele campo, caractere por caractere.
-  - Se não houver, "".
-- email: e-mail do cliente, se houver. Senão "".
-- nomeFonte: de ONDE você tirou o nome — "formulario" quando o nome veio de um campo de cadastro/formulário que o PRÓPRIO cliente preencheu (ex.: "full_name: Cleonir dos santos", "nome:"); "topo" quando veio do cabeçalho/perfil da conversa (nome do contato no topo da tela); "" se não houver nome. Se existir full_name no print, o nome DEVE vir dele e nomeFonte = "formulario".
-- produto: o empreendimento de interesse citado no anúncio compartilhado ou pelo próprio cliente, exatamente como aparece. Se não der pra saber, "".
-- observacao: um RESUMO ÚTIL e fiel do print, pra registrar como histórico/memória do lead. Inclua: de onde o lead veio (ex.: "veio de um anúncio do NVR III no Instagram", "formulário do Facebook", indicação), o que O CLIENTE de fato escreveu/pediu (pode usar as palavras dele), e dados pertinentes que ELE informou (cidade, prazo, valor, dúvidas, momento de vida etc.). DEIXE CLARO o que é fala do cliente e o que é anúncio. NÃO invente e NÃO atribua frase de propaganda ao cliente. Se ele só escreveu uma frase genérica de formulário, registre exatamente isso (sem inflar).
-- avatarBox: a posição da FOTO DE PERFIL REAL do cliente DENTRO do print — uma foto REDONDA com um ROSTO.
-  - NUNCA use um CARD compartilhado (post/anúncio, prévia de link, vídeo): esses são RETANGULARES e têm botão de ▶ play, miniatura de mapa/imagem, logo do Facebook/Instagram, título, legenda e link tipo "fb.me". ISSO NÃO É A FOTO DO CLIENTE — jamais recorte daí.
-  - Numa conversa ABERTA (não é card de contato novo), a única foto do cliente é a FOTINHA REDONDA pequena no TOPO, ao lado do nome, no cabeçalho. Use ESSA (mesmo sendo pequena).
-  - Em card de CONTATO NOVO (contato não salvo), o WhatsApp mostra uma FOTO REDONDA GRANDE no centro/topo, logo ACIMA do número — prefira ESSA por ser maior e mais nítida.
-  - JUSTEZA é o mais importante: a caixa tem que cercar SÓ o CÍRCULO da foto, coladinha na borda dele. NÃO inclua a seta de voltar (←), o nome, os ícones do cabeçalho, nem o fundo ao redor. Se a foto do cabeçalho for pequena, a caixa também é pequena — prefira pequena e certa a grande e folgada. O centro da caixa tem que cair EXATAMENTE no centro do rosto/foto.
-  - Devolva coordenadas NORMALIZADAS de 0 a 1 em relação à imagem inteira, no formato { "x":, "y":, "w":, "h": } (x,y = canto superior-esquerdo; w,h = largura/altura).
-  - Se NÃO houver foto real (só inicial/letra, silhueta cinza, ícone padrão do WhatsApp, ou só um card/anúncio), use avatarBox: null — NÃO recorte texto, card nem avatar vazio. NÃO invente uma posição.
-Responda APENAS JSON: { "nome":"", "nomeFonte":"", "telefone":"", "email":"", "produto":"", "observacao":"", "avatarBox": null }.`;
-  // Tenta o modelo de visão configurado (padrão gpt-4o) e, se ele falhar, cai para gpt-4o-mini.
-  const modelos = [...new Set([modeloVisao(), "gpt-4o-mini"])];
-  let ultimoErro = "";
-  for (let i = 0; i < modelos.length; i++) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: modelos[i],
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: instrucao },
-            { type: "image_url", image_url: { url: dataUrl, detail: "high" } }
-          ]
-        }],
-        max_tokens: 900,
-        response_format: { type: "json_object" }
-      }, { timeout: i === 0 ? 32000 : 22000, maxRetries: 0 });
-      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-extrair-print", usage: completion?.usage });
-      const raw = completion?.choices?.[0]?.message?.content || "{}";
-      let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
-      // Foto de perfil num print de CONVERSA do WhatsApp fica SEMPRE no TOPO, ao lado do nome
-      // (canto superior-esquerdo). A IA erra demais aqui (pega a imagem compartilhada ou o
-      // texto do nome), então cortamos pela POSIÇÃO PADRÃO, que é constante no print de conversa.
-      // Recorte vazio/silhueta (contato sem foto) é descartado no front (fotoQuaseVazia).
-      const avatarBox = { x: 0.145, y: 0.05, w: 0.10, h: 0.046 };
-      const telefone = String(p.telefone || "").slice(0, 40);
-      return json(res, 200, {
-        ok: true,
-        nome: String(p.nome || "").slice(0, 120),
-        nomeFonte: String(p.nomeFonte || "").slice(0, 20),
-        telefone,
-        // Avisa o front quando o celular BR não fecha os 13 dígitos (+55 + DDD 2 + 9):
-        // sinal de que a leitura comeu/inventou um dígito. Não bloqueia, só pede conferência.
-        telefoneSuspeito: telefoneBRSuspeito(telefone),
-        email: String(p.email || "").slice(0, 120),
-        produto: String(p.produto || "").slice(0, 80),
-        observacao: String(p.observacao || "").slice(0, 1800),
-        avatarBox
-      });
-    } catch (e) {
-      ultimoErro = e?.message || "falha ao ler o print";
-    }
-  }
-  return json(res, 200, { ok: false, error: ultimoErro || "Falha ao ler o print." });
-}
-
-// Detecta o ROSTO da pessoa numa imagem qualquer (foto, print de perfil, card) pra usar como
-// avatar do lead. Devolve a caixa NORMALIZADA (0–1) só do rosto, bem justa. Ignora logos/texto/fundo.
-async function acaoDetectarRosto(body, res, organizationId) {
-  const openai = getOpenAI();
-  if (!openai) return json(res, 200, { ok: false, error: "Detecção de rosto indisponível agora." });
-  // v1068 — mesma rede de segurança da leitura de print (ver comentário lá): sem teto nenhum.
-  const limite = await verificarLimiteDiario(organizationId, "visao-detectar-rosto", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
-  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} detecções de rosto foi atingido para esta conta. Tente novamente amanhã.` });
-  const dataUrl = String(body?.imagemBase64 || "");
-  if (!/^data:image\//.test(dataUrl)) return json(res, 400, { ok: false, error: "Imagem inválida." });
-
-  const instrucao = `Você recebe UMA imagem (pode ser foto de perfil, print de contato/WhatsApp, ou um card de propaganda com uma pessoa). Sua tarefa: localizar o ROSTO HUMANO PRINCIPAL pra recortar como foto de avatar.
-
-Regras:
-- Encontre o rosto da PESSOA (olhos/nariz/boca). Mesmo que esteja dentro de um card com texto, logo e fundo colorido, foque SÓ no rosto + um pouco de ombro, IGNORANDO o texto, telefone, logotipo e fundo.
-- Devolva uma caixa que CERCA o rosto com um pouco de margem (cabeça + ombros), em formato quadrado-ish, JUSTA — sem pegar o texto/logo ao lado.
-- Coordenadas NORMALIZADAS de 0 a 1 em relação à imagem inteira: { "x":, "y":, "w":, "h": } (x,y = canto superior-esquerdo; w,h = largura/altura).
-- Se NÃO houver nenhum rosto humano claro na imagem, retorne faceBox: null.
-Responda APENAS JSON: { "faceBox": null }.`;
-
-  const modelos = [...new Set([modeloVisao(), "gpt-4o-mini"])];
-  let ultimoErro = "";
-  for (let i = 0; i < modelos.length; i++) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: modelos[i],
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: instrucao },
-            { type: "image_url", image_url: { url: dataUrl, detail: "high" } }
-          ]
-        }],
-        max_tokens: 200,
-        response_format: { type: "json_object" }
-      }, { timeout: i === 0 ? 28000 : 20000, maxRetries: 0 });
-      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-detectar-rosto", usage: completion?.usage });
-      const raw = completion?.choices?.[0]?.message?.content || "{}";
-      let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
-      const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null; };
-      let faceBox = null;
-      const fb = p.faceBox;
-      if (fb && typeof fb === "object") {
-        const x = c01(fb.x), y = c01(fb.y), w = c01(fb.w), h = c01(fb.h);
-        if (x != null && y != null && w != null && h != null && w > 0.02 && h > 0.02) faceBox = { x, y, w, h };
-      }
-      return json(res, 200, { ok: true, faceBox });
-    } catch (e) {
-      ultimoErro = e?.message || "falha ao detectar rosto";
-    }
-  }
-  return json(res, 200, { ok: false, error: ultimoErro || "Falha ao detectar rosto." });
-}
-
-// Lê VÁRIOS prints de uma conversa (WhatsApp) com a visão da IA e devolve um registro
-// fiel da conversa, pra entrar como anotação de atendimento (timeline + observação) do lead.
-async function acaoLerPrintsConversa(body, res, organizationId) {
-  const openai = getOpenAI();
-  if (!openai) return json(res, 200, { ok: false, error: "Leitura de prints indisponível agora." });
-  // v1068 — mesma rede de segurança das outras duas ações de visão (ver comentário acima):
-  // sem teto nenhum, e esta é a mais cara das três (até 6 imagens numa chamada só).
-  const limite = await verificarLimiteDiario(organizationId, "visao-ler-prints", limiteVisaoIADoDia(), limiteVisaoIADoDiaTeste());
-  if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} leituras de conversa por print foi atingido para esta conta. Tente novamente amanhã.` });
-  let imgs = Array.isArray(body?.imagens) ? body.imagens : [];
-  imgs = imgs.filter(u => typeof u === "string" && /^data:image\//.test(u)).slice(0, 6);
-  if (!imgs.length) return json(res, 400, { ok: false, error: "Nenhuma imagem recebida." });
-  // Âncoras de data pra resolver "Hoje"/"Ontem" do print (senão a IA chuta um ano errado, ex.: 2023).
-  const _nowP = new Date();
-  const _hojeISO = _nowP.toISOString().slice(0, 10);
-  const _ontemP = new Date(_nowP); _ontemP.setDate(_ontemP.getDate() - 1);
-  const _ontemISO = _ontemP.toISOString().slice(0, 10);
-  const instrucao = `HOJE é ${_hojeISO}. "Hoje" no print = ${_hojeISO}; "Ontem" = ${_ontemISO}; datas sem ano = ano ${_nowP.getFullYear()} (a não ser que o print mostre OUTRO ano claramente). NUNCA use um ano anterior só porque o ano não aparece — datas relativas (Ontem/Hoje) são RECENTES.
-Você recebe ${imgs.length} print(s) de uma conversa de WhatsApp entre um CORRETOR de imóveis e um CLIENTE. Leia cada imagem com MUITA ATENÇÃO e TRANSCREVA a conversa NA ÍNTEGRA, mensagem por mensagem, do jeito que está escrita. NÃO resuma, NÃO encurte, NÃO omita falas. Quero o diálogo completo dos dois lados.
-COMO LER UM PRINT DE WHATSAPP:
-- Os balões à DIREITA (geralmente verdes/claros) são do CORRETOR (quem enviou). Marque essas falas como "Você:".
-- Os balões à ESQUERDA são do CLIENTE. Marque como "Cliente:".
-- Há SEPARADORES DE DATA no meio da conversa ("Ontem", "Hoje", "12 de maio", "15 de maio de 2025") e HORÁRIOS em cada balão (ex.: 16:05). CAPTURE a data e o horário de cada mensagem.
-- Se houver vários prints, junte-os na ORDEM cronológica (de cima pra baixo, do print mais antigo pro mais recente). Quando dois prints se sobrepõem (mostram a mesma mensagem), transcreva a mensagem UMA vez só.
-FORMATO DA TRANSCRIÇÃO (siga à risca):
-- Uma linha por mensagem, na ordem em que aparecem. Formato: "[DATA HORÁRIO] Você: texto" ou "[DATA HORÁRIO] Cliente: texto".
-- Use a data do último separador de data visível acima da mensagem; se só tiver o horário, use "[HORÁRIO]". Ex.: "[15/05 08:33] Cliente: Gostaria de mais informações dos terrenos do novo loteamento da vila rica".
-- Transcreva o TEXTO LITERAL de cada balão, inclusive valores, links e números (ex.: "R$ 95.000,00", "26 RUA LARANJEIRA 290,00"). Pode manter emojis se ajudarem a entender.
-- Quando o separador de data muda no meio da conversa, pode colocar uma linha só com a data (ex.: "— 16 de maio de 2025 —") antes de seguir.
-- NÃO invente nada. O que estiver cortado/ilegível, pule (não chute). Se um balão estiver parcialmente cortado, transcreva só a parte legível.
-- Texto de ANÚNCIO/post compartilhado (card de propaganda, "LANÇAMENTO IMPERDÍVEL", "LOTEAMENTO — Entrada 10%...") NÃO é fala de ninguém — é PROPAGANDA. Marque numa linha como "[HORÁRIO] Você: (anúncio compartilhado: nome do loteamento)" e NÃO transcreva o panfleto inteiro nem atribua como fala do cliente.
-- Português do Brasil, exatamente como escrito (não corrija a fala do cliente).
-DATA DA ÚLTIMA MENSAGEM: identifique a DATA da mensagem MAIS RECENTE que aparece no(s) print(s) (o último contato real, do cliente OU do corretor). Devolva em "dataUltimaISO" no formato AAAA-MM-DD, usando os separadores de data e horários visíveis. Se o ano não aparecer, deduza pelo contexto das outras datas. Se for IMPOSSÍVEL determinar a data com segurança, devolva "dataUltimaISO": "".
-Responda APENAS JSON: { "texto": "transcrição completa aqui, uma mensagem por linha", "dataUltimaISO": "AAAA-MM-DD ou vazio" }.`;
-  const content = [{ type: "text", text: instrucao }, ...imgs.map(u => ({ type: "image_url", image_url: { url: u, detail: "high" } }))];
-  const modelos = [...new Set([modeloVisao(), "gpt-4o-mini"])];
-  let ultimoErro = "";
-  for (let i = 0; i < modelos.length; i++) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: modelos[i],
-        messages: [{ role: "user", content }],
-        max_tokens: 4096,
-        response_format: { type: "json_object" }
-      }, { timeout: i === 0 ? 44000 : 30000, maxRetries: 0 });
-      await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modelos[i], rota: "visao-ler-prints-conversa", usage: completion?.usage });
-      const raw = completion?.choices?.[0]?.message?.content || "{}";
-      let p; try { p = JSON.parse(raw); } catch (_) { p = {}; }
-      const texto = String(p.texto || "");
-      // Data da última mensagem do print: só aceita AAAA-MM-DD plausível (não-futura). Caso contrário, vazio.
-      let dataUltimaISO = "";
-      const mIso = String(p.dataUltimaISO || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (mIso) {
-        const d = new Date(`${mIso[1]}-${mIso[2]}-${mIso[3]}T12:00:00`);
-        if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 24 * 60 * 60 * 1000) dataUltimaISO = d.toISOString();
-      }
-      // Guard contra ano errado em print com datas RELATIVAS (foi o bug do "981 dias"): se a
-      // transcrição termina em "Hoje"/"Ontem", a conversa é ATUAL — ancora na data real.
-      const ultimoTrecho = texto.slice(-400).toLowerCase();
-      const diasAtras = dataUltimaISO ? Math.floor((Date.now() - new Date(dataUltimaISO).getTime()) / 86400000) : null;
-      if (/\bhoje\b/.test(ultimoTrecho)) {
-        dataUltimaISO = _nowP.toISOString();
-      } else if (/\bontem\b/.test(ultimoTrecho) && (diasAtras == null || diasAtras > 2)) {
-        dataUltimaISO = _ontemP.toISOString();
-      } else if (diasAtras != null && diasAtras > 400) {
-        // Data muito antiga sem âncora confiável → deixa vazio (o app usa a data de hoje no registro).
-        dataUltimaISO = "";
-      }
-      // Foto do cliente: igual ao "extrair-print" (editar lead) — a IA erra demais a posição,
-      // então usamos a POSIÇÃO PADRÃO da fotinha de perfil no TOPO do print de conversa (canto
-      // superior-esquerdo, ao lado do nome). Recorte vazio/silhueta é descartado no front (fotoQuaseVazia).
-      const avatarBox = { x: 0.16, y: 0.05, w: 0.10, h: 0.048 };
-      return json(res, 200, { ok: true, texto: texto.slice(0, 12000), dataUltimaISO, avatarBox });
-    } catch (e) {
-      ultimoErro = e?.message || "falha ao ler os prints";
-    }
-  }
-  return json(res, 200, { ok: false, error: ultimoErro || "Falha ao ler os prints." });
-}
-
 async function acaoCriarManual(body, res, organizationId) {
   const nome = String(body?.nome || "").trim().slice(0, 120);
   const telefone = String(body?.telefone || "").trim().slice(0, 40);
@@ -951,7 +716,17 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     memoria: memoriaMesclada,
     aprendizado: anterior.aprendizado || undefined,
     venda: anterior.venda || undefined,
-    lembrete: anterior.lembrete || undefined,
+    // v1069 — bug real relatado (lead "Beato Broks Imobiliária" com lembrete que o corretor
+    // nunca agendou): esta função carregava QUALQUER lembrete antigo pra frente sem checar se
+    // ele era "auto" (resíduo da extração automática por texto, removida na v988 — mesmo
+    // princípio já aplicado em aplicarLembrete, api/reanalisar-lead.js:490-493). Reimportar uma
+    // conversa de um lead já existente (o caminho mais comum de reimportação) reintroduzia esse
+    // lixo antigo como se fosse um agendamento de verdade.
+    // IMPORTANTE: usa null (não undefined) quando descarta — "merged" abaixo é montado com
+    // {...anterior, ...nova, ...preservado (sem as chaves undefined)}; um undefined aqui seria
+    // filtrado e o ...anterior anterior a ele voltaria a valer, repropagando o lembrete auto de
+    // qualquer jeito. null sobrevive ao filtro e realmente limpa o campo.
+    lembrete: (anterior.lembrete && anterior.lembrete.auto !== true) ? anterior.lembrete : null,
     // Foto (avatar): mantém a do arquivo novo se veio, senão a que o corretor já tinha colado.
     // Sem isso, reimportar "pra atualizar" apagava a foto (a análise nova não traz avatar).
     avatarFoto: nova.avatarFoto || anterior.avatarFoto || undefined
@@ -1309,178 +1084,6 @@ async function acaoObservacaoAdicionar(id, body, res, organizationId) {
 }
 
 
-// ============ DESFECHO / APRENDIZADO CONTÍNUO v685-final ============
-function normalizarDinheiroV685(raw) {
-  const s = String(raw || "").trim();
-  if (!s) return null;
-  const limpo = s.replace(/[^0-9,\.]/g, "");
-  if (!limpo) return null;
-  let n;
-  if (limpo.includes(",")) n = Number(limpo.replace(/\./g, "").replace(",", "."));
-  else n = Number(limpo);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100) / 100;
-}
-
-function normalizarDataDesfechoV686(valor) {
-  const raw = String(valor || "").trim();
-  if (!raw) return new Date();
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00.000Z`) : new Date(raw);
-  return d && !Number.isNaN(d.getTime()) ? d : new Date();
-}
-
-function textoCurtoV686(valor, max = 500) {
-  return typeof valor === "string" ? valor.trim().slice(0, max) : "";
-}
-
-function dataPrimeiroContatoV685(timeline, fallback) {
-  const arr = Array.isArray(timeline) ? timeline : [];
-  for (const m of arr) {
-    const iso = m?.iso || m?.date || m?.datetime || m?.timestamp;
-    const d = iso ? new Date(iso) : null;
-    if (d && !Number.isNaN(d.getTime())) return d;
-  }
-  const fb = fallback ? new Date(fallback) : null;
-  return fb && !Number.isNaN(fb.getTime()) ? fb : new Date();
-}
-
-function contarContatosV685(timeline, eventos) {
-  const msgs = Array.isArray(timeline) ? timeline : [];
-  const mensagensVoce = msgs.filter(m => {
-    const from = String(m?.from || m?.speaker || m?.autor || m?.role || "").toLowerCase();
-    return /você|voce|corretor|construtora|atendente|eu|me/.test(from);
-  }).length;
-  const evs = Array.isArray(eventos) ? eventos : [];
-  const contatosManuais = evs.filter(e => /contato_manual|mensagem_copiada|atendido|proposta/i.test(String(e?.evento || ""))).length;
-  return Math.max(mensagensVoce, contatosManuais, 0);
-}
-
-async function acaoDesfecho(id, body, res, organizationId) {
-  const tipo = String(body?.tipo || "").toLowerCase();
-  if (!["vendido", "perdido"].includes(tipo)) return json(res, 400, { ok: false, error: "Informe tipo vendido ou perdido." });
-  const vendido = tipo === "vendido";
-  const etapa = vendido ? "Vendido" : "Perdido";
-  const produto = textoCurtoV686(body?.produto, 120);
-  const unidade = textoCurtoV686(body?.unidade, 80);
-  const valorVendido = normalizarDinheiroV685(body?.valorVendido);
-  const comissao = normalizarDinheiroV685(body?.comissao);
-  const motivoPerda = textoCurtoV686(body?.motivoPerda, 180);
-  const observacao = textoCurtoV686(body?.observacao, 1000);
-  const dataDesfecho = normalizarDataDesfechoV686(body?.data || body?.dataDesfecho);
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-
-  const { data: current, error: getErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("resultado_analise,timeline_json,criado_em,created_at")
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
-  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
-
-  const now = new Date();
-  const merged = { ...(current.resultado_analise || {}) };
-  merged.confirmedAppointments = []; // v1023 — nunca sobrevive a nenhuma gravação
-  if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
-  merged.lead.etapa = etapa;
-  if (produto) {
-    merged.produtoInteresse = produto;
-    merged.product = produto;
-    merged.lead.product = produto;
-  }
-
-  const timeline = Array.isArray(current.timeline_json) ? current.timeline_json : [];
-  const aprendizado = merged.aprendizado || { eventos: [] };
-  aprendizado.eventos = Array.isArray(aprendizado.eventos) ? aprendizado.eventos : [];
-  const primeiro = dataPrimeiroContatoV685(timeline, current.criado_em || current.created_at);
-  const tempoDias = Math.max(0, Math.ceil((now.getTime() - primeiro.getTime()) / 86400000));
-  const contatosAteDesfecho = contarContatosV685(timeline, aprendizado.eventos);
-  const funilReal = {
-    etapaFinal: etapa,
-    produto: produto || merged.produtoInteresse || merged.product || merged.lead.product || "",
-    tempoAteFechamentoDias: tempoDias,
-    contatosAteVenda: vendido ? contatosAteDesfecho : null,
-    contatosAtePerda: vendido ? null : contatosAteDesfecho,
-    dataPrimeiroContato: primeiro.toISOString(),
-    dataDesfecho: dataDesfecho.toISOString()
-  };
-
-  const evento = {
-    evento: vendido ? "venda_registrada" : "perda_registrada",
-    estilo: "desfecho",
-    detalhes: {
-      produto: funilReal.produto,
-      unidade: vendido ? unidade : null,
-      valorVendido: vendido ? valorVendido : null,
-      comissao: vendido ? comissao : null,
-      motivoPerda: vendido ? null : (motivoPerda || "não informado"),
-      observacao: observacao || null,
-      dataInformada: dataDesfecho.toISOString(),
-      tempoAteFechamentoDias: tempoDias,
-      contatosAteVenda: vendido ? contatosAteDesfecho : null,
-      contatosAtePerda: vendido ? null : contatosAteDesfecho,
-      funilReal,
-      de: "v686"
-    },
-    quando: now.toISOString()
-  };
-  aprendizado.eventos.push(evento);
-  if (aprendizado.eventos.length > 80) aprendizado.eventos = aprendizado.eventos.slice(-80);
-  merged.aprendizado = aprendizado;
-
-  if (vendido) {
-    merged.venda = {
-      empreendimento: funilReal.produto,
-      produto: funilReal.produto,
-      unidade,
-      valor: valorVendido,
-      comissao,
-      observacao,
-      observacoes: observacao,
-      data: dataDesfecho.toISOString(),
-      registradaEm: dataDesfecho.toISOString(),
-      vendidoEm: dataDesfecho.toISOString(),
-      tempoAteFechamentoDias: tempoDias,
-      contatosAteVenda: contatosAteDesfecho,
-      funilReal
-    };
-    delete merged.perda;
-  } else {
-    merged.perda = {
-      empreendimento: funilReal.produto,
-      produto: funilReal.produto,
-      motivo: motivoPerda || "não informado",
-      observacao,
-      observacoes: observacao,
-      data: dataDesfecho.toISOString(),
-      registradaEm: dataDesfecho.toISOString(),
-      perdidoEm: dataDesfecho.toISOString(),
-      tempoAtePerdaDias: tempoDias,
-      contatosAtePerda: contatosAteDesfecho,
-      funilReal
-    };
-    delete merged.venda;
-  }
-
-  const updates = { resultado_analise: merged, atualizado_em: now.toISOString() };
-  // Tenta gravar etapa na coluna se existir; se não existir, mantém etapa no JSON.
-  updates.etapa = etapa;
-  let attempt = await supabase.from("whatsapp_processamentos").update(updates).eq("id", id).eq("organization_id", organizationId).select("id,resultado_analise").maybeSingle();
-  if (attempt.error && /column .* does not exist|etapa.*does not exist/i.test(attempt.error.message || "")) {
-    attempt = await supabase
-      .from("whatsapp_processamentos")
-      .update({ resultado_analise: merged, atualizado_em: now.toISOString() })
-      .eq("id", id)
-      .eq("organization_id", organizationId)
-      .select("id,resultado_analise")
-      .maybeSingle();
-  }
-  if (attempt.error) return json(res, 500, { ok: false, error: attempt.error.message });
-  if (!attempt.data) return json(res, 404, { ok: false, error: "Lead não encontrado." });
-  return json(res, 200, { ok: true, id, etapa, analysis: attempt.data.resultado_analise || merged, desfecho: vendido ? merged.venda : merged.perda });
-}
 
 // ============ APRENDIZADO ============
 async function acaoAprendizado(id, body, res, organizationId) {

@@ -48,17 +48,19 @@ const pool = [
   // Muitas mensagens (explosão num período curto), sem recorrência, sem sinal de negociação —
   // é o caso do "Henrique 218 msgs, contatado há 2 dias, sem retomada real" que o dono apontou.
   { id:'volume-sem-fundo', __msgs:218, clientMessageDays:1, clientQuestionCount:0, __atendido:true },
-  // Pouco de tudo — fica por último.
+  // Pouco de tudo — fica por último entre os "de verdade".
   { id:'fraco', __msgs:6, clientMessageDays:1, clientQuestionCount:0, __atendido:true },
   { id:'d', __msgs:5, __hoje:true, __atendido:true }, // atendido hoje → fora
-  { id:'e', __msgs:0, __atendido:true },              // sem msg do cliente → fora
+  // v1069 — sem mensagem do cliente NÃO exclui mais (a regra passou a ser só data de
+  // atendimento); continua elegível, só cai pro fim por ter zero sinal de engajamento.
+  { id:'e', __msgs:0, __atendido:true },
 ];
 const r = fila(pool).map(l => l.id);
 if(ehFds){
   assert.deepEqual(r, [], 'fim de semana → fila vazia');
 } else {
-  assert.deepEqual(r, ['qualificado','volume-sem-fundo','fraco'],
-    'recorrência + perguntas + sinal de negociação avançada pesam mais que só volume de mensagens');
+  assert.deepEqual(r, ['qualificado','volume-sem-fundo','fraco','e'],
+    'recorrência + perguntas + sinal de negociação avançada pesam mais que só volume de mensagens; sem msg do cliente não exclui mais, só cai pro fim');
 }
 
 // 2. Dose helper + botão Atender +1 + fim de semana no card.

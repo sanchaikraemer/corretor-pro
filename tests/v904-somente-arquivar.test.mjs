@@ -26,21 +26,24 @@ const toolbar904 = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/
 assert.doesNotMatch(toolbar904, /marcarVendido|abrirVenda|>Vendido</, 'ações do topo sem venda');
 assert.doesNotMatch(app, /abrirVenda\(\$\{id\},\$\{nome\}\)/, 'barra rápida sem Vendido');
 
-// 4. Leads já marcados Vendido/Perdido/Geladeira aparecem como "Arquivado" (sem esses rótulos).
+// 4. Leads já marcados Vendido/Perdido/Geladeira (dados legados) aparecem como "Arquivado" (sem
+// esses rótulos) — v1069: normalizarEtapa já colapsa tudo isso em "Geladeira" na origem.
 const jornada = app.match(/function cp704Jornada\(lead, mc\)\{[\s\S]*?\n  \}/)[0];
 assert.doesNotMatch(jornada, /label:'Vendido'/, 'jornada não rotula Vendido');
 assert.doesNotMatch(jornada, /label:'Perdido'/, 'jornada não rotula Perdido');
-assert.match(jornada, /normal==='Vendido' \|\| normal==='Perdido' \|\| normal==='Geladeira'/, 'os três viram Arquivado');
+assert.match(jornada, /normal==='Geladeira'/, 'Geladeira (Vendido/Perdido/Arquivado legados) vira Arquivado');
 
 // 5. As telas/cards de venda saíram do app.
 assert.doesNotMatch(html, /Vendas registradas/, 'sem menu/tela "Vendas registradas"');
 assert.doesNotMatch(html, /cp-metric-revenue/, 'sem tile de receita no Desempenho');
 assert.doesNotMatch(html, /id="vendas"/, 'sem a tela #vendas');
 
-// 6. O arquivo (Arquivados) segue reunindo Geladeira + Perdido antigos num lugar só.
+// 6. O arquivo (Arquivados) segue reunindo os antigos Geladeira/Vendido/Perdido num lugar só —
+// v1069: normalizarEtapa já colapsa todos eles em "Geladeira" na origem, então carregarGeladeira
+// só precisa comparar com esse único valor (Perdido nunca mais é um resultado possível).
 // v952: a antiga função duplicada de carregarGeladeira (que este teste mirava sem querer,
 // com aspas duplas) foi removida — só sobra a versão real, com aspas simples.
-assert.match(app, /\['Geladeira','Perdido'\]\.includes\(normalizarEtapa\(l\.etapa\)\)/,
-  'Arquivados reúne Geladeira e Perdido antigos');
+assert.match(app, /normalizarEtapa\(l\.etapa\) === 'Geladeira'/,
+  'Arquivados reúne os antigos Vendido/Perdido/Geladeira, todos normalizados pra Geladeira');
 
 console.log('v904-somente-arquivar: ok');

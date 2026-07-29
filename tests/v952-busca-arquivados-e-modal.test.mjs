@@ -36,13 +36,13 @@ assert.match(app, /window\.carregarGeladeira = async function\(\)/, 'window.carr
 //    resolvia pro escopo do módulo — a função morta, antes de ser removida).
 assert.match(app, /await window\.carregarGeladeira\(\);/, 'navegação chama window.carregarGeladeira explicitamente');
 
-// 6. Reativar (Arquivados) e Reabrir (Perdidos) usam o modal em-app, não confirm() nativo
-//    como caminho principal.
+// 6. Reativar (Arquivados) usa o modal em-app, não confirm() nativo como caminho principal.
+// v1069 — a tela "Perdidos" (e reabrirLeadPerdido) nunca teve alvo no HTML desde a v952 (o
+// #perdidosList virou #geladeiraList) — código morto removido, "Reabrir" já não existe mais.
 const reativarFn = app.match(/async function reativarLeadGeladeira\(id, btn\)\{[\s\S]*?\n\}/)?.[0];
-const reabrirFn = app.match(/async function reabrirLeadPerdido\(id, btn\)\{[\s\S]*?\n\}/)?.[0];
 assert.match(reativarFn, /cp903Confirm\(\{ titulo: "Reativar lead"/, 'Reativar usa cp903Confirm');
-assert.match(reabrirFn, /cp903Confirm\(\{ titulo: "Reabrir lead"/, 'Reabrir usa cp903Confirm');
 // confirm() nativo só sobra como fallback caso cp903Confirm não exista (defesa, não caminho normal).
 assert.match(reativarFn, /: confirm\(msg\);/, 'mantém fallback defensivo pro confirm nativo');
+assert.doesNotMatch(app, /function reabrirLeadPerdido/, 'reabrirLeadPerdido (código morto, sem alvo no HTML) foi removida');
 
 console.log('v952-busca-arquivados-e-modal: ok');

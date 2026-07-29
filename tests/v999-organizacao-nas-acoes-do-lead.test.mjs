@@ -64,7 +64,7 @@ try {
   }
 
   const acoes = [
-    { action: "etapa", id: "lead-1", etapa: "Atendimento" },
+    { action: "etapa", id: "lead-1", etapa: "Ativo" },
     { action: "memoria-set", id: "lead-1", observacoes: "nota de memória" },
     { action: "observacao-adicionar", id: "lead-1", texto: "cliente pediu retorno amanhã" },
     { action: "aprendizado", id: "lead-1", evento: "teste-v999" },

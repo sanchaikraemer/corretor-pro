@@ -24,14 +24,13 @@ assert.ok(
   "KPI 'Fazer agora' ainda está fixo como active (coral mesmo com 0)"
 );
 
-// 2. Os KPIs "Agora" também só ficam coral quando há quentes.
+// 2. v1069 — o KPI "Agora" da tela de Condução (Pipeline, baseado em filtros.quentes) era parte
+// da geração de código morta removida junto com o termômetro (ver v860-sem-termometro.test.mjs);
+// a Condução de hoje (cp788) usa abas por FILTRO selecionado, não por contagem de "quentes" —
+// nenhum KPI fica preso em coral fixo lá (active segue a aba escolhida pelo corretor).
 assert.ok(
   !/class="ui-kpi active"><span>Agora<\/span>/.test(app),
-  "KPI 'Agora' ainda está fixo como active (coral mesmo com 0)"
-);
-assert.ok(
-  app.includes(`class="ui-kpi${"${filtros.quentes.length>0?' active':''}"}"><span>Agora</span>`),
-  "KPI 'Agora' deveria usar active condicional a filtros.quentes.length>0"
+  "KPI 'Agora' não pode estar fixo como active (coral mesmo com 0)"
 );
 
 // 3. Alerta "análise antiga" compacto: barra lateral + título menor.

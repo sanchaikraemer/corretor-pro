@@ -1,13 +1,15 @@
 import http from "node:http";
 import assert from "node:assert/strict";
 
-// v1068 — auditoria de segurança achou que extrair-print, detectar-rosto e ler-prints-conversa
-// (api/lead-update.js) e transcrever-audio (api/cerebro-config.js) chamavam a OpenAI sem NENHUM
-// teto diário — diferente da análise principal (api/_pipeline.js, verificarLimiteDiario, desde a
-// v1013). Um script (ou uma conta de teste grátis, o mesmo cenário que motivou a v1041) podia
-// gerar chamadas de visão/Whisper ilimitadas, sem nenhuma rede de segurança. Este teste confirma,
-// contra o handler de verdade e um servidor HTTP falso simulando o Supabase, que as quatro ações
-// agora recusam (HTTP 429) depois que o teto configurado é atingido.
+// v1068 — auditoria de segurança achou que transcrever-audio (api/cerebro-config.js) chamava a
+// OpenAI sem NENHUM teto diário — diferente da análise principal (api/_pipeline.js,
+// verificarLimiteDiario, desde a v1013). Um script (ou uma conta de teste grátis, o mesmo cenário
+// que motivou a v1041) podia gerar chamadas de Whisper ilimitadas, sem nenhuma rede de segurança.
+// Este teste confirma, contra o handler de verdade e um servidor HTTP falso simulando o Supabase,
+// que a ação agora recusa (HTTP 429) depois que o teto configurado é atingido.
+// v1069 — extrair-print, detectar-rosto e ler-prints-conversa (que também tinham o mesmo teto,
+// junto com transcrever-audio) foram deletadas do código por pedido do dono (nunca funcionaram
+// bem, ele nunca vai usar essas três) — os testes dessas três ações saíram daqui.
 
 function fakeRes() {
   let statusCode = 200, payload = "";
@@ -58,56 +60,23 @@ const envAntes = {
   NODE_ENV: process.env.NODE_ENV, SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-  CORRETOR_PRO_LIMITE_VISAO_DIA: process.env.CORRETOR_PRO_LIMITE_VISAO_DIA,
   CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA: process.env.CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA
 };
 function restaurarEnv() {
   for (const [k, v] of Object.entries(envAntes)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
 }
 process.env.NODE_ENV = "test";
-// Precisa de uma chave (mesmo falsa) pra getOpenAI() devolver um cliente de verdade — senão as
-// ações retornam "indisponível agora" ANTES de chegar no teto diário, e o teste não provaria
-// nada sobre o teto. Como o teto é sempre atingido nos três casos abaixo, a função nunca chega
-// a fazer a chamada de rede de verdade (retorna 429 antes disso).
+// Precisa de uma chave (mesmo falsa) pra getOpenAI() devolver um cliente de verdade — senão a
+// ação retorna "indisponível agora" ANTES de chegar no teto diário, e o teste não provaria nada
+// sobre o teto. Como o teto é sempre atingido abaixo, a função nunca chega a fazer a chamada de
+// rede de verdade (retorna 429 antes disso).
 process.env.OPENAI_API_KEY = "sk-fake-test-key-nao-usada-de-verdade";
-process.env.CORRETOR_PRO_LIMITE_VISAO_DIA = "5";
 process.env.CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA = "5";
 
 try {
-  const { default: handler } = await import(`../api/lead-update.js?v1068a=${Date.now()}`);
   const { default: cerebroHandler } = await import(`../api/cerebro-config.js?v1068b=${Date.now()}`);
 
-  // 1. extrair-print: com o teto (5) já atingido, recusa com 429 — antes desta correção não
-  // existia nenhum teto, então esta ação nunca teria sido barrada.
-  await comServidor(5, async () => {
-    const req = { method: "POST", headers: { authorization: "Bearer token-teste" }, body: { action: "extrair-print", imagemBase64: "data:image/png;base64,AAAA" } };
-    const res = fakeRes();
-    await handler(req, res);
-    assert.equal(res.statusCode, 429, res.payload);
-    const r = JSON.parse(res.payload);
-    assert.match(r.error, /Limite diário/);
-    console.log("v1068 (extrair-print): recusa com 429 depois do teto diário — ok");
-  });
-
-  // 2. detectar-rosto: mesmo teto, mesmo comportamento.
-  await comServidor(5, async () => {
-    const req = { method: "POST", headers: { authorization: "Bearer token-teste" }, body: { action: "detectar-rosto", imagemBase64: "data:image/png;base64,AAAA" } };
-    const res = fakeRes();
-    await handler(req, res);
-    assert.equal(res.statusCode, 429, res.payload);
-    console.log("v1068 (detectar-rosto): recusa com 429 depois do teto diário — ok");
-  });
-
-  // 3. ler-prints-conversa: mesmo teto, mesmo comportamento.
-  await comServidor(5, async () => {
-    const req = { method: "POST", headers: { authorization: "Bearer token-teste" }, body: { action: "ler-prints-conversa", imagens: ["data:image/png;base64,AAAA"] } };
-    const res = fakeRes();
-    await handler(req, res);
-    assert.equal(res.statusCode, 429, res.payload);
-    console.log("v1068 (ler-prints-conversa): recusa com 429 depois do teto diário — ok");
-  });
-
-  // 4. transcrever-audio (api/cerebro-config.js): mesmo teto, rota diferente.
+  // transcrever-audio (api/cerebro-config.js): com o teto (5) já atingido, recusa com 429.
   await comServidor(5, async () => {
     const req = { method: "POST", headers: { authorization: "Bearer token-teste" }, body: { action: "transcrever-audio", audioBase64: "AAAA" } };
     const res = fakeRes();
