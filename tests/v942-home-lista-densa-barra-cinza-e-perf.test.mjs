@@ -35,8 +35,9 @@ assert.match(app, /\.cp-hoje-list\{display:flex;flex-direction:column/, 'lista c
 assert.match(app, /\.cp-hoje-row\{width:100%;display:grid/, 'cada linha ocupa a largura toda');
 assert.match(app, /grid-template-areas:"nm dd" "bar pr"/, 'no mobile a linha vira 2 linhas (nome em cima, barra+produto embaixo)');
 
-// 2. lista-leads-grid (tela expandida do "Fazer agora") = 1 coluna sempre, sem 2/3 colunas.
-assert.match(css, /\.lista-leads-grid\{display:grid;grid-template-columns:1fr;gap:8px\}/, 'lista-leads-grid é 1 coluna');
+// 2. A tela expandida do "Fazer agora" continua 1 cliente por linha — desde a v1076 ela é a
+// tabela "com próximo passo" (.lgt), que é 1 coluna por natureza (uma linha por cliente).
+assert.match(css, /\.lgt-th,\.lgt-row\{display:grid;grid-template-columns:30px minmax/, 'a tabela das listas da Home existe (1 cliente por linha)');
 assert.doesNotMatch(css, /\.lista-leads-grid\{grid-template-columns:repeat\(2/, 'não volta pra 2 colunas em tela larga');
 
 // 3. Amarelo queimado removido: o token --morno não é mais o amarelo #F5C36B.
