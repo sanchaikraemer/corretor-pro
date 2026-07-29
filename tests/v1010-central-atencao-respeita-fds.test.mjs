@@ -15,7 +15,8 @@ assert.match(app, /por você na segunda/, 'a Central precisa dizer que os atendi
 // 2. O modo normal (dia útil) continua existindo.
 assert.match(app, /pedem'\} ação<\/b>/, 'no dia útil, a Central continua anunciando os atendimentos que pedem ação');
 
-// 3. O vazio da Condução no fim de semana explica a pausa em vez do genérico.
-assert.match(app, /Fim de semana — a fila do "Fazer agora" volta na segunda\.<\/div>/, 'o vazio da Condução precisa explicar a pausa de fim de semana');
+// 3. O vazio da lista "Fazer agora" no fim de semana explica a pausa em vez do genérico.
+// (v1075: a tela Condução foi deletada; a explicação mora no subtítulo da lista da Home.)
+assert.match(app, /Final de semana — sem fila de "Fazer agora" hoje\./, 'o vazio da lista precisa explicar a pausa de fim de semana');
 
 console.log('v1010-central-atencao-respeita-fds: ok');

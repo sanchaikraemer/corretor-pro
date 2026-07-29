@@ -275,7 +275,6 @@ function cpPerformanceResumo(){
     leadMs: cpPerfMedia("leadDetail"),
     consultaMs: cpPerfMedia("leadsFetch"),
     renderCarteiraMs: cpPerfMedia("renderCarteira"),
-    renderPipelineMs: cpPerfMedia("renderPipeline"),
     cacheHitPct: totalCache ? Math.round(cacheHits / totalCache * 100) : 0,
     memoriaMB: cpMemoriaMB()
   };
@@ -290,7 +289,6 @@ function atualizarDiagnosticoPerformance(){
       <b>Consulta da base:</b> ${Number(r.consultaMs||0)} ms<br>
       <b>Abrir lead:</b> ${Number(r.leadMs||0)} ms<br>
       <b>Render carteira:</b> ${Number(r.renderCarteiraMs||0)} ms<br>
-      <b>Render pipeline:</b> ${Number(r.renderPipelineMs||0)} ms<br>
       <b>Cache hit:</b> ${Number(r.cacheHitPct||0)}%${r.memoriaMB != null ? `<br><b>Memória:</b> ${Number(r.memoriaMB||0)} MB` : ""}
     `;
   }
@@ -646,7 +644,7 @@ async function slimZipKeepingTextAndAudio(file, onProgress){
   return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size };
 }
 
-const VIEW_CACHEABLE = new Set(["pipeline","agenda","vendas","perdidos","geladeira","relatorio","carteira"]);
+const VIEW_CACHEABLE = new Set(["agenda","vendas","perdidos","geladeira","relatorio","carteira"]);
 let _viewLoadSeq = 0;
 let _viewLoadTimer = null;
 function agendarTarefaLeve(fn, delay=70){
@@ -665,7 +663,6 @@ function carregarTelaAtiva(t, force=false){
       if(!force && VIEW_CACHEABLE.has(t) && state.viewRendered?.[t] === rev) return;
       try{
         if(t === "home") await carregarDashboard(force);
-        else if(t === "pipeline") await carregarPipeline();
         else if(t === "agenda") await carregarAgenda();
         else if(t === "cerebro"){
           await carregarCerebro();
@@ -697,7 +694,6 @@ function cpRouteForScreen(screen=state.active){
     screen:screen || "home",
     navKey:state.navKey || undefined,
     carteiraFiltro:state.carteiraFiltro || "todos",
-    pipelineFiltro:state.pipelineVisualFiltro || "todos",
     grupoAtivo:state.grupoAtivo || null
   };
 }
@@ -734,7 +730,6 @@ async function cpRestoreRoute(route){
     }
     if(r.screen === "lead" && r.leadId){
       if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
-      if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
       if(r.grupoAtivo) state.grupoAtivo=r.grupoAtivo;
       await abrirLead(r.leadId,{fromHistory:true});
       return;
@@ -742,7 +737,6 @@ async function cpRestoreRoute(route){
     cpClearLeadState();
     state.grupoAtivo=null;
     if(r.carteiraFiltro) state.carteiraFiltro=r.carteiraFiltro;
-    if(r.pipelineFiltro) state.pipelineVisualFiltro=r.pipelineFiltro;
     show(r.screen || "home",{navKey:r.navKey,skipHistory:true});
     if((r.screen||"home") === "home" && r.grupoAtivo){
       state.grupoAtivo=r.grupoAtivo;
@@ -757,8 +751,10 @@ window.cpPushTransientRoute=cpPushTransientRoute;
 window.cpConsumeTransientRoute=cpConsumeTransientRoute;
 
 function show(t, options={}){
+  // v1075 — a tela "Condução" foi deletada; rota antiga salva em algum aparelho cai na Home.
+  if(t === "pipeline") t = "home";
   const prev = state.active;
-  const defaultNavKey = {home:"home",carteira:"leads",propostas:"imoveis",pipeline:"negocios",agenda:"agenda",relatorio:"relatorios",menu:"config"}[t] || t;
+  const defaultNavKey = {home:"home",carteira:"leads",propostas:"imoveis",agenda:"agenda",relatorio:"relatorios",menu:"config"}[t] || t;
   state.navKey = options.navKey || defaultNavKey;
   state.active=t;
   if(!options.skipHistory && !cpApplyingHistory && prev !== t){
@@ -772,7 +768,7 @@ function show(t, options={}){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
     qs("#"+secId)?.classList.add("active");
   }else{
-    const escondidas = ["menu","cerebro","vendas","pipeline","agenda","zip","linhaTempo","perdidos","geladeira","aprendizado","propostas","relatorio","carteira"];
+    const escondidas = ["menu","cerebro","vendas","agenda","zip","linhaTempo","perdidos","geladeira","aprendizado","propostas","relatorio","carteira"];
     escondidas.forEach(id => qs("#"+id)?.classList.remove("active"));
     const home = qs("#home");
     if(t === "home") home?.classList.add("active");
@@ -2978,7 +2974,7 @@ function buildDesempenhoInsightsHTML(items){
     </div>
     <div class="dash-card">
       <div class="dh"><h4>✨ Leitura do Corretor Pro</h4></div>
-      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="cp786AbrirConducao('agora')">Abrir prioridades →</a>`:''}</div></div>
+      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="abrirFazerAgora()">Abrir prioridades →</a>`:''}</div></div>
     </div>`;
 }
 function renderHomeRight(items){
@@ -3231,6 +3227,7 @@ function abrirGrupoHome(grupo, options={}){
        <button type="button" onclick="voltarDaListaHome()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button>
        <b style="color:var(--lime);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:13px">${meta.titulo}</b>
        <span style="background:var(--lime);color:var(--on-accent);border-radius:999px;padding:0 9px;font-size:12px;font-weight:950">${arr.length}</span>
+       ${options.acoesHtml ? `<span style="display:inline-flex;gap:8px;margin-left:auto">${options.acoesHtml}</span>` : ""}
      </div>
      <div class="small" style="color:var(--muted);margin-bottom:12px;font-size:12px">${meta.sub}</div>
      ${barraBuscaLeadHTML("todos")}
@@ -3674,7 +3671,7 @@ function renderHomeFallbackSeguro(items){
   area.innerHTML = `<div class="ui-home-content">
     ${typeof ui677ToolbarHTML === "function" ? ui677ToolbarHTML("home") : ""}
     <section class="ui-priority-card">
-      <div class="ui-section-head"><div><h3>Atendimentos prioritários</h3><p>Sua carteira foi carregada. Abra um cliente para continuar.</p></div><button type="button" onclick="show('pipeline')">Ver todos</button></div>
+      <div class="ui-section-head"><div><h3>Atendimentos prioritários</h3><p>Sua carteira foi carregada. Abra um cliente para continuar.</p></div><button type="button" onclick="abrirFazerAgora()">Ver todos</button></div>
       <div class="ui-priority-list">${linhas || '<div class="empty">Nenhum atendimento ativo agora.</div>'}</div>
     </section>
   </div>`;
@@ -3749,8 +3746,6 @@ async function _processarDashboard(data){
     // lugar nenhum da tela: dado morto calculado à toa em todo carregamento do dashboard.
     if(qs("#kpiAtivos")) qs("#kpiAtivos").textContent = String(items.length);
     const etapasUsadas = new Set(items.map(l => normalizarEtapa(l.etapa)));
-    if(qs("#kpiPipelineAtivos")) qs("#kpiPipelineAtivos").textContent = items.length+" ativos";
-    if(qs("#kpiPipelineEtapas")) qs("#kpiPipelineEtapas").textContent = etapasUsadas.size+" etapas";
 
     // Home = 3 listas pra você decidir quem atacar (nenhum lead pré-aberto).
     if(items.length){
@@ -3817,122 +3812,6 @@ function normalizarEtapa(raw){
   return "Ativo";
 }
 
-let pipelineBuscaTermo = "";
-let pipelineFiltro = "todos";
-let pipelineTabAtiva = "oportunidades";
-let pipelineOrdem = "prioridade";
-
-// Ordena a lista da Carteira pelo critério escolhido no seletor.
-// Leads sem o dado vão sempre pro fim, independente da direção.
-function ordenarLeadsPor(items, modo){
-  const arr = items.slice();
-  const nMsg = (l) => totalMensagensLead(l);
-  const semResp = (l) => l.daysSinceClientReply != null ? l.daysSinceClientReply : l.daysSinceLastInteraction;
-  const contato = (l) => l.daysSinceLastTouch != null ? l.daysSinceLastTouch : l.daysSinceLastInteraction;
-  const desc = (f) => (a,b) => { const va=f(a), vb=f(b); if(va==null) return 1; if(vb==null) return -1; return vb-va; };
-  const asc  = (f) => (a,b) => { const va=f(a), vb=f(b); if(va==null) return 1; if(vb==null) return -1; return va-vb; };
-  switch(modo){
-    case "sr-antigos":  return arr.sort(desc(semResp));
-    case "sr-recentes": return arr.sort(asc(semResp));
-    case "ct-antigos":  return arr.sort(desc(contato));
-    case "ct-recentes": return arr.sort(asc(contato));
-    case "msg-mais":    return arr.sort(desc(nMsg));
-    case "msg-menos":   return arr.sort(asc(nMsg));
-    default:            return arr;
-  }
-}
-function setPipelineOrdem(v){ pipelineOrdem = v; carregarPipeline(); }
-window.setPipelineOrdem = setPipelineOrdem;
-
-function setPipelineTab(tab){
-  pipelineTabAtiva = tab;
-  ["oportunidades","ultimos","todos"].forEach(t => {
-    const btn = qs("#tab" + t.charAt(0).toUpperCase() + t.slice(1));
-    if(!btn) return;
-    btn.classList.toggle("active", t === tab);
-  });
-  const titulo = qs("#pipelineTitulo");
-  if(titulo){
-    if(tab === "oportunidades") titulo.textContent = "Oportunidades · quem merece atenção agora";
-    else if(tab === "ultimos") titulo.textContent = "Últimos atendimentos · atividade recente";
-    else titulo.textContent = "Todos os contatos · base completa";
-  }
-  if(state.active === "pipeline") carregarTelaAtiva("pipeline", true);
-}
-window.setPipelineTab = setPipelineTab;
-
-// Pipeline = lista única de todos os leads ativos, ordenada por prioridade. Arquivados ficam
-// fora (têm tela própria, "Arquivados").
-async function carregarPipeline(){
-  if(state.active !== "pipeline") return;
-  const board = qs("#pipelineBoard");
-  if(!board) return;
-  const renderPipeline = (data) => {
-    try{
-    const ehAtivo = (l) => { const e = normalizarEtapa(l.etapa); return e !== "Geladeira"; };
-    const allActive = (data?.items || []).map(limparLead).filter(ehAtivo);
-    let items = allActive.slice();
-    if(pipelineBuscaTermo){
-      const termo = semAcento(pipelineBuscaTermo);
-      items = items.filter(l => semAcento(l.name).includes(termo) || semAcento(l.product).includes(termo));
-    }
-    if(!items.length){
-      board.innerHTML = '<div class="empty">Nenhum lead encontrado.</div>';
-      return;
-    }
-    const ehAbaUltimos = pipelineTabAtiva === "ultimos" && (!pipelineOrdem || pipelineOrdem === "prioridade");
-    const cardHtml = (l) => {
-      const idJs = JSON.stringify(String(l.id||""));
-      const nameJs = JSON.stringify(l.name||"");
-      // Na aba "Últimos atendimentos" o rótulo mostra QUANDO foi o último atendimento
-      // real (agora/hoje/ontem/há X dias), não "dias parado" da última mensagem.
-      const dias = ehAbaUltimos
-        ? (ultimoAtendimentoTs(l) ? "atendido " + rotuloTempoAtendimento(ultimoAtendimentoTs(l)) : "sem atendimento registrado")
-        : (l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d parado" : "");
-      const tags = [];
-      if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
-      if(ehPermuta(l)) tags.push(tagPermutaHTML());
-      if(ehSumicoPosPreco(l)) tags.push(tagSumicoPrecoHTML());
-      if(ehContatadoHoje(l)) tags.push(`<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:950;color:var(--acao);background:rgba(104,255,149,.12);border:1px solid var(--acao);letter-spacing:.04em">✓ HOJE</span>`);
-      const waLink = l.phone ? whatsappLink(l.phone||"", "") : "";
-      const mostrarMsgs = (pipelineOrdem === "msg-mais" || pipelineOrdem === "msg-menos");
-      const msgCount = mostrarMsgs ? totalMensagensLead(l) : null;
-      return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink), msgCount });
-    };
-    let ord;
-    if(pipelineOrdem && pipelineOrdem !== "prioridade"){
-      ord = ordenarLeadsPor(items, pipelineOrdem);
-    } else if(pipelineTabAtiva === "ultimos"){
-      // §6.5: ordena pelo ATENDIMENTO mais recente (todas as fontes), não pela última
-      // mensagem. Quem nunca foi atendido cai para o fim, por atividade recente.
-      ord = items.slice().sort((a,b) => {
-        const ta = ultimoAtendimentoTs(a);
-        const tb = ultimoAtendimentoTs(b);
-        if(tb !== ta) return tb - ta;
-        return String(b.lastInteractionAt || b.createdAt || "").localeCompare(String(a.lastInteractionAt || a.createdAt || ""));
-      });
-    } else if(pipelineTabAtiva === "todos"){
-      ord = items.slice().sort((a,b) => (a.name||"").localeCompare(b.name||"", "pt-BR"));
-    } else {
-      // Oportunidades = prioridade real de atendimento, não leitura comercial.
-      // Corrige o ponto que ainda fazia a tela Leads divergir da Home: lead com
-      // contraproposta/pendência aberta deve subir mesmo que o percentual de venda não seja o maior.
-      ord = items.slice().sort(compararPrioridadeAtendimento);
-    }
-    const limite = Number(state.pipelineVisibleCount) || 60;
-    const visiveis = ord.slice(0, limite);
-    const mais = ord.length > limite ? `<button type="button" class="btn secondary" style="width:100%;margin-top:10px" onclick="state.pipelineVisibleCount=${limite + 60}; carregarTelaAtiva('pipeline', true)">Mostrar mais ${Math.min(60, ord.length-limite)} leads</button>` : "";
-    board.innerHTML = `<div class="leads-list">${visiveis.map(cardHtml).join("")}</div>${mais}`;
-    }catch(err){ board.innerHTML = boxErro("carregarPipeline()"); }
-  };
-  if(state.todosLeads?.length){
-    renderPipeline({ items: state.todosLeads });
-    return;
-  }
-  board.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{ const data = await getLeadsData(); renderPipeline(data); }catch(err){ board.innerHTML = boxErro("carregarPipeline()"); }
-}
-
 // Copia o histórico inteiro de mensagens do lead atual (texto plano).
 async function copiarHistoricoLead(){
   let lead = state.lead;
@@ -3985,7 +3864,6 @@ async function apagarLead(id, nome){
     if(data?.ok){
       toast("Lead apagado.");
       removerLeadDosCaches(id);
-      carregarPipeline();
       if(typeof carregarDashboard === "function") carregarDashboard();
     } else {
       toast("Erro: " + (data?.error || ""));
@@ -4128,8 +4006,7 @@ async function salvarNovoLead(){
       await loadRecentLeads(true);
       await loadTodosLeadsBusca();
       if(data.id) abrirLead(data.id);
-      else if(typeof cp788AbrirCarteiraAtiva === "function") cp788AbrirCarteiraAtiva();
-      else show("pipeline", { navKey:"negocios" });
+      else abrirCarteiraAtiva();
     } else {
       toast("Erro: " + (data?.error || "não foi possível incluir o lead"));
       if(btn){ btn.disabled = false; btn.textContent = "Incluir lead"; }
@@ -4221,7 +4098,6 @@ async function excluirLeadDefinitivo(id, nome){
       state.lead = null; state.focoLeadId = null; state.analysis = null;
       removerLeadDosCaches(id);
       if(typeof carregarDashboard === "function") carregarDashboard();
-      if(typeof carregarPipeline === "function") carregarPipeline();
       show("home");
     } else {
       toast("Erro ao excluir: " + (data?.error || ""));
@@ -7980,24 +7856,6 @@ function buscaLeadInline(termo, boxId){
 }
 window.buscaLeadInline = buscaLeadInline;
 
-qs("#pipelineRefresh")?.addEventListener("click", carregarPipeline);
-qsa(".pipeline-filtro").forEach(btn => btn.addEventListener("click", () => {
-  pipelineFiltro = btn.dataset.f || "todos";
-  qsa(".pipeline-filtro").forEach(b => {
-    const ativo = b.dataset.f === pipelineFiltro;
-    b.classList.toggle("active", ativo);
-    b.style.background = ativo ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.03)";
-    b.style.color = ativo ? "var(--text)" : "var(--muted)";
-    b.style.fontWeight = ativo ? "950" : "600";
-  });
-  carregarPipeline();
-}));
-let pipelineBuscaTimer = null;
-qs("#pipelineBusca")?.addEventListener("input", (e)=>{
-  pipelineBuscaTermo = e.target.value || "";
-  clearTimeout(pipelineBuscaTimer);
-  pipelineBuscaTimer = setTimeout(carregarPipeline, 250);
-});
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
 qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
@@ -8384,7 +8242,7 @@ function imprimirCarteiraAtiva(){
   const origem = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].find(a => Array.isArray(a) && a.length) || [];
   let ativos = origem.filter(l => typeof leadEhAtivo === "function" ? leadEhAtivo(l) : true);
   if (typeof cp786OrdenarConducao === "function") ativos = cp786OrdenarConducao(ativos);
-  if (!ativos.length) { toast("Nenhum cliente ativo pra listar ainda. Abra a Condução primeiro."); return; }
+  if (!ativos.length) { toast("Nenhum cliente ativo pra listar ainda."); return; }
   const linhas = ativos.map((l, i) => `<tr>
     <td>${i + 1}</td>
     <td>${escapeHtml(l.name || "Cliente")}</td>
@@ -8680,8 +8538,8 @@ document.addEventListener("keydown", (e) => {
     if(card){ e.preventDefault(); card.click(); }
     return;
   }
-  // h volta pra home, p pipeline, a agenda, m menu, z zip
-  const mapTeclas = { h: "home", p: "pipeline", m: "menu", z: "zip", c: "cerebro" };
+  // h volta pra home, m menu, z zip, c cérebro
+  const mapTeclas = { h: "home", m: "menu", z: "zip", c: "cerebro" };
   if(mapTeclas[e.key]){ e.preventDefault(); show(mapTeclas[e.key]); }
 });
 
@@ -9177,14 +9035,6 @@ function cp786MetaConducao(l){
 }
 function cp786PrecisaAcao(l){return cp786Categoria(l)==='agora';}
 function cp786AguardandoCliente(l){return cp786Categoria(l)==='aguardando';}
-function cp786AbrirConducao(filtro){
-  state.pipelineVisualFiltro=filtro||'agora';
-  show('pipeline');
-}
-function cp786AbrirPrioridadePrincipal(){
-  const leads=(state?.itemsAtivos||state?.todosLeads||[]).filter(leadEhAtivo);
-  cp786AbrirConducao('agora');
-}
 window.cp786PrecisaAcao=cp786PrecisaAcao;
 window.cp786ClienteRespondeu=cp786ClienteRespondeu;
 window.cp786UltimoFoiCliente=cp786UltimoFoiCliente;
@@ -9197,8 +9047,6 @@ window.cp786OrdenarConducao=cp786OrdenarConducao;
 window.cp786MetaConducao=cp786MetaConducao;
 window.cp786ResumoAcao=cp786ResumoAcao;
 window.cp786Badge=cp786Badge;
-window.cp786AbrirConducao=cp786AbrirConducao;
-window.cp786AbrirPrioridadePrincipal=cp786AbrirPrioridadePrincipal;
 
 // "Fazer agora" = a AÇÃO real do dia, não só "precisa responder AGORA". Numa carteira de
 // imports antigos quase nada é resposta pendente (categoria 'agora'), então o card vivia em
@@ -9235,6 +9083,26 @@ function abrirFazerAgora(){
 window.cpPrecisaAcaoHoje=cpPrecisaAcaoHoje;
 window.abrirFazerAgora=abrirFazerAgora;
 
+// v1075 — a tela "Condução" foi DELETADA (pedido do dono: repetia o painel/listas da Home).
+// Estas listas, no padrão dos grupos da Home, são as substitutas oficiais dos cards.
+function abrirAguardandoCliente(){
+  const ativos=(state.itemsAtivos||state.todosLeads||[]).filter(leadEhAtivo);
+  const leads=cp786OrdenarConducao(ativos.filter(l=>cp786Categoria(l)==='aguardando'));
+  abrirGrupoHome('__aguardando',{meta:{titulo:'Aguardando cliente',sub:'A bola está com o cliente — não cobre antes da hora.'},leads});
+}
+window.abrirAguardandoCliente=abrirAguardandoCliente;
+function abrirCarteiraAtiva(){
+  const ativos=(state.itemsAtivos||state.todosLeads||[]).filter(leadEhAtivo);
+  const leads=cp786OrdenarConducao(ativos);
+  const estiloAcao='background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer';
+  abrirGrupoHome('__carteiraAtiva',{
+    meta:{titulo:'Carteira ativa',sub:'Todos os seus clientes ativos.'},
+    leads,
+    acoesHtml:`<button type="button" onclick="imprimirCarteiraAtiva()" style="${estiloAcao}">🖨️ Imprimir</button><button type="button" onclick="exportarLeadsCSV(this)" style="${estiloAcao}">⬇ Excel</button>`
+  });
+}
+window.abrirCarteiraAtiva=abrirCarteiraAtiva;
+
 renderResumoDia = function(items){
   const box = qs("#resumoDia");
   if(!box) return;
@@ -9255,9 +9123,9 @@ renderResumoDia = function(items){
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
-    <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
+    <div class="ui-kpi" onclick="abrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
-    <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
+    <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
 };
 
@@ -9323,7 +9191,7 @@ renderListasHome = function(ordenados){
     <div class="ui-home-content">
       ${ui677ToolbarHTML('home')}
       <section class="ui-priority-card">
-        <div class="ui-section-head"><div><h3>Atendimentos prioritários para hoje</h3><p>O Corretor Pro colocou primeiro quem precisa de você agora.</p></div><button type="button" onclick="cp786AbrirConducao('${filtroPrincipal}')">Ver todos</button></div>
+        <div class="ui-section-head"><div><h3>Atendimentos prioritários para hoje</h3><p>O Corretor Pro colocou primeiro quem precisa de você agora.</p></div><button type="button" onclick="abrirFazerAgora()">Ver todos</button></div>
         <div class="ui-priority-list">${prioritarios.length?prioritarios.map((l,i)=>ui631LeadRow(l,cp786Badge(l),i)).join(''):'<div class="empty">Nenhuma ação imediata agora.</div>'}</div>
       </section>
     </div>`;
@@ -10611,7 +10479,6 @@ function ui670DetailRows(lead,mc){
       }
       toast(`${label || etapa} registrado.`);
       try{ await carregarDashboard(); }catch(_){}
-      try{ if(state.active === 'pipeline') carregarPipeline(); }catch(_){}
       try{ await abrirLead(id); }catch(_){}
     }catch(err){ toast('Não consegui atualizar: ' + (err?.message || err)); }
   }
@@ -10853,9 +10720,7 @@ function ui670DetailRows(lead,mc){
     window.cpPerformanceResumo = function(){
       const r = typeof oldResumo === 'function' ? oldResumo() : {};
       r.renderCarteiraVirtualMs = cpPerfMedia('renderCarteiraVirtual');
-      r.renderPipelineVirtualMs = cpPerfMedia('renderPipelineVirtual');
       r.carteiraDomRenderizado = state.carteiraRendered?.rendered || 0;
-      r.pipelineDomRenderizado = state.pipelineRendered?.rendered || 0;
       return r;
     };
   }catch(_){}
@@ -10909,8 +10774,8 @@ function ui670DetailRows(lead,mc){
     const metaDia = (typeof cpMetaAtendimentosDia==='function') ? cpMetaAtendimentosDia() : 10;
     const doseAviso = Math.min(metaDia, Number(d.agora)||0);
     const itemAcao = fds
-      ? `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
-      : `<div class="cp687-notify-item" data-go="pipeline" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
+      ? `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
+      : `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
       ${d.atrasados?`<div class="cp687-notify-item" data-go="agenda"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Veja a lista na Agenda — retome ou descarte um a um.</span></div></div>`:''}
@@ -10919,7 +10784,7 @@ function ui670DetailRows(lead,mc){
       <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
     panel.classList.add('open');
     panel.querySelector('.cp687-notify-close')?.addEventListener('click',()=>panel.classList.remove('open'));
-    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{panel.classList.remove('open');const filtro=el.dataset.filter;if(filtro&&typeof cp786AbrirConducao==='function')cp786AbrirConducao(filtro);else if(typeof window.show==='function')window.show(el.dataset.go);}));
+    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{panel.classList.remove('open');const filtro=el.dataset.filter;if(filtro==='agora'&&typeof abrirFazerAgora==='function')abrirFazerAgora();else if(typeof window.show==='function')window.show(el.dataset.go);}));
     setTimeout(()=>document.addEventListener('click',outside,{once:true}),0);
     function outside(ev){if(!panel.contains(ev.target)&&!ev.target.closest('#topBell'))panel.classList.remove('open');}
   }
@@ -11054,7 +10919,7 @@ function ui670DetailRows(lead,mc){
 
 /* ============================================================
    Atualização #724-2 (reduzida na v1073) — só o CSS vivo do antigo "cp695".
-   As gerações mortas de renderCarteiraTabela/carregarPipeline que moravam aqui
+   As gerações mortas dos renders de Atendimentos/Condução que moravam aqui
    (substituídas pela versão final cp788 no fim do arquivo) foram removidas.
    O que fica é o que a tela atual ainda usa:
    - a trava de overflow/height (correção histórica de tela travada/rolagem presa);
@@ -11070,11 +10935,11 @@ function ui670DetailRows(lead,mc){
   css.id='cp695RealMobileFixCSS';
   css.textContent=`
     html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
-    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
+    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#carteiraBody,.ui-priority-list,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
     .cp695-list{max-width:760px;margin-left:auto;margin-right:auto}
     .cp695-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
     .cp-bottom-nav{z-index:1000!important}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
-    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
+    @media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
   `;
   document.head.appendChild(css);
 })();
@@ -11297,93 +11162,6 @@ function ui670DetailRows(lead,mc){
     return grupos;
   }
 
-  function cp788LinhaConducao(l){
-    if(typeof ui631LeadRow!=='function') return '';
-    let selo = typeof cp786Badge==='function'?cp786Badge(l):'Abrir';
-    const cat = typeof cp786Categoria==='function'?cp786Categoria(l):'';
-    // O selo não repete o título da aba. Prioridade: compromisso vencido ("Atrasado · era DD/MM");
-    // senão, em Programados mostra a DATA; em Fazer agora mostra há quantos dias está parado.
-    const atrasado = typeof cp786CompromissoAtrasado==='function'?cp786CompromissoAtrasado(l):null;
-    let tone='';
-    if(atrasado){
-      selo = `Atrasado · era ${atrasado.dataLabel}`; tone='atrasado';
-    } else if(cat==='programados' && typeof cpAppointmentData==='function'){
-      const quando = cpAppointmentData(l)?.time;
-      if(quando) selo = quando;
-    } else if(cat==='agora'){
-      const d = Number(l?.daysSinceLastInteraction);
-      if(Number.isFinite(d)) selo = d<=0?'hoje':d===1?'há 1 dia':`há ${d} dias`;
-    }
-    return ui631LeadRow(l, selo, tone);
-  }
-
-  window.carregarPipeline=async function(){
-    if(state.active!=='pipeline') return;
-    const board=document.querySelector('#pipelineBoard');
-    if(!board) return;
-    const render=(leads)=>{
-      const grupos=cp788Grupos(leads);
-      const validos=['agora','programados','aguardando','todos'];
-      const filtro=validos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
-      state.pipelineVisualFiltro=filtro;
-      // v885/v924 — mesma régua da Home: "Fazer agora" = meta do dia (10) menos quem já foi
-      // atendido hoje (cpFazerAgoraDose), aplicada ao topo da fila ranqueada; o resto é backlog
-      // (não some, só não conta pra meta de hoje).
-      const filaAgora=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(leads):(grupos.agora||[]);
-      const doseCount=(typeof cpFazerAgoraDose==='function')?cpFazerAgoraDose(leads):Math.min(filaAgora.length,(typeof cpMetaAtendimentosDia==='function'?cpMetaAtendimentosDia():10));
-      // v885 — o H1 da tela acompanha a visão: chegar por "Total de leads" (filtro 'todos')
-      // mostra "Carteira ativa", não "Condução / o que fazer agora" (confundia o dono).
-      const pageT=document.querySelector('.pipeline-page-title'), pageS=document.querySelector('.pipeline-page-sub');
-      if(pageT&&pageS){
-        if(filtro==='todos'){ pageT.textContent='Carteira ativa'; pageS.textContent='Todos os seus leads ativos.'; }
-        else { pageT.textContent='Condução'; pageS.textContent='O que fazer agora, em ordem de prioridade'; }
-      }
-      const titulos={agora:['Fazer agora','As de maior prioridade primeiro — engajamento + tempo parado.'],programados:['Agenda','Visitas, reuniões e retornos com data.'],aguardando:['Aguardando cliente','A bola está com o cliente — não cobre antes da hora.'],todos:['Carteira ativa','Todos os clientes ativos, sem transformar a tela em funil.']};
-      const [titulo,sub]=titulos[filtro]||titulos.agora;
-      // Lista da visão atual. No "Fazer agora", dose em cima + divisor + fila de retomada.
-      let listaHtml;
-      if(filtro==='agora'){
-        const dose=filaAgora.slice(0,doseCount), resto=filaAgora.slice(doseCount);
-        const divisor=resto.length?`<div style="margin:14px 4px 8px;color:var(--muted);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em">Fila de retomada — mais ${resto.length}</div>`:'';
-        // v1010 — no fim de semana a fila pausa de propósito; o vazio precisa dizer ISSO,
-        // não o genérico "nenhum cliente" (parecia defeito vindo da Central de atenção).
-        const vazioAgora=(typeof cpFimDeSemana==='function'&&cpFimDeSemana())
-          ? '<div class="cp695-empty">Fim de semana — a fila do "Fazer agora" volta na segunda.</div>'
-          : '<div class="cp695-empty">Nenhum cliente nesta visão.</div>';
-        listaHtml=(dose.length?dose.map(cp788LinhaConducao).join(''):vazioAgora)+divisor+resto.map(cp788LinhaConducao).join('');
-      }else{
-        const lista=grupos[filtro]||[];
-        listaHtml=lista.length?lista.map(cp788LinhaConducao).join(''):'<div class="cp695-empty">Nenhum cliente nesta visão.</div>';
-      }
-      board.innerHTML=`
-        <div class="ui-pipeline-kpis cp786-action-kpis">
-          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div><b>${doseCount}</b><i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Agenda</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
-        </div>
-        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>${esc(titulo)}</h3><p>${esc(sub)}</p></div><div class="cp1064-head-actions">${filtro==='todos'?'<button type="button" onclick="imprimirCarteiraAtiva()">🖨️ Imprimir lista</button><button type="button" onclick="setPipelineVisualFiltro(\'agora\')">Voltar às prioridades</button>':'<button type="button" onclick="cp788AbrirCarteiraAtiva()">Ver clientes ativos</button>'}</div></div><div class="ui-priority-list cp695-list">${listaHtml}</div></section>`;
-    };
-    const memoria=[state?.todosLeads,state?.itemsAtivos,state?.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
-    if(memoria) render(memoria);
-    else{
-      board.innerHTML='<div class="cp695-loading">Lendo sua carteira...</div>';
-      const leads=await cp788CarregarBase(false);
-      render(leads);
-    }
-  };
-  try{ carregarPipeline=window.carregarPipeline; }catch(_){ }
-
-  window.setPipelineVisualFiltro=function(f){
-    state.pipelineVisualFiltro=f||'agora';
-    if(state.active!=='pipeline'&&typeof show==='function') show('pipeline');
-    else window.carregarPipeline();
-  };
-  window.cp788AbrirCarteiraAtiva=function(){
-    state.pipelineVisualFiltro='todos';
-    if(state.active!=='pipeline'&&typeof show==='function') show('pipeline');
-    else window.carregarPipeline();
-  };
-
   window.renderListasHome=function(ordenados){
     const foco=document.querySelector('#leadFocoArea'); if(!foco) return;
     const area=document.querySelector('#top3Area'); if(area){area.style.display='none';area.innerHTML='';}
@@ -11409,5 +11187,5 @@ function ui670DetailRows(lead,mc){
   };
   try{ renderListasHome=window.renderListasHome; }catch(_){ }
   // v1073 — o re-wire de #cpNewLeads foi removido: esse id não existe em lugar nenhum desde a
-  // v928 (o card "Total de leads" já chama cp788AbrirCarteiraAtiva direto no onclick).
+  // v928 (o card "Total de leads" já abre a lista "Carteira ativa" direto no onclick).
 })();

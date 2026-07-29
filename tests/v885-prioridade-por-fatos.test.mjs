@@ -37,14 +37,14 @@ assert.match(cat, /return entraEmRetomada\(l\) \? 'agora' : 'sem-acao'/, 'precis
 assert.doesNotMatch(cat, /responder-agora|precisaCorretor|responsavel==='corretor'/,
   'não deve mais depender do campo de status/responsavel da IA (o balde-lixo)');
 
-// --- 3. Condução (render vivo) na mesma régua: dose + SEM abas duplicadas. ---
-const iniLive = app.lastIndexOf('window.carregarPipeline=async function()');
-assert.ok(iniLive !== -1, 'render vivo da Condução não encontrado');
-const live = app.slice(iniLive, iniLive + 5000);
-assert.match(live, /cpFilaFazerAgora\(leads\)/, 'Condução deve usar a fila ranqueada (mesma da Home)');
-assert.match(live, /<b>\$\{doseCount\}<\/b>/, 'KPI "Fazer agora" da Condução mostra a dose (não o backlog)');
-assert.doesNotMatch(live, /ui-filter-tabs cp786-action-tabs/, 'as abas duplicadas foram removidas da Condução');
-assert.match(live, /filtro==='todos'.*Carteira ativa/s, 'vir por "Total de leads" (todos) renomeia o H1 pra Carteira ativa');
+// --- 3. A lista "Fazer agora" (Home) na mesma régua: fila ranqueada + dose do dia. ---
+// (v1075: a tela Condução foi deletada — a lista da Home é a visão única, com a mesma régua.)
+const iniLive = app.lastIndexOf('function abrirFazerAgora()');
+assert.ok(iniLive !== -1, 'abrirFazerAgora não encontrada');
+const live = app.slice(iniLive, iniLive + 2000);
+assert.match(live, /cpFilaFazerAgora\(ativos\)/, 'a lista deve usar a fila ranqueada (mesma régua da Home)');
+assert.match(live, /cpFazerAgoraDose\(ativos\)/, 'a lista corta pela dose do dia (não mostra o backlog inteiro no topo)');
+assert.match(app, /titulo:'Carteira ativa'/, 'vir por "Total de leads" abre a lista "Carteira ativa"');
 
 // --- 4. Limpezas de UI. ---
 assert.equal((app.match(/Top conversão de hoje/g) || []).length, 0, '"Top conversão de hoje" foi removido');

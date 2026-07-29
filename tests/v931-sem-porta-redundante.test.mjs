@@ -14,7 +14,9 @@ assert.doesNotMatch(app, /window\.abrirTodosLeads/, 'sem export órfão de abrir
 assert.doesNotMatch(app, /\.navTodos/, 'listener órfão .navTodos removido');
 assert.doesNotMatch(app, /const temLista ?=/, 'temLista (só existia pra decidir mostrar o link) removida');
 
-// O Menu continua sendo o único caminho fixo pra Condução — isso não muda.
-assert.match(app, /data-target="pipeline"|show\('pipeline'\)/, 'a tela Condução (pipeline) continua existindo e acessível');
+// v1075 — a própria tela Condução foi deletada (pedido do dono): as listas da Home são o
+// único destino agora, então nenhum código pode voltar a navegar pra ela.
+assert.doesNotMatch(app, /show\('pipeline'\)|show\("pipeline"\)/, 'nenhum código pode abrir a tela deletada');
+assert.match(app, /function abrirFazerAgora\(/, 'a lista "Fazer agora" da Home é o destino vivo');
 
 console.log('v931-sem-porta-redundante: ok');

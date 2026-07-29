@@ -22,14 +22,12 @@ assert.doesNotMatch(app, /['"]reaquecer['"],\s*['"]Reaquecer['"]/, 'aba "Reaquec
 assert.doesNotMatch(app, /⚠ REAQUECER/, 'tag "REAQUECER" precisa estar renomeada');
 assert.doesNotMatch(app, /Precisa reaquecer/, 'rótulo "Precisa reaquecer" precisa estar renomeado');
 
-// 3) v1069 — a tela de Condução (Pipeline) foi redesenhada desde então (cp788, ver
-// tests/v914-fazer-agora-dose-e-fds.test.mjs e afins): as abas "Quentes/Esfriando/Reaquecer"
-// (e seus apelidos "Agora/Parando/Reativar" desta versão) saíram junto com a geração de código
-// morta que as continha — a Condução de hoje usa "Fazer agora/Agenda/Aguardando cliente/Carteira
-// ativa" (nenhum deles fala de temperatura, o que é o ponto desta regressão). Confirma que os
-// rótulos atuais existem e continuam livres de vocabulário de temperatura.
-assert.match(app, /titulos=\{agora:\['Fazer agora'/, 'Condução atual usa "Fazer agora" (sem termômetro)');
-assert.match(app, /programados:\['Agenda'/, 'Condução atual usa "Agenda" (sem termômetro)');
-assert.match(app, /aguardando:\['Aguardando cliente'/, 'Condução atual usa "Aguardando cliente" (sem termômetro)');
+// 3) v1069/v1075 — as abas "Quentes/Esfriando/Reaquecer" saíram junto com as gerações mortas;
+// desde a v1075 a tela Condução foi deletada e as visões oficiais são as listas/cards da Home:
+// "Fazer agora / Agenda / Aguardando cliente / Carteira ativa" (nenhum fala de temperatura,
+// que é o ponto desta regressão). Confirma que os rótulos atuais existem.
+assert.match(app, /meta:\{titulo:'Fazer agora',sub\}/, 'lista atual usa "Fazer agora" (sem termômetro)');
+assert.match(app, /onclick="show\('agenda'\)"><span>Agenda<\/span>/, 'card atual usa "Agenda" (sem termômetro)');
+assert.match(app, /titulo:'Aguardando cliente'/, 'lista atual usa "Aguardando cliente" (sem termômetro)');
 
 console.log('v860-sem-termometro: ok');
