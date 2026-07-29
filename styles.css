@@ -1457,10 +1457,18 @@ button,.card,.menu-card,.top3-mini,.fila-row,.ui670-card,.ui670-status-card,.res
 
 
 /* v687-4 — loading real e Atendimentos limpo */
-.cp-db-loading{display:flex;align-items:center;gap:14px;margin:18px 0;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.035);color:var(--text)}
-.cp-db-loading b{display:block;font-size:15px;font-weight:950;margin-bottom:3px}.cp-db-loading span{display:block;color:var(--muted);font-size:13px}.cp-db-spinner{width:24px;height:24px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:var(--lime);animation:cpSpin .8s linear infinite;flex:0 0 auto}@keyframes cpSpin{to{transform:rotate(360deg)}}
-.cp-home-skeleton{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin:14px 0}.cp-home-skeleton span,.cp-side-skeleton span{display:block;border-radius:16px;background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.075),rgba(255,255,255,.035));background-size:220% 100%;animation:cpSkel 1.1s ease-in-out infinite;border:1px solid var(--line)}.cp-home-skeleton span{height:92px}.cp-side-skeleton{display:grid;gap:12px;margin-top:86px}.cp-side-skeleton span{height:120px}@keyframes cpSkel{0%{background-position:100% 0}100%{background-position:-100% 0}}
-@media(max-width:760px){.cp-home-skeleton{grid-template-columns:1fr 1fr}.cp-side-skeleton{display:none}.cp-db-loading{align-items:flex-start}.cp-db-spinner{margin-top:2px}}
+/* v1077 — "carregando" escolhido pelo dono (modelo 2): rodinha coral + "Carregando os leads…".
+   Substitui o esqueleto de quadros vazios que parecia tela travada. */
+.cp-loading-leads{min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:var(--text)}
+.cp-loading-leads b{font-size:14.5px;font-weight:700}
+.cp-loading-leads span{color:var(--muted);font-size:12.5px}
+.cp-loading-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.14);border-top-color:var(--lime);animation:cpLoadingGira 1s linear infinite}
+@keyframes cpLoadingGira{to{transform:rotate(360deg)}}
+/* v1077 — enquanto baixa/analisa a conversa, o card de instruções sai da tela: fica só o andamento. */
+#importCard.cp-import-rodando>.label,
+#importCard.cp-import-rodando>.small,
+#importCard.cp-import-rodando>#fileName,
+#importCard.cp-import-rodando>.btns{display:none!important}
 
 /* ============================================================
    ATUALIZAÇÃO #751 — TEMA CLARO LEGÍVEL + HOME LIMPA

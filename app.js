@@ -719,6 +719,23 @@ function cpClearLeadState(){
   if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
   state.lead=null; state.focoLeadId=null; state.analysis=null; state.sequencia=null;
 }
+// v1077 — as listas "montadas na hora" pelos cards da Home (Fazer agora, Aguardando cliente,
+// Carteira ativa, Sem atender 30d+, Propostas) não vivem em state.gruposHome — quem VOLTA pra
+// elas (botão voltar do Android/navegador) precisa reconstruí-las pela função dona. Sem isso,
+// o voltar mostrava o nome cru ("__fazeragora") com 0 leads (print do dono).
+function cpReabrirGrupoEspecial(grupo){
+  const donos = {
+    "__fazeragora": () => abrirFazerAgora(),
+    "__aguardando": () => abrirAguardandoCliente(),
+    "__carteiraAtiva": () => abrirCarteiraAtiva(),
+    "__semAtender30": () => cpAbrirSemAtender30Dias(),
+    "__propostas": () => cpAbrirHistoricoPropostas()
+  };
+  const abrir = donos[String(grupo || "")];
+  if(!abrir) return false;
+  try{ abrir(); }catch(_){ return false; }
+  return true;
+}
 async function cpRestoreRoute(route){
   cpApplyingHistory=true;
   try{
@@ -740,7 +757,7 @@ async function cpRestoreRoute(route){
     show(r.screen || "home",{navKey:r.navKey,skipHistory:true});
     if((r.screen||"home") === "home" && r.grupoAtivo){
       state.grupoAtivo=r.grupoAtivo;
-      abrirGrupoHome(r.grupoAtivo,{fromHistory:true});
+      if(!cpReabrirGrupoEspecial(r.grupoAtivo)) abrirGrupoHome(r.grupoAtivo,{fromHistory:true});
     } else if((r.screen||"home") === "home") {
       renderBotoesHome();
     }
@@ -821,6 +838,7 @@ function clearAnalysis(){
   qs("#fileName").textContent="";
   qs("#fileName").classList.remove("show");
   qs("#processingBox").classList.remove("show");
+  qs("#importCard")?.classList.remove("cp-import-rodando");
   qs("#processingText").textContent="Processando conversa...";
   qs("#progressBar").style.width="0%";
   qs("#resultBox").className="empty";
@@ -3173,7 +3191,7 @@ function abrirGrupoHome(grupo, options={}){
   state.grupoAtivo = grupo;
   const saud = qs("#saudacao");
   if(saud) saud.style.display = "none";
-  const meta = options.meta || GRUPOS_HOME[grupo] || { titulo: String(grupo||"Leads"), sub: "" };
+  const meta = options.meta || GRUPOS_HOME[grupo] || { titulo: String(grupo||"Leads").replace(/^__+/, ""), sub: "" };
   const arr = avulsa ? options.leads : ((state.gruposHome && state.gruposHome[grupo]) || []);
 
   // v1076 — modelo escolhido pelo dono (print aprovado): TABELA "com próximo passo"
@@ -3645,9 +3663,8 @@ function homeAindaEmSkeleton(){
   const area = qs("#leadFocoArea");
   if(!area) return false;
   const lateral = qs("#homeRight");
-  return !!area.querySelector(".skel-loading,.cp-home-skeleton,.cp-db-loading,.cp694-loading") ||
-    !!lateral?.querySelector?.(".cp-side-skeleton") ||
-    /Carregando (?:banco de dados|sua carteira)|Organizando sua carteira/i.test(area.textContent || "");
+  return !!area.querySelector(".skel-loading,.cp-loading-leads,.cp694-loading") ||
+    /Carregando os leads|Carregando (?:banco de dados|sua carteira)/i.test(area.textContent || "");
 }
 
 function renderHomeFallbackSeguro(items){
@@ -3701,7 +3718,7 @@ async function carregarDashboard(force){
     // com a lista já visível não pode apagar o que o corretor já está vendo enquanto busca.
     if(!state.itemsAtivos?.length){
       const focoSkel = qs("#leadFocoArea");
-      if(focoSkel) focoSkel.innerHTML = `<div class="skel-loading"><div class="skel-kpis"><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span><span class="skel-block"></span></div><div class="skel-row"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div><div class="skel-row skel-row--sm"></div></div>`;
+      if(focoSkel) focoSkel.innerHTML = `<div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>`;
     }
 
     const data = await getLeadsData(force);
@@ -4419,7 +4436,7 @@ function voltarDoLead(){
   // ficava com o painel vazio/parado (relatado: só "Buscar lead" e nada mais). show("home",...)
   // primeiro, na MESMA ordem que cpRestoreRoute já usa com sucesso pro botão físico de voltar.
   show("home", { skipHistory:true });
-  if(state.grupoAtivo){ abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
+  if(state.grupoAtivo){ if(!cpReabrirGrupoEspecial(state.grupoAtivo)) abrirGrupoHome(state.grupoAtivo,{fromHistory:true}); }
   else { renderBotoesHome(); }
   cpReplaceRoute(cpRouteForScreen("home"));
 }
@@ -7296,6 +7313,7 @@ async function processFile(file, options = {}){
   clearAnalysis();
   state.processing=true;
   show("zip");
+  qs("#importCard")?.classList.add("cp-import-rodando");
   qs("#fileName").textContent="Arquivo selecionado: "+file.name+" ("+(file.size/1024/1024).toFixed(1)+" MB)";
   qs("#fileName").classList.add("show");
   qs("#processingBox").classList.add("show");
@@ -7307,6 +7325,7 @@ async function processFile(file, options = {}){
     qs("#resultBox").className="notice error";
     qs("#resultBox").innerHTML="Envie o arquivo ZIP exportado pelo WhatsApp.";
     state.processing=false;
+    qs("#importCard")?.classList.remove("cp-import-rodando");
     return false;
   }
 
@@ -7370,6 +7389,7 @@ async function processFile(file, options = {}){
     return false;
   }finally{
     state.processing=false;
+    qs("#importCard")?.classList.remove("cp-import-rodando");
   }
 }
 async function readShareDebug(){
@@ -10898,11 +10918,11 @@ function ui670DetailRows(lead,mc){
     window.carregarDashboard = async function(){
       const foco = document.querySelector('#leadFocoArea');
       if(state?.active === 'home' && foco && !foco.children.length){
-        foco.innerHTML = '<div class="cp694-loading"><div class="cp694-spinner"></div><b>Carregando sua carteira...</b><span>Organizando leads e prioridades.</span></div>';
+        foco.innerHTML = '<div class="cp694-loading cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>';
       }
       const watchdog = setTimeout(()=>{
         const area = document.querySelector('#leadFocoArea');
-        if(state?.active === 'home' && area && /Carregando sua carteira/i.test(area.textContent||'')){
+        if(state?.active === 'home' && area && /Carregando os leads/i.test(area.textContent||'')){
           area.innerHTML = '<div class="cp694-loading"><b>Carregamento demorou mais que o normal.</b><span>Atualize a página ou abra Atendimentos para continuar usando a carteira.</span><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
         }
       }, 9000);
