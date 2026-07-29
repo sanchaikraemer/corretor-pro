@@ -912,13 +912,6 @@ body.lead-foco-aberto .home-page-heading,body.lead-foco-aberto #resumoDia,body.l
 /* v1077 — modelo 1 escolhido pelo dono: os 5 contadores da Home numa LINHA SÓ no computador,
    mais compactos e sem os iconezinhos (só nome e número). No celular nada muda. */
 #resumoDia .ui-kpi i{display:none}
-@media(min-width:1000px){
-  #resumoDia.resumo-dia{grid-template-columns:repeat(5,minmax(0,1fr))}
-  #resumoDia .ui-kpi{padding:12px 14px;min-height:0}
-  #resumoDia .ui-kpi b{font-size:24px}
-  #resumoDia .ui-kpi>div{margin-top:4px}
-  #resumoDia .ui-kpi>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-}
 @media(max-width:620px){.ui-insight-card{grid-template-columns:1fr auto;gap:8px;padding:14px}.ui-insight-title{min-width:0}.ui-insight-card p{grid-column:1/-1;font-size:11px}.ui-priority-row{grid-template-columns:minmax(0,1fr) auto 10px;gap:8px}.ui-row-action{padding:7px 9px;font-size:9px}.resumo-dia{grid-template-columns:repeat(4,122px)}}
 
 .cart-load-more {
@@ -1231,11 +1224,11 @@ html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{bac
 #home .home-page-heading h2{font-family:var(--font-display)!important;font-size:clamp(25px,2.6vw,36px)!important;line-height:1.05!important;letter-spacing:-.045em!important;color:var(--cp-text)!important}
 #home .saudacao{margin:7px 0 0!important;color:var(--cp-muted)!important;font-size:12px!important}
 #home .saudacao .destaque{color:var(--cp-coral)!important;font-weight:800!important}
-#home .resumo-dia{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;margin:0 0 15px!important;padding:0!important;background:transparent!important;border:0!important}
-#home .ui-kpi{background:var(--cp-panel)!important;border:1px solid var(--cp-border)!important;border-radius:10px!important;box-shadow:var(--cp-card-shadow)!important;min-height:88px!important;padding:14px!important}
+#home .resumo-dia{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:10px!important;margin:0 0 15px!important;padding:0!important;background:transparent!important;border:0!important}
+#home .ui-kpi{background:var(--cp-panel)!important;border:1px solid var(--cp-border)!important;border-radius:10px!important;box-shadow:var(--cp-card-shadow)!important;min-height:0!important;padding:12px 14px!important}
 #home .ui-kpi.active{background:var(--accent-soft)!important;border-color:var(--accent-line)!important}
-#home .ui-kpi>span{color:var(--cp-muted)!important;text-transform:none!important;letter-spacing:0!important}
-#home .ui-kpi b{color:var(--cp-text)!important;font-size:27px!important}
+#home .ui-kpi>span{color:var(--cp-muted)!important;text-transform:none!important;letter-spacing:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#home .ui-kpi b{color:var(--cp-text)!important;font-size:24px!important}
 #home .ui-kpi.active b,#home .ui-kpi.active i{color:var(--cp-coral)!important}
 #home .ui-kpi i{background:var(--cp-panel-2)!important;color:var(--cp-blue)!important}
 #home .ui-home-content{display:grid!important;grid-template-columns:1fr!important;gap:13px!important}
