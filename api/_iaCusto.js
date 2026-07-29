@@ -39,10 +39,6 @@ export function estimarCustoUsd({ kind, model, promptTokens = 0, completionToken
        + (Math.max(0, Number(completionTokens) || 0) / 1_000_000) * preco.saida;
 }
 
-export function estimarCustoBRL(args) {
-  return estimarCustoUsd(args) * cotacaoUsdBrl();
-}
-
 // Grava UM evento real de uso de IA — nunca agrega nem sobrescreve (diferente do contador de
 // limite diário em direciona_config, que é upsert e aceita perder 1-2 contagens sob concorrência,
 // ver api/_pipeline.js). Cada chamada vira uma linha própria (INSERT simples): sem disputa de

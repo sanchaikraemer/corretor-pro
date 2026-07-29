@@ -65,20 +65,6 @@ export function modeloOrquestrador() {
 }
 
 
-export function getModelosIASummary() {
-  return {
-    openai: {
-      transcricao: modeloTranscricao(),
-      analise: modeloAnalise(),
-      mensagens: modeloMensagens(),
-      visao: modeloVisao(),
-      tarefasSimples: modeloTarefasSimples(),
-      orquestrador: modeloOrquestrador()
-    }
-  };
-}
-
-
 function leadSeguroParaAnalise(lead = {}) {
   // v747: a conversa é a fonte da verdade. O objeto do lead pode trazer análises,
   // sugestões, nextAction, produto e unidade salvos por versões antigas. Enviar isso
@@ -298,11 +284,6 @@ function mcUltimaMensagemPedeResposta(ultimo) {
 // é exatamente o que o dono baniu por completo (ver aplicarCompromisso em
 // api/reanalisar-lead.js e o corte em listRecentProcessings, api/_persistence.js).
 
-export function normalizarModeloComercial(parsed, lead, timeline, corretorNome) {
-  // v724-2: reset total. Mantida apenas por compatibilidade com APIs antigas; não altera análise.
-  return parsed;
-}
-
 export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "") {
   // v724-2: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
   return parsed;
@@ -397,30 +378,6 @@ function normalizeComparable(text = "") {
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, " ")
     .trim();
-}
-
-// Tipos de material que o app sabe renderizar/mandar (espelha MATERIAL_LABEL no front).
-const MATERIAIS_VALIDOS = new Set([
-  "planta", "tabela", "video", "folder", "localizacao", "memorial",
-  "simulacao", "comparativo", "convite-visita", "material-valorizacao", "material-wellness"
-]);
-// Mantém só materiais com tipo válido, no máximo 3, sem repetir o mesmo tipo.
-export function sanitizarMateriais(materiais) {
-  if (!Array.isArray(materiais)) return [];
-  const vistos = new Set();
-  const out = [];
-  for (const m of materiais) {
-    const tipo = String(m?.tipo || "").trim().toLowerCase();
-    if (!MATERIAIS_VALIDOS.has(tipo) || vistos.has(tipo)) continue;
-    vistos.add(tipo);
-    out.push({
-      tipo,
-      motivo: String(m?.motivo || "").slice(0, 160),
-      quando: String(m?.quando || "").slice(0, 60)
-    });
-    if (out.length >= 3) break;
-  }
-  return out;
 }
 
 // v724-2: bloco antigo de análise/mensagem removido.
@@ -1751,27 +1708,6 @@ export function extrairRespostasCorretor(timeline, clientName) {
     out.push(texto);
   }
   return out;
-}
-
-// Banco do ESTILO REAL do corretor: junta as mensagens que ELE mesmo escreveu (não o cliente),
-// de TODAS as conversas processadas. É isso que faz a sugestão soar como ELE — reaproveitando o
-// jeito real que ele abre e pergunta — em vez de texto genérico de IA. Rolante (últimas ~80).
-export async function atualizarRespostasCorretor(timeline, clientName) {
-  try {
-    const novas = extrairRespostasCorretor(timeline, clientName);
-    if (!novas.length) return;
-    const { getSupabaseAdmin } = await import("./_persistence.js");
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return;
-    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", "corretor-respostas").maybeSingle();
-    const atuais = Array.isArray(data?.valor?.exemplos) ? data.valor.exemplos : [];
-    const vistos = new Set(atuais.map(t => _semAcento(t)));
-    for (const t of novas) { const k = _semAcento(t); if (!vistos.has(k)) { vistos.add(k); atuais.push(t); } }
-    const lista = atuais.slice(-80);
-    await supabase.from("direciona_config").upsert({ chave: "corretor-respostas", valor: { exemplos: lista }, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
-  } catch (e) {
-    console.warn("[direciona] atualizarRespostasCorretor:", e?.message || e);
-  }
 }
 
 // Varre TODA a carteira (timelines já salvas) e enche o banco de estilo de uma vez — SEM IA,

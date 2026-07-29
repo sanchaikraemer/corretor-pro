@@ -8441,7 +8441,9 @@ async function exportarLeadsCSV(btn){
       const lc = (a.leituraComercial && typeof a.leituraComercial === "object") ? a.leituraComercial : {};
       const diag = (a.diagnostico && typeof a.diagnostico === "object") ? a.diagnostico : {};
       const produto = (typeof produtosLabel === "function" ? produtosLabel(l) : "") || l.product || "";
-      const etapa = l.etapa || "";
+      // v1073 — a coluna ETAPA do Excel fala a mesma língua do app (Ativo/Arquivado), nunca o
+      // valor cru do banco (que pode ter vocabulário antigo de funil de antes da v1069).
+      const etapa = normalizarEtapa(l.etapa) === "Geladeira" ? "Arquivado" : "Ativo";
       const prioridade = (typeof prioridadeTituloCurto === "function") ? prioridadeTituloCurto(l) : "";
       const perfil = a.clientProfile && a.clientProfile !== "—" ? a.clientProfile : "";
       const porque = a.summary || l.summary || "";
@@ -8728,10 +8730,12 @@ async function reativarLeadGeladeira(id, btn){
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Atendimento" })
+      // v1073 — "Ativo" é o único estado de volta possível desde a v1069 (o servidor rejeita
+      // qualquer valor antigo de funil, ex.: "Atendimento" — mandar isso quebrava o Reativar).
+      body: JSON.stringify({ id, action: "etapa", etapa: "Ativo" })
     });
     if(!res.ok) throw new Error("falha");
-    toast("Lead reativado em Atendimento.");
+    toast("Lead reativado.");
     const card = document.querySelector(`[data-geladeira-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
