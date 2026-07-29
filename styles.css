@@ -909,6 +909,16 @@ body.lead-foco-aberto .home-page-heading,body.lead-foco-aberto #resumoDia,body.l
 .ui-row-rank.r3{background:linear-gradient(135deg,rgba(245,158,11,.9),rgba(245,158,11,.25));border-color:rgba(245,158,11,.45)}
 .ui-row-copy strong{font-size:14px}.ui-row-copy small{font-size:11px}.ui-row-copy em{font-size:10px;font-weight:700}.ui-row-copy em.hot{color:var(--accent)}.ui-row-copy em.warm{color:#f59e0b}.ui-row-copy em.cold{color:#93c5fd}.ui-row-copy em.ui-row-motivo{font-size:11px;font-weight:400;color:var(--soft);opacity:.88;margin-top:2px}.ui-row-action{font-size:10px;padding:8px 11px;border-radius:10px;background:rgba(255,96,91,.10)}.ui-row-action.atrasado{color:#FF6258!important;border-color:rgba(255,98,88,.6)!important;background:rgba(255,98,88,.15)!important;font-weight:900}
 .ui-kpi small{display:block;color:var(--muted);font-size:10px;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v1077 — modelo 1 escolhido pelo dono: os 5 contadores da Home numa LINHA SÓ no computador,
+   mais compactos e sem os iconezinhos (só nome e número). No celular nada muda. */
+#resumoDia .ui-kpi i{display:none}
+@media(min-width:1000px){
+  #resumoDia.resumo-dia{grid-template-columns:repeat(5,minmax(0,1fr))}
+  #resumoDia .ui-kpi{padding:12px 14px;min-height:0}
+  #resumoDia .ui-kpi b{font-size:24px}
+  #resumoDia .ui-kpi>div{margin-top:4px}
+  #resumoDia .ui-kpi>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
 @media(max-width:620px){.ui-insight-card{grid-template-columns:1fr auto;gap:8px;padding:14px}.ui-insight-title{min-width:0}.ui-insight-card p{grid-column:1/-1;font-size:11px}.ui-priority-row{grid-template-columns:minmax(0,1fr) auto 10px;gap:8px}.ui-row-action{padding:7px 9px;font-size:9px}.resumo-dia{grid-template-columns:repeat(4,122px)}}
 
 .cart-load-more {

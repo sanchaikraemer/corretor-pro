@@ -1,7 +1,7 @@
-# NOTAS v1077 — pacote em preparação (publicar junto, a pedido do dono)
+# NOTAS v1077 — pacote publicado junto, a pedido do dono (4 itens)
 
-> O dono pediu explicitamente: as mudanças desta versão ficam prontas na branch e **só vão
-> ao ar juntas, na próxima atualização** — não publicar item por item.
+> O dono pediu que estes itens fossem preparados um a um e publicados JUNTOS numa única
+> atualização — este arquivo cobre o pacote completo.
 
 ## 1. "Carregando os leads…" com rodinha coral (modelo 2, escolhido pelo dono)
 
@@ -38,12 +38,19 @@ passo, nota do iPhone, "Arquivo selecionado", botões Nova análise/Diagnóstico
 só o andamento aparece. Classe `cp-import-rodando` ligada no início do processamento e
 desligada no fim (finally), no arquivo inválido e na "Nova análise". Mesmo teste acima.
 
-## 4. Contadores da Home numa linha só no computador (aguardando escolha do modelo)
+## 4. Contadores da Home numa linha só no computador (modelo 1 escolhido)
 
-Pedido: na versão web os 5 cards de contadores ("Fazer agora", "Total de leads", "Agenda",
-"Aguardando cliente", "Sem atender 30d+") quebram pra segunda linha — devem caber numa linha
-só. 4 modelos enviados pro dono escolher; o escolhido entra NESTA versão antes de publicar.
+Na versão web os 5 cards de contadores quebravam pra segunda linha. Entre 4 modelos, o dono
+escolheu o **1 (mesmos cards, menores)**: no computador (≥1000px) os 5 ficam numa linha só,
+mais compactos e **sem os iconezinhos** (só nome e número). Celular e tablet não mudam.
+Só CSS (`#resumoDia`), sem mexer no render. Teste: `tests/v1077-contadores-uma-linha.test.mjs`.
 
-## Verificação (parcial, pacote ainda aberto)
+## Verificação
 
-- Suíte inteira (`npm test`) verde com os 2 testes novos.
+- Suíte inteira (`npm test`) verde — incluindo os 3 testes novos do pacote.
+- `npm run build` limpo.
+
+## Arquivos
+
+`app.js`, `index.html`, `styles.css`, `tests/v1077-*.test.mjs` (3 novos),
+`package.json`/`package-lock.json` (versão **1076 → 1077**), `NOTAS-v1077.md` (este arquivo).
