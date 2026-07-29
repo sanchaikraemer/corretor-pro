@@ -35,8 +35,9 @@ assert.match(app, /cp695-list/, 'CSS/markup .cp695-list continua (a lista viva u
 assert.match(app, /__cp788ConducaoHistorico/, 'a geração final cp788 continua');
 assert.equal((app.match(/window\.renderCarteiraTabela\s*=/g) || []).length, 1,
   'só a geração final pode definir window.renderCarteiraTabela');
-assert.equal((app.match(/window\.carregarPipeline\s*=/g) || []).length, 1,
-  'só a geração final pode definir window.carregarPipeline');
+// (v1075: a tela Condução foi deletada — ninguém mais pode definir esse render.)
+assert.equal((app.match(/window\.carregarPipeline\s*=/g) || []).length, 0,
+  'a tela Condução saiu na v1075 — window.carregarPipeline não pode voltar');
 assert.equal((app.match(/window\.carregarCarteira\s*=/g) || []).length, 1,
   'só a geração final pode definir window.carregarCarteira');
 // - o Arquivar continua vivo;

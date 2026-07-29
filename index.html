@@ -213,7 +213,7 @@
         <div style="margin-bottom:6px">
           <div class="label">📅 Agenda</div>
         </div>
-        <div class="small" style="color:var(--muted);margin-bottom:8px">Só o que tem data marcada: lembretes e compromissos confirmados. Contatos sem data aparecem na Condução quando houver uma ação recomendada.</div>
+        <div class="small" style="color:var(--muted);margin-bottom:8px">Só o que tem data marcada: lembretes e compromissos confirmados. Contatos sem data aparecem no "Fazer agora" da tela Hoje quando houver uma ação recomendada.</div>
         <div id="agendaList"></div>
       </div>
     </section>
@@ -243,7 +243,6 @@
           <article class="cp-card cp-stages-card">
             <div class="cp-card-head"><div><h3>Condução da carteira</h3><p>Distribuição por próxima ação</p></div></div>
             <div id="cpStageBars" class="cp-stage-bars"></div>
-            <button class="cp-card-link" onclick="show('pipeline')">Abrir Condução <span>›</span></button>
           </article>
 
           <article class="cp-card cp-running-card">
@@ -252,7 +251,7 @@
             <div id="cpRunningDeals" class="cp-running-list"></div>
           </article>
         </div>
-        <button type="button" class="cp-dashboard-continue" onclick="cp786AbrirPrioridadePrincipal()"><span>Abrir prioridades de hoje</span><b>›</b></button>
+        <button type="button" class="cp-dashboard-continue" onclick="abrirFazerAgora()"><span>Abrir prioridades de hoje</span><b>›</b></button>
       </div>
 
       </div>
@@ -266,37 +265,6 @@
       <div class="card hidden-empty" id="timelineCard">
         <div class="label">Linha do tempo da conversa</div>
         <div id="timeline" class="timeline"><div class="event"><b>Aguardando</b><p>Importe um ZIP para ver a conversa aqui.</p></div></div>
-      </div>
-    </section>
-
-    <section id="pipeline" class="screen">
-      <div class="card compact">
-        <div class="pipe-head">
-          <div><h2 class="pipeline-page-title">Condução</h2><div class="pipeline-page-sub">O que fazer agora, em ordem de prioridade</div><div class="label" style="display:none" id="pipelineTitulo">Oportunidades</div></div>
-          <div class="pipe-head-acoes">
-            <button type="button" onclick="exportarLeadsCSV(this)" class="cart-export" title="Baixar Excel (CSV) de TODOS os leads com o histórico inteiro">⬇ Excel</button>
-            <button type="button" onclick='show("home")' class="pipe-voltar" title="Voltar pra tela inicial">← Voltar pra Hoje</button>
-          </div>
-        </div>
-        <div class="pipe-tabs">
-          <button type="button" id="tabOportunidades" onclick="setPipelineTab('oportunidades')" class="pipe-tab active">Oportunidades</button>
-          <button type="button" id="tabUltimos" onclick="setPipelineTab('ultimos')" class="pipe-tab">Últimos atendimentos</button>
-          <button type="button" id="tabTodos" onclick="setPipelineTab('todos')" class="pipe-tab">Todos os contatos</button>
-        </div>
-        <select id="pipelineOrdem" onchange="setPipelineOrdem(this.value)" class="pipe-ordenar" title="Ordenar a lista">
-          <option value="prioridade">↕ Ordenar: prioridade</option>
-          <option value="sr-antigos">Sem resposta — mais antigos primeiro</option>
-          <option value="sr-recentes">Sem resposta — mais recentes primeiro</option>
-          <option value="ct-antigos">Sem contato há mais tempo</option>
-          <option value="ct-recentes">Contatados mais recentemente</option>
-          <option value="msg-mais">Mais mensagens no histórico</option>
-          <option value="msg-menos">Menos mensagens no histórico</option>
-        </select>
-        <div class="mobile-only" style="position:relative;margin-bottom:14px">
-          <input type="search" id="buscaPipeline" placeholder="Buscar lead..." autocomplete="off" oninput='buscaLeadInline(this.value, "buscaPipelineRes")' style="width:100%;box-sizing:border-box;padding:11px 16px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:14px;outline:none">
-          <div id="buscaPipelineRes" style="display:none;margin-top:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;max-height:340px;overflow-y:auto;box-shadow:0 18px 60px rgba(0,0,0,.45)"></div>
-        </div>
-        <div id="pipelineBoard"></div>
       </div>
     </section>
 

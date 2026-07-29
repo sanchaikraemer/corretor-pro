@@ -33,9 +33,10 @@ assert.match(app, /window\.imprimirCarteiraAtiva\s*=\s*imprimirCarteiraAtiva/, '
 assert.match(fn, /classList\.add\(["']cp1064-imprimindo["']\)/, 'precisa ligar a classe que escopa o CSS de impressão só pra esta lista');
 assert.match(fn, /afterprint/, 'precisa soltar a classe no evento "afterprint" — soltar logo após print() quebraria a impressão no celular (onde print()/compartilhar não trava a execução)');
 
-// ===== Parte C — o botão real existe na tela "Carteira ativa" (filtro "todos" da Condução) =====
-assert.match(app, /filtro===['"]todos['"]\?'<button type="button" onclick="imprimirCarteiraAtiva\(\)">/,
-  'o botão "Imprimir lista" só pode aparecer na visão "Carteira ativa" (filtro todos), igual ao "Ver clientes ativos"');
+// ===== Parte C — o botão real existe na lista "Carteira ativa" (card "Total de leads" da Home) =====
+// (v1075: a tela Condução foi deletada; a lista da Home herdou o Imprimir — e o Excel junto.)
+assert.match(app, /function abrirCarteiraAtiva\(\)\{[\s\S]*?onclick="imprimirCarteiraAtiva\(\)"/,
+  'o botão "Imprimir" precisa morar na lista "Carteira ativa" (aberta pelo card "Total de leads")');
 
 // ===== Parte D — CSS: escapa da briga com o print já existente da tela "Gerador de proposta" =====
 assert.match(css, /body\.cp1064-imprimindo\s*\*\{visibility:hidden!important\}/,

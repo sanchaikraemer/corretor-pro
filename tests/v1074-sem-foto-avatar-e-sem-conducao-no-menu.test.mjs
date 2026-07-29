@@ -35,13 +35,10 @@ assert.match(css, /\.lead-avatar\{/, 'o círculo de iniciais continua estilizado
 assert.match(leadUpdate, /Informe nome, telefone ou produto pra editar\./,
   'a mensagem de validação do editar não fala mais em foto');
 
-// ===== 2. Menus sem "Condução": as duas portas saíram; a da Home continua. =====
+// ===== 2. Menus sem "Condução" (v1074) — e na v1075 a tela inteira saiu do sistema. =====
 assert.ok(!html.includes('data-target="pipeline"'),
   'nenhum item de menu (gaveta lateral ou tela Mais) pode abrir a Condução');
 assert.ok(!html.includes('Condução do atendimento'), 'o card "Condução do atendimento" saiu da tela Mais');
-assert.match(html, /Abrir Condução/, 'a porta da Home ("Abrir Condução") continua');
-assert.match(html, /<section id="pipeline" class="screen">/, 'a tela Condução em si continua existindo');
 assert.ok(!app.includes('destacarMenuPipeline'), 'o destaque da porta de menu saiu junto com a porta');
-assert.match(app, /function setPipelineTab\(/, 'as abas internas da tela Condução continuam');
 
 console.log('v1074-sem-foto-avatar-e-sem-conducao-no-menu: ok');
