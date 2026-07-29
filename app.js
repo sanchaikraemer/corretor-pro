@@ -2074,6 +2074,21 @@ function temVendaCondicionada(l){
 function temAtendimentoManual(l){
   return !!(typeof ultimoAtendimentoTs === 'function' ? ultimoAtendimentoTs(l) : 0);
 }
+// v1071 — pedido do dono: um contador de quem falta atender há muito tempo, com prazo FIXO de
+// 30 dias (não o "descanso" configurável no Cérebro, que é outra régua, usada só pra decidir
+// quando um lead JÁ atendido volta a ser candidato em "Fazer agora"). Aqui é só uma leitura
+// direta: nunca atendido, ou último atendimento há 30 dias ou mais.
+function cpSemAtenderHaDias(l, dias){
+  const at = ultimoAtendimentoTs(l);
+  if(!at) return true; // nunca atendido = com certeza "falta atender"
+  const d = diasCalendarioBR(at);
+  return d == null || d >= dias;
+}
+function cpContarSemAtender(items, dias){
+  return (Array.isArray(items) ? items : []).filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, dias)).length;
+}
+window.cpSemAtenderHaDias = cpSemAtenderHaDias;
+window.cpContarSemAtender = cpContarSemAtender;
 const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
 // visita etc.) — NUNCA é uma fala real na conversa, mesmo tendo texto e data.
@@ -9238,7 +9253,12 @@ function cpAguardandoResposta(l){
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
   if(cp786TemCompromisso(l)) return 'programados';
-  if(cpAguardandoResposta(l)) return 'aguardando';                     // atendi e o cliente não respondeu (bola com ele)
+  // v1071 — "aguardando" só vale ENQUANTO ainda está dentro do prazo de descanso configurado
+  // (emJanelaDeEspera): sem esse limite, o mesmo cliente ficava "aguardando" pra sempre mesmo
+  // depois de já ter passado do prazo (quando ele já reaparece em "Fazer agora") — os dois
+  // números diziam coisas opostas sobre o mesmo cliente. Passado o prazo, ele "vence" aqui e
+  // cai no fluxo normal (agora/sem-acao) — deixa de contar como espera legítima.
+  if(cpAguardandoResposta(l) && emJanelaDeEspera(l)) return 'aguardando'; // atendi, cliente não respondeu e ainda está no prazo
   if(mensagensDoCliente(l) < CP_MIN_MSGS_PRIORIDADE) return 'sem-acao'; // lead raso: prospecção, fora dos cards de destaque
   return entraEmRetomada(l) ? 'agora' : 'sem-acao';                    // vale um toque? Fazer agora; senão, só em "Total de leads"
 }
@@ -9462,12 +9482,16 @@ renderResumoDia = function(items){
   const compromissos=cpAgendaContagem(ativos);
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
+  // v1071 — pedido do dono: quantos leads estão sem atender há 30 dias ou mais (prazo fixo,
+  // separado do "descanso" configurável do Cérebro — ver cpSemAtenderHaDias).
+  const semAtender30=cpContarSemAtender(ativos, 30);
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
-    <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
+    <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
+    <div class="ui-kpi" style="cursor:default" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
