@@ -281,9 +281,6 @@ async function acaoCriarManual(body, res, organizationId) {
   const telefone = String(body?.telefone || "").trim().slice(0, 40);
   const produto = String(body?.produto || "").trim().slice(0, 80);
   const observacao = String(body?.observacao || "").trim().slice(0, 2000);
-  // Foto do cliente recortada do print (dataURL pequeno). Só aceita imagem e tamanho sensato (~80KB).
-  let avatarFoto = String(body?.avatarFoto || "");
-  if (!/^data:image\//.test(avatarFoto) || avatarFoto.length > 110000) avatarFoto = "";
   if (!nome) return json(res, 400, { ok: false, error: "Informe o nome do lead." });
   try {
     const now = new Date();
@@ -318,7 +315,6 @@ async function acaoCriarManual(body, res, organizationId) {
         origem: "manual", // marca lead criado à mão — não pode ser engolido pela deduplicação por nome
         lead: { clientName: nome, phone: telefone },
         clientProfile: perfilCurto,
-        avatarFoto: avatarFoto || undefined,
         produtoInteresse: produto || "Não identificado",
         produtosInteresse: produto ? [produto] : [],
         etapaSugerida: "Novo",
@@ -726,10 +722,7 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     // {...anterior, ...nova, ...preservado (sem as chaves undefined)}; um undefined aqui seria
     // filtrado e o ...anterior anterior a ele voltaria a valer, repropagando o lembrete auto de
     // qualquer jeito. null sobrevive ao filtro e realmente limpa o campo.
-    lembrete: (anterior.lembrete && anterior.lembrete.auto !== true) ? anterior.lembrete : null,
-    // Foto (avatar): mantém a do arquivo novo se veio, senão a que o corretor já tinha colado.
-    // Sem isso, reimportar "pra atualizar" apagava a foto (a análise nova não traz avatar).
-    avatarFoto: nova.avatarFoto || anterior.avatarFoto || undefined
+    lembrete: (anterior.lembrete && anterior.lembrete.auto !== true) ? anterior.lembrete : null
   };
   const historicoEvolucao = Array.isArray(anterior.evolucao) ? anterior.evolucao.slice(-20) : [];
   if (evolucaoEntry) historicoEvolucao.push(evolucaoEntry);
@@ -1144,10 +1137,7 @@ async function acaoEditarDados(id, body, res, organizationId) {
   const telefone = typeof body?.telefone === "string" ? body.telefone.trim().slice(0, 40) : null;
   // Produto/empreendimento definido na mão pelo corretor (quando a IA não identificou).
   const produto = typeof body?.produto === "string" ? body.produto.trim().slice(0, 80) : null;
-  // Foto recortada do print (dataURL pequeno). Só aceita imagem e tamanho sensato (~80KB).
-  let avatarFoto = String(body?.avatarFoto || "");
-  if (!/^data:image\//.test(avatarFoto) || avatarFoto.length > 110000) avatarFoto = "";
-  if (!nome && !telefone && !produto && !avatarFoto) return json(res, 400, { ok: false, error: "Informe nome, telefone, produto ou foto pra editar." });
+  if (!nome && !telefone && !produto) return json(res, 400, { ok: false, error: "Informe nome, telefone ou produto pra editar." });
 
   const supabase = getSupabaseAdmin();
   if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
@@ -1167,7 +1157,6 @@ async function acaoEditarDados(id, body, res, organizationId) {
   if (!merged.lead || typeof merged.lead !== "object") merged.lead = {};
   if (nome != null) merged.lead.clientName = nome;
   if (telefone != null) merged.lead.phone = telefone;
-  if (avatarFoto) merged.avatarFoto = avatarFoto;
   // Produto definido na mão tem prioridade máxima na exibição (productFrom usa produtoInteresse primeiro).
   if (produto) {
     merged.produtoInteresse = produto;

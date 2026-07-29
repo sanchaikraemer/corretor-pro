@@ -9,8 +9,9 @@ const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 // tinha removido esses itens do Menu (certo pro desktop, que tem a lateral) e sumiu com eles no
 // mobile. Agora eles voltam como "menu-nav-item" (escondidos só no desktop) e navegam certo.
 
+// (v1074: a entrada "Condução do atendimento" saiu do Menu — o dono pediu, era a mesma coisa
+// que o painel da Home, que continua com o botão "Abrir Condução".)
 const destinos = [
-  ['pipeline', 'Condução do atendimento'],
   ['propostas', 'Gerador de proposta'],
   ['relatorio', 'Desempenho'],
   ['geladeira', 'Arquivados'],
