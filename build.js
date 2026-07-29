@@ -61,6 +61,36 @@ const textFiles = new Set([
   "recuperar-senha.html", "redefinir-senha.html", "privacidade.html", "termos.html"
 ]);
 
+// v1073 — o app publicado ia pro celular com TODOS os comentários e espaços do código-fonte
+// (app.js sozinho ~800KB). O esbuild remove só comentários/espaços na publicação — SEM renomear
+// nada e SEM reescrever lógica (minifyWhitespace apenas; nada de mangling, que quebraria os
+// onclick="funcao()" do HTML). Se o esbuild não estiver disponível por qualquer motivo, o build
+// publica o arquivo como está (nunca falha por causa da compressão).
+let esbuildTransform = null;
+try {
+  const esbuild = await import("esbuild");
+  esbuildTransform = esbuild.transformSync;
+} catch (_) {
+  console.warn("esbuild indisponível — publicando sem compressão de espaços/comentários.");
+}
+function comprimir(content, file) {
+  if (!esbuildTransform) return content;
+  const ehJs = file.endsWith(".js");
+  const ehCss = file.endsWith(".css");
+  if (!ehJs && !ehCss) return content; // HTML/JSON ficam como estão
+  try {
+    return esbuildTransform(content, {
+      loader: ehCss ? "css" : "js",
+      minifyWhitespace: true,
+      legalComments: "none"
+    }).code;
+  } catch (e) {
+    // Compressão nunca pode derrubar a publicação: em caso de erro, publica sem comprimir.
+    console.warn(`Compressão falhou em ${file} (publicando sem comprimir): ${e?.message || e}`);
+    return content;
+  }
+}
+
 for (const file of files) {
   const src = path.join(__dirname, file);
   if (!fs.existsSync(src)) throw new Error(`Arquivo obrigatório ausente no build: ${file}`);
@@ -70,7 +100,7 @@ for (const file of files) {
     const content = fs.readFileSync(src, "utf8")
       .replace(/__BUILD_ID__/g, buildId)
       .replace(/__VERSION__/g, version);
-    fs.writeFileSync(dest, content);
+    fs.writeFileSync(dest, comprimir(content, file));
   } else {
     fs.copyFileSync(src, dest);
   }

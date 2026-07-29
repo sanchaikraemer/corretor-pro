@@ -45,11 +45,11 @@ está exatamente nessas 12:
 | Rota | O que faz |
 |---|---|
 | `admin-contas.js` | Painel administrativo: excluir conta (`POST action:excluir-conta`) e relatório de uso de IA por empresa (`GET ?relatorio=uso-ia`) — as duas exclusivas do administrador da plataforma. |
-| `analisar.js` | Compatibilidade: processa um ZIP inteiro numa chamada só (quem manda o ZIP direto no corpo, sem passar pelo Storage antes). |
+| `analisar.js` | Compatibilidade: processa um ZIP inteiro numa chamada só (quem manda o ZIP direto no corpo, sem passar pelo Storage antes). Sem nenhum chamador no app atual (v1073) — candidata a remoção quando for preciso liberar uma vaga no teto de 12 funções da Vercel. |
 | `atalho-zip-token.js` | Gera/mostra a chave pessoal do Atalho do iPhone (ver `NOTAS-v1035.md`). |
 | `cerebro-config.js` | Configuração do Cérebro Comercial + aprendizado contínuo. |
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
-| `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. |
+| `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1073): as ações `lembrete-set`/`lembrete-clear`, `analise-comercial-set` e `nova-oportunidade-parceiro` não têm mais NENHUM chamador no front (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js pra lembretes) — ficam no servidor por serem pequenas e cobertas por teste, candidatas a remoção futura. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
 | `limpar-tudo.js` | Apaga todos os dados de uma empresa (rota destrutiva, desativada por padrão — exige `DIRECIONA_DANGER_LIMPAR_TUDO=ativo`). |
 | `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. |
@@ -133,6 +133,10 @@ a lista de funções). Se uma rota começar a falhar com erro citando uma tabela
 2. `.github/workflows/ci.yml` roda `npm test` automaticamente no PR e no push pro `main` (desde a
    v1043) — não bloqueia o merge sozinho (não é branch protection), é só um aviso visível.
 3. Mesclar no `main` → a Vercel publica sozinha (webhook do GitHub já configurado).
+   - Desde a v1073, `build.js` publica os `.js`/`.css` **sem comentários e espaços** (esbuild,
+     só `minifyWhitespace` — nunca renomeia identificador, senão os `onclick="funcao()"` do HTML
+     quebrariam; se o esbuild faltar/falhar, publica o arquivo como está). O `app.js` publicado
+     caiu de ~800KB pra ~510KB com isso + a faxina de código morto da mesma versão.
 4. Migrações do Supabase **não** são aplicadas automaticamente — são sempre um passo manual à
    parte (colar o SQL no SQL Editor).
 

@@ -469,7 +469,7 @@
           /* Só o papel da proposta ocupa a folha. O resto (formulário, títulos, botões) sai do
              fluxo pra não gerar páginas em branco. */
           #propostas .prop-form,#propostas .label,#propostas .title,#propostas .small,#propVoltarTopo,#propVoltarRodape{display:none !important}
-          .bottom-nav,#toast,#btnVoltarTopo{display:none !important}
+          .bottom-nav,#toast{display:none !important}
         }
       </style>
       <div style="margin-bottom:10px"><button type="button" id="propVoltarTopo" onclick="voltarDaProposta()" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer">‹ Voltar</button></div>
@@ -678,7 +678,6 @@
 </nav>
 <div id="menuDrawerBackdrop" onclick="fecharMenuGaveta()"></div>
 <div id="toast" class="toast"></div>
-<button type="button" id="btnVoltarTopo" title="Voltar ao topo" aria-label="Voltar ao topo" style="position:fixed;bottom:80px;right:18px;width:46px;height:46px;border-radius:50%;background:rgba(11,16,24,.92);color:var(--lime);border:1px solid var(--lime);font-size:20px;font-weight:950;cursor:pointer;z-index:998;display:none;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(255,98,88,.18);backdrop-filter:blur(6px);transition:transform .2s,opacity .2s">↑</button>
 
 <script src="/vendor/jszip.min.js?v=__VERSION__"></script>
 <!-- v1004 — login por conta (Supabase): o app passa a reconhecer a sessão de quem entrou por

@@ -39,8 +39,13 @@ assert.match(app, /function cpMetaAtendimentosDia\(\)/, "precisa existir o helpe
 assert.match(app, /window\.cpMetaAtendimentosDia = cpMetaAtendimentosDia/, "helper exposto pro restante do app");
 assert.match(app, /cpFimDeSemana\(\) \? 0 : Math\.max\(0, cpMetaAtendimentosDia\(\) - cpAtendidosHojeTotal\(items\)\)/,
   "cpFazerAgoraDose precisa usar a meta do corretor, não CP_DOSE_DIA fixo");
-assert.match(app, /cpFilaFazerAgora\(all\)\.slice\(0, \(typeof cpMetaAtendimentosDia==='function'\)\?cpMetaAtendimentosDia\(\):CP_DOSE_DIA\)/,
-  "a Condução precisa fatiar a fila pela meta do corretor");
+// v1073 — a geração antiga da Condução (que fatiava direto por cpMetaAtendimentosDia) era
+// código morto e foi removida; a Condução VIVA (cp788) fatia a fila pela dose do dia
+// (cpFazerAgoraDose = meta configurável menos atendidos hoje — checada acima).
+assert.match(app, /const doseCount=\(typeof cpFazerAgoraDose==='function'\)\?cpFazerAgoraDose\(leads\)/,
+  "a Condução precisa calcular a dose pela meta do corretor (cpFazerAgoraDose)");
+assert.match(app, /const dose=filaAgora\.slice\(0,doseCount\)/,
+  "a Condução precisa fatiar a fila pela dose do dia");
 
 // o helper NÃO pode ler de state.cerebroCfg (nunca é preenchido em runtime) — tem que
 // vir da mesma fonte da análise (obterCerebroConfigParaAnalise → localStorage/form).

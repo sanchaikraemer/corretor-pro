@@ -836,7 +836,6 @@ window.fecharMenuGaveta = fecharMenuGaveta;
 function clearAnalysis(){
   state.lead=null;
   state.focoLeadId=null;
-  if(window._colarAvatarHandler){ document.removeEventListener("paste", window._colarAvatarHandler); window._colarAvatarHandler=null; }
   state.analysis=null;
   state.msgStyle="direta";
   qs("#fileName").textContent="";
@@ -2310,41 +2309,6 @@ function semDialogoReal(l){
   return !houveDialogo;
 }
 
-// Registra "contato_manual" pra um lead pela lista (sem precisar abrir o lead).
-async function marcarContatoManualPorId(id){
-  if(!id) return false;
-  try{
-    const resp = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action:"aprendizado", evento:"contato_manual", detalhes:{ de:"listaPrioridade" } })
-    });
-    return resp.ok;
-  }catch(_){ return false; }
-}
-window.marcarContatoManualPorId = marcarContatoManualPorId;
-
-// (Botão "Já contatei" removido — "tratado hoje" só conta quando registra atendimento real.)
-// Função `contateiAgora` mantida pois é exportada e pode ser usada em testes/extensões.
-async function contateiAgora(id, btn){
-  if(!id) return;
-  if(btn){ btn.disabled = true; btn.textContent = "✓ Contatado"; btn.style.color = "var(--acao)"; btn.style.borderColor = "var(--acao)"; }
-  await marcarContatoManualPorId(id);
-  const card = document.querySelector(`[data-card-id="${id}"]`);
-  if(card){
-    card.style.transition = "opacity .25s, transform .25s";
-    card.style.opacity = "0";
-    card.style.transform = "translateX(18px)";
-    setTimeout(() => { card.remove(); }, 240);
-  }
-  const grupos = state.gruposHome || {};
-  for(const k of Object.keys(grupos)){
-    const arr = grupos[k];
-    if(!Array.isArray(arr)) continue;
-    const i = arr.findIndex(l => String(l.id) === String(id));
-    if(i >= 0) arr.splice(i, 1);
-  }
-}
-window.contateiAgora = contateiAgora;
 
 // Caixa de erro amigável com "Tentar de novo" — evita "Carregando..." preso e texto técnico.
 function boxErro(retryJs){
@@ -4159,100 +4123,6 @@ function abrirNovoLead(){
   setTimeout(() => qs("#novoLeadNome")?.focus(), 100);
 }
 function fecharNovoLead(){ qs("#novoLeadModal")?.remove(); }
-// Recebe um arquivo de imagem e devolve um dataURL QUADRADO (recorte central),
-// pronto pro avatar redondo. Sem IA: o corretor manda a imagem já enquadrada.
-function imagemQuadradaParaAvatar(file){
-  return new Promise((resolve) => {
-    if(!file) return resolve(null);
-    const r = new FileReader();
-    r.onerror = () => resolve(null);
-    r.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve(null);
-      img.onload = () => {
-        try{
-          const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
-          const s = Math.min(W, H);                  // maior quadrado que cabe na imagem
-          const sx = (W - s) / 2, sy = (H - s) / 2;  // centralizado
-          const out = 256;
-          const c = document.createElement("canvas"); c.width = out; c.height = out;
-          const ctx = c.getContext("2d");
-          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, out, out); // fundo PRETO (combina com o tema escuro; nunca branco)
-          ctx.drawImage(img, sx, sy, s, s, 0, 0, out, out);
-          resolve(c.toDataURL("image/jpeg", 0.88));
-        }catch(_){ resolve(null); }
-      };
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
-// Núcleo: recebe um arquivo/imagem → encaixa o quadrado central no avatar → salva no lead.
-async function processarAvatarFile(file, id){
-  if(!file || !id) return;
-  toast("⏳ Ajustando a foto no avatar…");
-  try{
-    // O corretor manda a imagem já quadrada/enquadrada. Sem IA: pega o quadrado central
-    // e o avatar redondo (object-fit:cover) preenche o círculo certinho.
-    const foto = await imagemQuadradaParaAvatar(file);
-    if(!foto){ toast("Não consegui usar essa imagem — tenta outra."); return; }
-    const save = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action:"editar-dados", id, avatarFoto: foto })
-    });
-    const sd = await save.json().catch(()=>({ok:false}));
-    if(!sd?.ok){ toast("Não consegui salvar a foto: " + (sd?.error||"erro")); return; }
-    if(state.lead && String(state.lead.id) === String(id)){
-      state.lead.avatarFoto = foto;
-      if(state.lead.analysis) state.lead.analysis.avatarFoto = foto;
-      renderLeadFoco(state.lead);
-    }
-    invalidarLeadsCache?.();
-    toast("✓ Avatar atualizado.");
-  }catch(err){ toast("Erro: " + (err?.message || err)); }
-}
-// Editar avatar por ARQUIVO anexado.
-async function editarAvatarLead(ev, id){
-  const file = ev?.target?.files?.[0];
-  if(ev?.target) ev.target.value = "";
-  await processarAvatarFile(file, id);
-}
-// Editar avatar COLANDO (Ctrl+V): lê a imagem da área de transferência.
-async function colarAvatarLead(id){
-  try{
-    if(!navigator.clipboard?.read){ toast("Seu navegador não deixa colar daqui — use o botão de anexar."); return; }
-    const itens = await navigator.clipboard.read();
-    for(const item of itens){
-      const tipo = item.types.find(t => t.startsWith("image/"));
-      if(tipo){
-        const blob = await item.getType(tipo);
-        const file = new File([blob], "colado.png", { type: tipo });
-        await processarAvatarFile(file, id);
-        return;
-      }
-    }
-    toast("Não tem imagem na área de transferência. Copie a foto primeiro (Ctrl+C).");
-  }catch(err){ toast("Não consegui colar: " + (err?.message || err)); }
-}
-// Ctrl+V no perfil do lead cola a imagem direto no avatar.
-function ligarColarAvatarGlobal(id){
-  if(window._colarAvatarHandler) document.removeEventListener("paste", window._colarAvatarHandler);
-  window._colarAvatarHandler = async (e) => {
-    if(!state.lead || String(state.lead.id) !== String(id)) return;
-    const items = e.clipboardData?.items || [];
-    for(const it of items){
-      if(it.type && it.type.startsWith("image/")){
-        e.preventDefault();
-        const blob = it.getAsFile();
-        if(blob) await processarAvatarFile(blob, id);
-        return;
-      }
-    }
-  };
-  document.addEventListener("paste", window._colarAvatarHandler);
-}
-window.editarAvatarLead = editarAvatarLead;
-window.colarAvatarLead = colarAvatarLead;
 
 async function salvarNovoLead(){
   const nome = (qs("#novoLeadNome")?.value || "").trim();
@@ -5255,7 +5125,6 @@ function renderLeadFoco(lead){
   if(!area||!lead) return;
   // v735: o card "Atendidos hoje" pertence apenas à tela Hoje.
   // Ao abrir um lead, removemos qualquer sobra desse card antes de montar o detalhe.
-  document.querySelector('#ui683AtendidosHojeCard')?.remove();
   document.body.classList.add('lead-foco-aberto');
   state.focoLeadId=lead?.id||null;
   const saud=document.querySelector('#saudacao');
@@ -8156,7 +8025,6 @@ qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
 qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
-qs("#carteiraExport")?.addEventListener("click", baixarRelatorioCarteira);
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
 qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   const id = state.lead?.id;
@@ -8345,46 +8213,11 @@ async function salvarMemoria(){
 // ===== Carteira completa: todos os leads num lugar (panorama + contatar hoje + ranking) =====
 // Reusa o mesmo dado (leads-recentes limit=2000) e os mesmos critérios da Hoje (scoreLead,
 // entraEmRetomada, etapas). Não cria função nova no servidor — tudo no cliente, em cima do cache.
-function carteiraEhFinal(e){ return e === "Geladeira"; }
-function carteiraLinhaLead(l, pos){
-  const idJs = JSON.stringify(String(l.id||""));
-  const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+"d" : "—";
-  const etapa = normalizarEtapa(l.etapa);
-  return `<div onclick='abrirLead(${idJs})' style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer">
-    ${pos!=null?`<div style="width:22px;text-align:center;font-weight:950;color:var(--muted);font-size:12px;flex-shrink:0">${pos}</div>`:""}
-    <div style="flex:1;min-width:0">
-      <div style="font-weight:950;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name||"Cliente")}</div>
-      <div class="small" style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(etapa)} · ${escapeHtml(motivoCurto(l))}</div>
-    </div>
-    <div style="text-align:right;flex-shrink:0">
-      <div class="small" style="color:var(--muted)">${dias} parado</div>
-    </div>
-  </div>`;
-}
-async function carregarCarteira(force){
-  if(state.active !== "carteira") return;
-  const box = qs("#carteiraBody");
-  if(!box) return;
-  const renderDe = (data) => {
-    if(data && data.ok === false){ box.innerHTML = boxErro("carregarCarteira(true)"); return; }
-    const all = (data?.items || []).map(limparLead);
-    state.carteiraLeads = all;
-    if(!all.length){ box.innerHTML = '<div class="empty">Nenhum lead ainda. Importe uma conversa pra começar.</div>'; return; }
-    renderCarteiraTabela();
-  };
-  if(!force && state.todosLeads?.length){
-    renderDe({ items: state.todosLeads });
-    return;
-  }
-  box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
-  try{
-    const data = await getLeadsData(force);
-    renderDe(data);
-  }catch(err){
-    box.innerHTML = boxErro("carregarCarteira(true)");
-  }
-}
-window.carregarCarteira = carregarCarteira;
+// v1073 — a versão original de carregarCarteira (e o antigo relatório .txt da carteira, sem
+// botão no HTML desde a reforma dos Atendimentos) era código morto: a versão VIVA é a do
+// bloco cp788 no fim do arquivo, que reatribui este nome. A declaração fica só pra o
+// "carregarCarteira = window.carregarCarteira" de lá ter o que reatribuir.
+let carregarCarteira = null;
 
 
 // Carrega históricos completos apenas quando o usuário pede uma exportação.
@@ -8441,7 +8274,9 @@ async function exportarLeadsCSV(btn){
       const lc = (a.leituraComercial && typeof a.leituraComercial === "object") ? a.leituraComercial : {};
       const diag = (a.diagnostico && typeof a.diagnostico === "object") ? a.diagnostico : {};
       const produto = (typeof produtosLabel === "function" ? produtosLabel(l) : "") || l.product || "";
-      const etapa = l.etapa || "";
+      // v1073 — a coluna ETAPA do Excel fala a mesma língua do app (Ativo/Arquivado), nunca o
+      // valor cru do banco (que pode ter vocabulário antigo de funil de antes da v1069).
+      const etapa = normalizarEtapa(l.etapa) === "Geladeira" ? "Arquivado" : "Ativo";
       const prioridade = (typeof prioridadeTituloCurto === "function") ? prioridadeTituloCurto(l) : "";
       const perfil = a.clientProfile && a.clientProfile !== "—" ? a.clientProfile : "";
       const porque = a.summary || l.summary || "";
@@ -8600,55 +8435,6 @@ function imprimirCarteiraAtiva(){
 }
 window.imprimirCarteiraAtiva = imprimirCarteiraAtiva;
 
-async function baixarRelatorioCarteira(){
-  let all = Array.isArray(state.carteiraLeads) ? state.carteiraLeads : [];
-  if(!all.length){ toast("Nada pra exportar ainda. Abra a Carteira primeiro."); return; }
-  toast("Carregando os históricos completos para o relatório…");
-  all = await carregarDetalhesParaExportacao(all);
-  const ativos = all.filter(l => !carteiraEhFinal(normalizarEtapa(l.etapa))).map(l => ({...l,_s:scoreRankingHoje(l)})).sort(compararPrioridadeAtendimento);
-  const finais = all.filter(l => carteiraEhFinal(normalizarEtapa(l.etapa)));
-  const ordem = ativos.concat(finais);
-  const linhas = [];
-  linhas.push("RELATÓRIO DA CARTEIRA — Corretor Pro");
-  linhas.push("Gerado em " + new Date().toLocaleString("pt-BR"));
-  linhas.push("Total de leads: " + all.length);
-  linhas.push("=".repeat(60));
-  linhas.push("");
-  for(const l of ordem){
-    const etapa = normalizarEtapa(l.etapa);
-    const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction + " dias parado" : "—";
-    linhas.push(`### ${l.name || "Cliente"} — ${etapa}`);
-    linhas.push(`Produto: ${l.product || "—"} | Prioridade: ${prioridadeTituloCurto(l)} | ${dias} | Telefone: ${l.phone || "—"}`);
-    const resumo = (l.analysis?.summary || l.summary || "").trim();
-    if(resumo) linhas.push(`Situacao: ${resumo}`);
-    const next = (l.analysis?.nextAction || l.nextAction || "").trim();
-    if(next) linhas.push(`Proxima acao: ${next}`);
-    const obs = (l.analysis?.memoria?.observacoes || "").trim();
-    if(obs) linhas.push(`Observacoes: ${obs}`);
-    const msgs = Array.isArray(l.recentMessages) ? l.recentMessages.filter(m => m && String(m.text||"").trim()) : [];
-    if(msgs.length){
-      linhas.push("Historico:");
-      for(const m of msgs){
-        linhas.push(`  [${m.date||""} ${m.time||""}] ${m.author||""}: ${String(m.text||"").replace(/\s+/g," ").trim()}`);
-      }
-    } else {
-      linhas.push("Historico: (sem mensagens registradas)");
-    }
-    linhas.push("");
-    linhas.push("-".repeat(60));
-    linhas.push("");
-  }
-  const blob = new Blob([linhas.join("\n")], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `carteira-corretor-pro-${new Date().toISOString().slice(0,10)}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
-  toast(`Relatório de ${all.length} leads baixado.`);
-}
-window.baixarRelatorioCarteira = baixarRelatorioCarteira;
 
 async function registrarAprendizado(evento, estilo, detalhes){
   const id = state.lead?.id;
@@ -8728,10 +8514,12 @@ async function reativarLeadGeladeira(id, btn){
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Atendimento" })
+      // v1073 — "Ativo" é o único estado de volta possível desde a v1069 (o servidor rejeita
+      // qualquer valor antigo de funil, ex.: "Atendimento" — mandar isso quebrava o Reativar).
+      body: JSON.stringify({ id, action: "etapa", etapa: "Ativo" })
     });
     if(!res.ok) throw new Error("falha");
-    toast("Lead reativado em Atendimento.");
+    toast("Lead reativado.");
     const card = document.querySelector(`[data-geladeira-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
@@ -8863,19 +8651,6 @@ if("serviceWorker" in navigator){
   });
 }
 addEventListener("resize",()=>{if(!isDesktop()){qsa(".screen").forEach(e=>e.classList.remove("active"));qs("#"+state.active)?.classList.add("active")}});
-
-// Botão "voltar ao topo" — aparece após rolar 400px, scroll suave ao clicar.
-(() => {
-  const btn = qs("#btnVoltarTopo");
-  if(!btn) return;
-  const atualizar = () => {
-    if(window.scrollY > 400) btn.style.display = "flex";
-    else btn.style.display = "none";
-  };
-  addEventListener("scroll", atualizar, { passive: true });
-  btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
-  atualizar();
-})();
 
 (async function checkStatus(){
   const stamp = qs("#statusStamp");
@@ -9584,7 +9359,6 @@ function ui631UltimoFalante(lead){
   for(let i=msgs.length-1;i>=0;i--){if(!msgs[i]||!String(msgs[i].text||"").trim())continue;return ehMsgDoCliente(msgs[i],pn)?"cliente":"você";}
   return "—";
 }
-window.ui631CopyResponse=async function(){const t=qs("#ui631ResponseText")?.textContent||"";if(!t){toast("Nenhuma mensagem disponível.");return;}try{await navigator.clipboard.writeText(t);toast("Mensagem copiada.")}catch(_){toast("Não consegui copiar.")}};
 
 // Atualização #724-2: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
@@ -10389,18 +10163,6 @@ async function ui675BuscarDetalhe(id){
   if(!r.ok||!d?.ok)return null;
   return d.item||null;
 }
-async function ui675PersistirFallback(id,analysis){
-  const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},cache:"no-store",body:JSON.stringify({action:"analise-comercial-set",id,analysis})});
-  const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida ao salvar a análise."}));
-  if(!r.ok||!d?.ok||!d?.analysis){
-    const erro=String(d?.error||"Não foi possível salvar a análise comercial corrigida.");
-    if(/action inválida/i.test(erro)){
-      throw new Error("Backend desatualizado: o arquivo api/lead-update.js não foi substituído na pasta /api.");
-    }
-    throw new Error(erro);
-  }
-  return d.analysis;
-}
 
 // Observação de atendimento (texto ou áudio gravado na hora): soma na linha do tempo do
 // lead (sem apagar nada) e reanalisa, pra virar contexto real pras próximas sugestões.
@@ -10784,40 +10546,6 @@ window.ui670Reanalisar=async function(btn){
   }
 };
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
-window.ui671FecharNovaOportunidade=function(){qs("#ui671NovaOppModal")?.remove();};
-window.ui670NovaOportunidade=function(){
-  const lead=state.lead;if(!lead?.id){toast("Abra o contato parceiro antes de registrar a oportunidade.");return;}
-  qs("#ui671NovaOppModal")?.remove();
-  const opts=(typeof EMPREENDIMENTOS_CATALOGO!=="undefined"?EMPREENDIMENTOS_CATALOGO:[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
-  const el=document.createElement("div");el.id="ui671NovaOppModal";el.className="ui671-modal";
-  el.innerHTML=`<div class="ui671-modal-card"><div class="ui671-modal-head"><div><small>Corretor parceiro</small><h3>Nova oportunidade</h3><p>${escapeHtml(lead.name||"Contato")}</p></div><button type="button" onclick="ui671FecharNovaOportunidade()">✕</button></div>
-  <label>Comprador final *</label><input id="ui671OppComprador" type="text" placeholder="Nome ou identificação do novo cliente" autocomplete="off">
-  <label>Empreendimento ou produto *</label><select id="ui671OppProduto"><option value="">Selecione</option>${opts}<option value="Outro">Outro</option></select>
-  <div id="ui671OppOutroWrap" hidden><label>Qual produto?</label><input id="ui671OppOutro" type="text" placeholder="Informe o empreendimento ou produto"></div>
-  <label>Contexto inicial</label><textarea id="ui671OppObs" rows="4" placeholder="O que o parceiro já informou sobre perfil, valor, prazo ou necessidade"></textarea>
-  <div class="ui671-modal-info">Será criada uma oportunidade independente, vinculada a este parceiro. A negociação anterior continuará preservada.</div>
-  <div class="ui671-modal-actions"><button class="secondary" type="button" onclick="ui671FecharNovaOportunidade()">Cancelar</button><button id="ui671OppSalvar" type="button" onclick="ui671SalvarNovaOportunidade()">Criar oportunidade</button></div></div>`;
-  document.body.appendChild(el);
-  el.addEventListener("click",e=>{if(e.target===el)ui671FecharNovaOportunidade();});
-  qs("#ui671OppProduto")?.addEventListener("change",e=>{const w=qs("#ui671OppOutroWrap");if(w)w.hidden=e.target.value!=="Outro";});
-  setTimeout(()=>qs("#ui671OppComprador")?.focus(),80);
-};
-window.ui671SalvarNovaOportunidade=async function(){
-  const lead=state.lead,comprador=String(qs("#ui671OppComprador")?.value||"").trim();
-  const sel=String(qs("#ui671OppProduto")?.value||"").trim();
-  const produto=sel==="Outro"?String(qs("#ui671OppOutro")?.value||"").trim():sel;
-  const observacao=String(qs("#ui671OppObs")?.value||"").trim();
-  if(!comprador){toast("Informe o novo comprador.");qs("#ui671OppComprador")?.focus();return;}
-  if(!produto){toast("Informe o empreendimento ou produto.");(sel==="Outro"?qs("#ui671OppOutro"):qs("#ui671OppProduto"))?.focus();return;}
-  const btn=qs("#ui671OppSalvar");if(btn){btn.disabled=true;btn.textContent="Criando...";}
-  try{
-    const r=await fetch("./api/lead-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"nova-oportunidade-parceiro",id:lead.id,compradorFinal:comprador,produto,observacao})});
-    const d=await r.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
-    if(!r.ok||!d.ok)throw new Error(d.error||"Não foi possível criar a oportunidade.");
-    ui671FecharNovaOportunidade();invalidarLeadsCache();if(typeof loadRecentLeads==="function")await loadRecentLeads(true);toast("Nova oportunidade criada e vinculada ao parceiro.");
-    await abrirLead(String(d.id));
-  }catch(err){toast("Erro: "+(err?.message||err));if(btn){btn.disabled=false;btn.textContent="Criar oportunidade";}}
-};
 
 function ui670ScheduleHtml(lead){
   if(!lead?.id)return "";
@@ -10845,111 +10573,6 @@ function ui670DetailRows(lead,mc){
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
 
 
-/* ============================================================
-   ATUALIZAÇÃO #683 — FLUXO DIÁRIO DO CORRETOR
-   - Atendidos hoje visível e clicável
-   - Último atendimento no detalhe do lead
-   - Botões rápidos: copiar, atendido, agendar, observação, proposta feita,
-     vendido, perdido e arquivar
-   - Atendido é ação registrada, não troca a etapa comercial do lead
-   ============================================================ */
-(function(){
-  if(window.__cp683FluxoDiario) return;
-  window.__cp683FluxoDiario = true;
-
-  function ui683InjectStyles(){
-    if(document.getElementById('ui683Styles')) return;
-    const st=document.createElement('style'); st.id='ui683Styles';
-    st.textContent=`
-      .ui683-card{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(55,232,255,.05),rgba(255,98,88,.035));box-shadow:0 12px 36px rgba(0,0,0,.12)}
-      .ui683-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.ui683-head h3{margin:0;font-size:17px}.ui683-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.ui683-pill{border:1px solid rgba(255,98,88,.45);background:rgba(255,98,88,.12);color:var(--acao);border-radius:999px;padding:7px 12px;font-weight:950;font-size:12px;white-space:nowrap}.ui683-list{display:grid;gap:8px}.ui683-row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);cursor:pointer}.ui683-row:hover{background:rgba(255,255,255,.05)}.ui683-time{font-weight:950;color:var(--dados);font-size:13px}.ui683-name{font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ui683-sub{font-size:11px;color:var(--muted);margin-top:2px}.ui683-empty{padding:15px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:13px}.ui683-link{border:0;background:transparent;color:var(--acao);font-weight:950;cursor:pointer}
-      .ui683-last{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);color:var(--soft);font-size:12px}.ui683-last b{color:var(--text)}
-      .ui683-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}.ui683-actions button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:9px 13px;font-size:12px;font-weight:950;cursor:pointer}.ui683-actions button:hover{background:rgba(255,255,255,.07)}.ui683-actions .primary{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.13);color:var(--acao)}.ui683-actions .danger{border-color:rgba(255,98,88,.35);color:var(--acao)}.ui683-mini{color:var(--muted);font-size:11px;margin-top:2px}.cart-row.is-atendido-hoje{box-shadow:inset 3px 0 0 var(--acao)}.cart-row .cart-last-att{display:block;margin-top:3px;color:var(--dados);font-size:11px;font-weight:800}
-      @media(max-width:760px){.ui683-row{grid-template-columns:58px 1fr}.ui683-row .ui683-open{display:none}.ui683-actions{position:relative}.ui683-actions button{flex:1 1 calc(50% - 8px)}}`;
-    document.head.appendChild(st);
-  }
-
-  function ui683Eventos(lead){ return Array.isArray(lead?.analysis?.aprendizado?.eventos) ? lead.analysis.aprendizado.eventos : []; }
-  function ui683ContatoManualEventos(lead){ return ui683Eventos(lead).filter(e=>e?.evento==='contato_manual' && e?.quando).sort((a,b)=>new Date(b.quando)-new Date(a.quando)); }
-  function ui683UltimoAtendimento(lead){ return ui683ContatoManualEventos(lead)[0] || null; }
-  function ui683DataHoraBR(iso){
-    try{return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));}catch(_){return '—';}
-  }
-  function ui683HoraBR(iso){
-    try{return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));}catch(_){return '—';}
-  }
-  function ui683Origem(ev){
-    const de=ev?.detalhes?.de||ev?.detalhes?.tipo||'';
-    return ({botao_atendido:'marcado no botão Marcar atendimento',novoAtendimento:'observação/atendimento registrado',listaPrioridade:'marcado pela lista',copiar_msg:'mensagem copiada',leadFoco:'detalhe do lead'})[de] || 'atendimento registrado';
-  }
-  function ui683AtendidosHoje(base){
-    const hoje = typeof inicioDoDiaBR === 'function' ? inicioDoDiaBR() : (()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
-    const lista=(Array.isArray(base)?base:[]).map(l=>({lead:l,ev:ui683UltimoAtendimento(l)})).filter(x=>x.ev?.quando && new Date(x.ev.quando)>=hoje);
-    return lista.sort((a,b)=>new Date(b.ev.quando)-new Date(a.ev.quando));
-  }
-
-  window.abrirAtendidosHoje = function(){
-    state.carteiraFiltro='atendidos-hoje';
-    state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE || 80;
-    if(typeof show==='function') show('carteira');
-    setTimeout(()=>{ try{ if(typeof carregarCarteira==='function') carregarCarteira(false); }catch(_){} }, 60);
-  };
-
-  function ui683RenderAtendidosHojeHome(){
-    // v748: removido da tela principal/home por solicitação do usuário.
-    const antigo = qs('#ui683AtendidosHojeCard');
-    if(antigo) antigo.remove();
-    return;
-  }
-
-  const __ui683ProcessarDashboard = window._processarDashboard || (typeof _processarDashboard==='function' ? _processarDashboard : null);
-  if(__ui683ProcessarDashboard){
-    _processarDashboard = async function(data){
-      const out = await __ui683ProcessarDashboard(data);
-      ui683RenderAtendidosHojeHome();
-      return out;
-    };
-    window._processarDashboard = _processarDashboard;
-  }
-
-  const __ui683BuildDesempenho = typeof buildDesempenhoInsightsHTML==='function' ? buildDesempenhoInsightsHTML : null;
-  if(__ui683BuildDesempenho){
-    buildDesempenhoInsightsHTML = function(items){
-      let html=__ui683BuildDesempenho(items);
-      html=html.replace(/onclick="show\('home'\)" title="Ver atendidos hoje"/g, 'onclick="abrirAtendidosHoje()" title="Ver atendidos hoje"');
-      return html;
-    };
-    window.buildDesempenhoInsightsHTML = buildDesempenhoInsightsHTML;
-  }
-
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-
-  function ui683EnhanceLead(lead){
-    ui683InjectStyles();
-    const wrap=qs('#leadFocoArea .lead-foco'); if(!wrap) return;
-    qs('#ui683LeadTools')?.remove();
-    qs('#ui683LastAttendance')?.remove();
-    const head=wrap.querySelector('.ui-lead-head') || wrap.querySelector('.ui670-hero') || wrap.firstElementChild;
-    const ev=ui683UltimoAtendimento(lead);
-    const last=document.createElement('div'); last.id='ui683LastAttendance'; last.className='ui683-last';
-    last.innerHTML=ev?.quando ? `<b>Último atendimento:</b> ${escapeHtml(ui683DataHoraBR(ev.quando))} <span>· ${escapeHtml(ui683Origem(ev))}</span>` : `<b>Último atendimento:</b> ainda não registrado hoje`;
-    const actions=document.createElement('div'); actions.id='ui683LeadTools'; actions.className='ui683-actions';
-    const id=JSON.stringify(String(lead?.id||'')); const nome=safeJson(lead?.name||''); const prod=safeJson(lead?.product||'');
-    actions.innerHTML=`
-      <button type="button" class="primary" onclick="document.querySelector('#ui667AtendidoBtn')?.click()">✓ Marcar atendimento</button>
-      <button type="button" onclick="ui631CopyResponse&&ui631CopyResponse()">Copiar resposta</button>
-      <button type="button" onclick="document.querySelector('#ui631ResponseText,#msgFocoText')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver mensagem</button>
-      <button type="button" onclick="document.querySelector('#novoAtendimentoPanel, #ui670NoteSlot')?.scrollIntoView({behavior:'smooth',block:'center'})">Adicionar observação</button>
-      <button type="button" onclick="abrirModalAgendar&&abrirModalAgendar(${id},${nome})">Agendar retorno</button>
-      <button type="button" onclick="ui683MarcarEtapaRapida(${id},'Visita/Proposta','Proposta feita')">Proposta feita</button>
-      <button type="button" onclick="arquivarLead(${id},${nome})">Arquivar</button>`;
-    if(head?.parentElement){ head.parentElement.insertBefore(last, head.nextSibling); head.parentElement.insertBefore(actions, last.nextSibling); }
-    else { wrap.prepend(actions); wrap.prepend(last); }
-  }
-
-  // Atualiza a versão exigida pela análise comercial a partir desta atualização.
-  window.CORRETOR_PRO_VERSAO_FLUXO_DIARIO = 683;
-})();
 
 /* ============================================================
    #683 FECHAMENTO — BOTÕES RÁPIDOS E FLUXO DIÁRIO COMPLETO
@@ -10971,65 +10594,6 @@ function ui670DetailRows(lead,mc){
       return await res.json().catch(()=>({ ok:false }));
     }catch(_){ return { ok:false }; }
   }
-
-  function ui683DataISO(dias){
-    const d = new Date();
-    d.setDate(d.getDate() + Number(dias || 0));
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-
-  window.abrirModalAgendar = function(id, nome){
-    if(!id) return toast('Lead não identificado.');
-    document.getElementById('ui683AgendaModal')?.remove();
-    const hoje = ui683DataISO(0);
-    const html = document.createElement('div');
-    html.id = 'ui683AgendaModal';
-    html.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px';
-    html.innerHTML = `<div style="width:min(440px,100%);background:var(--bg);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">
-        <div><h3 style="margin:0;color:var(--text)">Agendar retorno</h3><div class="small" style="margin-top:4px;color:var(--muted)">${escapeHtml(nome || 'Lead')}</div></div>
-        <button type="button" onclick="document.getElementById('ui683AgendaModal')?.remove()" style="border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer">×</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:14px 0">
-        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},0)">Hoje</button>
-        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},1)">Amanhã</button>
-        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},3)">+3 dias</button>
-        <button class="btn" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},7)">+7 dias</button>
-      </div>
-      <label class="small" style="display:block;margin:10px 0 6px;color:var(--muted);font-weight:900">Escolher data</label>
-      <input id="ui683AgendaData" type="date" min="${hoje}" value="${hoje}" style="width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text)">
-      <button class="btn primary" type="button" onclick="ui683AgendarRetorno(${JSON.stringify(String(id))},null,document.getElementById('ui683AgendaData')?.value)" style="width:100%;margin-top:12px">Salvar retorno</button>
-    </div>`;
-    document.body.appendChild(html);
-  };
-
-  window.ui683AgendarRetorno = async function(id, dias, dataManual){
-    const data = dataManual || ui683DataISO(dias);
-    await reagendarLembrete(id, data);
-    await ui683RegistrarEvento(id, 'retorno_agendado', { data, de:'botao_rapido' });
-    document.getElementById('ui683AgendaModal')?.remove();
-  };
-
-  window.ui683AdicionarObservacaoRapida = function(){
-    const alvo = document.querySelector('#novoAtendimentoTexto, #memoriaObservacoes, textarea');
-    if(alvo){ alvo.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>alvo.focus(),260); }
-    else toast('Campo de observação não encontrado neste lead.');
-  };
-
-  window.ui631CopyResponse = async function(){
-    const txt = document.querySelector('#ui631ResponseText')?.textContent || document.querySelector('#msgFocoText')?.textContent || '';
-    if(!txt.trim()) return toast('Nenhuma mensagem disponível.');
-    try{
-      await navigator.clipboard.writeText(txt);
-      toast('Mensagem copiada.');
-      const lead = state.lead;
-      if(lead?.id){
-        try{ await ui683RegistrarEvento(lead.id, 'mensagem_copiada', { de:'botao_rapido', preview: txt.slice(0,240) }); }catch(_){}
-      }
-    }catch(_){
-      toast('Não consegui copiar.');
-    }
-  };
 
   async function ui683MoverEtapaComEvento(id, etapa, label, evento){
     if(!id) return toast('Lead não identificado.');
@@ -11075,25 +10639,10 @@ function ui670DetailRows(lead,mc){
     }catch(err){ toast('Não consegui atualizar: ' + (err?.message || err)); }
   }
 
-  window.ui683MarcarEtapaRapida = function(id, etapa, label){
-    const evento = etapa === 'Visita/Proposta' ? 'proposta_feita' : 'etapa_alterada';
-    return ui683MoverEtapaComEvento(id, etapa, label, evento);
-  };
-
-  const antigoArquivarLead = window.arquivarLead;
+  // v1073 — a versão viva do Arquivar: confirmação em-app + evento + volta pra home.
   window.arquivarLead = function(id, nome){
     return ui683MoverEtapaComEvento(id, 'Geladeira', 'Arquivado', 'lead_arquivado');
   };
-
-  function ui683CorrigirBotoesRapidos(){
-    const tools = document.getElementById('ui683LeadTools');
-    if(!tools || tools.dataset.fechar683 === '1') return;
-    tools.dataset.fechar683 = '1';
-    tools.innerHTML = tools.innerHTML
-      .replace(/document\.querySelector\('#novoAtendimentoPanel, #ui670NoteSlot'\)\?\.scrollIntoView\(\{behavior:'smooth',block:'center'\}\)/g, 'ui683AdicionarObservacaoRapida()')
-      .replace(/abrirModalAgendar&&abrirModalAgendar/g, 'abrirModalAgendar');
-  }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
 })();
 
 
@@ -11456,6 +11005,10 @@ function ui670DetailRows(lead,mc){
       requestAnimationFrame(()=>setTimeout(()=>screenPolish({animate:true}), 40));
       return ret;
     };
+    // v1073 — ressincroniza o nome interno do módulo com a versão embrulhada. Antes isso era
+    // feito (por acaso) pelos blocos mortos cp696/cp697/cp703, removidos nesta versão — sem esta
+    // linha, chamadas internas tipo show("home") pulariam o polimento/sininho desta camada.
+    try{ show = window.show; }catch(_){ }
   }
   const bell = $('#topBell');
   if(bell){
@@ -11482,129 +11035,16 @@ function ui670DetailRows(lead,mc){
 
 
 /* ============================================================
-   Atualização #724-2 — Hotfix real mobile
-   - Remove as correções conflitantes anteriores de Atendimentos.
-   - Atendimentos: lista simples, página com rolagem natural, sem container interno.
-   - Botão + fica dentro da barra inferior, no centro, junto dos demais ícones.
-   - Loading da Home não fica preso: mostra skeleton e libera fallback se a API demorar.
+   Atualização #724-2 (reduzida na v1073) — só a parte viva do antigo "cp694":
+   o embrulho de carregarDashboard que mostra o spinner "Carregando sua carteira..."
+   na Home e um vigia de 9s com saída de emergência pra Atendimentos (a checagem
+   homeAindaEmSkeleton, mais acima no arquivo, depende desse spinner existir).
+   As gerações mortas de renderizadores da carteira e os "fixers" de
+   layout redundantes que moravam aqui foram removidos.
    ============================================================ */
 (function(){
   if(window.__cp694HotfixMobile) return;
   window.__cp694HotfixMobile = true;
-  const VERSION = '__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function safeId(l){ return JSON.stringify(String(l?.id || '')); }
-  function etapaTxt(l){
-    const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || 'Atendimento');
-    const p = String(l?.product || '').trim();
-    return p ? `${e} · ${p}` : e;
-  }
-  function acaoTxt(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
-    return raw.length > 72 ? raw.slice(0,69).trim() + '...' : raw;
-  }
-  function statusTxt(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
-    const t = String(p.titulo || '').trim();
-    if(/atender/i.test(t)) return 'Atender';
-    if(/retomar/i.test(t)) return 'Retomar';
-    if(/aguardar/i.test(t)) return 'Aguardar';
-    if(/sem/i.test(t)) return 'Sem ação';
-    return t || 'Abrir';
-  }
-  function statusClass(l){
-    const p = typeof prioridadeAtendimento === 'function' ? (prioridadeAtendimento(l)||{}) : {};
-    if(p.grupo === 'acao-hoje') return 'hot';
-    if(p.grupo === 'retomar-cuidado') return 'warm';
-    if(p.grupo === 'baixa-prioridade') return 'low';
-    return 'normal';
-  }
-  function leadsAtendimento(){
-    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads :
-      (Array.isArray(state?.itemsAtivos) && state.itemsAtivos.length ? state.itemsAtivos :
-      (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
-    return arr.filter(l=>{
-      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-      return e !== 'Geladeira';
-    }).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
-      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
-  }
-  function rowLead(l){
-    return `<button type="button" class="cp694-lead-row ${statusClass(l)}" onclick='abrirLead(${safeId(l)})'>
-      <span class="cp694-lead-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapaTxt(l))}</em><small>${esc(acaoTxt(l))}</small></span>
-      <span class="cp694-lead-status">${esc(statusTxt(l))}</span>
-    </button>`;
-  }
-
-  window.renderCarteiraTabela = function(){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const old = window.scrollY || document.documentElement.scrollTop || 0;
-    const lista = leadsAtendimento();
-    const rows = lista.length ? lista.map(rowLead).join('') : `<div class="cp694-empty"><b>Nenhum atendimento agora.</b><span>Quando houver lead ativo, ele aparece aqui por prioridade.</span></div>`;
-    box.innerHTML = `<section class="cp694-atendimentos">
-      <header class="cp694-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp694-lista">${rows}</div>
-    </section>`;
-    requestAnimationFrame(()=>{
-      cp694FixLayout();
-      if(state?.active === 'carteira' && old > 80) window.scrollTo(0, old);
-    });
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
-
-  window.setCarteiraFiltro = function(){
-    state.carteiraFiltro = 'todos';
-    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
-    else window.renderCarteiraTabela();
-  };
-
-  function cp694FixVersion(){
-    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
-      const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #__VERSION__');
-    });
-  }
-  function cp694FixFab(){
-    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
-      el.removeAttribute('style');
-      el.style.setProperty('position','static','important');
-      el.style.setProperty('left','auto','important');
-      el.style.setProperty('top','auto','important');
-      el.style.setProperty('transform','none','important');
-      el.style.setProperty('width','38px','important');
-      el.style.setProperty('height','38px','important');
-      el.style.setProperty('margin','0 auto','important');
-      el.style.setProperty('border-width','3px','important');
-      el.style.setProperty('font-size','24px','important');
-      el.style.setProperty('line-height','1','important');
-      el.style.setProperty('z-index','1','important');
-    });
-    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
-      el.style.setProperty('position','relative','important');
-      el.style.setProperty('display','flex','important');
-      el.style.setProperty('align-items','center','important');
-      el.style.setProperty('justify-content','center','important');
-      el.style.setProperty('padding','0','important');
-      el.style.setProperty('overflow','visible','important');
-    });
-  }
-  function cp694FixScroll(){
-    document.querySelectorAll('#carteira,#carteiraBody,#pipeline,#pipelineBoard,.cp-virtual-wrap,.cp-virtual-inner,.ui-priority-list,.ui-pipeline-list,.cp694-lista').forEach(el=>{
-      el.style.setProperty('height','auto','important');
-      el.style.setProperty('max-height','none','important');
-      el.style.setProperty('overflow','visible','important');
-      el.style.setProperty('overflow-y','visible','important');
-      el.style.setProperty('contain','none','important');
-      el.style.setProperty('transform','none','important');
-    });
-  }
-  function cp694FixLayout(){ cp694FixVersion(); cp694FixFab(); cp694FixScroll(); }
 
   const oldDash = window.carregarDashboard || (typeof carregarDashboard === 'function' ? carregarDashboard : null);
   if(oldDash){
@@ -11620,562 +11060,51 @@ function ui670DetailRows(lead,mc){
         }
       }, 9000);
       try{ return await oldDash.apply(this, arguments); }
-      finally{ clearTimeout(watchdog); setTimeout(cp694FixLayout, 80); }
+      finally{ clearTimeout(watchdog); }
     };
     try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
   }
 
-  document.addEventListener('DOMContentLoaded', cp694FixLayout);
-  window.addEventListener('resize', cp694FixLayout);
-  setTimeout(cp694FixLayout, 250);
-  setTimeout(cp694FixLayout, 1000);
-
   const css = document.createElement('style');
   css.id = 'cp694HotfixCSS';
   css.textContent = `
-    html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
-    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.cp-virtual-wrap,.cp-virtual-inner,.ui-priority-list,.ui-pipeline-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;will-change:auto!important;transform:none!important}
-    .cp-virtual-pad{display:none!important}
-    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page{display:none!important}
     #carteiraBody{padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))!important}
-    .cp694-atendimentos{max-width:760px;margin:0 auto;padding:0 0 calc(132px + env(safe-area-inset-bottom,0px))}
-    .cp694-head{margin:0 0 14px}.cp694-head h2{margin:0;font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.045em;color:var(--text)}.cp694-head p{margin:7px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
-    .cp694-lista{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.62);overflow:visible!important;margin-bottom:calc(120px + env(safe-area-inset-bottom,0px))}
-    .cp694-lead-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-height:72px;padding:11px 11px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}
-    .cp694-lead-row:last-child{border-bottom:0}.cp694-lead-row::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp694-lead-row.hot::before{background:var(--lime)}.cp694-lead-row.warm::before{background:var(--morno)}.cp694-lead-row:active{background:rgba(255,98,88,.08)}
-    .cp694-lead-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp694-lead-copy b{display:block;color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp694-lead-copy em{display:block;color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp694-lead-copy small{display:block;color:rgba(227,245,249,.76);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cp694-lead-status{justify-self:end;display:inline-flex;align-items:center;justify-content:center;min-width:58px;max-width:66px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,98,88,.38);background:rgba(255,98,88,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp694-lead-row.normal .cp694-lead-status,.cp694-lead-row.low .cp694-lead-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}
-    .cp694-empty{padding:22px;color:var(--muted);display:flex;flex-direction:column;gap:6px}.cp694-empty b{color:var(--text)}
-    .cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:static!important;left:auto!important;top:auto!important;transform:none!important;width:38px!important;height:38px!important;margin:0 auto!important;border-width:3px!important;font-size:24px!important;line-height:1!important;box-shadow:0 6px 14px rgba(0,0,0,.28)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
-    #btnVoltarTopo{display:none!important}.cp694-loading{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text);text-align:center}.cp694-loading span{color:var(--muted);font-size:14px}.cp694-loading button{margin-top:10px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--text);padding:10px 16px;font-weight:900}.cp694-spinner{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp694spin .8s linear infinite}@keyframes cp694spin{to{transform:rotate(360deg)}}
-    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.cp694-atendimentos{padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}.cp694-lista{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
+    .cp694-loading{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text);text-align:center}.cp694-loading span{color:var(--muted);font-size:14px}.cp694-loading button{margin-top:10px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--text);padding:10px 16px;font-weight:900}.cp694-spinner{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp694spin .8s linear infinite}@keyframes cp694spin{to{transform:rotate(360deg)}}
   `;
   document.head.appendChild(css);
 })();
 
 
 /* ============================================================
-   Atualização #724-2 — Correção real da lista mobile
-   - Remove janela/virtualização na tela mobile onde os leads estavam sumindo.
-   - Pipeline e Atendimentos usam rolagem natural da página, sem lista interna.
-   - Botão + fica dentro da barra inferior, alinhado aos demais ícones.
+   Atualização #724-2 (reduzida na v1073) — só o CSS vivo do antigo "cp695".
+   As gerações mortas de renderCarteiraTabela/carregarPipeline que moravam aqui
+   (substituídas pela versão final cp788 no fim do arquivo) foram removidas.
+   O que fica é o que a tela atual ainda usa:
+   - a trava de overflow/height (correção histórica de tela travada/rolagem presa);
+   - o visual de .cp695-list/.cp695-empty/.cp695-loading (a lista da Condução/Atendimentos
+     renderizada pelo cp788 usa exatamente essas classes);
+   - o "+" preso dentro da barra de baixo (sem isso ele volta a flutuar solto);
+   - o respiro de padding das telas Carteira/Condução no celular.
    ============================================================ */
 (function(){
   if(window.__cp695RealMobileFix) return;
   window.__cp695RealMobileFix = true;
-  const VERSION = '__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
-
-  function esc(v){
-    try{ return escapeHtml(String(v ?? '')); }
-    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
-  function activeItems(){
-    const arr = Array.isArray(state?.carteiraLeads) && state.carteiraLeads.length ? state.carteiraLeads :
-      (Array.isArray(state?.itemsAtivos) && state.itemsAtivos.length ? state.itemsAtivos :
-      (Array.isArray(state?.todosLeads) ? state.todosLeads : []));
-    return arr.filter(l=>{
-      const e = typeof normalizarEtapa === 'function' ? normalizarEtapa(l?.etapa) : String(l?.etapa || '');
-      return e !== 'Geladeira';
-    });
-  }
-  function sortedLeads(list){
-    if(typeof cp786OrdenarConducao==='function') return cp786OrdenarConducao(list||[]);
-    return (list||[]).map(l=>({ ...l, _s: typeof scoreRankingHoje === 'function' ? scoreRankingHoje(l) : 0 }))
-      .sort(typeof compararPrioridadeAtendimento === 'function' ? compararPrioridadeAtendimento : (()=>0));
-  }
-  function etapaProduto(l){
-    const p = String(l?.product || '').trim();
-    return p || 'Produto não identificado';
-  }
-  function resumoAcao(l){ return cp786ResumoAcao(l); }
-  function badge(l){ return cp786Badge(l); }
-  function cls(l){ return cp786Classe(l); }
-  function row(l){
-    return `<button type="button" class="cp695-lead-row ${cls(l)}" onclick='abrirLead(${idJs(l)})'>
-      <span class="cp695-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(etapaProduto(l))}</em><small>${esc(resumoAcao(l))}</small></span>
-      <span class="cp695-status">${esc(badge(l))}</span>
-      <span class="cp695-chevron">›</span>
-    </button>`;
-  }
-
-  function fixVersion(){
-    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
-      const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #__VERSION__');
-    });
-  }
-  function fixFab(){
-    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
-      el.style.setProperty('position','relative','important');
-      el.style.setProperty('height','56px','important');
-      el.style.setProperty('min-height','56px','important');
-      el.style.setProperty('display','flex','important');
-      el.style.setProperty('align-items','center','important');
-      el.style.setProperty('justify-content','center','important');
-      el.style.setProperty('padding','0','important');
-      el.style.setProperty('transform','none','important');
-    });
-    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
-      el.removeAttribute('style');
-      el.style.setProperty('position','relative','important');
-      el.style.setProperty('top','0','important');
-      el.style.setProperty('left','0','important');
-      el.style.setProperty('transform','none','important');
-      el.style.setProperty('width','34px','important');
-      el.style.setProperty('height','34px','important');
-      el.style.setProperty('margin','0','important');
-      el.style.setProperty('border','2px solid var(--cp-shell, var(--bg))','important');
-      el.style.setProperty('border-radius','999px','important');
-      el.style.setProperty('font-size','23px','important');
-      el.style.setProperty('font-weight','500','important');
-      el.style.setProperty('line-height','1','important');
-      el.style.setProperty('box-shadow','0 5px 12px rgba(0,0,0,.22)','important');
-    });
-  }
-  function fixScrollContainers(){
-    document.querySelectorAll('#carteira,#carteiraBody,#pipeline,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner,.cp694-lista,.cp695-list').forEach(el=>{
-      el.style.setProperty('height','auto','important');
-      el.style.setProperty('max-height','none','important');
-      el.style.setProperty('overflow','visible','important');
-      el.style.setProperty('overflow-y','visible','important');
-      el.style.setProperty('contain','none','important');
-      el.style.setProperty('transform','none','important');
-    });
-  }
-  function fixLayout(){ fixVersion(); fixFab(); fixScrollContainers(); }
-
-  window.renderCarteiraTabela = function(){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const lista = sortedLeads(activeItems());
-    box.innerHTML = `<section class="cp695-atendimentos">
-      <header class="cp695-head"><h2>Atendimentos</h2><p>Prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp695-list">${lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhum atendimento agora.</div>'}</div>
-    </section>`;
-    requestAnimationFrame(fixLayout);
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){}
-
-  window.setCarteiraFiltro = function(){
-    state.carteiraFiltro = 'todos';
-    if(state.active !== 'carteira' && typeof show === 'function') show('carteira');
-    else window.renderCarteiraTabela();
-  };
-
-  window.carregarPipeline = async function(){
-    if(state.active !== 'pipeline') return;
-    const board = document.querySelector('#pipelineBoard');
-    if(!board) return;
-    const render = (data) => {
-      const all = (data?.items || []).map(typeof limparLead === 'function' ? limparLead : (x=>x)).filter(typeof leadEhAtivo === 'function' ? leadEhAtivo : (()=>true));
-      const grupos = {agora:[],respondeu:[],programados:[],aguardando:[]};
-      for(const l of all){ const c=cp786Categoria(l); if(grupos[c]) grupos[c].push(l); }
-      // v914 — "Fazer agora" na Condução = a MESMA dose da home (top 10 por mensagens do cliente,
-      // fim de semana vazio), pra o número e a lista baterem com o card.
-      grupos.agora = cpFilaFazerAgora(all).slice(0, (typeof cpMetaAtendimentosDia==='function')?cpMetaAtendimentosDia():CP_DOSE_DIA);
-      const filtrosValidos=['agora','programados','aguardando'];
-      const filtro = filtrosValidos.includes(state.pipelineVisualFiltro)?state.pipelineVisualFiltro:'agora';
-      state.pipelineVisualFiltro=filtro;
-      const lista = sortedLeads(grupos[filtro]);
-      const tabs=[['agora','Fazer agora'],['programados','Agenda'],['aguardando','Aguardando cliente']];
-      const listRows = lista.length ? lista.map(row).join('') : '<div class="cp695-empty">Nenhuma ação pendente nesta visão.</div>';
-      board.innerHTML=`
-        <div class="ui-pipeline-kpis cp786-action-kpis">
-          <div class="ui-kpi ${filtro==='agora'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('agora')"><span>Fazer agora</span><div>${cpFimDeSemana()?'<b class="cp-fds">Final de semana</b>':`<b>${grupos.agora.length}</b>`}<i>${typeof ui631Icon==='function'?ui631Icon('resposta'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='programados'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('programados')"><span>Agenda</span><div><b>${grupos.programados.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('compromisso'):''}</i></div></div>
-          <div class="ui-kpi ${filtro==='aguardando'?'active':''}" role="button" tabindex="0" onclick="setPipelineVisualFiltro('aguardando')"><span>Aguardando cliente</span><div><b>${grupos.aguardando.length}</b><i>${typeof ui631Icon==='function'?ui631Icon('ativos'):''}</i></div></div>
-        </div>
-        <div class="ui-filter-tabs cp786-action-tabs">${tabs.map(([k,t])=>`<button type="button" class="${k===filtro?'active':''}" onclick="setPipelineVisualFiltro('${k}')">${t}</button>`).join('')}</div>
-        <section class="ui-priority-card ui-pipeline-list"><div class="ui-section-head"><div><h3>Próximas ações</h3><p>O Corretor Pro ordenou quem precisa de você primeiro.</p></div><button type="button" onclick="reanalisarTudo()">↻ Atualizar leitura</button></div><div class="ui-priority-list cp695-list">${listRows}</div></section>`;
-      requestAnimationFrame(fixLayout);
-    };
-    const emMemoria = [state.todosLeads, state.itemsAtivos, state.carteiraLeads].find(a=>Array.isArray(a)&&a.length);
-    if(emMemoria) render({items:emMemoria});
-    else { board.innerHTML='<div class="cp695-loading">Lendo sua carteira...</div>'; try{ render(await getLeadsData()); }catch(e){ board.innerHTML = typeof boxErro==='function'?boxErro('carregarPipeline()'):'<div class="empty">Falha ao carregar.</div>'; } }
-  };
-  try{ carregarPipeline = window.carregarPipeline; }catch(_){}
-
-  window.setPipelineVisualFiltro = function(f){
-    state.pipelineVisualFiltro = f || 'agora';
-    if(state.active !== 'pipeline' && typeof show === 'function') show('pipeline');
-    else window.carregarPipeline();
-  };
-
   const css=document.createElement('style');
   css.id='cp695RealMobileFixCSS';
   css.textContent=`
     html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}
-    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner,.cp694-lista,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
-    .cp-virtual-wrap>div[style*="height"],.cp-virtual-pad{display:none!important;height:0!important}
-    #carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page,#carteira .cp694-atendimentos{display:none!important}
-    .cp695-atendimentos,.cp695-list{max-width:760px;margin-left:auto;margin-right:auto}.cp695-atendimentos{padding-bottom:calc(122px + env(safe-area-inset-bottom,0px))}.cp695-head{margin:0 0 14px}.cp695-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.04em}.cp695-head p{margin:8px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}
-    .cp695-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-lead-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;align-items:center;gap:9px;min-height:70px;padding:11px 9px 11px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}.cp695-lead-row:last-child{border-bottom:0}.cp695-lead-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp695-lead-row.hot:before{background:var(--lime)}.cp695-lead-row.warm:before{background:var(--morno)}.cp695-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.cp695-copy b{color:var(--text);font-size:18px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-copy em{color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-copy small{color:rgba(227,245,249,.75);font-size:13px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp695-status{display:inline-flex;align-items:center;justify-content:center;min-width:56px;max-width:64px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,98,88,.38);background:rgba(255,98,88,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp695-lead-row.low .cp695-status,.cp695-lead-row.normal .cp695-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}.cp695-chevron{color:var(--muted);font-size:18px}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
+    .main-col,.desktop-layout,.app,.screen,#home,#carteira,#pipeline,#carteiraBody,#pipelineBoard,.ui-priority-list,.ui-pipeline-list,.cp695-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}
+    .cp695-list{max-width:760px;margin-left:auto;margin-right:auto}
+    .cp695-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp695-empty,.cp695-loading{padding:22px;color:var(--muted);text-align:center}
     .cp-bottom-nav{z-index:1000!important}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}
-    #btnVoltarTopo{display:none!important}
-    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.ui-pipeline-grid{display:block!important}.ui-pipe-summary{margin-top:12px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}.cp695-copy b{font-size:17px!important}.cp695-copy small{font-size:12.5px!important}.cp695-lead-row{min-height:68px}}
+    @media(max-width:760px){.screen#carteira.active,.screen#pipeline.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.ui-priority-card{padding:15px!important}.cp695-list{margin-bottom:calc(132px + env(safe-area-inset-bottom,0px))}}
   `;
   document.head.appendChild(css);
-
-  document.addEventListener('DOMContentLoaded', fixLayout);
-  window.addEventListener('resize', fixLayout);
-  setTimeout(fixLayout,60); setTimeout(fixLayout,300); setTimeout(fixLayout,1000);
-  const oldShow = window.show;
-  if(typeof oldShow === 'function'){
-    window.show = function(){ const out = oldShow.apply(this, arguments); setTimeout(()=>{ if(state.active==='carteira') window.renderCarteiraTabela(); if(state.active==='pipeline') window.carregarPipeline(); fixLayout(); }, 40); return out; };
-  }
 })();
 
 
-/* ============================================================
-   Atualização #724-2 — Correção definitiva carregamento total Atendimentos
-   - A tela Atendimentos não pode depender de state.carteiraLeads truncado.
-   - Busca a base completa em /api/leads-recentes?limit=2000 e renderiza todos.
-   - Mantém rolagem natural da página, sem virtualização nem janela no mobile.
-   ============================================================ */
-(function(){
-  if(window.__cp696AtendimentosFullList) return;
-  window.__cp696AtendimentosFullList = true;
-  const VERSION = '__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){}
-
-  function esc(v){
-    try{ return escapeHtml(String(v ?? '')); }
-    catch(_){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function normalEtapa(l){
-    try{ return normalizarEtapa(l?.etapa); }catch(_){ return String(l?.etapa || 'Atendimento'); }
-  }
-  function isAtivo(l){
-    const e = normalEtapa(l);
-    return e !== 'Geladeira';
-  }
-  function sortLeads(list){
-    const arr = Array.isArray(list) ? list.slice() : [];
-    try{ return arr.map(l=>({ ...l, _s: scoreRankingHoje(l) })).sort(compararPrioridadeAtendimento); }
-    catch(_){ return arr; }
-  }
-  function meta(l){
-    const p = String(l?.product || '').trim() || 'Produto não identificado';
-    const dias = Number(l?.daysSinceLastInteraction || l?.diasSemResposta || 0);
-    const d = dias > 0 ? ` · ${dias}d` : '';
-    return `${p}${d}`;
-  }
-  function acao(l){
-    const raw = String(l?.nextAction || (typeof motivoCurto === 'function' ? motivoCurto(l) : '') || 'Abrir lead para conferir.').replace(/\s+/g,' ').trim();
-    return raw.length > 74 ? raw.slice(0,71).trim() + '...' : raw;
-  }
-  function badge(l){
-    let t = '';
-    try{ t = String((prioridadeAtendimento(l)||{}).titulo || ''); }catch(_){}
-    if(/atender/i.test(t)) return 'Atender';
-    if(/retomar/i.test(t)) return 'Retomar';
-    if(/aguardar/i.test(t)) return 'Aguardar';
-    if(/sem/i.test(t)) return 'Sem ação';
-    return t || 'Abrir';
-  }
-  function cls(l){
-    let g = '';
-    try{ g = String((prioridadeAtendimento(l)||{}).grupo || ''); }catch(_){}
-    if(g === 'acao-hoje') return 'hot';
-    if(g === 'retomar-cuidado') return 'warm';
-    if(g === 'baixa-prioridade') return 'low';
-    return 'normal';
-  }
-  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
-  function row(l){
-    return `<button type="button" class="cp696-row ${cls(l)}" onclick='abrirLead(${idJs(l)})'>
-      <span class="cp696-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta(l))}</em><small>${esc(acao(l))}</small></span>
-      <span class="cp696-status">${esc(badge(l))}</span>
-      <span class="cp696-chevron">›</span>
-    </button>`;
-  }
-  function updateVersion(){
-    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
-      const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #__VERSION__');
-    });
-  }
-  function applyLayoutFixes(){
-    updateVersion();
-    document.querySelectorAll('#carteira,#carteiraBody,.cp696-list,.cp695-list,.ui-priority-list,.ui-pipeline-list,.cp-virtual-wrap,.cp-virtual-inner').forEach(el=>{
-      el.style.setProperty('height','auto','important');
-      el.style.setProperty('max-height','none','important');
-      el.style.setProperty('overflow','visible','important');
-      el.style.setProperty('overflow-y','visible','important');
-      el.style.setProperty('contain','none','important');
-    });
-    document.querySelectorAll('.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab').forEach(el=>{
-      el.style.setProperty('position','relative','important');
-      el.style.setProperty('display','flex','important');
-      el.style.setProperty('align-items','center','important');
-      el.style.setProperty('justify-content','center','important');
-      el.style.setProperty('height','56px','important');
-      el.style.setProperty('padding','0','important');
-    });
-    document.querySelectorAll('.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn').forEach(el=>{
-      el.style.setProperty('position','relative','important');
-      el.style.setProperty('top','0','important');
-      el.style.setProperty('left','0','important');
-      el.style.setProperty('transform','none','important');
-      el.style.setProperty('width','34px','important');
-      el.style.setProperty('height','34px','important');
-      el.style.setProperty('margin','0','important');
-    });
-  }
-  async function fetchAllLeads(force){
-    try{
-      const data = await getLeadsData(!!force);
-      if(data && Array.isArray(data.items) && data.items.length) return data.items;
-    }catch(_){}
-    try{
-      const res = await fetch(`./api/leads-recentes?limit=2000${force?'&fresh=1':''}`, { cache:'no-store' });
-      const data = await res.json();
-      if(data && Array.isArray(data.items)) return data.items;
-    }catch(_){}
-    return [];
-  }
-  function renderAtendimentosCompleto(leads){
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    const lista = sortLeads((leads || []).filter(isAtivo));
-    try{ state.carteiraLeads = lista; state.carteiraFiltro = 'todos'; }catch(_){}
-    const rows = lista.length ? lista.map(row).join('') : '<div class="cp696-empty">Nenhum atendimento agora.</div>';
-    box.innerHTML = `<section class="cp696-page">
-      <header class="cp696-head"><h2>Atendimentos</h2><p>${lista.length} leads · prioridade de atendimento, de cima para baixo.</p></header>
-      <div class="cp696-list">${rows}</div>
-    </section>`;
-    requestAnimationFrame(applyLayoutFixes);
-  }
-  window.carregarCarteira = async function(force){
-    if(state.active !== 'carteira') return;
-    const box = document.querySelector('#carteiraBody');
-    if(!box) return;
-    box.innerHTML = '<div class="cp696-loading"><i></i><b>Carregando atendimentos...</b><span>Buscando toda sua carteira de leads.</span></div>';
-    const leads = await fetchAllLeads(force);
-    renderAtendimentosCompleto(leads);
-  };
-  try{ carregarCarteira = window.carregarCarteira; }catch(_){}
-  window.renderCarteiraTabela = function(){
-    const sources = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].filter(a=>Array.isArray(a));
-    const biggest = sources.sort((a,b)=>b.length-a.length)[0] || [];
-    if(biggest.length >= 80) renderAtendimentosCompleto(biggest);
-    else window.carregarCarteira(false);
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){}
-  window.setCarteiraFiltro = function(){
-    try{ state.carteiraFiltro = 'todos'; }catch(_){}
-    if(typeof show === 'function' && state.active !== 'carteira') show('carteira');
-    else window.carregarCarteira(false);
-  };
-  const oldShow = window.show;
-  if(typeof oldShow === 'function'){
-    window.show = function(name, ...args){
-      const ret = oldShow.apply(this, [name, ...args]);
-      if(name === 'carteira') setTimeout(()=>window.carregarCarteira(false), 0);
-      else setTimeout(applyLayoutFixes, 0);
-      return ret;
-    };
-    try{ show = window.show; }catch(_){}
-  }
-  const css = document.createElement('style');
-  css.id = 'cp696AtendimentosFullCSS';
-  css.textContent = `
-    html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important;scroll-behavior:auto!important}.main-col,.desktop-layout,.app,.screen,#carteira,#carteiraBody,.cp696-page,.cp696-list{height:auto!important;max-height:none!important;overflow:visible!important;overflow-y:visible!important;contain:none!important;transform:none!important;will-change:auto!important}.cp-virtual-wrap>div[style*="height"],.cp-virtual-pad{display:none!important;height:0!important}#carteira .cart-filtros,#carteira .cart-export,#carteira .cart-head,#carteira .cart-table,#carteira .cart-thead,#carteira .cp689-att-page,#carteira .cp690-att-page,#carteira .cp691-att-page,#carteira .cp693-page,#carteira .cp694-atendimentos,#carteira .cp695-atendimentos{display:none!important}.cp696-page{max-width:760px;margin:0 auto;padding-bottom:calc(128px + env(safe-area-inset-bottom,0px))}.cp696-head{margin:0 0 14px}.cp696-head h2{margin:0;color:var(--text);font-size:30px!important;line-height:1;font-weight:950;letter-spacing:-.04em}.cp696-head p{margin:8px 0 0;color:var(--muted);font-size:14px!important;line-height:1.35}.cp696-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);margin-bottom:calc(128px + env(safe-area-inset-bottom,0px));overflow:visible!important}.cp696-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;align-items:center;gap:9px;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative;cursor:pointer}.cp696-row:last-child{border-bottom:0}.cp696-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0;background:transparent}.cp696-row.hot:before{background:var(--lime)}.cp696-row.warm:before{background:var(--morno)}.cp696-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp696-copy b{color:var(--text);font-size:17px!important;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-copy em{color:var(--muted);font-style:normal;font-size:12px!important;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-copy small{color:rgba(227,245,249,.75);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp696-status{display:inline-flex;align-items:center;justify-content:center;min-width:54px;max-width:62px;padding:6px 7px;border-radius:999px;border:1px solid rgba(255,98,88,.38);background:rgba(255,98,88,.06);color:var(--lime);font-size:10.5px!important;font-weight:900;line-height:1;white-space:nowrap}.cp696-row.low .cp696-status,.cp696-row.normal .cp696-status{border-color:rgba(255,255,255,.13);color:var(--muted);background:rgba(255,255,255,.03)}.cp696-chevron{color:var(--muted);font-size:18px}.cp696-empty,.cp696-loading{padding:24px;color:var(--muted);text-align:center}.cp696-loading{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}.cp696-loading b{color:var(--text)}.cp696-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp696spin .8s linear infinite}@keyframes cp696spin{to{transform:rotate(360deg)}}.cp-bottom-nav .nav-inner,.bottom-nav .nav-inner{height:58px!important;align-items:center!important}.cp-bottom-nav .nav.fab,.bottom-nav .nav.fab{position:relative!important;height:56px!important;min-height:56px!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;overflow:visible!important;transform:none!important}.cp-bottom-nav .nav.fab .fab-btn,.bottom-nav .nav.fab .fab-btn{position:relative!important;top:0!important;left:0!important;transform:none!important;width:34px!important;height:34px!important;margin:0!important;border-width:2px!important;font-size:23px!important;font-weight:500!important;line-height:1!important;box-shadow:0 5px 12px rgba(0,0,0,.22)!important;z-index:1!important}.cp-bottom-nav .nav.fab .lbl,.bottom-nav .nav.fab .lbl{display:none!important;visibility:hidden!important}#btnVoltarTopo{display:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(96px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important;height:auto!important;max-height:none!important}#carteiraBody{padding:0 6px!important}.cp696-page{padding-bottom:calc(136px + env(safe-area-inset-bottom,0px))}.cp696-list{margin-bottom:calc(136px + env(safe-area-inset-bottom,0px))}}
-  `;
-  document.head.appendChild(css);
-  document.addEventListener('DOMContentLoaded', applyLayoutFixes);
-  window.addEventListener('resize', applyLayoutFixes);
-  setTimeout(applyLayoutFixes,50); setTimeout(applyLayoutFixes,250); setTimeout(applyLayoutFixes,1000);
-  if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
-})();
 
 
-/* ============================================================
-   Atualização #724-2 — Preparação da Carteira
-   - Separa leads sem histórico/análise de leads prontos.
-   - Importação de ZIP já deixa o lead marcado como pronto quando houver histórico + análise.
-   - Home mostra progresso da preparação.
-   - Atendimentos ganha visão Preparação / Prontos / Todos sem quebrar a rolagem natural.
-   ============================================================ */
-(function(){
-  if(window.__cp697PreparacaoCarteira) return;
-  window.__cp697PreparacaoCarteira = true;
-  const VERSION = '__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-
-  function esc(v){
-    try { return escapeHtml(String(v ?? '')); }
-    catch(_) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  }
-  function idJs(l){ return JSON.stringify(String(l?.id || '')); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function normalEtapa(l){
-    try{ return normalizarEtapa(l?.etapa); }catch(_){ return String(l?.etapa || 'Atendimento'); }
-  }
-  function isAtivo697(l){
-    const e = normalEtapa(l);
-    return e !== 'Geladeira';
-  }
-  function recentCount(l){
-    const candidates = [l?.recentMessages, l?.timeline, l?.messages, l?.history, l?.mensagens].filter(Array.isArray);
-    const n = candidates.reduce((m,a)=>Math.max(m,a.length),0);
-    const extra = Number(l?.historyCount || l?.messageCount || l?.totalMessages || l?.totalMensagens || 0) || 0;
-    return Math.max(n, extra);
-  }
-  function hasAnalysis697(l){
-    const a = l?.analysis || l?.analise || l?.diagnostico || {};
-    if(!a || typeof a !== 'object') return false;
-    if(a.error) return false;
-    if(a.messages && typeof a.messages === 'object' && (a.messages.a || a.messages.b || a.messages.c)) return true;
-    if(a.analiseComercial && typeof a.analiseComercial === 'object') return true;
-    if(a.nextAction || a.proximaAcao || a.resumo) return true;
-    return !!(l?.nextAction && recentCount(l) > 0);
-  }
-  function isReady697(l){
-    return recentCount(l) > 0 && hasAnalysis697(l);
-  }
-  function leadStage697(l){
-    return isReady697(l) ? 'pronto' : 'preparacao';
-  }
-  function sort697(list,meta){
-    if(typeof cp786OrdenarConducao==='function') return cp786OrdenarConducao(list,meta);
-    const copy=list.slice();
-    if(typeof compararPrioridadeAtendimento==='function') return copy.sort(compararPrioridadeAtendimento);
-    return copy.sort((a,b)=>String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR'));
-  }
-  function meta697(l){
-    const p=String(l?.product||'').trim()||'Produto não identificado';
-    const dias=Number(l?.daysSinceLastInteraction||0);
-    return dias>0?`${p} · ${dias}d`:`${p}`;
-  }
-  function row697(l,m){
-    const meta=m||cp786MetaConducao(l);
-    const cls=['agora','respondeu'].includes(meta.categoria)?'ready':'pending';
-    return `<button type="button" class="cp697-row ${cls}" onclick='abrirLead(${idJs(l)})'>
-      <span class="cp697-copy"><b>${esc(l?.name || 'Cliente')}</b><em>${esc(meta697(l))}</em><small>${esc(meta.resumo)}</small></span>
-      <span class="cp697-status">${esc(meta.badge)}</span><span class="cp697-chevron">›</span>
-    </button>`;
-  }
-  function updateVersion697(){
-    document.querySelectorAll('.sb-brand small,.cp-brand small,.brand small,[data-version]').forEach(el=>{
-      const txt = el.textContent || '';
-      if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #__VERSION__');
-    });
-  }
-  async function fetchAll697(force){
-    try{
-      if(typeof getLeadsData === 'function'){
-        const data = await getLeadsData(!!force);
-        if(Array.isArray(data?.items) && data.items.length) return data.items;
-      }
-    }catch(_){ }
-    try{
-      const res = await fetch(`./api/leads-recentes?limit=2000${force?'&fresh=1':''}`, { cache:'no-store' });
-      const data = await res.json().catch(()=>null);
-      if(Array.isArray(data?.items)) return data.items;
-    }catch(_){ }
-    return [];
-  }
-  function currentTab697(){ return String(window.cp697Tab || localStorage.getItem('cp697Tab') || 'preparacao'); }
-  function setTab697(tab){ window.cp697Tab = tab; try{ localStorage.setItem('cp697Tab', tab); }catch(_){ } renderCarteiraTabela(); }
-  window.cp697SetTab = setTab697;
-
-  function renderCarteira697(leads){
-    const box=document.querySelector('#carteiraBody');
-    if(!box) return;
-    const base=(leads||[]).filter(isAtivo697);
-    const meta=new Map(base.map(l=>[l,cp786MetaConducao(l)]));
-    const ativos=sort697(base,meta);
-    const rows=ativos.length?ativos.map(l=>row697(l,meta.get(l))).join(''):'<div class="cp697-empty"><b>Nenhum atendimento ativo.</b><span>Importe uma conversa ou inclua um cliente manualmente.</span></div>';
-    try{state.carteiraLeads=ativos;state.todosLeads=Array.isArray(state.todosLeads)&&state.todosLeads.length?state.todosLeads:ativos;}catch(_){}
-    box.innerHTML=`<section class="cp697-page">
-      <header class="cp697-head"><h2>Atendimentos</h2><p>${ativos.length} cliente${ativos.length===1?' ativo':'s ativos'} · a próxima ação aparece em cada atendimento.</p></header>
-      <div class="cp697-list">${rows}</div>
-    </section>`;
-    requestAnimationFrame(applyFix697);
-  }
-  window.cp697RenderCarteira = renderCarteira697;
-  window.carregarCarteira = async function(force){
-    const box = document.querySelector('#carteiraBody');
-    if(box){ box.innerHTML = '<div class="cp697-loading"><i></i><b>Carregando atendimentos...</b><span>Organizando a próxima ação de cada cliente.</span></div>'; }
-    const leads = await fetchAll697(!!force);
-    renderCarteira697(leads);
-  };
-  try{ carregarCarteira = window.carregarCarteira; }catch(_){ }
-  window.renderCarteiraTabela = function(){
-    const sources = [state?.todosLeads, state?.itemsAtivos, state?.carteiraLeads].filter(Array.isArray);
-    const biggest = sources.sort((a,b)=>b.length-a.length)[0] || [];
-    if(biggest.length >= 20) renderCarteira697(biggest); else window.carregarCarteira(false);
-  };
-  try{ renderCarteiraTabela = window.renderCarteiraTabela; }catch(_){ }
-
-  function homeProgress697(){
-    // Bloco "Preparação da carteira" removido da Home (a pedido) — carteira já está em dia.
-    const antigo = document.getElementById('cp697HomeProgress');
-    if(antigo && antigo.parentNode) antigo.parentNode.removeChild(antigo);
-  }
-
-  const oldShow = window.show;
-  if(typeof oldShow === 'function' && !oldShow.__cp697Wrapped){
-    const wrapped = function(name, ...args){
-      const ret = oldShow.apply(this, [name, ...args]);
-      if(name === 'carteira') setTimeout(()=>window.carregarCarteira(false), 0);
-      setTimeout(()=>{ applyFix697(); homeProgress697(); }, 80);
-      return ret;
-    };
-    wrapped.__cp697Wrapped = true;
-    window.show = wrapped; try{ show = window.show; }catch(_){ }
-  }
-
-  const oldRefresh = window.refreshAllSections;
-  if(typeof oldRefresh === 'function' && !oldRefresh.__cp697Wrapped){
-    const wrappedRefresh = function(){
-      const ret = oldRefresh.apply(this, arguments);
-      setTimeout(()=>{ homeProgress697(); if(state?.active==='carteira') window.carregarCarteira(true); }, 250);
-      return ret;
-    };
-    wrappedRefresh.__cp697Wrapped = true;
-    window.refreshAllSections = wrappedRefresh; try{ refreshAllSections = window.refreshAllSections; }catch(_){ }
-  }
-
-  const oldFetch = window.fetch;
-  window.fetch = async function(input, init){
-    const res = await oldFetch.apply(this, arguments);
-    try{
-      const url = String(typeof input === 'string' ? input : (input?.url || ''));
-      const body = init?.body ? String(init.body) : '';
-      if(/lead-update|processar-storage|reanalisar-lead/i.test(url) && /salvar-novo|atualizar-com-evolucao|analisar|reanalisar/i.test(body + ' ' + url)){
-        setTimeout(()=>{ window.carregarCarteira?.(true); homeProgress697(); }, 900);
-      }
-    }catch(_){ }
-    return res;
-  };
-
-  function applyFix697(){
-    updateVersion697();
-    document.querySelectorAll('#carteira,#carteiraBody,.cp697-list,.cp696-list,.cp695-list,.cp694-lista,.cp-virtual-wrap,.cp-virtual-inner').forEach(el=>{
-      el.style.setProperty('height','auto','important');
-      el.style.setProperty('max-height','none','important');
-      el.style.setProperty('overflow','visible','important');
-      el.style.setProperty('overflow-y','visible','important');
-      el.style.setProperty('contain','none','important');
-    });
-  }
-
-  const css = document.createElement('style');
-  css.id = 'cp697PreparacaoCSS';
-  css.textContent = `
-    .cp697-page{max-width:760px;margin:0 auto;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-head{margin:0 0 14px}.cp697-head h2{font-size:30px!important;line-height:1.02;margin:0 0 8px;color:var(--text);font-weight:950;letter-spacing:-.04em}.cp697-head p{font-size:14px!important;line-height:1.35;color:var(--muted);margin:0 0 14px}.cp697-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.cp697-progress>div{padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.025)}.cp697-progress b{display:block;color:var(--text);font-size:22px;line-height:1;font-weight:950}.cp697-progress span{display:block;margin-top:4px;color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.cp697-tabs{display:flex;gap:8px;overflow-x:auto;margin:12px 0 14px;padding-bottom:2px}.cp697-tabs button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--soft);border-radius:999px;padding:9px 12px;font-size:12px;font-weight:950;white-space:nowrap}.cp697-tabs button.active{background:var(--lime);border-color:var(--lime);color:#06262d}.cp697-tabs span{opacity:.75;margin-left:4px}.cp697-list{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.10);border-radius:17px;background:rgba(7,52,64,.58);overflow:visible!important;margin-bottom:calc(130px + env(safe-area-inset-bottom,0px))}.cp697-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 10px;gap:9px;align-items:center;min-height:66px;padding:10px 9px 10px 17px;border:0;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;color:var(--text);font:inherit;text-align:left;position:relative}.cp697-row:last-child{border-bottom:0}.cp697-row:before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 999px 999px 0}.cp697-row.ready:before{background:#68ff95}.cp697-row.pending:before{background:rgba(184,194,201,.9)}.cp697-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.cp697-copy b{font-size:17px!important;line-height:1.08;font-weight:950;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy em{font-style:normal;color:var(--muted);font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-copy small{color:rgba(227,245,249,.77);font-size:12.5px!important;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cp697-status{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:10.5px!important;font-weight:950;line-height:1;white-space:nowrap}.cp697-row.ready .cp697-status{border-color:rgba(104,255,149,.42);color:#68ff95;background:rgba(104,255,149,.07)}.cp697-row.pending .cp697-status{border-color:rgba(184,194,201,.45);color:var(--soft);background:rgba(184,194,201,.07)}.cp697-chevron{color:var(--muted);font-size:18px}.cp697-empty,.cp697-loading{padding:24px;color:var(--muted);text-align:center;display:flex;flex-direction:column;gap:6px}.cp697-empty b,.cp697-loading b{color:var(--text)}.cp697-loading{min-height:240px;align-items:center;justify-content:center}.cp697-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--lime);animation:cp697spin .8s linear infinite}@keyframes cp697spin{to{transform:rotate(360deg)}}.cp697-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0}.cp697-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp697-home-title b{font-size:16px;color:var(--text)}.cp697-home-title button{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp697-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp697-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#FF6258,#68ff95);border-radius:999px}.cp697-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}.screen#carteira.active,#carteiraBody{height:auto!important;max-height:none!important;overflow:visible!important;contain:none!important}@media(max-width:760px){.screen#carteira.active{padding:18px 24px calc(98px + env(safe-area-inset-bottom,0px))!important}.cp697-head h2{font-size:29px!important}.cp697-progress{grid-template-columns:repeat(3,minmax(0,1fr))}.cp697-progress b{font-size:20px}.cp697-list{margin-bottom:calc(140px + env(safe-area-inset-bottom,0px))}.cp697-page{padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))}}
-  `;
-  document.head.appendChild(css);
-  document.addEventListener('DOMContentLoaded', ()=>{ applyFix697(); setTimeout(homeProgress697, 300); });
-  window.addEventListener('resize', applyFix697);
-  setTimeout(()=>{ applyFix697(); homeProgress697(); }, 250);
-  setTimeout(()=>{ applyFix697(); homeProgress697(); }, 1200);
-  if(state?.active === 'carteira') setTimeout(()=>window.carregarCarteira(false),0);
-})();
 
 
 /* ============================================================
@@ -12241,172 +11170,6 @@ function ui670DetailRows(lead,mc){
 })();
 
 
-/* ============================================================
-   Atualização #724-2 — Preparação da Carteira estável
-   - O bloco Preparação da carteira não depende mais de cache parcial.
-   - Aparece sempre que a Home abre e só atualiza quando a base completa chega.
-   - Evita alternância/sumiço durante redesenhos da Home.
-   ============================================================ */
-(function(){
-  if(window.__cp703PreparacaoEstavel) return;
-  window.__cp703PreparacaoEstavel = true;
-  const VERSION = '__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-
-  let fullLeadsCache = null;
-  let fullLeadsLoading = null;
-  let lastHtml = '';
-  let scheduled = false;
-
-  function qs(sel){ return document.querySelector(sel); }
-  function activeHome(){ return (window.state?.active || 'home') === 'home'; }
-  function textVersion(){
-    try{
-      document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
-        const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #__VERSION__');
-      });
-    }catch(_){ }
-  }
-  function normalizeStage(l){
-    try{ return normalizarEtapa(l?.etapa); }catch(_){ return String(l?.etapa || 'Atendimento'); }
-  }
-  function isActiveLead(l){
-    const e = normalizeStage(l);
-    return e !== 'Geladeira';
-  }
-  function msgCount(l){
-    const arrays = [l?.recentMessages, l?.timeline, l?.messages, l?.history, l?.mensagens].filter(Array.isArray);
-    const maxArr = arrays.reduce((m,a)=>Math.max(m,a.length),0);
-    const n = Number(l?.historyCount || l?.messageCount || l?.totalMessages || l?.totalMensagens || 0) || 0;
-    return Math.max(maxArr,n);
-  }
-  function hasAnalysis(l){
-    const a = l?.analysis || l?.analise || l?.diagnostico || {};
-    if(!a || typeof a !== 'object' || a.error) return false;
-    if(a.messages && typeof a.messages === 'object' && (a.messages.a || a.messages.b || a.messages.c)) return true;
-    if(a.analiseComercial && typeof a.analiseComercial === 'object') return true;
-    if(a.nextAction || a.proximaAcao || a.resumo) return true;
-    return !!(l?.nextAction && msgCount(l) > 0);
-  }
-  function readyLead(l){ return msgCount(l) > 0 && hasAnalysis(l); }
-  function bestLocalLeads(){
-    const lists = [window.state?.todosLeads, window.state?.itemsAtivos, window.state?.carteiraLeads, window.state?.leads].filter(Array.isArray);
-    return (lists.sort((a,b)=>b.length-a.length)[0] || []).slice();
-  }
-  async function loadFullLeads(force){
-    const local = bestLocalLeads();
-    if(!force && local.length >= 100){
-      fullLeadsCache = local;
-      return local;
-    }
-    if(!force && Array.isArray(fullLeadsCache) && fullLeadsCache.length) return fullLeadsCache;
-    if(fullLeadsLoading) return fullLeadsLoading;
-    fullLeadsLoading = (async()=>{
-      try{
-        if(typeof getLeadsData === 'function'){
-          const data = await getLeadsData(!!force);
-          if(Array.isArray(data?.items) && data.items.length){
-            fullLeadsCache = data.items;
-            try{ window.state.todosLeads = data.items; }catch(_){ }
-            return data.items;
-          }
-        }
-      }catch(_){ }
-      try{
-        const res = await fetch('./api/leads-recentes?limit=2000&fresh=1&_v=709&_t=' + Date.now(), {cache:'no-store'});
-        const data = await res.json().catch(()=>null);
-        const items = Array.isArray(data?.items) ? data.items : [];
-        if(items.length){
-          fullLeadsCache = items;
-          try{ window.state.todosLeads = items; }catch(_){ }
-        }
-        return items;
-      }catch(_){ return local; }
-      finally{ fullLeadsLoading = null; }
-    })();
-    return fullLeadsLoading;
-  }
-  function cardHtml(leads, loading){
-    const ativos = (leads || []).filter(isActiveLead);
-    const ready = ativos.filter(readyLead).length;
-    const pending = Math.max(0, ativos.length - ready);
-    const pct = ativos.length ? Math.round((ready / ativos.length) * 100) : 0;
-    const status = loading ? 'Calculando carteira...' : `${ready} prontos para contato`;
-    const pend = loading ? 'buscando base completa' : `${pending} aguardando histórico`;
-    return `<div class="cp702-home-title"><b>Preparação da carteira</b><button type="button" onclick="cp697SetTab&&cp697SetTab('preparacao');show('carteira')">Preparar leads</button></div>
-      <div class="cp702-home-bar"><span style="width:${pct}%"></span></div>
-      <div class="cp702-home-meta"><span>${status}</span><span>${pend}</span><span>${loading ? '...' : pct + '%'}</span></div>`;
-  }
-  function ensureCard(){
-    const root = qs('#home') || qs('.screen.active');
-    if(!root) return null;
-    let card = qs('#cp702HomeProgress');
-    if(!card){
-      card = document.createElement('section');
-      card.id = 'cp702HomeProgress';
-      card.className = 'cp702-home-progress';
-      const old = qs('#cp697HomeProgress');
-      if(old && old.parentNode){ old.parentNode.replaceChild(card, old); return card; }
-      const anchor = qs('#leadFocoArea') || qs('#home .ui683-card') || qs('#home section:nth-of-type(2)') || null;
-      if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor);
-      else root.appendChild(card);
-    }
-    return card;
-  }
-  async function renderHomePrep(force){
-    // Bloco "Preparação da carteira" removido da Home (a pedido). Mantém só a atualização do
-    // rótulo de versão; não desenha mais o card nem busca a base inteira à toa.
-    textVersion();
-    const antigo = qs('#cp702HomeProgress') || qs('#cp697HomeProgress');
-    if(antigo && antigo.parentNode) antigo.parentNode.removeChild(antigo);
-  }
-  function schedule(force){
-    if(scheduled) return;
-    scheduled = true;
-    setTimeout(()=>{ scheduled=false; renderHomePrep(!!force); }, 120);
-  }
-
-  const oldShow = window.show;
-  if(typeof oldShow === 'function' && !oldShow.__cp702Wrapped){
-    const wrapped = function(name, ...args){
-      const ret = oldShow.apply(this, [name, ...args]);
-      if(name === 'home') schedule(false);
-      setTimeout(textVersion, 80);
-      return ret;
-    };
-    wrapped.__cp702Wrapped = true;
-    window.show = wrapped; try{ show = window.show; }catch(_){ }
-  }
-  const oldRefresh = window.refreshAllSections;
-  if(typeof oldRefresh === 'function' && !oldRefresh.__cp702Wrapped){
-    const wrappedRefresh = function(){
-      const ret = oldRefresh.apply(this, arguments);
-      schedule(true);
-      return ret;
-    };
-    wrappedRefresh.__cp702Wrapped = true;
-    window.refreshAllSections = wrappedRefresh; try{ refreshAllSections = window.refreshAllSections; }catch(_){ }
-  }
-
-  const css = document.createElement('style');
-  css.id = 'cp702PreparacaoEstavelCSS';
-  css.textContent = `
-    body.lead-foco-aberto #cp702HomeProgress,body.lead-foco-aberto #cp697HomeProgress{display:none!important}#cp697HomeProgress{display:none!important}.cp702-home-progress{border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);padding:16px;margin:14px 0;display:block!important}.cp702-home-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.cp702-home-title b{font-size:16px;color:var(--text);font-weight:950}.cp702-home-title button{border:1px solid rgba(255,98,88,.40);background:rgba(255,98,88,.07);color:var(--lime);border-radius:999px;padding:8px 12px;font-weight:950}.cp702-home-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.cp702-home-bar span{display:block;height:100%;background:linear-gradient(90deg,#FF6258,#68ff95);border-radius:999px;min-width:3px;transition:width .18s ease}.cp702-home-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:11px;font-weight:850}@media(max-width:760px){.cp702-home-progress{margin:12px 0;padding:15px}.cp702-home-title b{font-size:15px}.cp702-home-title button{font-size:13px;padding:8px 11px}}`;
-  document.head.appendChild(css);
-
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>schedule(false)); else schedule(false);
-  window.addEventListener('load', ()=>schedule(true));
-  setTimeout(()=>schedule(false), 300);
-  setTimeout(()=>schedule(true), 1400);
-  try{
-    const home = qs('#home');
-    if(home){
-      const mo = new MutationObserver(()=>{ if(activeHome()) schedule(false); });
-      mo.observe(home, {childList:true, subtree:false});
-    }
-  }catch(_){ }
-})();
 
 
 
@@ -12543,11 +11306,6 @@ function ui670DetailRows(lead,mc){
     const base=[state?.todosLeads,state?.carteiraLeads,state?.itemsAtivos].find(a=>Array.isArray(a)&&a.length)||[];
     cp788RenderAtendimentos(base);
   };
-  try{ renderCarteiraTabela=window.renderCarteiraTabela; }catch(_){ }
-  window.setCarteiraFiltro=function(){
-    if(state.active!=='carteira'&&typeof show==='function') show('carteira');
-    else window.renderCarteiraTabela();
-  };
 
   function cp788Grupos(leads){
     const grupos={agora:[],respondeu:[],programados:[],aguardando:[],todos:[]};
@@ -12673,14 +11431,6 @@ function ui670DetailRows(lead,mc){
     if(typeof renderBotoesHome==='function') renderBotoesHome();
   };
   try{ renderListasHome=window.renderListasHome; }catch(_){ }
-
-  // Atalhos que mostram "clientes ativos" não devem abrir o histórico de atendimentos.
-  document.addEventListener('DOMContentLoaded',()=>{
-    const metric=document.querySelector('#cpNewLeads')?.closest('button');
-    if(metric) metric.setAttribute('onclick','cp788AbrirCarteiraAtiva()');
-  });
-  setTimeout(()=>{
-    const metric=document.querySelector('#cpNewLeads')?.closest('button');
-    if(metric) metric.setAttribute('onclick','cp788AbrirCarteiraAtiva()');
-  },300);
+  // v1073 — o re-wire de #cpNewLeads foi removido: esse id não existe em lugar nenhum desde a
+  // v928 (o card "Total de leads" já chama cp788AbrirCarteiraAtiva direto no onclick).
 })();

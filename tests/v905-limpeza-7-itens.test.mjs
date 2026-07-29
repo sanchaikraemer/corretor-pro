@@ -41,9 +41,11 @@ assert.doesNotMatch(salvar, /editLeadAvatarFoto|obsMudou|memoria-set/, 'salvar s
 assert.match(app, /id="editLeadNome"/, 'Nome fica');
 assert.match(app, /id="editLeadTelefone"/, 'Telefone fica');
 assert.match(app, /id="editLeadProduto"/, 'Produto fica');
-// v1069 — recortarAvatar foi substituída por imagemQuadradaParaAvatar (recorte central sem UI de
-// enquadrar), usada pelo fluxo real de editar avatar (editarAvatarLead/colarAvatarLead).
-assert.match(app, /function imagemQuadradaParaAvatar\(/, 'função de recorte de avatar (atual) fica');
+// v1073 — o fluxo inteiro de EDITAR/COLAR avatar (imagemQuadradaParaAvatar/editarAvatarLead/
+// colarAvatarLead) saiu do código: não tinha nenhum botão vivo desde a reforma do Editar lead.
+// A EXIBIÇÃO do avatar salvo continua viva (avatarLead) — fotos já gravadas seguem aparecendo.
+assert.doesNotMatch(app, /function imagemQuadradaParaAvatar\(/, 'fluxo morto de editar avatar não volta');
+assert.match(app, /function avatarLead\(/, 'a exibição do avatar salvo continua viva');
 
 // 7. Card "Registrar observação": caixa de texto maior.
 assert.match(app, /id="cp7ObsTexto"[^>]*min-height:120px/, 'textarea da observação ficou maior');
