@@ -2087,7 +2087,22 @@ function cpSemAtenderHaDias(l, dias){
 function cpContarSemAtender(items, dias){
   return (Array.isArray(items) ? items : []).filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, dias)).length;
 }
+// v1071 — abre a lista de quem está sem atender há 30d+, do mais antigo pro mais recente.
+// "Nunca atendido" é sempre mais atrasado que "atendido há muito tempo" — por isso vem primeiro,
+// antes de ordenar quem tem data de atendimento (mais velha primeiro).
+function cpAbrirSemAtender30Dias(){
+  const items = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
+  const alvo = items.filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, 30));
+  if(!alvo.length){ toast("Nenhum lead sem atendimento há 30 dias ou mais."); return; }
+  const semData = [], comData = [];
+  for(const l of alvo){ (ultimoAtendimentoTs(l) ? comData : semData).push(l); }
+  comData.sort((a,b) => ultimoAtendimentoTs(a) - ultimoAtendimentoTs(b));
+  const leads = [...semData, ...comData];
+  const sub = `${leads.length} lead${leads.length>1?"s":""} sem atendimento há 30 dias ou mais — do mais antigo pro mais recente.`;
+  abrirGrupoHome("__semAtender30", { meta:{ titulo:"Sem atender 30d+", sub }, leads });
+}
 window.cpSemAtenderHaDias = cpSemAtenderHaDias;
+window.cpAbrirSemAtender30Dias = cpAbrirSemAtender30Dias;
 window.cpContarSemAtender = cpContarSemAtender;
 const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
@@ -9491,7 +9506,7 @@ renderResumoDia = function(items){
     <div class="ui-kpi" onclick="cp788AbrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="cp786AbrirConducao('aguardando')"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" style="cursor:default" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
+    <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
