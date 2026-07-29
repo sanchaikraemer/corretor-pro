@@ -61,6 +61,11 @@ de comentário de código), nada de jargão técnico — sem nome de função, c
 "branch", "regex", "PR", etc. Fale do que muda **na tela**, no dia a dia dele, não de como o
 código faz isso por dentro. Se for inevitável citar algo técnico, traduza na mesma frase.
 
+**Toda atualização publicada (correção, feature, ajuste) termina a resposta informando o número
+da versão** (o `displayVersion` que acabou de subir, ex.: "A versão agora é a 1070") — mesmo
+quando o dono não perguntar. É a referência que ele usa pra saber que está vendo a versão certa
+no app.
+
 ## "Colocar no ar" já autoriza publicar — não pergunte nesse momento
 
 Quando o dono pedir pra corrigir algo, implementar algo, ou disser (em qualquer variação) que
