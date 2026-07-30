@@ -5029,6 +5029,24 @@ function renderLeadFoco(lead){
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
     // Ranking explicável (v945): mesmo motivo mostrado na Home, agora dentro do card "Fazer
     // agora" — vazio quando nenhum fator real se aplica (nunca inventa razão).
+    // v1081 — o detalhe do lead é remontado do zero mais de uma vez (ao abrir vem primeiro o
+    // que está na memória e depois o que o servidor devolve; reanalisar e marcar atendimento
+    // também remontam). Cada remontagem trocava a área inteira e DESTRUÍA o campo "Registrar
+    // observação" que o corretor estava usando: o texto já digitado sumia, o cursor ia parar
+    // no corpo da página e a tela pulava de lugar. Guarda o estado do campo (texto, cursor,
+    // foco) e a posição da rolagem ANTES de remontar, pra devolver tudo logo depois.
+    const cp7ObsAntes = area.querySelector('#cp7ObsTexto');
+    const cp7ObsEstado = cp7ObsAntes ? {
+      valor: cp7ObsAntes.value,
+      inicio: cp7ObsAntes.selectionStart,
+      fim: cp7ObsAntes.selectionEnd,
+      rolagemInterna: cp7ObsAntes.scrollTop,
+      focado: document.activeElement === cp7ObsAntes
+    } : null;
+    // Só vale restaurar a rolagem quando JÁ havia um detalhe montado aqui (remontagem).
+    // Na primeira montagem (vindo do esqueleto) a página deve continuar se comportando como antes.
+    const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
+    const cp7RolagemPagina = window.scrollY;
     area.innerHTML=`<div class="cp704-lead">
       <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
@@ -5075,6 +5093,27 @@ function renderLeadFoco(lead){
         <div class="cp704-timeline">${cp704TimelineHtml(lead)}</div>
       </section>
     </div>`;
+  // v1081 — devolve a observação em andamento pro campo recém-criado. Sem isto, salvar ficava
+  // impossível: o corretor escrevia, a tela se remontava sozinha por baixo e o texto sumia
+  // (ele só conseguia na 3ª tentativa, quando o lead já estava em cache e a remontagem
+  // acontecia antes dele começar a digitar).
+  if(cp7ObsEstado && (cp7ObsEstado.valor || cp7ObsEstado.focado)){
+    const cp7ObsDepois = area.querySelector('#cp7ObsTexto');
+    if(cp7ObsDepois){
+      cp7ObsDepois.value = cp7ObsEstado.valor;
+      cp7ObsDepois.scrollTop = cp7ObsEstado.rolagemInterna || 0;
+      if(cp7ObsEstado.focado){
+        // preventScroll: devolver o foco não pode ser mais um motivo pra tela pular.
+        try{ cp7ObsDepois.focus({ preventScroll:true }); }catch(_){ cp7ObsDepois.focus(); }
+        try{ cp7ObsDepois.setSelectionRange(cp7ObsEstado.inicio, cp7ObsEstado.fim); }catch(_){}
+      }
+    }
+  }
+  // A remontagem troca a altura da área e o navegador reposiciona a página sozinho — é o
+  // "a tela pulou pra baixo" relatado pelo dono. Volta pra onde ele estava.
+  if(cp7JaTinhaDetalhe && Math.abs(window.scrollY - cp7RolagemPagina) > 2){
+    try{ window.scrollTo({ top: cp7RolagemPagina, behavior: "auto" }); }catch(_){ window.scrollTo(0, cp7RolagemPagina); }
+  }
   return null;
 }
 
@@ -8576,6 +8615,15 @@ document.addEventListener("keydown", (e) => {
   const ehTexto = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
   if(ehTexto) return;
   if(!isDesktop()) return;
+  // v1081 — combinação do navegador (Ctrl+H, Alt+M, Cmd+Z...) não é atalho do app: antes disso
+  // o app engolia a tecla e navegava no lugar do navegador. Acento/ç em teclado ABNT também
+  // chega como composição e não pode virar navegação.
+  if(e.ctrlKey || e.altKey || e.metaKey || e.isComposing || e.key === "Process") return;
+  // v1081 — com um lead ABERTO, letra solta nunca navega. Este era o outro lado do bug da
+  // observação: bastava o foco escapar do campo de texto (a tela se remontando por baixo, um
+  // clique fora) pra digitação virar navegação — "m" jogava o corretor no Menu, "h" na Home,
+  // e o que ele achava estar escrevendo ia junto com a tela.
+  if(state.focoLeadId || state.lead?.id) return;
   // / foca busca
   if(e.key === "/"){ const b = qs("#buscaGlobal"); if(b){ e.preventDefault(); b.focus(); } return; }
   // 1, 2, 3 selecionam o card do Top 3
