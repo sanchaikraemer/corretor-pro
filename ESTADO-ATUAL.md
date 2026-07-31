@@ -39,19 +39,19 @@ comercial e código morto) — ver `NOTAS-v1068.md` e a seção 8 atualizada._
 ## 2. Rotas da API (`api/*.js`)
 
 O plano gratuito (Hobby) da Vercel permite no máximo **12** Serverless Functions por publicação
-(ver `NOTAS-v1039.md` — isso já travou publicações por dias sem ninguém perceber). Hoje o projeto
-está exatamente nessas 12:
+(ver `NOTAS-v1039.md` — isso já travou publicações por dias sem ninguém perceber). O projeto
+esteve nas 12 até a v1082; a v1083 removeu duas rotas (`analisar.js`, sem nenhum chamador, e
+`limpar-tudo.js`, junto com o botão "Apagar tudo" — decisão do dono). **Hoje são 10, com 2 vagas
+livres.**
 
 | Rota | O que faz |
 |---|---|
 | `admin-contas.js` | Painel administrativo: excluir conta (`POST action:excluir-conta`) e relatório de uso de IA por empresa (`GET ?relatorio=uso-ia`) — as duas exclusivas do administrador da plataforma. |
-| `analisar.js` | Compatibilidade: processa um ZIP inteiro numa chamada só (quem manda o ZIP direto no corpo, sem passar pelo Storage antes). Sem nenhum chamador no app atual (v1073) — candidata a remoção quando for preciso liberar uma vaga no teto de 12 funções da Vercel. |
 | `atalho-zip-token.js` | Gera/mostra a chave pessoal do Atalho do iPhone (ver `NOTAS-v1035.md`). |
 | `cerebro-config.js` | Configuração do Cérebro Comercial + aprendizado contínuo. |
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
 | `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1073): as ações `lembrete-set`/`lembrete-clear`, `analise-comercial-set` e `nova-oportunidade-parceiro` não têm mais NENHUM chamador no front (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js pra lembretes) — ficam no servidor por serem pequenas e cobertas por teste, candidatas a remoção futura. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
-| `limpar-tudo.js` | Apaga todos os dados de uma empresa (rota destrutiva, desativada por padrão — exige `DIRECIONA_DANGER_LIMPAR_TUDO=ativo`). |
 | `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. |
 | `reanalisar-lead.js` | Reanálise de um lead já importado. |
 | `receber-zip-atalho.js` | Recebe o ZIP mandado pelo Atalho do iPhone (autenticação própria, por token — não é sessão do app). |
@@ -75,8 +75,8 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
   antigo (pré-login por conta); hoje só resolve pra empresa principal, nunca abre rota nenhuma
   sozinha (ver `NOTAS-v1042.md`). Sem essa variável configurada, em produção a API fica bloqueada
   por padrão — a menos que `ALLOW_UNPROTECTED_API=true` seja definida conscientemente.
-- `DIRECIONA_DANGER_LIMPAR_TUDO` — precisa ser literalmente `ativo` pra rota `limpar-tudo.js`
-  funcionar. Deixe **sem definir** em produção, a não ser que você realmente vá usar.
+- `DIRECIONA_DANGER_LIMPAR_TUDO` — **não é mais usada.** A rota `limpar-tudo.js` foi removida na
+  v1083; se essa variável ainda estiver cadastrada na Vercel, pode apagar.
 - `ATALHO_ZIP_TOKEN_SECRET` — segredo usado pra assinar a chave pessoal do Atalho do iPhone.
 
 ### Custo e limites de IA
@@ -205,11 +205,10 @@ montar isso:
     `window.__cpShareImportActive`: as duas primeiras são correntes propositais (cada camada
     guarda a anterior e chama ela), a terceira é estado de execução, não definição. Remover
     qualquer elo dessas correntes derruba silenciosamente o comportamento da camada de fora.
-- **`limpar-tudo.js` sem checagem de "dono" da empresa** — qualquer membro autenticado de uma
-  empresa pode disparar "Apagar tudo" da própria empresa (não só o dono dela), uma vez que a
-  variável de ambiente global `DIRECIONA_DANGER_LIMPAR_TUDO=ativo` esteja ligada. Isso é uma
-  decisão de acesso/produto, não só um bug — fica registrado pra decisão explícita do dono (ver
-  `NOTAS-v1068.md`, item 3).
+- ~~`limpar-tudo.js` sem checagem de "dono" da empresa~~ — **resolvido na v1083 pela remoção da
+  rota inteira** (decisão do dono: o botão "Apagar tudo" nunca seria usado). A única forma de
+  apagar os dados de uma conta hoje é o painel administrativo (`admin-contas.js`, ação
+  `excluir-conta`), que já exige ser administrador da plataforma.
 - **Política de privacidade e termos de uso** — publicadas desde a v1045 (`privacidade.html`,
   `termos.html`, linkadas no rodapé do cadastro). Ainda faltam dois passos manuais do dono: (1)
   preencher os campos `[razão social / CNPJ ou CPF do responsável]` e `[e-mail de contato/DPO]`

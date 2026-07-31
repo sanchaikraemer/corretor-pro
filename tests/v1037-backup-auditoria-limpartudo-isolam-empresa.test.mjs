@@ -136,56 +136,12 @@ try {
   });
 
   // ---------------------------------------------------------------------------------------
-  // PARTE 3 — api/limpar-tudo.js, empresa QUALQUER: "Apagar tudo" só pode apagar a própria
-  // organização (linhas e arquivos do Storage), nunca a base inteira nem tabela legada alheia.
-  // ---------------------------------------------------------------------------------------
-  await comServidor("org-outra-empresa-999", {
-    "/storage/v1/object/list/whatsapp-zips": (req, res) => { res.end("[]"); }
-  }, async (chamadas) => {
-    process.env.DIRECIONA_DANGER_LIMPAR_TUDO = "ativo";
-    const { default: handler } = await import(`../api/limpar-tudo.js?v1037c=${Date.now()}`);
-    const req = { method: "POST", headers: { authorization: "Bearer token-outra-empresa" }, body: { confirm: "APAGAR TUDO" } };
-    const res = fakeRes();
-    await handler(req, res);
-    assert.equal(res.statusCode, 200, res.payload);
-
-    const deleteWhatsapp = chamadas.filter(c => c.pathname === "/rest/v1/whatsapp_processamentos" && c.method === "DELETE");
-    assert.ok(deleteWhatsapp.length >= 1, "precisa ter tentado apagar whatsapp_processamentos");
-    for (const c of deleteWhatsapp) {
-      assert.match(c.search, /organization_id=eq\.org-outra-empresa-999/, `delete de whatsapp_processamentos precisa filtrar pela própria empresa, veio: ${c.search}`);
-    }
-    assert.ok(!chamadas.some(c => c.pathname === "/rest/v1/leads"), "empresa que não é a principal nunca pode apagar a tabela legada leads");
-    assert.ok(!chamadas.some(c => c.pathname === "/rest/v1/direciona_leads"), "empresa que não é a principal nunca pode apagar a tabela legada direciona_leads");
-
-    const listagensStorage = chamadas.filter(c => c.pathname.startsWith("/storage/v1/object/list/"));
-    assert.ok(listagensStorage.length >= 2, "precisa ter listado o Storage pra apagar (2 prefixos: whatsapp/organizations/.. e organizations/..)");
-    for (const c of listagensStorage) {
-      const prefixo = JSON.parse(c.body || "{}").prefix || "";
-      assert.match(prefixo, /organizations\/org-outra-empresa-999$/, `listagem do Storage precisa ficar dentro do prefixo da própria empresa, veio prefix="${prefixo}"`);
-    }
-
-    console.log("v1037 (limpar-tudo.js, empresa qualquer): apaga só a própria empresa — ok");
-  });
-
-  // ---------------------------------------------------------------------------------------
-  // PARTE 4 — api/limpar-tudo.js, empresa PRINCIPAL: continua apagando as tabelas legadas
-  // (sem regressão pra quem já usa "Apagar tudo" hoje).
-  // ---------------------------------------------------------------------------------------
-  await comServidor(EMPRESA_PRINCIPAL_ID, {
-    "/storage/v1/object/list/whatsapp-zips": (req, res) => { res.end("[]"); }
-  }, async (chamadas) => {
-    process.env.DIRECIONA_DANGER_LIMPAR_TUDO = "ativo";
-    const { default: handler } = await import(`../api/limpar-tudo.js?v1037d=${Date.now()}`);
-    const req = { method: "POST", headers: {}, body: { confirm: "APAGAR TUDO" } };
-    const res = fakeRes();
-    await handler(req, res);
-    assert.equal(res.statusCode, 200, res.payload);
-
-    assert.ok(chamadas.some(c => c.pathname === "/rest/v1/leads" && c.method === "DELETE"), "empresa principal precisa continuar apagando a tabela legada leads (sem regressão)");
-    assert.ok(chamadas.some(c => c.pathname === "/rest/v1/direciona_leads" && c.method === "DELETE"), "empresa principal precisa continuar apagando a tabela legada direciona_leads (sem regressão)");
-
-    console.log("v1037 (limpar-tudo.js, empresa principal): sem regressão — ok");
-  });
+  // PARTES 3 e 4 (removidas na v1083) — cobriam api/limpar-tudo.js, a rota do botão
+  // "Apagar tudo". A rota e o botão foram apagados a pedido do dono ("nunca será usado
+  // mesmo"), então não há mais o que isolar aqui. O isolamento por empresa continua coberto
+  // nas partes 1 e 2 acima (leads-recentes.js: auditoria e backup) e, pra exclusão de dados,
+  // em tests/v1005-excluir-conta-pelo-painel (api/admin-contas.js), que é o único caminho
+  // que ainda apaga dados de uma conta.
 } finally {
   restaurarEnv();
 }

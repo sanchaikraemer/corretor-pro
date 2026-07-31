@@ -1228,3 +1228,50 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     }
   };
 }
+
+// v1083 — veio de api/limpar-tudo.js, que foi removida nesta versão junto com o botão
+// "Apagar tudo" (decisão do dono: nunca seria usado). O painel administrativo continua
+// precisando desta função pra apagar os arquivos de uma conta excluída (api/admin-contas.js),
+// então ela passou a morar aqui, no módulo compartilhado.
+export async function emptyBucket(supabase, bucket, prefix = "") {
+  const todos = [];
+  const PAGE = 1000;
+  async function listFolder(prefix) {
+    // list() nunca pagina sozinho — devolve no máximo PAGE itens por chamada. Uma pasta
+    // compartilhada (ex.: transcription-cache/) pode facilmente passar de 1000 arquivos depois
+    // de meses de uso; sem o loop de offset, "limpar tudo" parava no primeiro lote e reportava
+    // sucesso (ok:true) deixando o resto pra trás.
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
+        limit: PAGE,
+        offset,
+        sortBy: { column: "name", order: "asc" }
+      });
+      if (error) return { error: error.message };
+      for (const item of data || []) {
+        const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.id) {
+          todos.push(fullPath);
+        } else {
+          // É pasta — desce.
+          const sub = await listFolder(fullPath);
+          if (sub?.error) return sub;
+        }
+      }
+      if (!data || data.length < PAGE) break;
+    }
+    return { ok: true };
+  }
+  const walk = await listFolder(prefix);
+  if (walk?.error) return { ok: false, error: walk.error, deleted: 0 };
+  if (!todos.length) return { ok: true, deleted: 0 };
+  // remove() em lotes de PAGE — mesma precaução, sem mudar quais arquivos são apagados.
+  let deleted = 0;
+  for (let i = 0; i < todos.length; i += PAGE) {
+    const batch = todos.slice(i, i + PAGE);
+    const { data, error } = await supabase.storage.from(bucket).remove(batch);
+    if (error) return { ok: false, error: error.message, deleted };
+    deleted += (data || []).length;
+  }
+  return { ok: true, deleted };
+}
