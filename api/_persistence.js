@@ -462,7 +462,12 @@ export function _mesclarTimelinesV681(antiga, nova) {
   out.forEach((m, i) => { m.id = i + 1; m.order = i + 1; });
   const chavesAntigas = new Set(a.map(_assinaturaTimelineV681).filter(Boolean));
   const novasUnicas = b.filter(m => { const k = _assinaturaTimelineV681(m); return k && !chavesAntigas.has(k); }).length;
-  const preservadasDoAntigo = a.filter(m => { const k = _assinaturaTimelineV681(m); return k && !new Set(b.map(_assinaturaTimelineV681).filter(Boolean)).has(k); }).length;
+  // v1082 — o conjunto das chaves novas era remontado DENTRO do filtro, uma vez por mensagem
+  // antiga: reimportar uma conversa de 4 mil mensagens fazia 16 milhões de comparações e criava
+  // 4 mil conjuntos, só pra contar um número que aparece no aviso da importação. Agora monta uma
+  // vez só, igual o chavesAntigas da linha de cima.
+  const chavesNovas = new Set(b.map(_assinaturaTimelineV681).filter(Boolean));
+  const preservadasDoAntigo = a.filter(m => { const k = _assinaturaTimelineV681(m); return k && !chavesNovas.has(k); }).length;
   return { timeline: out, novasUnicas, preservadasDoAntigo, substituidasPelaReal: a0.length - a.length, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
 }
 
@@ -476,21 +481,42 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
 
+  // v1082 — esta varredura roda em TODO salvamento de lead (salvar-novo, criar-manual, o ZIP do
+  // Atalho do iPhone e o "preparar" da importação). Ela só precisa de nome/telefone pra achar o
+  // cliente, mas trazia junto o timeline_json — a conversa INTEIRA — de até 5 mil leads. Numa
+  // carteira grande isso é dezenas (às vezes centenas) de MB baixados e convertidos a cada
+  // clique, e era o que fazia "salvar lead" travar de forma intermitente só pras contas mais
+  // cheias. A conversa do lead encontrado é buscada depois, numa consulta só, em buscarTimeline.
   const { data, error } = await supabase
     .from("whatsapp_processamentos")
-    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,criado_em,created_at,atualizado_em,updated_at")
     .eq("organization_id", organizationId)
     .order("atualizado_em", { ascending: false })
     .limit(5000);
   if (error || !Array.isArray(data)) return null;
+  // Os dois usos do retorno (a fusão em persistProcessingResult e o reaproveitamento de
+  // transcrição em processar-storage.js) leem row.timeline_json — então quem for devolvido
+  // carrega a conversa junto, buscada só pra ele.
+  // Filtra só pelo id: ele é a chave primária da tabela e acabou de vir da consulta acima, que
+  // já estava restrita a esta empresa — ou seja, este id comprovadamente é desta conta.
+  const comTimeline = async (row, via) => {
+    const { data: cheio } = await supabase
+      .from("whatsapp_processamentos")
+      .select("id,timeline_json")
+      .eq("id", row.id)
+      .order("atualizado_em", { ascending: false })
+      .limit(1);
+    const achado = Array.isArray(cheio) ? cheio.find(r => String(r?.id) === String(row.id)) : null;
+    return { row: { ...row, timeline_json: achado?.timeline_json || row.timeline_json || [] }, via };
+  };
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
-    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return { row, via: "telefone" };
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return comTimeline(row, "telefone");
   }
   for (const row of data) {
     const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
-    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return { row, via: "arquivo" };
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return comTimeline(row, "arquivo");
   }
   // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
   // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
@@ -502,7 +528,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     for (const row of data) {
       const ra = row.resultado_analise || {};
       const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
-      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return { row, via: "nome" };
+      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return comTimeline(row, "nome");
     }
   }
   return null;
@@ -612,7 +638,13 @@ export async function persistProcessingResult({
     nome_arquivo: nomeArquivo,
     arquivo_nome: nomeArquivo,
     status: "pronto",
-    etapa: analysis?.etapaSugerida || "Novo",
+    // v1082 — a etapa é decisão DO CORRETOR, não da IA. Só existem dois valores desde a v1069
+    // ("Ativo" e "Geladeira", ver ETAPAS_VALIDAS em api/lead-update.js). Antes entrava aqui o
+    // "etapaSugerida" da IA, que é texto livre (o prompt pede "etapaSugerida":"texto" e o
+    // fallback grava "Não identificado") — então a coluna acumulava vocabulário de funil que não
+    // existe mais. O palpite da IA continua guardado dentro de resultado_analise.etapaSugerida,
+    // que é onde ele sempre foi lido pra exibição; a coluna volta a ser só o estado real.
+    etapa: "Ativo",
     progresso: 100,
     erro: null,
     texto_extraido: result?.rawText || null,
@@ -634,6 +666,11 @@ export async function persistProcessingResult({
     const mergedAnalysis = _mesclarAnaliseV681(anterior.resultado_analise || {}, analysis || {});
     const updatePayload = {
       ...canonicalPayload,
+      // v1082 — reimportar a conversa NÃO pode desarquivar o lead. Como updatePayload espalha o
+      // canonicalPayload, a etapa do registro antigo era sobrescrita a cada reimportação: um
+      // cliente que o corretor tinha arquivado voltava sozinho pra fila do dia (a Home considera
+      // ativo tudo que não é "Geladeira"). A etapa que vale é sempre a que já estava salva.
+      etapa: anterior.etapa || "Ativo",
       resultado_analise: mergedAnalysis,
       timeline_json: mergeTimeline.timeline,
       texto_extraido: mergeTimeline.timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
@@ -717,12 +754,27 @@ export async function persistProcessingResult({
 
     // O projeto já teve tabelas "leads" e "direciona_leads" em momentos diferentes.
     // Tentamos salvar sem travar o processamento se uma delas tiver colunas diferentes.
-    for (const table of ["leads", "direciona_leads"]) {
-      try {
-        leadRow = await tryUpsert(supabase, table, leadBase);
-        break;
-      } catch (error) {
-        attempts.push({ table, model: "lead", error: error.message });
+    //
+    // v1082 — SÓ a conta original escreve aqui. Estas duas tabelas são anteriores às contas por
+    // login e NUNCA ganharam a coluna organization_id (ver supabase/migrations/0001 e 0002, que
+    // só acrescentaram a coluna em whatsapp_processamentos e direciona_config). Ou seja: tudo que
+    // cai nelas fica sem dono. Os três lugares que leem essas tabelas — restaurar-leads.js,
+    // leads-recentes.js (?export=full) e limpar-tudo.js — tratam TODA linha delas como sendo da
+    // conta original. Enquanto qualquer corretor também gravava aqui, o cliente dele (nome,
+    // telefone e análise inteira) entrava nesse balde sem dono; uma "Restauração de leads"
+    // rodada depois pela conta original enxergava aquele id como "faltando" (currentKeys só
+    // conhece os ids da própria conta) e o trazia pra si com upsert por id — reescrevendo o
+    // registro do outro corretor e passando o lead dele pra conta original. Restringir a escrita
+    // à conta original corta o problema na raiz e não tira nada de ninguém: pra todo mundo o
+    // registro que vale é o de whatsapp_processamentos, que sempre carrega organization_id.
+    if (organizationId === EMPRESA_PRINCIPAL_ID) {
+      for (const table of ["leads", "direciona_leads"]) {
+        try {
+          leadRow = await tryUpsert(supabase, table, leadBase);
+          break;
+        } catch (error) {
+          attempts.push({ table, model: "lead", error: error.message });
+        }
       }
     }
   }
@@ -750,9 +802,19 @@ async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) 
     const fatia = lote.slice(i, i + STATS_CACHE_WRITE_CONCURRENCY);
     await Promise.all(fatia.map(async (item) => {
       try {
-        await supabase.from("whatsapp_processamentos")
+        // v1082 — esta gravação regrava o resultado_analise INTEIRO como ele foi lido no começo
+        // da listagem (só pra guardar o _statsCache do dia junto). Sem trava, ela desfazia
+        // silenciosamente qualquer alteração feita ENQUANTO a listagem rodava: o corretor tocava
+        // em "Reanalisar" (que pode levar até 60s), a Home fazia o refresh normal no meio, e o
+        // refresh terminava depois — devolvendo a análise velha por cima da nova, com ok:true nos
+        // dois lados. O mesmo valia pra "Copiar mensagem"/"Marcar atendido" registrados no meio.
+        // Agora a gravação só vale se a linha não tiver sido tocada desde a leitura; se tiver,
+        // ela é simplesmente pulada (é cache — a próxima carga recalcula e grava de novo).
+        let q = supabase.from("whatsapp_processamentos")
           .update({ resultado_analise: item.resultado_analise })
           .eq("id", item.id).eq("organization_id", organizationId);
+        if (item.atualizado_em) q = q.eq("atualizado_em", item.atualizado_em);
+        await q;
       } catch (_) {
         // melhor esforço — a próxima carga recalcula e tenta gravar de novo.
       }
@@ -1019,6 +1081,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
       statsCacheWriteBacks.push({
         id: row.id,
+        // Marca d'água da leitura: a gravação de volta só acontece se a linha continuar
+        // exatamente como estava aqui (ver persistStatsCacheWriteBacks).
+        atualizado_em: row.atualizado_em || null,
         resultado_analise: {
           ...(analysisOriginal && typeof analysisOriginal === "object" ? analysisOriginal : {}),
           _statsCache: {

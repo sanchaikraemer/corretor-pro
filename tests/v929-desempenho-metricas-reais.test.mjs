@@ -26,11 +26,21 @@ assert.ok(iniHelper !== -1 && iniFn !== -1 && fim !== -1, 'cpInicioMesMs/cpDesem
 // remove o "window.cpInicioMesMs = ..." no meio do trecho: não existe `window` neste eval isolado.
 const fnSrc = app.slice(iniHelper, fim).replace(/^window\.cpInicioMesMs = cpInicioMesMs;\n/m, '');
 
-// "dentro do mês" = ontem (sempre no mês corrente); "fora do mês" = mês passado (sempre antes
-// do dia 1 corrente, não importa em que dia do mês o teste rodar).
-const dentroDaJanela = new Date(Date.now() - 1*24*60*60*1000).toISOString();
-const mesPassado = new Date(); mesPassado.setMonth(mesPassado.getMonth() - 1);
-const foraDaJanela = mesPassado.toISOString();
+// v1082 — as duas datas passam a ser calculadas a partir do MESMO começo de mês que a função
+// usa (dia 1, 00:00 em Brasília), em vez de "ontem" e "setMonth(mês - 1)". As duas formas
+// antigas quebravam sozinhas em certos dias do calendário, sem nada ter mudado no app:
+//   - "ontem" cai no mês passado sempre que o teste roda no dia 1;
+//   - setMonth(mês - 1) em 31/07 pede "31 de junho", data que não existe — o JavaScript
+//     normaliza pra 01/07, ou seja, o registro que deveria estar FORA da janela caía DENTRO
+//     dela e a contagem dava 3 em vez de 2. Foi o que aconteceu de verdade em 31/07/2026,
+//     deixando a suíte (e o ✓ do CI) vermelha sem nenhuma alteração de código.
+const inicioMesBR = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
+const inicioMesMs = new Date(`${inicioMesBR}-01T00:00:00-03:00`).getTime();
+// "dentro do mês" = agora (sempre no mês corrente e sempre no passado, rode em que dia rodar).
+const dentroDaJanela = new Date().toISOString();
+// "fora do mês" = 2 dias antes do dia 1 do mês corrente (sempre no mês anterior, com folga
+// suficiente pra não depender do fuso em que a máquina do teste estiver).
+const foraDaJanela = new Date(inicioMesMs - 2 * 24 * 60 * 60 * 1000).toISOString();
 
 const cpDesempenhoMetricas = eval(`
   const produtosLabel = (l) => l.__produto || "";

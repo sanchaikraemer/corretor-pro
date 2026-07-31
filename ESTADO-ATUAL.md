@@ -189,14 +189,22 @@ montar isso:
   dono.
 - **Captcha no cadastro** — dá pra fazer (Supabase suporta hCaptcha/Turnstile), mas exige criar
   conta num provedor externo — combinar com o dono antes.
-- **`app.js` é um arquivo só, com ~14 mil linhas** — funciona, mas dificulta manutenção e pode
-  esconder funções duplicadas/substituídas (achado da auditoria, ver seção 03 do relatório). Ainda
-  não foi dividido em módulos. Caso concreto já identificado (auditoria de código morto,
-  `NOTAS-v1068.md`): `abrirVenda`/`marcarPerdido` são redefinidas 3 vezes (só a última,
-  "v685-final", vale — as ~500 linhas anteriores viraram código morto inalcançável) e
-  `abrirEditarLead`/`salvarEditarLead` 2 vezes — não removidas ainda porque exige validar os
-  fluxos de venda/perda/edição de lead num navegador de verdade antes de apagar, não só testes
-  automatizados. Fica como tarefa pra uma sessão dedicada a isso.
+- **`app.js` é um arquivo só, com ~11,3 mil linhas** — funciona, mas dificulta manutenção. Ainda
+  não foi dividido em módulos. Detalhe importante pra quem for mexer: `app.js` é um **módulo ES**
+  (`<script type="module">` no `index.html`), então uma `function` declarada no topo do arquivo
+  **não** fica acessível pros `onclick="funcao()"` do HTML — só as linhas `window.funcao = funcao`
+  fazem essa ponte. É por isso que uma "função duplicada" quase sempre é, na verdade, uma ponte
+  `window.x = ...` reatribuída.
+  - As duplicatas que esta seção apontava desde a v1068 (`abrirVenda`/`marcarPerdido` 3 vezes,
+    `abrirEditarLead`/`salvarEditarLead` 2 vezes) **não existem mais**: saíram na faxina da v1069.
+  - A v1082 varreu o arquivo inteiro com um analisador de sintaxe (acorn) e confirmou **zero**
+    declarações duplicadas no topo. As últimas sobras de verdade foram removidas na mesma versão:
+    a geração antiga de `arquivarLead` (com `confirm()` do navegador, substituída na v1073) e uma
+    linha repetida de `window.reanalisarTudo`.
+  - **Não** mexa nas reatribuições de `window.show`, `window.cpPerformanceResumo` e
+    `window.__cpShareImportActive`: as duas primeiras são correntes propositais (cada camada
+    guarda a anterior e chama ela), a terceira é estado de execução, não definição. Remover
+    qualquer elo dessas correntes derruba silenciosamente o comportamento da camada de fora.
 - **`limpar-tudo.js` sem checagem de "dono" da empresa** — qualquer membro autenticado de uma
   empresa pode disparar "Apagar tudo" da própria empresa (não só o dono dela), uma vez que a
   variável de ambiente global `DIRECIONA_DANGER_LIMPAR_TUDO=ativo` esteja ligada. Isso é uma

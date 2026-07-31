@@ -103,6 +103,24 @@ import './js/pwa-install.js?v=__VERSION__';
   // Toda aba do site agora escuta essa gaveta: se OUTRA aba muda o login guardado nela, esta aba
   // recarrega sozinha na hora — assim nenhuma aba velha consegue "brigar" pela conta certa depois.
   addEventListener("storage", (ev) => { if (ev.key && ev.key.includes("auth-token")) location.reload(); });
+  // v1082 — uma só ida pra tela de entrar. Sem esta trava, várias chamadas de API que voltam 401
+  // ao mesmo tempo (a Home dispara várias de uma vez) mandavam a navegação de novo a cada uma.
+  let jaMandouPraEntrar = false;
+  function irParaEntrar(){
+    if (jaMandouPraEntrar) return;
+    jaMandouPraEntrar = true;
+    try { window.location.href = "/entrar.html"; } catch(_) {}
+  }
+  // Mesma ideia pra caixinha da chave antiga: várias respostas 401 simultâneas empilhavam várias
+  // caixinhas seguidas, uma por chamada. Agora pergunta uma vez e reaproveita a resposta.
+  let chavePerguntadaNestaSessao = false;
+  let chaveRespondida = "";
+  function pedirChaveUmaVezSo(){
+    if (chavePerguntadaNestaSessao) return chaveRespondida;
+    chavePerguntadaNestaSessao = true;
+    chaveRespondida = window.definirChaveSegurancaCorretorPro() || "";
+    return chaveRespondida;
+  }
   window.definirChaveSegurancaCorretorPro = function(){
     const atual = getKey();
     const valor = prompt("Informe a chave de segurança do Corretor Pro:", atual || "");
@@ -137,10 +155,20 @@ import './js/pwa-install.js?v=__VERSION__';
       // Com login por conta, um 401 significa sessão vencida — volta pra tela de entrar,
       // nunca pro pedido da chave compartilhada (que não é desse fluxo).
       if (token) {
-        try { window.location.href = "/entrar.html"; } catch(_) {}
+        irParaEntrar();
         return res;
       }
-      const nova = window.definirChaveSegurancaCorretorPro();
+      // v1082 — SEM login e SEM chave salva neste aparelho: é gente que simplesmente não está
+      // conectada (nunca entrou, ou saiu/limpou o navegador). Antes, o app abria a caixinha crua
+      // do navegador pedindo "a chave de segurança do Corretor Pro" — algo que cliente nenhum tem
+      // nem entende, e a tela ficava presa em "Reconectando…". Agora vai direto pra tela de entrar.
+      // A caixinha da chave só continua existindo pra aparelho que JÁ usa esse caminho antigo
+      // (chave guardada aqui) e cuja chave parou de valer — aí perguntar de novo faz sentido.
+      if (!key) {
+        irParaEntrar();
+        return res;
+      }
+      const nova = pedirChaveUmaVezSo();
       if (nova && nova !== key) {
         const retryHeaders = new Headers(headers);
         retryHeaders.set("X-Corretor-Pro-Key", nova);
@@ -3438,8 +3466,6 @@ async function executarReanaliseTudo(items){
     toast("Lista atualizada com a reanálise.");
   }, { once: true });
 }
-window.reanalisarTudo = reanalisarTudo;
-
 // Reroda APENAS os leads que falharam na última reanálise (botão no resumo final).
 function reanalisarFalhas(){
   const lista = (window._reanalFalhas || []).map(f => ({ id: f.id, name: f.nome }));
@@ -8450,38 +8476,6 @@ async function reativarLeadGeladeira(id, btn){
   }
 }
 window.reativarLeadGeladeira = reativarLeadGeladeira;
-
-async function arquivarLead(id, nome){
-  if(!id) return;
-  if(!confirm(`Arquivar ${nome || "este lead"}? Ele sai das prioridades, mas continua guardado para ser reativado depois.`)) return;
-  try{
-    const res = await fetch("./api/lead-update", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, action: "etapa", etapa: "Geladeira" })
-    });
-    const data = await res.json().catch(()=>({ok:false}));
-    if(data?.ok){
-      toast("Lead arquivado.");
-      // O servidor já arquivou, mas a Home lê de um cache em memória (fast-path do
-      // carregarDashboard). Sem atualizar esse cache e invalidar a busca, o lead
-      // arquivado continuava aparecendo nas prioridades até um refresh manual.
-      const sid = String(id);
-      for(const lista of [state.todosLeads, state.leads]){
-        if(!Array.isArray(lista)) continue;
-        const l = lista.find(x => String(x.id) === sid);
-        if(l) l.etapa = "Geladeira";
-      }
-      if(Array.isArray(state.itemsAtivos)) state.itemsAtivos = state.itemsAtivos.filter(x => String(x.id) !== sid);
-      invalidarLeadsCache();
-      voltarDoLead();
-      carregarDashboard();
-      loadRecentLeads(true);
-    } else {
-      toast("Erro: " + (data?.error || "falha"));
-    }
-  }catch(err){ toast("Erro de rede: " + (err?.message||err)); }
-}
-window.arquivarLead = arquivarLead;
 
 qs("#copyMessage").addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText(qs("#messageText").value);toast("Mensagem copiada.")}
