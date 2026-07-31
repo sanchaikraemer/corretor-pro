@@ -471,12 +471,19 @@ export default async function handler(req, res) {
       // áudios já feitos nesse MESMO cliente; não decide fusão de cadastro (isso continua
       // acontecendo depois, na análise/persistência, do jeito que já era).
       const nomeArquivoZip = storagePath.split("/").pop() || "";
-      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath, organizationId }).catch(() => null);
+      // v1086 — se a leitura da conversa já salva falhar, o cache de áudio vem vazio e TODOS os
+      // áudios são transcritos de novo (importação lenta e cara). Isso não pode passar batido:
+      // a falha vai registrada na resposta, pra aparecer no diagnóstico em vez de virar só
+      // "essa importação demorou muito hoje".
+      let avisoCacheAudio = null;
+      const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath, organizationId })
+        .catch((e) => { avisoCacheAudio = e?.message || String(e); return null; });
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
       const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, organizationId });
       return json(res, 200, {
         ok: true, bucket, path: storagePath, importId, manifestPath: `organizations/${organizationId}/imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
+        ...(avisoCacheAudio ? { avisoCacheAudio } : {}),
         audioStorage: manifest.audioStorage,
         cachedTranscriptions: manifest.transcriptions || {}
       });
