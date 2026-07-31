@@ -41,18 +41,12 @@ assert.match(
   /cp903Confirm/,
   '#btnDescartarUpload deve usar cp903Confirm'
 );
-const wipeAllSrc = src.slice(src.indexOf('qs("#wipeAll")'), src.indexOf('qs("#wipeAll")') + 1200);
-assert.match(wipeAllSrc, /cp903Confirm/, '#wipeAll deve usar cp903Confirm nas duas confirmações');
-
-// v964 — bug real à parte: o body enviado por #wipeAll usava a chave "confirmacao", mas
-// api/limpar-tudo.js exige literalmente body.confirm === "APAGAR TUDO". Com a chave errada o
-// botão SEMPRE devolvia 400 "Confirmação inválida" — nunca funcionou. Checa só a linha ATIVA
-// (`body: JSON.stringify(...)`), não o arquivo/trecho inteiro — um comentário explicando o bug
-// antigo também contém o texto "confirmacao: ...", o que faria esse assert disparar por engano.
-const linhaBodyWipe = wipeAllSrc.split('\n').find(l => l.trim().startsWith('body: JSON.stringify({ confirm'));
-assert.ok(linhaBodyWipe, 'achei a linha do body enviado por #wipeAll');
-assert.doesNotMatch(linhaBodyWipe, /confirmacao/, '#wipeAll não pode mais mandar a chave errada "confirmacao"');
-assert.match(linhaBodyWipe, /confirm\s*:\s*["']APAGAR TUDO["']/, '#wipeAll precisa mandar { confirm: "APAGAR TUDO" }, a chave que a API espera');
+// v1083 — o botão "Apagar tudo" (#wipeAll) e a rota api/limpar-tudo.js foram REMOVIDOS a
+// pedido do dono ("nunca será usado mesmo"). O que era conferido aqui vira uma trava de que
+// eles não voltem por engano: a exclusão de dados de uma conta agora acontece só pelo painel
+// administrativo (api/admin-contas.js, action "excluir-conta").
+assert.ok(!src.includes('#wipeAll'), 'o botão Apagar tudo foi removido — não pode voltar');
+assert.ok(!src.includes('api/limpar-tudo'), 'nenhuma chamada à rota removida api/limpar-tudo pode existir');
 
 // CSS: mensagens multi-linha (ex.: zerarCerebroTudo, excluirLeadDefinitivo) usam \n\n no texto —
 // sem white-space:pre-line no <p> do modal, a quebra de linha desaparecia visualmente.

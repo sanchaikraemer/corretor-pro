@@ -33,7 +33,8 @@ for (const nome of arquivos) {
   if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src) && !/resolveOrganizationIdByAtalhoToken\s*\(/.test(src) && !/requirePlatformAdmin\s*\(/.test(src)) rotasSemApiKey.push(nome);
 }
 
-assert.ok(rotasVerificadas.includes('analisar.js'), 'api/analisar.js precisa ser reconhecida como rota (tem handler default)');
+// v1083 — api/analisar.js foi removida (rota de compatibilidade sem nenhum chamador). A
+// varredura genérica acima continua valendo pra TODA rota que existir em api/.
 assert.ok(rotasVerificadas.length >= 8, `esperava achar pelo menos 8 rotas com handler, achei ${rotasVerificadas.length}: ${rotasVerificadas.join(', ')}`);
 assert.deepEqual(rotasSemApiKey, [], `toda rota (handler default) precisa chamar requireApiKey — faltando em: ${rotasSemApiKey.join(', ')}`);
 

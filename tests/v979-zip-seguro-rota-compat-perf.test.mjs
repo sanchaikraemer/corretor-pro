@@ -11,8 +11,9 @@ import { processZipBuffer, transcribeAudio } from '../api/_pipeline.js';
 assert.equal(typeof processZipBuffer, 'function', 'processZipBuffer precisa existir em _pipeline.js — sem isso api/analisar.js quebra ao carregar');
 
 // Prova direta do bug: importar o módulo da rota real não pode lançar erro.
-await import('../api/analisar.js');
-console.log('v979-rota-compat: api/analisar.js carrega sem erro (processZipBuffer existe)');
+// v1083 — api/analisar.js foi removida (rota de compatibilidade, zero chamadores). A checagem
+// de que processZipBuffer existe continua acima: api/receber-zip-atalho.js (Atalho do iPhone)
+// ainda depende dela.
 
 // v979 (arquivo "bomba") — transcribeAudio descompactava o áudio inteiro (.async) e só
 // DEPOIS conferia o tamanho. Um ZIP que declara um áudio gigante (pequeno fechado, imenso

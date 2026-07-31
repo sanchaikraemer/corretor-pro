@@ -5,9 +5,8 @@
 // v1039 — também acumula o relatório de uso de IA por empresa (antes em api/admin-uso-ia.js,
 // separado — ver NOTAS-v1039.md: o plano Hobby da Vercel só permite 12 Serverless Functions).
 // GET ?relatorio=uso-ia devolve o relatório; POST {action:"excluir-conta"} continua igual.
-import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin } from "./_persistence.js";
+import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin, emptyBucket } from "./_persistence.js";
 import { invalidarMemoriaComercialCache } from "./_pipeline.js";
-import { emptyBucket } from "./limpar-tudo.js";
 import { estimarCustoUsd, cotacaoUsdBrl } from "./_iaCusto.js";
 
 function json(res, status, payload) {
