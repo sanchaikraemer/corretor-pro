@@ -44,8 +44,15 @@ import { EMPRESA_PRINCIPAL_ID } from '../api/_persistence.js';
       const resultado = () => Promise.resolve({ data: rows, error: null });
       return {
         // lerTabela() (leads/direciona_leads) encadeia select().limit(); currentKeys()
-        // (whatsapp_processamentos) encadeia select().eq().limit() — o fake precisa aceitar os dois.
-        select() { return { limit: resultado, eq() { return { limit: resultado }; } }; },
+        // (whatsapp_processamentos) encadeia select().eq().limit(); idsDeOutrasEmpresas()
+        // (v1082) encadeia select().neq().range() — o fake precisa aceitar os três.
+        select() {
+          return {
+            limit: resultado,
+            eq() { return { limit: resultado }; },
+            neq() { return { range: () => Promise.resolve({ data: [], error: null }) }; }
+          };
+        },
         upsert(rowsToUpsert) { upserted.push(...rowsToUpsert); return Promise.resolve({ error: null }); }
       };
     }

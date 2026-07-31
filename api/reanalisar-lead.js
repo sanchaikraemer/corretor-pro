@@ -387,8 +387,8 @@ async function reanalisarLeadHandler702(req, res) {
     };
     if (prev.lembrete && prev.lembrete.auto !== true) mergedC.lembrete = prev.lembrete; // preserva lembrete manual
     const updC = { resultado_analise: mergedC, timeline_json: novaTl, atualizado_em: new Date().toISOString() };
-    const etapaC = String(row.etapa || "Novo").toLowerCase();
-    if (!/vendido|perdido/.test(etapaC) && novoC?.etapaSugerida) updC.etapa = novoC.etapaSugerida;
+    // v1082 — a reanálise NÃO mexe mais na etapa (ver comentário completo no outro ponto deste
+    // arquivo, na reanálise completa): etapa é decisão do corretor, não palpite da IA.
     const { error: errC } = await supabase.from("whatsapp_processamentos").update(updC).eq("id", id).eq("organization_id", organizationId);
     if (errC) return json(res, 500, { ok: false, error: errC.message });
     return json(res, 200, { ok: true, analysis: mergedC });
@@ -615,7 +615,14 @@ async function reanalisarLeadHandler702(req, res) {
     clientName: freshPrevious.clientName || freshPrevious?.lead?.clientName || freshPrevious?.lead?.name || nomeRecuperado,
     lead: freshPrevious.lead || leadModelo,
     venda: freshPrevious.venda || undefined,
-    memoria: { observacoes: observacoesFinais },
+    // v1082 — a memória do lead é o que o CORRETOR digitou à mão (preferências, quem decide,
+    // pontos sensíveis, além de camposManuais/manualAtualizadoEm, que marcam o que é manual).
+    // Trocar o objeto inteiro por { observacoes } apagava tudo isso a cada "Reanalisar": o
+    // corretor preenchia "quer térrea, aceita permuta" e "decide com a esposa", mandava
+    // reanalisar, e os campos voltavam em branco — some da tela, some do banco e some do que é
+    // mandado pra IA nas próximas análises. Preserva o que já existia e só troca as observações
+    // (é exatamente o que o caminho irmão de corrigir-observacao sempre fez, poucas linhas acima).
+    memoria: { ...(freshPrevious.memoria || {}), observacoes: observacoesFinais },
     aprendizado: freshPrevious.aprendizado || undefined,
     reanalisadoEm: new Date().toISOString()
   };
@@ -647,9 +654,14 @@ async function reanalisarLeadHandler702(req, res) {
   const agoraSalvar = new Date().toISOString();
   const update = { resultado_analise: merged, atualizado_em: agoraSalvar };
   if (novoAtendimento) update.timeline_json = timelineFinal;
-  const etapaAtual = String(row.etapa || "Novo").toLowerCase();
-  const ehFinalCorretor = /vendido|perdido/.test(etapaAtual);
-  if (!ehFinalCorretor && merged?.etapaSugerida) update.etapa = merged.etapaSugerida;
+  // v1082 — a reanálise não escreve mais na coluna "etapa". Desde a v1069 só existem dois
+  // valores válidos ("Ativo" e "Geladeira", ver ETAPAS_VALIDAS em api/lead-update.js), e esta
+  // guarda procurava por "vendido|perdido" — vocabulário de funil que deixou de existir, ou seja,
+  // ela nunca protegia nada. O que entrava aqui era o "etapaSugerida" da IA, que é texto livre.
+  // Resultado no dia a dia: o corretor arquivava um cliente, tocava em "Reanalisar", a IA
+  // devolvia algo como "Atendimento", e o lead voltava sozinho pra fila do dia (a Home trata como
+  // ativo tudo que não é "Geladeira") — a decisão de arquivar sumia sem aviso. O palpite da IA
+  // continua salvo dentro de resultado_analise.etapaSugerida, que é de onde a tela sempre leu.
   const freshUpdatedAt = freshRow?.updated_at;
   let updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id).eq("organization_id", organizationId);
   let finalQuery = freshUpdatedAt ? updateQuery.eq("updated_at", freshUpdatedAt) : updateQuery;

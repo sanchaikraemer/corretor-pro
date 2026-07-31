@@ -6,7 +6,7 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Uso: POST /api/lead-update com body { id, action, ...payload }
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
-import { resolveOrganizationId } from "./_persistence.js";
+import { resolveOrganizationId, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -1236,7 +1236,7 @@ function idsImportacaoDoRegistro(row) {
   return [...ids].filter(v => /^[a-zA-Z0-9][a-zA-Z0-9._-]{7,120}$/.test(v));
 }
 
-async function apagarStorageDosLeads(supabase, rows) {
+async function apagarStorageDosLeads(supabase, rows, organizationId) {
   const defaultBucket = String(process.env.SUPABASE_ZIP_BUCKET || "whatsapp-zips").trim() || "whatsapp-zips";
   const porBucket = new Map();
   let precisaLimparCacheLegado = false;
@@ -1251,12 +1251,26 @@ async function apagarStorageDosLeads(supabase, rows) {
     for (const path of refs?.transcriptionCachePaths || []) if (path) alvo.caches.add(String(path));
     const importIds = idsImportacaoDoRegistro(row);
     for (const importId of importIds) {
+      // v1082 — desde a separação por empresa, a importação vive em
+      // organizations/<empresa>/imports/<id>/ (ver api/processar-storage.js). Só os dois prefixos
+      // antigos estavam listados aqui, então NENHUM arquivo de importação inacabada era apagado
+      // junto com o lead — e o manifesto guarda a conversa inteira já lida. Os prefixos antigos
+      // continuam na lista pra limpar o que ficou do layout anterior.
+      alvo.prefixes.add(`organizations/${organizationId}/imports/${importId}`);
+      alvo.prefixes.add(`whatsapp/organizations/${organizationId}/imports/${importId}`);
       alvo.prefixes.add(`imports/${importId}`);
       alvo.prefixes.add(`whatsapp/imports/${importId}`);
     }
     // v911 e anteriores não guardavam a relação hash → lead. Para garantir a exclusão
     // de dados pessoais antigos, limpa o cache compartilhado uma vez quando faltar essa referência.
-    if (!refs || !Array.isArray(refs.transcriptionCachePaths)) precisaLimparCacheLegado = true;
+    // v1082 — "transcription-cache/" é a pasta GLOBAL de antes da separação por empresa (hoje as
+    // transcrições novas vão pra organizations/<empresa>/transcription-cache/). O conteúdo dela é
+    // da conta original. Como esta varredura era disparada sempre que o lead não tinha
+    // _storageRefs — e a reanálise reconstrói a análise sem esse campo, ou seja, todo lead já
+    // reanalisado se encaixa —, apagar um lead em QUALQUER conta varria a pasta global inteira: a
+    // conta original perdia as transcrições reaproveitáveis e pagava a transcrição de novo na
+    // próxima importação. Só a dona daquela pasta pode limpá-la.
+    if (organizationId === EMPRESA_PRINCIPAL_ID && (!refs || !Array.isArray(refs.transcriptionCachePaths))) precisaLimparCacheLegado = true;
   }
 
   let removidos = 0;
@@ -1374,7 +1388,7 @@ async function acaoApagar(id, res, ids, organizationId) {
   const registros = rows.filter(r => alvos.includes(String(r.id)));
 
   try {
-    const storage = await apagarStorageDosLeads(supabase, registros);
+    const storage = await apagarStorageDosLeads(supabase, registros, organizationId);
     await limparAprendizadoDosLeads(supabase, alvos, organizationId);
     const vinculosAtualizados = await removerVinculosComLeadsApagados(supabase, alvos, organizationId);
     const auxiliares = [];

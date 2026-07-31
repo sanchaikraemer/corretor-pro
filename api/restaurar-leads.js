@@ -179,6 +179,30 @@ async function lerTabela(supabase, table) {
   return { table, rows: Array.isArray(data) ? data : [], error: null };
 }
 
+// v1082 — rede de segurança contra o estrago que a gravação sem dono já pode ter deixado no banco.
+// Até esta versão, o salvamento de QUALQUER corretor também copiava o lead pras tabelas legadas
+// leads/direciona_leads, que não têm coluna de empresa (ver api/_persistence.js, mesma versão).
+// Então essas tabelas podem conter, hoje, leads de outros corretores. Como a restauração grava em
+// whatsapp_processamentos com upsert por id, restaurar um desses ids reescreveria o registro do
+// outro corretor e passaria o cliente dele pra conta original — inclusive com force:true, que pula
+// a checagem de "já existe". Aqui levantamos os ids que pertencem a OUTRA empresa pra nunca tocar
+// neles, aconteça o que acontecer.
+async function idsDeOutrasEmpresas(supabase) {
+  const donos = new Set();
+  const PAGINA = 1000;
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await supabase
+      .from("whatsapp_processamentos")
+      .select("id")
+      .neq("organization_id", EMPRESA_PRINCIPAL_ID)
+      .range(inicio, inicio + PAGINA - 1);
+    if (error) throw new Error(error.message);
+    for (const row of data || []) if (row?.id) donos.add(String(row.id));
+    if (!data || data.length < PAGINA) break;
+  }
+  return donos;
+}
+
 async function currentKeys(supabase) {
   let query = supabase
     .from("whatsapp_processamentos")
@@ -223,6 +247,7 @@ async function adaptiveBatchUpsert(supabase, rows) {
 
 export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
   const current = await currentKeys(supabase);
+  const idsDeOutros = await idsDeOutrasEmpresas(supabase);
   const tables = await Promise.all([lerTabela(supabase, "leads"), lerTabela(supabase, "direciona_leads")]);
   const sourceRows = [];
   for (const result of tables) {
@@ -242,7 +267,10 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
 
   const selected = [];
   const seenKeys = new Set(current.keys);
+  let ignoradosDeOutraEmpresa = 0;
   for (const normalized of best.values()) {
+    // Nunca reescreve um registro que hoje é de outra empresa — nem com force:true.
+    if (normalized.id && idsDeOutros.has(String(normalized.id))) { ignoradosDeOutraEmpresa++; continue; }
     if (!force && normalized.id && current.ids.has(String(normalized.id))) continue;
     if (!force && normalized.dedupeKey && seenKeys.has(normalized.dedupeKey)) continue;
     if (normalized.dedupeKey) seenKeys.add(normalized.dedupeKey);
@@ -264,6 +292,7 @@ export async function restaurarLeadsLegados(supabase, { force = false } = {}) {
     legacyFound: sourceRows.length,
     uniqueLegacy: best.size,
     restored,
+    ignoradosDeOutraEmpresa,
     alreadyPresent: Math.max(0, best.size - selected.length),
     currentAfterEstimate: current.count + restored,
     tables: tables.map(t => ({ table: t.table, rows: t.rows.length, error: t.error })),
