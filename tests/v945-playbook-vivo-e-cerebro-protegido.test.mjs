@@ -44,7 +44,17 @@ await analyzeWithBrain({
 });
 const systemVivo = chamadas.at(-1).messages.find(m => m.role === "system")?.content || "";
 assert.match(systemVivo, /QUALIFICAR antes de empurrar produto/, "trecho do playbook precisa chegar no prompt de verdade enviado ao modelo");
-assert.match(systemVivo, /Reenquadre: "entrada \+ financiamento/, "argumento de permuta do playbook precisa estar no prompt vivo");
+// v1084 — o playbook base deixou de trazer ARGUMENTO PRONTO com condição comercial embutida
+// ("congela o preço", "pega desconto", "entrada + financiamento…"). Motivo: essas condições
+// dependem da construtora de cada corretor, e a IA as tratava como fato — quem vende só pronto
+// podia acabar prometendo o que a construtora dele não oferece. Ficou só o ROTEIRO (para onde
+// olhar em cada situação); toda condição precisa vir do Cérebro ou da própria conversa.
+assert.doesNotMatch(systemVivo, /congela o preço|pega desconto/,
+  "o piso comercial não pode afirmar condição de venda (isso vem do Cérebro ou da conversa)");
+assert.match(systemVivo, /Quer dar imóvel na troca \(permuta\)/,
+  "o roteiro de permuta continua no prompt — o que saiu foi a promessa, não a situação");
+assert.match(systemVivo, /só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa/,
+  "o piso precisa deixar explícito que condição comercial nunca é inventada");
 
 // ---------------------------------------------------------------------------
 // 2) Campos livres do Cérebro (método/tom/diferenciais/evitar) nunca tinham teto
