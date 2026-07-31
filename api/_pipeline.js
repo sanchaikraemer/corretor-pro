@@ -2342,7 +2342,12 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
       ],
       max_tokens: maxOutputTokens,
       response_format: { type: "json_object" }
-    }, { signal: controller.signal, timeout });
+      // v1086 — maxRetries:0. O SDK da OpenAI tenta sozinho até 3 vezes por chamada em 429/5xx,
+      // POR DENTRO da nossa janela de 26s: numa hora de fila na OpenAI, essas tentativas escondidas
+      // consumiam a janela inteira antes de a nossa própria retentativa começar, dobrando o tempo
+      // que o corretor espera na tela. Agora a falha volta na hora e quem controla a repetição é o
+      // withRetries daqui, que tem backoff próprio e é o mesmo pra todas as chamadas.
+    }, { signal: controller.signal, timeout, maxRetries: 0 });
     const completion = await Promise.race([apiPromise, timeoutPromise]);
     const texto = completion.choices[0]?.message?.content || "";
     if (!texto) throw new Error(`${model} não retornou texto.`);

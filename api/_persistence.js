@@ -481,31 +481,54 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
 
-  // v1085 — a otimização da v1082 (tirar o timeline_json daqui pra não baixar a conversa de até
-  // 5 mil leads a cada salvamento) FOI REVERTIDA: ela buscava a conversa do lead encontrado numa
-  // segunda consulta, e essa segunda consulta é um ponto de falha silenciosa em cima do caminho
-  // mais crítico do app. Se ela não devolvesse a conversa, o resultado NÃO era um erro visível —
-  // era o cache de transcrição de áudio vindo vazio (ele é montado a partir desta conversa, ver
-  // transcricoesDoLeadAnterior em api/processar-storage.js). Sem cache, TODO áudio da conversa é
-  // transcrito de novo a cada reimportação: a importação fica "lendo" sem parar, estoura o limite
-  // de 60s da função e nunca conclui — além de pagar de novo pela transcrição. A conversa volta a
-  // vir junto na mesma consulta, como sempre foi. O ganho de desempenho pode ser buscado de novo
-  // depois, mas só de um jeito que não tenha como degradar em silêncio.
+  // v1086 — esta varredura roda DUAS VEZES por importação (no "preparar" e de novo ao salvar).
+  // Ela precisa só de nome/telefone pra achar o cliente, mas trazer o timeline_json junto
+  // significa baixar a CONVERSA INTEIRA de até 5 mil leads — dezenas ou centenas de MB, duas
+  // vezes, a cada importação. Era o que fazia a importação levar minutos.
+  //
+  // A v1082 já tinha tirado o timeline_json daqui, mas buscava a conversa do lead encontrado numa
+  // segunda consulta que, se falhasse, devolvia conversa vazia SEM ERRO NENHUM — e conversa vazia
+  // aqui significa perder o cache de transcrição (re-transcreve tudo) e, no salvamento, perder o
+  // histórico. Foi o que quebrou a importação e obrigou o revert na v1085.
+  //
+  // Agora tem as duas coisas: a varredura é leve E a conversa do lead encontrado nunca some em
+  // silêncio — a segunda busca tenta 3 vezes e, se ainda assim não conseguir, ESTOURA. Quem chama
+  // decide o que fazer com o erro, mas ninguém mais recebe uma conversa vazia achando que é real.
   const { data, error } = await supabase
     .from("whatsapp_processamentos")
-    .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+    .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,criado_em,created_at,atualizado_em,updated_at")
     .eq("organization_id", organizationId)
     .order("atualizado_em", { ascending: false })
     .limit(5000);
   if (error || !Array.isArray(data)) return null;
+
+  const comTimeline = async (row, via) => {
+    let ultimoErro = null;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      if (tentativa) await new Promise(r => setTimeout(r, 300 * tentativa));
+      const { data: cheio, error: erroTl } = await supabase
+        .from("whatsapp_processamentos")
+        .select("id,timeline_json")
+        .eq("id", row.id)
+        .order("atualizado_em", { ascending: false })
+        .limit(1);
+      if (erroTl) { ultimoErro = new Error(erroTl.message); continue; }
+      const achado = Array.isArray(cheio) ? cheio.find(r => String(r?.id) === String(row.id)) : null;
+      if (!achado) { ultimoErro = new Error("registro não voltou na releitura"); continue; }
+      return { row: { ...row, timeline_json: Array.isArray(achado.timeline_json) ? achado.timeline_json : [] }, via };
+    }
+    // Nunca devolve conversa vazia como se fosse a real: sem isso, o salvamento apagaria o
+    // histórico do lead e a importação re-transcreveria todos os áudios sem ninguém perceber.
+    throw new Error(`Não consegui ler a conversa já salva deste cliente (${row.id}): ${ultimoErro?.message || "motivo desconhecido"}`);
+  };
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
-    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return { row, via: "telefone" };
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return comTimeline(row, "telefone");
   }
   for (const row of data) {
     const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
-    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return { row, via: "arquivo" };
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return comTimeline(row, "arquivo");
   }
   // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
   // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
@@ -517,7 +540,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     for (const row of data) {
       const ra = row.resultado_analise || {};
       const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
-      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return { row, via: "nome" };
+      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return comTimeline(row, "nome");
     }
   }
   return null;
