@@ -481,42 +481,31 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
 
-  // v1082 — esta varredura roda em TODO salvamento de lead (salvar-novo, criar-manual, o ZIP do
-  // Atalho do iPhone e o "preparar" da importação). Ela só precisa de nome/telefone pra achar o
-  // cliente, mas trazia junto o timeline_json — a conversa INTEIRA — de até 5 mil leads. Numa
-  // carteira grande isso é dezenas (às vezes centenas) de MB baixados e convertidos a cada
-  // clique, e era o que fazia "salvar lead" travar de forma intermitente só pras contas mais
-  // cheias. A conversa do lead encontrado é buscada depois, numa consulta só, em buscarTimeline.
+  // v1085 — a otimização da v1082 (tirar o timeline_json daqui pra não baixar a conversa de até
+  // 5 mil leads a cada salvamento) FOI REVERTIDA: ela buscava a conversa do lead encontrado numa
+  // segunda consulta, e essa segunda consulta é um ponto de falha silenciosa em cima do caminho
+  // mais crítico do app. Se ela não devolvesse a conversa, o resultado NÃO era um erro visível —
+  // era o cache de transcrição de áudio vindo vazio (ele é montado a partir desta conversa, ver
+  // transcricoesDoLeadAnterior em api/processar-storage.js). Sem cache, TODO áudio da conversa é
+  // transcrito de novo a cada reimportação: a importação fica "lendo" sem parar, estoura o limite
+  // de 60s da função e nunca conclui — além de pagar de novo pela transcrição. A conversa volta a
+  // vir junto na mesma consulta, como sempre foi. O ganho de desempenho pode ser buscado de novo
+  // depois, mas só de um jeito que não tenha como degradar em silêncio.
   const { data, error } = await supabase
     .from("whatsapp_processamentos")
-    .select("id,nome_arquivo,arquivo_nome,telefone,resultado_analise,criado_em,created_at,atualizado_em,updated_at")
+    .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
     .eq("organization_id", organizationId)
     .order("atualizado_em", { ascending: false })
     .limit(5000);
   if (error || !Array.isArray(data)) return null;
-  // Os dois usos do retorno (a fusão em persistProcessingResult e o reaproveitamento de
-  // transcrição em processar-storage.js) leem row.timeline_json — então quem for devolvido
-  // carrega a conversa junto, buscada só pra ele.
-  // Filtra só pelo id: ele é a chave primária da tabela e acabou de vir da consulta acima, que
-  // já estava restrita a esta empresa — ou seja, este id comprovadamente é desta conta.
-  const comTimeline = async (row, via) => {
-    const { data: cheio } = await supabase
-      .from("whatsapp_processamentos")
-      .select("id,timeline_json")
-      .eq("id", row.id)
-      .order("atualizado_em", { ascending: false })
-      .limit(1);
-    const achado = Array.isArray(cheio) ? cheio.find(r => String(r?.id) === String(row.id)) : null;
-    return { row: { ...row, timeline_json: achado?.timeline_json || row.timeline_json || [] }, via };
-  };
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
-    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return comTimeline(row, "telefone");
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return { row, via: "telefone" };
   }
   for (const row of data) {
     const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
-    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return comTimeline(row, "arquivo");
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return { row, via: "arquivo" };
   }
   // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
   // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
@@ -528,7 +517,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     for (const row of data) {
       const ra = row.resultado_analise || {};
       const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
-      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return comTimeline(row, "nome");
+      if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return { row, via: "nome" };
     }
   }
   return null;
