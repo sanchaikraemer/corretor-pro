@@ -2918,14 +2918,20 @@ function renderBotoesHome(){
 // "Pular próximo": tira o lead EM FOCO da vez de agora (vai pro FIM da fila de urgentes) e joga o
 // próximo pro card "Prioridade agora". NÃO remove das prioridades — só adia ele nesta sessão.
 function pularProximo(){
-  const grupos = state.gruposHome || {};
-  let urg = (grupos["acao-hoje"] || []);
+  // v1084 — o botão era desenhado a partir da fila do "Fazer agora" (cpFilaFazerAgora), mas
+  // pulava o primeiro de OUTRA lista: o grupo "acao-hoje", que é montado por cp786Categoria e
+  // tem membros e ordem diferentes. Na prática, ou a tela era redesenhada idêntica (o lead
+  // "pulado" nem estava à vista), ou rebaixava um cliente que o corretor não escolheu. Pior:
+  // quando "acao-hoje" tinha menos de 2 itens a função saía calada, e o botão virava um botão
+  // morto. Agora ele opera exatamente sobre a fila de onde nasceu.
+  const items = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
+  let fila = (typeof cpFilaFazerAgora === 'function') ? cpFilaFazerAgora(items) : [];
   const pulados = state.pulados instanceof Set ? state.pulados : (state.pulados = new Set());
   if(pulados.size){
-    urg = urg.filter(l => !pulados.has(String(l.id))).concat(urg.filter(l => pulados.has(String(l.id))));
+    fila = fila.filter(l => !pulados.has(String(l.id))).concat(fila.filter(l => pulados.has(String(l.id))));
   }
-  if(urg.length < 2) return; // só um na fila: não há pra onde pular
-  pulados.add(String(urg[0].id));
+  if(fila.length < 2){ toast("Não há outro lead na fila pra trocar."); return; }
+  pulados.add(String(fila[0].id));
   renderBotoesHome();
 }
 window.pularProximo = pularProximo;
@@ -8291,15 +8297,21 @@ function imprimirCarteiraAtiva(){
 window.imprimirCarteiraAtiva = imprimirCarteiraAtiva;
 
 
+// v1084 — passa a DIZER se gravou. Antes engolia qualquer falha num catch vazio e não olhava a
+// resposta do servidor, então quem chamava não tinha como saber se deu certo (ver
+// registrarRespostaCliente, que mostrava "Registrei" mesmo sem ter registrado nada).
+// Quem usa em modo "dispara e esquece" pode continuar ignorando o retorno.
 async function registrarAprendizado(evento, estilo, detalhes){
   const id = state.lead?.id;
-  if(!id) return;
+  if(!id) return false;
   try{
-    await fetch("./api/lead-update", {
+    const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ id, action: "aprendizado", evento, estilo: estilo || state.msgStyle, detalhes: detalhes || {} })
     });
-  }catch(_){}
+    const data = await res.json().catch(()=>null);
+    return !!(res.ok && data?.ok);
+  }catch(_){ return false; }
 }
 
 // Copiar uma sugestão é apenas uma ação de interface. Não registra atendimento,
@@ -8335,7 +8347,18 @@ async function registrarRespostaCliente(valor){
   if(!valor){ if(box) box.innerHTML = respostaClienteBotoesHTML(); return; } // "mudar"
   const id = state.lead?.id;
   if(id){
-    try{ await registrarAprendizado("cliente_respondeu", state.msgStyle, { resposta: valor }); }catch(_){}
+    // v1084 — só confirma na tela DEPOIS de o servidor confirmar. Antes o app pintava o estado
+    // e dizia "Boa! Registrei que ele respondeu." mesmo sem ter gravado nada (num momento sem
+    // sinal, por exemplo): o corretor seguia em frente achando que estava salvo e, na próxima
+    // vez que abrisse o lead, os botões estavam de volta. Pior, o recarregarLeadFoco logo abaixo
+    // relê do servidor e desfaz a tela na cara dele.
+    let gravou = false;
+    try{ gravou = await registrarAprendizado("cliente_respondeu", state.msgStyle, { resposta: valor }); }catch(_){ gravou = false; }
+    if(!gravou){
+      if(box) box.innerHTML = respostaClienteBotoesHTML();
+      toast("Não consegui registrar agora. Confira a internet e toque de novo.");
+      return;
+    }
     try{
       const a = state.analysis = state.analysis || {};
       a.aprendizado = a.aprendizado || {}; a.aprendizado.eventos = a.aprendizado.eventos || [];
@@ -9109,7 +9132,11 @@ renderResumoDia = function(items){
   // era o 207 que travava. Agenda = compromisso marcado. Aguardando = bola legitimamente com o
   // cliente (ou lead cru). O backlog além da dose fica acessível na lista do "Fazer agora".
   const fds=cpFimDeSemana();
-  const fazerAgora=cpFazerAgoraDose(ativos);
+  // v1084 — o card mostrava a meta restante do dia mesmo quando NÃO havia tanta gente elegível:
+  // aparecia "10", a saudação logo acima dizia "Tudo em dia!" e o toque abria uma lista vazia —
+  // três respostas diferentes na mesma tela. Limita pelo tamanho real da fila, igual à saudação.
+  const filaAgoraLen=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(ativos).length:0;
+  const fazerAgora=Math.max(0,Math.min(cpFazerAgoraDose(ativos),filaAgoraLen));
   const faB=fds?'<b class="cp-fds">Final de semana</b>':`<b>${fazerAgora}</b>`;
   const compromissos=cpAgendaContagem(ativos);
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
@@ -9678,7 +9705,10 @@ function renderCorretorProDashboard(items, all){
     }).join(""):`<div class="cp-empty cp-empty-table"><strong>Nenhum atendimento em andamento</strong><span>Importe uma conversa para começar.</span></div>`;
   }
 
-  const atendidosHoje=items.filter(ehContatadoHoje).length;
+  // v1084 — mesmo bug que a v980 corrigiu na Home, vivo aqui: "items" são só os ATIVOS, então
+  // quem foi atendido e arquivado no mesmo dia sumia da conta. A Home dizia 12 e o Desempenho 11.
+  // cpAtendidosHojeTotal olha a carteira inteira (inclusive arquivados), que é a conta certa.
+  const atendidosHoje=(typeof cpAtendidosHojeTotal==='function')?cpAtendidosHojeTotal(items):items.filter(ehContatadoHoje).length;
   const semResposta=items.filter(l=>!ehContatadoHoje(l)&&!lembreteFuturo(l)&&Number(l.daysSinceLastInteraction||0)>=3).length;
   const lembretes=items.filter(l=>!!l?.analysis?.lembrete?.quando).length;
   const confirmados=items.filter(l=>Array.isArray(l?.analysis?.confirmedAppointments)&&l.analysis.confirmedAppointments.length>0).length;
@@ -10782,8 +10812,15 @@ function ui670DetailRows(lead,mc){
     // Num sábado apareceu "34 atendimentos esperam por você na segunda" — 34 era o backlog
     // inteiro, mas na segunda a tela só entrega a dose (ex.: 10). O número do aviso agora é
     // min(meta, fila), a mesma conta do card "Fazer agora".
-    const metaDia = (typeof cpMetaAtendimentosDia==='function') ? cpMetaAtendimentosDia() : 10;
-    const doseAviso = Math.min(metaDia, Number(d.agora)||0);
+    // v1084 — o sino prometia um número que a lista não entregava. metaDia é a meta CRUA (nunca
+    // desconta quem já foi atendido hoje) e d.agora é o backlog inteiro; já a lista que este
+    // aviso abre mostra min(fila, meta − atendidos hoje). Depois de bater a meta o sino dizia
+    // "10 atendimentos pedem ação" e o toque seguinte abria "Você já bateu a meta de hoje".
+    // Agora o aviso é calculado exatamente com as mesmas funções da lista.
+    const ativosSino = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
+    const filaSino = (typeof cpFilaFazerAgora==='function') ? cpFilaFazerAgora(ativosSino) : [];
+    const doseSino = (typeof cpFazerAgoraDose==='function') ? cpFazerAgoraDose(ativosSino) : 0;
+    const doseAviso = Math.max(0, Math.min(filaSino.length, doseSino));
     const itemAcao = fds
       ? `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
       : `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;

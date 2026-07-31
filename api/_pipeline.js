@@ -843,7 +843,16 @@ function sanitizeCerebroConfig(valor = {}) {
       ? _capTextoCerebroPipeline(v.objecoesTexto, MAX_BLOCO_CEREBRO)
       : _capTextoCerebroPipeline(_objecoesLegadasParaTextoPipeline(v.objecoes), MAX_BLOCO_CEREBRO),
     regras: Array.isArray(v.regras) ? v.regras : [],
-    objecoes: Array.isArray(v.objecoes) ? v.objecoes : []
+    objecoes: Array.isArray(v.objecoes) ? v.objecoes : [],
+    // v1084 — ESTE CAMPO PRECISA SOBREVIVER À LIMPEZA. Era descartado aqui, e como
+    // loadCerebroConfig devolve `{ ...sanitizeCerebroConfig(...) }`, `inteligenciaAprendida`
+    // chegava SEMPRE undefined em analyzeWithBrain. Resultado: tudo que o botão "Aprender da
+    // carteira" extraía das conversas reais (e que custa chamadas de IA pra extrair) era gravado
+    // no banco e nunca chegava ao pedido feito pra IA — a análise saía idêntica à de uma conta
+    // zerada. Quem monta o texto que entra no prompt é jeitoAprendidoCompacto(), que já
+    // seleciona só o que é relevante pra ESTA conversa (no máximo 3 tons, 4 objeções, 3
+    // técnicas, 2 perfis e 2 follow-ups), então o prompt não cresce sem controle.
+    inteligenciaAprendida: v.inteligenciaAprendida && typeof v.inteligenciaAprendida === "object" ? v.inteligenciaAprendida : undefined
   };
 }
 
@@ -1975,11 +1984,12 @@ const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE (sempre vale; aprend
 2) QUALIFICAR antes de empurrar produto: morar ou investir? tipologia/dormitórios? faixa de valor? prazo (pronto x planta)? permuta (imóvel/carro) ou dinheiro/financiamento? Se o orçamento for menor que a faixa do produto pedido, redirecione para uma opção que caiba — SEMPRE com base no que existir no Cérebro e na conversa, nunca em produtos ou valores fixos.
 CUIDADO com a palavra "investir": em fala coloquial ("se a gente for investir", "se formos investir nisso") pode significar só "se a gente topar comprar/se comprometer", sem indicar perfil de investidor. Não rotule o objetivo do cliente como investimento só por essa palavra — confirme pelo contexto inteiro da conversa (ex.: quem já mudou para a cidade e pede dormitórios pensando na família tende a buscar moradia, não renda/revenda) e, se ficar ambíguo, pergunte antes de assumir.
 
-3) ARGUMENTOS POR SITUAÇÃO (use o que casa com o sinal do cliente):
-- Acha caro o pronto / não tem pressa / investidor → planta de lançamento: "compra na planta, congela o preço, e historicamente imóveis na planta valorizam até a entrega; quanto mais cedo no lançamento, mais barato e maior o prazo". Isso é um mecanismo geral do mercado — não prometa nem crave número/percentual de valorização para o imóvel específico sem confirmação no Cérebro ou na conversa.
-- Travado em pagamento → explore as formas de pagamento que a construtora realmente oferecer (entrada + saldo, parcelamento direto, condições de correção), sempre "ajustável pra ficar confortável" — sem prometer condição que não conste no Cérebro ou na conversa.
-- Quer dar imóvel na troca (permuta) → só vale imóvel LÍQUIDO e de MENOR valor que o comprado ("tem que virar dinheiro rápido"); não pegar bem que vale mais que o imóvel. Reenquadre: "entrada + financiamento, bota o imóvel à venda e quita quando vender — pega desconto e ainda vende o seu por mais depois".
-- Investidor → foque em opção comercial/de renda quando houver; para quem quer decidir depois (morar/alugar/revender), a opção mais flexível. Reative indeciso com comparativo histórico real de valorização. Cite apenas empreendimentos que apareçam no Cérebro ou na conversa.
+3) PARA ONDE OLHAR EM CADA SITUAÇÃO (roteiro, NÃO argumento pronto):
+IMPORTANTE: os itens abaixo dizem apenas QUAL CAMINHO investigar. Eles NÃO autorizam afirmar nenhuma condição comercial. Toda condição (congelamento de preço, desconto, prazo, forma de pagamento, valorização, aceitação de permuta) só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa. Se não estiver em nenhum dos dois, NÃO afirme — pergunte ou ofereça verificar.
+- Acha caro o pronto / não tem pressa → verifique se há opção de planta/lançamento no Cérebro e, se houver, apresente as condições que o Cérebro descrever. Sem isso no Cérebro, não invente vantagem de planta.
+- Travado em pagamento → explore apenas as formas de pagamento que constarem no Cérebro ou que o cliente já citou.
+- Quer dar imóvel na troca (permuta) → trate como uma pergunta a confirmar (a construtora aceita? em que condições?), nunca como uma condição já garantida. O ponto de atenção real é de liquidez: imóvel difícil de vender trava o negócio.
+- Investidor → confirme antes que é mesmo perfil de investidor (ver o alerta sobre a palavra "investir" acima) e cite apenas empreendimentos e números que apareçam no Cérebro ou na conversa.
 - Decisão conjunta (cônjuge/filho/mãe) → não pressione; ofereça café na construtora pra apresentar junto e mantenha contato leve até a novidade/material.
 - Não viu o decorado (e ainda não houve recusa) → retome com leveza: "sem ver o decorado não dá pra entender a planta"; ofereça visita/chave sem compromisso, horário flexível.
 
@@ -2401,6 +2411,16 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       if (total > MAX_CHARS) break;
       recentes.unshift(linhas[i]);
     }
+    // v1084 — piso obrigatório: se a ÚLTIMA mensagem sozinha já for maior que o limite, o laço
+    // acima parava na primeira volta e "recentes" ficava VAZIO. A IA então recebia só o aviso de
+    // "parte antiga omitida" e NENHUMA mensagem — e mesmo assim devolvia diagnóstico e as 3
+    // sugestões, inventadas a partir do nome e do telefone do lead. É o oposto exato da regra de
+    // nunca inventar. Acontece de verdade: um áudio longo vira UMA única linha transcrita, que
+    // sozinha passa fácil do limite. Nesse caso, manda o FINAL dessa mensagem (que é a parte mais
+    // recente e mais útil da conversa) em vez de mandar nada.
+    if (!recentes.length && linhas.length) {
+      recentes.push(linhas[linhas.length - 1].slice(-MAX_CHARS));
+    }
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
@@ -2486,6 +2506,12 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // já configura pra fila Fazer agora, em vez de criar um segundo número pra manter sincronizado.
   const diasParaRetomada = Number(configCerebro?.diasDescansoPosAtendimento) || 5;
 
+  // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
+  // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
+  // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
+  // o prompt fica exatamente como era antes.
+  const jeitoAprendido = jeitoAprendidoCompacto(configCerebro, timelineText);
+
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a única autoridade sobre análise, estratégia e criação das mensagens.
 Respeite integralmente todas as regras do Cérebro Comercial.
@@ -2499,6 +2525,7 @@ O bloco acima é o piso comercial geral, válido sempre. Qualquer regra do Cére
 === INÍCIO DO CÉREBRO COMERCIAL ===
 ${instrucoesCerebroTexto}
 === FIM DO CÉREBRO COMERCIAL ===
+${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
 
 Responda somente com JSON válido no formato solicitado.`;
 

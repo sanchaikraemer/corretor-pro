@@ -20,7 +20,15 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 // ---------------------------------------------------------------------------
 assert.doesNotMatch(pipeline, /insista com leveza/, "'insista' não pode mais aparecer no texto fixo (colide com 'não insistir após negativa clara')");
 assert.match(pipeline, /retome com leveza/, "o ponto do decorado precisa continuar existindo, só sem a palavra 'insista'");
-assert.match(pipeline, /mecanismo geral do mercado.*não prometa.*número\/percentual/, "o argumento de valorização precisa deixar claro que não é garantia sobre o imóvel específico");
+// v1084 — o argumento de valorização saiu de vez do texto fixo. A v1059 tinha resolvido metade
+// do problema (proibir cravar número/percentual), mas a afirmação em si ("congela o preço",
+// "quanto mais cedo, mais barato") continuava sendo dita como fato — e isso é uma CONDIÇÃO
+// comercial, que depende da construtora de cada corretor. Agora nenhuma condição pode ser
+// afirmada sem estar no Cérebro ou na conversa; o que sobrou é só o roteiro de para onde olhar.
+assert.doesNotMatch(pipeline, /congela o preço/, "o texto fixo não pode afirmar congelamento de preço");
+assert.doesNotMatch(pipeline, /mais barato e maior o prazo/, "o texto fixo não pode afirmar condição de lançamento");
+assert.match(pipeline, /Toda condição \(congelamento de preço, desconto, prazo, forma de pagamento, valorização, aceitação de permuta\) só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa/,
+  "o piso comercial precisa proibir explicitamente afirmar condição que não veio do Cérebro nem da conversa");
 
 // ---------------------------------------------------------------------------
 // 2) Schema: recomendacaoContato precisa estar no formato pedido à IA, com instrução própria.

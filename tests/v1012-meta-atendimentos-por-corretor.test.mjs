@@ -56,7 +56,13 @@ assert.ok(!helperSrc.includes("state.cerebroCfg"), "meta não pode depender de s
 // --- o sino nunca promete mais que a dose do dia ------------------------------------
 const iniPanel = app.indexOf("function openNotifyPanel()");
 const panelSrc = app.slice(iniPanel, iniPanel + 3000);
-assert.ok(panelSrc.includes("Math.min(metaDia,"), "o aviso do sino precisa ser min(meta, fila)");
+// v1084 — o aviso do sino era min(META CRUA, backlog inteiro). A meta crua não desconta quem já
+// foi atendido hoje, e o backlog não é a fila. Depois de bater a meta o sino dizia "10
+// atendimentos pedem ação" e o toque abria "Você já bateu a meta de hoje". Agora ele usa
+// exatamente as mesmas duas funções da lista que ele abre: min(cpFilaFazerAgora, cpFazerAgoraDose).
+assert.ok(panelSrc.includes("cpFilaFazerAgora(ativosSino)"), "o sino precisa medir a fila real do Fazer agora");
+assert.ok(panelSrc.includes("cpFazerAgoraDose(ativosSino)"), "o sino precisa usar a dose que já desconta os atendidos de hoje");
+assert.ok(panelSrc.includes("Math.min(filaSino.length, doseSino)"), "o aviso do sino precisa ser min(fila, dose)");
 assert.match(panelSrc, /por você na segunda/, "o texto de fim de semana continua existindo");
 assert.ok(!/\$\{d\.agora\}\s*atendimento/.test(panelSrc), "o sino não pode mais mostrar o backlog inteiro (d.agora cru)");
 
