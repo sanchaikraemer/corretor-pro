@@ -3973,8 +3973,14 @@ const ETAPA_ATIVO = "Ativo";
 const ETAPAS = [ETAPA_ATIVO, ETAPA_ARQUIVADO];
 
 function normalizarEtapa(raw){
-  const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  if(/vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return ETAPA_ARQUIVADO;
+  const bruto = String(raw || "").trim();
+  const s = bruto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  // v1105 — auditoria do backup real (298 registros): 244 tinham um TEXTO de análise da IA
+  // gravado no lugar da etapa ("Acompanhamento do andamento no cartório..."). Só ETIQUETA CURTA
+  // pode arquivar (dado legado: "Vendido", "Perdido", "Geladeira") — um texto longo que por
+  // acaso contenha "fechado"/"desistiu" no meio da frase JAMAIS pode arquivar um cliente que o
+  // corretor não mandou arquivar.
+  if(bruto.length <= 40 && /vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return ETAPA_ARQUIVADO;
   return ETAPA_ATIVO;
 }
 

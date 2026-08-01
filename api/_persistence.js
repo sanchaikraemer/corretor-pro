@@ -501,6 +501,19 @@ async function adaptiveUpdateById(supabase, table, id, payload) {
   throw new Error(`${table}: muitos retries no update (descartadas: ${removed.join(", ")})`);
 }
 
+// v1105 — auditoria do backup real do dono (298 registros): 244 tinham TEXTO de análise da IA
+// gravado na coluna etapa (herança de versões antigas, perpetuada porque a reimportação copiava
+// a etapa anterior como estivesse). Etiqueta curta legada ("Vendido", "Perdido") vira Geladeira,
+// como decidido na v1069; qualquer outra coisa — inclusive texto longo com "fechado"/"desistiu"
+// no meio — vira Ativo. Um texto NUNCA pode arquivar cliente que o corretor não arquivou.
+export function normalizarEtapaBanco(valor) {
+  const bruto = String(valor || "").trim();
+  if (bruto === "Ativo" || bruto === "Geladeira") return bruto;
+  const s = bruto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (bruto.length <= 40 && /vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return "Geladeira";
+  return "Ativo";
+}
+
 function _normNome(value = "") {
   return String(value || "")
     .toLowerCase()
@@ -882,7 +895,7 @@ export async function persistProcessingResult({
       // canonicalPayload, a etapa do registro antigo era sobrescrita a cada reimportação: um
       // cliente que o corretor tinha arquivado voltava sozinho pra fila do dia (a Home considera
       // ativo tudo que não é "Geladeira"). A etapa que vale é sempre a que já estava salva.
-      etapa: anterior.etapa || "Ativo",
+      etapa: normalizarEtapaBanco(anterior.etapa), // v1105 — não perpetua texto gravado no lugar da etapa
       resultado_analise: mergedAnalysis,
       timeline_json: mergeTimeline.timeline,
       texto_extraido: mergeTimeline.timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
@@ -1035,7 +1048,7 @@ export async function persistStatsCacheWriteBacks(supabase, pendentes, organizat
         // Agora a gravação só vale se a linha não tiver sido tocada desde a leitura; se tiver,
         // ela é simplesmente pulada (é cache — a próxima carga recalcula e grava de novo).
         let q = supabase.from("whatsapp_processamentos")
-          .update({ resultado_analise: item.resultado_analise })
+          .update({ resultado_analise: item.resultado_analise, ...(item.etapa ? { etapa: item.etapa } : {}) })
           .eq("id", item.id).eq("organization_id", organizationId);
         if (item.atualizado_em) q = q.eq("atualizado_em", item.atualizado_em);
         await q;
@@ -1319,8 +1332,12 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         if (timeline[i]?.proposta) { hasProposal = true; break; }
       }
 
+      const _etapaLimpa = normalizarEtapaBanco(row.etapa);
       statsCacheWriteBacks.push({
         id: row.id,
+        // v1105 — autolimpeza: se a coluna etapa carrega texto de análise (244 registros no
+        // backup real), esta mesma regravação — protegida pela marca d'água abaixo — corrige.
+        ...(_etapaLimpa !== String(row.etapa || "") ? { etapa: _etapaLimpa } : {}),
         // Marca d'água da leitura: a gravação de volta só acontece se a linha continuar
         // exatamente como estava aqui (ver persistStatsCacheWriteBacks).
         atualizado_em: row.atualizado_em || null,
