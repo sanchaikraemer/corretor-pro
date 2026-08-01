@@ -28,7 +28,10 @@ assert.match(bloco, /id:\s*l\.id/, 'precisa usar o id do lead do CARD (l.id), n�
 assert.match(app, /function cpInicioMesMs\(\)\{/, 'precisa existir um helper de início do mês corrente');
 assert.doesNotMatch(app, /cutoff7d/, 'a janela antiga de 7 dias corridos não pode mais existir no cálculo do Desempenho');
 assert.match(html, /Seu mês no Corretor Pro/, 'o título do card precisa refletir a janela mensal');
-assert.match(app, /"Mensagens trocadas", "Com clientes, este mês"/, 'o subtítulo de mensagens trocadas precisa dizer "este mês"');
-assert.match(app, /"Leads atendidos", "Este mês"/, 'o subtítulo de leads atendidos precisa dizer "este mês"');
+// v1106 — os subtítulos viraram dinâmicos (rotuloMes): dizem "este mês" na visão corrente e
+// "em julho" quando o dono abre o mês passado — o que este teste protegia (a janela mensal)
+// continua, agora com o mês explícito.
+assert.match(app, /"Mensagens trocadas", `Com clientes, \$\{rotuloMes\}`/, 'o subtítulo de mensagens acompanha o mês escolhido');
+assert.match(app, /"Leads atendidos", vendoMesPassado \? `Em \$\{nomeMes\(iniAnt\)\}` : "Este mês"/, 'o subtítulo de leads acompanha o mês escolhido');
 
 console.log('v984-copiar-hero-registra-lead-certo: ok');

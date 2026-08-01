@@ -206,11 +206,15 @@ function cpRegistrarAtividade(chave, quandoIso){
     localStorage.setItem(key, JSON.stringify(podado));
   }catch(_){}
 }
-function cpContarAtividade(chave, desdeMs){
+function cpContarAtividade(chave, desdeMs, ateMs){
   try{
     const arr = JSON.parse(localStorage.getItem("cpAtividade_"+chave) || "[]");
-    if(!desdeMs) return arr.length;
-    return arr.filter(iso => { const t = Date.parse(iso); return Number.isFinite(t) && t >= desdeMs; }).length;
+    if(!desdeMs && !ateMs) return arr.length;
+    // v1106 — ateMs (exclusivo) fecha uma janela: é o que permite "mês passado" no Desempenho.
+    return arr.filter(iso => {
+      const t = Date.parse(iso);
+      return Number.isFinite(t) && (!desdeMs || t >= desdeMs) && (!ateMs || t < ateMs);
+    }).length;
   }catch(_){ return 0; }
 }
 window.cpRegistrarAtividade = cpRegistrarAtividade;
@@ -9962,10 +9966,30 @@ function cpInicioMesMs(){
   return new Date(`${hojeIso.slice(0,7)}-01T00:00:00-03:00`).getTime();
 }
 window.cpInicioMesMs = cpInicioMesMs;
-function cpDesempenhoMetricas(items, all){
+// v1106 — o dono, dia 1º de agosto: "pra ver resultados do mês passado como faço?". Não fazia:
+// virou o mês, os números zeravam na tela (os DADOS continuam — tudo tem data). Este é o começo
+// do mês anterior; o fim dele é cpInicioMesMs().
+function cpInicioMesAnteriorMs(){
+  const ini = new Date(cpInicioMesMs());
+  const y = ini.getFullYear(), m = ini.getMonth();
+  return new Date(y, m - 1, 1).getTime();
+}
+window.cpInicioMesAnteriorMs = cpInicioMesAnteriorMs;
+function cpTempoAppSegundosPeriodo(iniMs, fimMs){
+  const mapa = cpTempoAppLerMapa();
+  let total = 0;
+  for(const [chave, seg] of Object.entries(mapa)){
+    const t = new Date(`${chave}T12:00:00-03:00`).getTime();
+    if(Number.isFinite(t) && t >= iniMs && t < fimMs) total += Number(seg)||0;
+  }
+  return Math.round(total);
+}
+function cpDesempenhoMetricas(items, all, periodo){
   const ativos = Array.isArray(items) ? items : [];
   const todos = Array.isArray(all) ? all : ativos;
-  const cutoffPeriodo = typeof cpInicioMesMs === "function" ? cpInicioMesMs() : (Date.now() - 30*24*60*60*1000);
+  const cutoffPeriodo = periodo?.ini ?? (typeof cpInicioMesMs === "function" ? cpInicioMesMs() : (Date.now() - 30*24*60*60*1000));
+  const fimPeriodo = periodo?.fim ?? null; // null = até agora (mês corrente)
+  const dentro = (t) => Number.isFinite(t) && t >= cutoffPeriodo && (!fimPeriodo || t < fimPeriodo);
 
   let mensagensTrocadas = 0, mensagensCopiadas = 0;
   const leadsAtendidosIds = new Set();
@@ -9974,14 +9998,14 @@ function cpDesempenhoMetricas(items, all){
     const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
     for(const m of msgs){
       const t = Date.parse(m?.iso || "");
-      if(Number.isFinite(t) && t >= cutoffPeriodo) mensagensTrocadas++;
-      if(m?.type === "proposta") propostas.push({ lead:l, ts: Number.isFinite(t)?t:0 });
+      if(dentro(t)) mensagensTrocadas++;
+      if(m?.type === "proposta" && (!fimPeriodo ? true : dentro(t))) propostas.push({ lead:l, ts: Number.isFinite(t)?t:0 });
     }
     const eventos = l?.analysis?.aprendizado?.eventos || [];
     let atendeuNaJanela = false;
     for(const e of eventos){
       const t = Date.parse(e?.quando || "");
-      if(!Number.isFinite(t) || t < cutoffPeriodo) continue;
+      if(!dentro(t)) continue;
       if(e.evento === "contato_manual") atendeuNaJanela = true;
       if(e.evento === "mensagem_copiada") mensagensCopiadas++;
     }
@@ -10005,8 +10029,8 @@ function cpDesempenhoMetricas(items, all){
     empreendimentos,
     leadsAtendidos: leadsAtendidosIds.size,
     mensagensCopiadas,
-    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo) : 0,
-    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo) : 0,
+    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo, fimPeriodo) : 0,
+    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo, fimPeriodo) : 0,
     propostas: propostas.sort((a,b)=>b.ts-a.ts),
   };
 }
@@ -10024,20 +10048,31 @@ const CP_MET_ICONS = {
 function cpRenderDesempenhoMetricas(items, all){
   const box = qs("#cpMetricasSemana");
   if(!box) return;
-  const m = cpDesempenhoMetricas(items, all);
+  // v1106 — "pra ver resultados do mês passado como faço?" (dono, dia 1º de agosto, vendo tudo
+  // zerado). Agora dá: o seletor abaixo alterna entre o mês corrente e o mês fechado anterior.
+  const vendoMesPassado = state.cpDesempenhoMes === "anterior";
+  const iniAnt = (typeof cpInicioMesAnteriorMs === "function") ? cpInicioMesAnteriorMs() : 0;
+  const iniAtual = (typeof cpInicioMesMs === "function") ? cpInicioMesMs() : 0;
+  const periodo = vendoMesPassado ? { ini: iniAnt, fim: iniAtual } : null;
+  const nomeMes = (ms) => { try{ return new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",month:"long"}).format(new Date(ms + 12*3600*1000)); }catch(_){ return "mês passado"; } };
+  const rotuloMes = vendoMesPassado ? `em ${nomeMes(iniAnt)}` : "este mês";
+  const m = cpDesempenhoMetricas(items, all, periodo);
   const linha = (icone, cor, titulo, sub, valor) => `
     <div class="cp-met-row">
       <div class="cp-met-ic" style="background:color-mix(in srgb, ${cor} 18%, transparent);color:${cor}">${icone}</div>
       <div class="cp-met-copy"><b>${escapeHtml(titulo)}</b><small>${escapeHtml(sub)}</small></div>
       <div class="cp-met-num">${escapeHtml(String(valor))}</div>
     </div>`;
+  const linhaTempo = vendoMesPassado
+    ? linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Total ${rotuloMes} (só deste aparelho)`, cpFormatarDuracao((typeof cpTempoAppSegundosPeriodo === "function") ? cpTempoAppSegundosPeriodo(iniAnt, iniAtual) : 0))
+    : linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Hoje · média de ${cpFormatarDuracao(m.tempoMedia7dSeg)} nos últimos 7 dias`, cpFormatarDuracao(m.tempoHojeSeg));
   const rows = [
-    linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Hoje · média de ${cpFormatarDuracao(m.tempoMedia7dSeg)} nos últimos 7 dias`, cpFormatarDuracao(m.tempoHojeSeg)),
-    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", "Com clientes, este mês", m.mensagensTrocadas),
-    linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", "Este mês", m.leadsAtendidos),
-    linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", "Sugestões da IA que você usou", m.mensagensCopiadas),
-    linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", "Conversas processadas pela IA", m.analisesFeitas),
-    linha(CP_MET_ICONS.importar, "var(--dados)", "Importações", "ZIPs de conversa processados", m.importacoes),
+    linhaTempo,
+    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", `Com clientes, ${rotuloMes}`, m.mensagensTrocadas),
+    linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", vendoMesPassado ? `Em ${nomeMes(iniAnt)}` : "Este mês", m.leadsAtendidos),
+    linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", `Sugestões da IA que você usou, ${rotuloMes}`, m.mensagensCopiadas),
+    linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", `Conversas processadas pela IA, ${rotuloMes}`, m.analisesFeitas),
+    linha(CP_MET_ICONS.importar, "var(--dados)", "Importações", `ZIPs de conversa processados, ${rotuloMes}`, m.importacoes),
   ].join("");
   const propostasRow = `
     <button type="button" class="cp-met-row cp-met-row-btn" onclick="cpAbrirHistoricoPropostas()">
@@ -10049,13 +10084,23 @@ function cpRenderDesempenhoMetricas(items, all){
     ? m.empreendimentos.slice(0,3).map(([nome,n]) => `<span class="cp-met-tag">${escapeHtml(nome)} <b>${n}</b></span>`).join("")
       + (m.empreendimentos.length > 3 ? `<span class="cp-met-tag">+${m.empreendimentos.length-3}</span>` : "")
     : `<span class="cp-met-tag" style="opacity:.6">Nenhum ainda</span>`;
-  box.innerHTML = rows + propostasRow + `
+  const seletorMes = `
+    <div class="cp-met-mes-chips">
+      <button type="button" class="cp-met-mes-chip${vendoMesPassado ? "" : " ativo"}" onclick="cpDesempenhoTrocarMes('atual')">Este mês</button>
+      <button type="button" class="cp-met-mes-chip${vendoMesPassado ? " ativo" : ""}" onclick="cpDesempenhoTrocarMes('anterior')">${escapeHtml(nomeMes(iniAnt))[0].toUpperCase()+escapeHtml(nomeMes(iniAnt)).slice(1)}</button>
+    </div>`;
+  box.innerHTML = seletorMes + rows + propostasRow + `
     <div class="cp-met-tags-row">
       <small>Empreendimentos negociados</small>
       <div class="cp-met-taglist">${tagsHtml}</div>
     </div>`;
 }
 window.cpRenderDesempenhoMetricas = cpRenderDesempenhoMetricas;
+function cpDesempenhoTrocarMes(qual){
+  state.cpDesempenhoMes = qual === "anterior" ? "anterior" : "atual";
+  cpRenderDesempenhoMetricas(state.itemsAtivos || [], state.todosLeads || state.itemsAtivos || []);
+}
+window.cpDesempenhoTrocarMes = cpDesempenhoTrocarMes;
 
 // "Ver histórico" de propostas: reusa a lista avulsa (mesmo mecanismo do "Fazer agora") pra
 // mostrar os leads com proposta registrada, mais recente primeiro — abrir o lead mostra a

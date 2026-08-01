@@ -2221,3 +2221,8 @@ body.cpio-aberto{overflow:hidden}
 }
 .cp-dias-semana input{accent-color:var(--cp-coral,#FF6258);margin:0;width:15px;height:15px}
 .cp-dias-semana label:focus-within{outline:2px solid var(--cp-coral,#FF6258);outline-offset:2px}
+
+/* v1106 — seletor "Este mês / mês passado" do Desempenho. */
+.cp-met-mes-chips{display:flex;gap:8px;margin:2px 0 12px}
+.cp-met-mes-chip{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--soft);font:inherit;font-size:12px;font-weight:950;cursor:pointer}
+.cp-met-mes-chip.ativo{background:rgba(255,98,88,.16);border-color:rgba(255,98,88,.6);color:var(--text)}
