@@ -836,6 +836,11 @@ function sanitizeCerebroConfig(valor = {}) {
     evitar: typeof v.evitar === "string" ? _capTextoCerebroPipeline(v.evitar) : "",
     diasImportacao: _clampDiasImportacaoPipeline(v.diasImportacao),
     diasDescansoPosAtendimento: _clampDiasDescansoPipeline(v.diasDescansoPosAtendimento),
+    // v1091 — preferência de trabalho do corretor (dias em que ele atende). Não vai pro prompt da
+    // IA, mas PRECISA sobreviver à limpeza: é ela que o app lê pra saber se hoje tem fila.
+    diasAtendimento: Array.isArray(v.diasAtendimento)
+      ? [...new Set(v.diasAtendimento.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
+      : undefined,
     regrasTexto: temRegrasTexto && typeof v.regrasTexto === "string"
       ? _capTextoCerebroPipeline(v.regrasTexto, MAX_BLOCO_CEREBRO)
       : _capTextoCerebroPipeline(_regrasLegadasParaTextoPipeline(v.regras), MAX_BLOCO_CEREBRO),

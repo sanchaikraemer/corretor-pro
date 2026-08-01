@@ -2167,3 +2167,17 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
 }
 /* Enquanto a tela cheia da importação está aberta, o app atrás não rola. */
 body.cpio-aberto{overflow:hidden}
+
+/* v1091 — escolha dos dias em que o corretor atende (fila "Fazer agora"). */
+.cp-dias-semana{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.cp-dias-semana label{
+  display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;
+  font-size:13px;font-weight:700;color:var(--muted);transition:all .16s;
+}
+.cp-dias-semana label:has(input:checked){
+  border-color:var(--cp-coral,#FF6258);color:var(--text);
+  background:color-mix(in srgb, var(--cp-coral,#FF6258) 12%, transparent);
+}
+.cp-dias-semana input{accent-color:var(--cp-coral,#FF6258);margin:0;width:15px;height:15px}
+.cp-dias-semana label:focus-within{outline:2px solid var(--cp-coral,#FF6258);outline-offset:2px}

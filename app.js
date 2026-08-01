@@ -2825,7 +2825,9 @@ function renderBotoesHome(){
     top3Html = `<div class="cp-hoje-done">Você já atendeu ${atendidosHojeReal} hoje. 👏 <button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um</button></div>`;
   } else {
     // Fila realmente vazia (fim de semana, ou ninguém elegível agora). Uma linha neutra, sem box.
-    top3Html = `<div class="cp-hoje-vazio">${cpFimDeSemana() ? 'Fim de semana — a fila do "Fazer agora" volta na segunda.' : 'Nenhum lead pra atender agora. Bom momento pra importar conversas novas.'}</div>`;
+    // v1091 — em dia sem fila esta caixa NÃO repete o aviso: a saudação, poucos centímetros acima
+    // na mesma tela, já explicou. Fica em branco pra tela não ficar dizendo a mesma coisa duas vezes.
+    top3Html = cpFimDeSemana() ? "" : `<div class="cp-hoje-vazio">Nenhum lead pra atender agora. Bom momento pra importar conversas novas.</div>`;
   }
 
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
@@ -3591,8 +3593,11 @@ function renderSaudacao(items){
   let html;
   if(cpFimDeSemana()){
     html = tratadosHoje > 0
-      ? `<span class="destaque">Final de semana!</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje — o "Fazer agora" volta na segunda.`
-      : `<span class="destaque">Final de semana!</span> Fila de "Fazer agora" pausada — volta na segunda.`;
+      // v1091 — ÚNICO aviso de dia sem fila que sobrou na Home. Antes a mesma informação aparecia
+      // em cinco lugares na mesma tela (o dono circulou três num print). E o texto dizia sempre
+      // "volta na segunda", o que fica errado pra quem marcou sábado no Cérebro.
+      ? `<span class="destaque">Hoje você não atende.</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje mesmo assim — a fila volta ${cpProximoDiaDeAtendimento()}.`
+      : `<span class="destaque">Hoje você não atende.</span> A fila "Fazer agora" volta ${cpProximoDiaDeAtendimento()}. Dá pra mudar seus dias no Cérebro.`;
   } else if(acaoMostrada > 0){
     // v942 — a Home agora SEMPRE mostra os leads do dia (puxa da fila ranqueada completa), então
     // "de cima pra baixo" volta a ser verdade e o card amarelo "nenhum lead prioritário" foi
@@ -5547,6 +5552,13 @@ function objecoesLegadasParaTexto(arr) {
     return sinal || conducao;
   }).filter(Boolean).join("\n\n");
 }
+// v1091 — usado no sanitizer e ao ler os quadradinhos da tela do Cérebro.
+function cpNormalizarDiasAtendimento(valor){
+  if(!Array.isArray(valor)) return [...CP_DIAS_ATENDIMENTO_PADRAO];
+  const limpos = [...new Set(valor.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  return limpos.length ? limpos : [...CP_DIAS_ATENDIMENTO_PADRAO];
+}
+
 function sanitizeCerebroConfigV762(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
   const temRegrasTexto = Object.prototype.hasOwnProperty.call(c, "regrasTexto");
@@ -5562,6 +5574,9 @@ function sanitizeCerebroConfigV762(cfg) {
     atendimentosPorDia: (Number(c.atendimentosPorDia) >= 1 && Number(c.atendimentosPorDia) <= 50) ? Math.round(Number(c.atendimentosPorDia)) : 10,
     // v1048 — dias de "descanso" pós-atendimento, configurável por corretor; fora de 1–60 vira 5.
     diasDescansoPosAtendimento: (Number(c.diasDescansoPosAtendimento) >= 1 && Number(c.diasDescansoPosAtendimento) <= 60) ? Math.round(Number(c.diasDescansoPosAtendimento)) : 5,
+    // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Lista vazia ou
+    // inválida cai no padrão de sempre (segunda a sexta), pra ninguém ficar sem fila por engano.
+    diasAtendimento: cpNormalizarDiasAtendimento(c.diasAtendimento),
     regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
     objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
@@ -5588,12 +5603,22 @@ function obterCerebroConfigParaAnalise() {
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || cfg?.diasDescansoPosAtendimento || 5,
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
+      diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? cpNormalizarDiasAtendimento(cfg?.diasAtendimento),
       regras: [],
       objecoes: []
     };
   }
   return sanitizeCerebroConfigV762(cfg || { metodo: "", diasImportacao: 90 });
 }
+// Devolve os dias marcados na tela do Cérebro, ou null se a tela ainda não foi montada — nesse
+// caso vale o que está salvo, nunca uma lista vazia acidental.
+function cpLerDiasAtendimentoDoFormulario(){
+  const caixas = qsa('#cerebroDiasSemana input[type="checkbox"]');
+  if(!caixas || !caixas.length) return null;
+  const marcados = caixas.filter(c => c.checked).map(c => Number(c.dataset.dia));
+  return cpNormalizarDiasAtendimento(marcados);
+}
+
 function payloadComCerebro(obj = {}) { return { ...obj, cerebroConfig: obterCerebroConfigParaAnalise() }; }
 window.payloadComCerebro = payloadComCerebro;
 
@@ -6356,6 +6381,9 @@ async function carregarCerebro(){
   if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
   const inpDescanso = qs("#cerebroDiasDescanso");
   if(inpDescanso) inpDescanso.value = (Number(config.diasDescansoPosAtendimento) >= 1) ? config.diasDescansoPosAtendimento : 5;
+  // v1091 — marca os dias em que ele atende.
+  const diasSalvos = cpNormalizarDiasAtendimento(config.diasAtendimento);
+  qsa('#cerebroDiasSemana input[type="checkbox"]').forEach(c => { c.checked = diasSalvos.includes(Number(c.dataset.dia)); });
   // Regras e objeções em blocos únicos de texto.
   if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
   if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
@@ -6417,6 +6445,7 @@ async function salvarCerebro(){
     diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
     diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
+    diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
     objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
     regras: [],
@@ -6472,6 +6501,7 @@ async function zerarCerebroTudo(){
       // não aprendizado — ficam.
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || 5,
+      diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });
@@ -8906,9 +8936,44 @@ function cpNotaPrioridade(l){
 // v943 — multi-linha de propósito: era 1 linha só, e testes que extraem essa função via regex
 // "\n\}" atravessavam ela sem querer e engoliam a função seguinte inteira (mascarou por acidente
 // uma função faltando em teste — só não deu ReferenceError porque "vazou" pra dentro do stub).
+// v1091 — DIAS DE ATENDIMENTO CONFIGURÁVEIS. Sábado e domingo eram cravados aqui como dias sem
+// fila (regra pedida na v914/v937). Só que corretor de imóveis costuma trabalhar sábado — é dia de
+// visita. Agora cada corretor marca no Cérebro os dias em que quer receber a fila "Fazer agora".
+// Padrão (sem nada configurado): segunda a sexta, exatamente como era antes desta versão.
+const CP_DIAS_ATENDIMENTO_PADRAO = [1, 2, 3, 4, 5]; // 0=domingo ... 6=sábado
+function cpDiasDeAtendimento(){
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    const dias = cfg?.diasAtendimento;
+    if(Array.isArray(dias)){
+      const limpos = [...new Set(dias.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))];
+      // Lista vazia significaria "não atendo nunca" — aí a fila sumiria pra sempre e o corretor
+      // não entenderia por quê. Nesse caso vale o padrão.
+      if(limpos.length) return limpos;
+    }
+  }catch(_){}
+  return CP_DIAS_ATENDIMENTO_PADRAO;
+}
+window.cpDiasDeAtendimento = cpDiasDeAtendimento;
+// Mantém o nome antigo (usado em vários pontos da tela): "hoje é um dia sem fila?".
 function cpFimDeSemana(){
-  const d = new Date().getDay();
-  return d === 0 || d === 6;
+  // O "typeof" não é frescura: vários testes extraem ESTA função do arquivo e a rodam isolada,
+  // sem o resto do app em volta. Sem a guarda, todos quebrariam — e o padrão devolvido aqui é
+  // exatamente o comportamento antigo (segunda a sexta).
+  const dias = (typeof cpDiasDeAtendimento === "function") ? cpDiasDeAtendimento() : [1, 2, 3, 4, 5];
+  return !dias.includes(new Date().getDay());
+}
+// Nome do próximo dia em que ele atende — melhor que cravar "volta na segunda", que fica errado
+// pra quem marcou sábado.
+const CP_NOMES_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+function cpProximoDiaDeAtendimento(){
+  const dias = cpDiasDeAtendimento();
+  const hoje = new Date().getDay();
+  for(let i = 1; i <= 7; i++){
+    const d = (hoje + i) % 7;
+    if(dias.includes(d)) return CP_NOMES_DIAS[d];
+  }
+  return "segunda";
 }
 // v943 — a ORDEM do "Fazer agora" precisa ser uma JUNÇÃO DE FATORES reais da conversa, não uma
 // regra isolada (nem "mais mensagens", nem "mais dias parado", nem só "cliente esperando você").
@@ -9262,7 +9327,7 @@ function abrirFazerAgora(){
   const mostrar=Math.min(fila.length, restante + extra);
   const dose=fila.slice(0, mostrar);
   const sub = cpFimDeSemana()
-    ? 'Final de semana — sem fila de "Fazer agora" hoje.'
+    ? `Hoje você não atende — a fila volta ${cpProximoDiaDeAtendimento()}.`
     : (dose.length ? `Os ${dose.length} que faltam pra bater a meta de hoje, por prioridade.` : 'Você já bateu a meta de hoje. Bom trabalho!');
   abrirGrupoHome('__fazeragora',{meta:{titulo:'Fazer agora',sub},leads:dose});
   // Botão "Atender +1": revela mais um lead além da meta, enquanto quiser atender no mesmo dia.
@@ -9314,7 +9379,9 @@ renderResumoDia = function(items){
   // três respostas diferentes na mesma tela. Limita pelo tamanho real da fila, igual à saudação.
   const filaAgoraLen=(typeof cpFilaFazerAgora==='function')?cpFilaFazerAgora(ativos).length:0;
   const fazerAgora=Math.max(0,Math.min(cpFazerAgoraDose(ativos),filaAgoraLen));
-  const faB=fds?'<b class="cp-fds">Final de semana</b>':`<b>${fazerAgora}</b>`;
+  // v1091 — o card mostrava "Final de semana" no lugar do número, quebrando o alinhamento com os
+  // outros cards e repetindo o aviso da saudação. Em dia sem fila ele mostra 0, que é a verdade.
+  const faB=`<b>${fds?0:fazerAgora}</b>`;
   const compromissos=cpAgendaContagem(ativos);
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
@@ -10999,7 +11066,7 @@ function ui670DetailRows(lead,mc){
     const doseSino = (typeof cpFazerAgoraDose==='function') ? cpFazerAgoraDose(ativosSino) : 0;
     const doseAviso = Math.max(0, Math.min(filaSino.length, doseSino));
     const itemAcao = fds
-      ? `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>✓</i><div><b>Fim de semana — fila pausada</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você na segunda.`:'O "Fazer agora" volta na segunda.'}</span></div></div>`
+      ? `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>✓</i><div><b>Hoje você não atende</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você ${cpProximoDiaDeAtendimento()}.`:`O "Fazer agora" volta ${cpProximoDiaDeAtendimento()}.`}</span></div></div>`
       : `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
     panel.innerHTML=`
       <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>

@@ -12,6 +12,9 @@ const DEFAULTS = {
   diasImportacao: 90,
   atendimentosPorDia: 10,
   diasDescansoPosAtendimento: 5,
+  // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Padrão segunda a
+  // sexta, que era o comportamento cravado no código antes desta versão.
+  diasAtendimento: [1, 2, 3, 4, 5],
   regrasTexto: "",
   objecoesTexto: "",
   regras: [],
@@ -50,6 +53,14 @@ function clampDiasDescanso(v) {
   return (Number.isFinite(n) && n >= 1 && n <= 60) ? Math.round(n) : 5;
 }
 
+// v1091 — lista vazia ou inválida vira o padrão: "não atendo nunca" deixaria o corretor sem fila
+// pra sempre, sem entender o motivo.
+function normalizarDiasAtendimento(v) {
+  if (!Array.isArray(v)) return [1, 2, 3, 4, 5];
+  const limpos = [...new Set(v.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  return limpos.length ? limpos : [1, 2, 3, 4, 5];
+}
+
 function regrasLegadasParaTexto(arr) {
   if (!Array.isArray(arr)) return "";
   return arr.map(r => String(typeof r === "string" ? r : (r?.texto || "")).trim()).filter(Boolean).join("\n\n");
@@ -76,6 +87,7 @@ function sanitizeCerebroConfig(valor = {}) {
     diasImportacao: clampDiasImportacao(v.diasImportacao),
     atendimentosPorDia: clampAtendimentosDia(v.atendimentosPorDia),
     diasDescansoPosAtendimento: clampDiasDescanso(v.diasDescansoPosAtendimento),
+    diasAtendimento: normalizarDiasAtendimento(v.diasAtendimento),
     regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
     objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? capTexto(v.objecoesTexto, MAX_BLOCO_REGRAS) : capTexto(objecoesLegadasParaTexto(v.objecoes), MAX_BLOCO_REGRAS),
     regras: Array.isArray(v.regras) ? v.regras : [],
@@ -388,6 +400,7 @@ export default async function handler(req, res) {
       diasImportacao: clampDiasImportacao(body.diasImportacao),
       atendimentosPorDia: clampAtendimentosDia(body.atendimentosPorDia),
       diasDescansoPosAtendimento: clampDiasDescanso(body.diasDescansoPosAtendimento),
+      diasAtendimento: normalizarDiasAtendimento(body.diasAtendimento),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
       objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
       regras: [],
