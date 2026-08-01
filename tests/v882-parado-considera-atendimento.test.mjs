@@ -44,14 +44,15 @@ assert.equal(diasParado(antigo), 3, 'com mensagem mais recente que o atendimento
 // 4. Lead sem nenhum sinal de data → Infinity (nunca tocado), ainda tratável pelo >=7.
 assert.equal(diasParado({}), Infinity, 'sem dado de data nenhum, retorna Infinity');
 
-// 5. A lista de esquecidos e o radar usam diasParado (e não mais o cálculo antigo cru).
-// v1093 — a função ganhou um 2º parâmetro (os ids que já estão na tela, pra o "Atender mais um"
-// não duplicar cliente na Home), então a busca aqui não pode exigir a assinatura antiga exata.
-const esqMatch = app.match(/function leadsEsquecidos\([^)]*\)\{[\s\S]*?\n\}/);
-assert.ok(esqMatch, 'leadsEsquecidos não encontrada em app.js');
-const esqSrc = esqMatch[0];
-assert.match(esqSrc, /const parado = diasParado\(l\);/, 'leadsEsquecidos deve usar diasParado');
-const radarSrc = app.match(/function radarRowHTML\(l\)\{[\s\S]*?const parado =/)[0];
-assert.match(radarSrc, /diasParado\(l\)/, 'radarRowHTML deve usar diasParado');
+// 5. v1095 — as duas funções que este trecho verificava (leadsEsquecidos e radarRowHTML) foram
+// REMOVIDAS junto com a seção "Oportunidades esquecidas", por ordem do dono: um cliente só pode
+// ser Ativo ou Arquivado, sem nenhum outro nome. O que continua valendo — e é o que este teste
+// realmente protege — é a regra de diasParado (contar a partir do último ATENDIMENTO, não da
+// última mensagem), que segue viva em quem ainda a usa.
+assert.doesNotMatch(app, /function leadsEsquecidos\b/, 'a lista de "esquecidos" não pode voltar');
+assert.doesNotMatch(app, /function radarRowHTML\b/, 'o cartão da lista removida não pode voltar');
+
+const usos = [...app.matchAll(/diasParado\(/g)].length;
+assert.ok(usos >= 2, `diasParado precisa continuar sendo usada de verdade (achei ${usos} usos)`);
 
 console.log('v882-parado-considera-atendimento: ok');
