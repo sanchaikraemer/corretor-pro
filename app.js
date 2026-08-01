@@ -7552,7 +7552,16 @@ async function salvarLeadPendente(){
     // v1088 — a tela cheia cobre tudo; num erro aqui ela precisa sair pro corretor ver o aviso
     // e os botões de tentar de novo.
     try{ cpImportOverlayVisivel(false); }catch(_){}
-    toast("Não foi possível salvar: " + userFriendlyError(err));
+    // v1096 — o print do dono mostrou "Não foi possível salvar: Sem conexão com a internet ou o
+    // servidor caiu" com o celular no wi-fi e sinal cheio. A mensagem estava culpando a internet
+    // dele por uma gravação que demorou demais do lado do servidor — e, pior, não dizia a única
+    // coisa que importa naquele momento: a análise NÃO se perdeu, é só tocar em salvar de novo
+    // (o state.pendingSave continua aqui e os botões acabaram de voltar).
+    const bruto = String(err?.message || err || "");
+    const pareceQuedaDeConexao = /Failed to fetch|NetworkError|aborted|AbortError/i.test(bruto);
+    toast(pareceQuedaDeConexao
+      ? "A gravação não terminou a tempo. Sua análise NÃO foi perdida — toque em \"Salvar lead\" pra tentar de novo."
+      : "Não foi possível salvar: " + userFriendlyError(err));
   }
 }
 

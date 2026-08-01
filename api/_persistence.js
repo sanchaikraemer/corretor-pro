@@ -383,6 +383,44 @@ function erroDoBanco(error, sufixo = "") {
   return err;
 }
 
+// v1096 — MEMÓRIA DE COLUNAS QUE O BANCO NÃO TEM.
+//
+// A gravação adaptativa descobre coluna faltante do jeito mais caro possível: manda o registro
+// INTEIRO, o banco recusa citando UMA coluna, ela é descartada e o registro inteiro é mandado de
+// novo. Uma ida ao banco por coluna faltante — cada uma carregando a conversa completa do cliente.
+//
+// Na v1092 isso virou um problema de verdade: passamos a mandar três colunas novas de deduplicação
+// (migração 0010) que a maioria dos bancos ainda não tem. Onde havia UMA gravação passaram a
+// existir QUATRO, e o salvamento tem retry — então oito. Com uma conversa grande, isso estoura o
+// tempo da função e a importação morre em "salvando no banco de dados" (print do dono na v1095).
+//
+// Agora o que o banco recusou fica lembrado enquanto o processo vive: a próxima gravação já sai
+// sem essas colunas, direto. Aprende uma vez, não a cada gravação.
+//
+// Detalhe honesto: se uma migração for aplicada com o servidor já rodando, um processo que já
+// tinha aprendido "essa coluna não existe" continua sem gravá-la até ser reciclado (minutos).
+// Isso é seguro de propósito — a coluna só serve pra ACELERAR a busca, e enquanto isso o sistema
+// funciona pelo caminho antigo. Nada é perdido nem corrompido; no máximo continua rápido só
+// depois da reciclagem.
+const _colunasQueNaoExistem = new Map(); // tabela -> Set(colunas)
+
+function _esquecidas(tabela) {
+  let s = _colunasQueNaoExistem.get(tabela);
+  if (!s) { s = new Set(); _colunasQueNaoExistem.set(tabela, s); }
+  return s;
+}
+function _anotarColunaInexistente(tabela, coluna) { _esquecidas(tabela).add(coluna); }
+function _semColunasInexistentes(tabela, payload) {
+  const faltantes = _colunasQueNaoExistem.get(tabela);
+  if (!faltantes || !faltantes.size) return payload;
+  const out = {};
+  for (const [k, v] of Object.entries(payload)) if (!faltantes.has(k)) out[k] = v;
+  return out;
+}
+// Exportadas pro teste conseguir dirigir e conferir esse aprendizado.
+export function _colunasInexistentesEstado(tabela) { return [..._esquecidas(tabela)]; }
+export function _colunasInexistentesResetar() { _colunasQueNaoExistem.clear(); }
+
 // Valores padrão só para colunas da lista de adaptáveis. Nunca inventa identificador.
 function defaultFor(col) {
   if (/_em$|_at$|timestamp|date/i.test(col)) return new Date().toISOString();
@@ -392,7 +430,7 @@ function defaultFor(col) {
 }
 
 async function adaptiveWrite(supabase, table, payload, mode, onConflict = "id") {
-  let current = compact(payload);
+  let current = _semColunasInexistentes(table, compact(payload));
   const removed = [];
   const filled = [];
   for (let i = 0; i < 24; i++) {
@@ -404,6 +442,7 @@ async function adaptiveWrite(supabase, table, payload, mode, onConflict = "id") 
     const noCol = msg.match(/Could not find the '([^']+)' column/i);
     if (noCol && noCol[1] in current) {
       if (!COLUNAS_ADAPTAVEIS.has(noCol[1])) throw erroColunaCritica(table, noCol[1], "ausente");
+      _anotarColunaInexistente(table, noCol[1]);
       removed.push(noCol[1]);
       const { [noCol[1]]: _drop, ...rest } = current;
       current = rest;
@@ -437,7 +476,7 @@ async function tryUpsert(supabase, table, payload, onConflict = "id") {
 }
 
 async function adaptiveUpdateById(supabase, table, id, payload) {
-  let current = compact(payload);
+  let current = _semColunasInexistentes(table, compact(payload));
   const removed = [];
   for (let i = 0; i < 24; i++) {
     const { data, error } = await supabase
@@ -451,6 +490,7 @@ async function adaptiveUpdateById(supabase, table, id, payload) {
     const noCol = msg.match(/Could not find the '([^']+)' column/i);
     if (noCol && noCol[1] in current) {
       if (!COLUNAS_ADAPTAVEIS.has(noCol[1])) throw erroColunaCritica(table, noCol[1], "ausente");
+      _anotarColunaInexistente(table, noCol[1]);
       removed.push(noCol[1]);
       const { [noCol[1]]: _drop, ...rest } = current;
       current = rest;
@@ -615,7 +655,16 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
       if (erroIdx) {
         // Coluna ainda não existe (migração 0010 não aplicada): desliga o caminho rápido neste
         // processo e segue pela varredura. Não é erro — é o estado esperado antes da migração.
-        if (/column|schema cache/i.test(String(erroIdx.message || ""))) { _dedupeIndexadoDisponivel = false; break; }
+        if (/column|schema cache/i.test(String(erroIdx.message || ""))) {
+          _dedupeIndexadoDisponivel = false;
+          // v1096 — a busca acabou de PROVAR que estas colunas não existem. Avisa a gravação
+          // agora, pra ela não redescobrir a mesma coisa uma ida ao banco por vez, logo depois,
+          // carregando a conversa inteira em cada tentativa.
+          for (const c of ["dedupe_fone8", "dedupe_arquivo", "dedupe_nome"]) {
+            _anotarColunaInexistente("whatsapp_processamentos", c);
+          }
+          break;
+        }
         break; // erro de rede/banco: cai na varredura, que tem o mesmo resultado
       }
       _dedupeIndexadoDisponivel = true;
