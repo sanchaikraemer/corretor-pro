@@ -26,14 +26,38 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
 
 // ── 1. O FILTRO de "sem atender 30d+" está certo — é a régua do ATENDIMENTO ────────────────────
 {
+  // v1102 — caso Jamil ("nunca atendido jamil?????"): a régua virou o último CONTATO REAL do
+  // corretor — atendimento marcado OU última mensagem DELE na conversa do WhatsApp.
   const fonte = app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/)[0]
+    + '\n' + app.match(/function cpUltimoContatoCorretorTs\(l\)\{[\s\S]*?\n\}/)[0]
     + '\n' + app.match(/function cpSemAtenderHaDias\(l, dias\)\{[\s\S]*?\n\}/)[0];
-  const { cpSemAtenderHaDias } = eval(`
+  const { cpSemAtenderHaDias, cpUltimoContatoCorretorTs } = eval(`
     const TIPOS_ATENDIMENTO_TIMELINE = new Set();
     const diasCalendarioBR = (ts) => Math.floor((Date.now() - ts) / ${DIA});
+    const ehMsgManualTimeline = () => false;
+    const ehMsgDoCliente = (m, pn) => String(m?.author||"").toLowerCase().startsWith(String(pn||"").toLowerCase());
+    const window = {};
     ${fonte}
-    ({ cpSemAtenderHaDias });
+    ({ cpSemAtenderHaDias, cpUltimoContatoCorretorTs });
   `);
+
+  // O CASO JAMIL: nunca marcado no app, mas o corretor mandou mensagem na conversa há 53 dias.
+  const jamil = { id: 'jamil', name: 'Jamil Contalex', daysSinceLastInteraction: 53,
+    analysis: {},
+    recentMessages: [
+      { author: 'Jamil Contalex', text: 'vou avaliar', iso: hojeMenos(53) },
+      { author: 'Construtora Senger', text: 'te mando o material do Personalité', iso: hojeMenos(53) }
+    ] };
+  assert.ok(cpUltimoContatoCorretorTs(jamil) > 0,
+    'mensagem que o CORRETOR mandou na conversa CONTA como contato — Jamil nunca mais é "nunca atendido"');
+  assert.equal(cpSemAtenderHaDias(jamil, 30), true,
+    'e como o último contato dele foi há 53 dias, o Jamil continua na lista de 30d+ — só que com a data certa');
+
+  // Corretor respondeu ONTEM na conversa (sem marcar nada no app): NÃO pode entrar na lista.
+  const respondidoOntem = { id: 'r', name: 'Cliente Novo', analysis: {},
+    recentMessages: [{ author: 'Construtora Senger', text: 'segue a tabela', iso: hojeMenos(1) }] };
+  assert.equal(cpSemAtenderHaDias(respondidoOntem, 30), false,
+    'quem o corretor respondeu ontem pelo WhatsApp não está "sem atender"');
 
   // Cliente que MANDOU MENSAGEM ONTEM mas nunca foi atendido: entra na lista, e está certo.
   assert.equal(cpSemAtenderHaDias(leadNuncaAtendido('novo', 1), 30), true,
@@ -55,8 +79,12 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
     const ehContatadoHoje = () => false;
     const diasCalendarioBR = (ts) => Math.floor((Date.now() - ts) / ${DIA});
     const limiarRetomada = () => 14;
-    ${app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/)[0]}
     const TIPOS_ATENDIMENTO_TIMELINE = new Set();
+    const ehMsgManualTimeline = () => false;
+    const ehMsgDoCliente = (m, pn) => String(m?.author||"").toLowerCase().startsWith(String(pn||"").toLowerCase());
+    const window = {};
+    ${app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/)[0]}
+    ${app.match(/function cpUltimoContatoCorretorTs\(l\)\{[\s\S]*?\n\}/)[0]}
     ${bloco[0].replace('const coluna = COLUNAS_POR_GRUPO[grupo] || COLUNA_PADRAO;', '')}
     ({ COLUNAS_POR_GRUPO, COLUNA_PADRAO });
   `);
@@ -70,8 +98,8 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
   const semAtender = COLUNAS_POR_GRUPO.__semAtender30;
   assert.equal(semAtender.titulo, 'Sem atender desde', 'o título precisa dizer que o que vem é uma data');
   const nunca = semAtender.valor(leadNuncaAtendido('x', 1));
-  assert.match(nunca, /nunca atendido/i,
-    'quem nunca foi atendido precisa dizer isso — no print aparecia "1 dia", que era a mensagem dele');
+  assert.match(nunca, /nunca respondeu/i,
+    'sem NENHUM contato do corretor (nem marcado, nem mensagem), diz isso com todas as letras');
   assert.doesNotMatch(nunca, /\b1 dia\b/, 'e não pode mostrar o "1 dia" da última mensagem');
 
   const velho = semAtender.valor(leadAtendidoHa('y', 53, 12));
