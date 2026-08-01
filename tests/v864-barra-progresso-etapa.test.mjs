@@ -31,13 +31,16 @@ assert.ok(ini !== -1 && fim !== -1 && fim > ini, 'não localizei as funções da
 const fonte = app.slice(ini, fim);
 
 // eslint-disable-next-line no-new-func
+// v1094 — ETAPA_ARQUIVADO é a constante que guarda o valor gravado no banco ("Geladeira").
+// Como aqui a função roda isolada, ela precisa ser injetada junto.
 const carregar = new Function(
-  'normalizarEtapa', 'escapeHtml',
+  'normalizarEtapa', 'escapeHtml', 'ETAPA_ARQUIVADO',
   fonte + '\nreturn { cp704Jornada, cp704JornadaBadge };'
 );
 const { cp704JornadaBadge } = carregar(
   () => '',            // normalizarEtapa: string vazia → não cai em Vendido/Perdido/Arquivado
-  (s) => String(s ?? '') // escapeHtml: identidade
+  (s) => String(s ?? ''), // escapeHtml: identidade
+  'Geladeira'
 );
 
 const badge = (status) => cp704JornadaBadge({ etapa: status }, { oportunidade: { status } });

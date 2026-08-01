@@ -672,7 +672,7 @@ async function slimZipKeepingTextAndAudio(file, onProgress){
   return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size };
 }
 
-const VIEW_CACHEABLE = new Set(["agenda","vendas","perdidos","geladeira","relatorio","carteira"]);
+const VIEW_CACHEABLE = new Set(["agenda","arquivados","relatorio","carteira"]);
 let _viewLoadSeq = 0;
 let _viewLoadTimer = null;
 function agendarTarefaLeve(fn, delay=70){
@@ -697,12 +697,11 @@ function carregarTelaAtiva(t, force=false){
           await carregarAprendizado();
           icTab(state.icTabAtiva === "aprendizado" ? "aprendizado" : "cerebro", true);
         }
-        // "perdidos" e "geladeira" apontam pro MESMO lugar agora: a Geladeira única.
         // v952: chamada via window.* de propósito — existe uma versão mais nova (com paginação
-        // e state.geladeiraItemsTodos p/ busca) só em window.carregarGeladeira; a referência
-        // solta "carregarGeladeira" aqui resolvia pro nome de função do escopo do módulo (a
-        // versão velha, sem paginação nem state.geladeiraItemsTodos), nunca pra atual.
-        else if(t === "perdidos" || t === "geladeira") await window.carregarGeladeira();
+        // e state.arquivadosItemsTodos p/ busca) só em window.carregarArquivados; a referência
+        // solta "carregarArquivados" aqui resolvia pro nome de função do escopo do módulo (a
+        // versão velha, sem paginação nem state.arquivadosItemsTodos), nunca pra atual.
+        else if(t === "arquivados") await window.carregarArquivados();
         else if(t === "aprendizado") await carregarAprendizado();
         else if(t === "carteira") await carregarCarteira(force);
         if(state.active === t && VIEW_CACHEABLE.has(t)) state.viewRendered[t] = Number(state.dataRevision) || rev;
@@ -805,15 +804,16 @@ function show(t, options={}){
   if(!options.skipHistory && !cpApplyingHistory && prev !== t){
     cpPushRoute(cpRouteForScreen(t));
   }
-  // A "Geladeira" não é uma tela própria: mora dentro da seção #perdidos (o balde único
-  // de leads fora do pipeline). Sem esse alias, show("geladeira") tentava ativar um
-  // #geladeira inexistente e o corretor caía numa tela em branco (os leads nunca apareciam).
-  const secId = (t === "geladeira") ? "perdidos" : t;
+  // v1094 — a tela dos arquivados agora tem UM nome só ("arquivados"). Antes ela respondia por
+  // dois nomes de etapas que o dono aboliu ("perdidos" e "geladeira"), e precisava de um apelido
+  // aqui pra show("geladeira") não ativar uma seção inexistente e deixar o corretor numa tela
+  // em branco. Sem dois nomes, o apelido deixou de existir.
+  const secId = t;
   if(!isDesktop()){
     qsa(".screen").forEach(e=>e.classList.remove("active"));
     qs("#"+secId)?.classList.add("active");
   }else{
-    const escondidas = ["menu","cerebro","vendas","agenda","zip","linhaTempo","perdidos","geladeira","aprendizado","propostas","relatorio","carteira"];
+    const escondidas = ["menu","cerebro","agenda","zip","linhaTempo","arquivados","aprendizado","propostas","relatorio","carteira"];
     escondidas.forEach(id => qs("#"+id)?.classList.remove("active"));
     const home = qs("#home");
     if(t === "home") home?.classList.add("active");
@@ -971,7 +971,7 @@ async function buscarSimilares(produto, etapa, leadAtual){
     const data = await res.json();
     const items = (data?.items || []).map(limparLead);
     // Cada lead recebe um score de similaridade com o leadAtual.
-    const scored = items.filter(l => l.id && (!leadAtual?.id || String(l.id) !== String(leadAtual.id)) && normalizarEtapa(l.etapa) !== "Geladeira").map(l => {
+    const scored = items.filter(l => l.id && (!leadAtual?.id || String(l.id) !== String(leadAtual.id)) && normalizarEtapa(l.etapa) !== ETAPA_ARQUIVADO).map(l => {
       let score = 0;
       // Mesmo produto vale muito
       if(produto && l.product && (l.product||"").toLowerCase() === produto.toLowerCase()) score += 25;
@@ -1359,7 +1359,7 @@ function prioridadeAtendimento(l){
 }
 function _prioridadeAtendimentoCalcular(l){
   const e = normalizarEtapa(l.etapa);
-  if(e === "Geladeira") {
+  if(e === ETAPA_ARQUIVADO) {
     return { score:-999, grupo:"baixa-prioridade", titulo:"Fora da fila", motivo:"lead arquivado" };
   }
 
@@ -2727,7 +2727,7 @@ function leadsEsquecidos(items, idsJaNaTela = null){
   const out = [];
   for(const l of (items || [])){
     const etapa = normalizarEtapa(l.etapa);
-    if(etapa === "Geladeira") continue;
+    if(etapa === ETAPA_ARQUIVADO) continue;
     if(doseHoje.has(String(l.id))) continue; // já está no "Fazer agora" de hoje = não está esquecido
     // v911 — só FATO real (o app não sabe etapa/proposta/visita, que o dono mandou tirar): entra
     // quem VOCÊ já atendeu (dinheiro investido) OU teve conversa real (5+ mensagens do cliente).
@@ -3720,7 +3720,7 @@ async function atualizarSinoAgenda(leadsAll){
   let atrasadosN = 0;
   for(const l of all){
     const e = normalizarEtapa(l.etapa);
-    if(e === "Geladeira") continue;
+    if(e === ETAPA_ARQUIVADO) continue;
     if(typeof cp786CompromissoAtrasado === 'function' && cp786CompromissoAtrasado(l)){ atrasadosN++; continue; }
     const q = l.analysis?.lembrete?.quando;
     if(q){ const t = new Date(q).getTime(); if(!isNaN(t) && t >= ini && t <= fim){ agendaN++; continue; } }
@@ -3815,7 +3815,7 @@ async function _processarDashboard(data){
   if(!data?.items) return;
   try{
     const all = (data?.items || []).map(limparLead);
-    const items = all.filter(l => { const e = normalizarEtapa(l.etapa); return e !== "Geladeira"; });
+    const items = all.filter(l => { const e = normalizarEtapa(l.etapa); return e !== ETAPA_ARQUIVADO; });
     state.itemsAtivos = items;
     state.todosLeads = all;
     try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
@@ -3823,7 +3823,7 @@ async function _processarDashboard(data){
     // agora no helper atualizarSinoAgenda (reusado ao excluir/reagendar lembrete, pra refletir sem F5).
     atualizarSinoAgenda(all);
     // Radar da Geladeira: badge do Menu desativado (dono não quer aviso).
-    const badgeGel = qs("#geladeiraRevisitarBadge");
+    const badgeGel = qs("#arquivadosRevisitarBadge");
     if(badgeGel) badgeGel.style.display = "none";
     // Total de leads ativos no pill do topo (mobile).
     const pillTotal = qs("#pillTotalLeads");
@@ -3904,12 +3904,19 @@ async function _processarDashboard(data){
 // mesmo nome que a tela "Arquivados" já usava — evita renomear coluna/telas que dependem dele).
 // Todo valor antigo de Vendido/Perdido/qualquer variação de "arquivado" cai em Geladeira; todo o
 // resto (inclusive etapas de funil antigas, se sobrar em dado legado) cai em Ativo.
-const ETAPAS = ["Ativo", "Geladeira"];
+// v1094 — "Geladeira" NÃO é mais um conceito do app: é só o texto que ficou GRAVADO na coluna
+// "etapa" do banco nos leads arquivados. Renomear esse texto exigiria reescrever o registro de
+// todos os leads já arquivados no banco de produção (migração de dados), o que não foi feito
+// nesta faxina de propósito. Então ele passa a existir em UM lugar só, com nome que diz o que é:
+// no resto do código lê-se ETAPA_ARQUIVADO, e a palavra antiga não aparece mais espalhada.
+const ETAPA_ARQUIVADO = "Geladeira";  // valor gravado no banco; na tela sempre "Arquivado"
+const ETAPA_ATIVO = "Ativo";
+const ETAPAS = [ETAPA_ATIVO, ETAPA_ARQUIVADO];
 
 function normalizarEtapa(raw){
   const s = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  if(/vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return "Geladeira";
-  return "Ativo";
+  if(/vendido|venda concluida|venda fechada|perdido|desistiu|recusou|geladeira|arquivad|fechado/.test(s)) return ETAPA_ARQUIVADO;
+  return ETAPA_ATIVO;
 }
 
 // Copia o histórico inteiro de mensagens do lead atual (texto plano).
@@ -4733,7 +4740,7 @@ function cp704Css(){
   function cp704Jornada(lead, mc){
     const normal = (typeof normalizarEtapa==='function') ? normalizarEtapa(lead?.etapa) : String(lead?.etapa||'');
     // v904: Vendido/Perdido/Geladeira não existem mais como desfecho separado — todos "Arquivado".
-    if(normal==='Geladeira')
+    if(normal===ETAPA_ARQUIVADO)
       return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
     const st = String(mc?.oportunidade?.status || lead?.etapa || 'descoberta').toLowerCase();
     const etapas = [
@@ -5292,7 +5299,7 @@ async function carregarAgendaTopo(){
     }
     const dispensados = compromissosDispensados();
     for(const lead of leads){
-      if(normalizarEtapa(lead.etapa) === "Geladeira") continue; // geladeira não aparece na barra de agenda do topo
+      if(normalizarEtapa(lead.etapa) === ETAPA_ARQUIVADO) continue; // geladeira não aparece na barra de agenda do topo
       if(ehContatadoHoje(lead)) continue; // já falei com ele hoje — tira o aviso do topo
       const aps = lead.analysis?.confirmedAppointments;
       if(Array.isArray(aps) && aps.length){
@@ -5434,7 +5441,7 @@ async function carregarAgenda(){
   try{
     // itemsAll inclui GELADEIRA (pra os lembretes continuarem valendo lá); items = só ativos (pras outras seções).
     const itemsAll = (data?.items || []).map(limparLead);
-    const items = itemsAll.filter(l => normalizarEtapa(l.etapa) !== "Geladeira");
+    const items = itemsAll.filter(l => normalizarEtapa(l.etapa) !== ETAPA_ARQUIVADO);
 
     const agoraTs = Date.now();
     const iniHojeA = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
@@ -5446,8 +5453,8 @@ async function carregarAgenda(){
     // Lembrete VENCIDO de lead na GELADEIRA → reaparece AQUI pra revisar (está parkeado, não vai pro Hoje).
     const lembretesFuturos = itemsAll.filter(l => { const t = lembreteTs(l); return !isNaN(t) && t > fimHojeA; });
     lembretesFuturos.sort((a,b) => lembreteTs(a) - lembreteTs(b));
-    const lembretesGeladeiraVencidos = itemsAll.filter(l => lembreteVencido(l) && normalizarEtapa(l.etapa) === "Geladeira");
-    lembretesGeladeiraVencidos.sort((a,b) => lembreteTs(a) - lembreteTs(b));
+    const lembretesArquivadosVencidos = itemsAll.filter(l => lembreteVencido(l) && normalizarEtapa(l.etapa) === ETAPA_ARQUIVADO);
+    lembretesArquivadosVencidos.sort((a,b) => lembreteTs(a) - lembreteTs(b));
 
     // Compromissos confirmados — todos, agrupados por urgência
     const compHoje = [], compAmanha = [], compFuturo = [];
@@ -5472,7 +5479,7 @@ async function carregarAgenda(){
       .filter(x => x.at);
     atrasados.sort((a,b) => a.at.dias - b.at.dias);
 
-    if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesGeladeiraVencidos.length && !atrasados.length){
+    if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesArquivadosVencidos.length && !atrasados.length){
       box.innerHTML = '<div class="empty">Nada agendado. Quando você ou o cliente marcarem um retorno (ex.: "retomar em 60 dias"), aparece aqui.</div>';
       return;
     }
@@ -5508,9 +5515,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(lembretesGeladeiraVencidos.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${lembretesGeladeiraVencidos.length})</div>`;
-      html += lembretesGeladeiraVencidos.map(l => {
+    if(lembretesArquivadosVencidos.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${lembretesArquivadosVencidos.length})</div>`;
+      html += lembretesArquivadosVencidos.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,45,155,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
@@ -8154,7 +8161,7 @@ window.semAcento = semAcento;
 // não achava nada e dava a impressão de que ele tinha sumido do app. Agora o arquivado APARECE,
 // mas nunca disfarçado de ativo — vem sempre depois dos ativos e com a tarja "Arquivado", que é
 // a condição que o dono colocou: "pode aparecer, desde que exista alguma diferença visual".
-function leadArquivado(l){ return normalizarEtapa(l?.etapa) === "Geladeira"; }
+function leadArquivado(l){ return normalizarEtapa(l?.etapa) === ETAPA_ARQUIVADO; }
 function renderBuscaGlobal(termo){
   const box = qs("#buscaGlobalResults");
   if(!box) return;
@@ -8252,7 +8259,7 @@ window.buscaLeadInline = buscaLeadInline;
 
 qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
 qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
-qs("#geladeiraRefresh")?.addEventListener("click", () => window.carregarGeladeira());
+qs("#arquivadosRefresh")?.addEventListener("click", () => window.carregarArquivados());
 qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
 qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
@@ -8413,7 +8420,7 @@ async function exportarLeadsCSV(btn){
       const produto = (typeof produtosLabel === "function" ? produtosLabel(l) : "") || l.product || "";
       // v1073 — a coluna ETAPA do Excel fala a mesma língua do app (Ativo/Arquivado), nunca o
       // valor cru do banco (que pode ter vocabulário antigo de funil de antes da v1069).
-      const etapa = normalizarEtapa(l.etapa) === "Geladeira" ? "Arquivado" : "Ativo";
+      const etapa = normalizarEtapa(l.etapa) === ETAPA_ARQUIVADO ? "Arquivado" : "Ativo";
       const prioridade = (typeof prioridadeTituloCurto === "function") ? prioridadeTituloCurto(l) : "";
       const perfil = a.clientProfile && a.clientProfile !== "—" ? a.clientProfile : "";
       const porque = a.summary || l.summary || "";
@@ -8650,14 +8657,14 @@ async function registrarRespostaCliente(valor){
 window.registrarRespostaCliente = registrarRespostaCliente;
 
 // v952: a renderização real de Arquivados (com paginação e busca) vive só dentro da IIFE
-// #724-2, exposta em window.carregarGeladeira. Existia uma segunda função de mesmo nome aqui
+// #724-2, exposta em window.carregarArquivados. Existia uma segunda função de mesmo nome aqui
 // (mais antiga, sem paginação nem suporte a busca) que nenhuma chamada `window.`-qualificada
-// nunca usava — mas a navegação chamava o nome solto "carregarGeladeira()", que por escopo
+// nunca usava — mas a navegação chamava o nome solto "carregarArquivados()", que por escopo
 // léxico do módulo resolvia pra ESTA função velha, não pra atual. Removida (ver fix em
-// carregarTelaAtiva). valeRevisitarGeladeira também saiu: só era usada por este bloco morto,
+// carregarTelaAtiva). valeRevisitarArquivado também saiu: só era usada por este bloco morto,
 // e já nem era chamada com motivos reais (sempre null) havia tempo.
 
-async function reativarLeadGeladeira(id, btn){
+async function reativarLeadArquivado(id, btn){
   if(!id) return;
   const msg = "Reativar este cliente? Ele volta para os atendimentos ativos.";
   const ok = (typeof cp903Confirm === "function")
@@ -8674,7 +8681,7 @@ async function reativarLeadGeladeira(id, btn){
     });
     if(!res.ok) throw new Error("falha");
     toast("Lead reativado.");
-    const card = document.querySelector(`[data-geladeira-id="${id}"]`);
+    const card = document.querySelector(`[data-arquivado-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
   }catch(err){
@@ -8682,7 +8689,7 @@ async function reativarLeadGeladeira(id, btn){
     toast("Erro ao reativar.");
   }
 }
-window.reativarLeadGeladeira = reativarLeadGeladeira;
+window.reativarLeadArquivado = reativarLeadArquivado;
 
 qs("#copyMessage").addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText(qs("#messageText").value);toast("Mensagem copiada.")}
@@ -8860,7 +8867,7 @@ function ui631Icon(nome){
 // Antes cada tela tinha uma regra diferente, por isso a Home mostrava 5 quentes
 // e Atendimentos mostrava zero.
 function leadEhAtivo(l){
-  return normalizarEtapa(l?.etapa) !== "Geladeira";
+  return normalizarEtapa(l?.etapa) !== ETAPA_ARQUIVADO;
 }
 function leadEhQuente(l){
   if(!leadEhAtivo(l)) return false;
@@ -10977,11 +10984,11 @@ function ui670DetailRows(lead,mc){
   function baseRows(items){
     return (Array.isArray(items) ? items : []).map(limparLead);
   }
-  function geladeiraCardHTML(l){
+  function arquivadoCardHTML(l){
     const idJs = leadId(l);
     const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction+'d parado' : '';
     return `
-      <div data-geladeira-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
+      <div data-arquivado-id="${escapeHtml(String(l.id||''))}" style="border:1px solid var(--line);background:rgba(0,212,255,.04);border-radius:14px;padding:12px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
             <strong style="font-size:15px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(55,232,255,.3)" onclick='abrirLead(${idJs})'>${escapeHtml(l.name||'Cliente')}</strong>
@@ -10991,7 +10998,7 @@ function ui670DetailRows(lead,mc){
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button type="button" onclick='abrirLead(${idJs})' style="padding:6px 12px;background:transparent;color:var(--soft);border:1px solid var(--line);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Ver lead</button>
-          <button type="button" onclick='reativarLeadGeladeira(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
+          <button type="button" onclick='reativarLeadArquivado(${idJs},this)' style="padding:6px 12px;background:rgba(104,255,149,.12);color:var(--acao);border:1px solid var(--acao);border-radius:999px;font-size:11px;font-weight:950;cursor:pointer">Reativar</button>
         </div>
       </div>`;
   }
@@ -11001,51 +11008,51 @@ function ui670DetailRows(lead,mc){
       ? `<button type="button" class="cart-load-more" onclick="${fnName}()">Carregar mais ${Math.min(PAGE, faltam)} <span>(${visible} de ${total})</span></button>`
       : "";
   }
-  window.cp6862MaisGeladeira = function(){ loadMore('geladeiraVisibleCount', window.carregarGeladeira); };
+  window.cp6862MaisGeladeira = function(){ loadMore('arquivadosVisibleCount', window.carregarArquivados); };
 
   // v928 — window.carregarVendas/cp6862MaisVendas removidos: alvo #vendasList não existe no
   // HTML desde a v904 (tela "Vendas registradas" removida) — nunca renderizava nada.
   // v1069 — window.carregarPerdidos/cp6862MaisPerdidos removidos pelo mesmo motivo: alvo
   // #perdidosList não existe no HTML desde a v952 (tela "Perdidos" virou parte de Arquivados).
 
-  window.carregarGeladeira = async function(){
+  window.carregarArquivados = async function(){
     const start = cpPerfNow();
-    const box = qs('#geladeiraList');
+    const box = qs('#arquivadosList');
     if(!box) return;
     box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
     try{
       const data = await getLeadsData(false);
       const items = baseRows(data?.items).filter(l => normalizarEtapa(l.etapa) === 'Geladeira');
-      state.geladeiraItemsTodos = items;
+      state.arquivadosItemsTodos = items;
       const buscaAtiva = qs('#buscaArquivados');
       if(buscaAtiva && buscaAtiva.value.trim().length >= 2){
-        window.buscaGeladeiraInline(buscaAtiva.value);
-        cpPerfMark('renderGeladeira', start, { total:items.length, busca:true });
+        window.buscaArquivadosInline(buscaAtiva.value);
+        cpPerfMark('renderArquivados', start, { total:items.length, busca:true });
         return;
       }
-      const limite = ensureVisibleKey('geladeiraVisibleCount');
+      const limite = ensureVisibleKey('arquivadosVisibleCount');
       const lote = items.slice(0, limite);
-      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>'; cpPerfMark('renderGeladeira', start, { total:0, visiveis:0 }); return; }
-      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(geladeiraCardHTML).join('') + renderLoadMore('geladeiraVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
-      cpPerfMark('renderGeladeira', start, { total:items.length, visiveis:lote.length });
-    }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderGeladeira', start, { error:true }); }
+      if(!items.length){ box.innerHTML = '<div class="empty">Nenhum contato arquivado no momento.</div>'; cpPerfMark('renderArquivados', start, { total:0, visiveis:0 }); return; }
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${items.length} negócio${items.length>1?'s':''} guardado${items.length>1?'s':''}.</div>` + lote.map(arquivadoCardHTML).join('') + renderLoadMore('arquivadosVisibleCount', items.length, lote.length, 'cp6862MaisGeladeira');
+      cpPerfMark('renderArquivados', start, { total:items.length, visiveis:lote.length });
+    }catch(err){ box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>'; cpPerfMark('renderArquivados', start, { error:true }); }
   };
 
   // Busca dentro dos Arquivados (Geladeira/Perdido): o dono pediu pra achar rápido um contato
   // "morto" que voltou a responder, sem precisar rolar a lista inteira, e reativá-lo dali mesmo.
-  let _buscaGeladeiraTimer = null;
-  window.buscaGeladeiraInline = function(termo){
-    clearTimeout(_buscaGeladeiraTimer);
-    _buscaGeladeiraTimer = setTimeout(() => {
-      const box = qs('#geladeiraList');
+  let _buscaArquivadosTimer = null;
+  window.buscaArquivadosInline = function(termo){
+    clearTimeout(_buscaArquivadosTimer);
+    _buscaArquivadosTimer = setTimeout(() => {
+      const box = qs('#arquivadosList');
       if(!box) return;
       const t = semAcento(termo);
-      if(t.length < 2){ window.carregarGeladeira(); return; }
-      const fonte = Array.isArray(state.geladeiraItemsTodos) ? state.geladeiraItemsTodos : [];
+      if(t.length < 2){ window.carregarArquivados(); return; }
+      const fonte = Array.isArray(state.arquivadosItemsTodos) ? state.arquivadosItemsTodos : [];
       const numeros = String(termo||'').replace(/\D/g,'');
       const matches = fonte.filter(l => semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||'').replace(/\D/g,'').includes(numeros)));
       if(!matches.length){ box.innerHTML = `<div class="empty">Nenhum arquivado encontrado com "${escapeHtml(termo)}".</div>`; return; }
-      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${matches.length} encontrado${matches.length>1?'s':''}.</div>` + matches.map(geladeiraCardHTML).join('');
+      box.innerHTML = `<div class="small" style="color:var(--muted);margin-bottom:10px">${matches.length} encontrado${matches.length>1?'s':''}.</div>` + matches.map(arquivadoCardHTML).join('');
     }, 200);
   };
 
@@ -11054,7 +11061,7 @@ function ui670DetailRows(lead,mc){
     window.cpPerformanceResumo = function(){
       const r = typeof antigoResumo === 'function' ? antigoResumo() : {};
       r.renderPerdidosMs = cpPerfMedia('renderPerdidos');
-      r.renderGeladeiraMs = cpPerfMedia('renderGeladeira');
+      r.renderArquivadosMs = cpPerfMedia('renderArquivados');
       return r;
     };
   }catch(_){}
