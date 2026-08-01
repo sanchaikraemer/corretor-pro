@@ -209,14 +209,21 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .lgt-cli small{display:block;color:var(--muted);font-size:11.8px;margin-top:2px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lgt-passo{color:var(--soft);font-size:12.6px;line-height:1.5;font-weight:400;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .lgt-dias{text-align:right;white-space:nowrap;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
-.lgt-dias b{color:var(--lime);font-weight:900;font-size:14px;margin-right:3px}
+.lgt-dias b{color:var(--lime);font-weight:900;font-size:13px;margin-right:3px;letter-spacing:-.02em}
 .lgt-dias i{font-style:normal;color:var(--muted);font-size:11px}
 /* v1098 — segunda linha da coluna de dias ("atendido há 3d", "sem atendimento"): explica de onde
    vem o número principal, sem competir com ele. */
 .lgt-dias .lgt-sub{display:block;color:var(--muted);font-size:9.5px;font-weight:700;line-height:1.2;margin-top:1px}
 .lgt-chev{color:var(--muted);font-size:15px;text-align:right}
+/* v1101 — a legenda da coluna DENTRO da linha ("volta em", "sem atender há", "parado há").
+   No computador o cabeçalho da tabela já diz isso, então aqui ela fica escondida. No celular o
+   cabeçalho é ocultado (logo abaixo) e o número ficava SOLTO: o dono leu "14 dias" ao lado de
+   "atendido ontem" como se a conversa tivesse 14 dias. Com a legenda na linha, o número nunca
+   mais depende de um cabeçalho que pode não estar à vista. */
+.lgt-dias .lgt-rot{display:none}
 @media(max-width:720px){
   .lgt-th{display:none}
+  .lgt-dias .lgt-rot{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;line-height:1.2;margin-bottom:1px}
   .lgt-row{grid-template-columns:26px minmax(0,1fr) 74px 14px;gap:10px;padding:12px 12px}
   .lgt-row .lgt-passo{display:none}
 }

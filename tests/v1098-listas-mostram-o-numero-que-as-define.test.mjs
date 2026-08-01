@@ -61,30 +61,38 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
     ({ COLUNAS_POR_GRUPO, COLUNA_PADRAO });
   `);
 
-  // "Sem atender 30d+" — o caso EXATO do print: nunca atendido, mensagem há 1 dia.
+  // v1101 — as duas colunas passaram a mostrar DATA, não contagem de dias. O dono leu "14 dias"
+  // ao lado da Silvana (atendida ONTEM) como "conversa parada há 14 dias". A conta estava certa,
+  // mas número solto de dias na linha de um cliente vai ser lido como tempo de abandono — sempre.
+  // Data ninguém lê errado.
+  const DATA = /\b\d{2}\/\d{2}\b/;
+
   const semAtender = COLUNAS_POR_GRUPO.__semAtender30;
-  assert.equal(semAtender.titulo, 'Sem atender há', 'o título precisa dizer o que o número é');
+  assert.equal(semAtender.titulo, 'Sem atender desde', 'o título precisa dizer que o que vem é uma data');
   const nunca = semAtender.valor(leadNuncaAtendido('x', 1));
-  assert.match(nunca, /nunca/i,
-    'quem nunca foi atendido precisa aparecer como "nunca" — no print aparecia "1 dia", que era a mensagem dele');
-  assert.doesNotMatch(nunca, /\b1\b/, 'e não pode mostrar o "1 dia" da última mensagem');
+  assert.match(nunca, /nunca atendido/i,
+    'quem nunca foi atendido precisa dizer isso — no print aparecia "1 dia", que era a mensagem dele');
+  assert.doesNotMatch(nunca, /\b1 dia\b/, 'e não pode mostrar o "1 dia" da última mensagem');
 
   const velho = semAtender.valor(leadAtendidoHa('y', 53, 12));
-  assert.match(velho, /53/, 'precisa mostrar os dias SEM ATENDIMENTO (53), não os da última mensagem (12)');
-  assert.doesNotMatch(velho, /12/, 'o número da última mensagem não pode aparecer aqui');
+  assert.match(velho, DATA, 'precisa mostrar a DATA do último atendimento');
+  assert.match(velho, /53/, 'e há quantos dias foi, como apoio');
+  assert.doesNotMatch(velho, /\b12\b/, 'o número da última mensagem não pode aparecer aqui');
 
-  // "Aguardando cliente" — o caso do outro print: calado há 18 dias, atendido há 3, descanso 14.
+  // "Aguardando cliente" — o caso da Silvana: atendida ontem, descanso de 14.
   const aguardando = COLUNAS_POR_GRUPO.__aguardando;
-  assert.equal(aguardando.titulo, 'Volta em', 'o título precisa responder "por que ele ainda está aqui?"');
-  const espera = aguardando.valor(leadAtendidoHa('z', 3, 18));
-  assert.match(espera, /\b12\b/, 'com descanso de 14 e atendido há 3, faltam 12 dias pra voltar');
-  assert.match(espera, /atendido há 3 dias/, 'e precisa mostrar de onde vem a conta');
-  assert.doesNotMatch(espera, /\b18\b/,
-    'o "18 dias" da última mensagem era justamente o que fazia parecer que o prazo tinha estourado');
+  assert.equal(aguardando.titulo, 'Volta dia', 'o título precisa responder "quando ele volta?"');
+  const espera = aguardando.valor(leadAtendidoHa('silvana', 1, 14));
+  assert.match(espera, DATA, 'precisa mostrar a DATA em que ele volta pra fila');
+  assert.match(espera, /atendido ontem/, 'e quando foi atendido');
+  assert.doesNotMatch(espera, /\b14 dias\b/,
+    'nada de "14 dias" solto — foi exatamente isso que o dono leu como "conversa de 14 dias"');
 
-  // Quem acabou de ser atendido tem o prazo cheio pela frente.
-  assert.match(aguardando.valor(leadAtendidoHa('w', 0, 40)), /\b15\b|\b14\b/,
-    'atendido hoje precisa mostrar o prazo praticamente inteiro pela frente');
+  // A data tem que bater com a regra: volta no dia seguinte ao último dia de descanso.
+  const esperada = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })
+    .format(new Date(Date.now() - 1 * DIA + 15 * DIA));
+  assert.match(espera, new RegExp(esperada.replace('/', '\\/')),
+    `atendida ontem com descanso 14, a data de volta precisa ser ${esperada}`);
 
   // As demais listas continuam mostrando "Parado há" (dias desde a última mensagem).
   assert.equal(COLUNA_PADRAO.titulo, 'Parado há', 'as outras listas não mudam');
