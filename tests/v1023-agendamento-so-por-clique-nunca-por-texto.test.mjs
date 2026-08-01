@@ -116,11 +116,19 @@ console.log('v1023 (reanalisar-lead.js): todo caminho de gravação zera confirm
 // v1069 — acaoDesfecho (Marcar venda/Marcar perda) foi removida: era código morto sem nenhum
 // caminho no front que ainda chamasse a ação "desfecho" (as telas que a usavam já tinham saído
 // do app antes disso).
+// v1092 — acaoLembreteSet/acaoLembreteClear saíram da lista porque as duas ações foram
+// removidas do lead-update.js: nenhuma tela do app as chamou em nenhum momento da história do
+// projeto, e lembrete automático é justamente o que esta regra proíbe.
 const acoesQueGravamLead = [
-  'acaoAnaliseComercialSet', 'acaoLembreteSet', 'acaoLembreteClear', 'acaoNovaOportunidadeParceiro',
+  'acaoAnaliseComercialSet', 'acaoNovaOportunidadeParceiro',
   'acaoAtualizarComEvolucao', 'acaoEtapa', 'acaoMemoriaSet', 'acaoObservacaoAdicionar',
   'acaoAprendizado', 'acaoEditarDados', 'removerVinculosComLeadsApagados'
 ];
+// E o que foi removido não pode voltar sem passar pela regra acima.
+for (const sumiu of ['acaoLembreteSet', 'acaoLembreteClear']) {
+  assert.doesNotMatch(leadUpdateSrc, new RegExp(`function\\s+${sumiu}\\b`),
+    `${sumiu} foi removida na v1092; se voltar, precisa entrar na lista que zera confirmedAppointments`);
+}
 for (const nome of acoesQueGravamLead) {
   const corpo = extrairFn(leadUpdateSrc, nome, 'lead-update.js');
   assert.match(corpo, /confirmedAppointments\s*[:=]\s*\[\]/,

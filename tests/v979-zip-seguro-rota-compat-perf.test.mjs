@@ -52,8 +52,15 @@ await assert.rejects(
 // usado na sincronização da Home) — a rede de segurança continua ativa, só não compete
 // mais com clique/toque o tempo inteiro que o app fica aberto.
 const appSrc = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-assert.ok(!/setInterval\(fixVersionText,\s*2000\)/.test(appSrc), 'o relógio de correção de versão não pode mais rodar a cada 2 segundos para sempre');
-assert.ok(/setInterval\(fixVersionText,\s*30000\)/.test(appSrc), 'esperava o intervalo reduzido para 30s');
+// v1092 — o intervalo saiu de vez (a v979 tinha só reduzido de 2s pra 30s). Varrer todo o texto
+// do documento periodicamente, pra sempre, é trabalho contínuo à toa num app que fica aberto o dia
+// inteiro. O número da versão é gravado no HTML na hora de publicar (build.js troca __VERSION__) e
+// os gatilhos de carregamento já cobrem tudo. A intenção original deste teste — o relógio não pode
+// ficar competindo com o toque na tela — agora é garantida na forma mais forte: não há relógio.
+assert.ok(!/setInterval\(fixVersionText/.test(appSrc),
+  'não pode haver varredura periódica do DOM só pra corrigir o número da versão');
+assert.ok(/document\.addEventListener\('DOMContentLoaded', fixVersionText\)/.test(appSrc),
+  'a correção da versão precisa continuar acontecendo no carregamento');
 console.log('v979-performance: fixVersionText não roda mais a cada 2s para sempre');
 
 console.log('v979-zip-seguro-rota-compat-perf: ok');

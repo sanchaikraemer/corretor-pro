@@ -11272,36 +11272,20 @@ function ui670DetailRows(lead,mc){
   setTimeout(fixVersionText, 50);
   setTimeout(fixVersionText, 250);
   setTimeout(fixVersionText, 1000);
-  // v979: era a cada 2s, para sempre, varrendo TODO o texto do documento — rodando o
-  // tempo inteiro que o app fica aberto, competia com clique/toque pelo processador
-  // principal (perceptível como lentidão). As 3 chamadas acima já cobrem o carregamento;
-  // o intervalo é só uma rede de segurança tardia, então 30s (mesmo ritmo já usado na
-  // sincronização da Home) preserva o comportamento sem manter o navegador ocupado à toa.
-  setInterval(fixVersionText, 30000);
+  // v1092 — o intervalo saiu de vez. Ele varria TODO o texto do documento a cada 30 segundos,
+  // pra sempre, enquanto o app estivesse aberto — num aparelho que fica com o app aberto o dia
+  // inteiro isso é trabalho contínuo à toa, competindo com o toque na tela. O número da versão é
+  // gravado no HTML na hora de publicar (build.js troca __VERSION__), e os cinco gatilhos acima
+  // (DOMContentLoaded, load e três tempos curtos) cobrem qualquer texto que chegue no
+  // carregamento. Nada renderizado depois disso nasce com número velho.
 })();
 
 
 
-/* ============================================================
-   Atualização #724-2 — estabilidade pós-cache
-   - Apenas fixa o texto da versão, sem observer e sem interferir no carregamento.
-   ============================================================ */
-(function(){
-  const VERSION='__VERSION__';
-  try{ window.CORRETOR_PRO_VERSION = VERSION; }catch(_){ }
-  function fix(){
-    try{
-      document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
-        const txt=el.textContent||'';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i,'Atualização #__VERSION__');
-      });
-    }catch(_){ }
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', fix); else fix();
-  window.addEventListener('load', fix);
-  setTimeout(fix, 300);
-  setTimeout(fix, 1200);
-})();
+/* v1092 — o segundo bloco de correção da versão (o "#724-2") foi removido: ele era um
+   SUBCONJUNTO EXATO do bloco acima — mesma atribuição de CORRETOR_PRO_VERSION e o mesmo passe de
+   querySelectorAll, só que com menos gatilhos. Dois mecanismos fazendo a mesma coisa é a receita
+   pra um deles ficar desatualizado sem ninguém notar. */
 
 
 

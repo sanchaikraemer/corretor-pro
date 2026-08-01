@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { prepararTimelineParaAprendizado, ranquearCasosAprendidos, extrairInteligenciaObservada } from "../api/_pipeline.js";
+import { prepararTimelineParaAprendizado, ranquearCasosAprendidos, extrairInteligenciaObservada, jeitoAprendidoCompacto } from "../api/_pipeline.js";
 
 const timelineLorena = [
   { date:"09/06/2026", time:"15:51", author:"Construtora Senger", text:"No momento não estamos adquirindo novas áreas. Vou levar a informação do terreno para conhecimento da direção." },
@@ -72,7 +72,43 @@ const pipelineSrc = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.u
 const leadUpdateSrc = fs.readFileSync(new URL("../api/lead-update.js", import.meta.url), "utf8");
 const reanaliseSrc = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.meta.url), "utf8");
 const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
-assert.match(pipelineSrc, /CASOS REAIS RECUPERADOS DO SEU HISTÓRICO/);
+// v1092 — esta verificação procurava um texto fixo dentro do código-fonte, e esse texto morava
+// numa função que ninguém chamava (casosSemelhantesPrompt). Ou seja: passava verde enquanto o
+// aprendizado podia perfeitamente não estar chegando na IA. Agora testa o EFEITO — o que o
+// aprendizado do corretor realmente coloca no prompt.
+{
+  const cerebroAprendido = {
+    inteligenciaAprendida: {
+      tons: [{ texto: "fala curta, direta e cordial, sempre tratando por senhor/senhora" }],
+      objecoes: [
+        { objecao: "está caro", respostaUsada: "mostro o custo por metro e comparo com o aluguel atual", funcionou: true },
+        { objecao: "vou pensar", respostaUsada: "insisto pra fechar na hora", funcionou: false }
+      ],
+      tecnicas: [{ texto: "convido pra um café na construtora antes de falar de preço" }],
+      produtoVsPerfil: [{ perfilCliente: "casal com filho pequeno", produto: "Boulevard", reacao: "gostou da área de lazer" }],
+      padroesFollowup: [{ texto: "retomo perguntando se conseguiu vender o bem que trava a compra" }]
+    }
+  };
+  const bloco = jeitoAprendidoCompacto(cerebroAprendido, "casal com filho pequeno achou caro o Boulevard");
+
+  assert.ok(bloco, "com aprendizado gravado, o prompt PRECISA receber o bloco do jeito do corretor");
+  assert.match(bloco, /custo por metro/, "a resposta de objeção que funcionou precisa chegar na IA");
+  assert.match(bloco, /café na construtora/, "a técnica aprendida precisa chegar na IA");
+  assert.match(bloco, /senhor\/senhora/, "o tom de voz aprendido precisa chegar na IA");
+  assert.match(bloco, /Boulevard/, "o casamento produto × perfil precisa chegar na IA");
+  assert.match(bloco, /vender o bem/, "o padrão de follow-up precisa chegar na IA");
+
+  assert.doesNotMatch(bloco, /insisto pra fechar na hora/,
+    "o que NÃO funcionou jamais pode ser ensinado como se funcionasse");
+  assert.match(bloco, /N[ÃA]O copie literal/i,
+    "a IA precisa ser instruída a adaptar, nunca copiar a frase pronta");
+
+  // Cérebro sem aprendizado nenhum não pode inventar bloco (senão a IA recebe regra do nada).
+  assert.equal(jeitoAprendidoCompacto({}, "qualquer coisa"), "",
+    "sem aprendizado gravado, nada pode ser injetado no prompt");
+  assert.equal(jeitoAprendidoCompacto({ inteligenciaAprendida: {} }, "qualquer coisa"), "",
+    "aprendizado vazio também não pode virar texto no prompt");
+}
 assert.match(leadUpdateSrc, /marcarAprendizadoPendente/);
 assert.match(reanaliseSrc, /marcarAprendizadoPendente/);
 assert.match(appSrc, /iniciarAprendizadoContinuoAutomatico/);

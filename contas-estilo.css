@@ -22,10 +22,18 @@ body{
   color:var(--cp-text);
   font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
   display:flex;
-  align-items:center;
+  /* v1092 — era "align-items:center". Isso centraliza bem as telas curtas (entrar, cadastro), mas
+     quando o conteúdo é MAIOR que a tela — o caso da Política de Privacidade e dos Termos — o
+     excedente transborda pros DOIS lados, e o que sobra para cima fica INALCANÇÁVEL: a página
+     abre no meio do texto e não há como rolar pra trás. Foi o que o dono flagrou com print: os
+     dois documentos começando na seção 3, sem título nem introdução.
+     A correção padrão: alinhar no topo e deixar o centramento por conta de margens automáticas —
+     elas centralizam quando há espaço sobrando e viram zero quando não há. */
+  align-items:flex-start;
   justify-content:center;
   padding:24px;
 }
+body > *{ margin-top:auto; margin-bottom:auto; }
 .marca{ text-align:center; margin-bottom:22px; }
 .marca img{ width:44px; height:44px; display:block; margin:0 auto 8px; }
 .marca b{ font-size:20px; font-weight:900; }

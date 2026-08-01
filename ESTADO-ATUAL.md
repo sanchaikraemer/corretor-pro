@@ -50,7 +50,7 @@ livres.**
 | `atalho-zip-token.js` | Gera/mostra a chave pessoal do Atalho do iPhone (ver `NOTAS-v1035.md`). |
 | `cerebro-config.js` | Configuração do Cérebro Comercial + aprendizado contínuo. |
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
-| `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1073): as ações `lembrete-set`/`lembrete-clear`, `analise-comercial-set` e `nova-oportunidade-parceiro` não têm mais NENHUM chamador no front (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js pra lembretes) — ficam no servidor por serem pequenas e cobertas por teste, candidatas a remoção futura. |
+| `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1092): `lembrete-set`/`lembrete-clear` foram REMOVIDAS — o histórico do repositório mostra que nenhuma tela as chamou em nenhum momento do projeto (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js). Já `analise-comercial-set` e `nova-oportunidade-parceiro` continuam de propósito: as chamadas saíram do front só na v1073 (29/07/2026) e, como o app é PWA instalável, um celular que não abriu o app desde então ainda roda a versão em cache que as chamaria. Remover agora daria erro pra quem está desatualizado — sair numa faxina futura. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
 | `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. |
 | `reanalisar-lead.js` | Reanálise de um lead já importado. |
@@ -78,6 +78,13 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 - `DIRECIONA_DANGER_LIMPAR_TUDO` — **não é mais usada.** A rota `limpar-tudo.js` foi removida na
   v1083; se essa variável ainda estiver cadastrada na Vercel, pode apagar.
 - `ATALHO_ZIP_TOKEN_SECRET` — segredo usado pra assinar a chave pessoal do Atalho do iPhone.
+- `ALLOW_UNPROTECTED_API` — **não vale mais em produção (v1092).** Ela liberava a API sem chave e
+  sem login; como toda chamada sem login é tratada como sendo da conta original, isso deixava os
+  dados dela abertos pra qualquer um. Fora de produção (desenvolvimento/teste) continua valendo.
+- `CORRETOR_PRO_LEGADO_DESLIGADO` — defina como `sim` pra **desligar definitivamente** o acesso
+  antigo por chave compartilhada. A partir daí só entra quem tem login de verdade. Vem desligado
+  por padrão porque o Atalho do iPhone e aparelhos antigos da conta original podem depender do
+  caminho antigo; quem usa o app com login não perde nada ao ligar isto.
 
 ### Custo e limites de IA
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia por empresa (padrão 200).
@@ -120,6 +127,7 @@ Supabase — nenhuma ferramenta de migração automática está configurada). Li
 | `0007_excluir_organizacao_transacional.sql` | Exclusão de empresa numa transação só. |
 | `0008_telemetria_uso_ia.sql` | Tabela `ai_usage_events` (uso de IA por empresa). |
 | `0009_travas_concorrencia_e_search_path.sql` | Restrição única real contra empresa duplicada, `organization_id` obrigatório em `whatsapp_processamentos`, `search_path` fixo nas funções `SECURITY DEFINER`. |
+| `0010_dedupe_indexado.sql` | **Aditiva e opcional (v1092).** Cria três colunas de deduplicação (`dedupe_fone8`, `dedupe_arquivo`, `dedupe_nome`) com índice por empresa, pra a importação parar de varrer a carteira inteira só pra saber se o cliente já existe. Enquanto não for aplicada, o sistema funciona igual, só mais devagar — o app detecta a ausência sozinho. |
 
 **Importante**: esta sessão não tem acesso ao Supabase de produção (ver `CLAUDE.md`). Não há
 confirmação automática de quais migrações já foram de fato aplicadas no banco real — isso precisa
@@ -210,11 +218,11 @@ montar isso:
   apagar os dados de uma conta hoje é o painel administrativo (`admin-contas.js`, ação
   `excluir-conta`), que já exige ser administrador da plataforma.
 - **Política de privacidade e termos de uso** — publicadas desde a v1045 (`privacidade.html`,
-  `termos.html`, linkadas no rodapé do cadastro). Ainda faltam dois passos manuais do dono: (1)
-  preencher os campos `[razão social / CNPJ ou CPF do responsável]` e `[e-mail de contato/DPO]`
-  nas duas páginas — são dados que só ele tem, não podem ser inventados; (2) uma revisão jurídica
-  de verdade antes de tratar o texto como definitivo (aviso disso já fica visível no topo das duas
-  páginas).
+  `termos.html`). Os dados de identificação do responsável e o e-mail de contato **já foram
+  preenchidos na v1084**; os links passaram a existir também dentro do app, no rodapé da tela Menu
+  (antes só havia link na tela de criar conta, então quem já era cliente não achava as páginas).
+  **Pendência restante: uma revisão jurídica de verdade** antes de tratar o texto como definitivo —
+  o aviso disso continua visível no topo das duas páginas.
 - **Cobrança/assinatura automatizada** — hoje o "virar pago" é manual, pelo botão "Marcar pago" no
   painel administrativo. Não há integração com nenhum meio de pagamento.
 - **App nativo pro iPhone** (aparecer direto no botão Compartilhar do WhatsApp, como no Android) —

@@ -68,10 +68,17 @@ try {
     { action: "memoria-set", id: "lead-1", observacoes: "nota de memória" },
     { action: "observacao-adicionar", id: "lead-1", texto: "cliente pediu retorno amanhã" },
     { action: "aprendizado", id: "lead-1", evento: "teste-v999" },
-    { action: "lembrete-set", id: "lead-1", dias: 3, motivo: "retomar" },
-    { action: "lembrete-clear", id: "lead-1" },
+    // v1092 — "lembrete-set" e "lembrete-clear" saíram daqui porque as duas ações foram
+    // removidas da API: nenhuma tela do app as chamou em nenhum momento do projeto.
     { action: "editar-dados", id: "lead-1", nome: "Novo Nome" }
   ];
+
+  // Ação que não existe mais precisa ser RECUSADA, nunca respondida como se tivesse funcionado.
+  for (const extinta of ["lembrete-set", "lembrete-clear"]) {
+    const { statusCode, payload } = await chamar({ action: extinta, id: "lead-1", dias: 3 });
+    assert.notEqual(statusCode, 200, `a ação removida "${extinta}" não pode responder sucesso`);
+    assert.notEqual(payload?.ok, true, `a ação removida "${extinta}" não pode responder ok:true`);
+  }
 
   for (const acao of acoes) {
     const { statusCode, payload } = await chamar(acao);
