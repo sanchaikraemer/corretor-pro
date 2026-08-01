@@ -3234,34 +3234,52 @@ function abrirGrupoHome(grupo, options={}){
       const d = l.daysSinceLastInteraction;
       return ehContatadoHoje(l)
         ? '<i>atendido hoje</i>'
-        : (d != null ? `<b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
+        : (d != null ? `<small class="lgt-rot">parado há</small><b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
     }
   };
   const diasDesdeAtendimento = (l) => {
     const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
     return ts ? diasCalendarioBR(ts) : null;
   };
+  // v1101 — CONTAGEM DE DIAS SAIU. VIRAM DATAS.
+  //
+  // O dono olhou a Silvana — atendida ONTEM — e leu "14 dias" ao lado do nome dela como se a
+  // conversa tivesse 14 dias parados. A conta estava certa (14 dias de descanso, volta no dia
+  // seguinte ao 14º), mas isso não importa: um número solto de dias, na mesma linha de um nome de
+  // cliente, vai ser lido como "faz tanto tempo que não falo com ele". Sempre.
+  //
+  // No celular era pior ainda, porque o cabeçalho da tabela é escondido — o número aparecia sem
+  // legenda nenhuma.
+  //
+  // Corretor trabalha com DATA, não com contagem regressiva. "Volta 15/08" ninguém lê errado.
+  const dataBRcurta = (ts) => {
+    try{
+      return new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit" }).format(new Date(ts));
+    }catch(_){ return ""; }
+  };
   const COLUNAS_POR_GRUPO = {
-    // Quantos dias faltam pra ele voltar pra fila — é o que responde "por que está aqui?".
+    // QUANDO ele volta pra fila — a resposta de "por que ele ainda está aqui?".
     __aguardando: {
-      titulo: "Volta em",
+      titulo: "Volta dia",
       valor: (l) => {
+        const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
         const desde = diasDesdeAtendimento(l);
         const prazo = (typeof limiarRetomada === "function") ? limiarRetomada(l) : null;
-        if(desde == null || prazo == null) return COLUNA_PADRAO.valor(l);
-        const faltam = Math.max(0, prazo - desde + 1);
-        // v1100 — saía "atendido há hoje" (erro meu na v1098): o "há" não cabe com "hoje".
+        if(!ts || desde == null || prazo == null) return COLUNA_PADRAO.valor(l);
+        // Volta no dia seguinte ao último dia de descanso (mesma regra de emJanelaDeEspera).
+        const volta = dataBRcurta(ts + (prazo + 1) * 86400000);
         const quando = desde === 0 ? "atendido hoje" : desde === 1 ? "atendido ontem" : `atendido há ${desde} dias`;
-        return `<b>${faltam}</b> ${faltam === 1 ? "dia" : "dias"}<small class="lgt-sub">${quando}</small>`;
+        return `<small class="lgt-rot">volta dia</small><b>${volta}</b><small class="lgt-sub">${quando}</small>`;
       }
     },
-    // Há quantos dias está sem atendimento — a mesma régua que monta e ordena a lista.
+    // DESDE QUANDO está sem atendimento — a mesma régua que monta e ordena a lista.
     __semAtender30: {
-      titulo: "Sem atender há",
+      titulo: "Sem atender desde",
       valor: (l) => {
+        const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
+        if(!ts) return '<small class="lgt-rot">nunca</small><b>—</b><small class="lgt-sub">nunca atendido</small>';
         const desde = diasDesdeAtendimento(l);
-        if(desde == null) return '<b>nunca</b><small class="lgt-sub">sem atendimento</small>';
-        return `<b>${desde}</b> ${desde === 1 ? "dia" : "dias"}`;
+        return `<small class="lgt-rot">sem atender desde</small><b>${dataBRcurta(ts)}</b>${desde != null ? `<small class="lgt-sub">${desde === 1 ? "há 1 dia" : `há ${desde} dias`}</small>` : ""}`;
       }
     }
   };
