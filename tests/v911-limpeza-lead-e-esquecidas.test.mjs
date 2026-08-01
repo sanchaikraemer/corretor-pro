@@ -24,16 +24,11 @@ assert.doesNotMatch(app, /raiox-mobile|function insightFocoHTML|function abrirRa
 // 5. "Últimos atendimentos" saiu da home.
 assert.doesNotMatch(app, /abrirUltimosAtendimentos/, '"Últimos atendimentos" removido da home');
 
-// 6. "Oportunidades esquecidas" reformada: fato real, mais antigos primeiro, máx 10.
-// v1093 — a função ganhou um 2º parâmetro (os ids já mostrados na tela), então a busca aqui
-// aceita qualquer assinatura.
-const esq = app.match(/function leadsEsquecidos\([^)]*\)\{[\s\S]*?\n\}/)[0];
-assert.match(esq, /temAtendimentoManual\(l\) \|\| mensagensDoCliente\(l\) >= CP_MIN_MSGS_PRIORIDADE/, 'entra por fato real (atendeu ou conversou)');
-assert.doesNotMatch(esq, /pesoRecuperacao|leadTemProposta|Visita\/Proposta|Negociação/, 'sem etapa/proposta no ranking');
-assert.match(esq, /out\.sort\(\(a,b\) => b\.parado - a\.parado\)/, 'ordena por mais tempo parado (mais antigos primeiro)');
-assert.match(esq, /out\.slice\(0, 10\)/, 'no máximo 10');
-const radar = app.match(/function radarRowHTML\(l\)\{[\s\S]*?\n\}/)[0];
-assert.doesNotMatch(radar, /Alta|Média|Baixa|negociação aberta|visita\/proposta em jogo/, 'sem rótulo Alta/Média nem etapa no card');
-assert.match(radar, /você já atendeu|msg.* do cliente/, 'o card mostra o fato real');
+// 6. v1095 — "Oportunidades esquecidas" não foi mais reformada: foi REMOVIDA inteira, por ordem
+// do dono ("só ativo ou arquivado, ponto final" — nenhum outro nome pra cliente). As duas funções
+// que este bloco verificava saíram junto. O que passa a ser protegido aqui é a remoção.
+assert.doesNotMatch(app, /function leadsEsquecidos\b/, 'a lista de "esquecidos" não pode voltar');
+assert.doesNotMatch(app, /function radarRowHTML\b/, 'o cartão daquela lista não pode voltar');
+assert.doesNotMatch(html, /Oportunidades esquecidas/i, 'nem o título pode reaparecer');
 
 console.log('v911-limpeza-lead-e-esquecidas: ok');

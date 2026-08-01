@@ -129,19 +129,22 @@ function extrair(nome){
 }
 
 // ─── 4. O mesmo cliente nunca aparece duas vezes na Home ──────────────────────────────────────
+// A v1093 corrigiu isso ensinando "Oportunidades esquecidas" a não repetir quem já estava em
+// "Fazer agora". Na v1095 o dono mandou remover aquela seção INTEIRA ("só ativo ou arquivado,
+// ponto final") — e sem a segunda lista não existe mais onde duplicar.
+// A garantia de que ela não volta está em tests/v1095-so-ativo-ou-arquivado. Aqui só se confirma
+// que a Home passou a ter UMA lista de clientes.
 {
-  const esq = extrair('leadsEsquecidos');
-  assert.match(esq, /idsJaNaTela/,
-    'leadsEsquecidos precisa receber quem JÁ está na tela, senão o "Atender mais um" duplica');
-  assert.match(app, /leadsEsquecidos\(items, new Set\(dose\.map/,
-    'quem monta a Home precisa passar exatamente os leads mostrados em "Fazer agora"');
+  const home = app.match(/const urgentes = dose;[\s\S]*?foco\.innerHTML = `/);
+  assert.ok(home, 'não localizei a montagem da Home');
+  assert.doesNotMatch(home[0], /esquecid/i,
+    'a Home não pode voltar a montar uma segunda lista de clientes');
 
-  // O efeito, com a regra de exclusão isolada: quem está na tela não pode voltar como "esquecido".
-  const doseNaTela = new Set(['a', 'b', 'extra']);
-  const candidatos = ['a', 'b', 'extra', 'c'];
-  const esquecidos = candidatos.filter(id => !doseNaTela.has(id));
-  assert.deepEqual(esquecidos, ['c'],
-    'o cliente puxado pelo "Atender mais um" não pode reaparecer em Oportunidades esquecidas');
+  const corpoHome = app.match(/foco\.innerHTML = `[\s\S]*?\n  `;/);
+  assert.ok(corpoHome, 'não localizei o corpo montado da Home');
+  const listas = [...corpoHome[0].matchAll(/\$\{(\w*Html)\}/g)].map(m => m[1]);
+  assert.ok(!listas.some(n => /esquecid/i.test(n)),
+    `a Home só pode ter a lista do "Fazer agora" — achei: ${listas.join(', ')}`);
 }
 
 // ─── 5. O "Carregando..." não fica mais preso embaixo do Salvar ───────────────────────────────

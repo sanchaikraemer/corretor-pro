@@ -2707,68 +2707,10 @@ window.copiarMensagemLead = function(id){
   else { toast("Não consegui copiar"); }
 };
 
-// === Oportunidades esquecidas (radar de resgate) ===
-// Leads VALIOSOS que tiveram um passo-chave (visita, proposta, negociação ou atendimento
-// registrado) e ESFRIARAM — escaparam da fila urgente de hoje. É "dinheiro parado": o
-// corretor já investiu e está prestes a perder por esquecimento. (ideia do podcast do Airton)
-function leadsEsquecidos(items, idsJaNaTela = null){
-  // v914/v924 — não repete quem está na dose de hoje do "Fazer agora".
-  //
-  // v1093 — o dono flagrou o MESMO cliente aparecendo duas vezes na Home. Causa: aqui só eram
-  // excluídos os leads da META do dia, mas o "Atender mais um" mostra ALÉM da meta (e o "Pular
-  // próximo" ainda reordena a fila). O cliente puxado a mais não era excluído e reaparecia logo
-  // abaixo, em "Oportunidades esquecidas". Agora quem monta a tela passa os ids que REALMENTE
-  // foram mostrados — assim a exclusão bate exatamente com o que está à vista, seja qual for a
-  // meta, o extra ou a ordem.
-  const doseHoje = idsJaNaTela instanceof Set
-    ? idsJaNaTela
-    : new Set((typeof cpFilaFazerAgora === 'function' && typeof cpFazerAgoraDose === 'function'
-        ? cpFilaFazerAgora(items).slice(0, cpFazerAgoraDose(items)) : []).map(l => String(l.id)));
-  const out = [];
-  for(const l of (items || [])){
-    const etapa = normalizarEtapa(l.etapa);
-    if(etapa === ETAPA_ARQUIVADO) continue;
-    if(doseHoje.has(String(l.id))) continue; // já está no "Fazer agora" de hoje = não está esquecido
-    // v911 — só FATO real (o app não sabe etapa/proposta/visita, que o dono mandou tirar): entra
-    // quem VOCÊ já atendeu (dinheiro investido) OU teve conversa real (5+ mensagens do cliente).
-    const investido = temAtendimentoManual(l) || mensagensDoCliente(l) >= CP_MIN_MSGS_PRIORIDADE;
-    if(!investido) continue;
-    // "parado" considera o último ATENDIMENTO, não só a última mensagem (lead atendido hoje = 0).
-    const parado = diasParado(l);
-    if(!(Number.isFinite(parado) && parado >= 7)) continue; // recente/atendido agora não é "esquecido"
-    out.push({ l, parado });
-  }
-  out.sort((a,b) => b.parado - a.parado); // mais antigos (mais tempo parado) primeiro
-  return out.slice(0, 10).map(x => x.l);
-}
-// v982 — pedido do dono: destacar visualmente QUANTO uma oportunidade esquecida está atrasada,
-// não só o número em texto. Cor e comprimento da barra sobem juntos com os dias parado, usando as
-// cores semânticas que o app já tem (--risco/--morno/--soft) — nenhuma cor nova.
-function radarSeveridade(parado){
-  const dias = Number.isFinite(parado) ? Math.max(0, parado) : 0;
-  const pct = Math.max(4, Math.min(100, Math.round(dias / 365 * 100)));
-  if(dias >= 180) return { cor: "var(--risco)", pct };
-  if(dias >= 60) return { cor: "var(--morno)", pct };
-  return { cor: "var(--soft)", pct };
-}
-function radarRowHTML(l){
-  const idJs = JSON.stringify(String(l.id || ""));
-  const paradoRaw = diasParado(l);
-  const parado = Number.isFinite(paradoRaw) ? paradoRaw : 0;
-  // v911 — sem etapa/proposta/visita (o app não sabe): mostra só o FATO real (atendeu ou conversou).
-  const nMsgs = (typeof mensagensDoCliente === "function") ? mensagensDoCliente(l) : 0;
-  const fato = temAtendimentoManual(l) ? "você já atendeu" : (nMsgs ? `${nMsgs} msg${nMsgs > 1 ? "s" : ""} do cliente` : "conversa iniciada");
-  const prod = (l.product && !/n[ãa]o identificad|importad/i.test(String(l.product))) ? " · " + escapeHtml(l.product) : "";
-  const sev = radarSeveridade(parado);
-  return `<button type="button" class="radar-row" onclick='abrirLead(${idJs})'>
-    <div class="radar-row-main">
-      <div class="radar-nome">${escapeHtml(l.name || "Cliente")}<span class="radar-prod">${prod}</span></div>
-      <div class="radar-meta">${fato} · parado ${parado <= 0 ? "hoje" : parado + "d"}</div>
-      <div class="radar-bar"><i style="width:${sev.pct}%;background:${sev.cor}"></i></div>
-    </div>
-    <div class="radar-rec" style="color:${sev.cor}"><b>${parado <= 0 ? "hoje" : parado + "d"}</b><span>parado</span></div>
-  </button>`;
-}
+// v1095 — "Oportunidades esquecidas" REMOVIDA. Ordem do dono, repetida e sem margem: um cliente
+// só pode ser ATIVO ou ARQUIVADO, e nada mais pode dar outro nome a ele. Aquela seção da tela
+// inicial rotulava cliente ativo como "esquecido" — mais um nome, exatamente o que ele baniu.
+// Saíram junto leadsEsquecidos(), radarRowHTML() e radarSeveridade(), que só serviam a ela.
 
 // (v911) Raio-X da carteira removido de vez (o dono pediu): usava etapa/proposta/visita —
 // dados que o app não sabe de verdade — pra montar diagnóstico. insightFocoHTML/temVisitaLead/
@@ -2834,7 +2776,7 @@ function renderBotoesHome(){
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
   const quantosMostrar = Math.max(0, metaHoje) + extraHoje;
   const dose = filaRanqueada.slice(0, quantosMostrar);
-  const urgentes = dose; // usado no btnPular e no gate das "oportunidades esquecidas" abaixo
+  const urgentes = dose; // usado no botão "Pular próximo"
   const disponiveisParaPuxar = filaRanqueada.slice(dose.length);
   let top3Html;
   if(dose.length){
@@ -2865,15 +2807,6 @@ function renderBotoesHome(){
 
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
   const btnPularHtml = urgentes.length > 1 ? `<button type="button" class="seq-link" onclick='pularProximo()'>⏭ Pular próximo</button>` : "";
-
-  // v1093 — passa exatamente quem já está aparecendo em "Fazer agora" (incluindo o que o
-  // "Atender mais um" puxou além da meta), pra ninguém aparecer duas vezes na mesma tela.
-  const esquecidos = leadsEsquecidos(items, new Set(dose.map(l => String(l.id))));
-  const esquecidosHtml = esquecidos.length ? `
-    <div class="radar-card">
-      <div class="radar-tit">⏳ Oportunidades esquecidas <span class="radar-sub">valiosas e paradas — resgate antes de perder</span></div>
-      ${esquecidos.map(radarRowHTML).join("")}
-    </div>` : "";
 
   foco.innerHTML = `
     <style>
@@ -2945,7 +2878,6 @@ function renderBotoesHome(){
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
-    ${esquecidosHtml}
   `;
   qsa(".pickZipShortcut").forEach(b => {
     if(!b.dataset.bound){ b.dataset.bound = "1"; b.addEventListener("click", () => show("zip")); }

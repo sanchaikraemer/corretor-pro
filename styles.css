@@ -408,21 +408,7 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 .diag-perg-lab{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:950;color:var(--lime);margin-bottom:3px}
 .diag-perg-txt{font-size:13px;color:var(--text);font-weight:600}
 .diag-alerta{margin-top:10px;padding:9px 12px;background:rgba(184,194,201,.10);border:1px solid var(--morno);border-radius:10px;font-size:12px;color:var(--soft);line-height:1.45}
-/* Radar "Oportunidades esquecidas" na Home */
-.radar-card{margin-top:16px;padding:14px 16px;background:rgba(184,194,201,.05);border:1px solid rgba(184,194,201,.22);border-radius:16px}
-.radar-tit{color:var(--morno);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:11px;margin-bottom:11px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.radar-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:600;font-size:11px}
-.radar-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-top:8px;cursor:pointer;transition:background .15s,border-color .15s}
-.radar-row:hover{background:rgba(255,255,255,.06);border-color:rgba(184,194,201,.4)}
-.radar-row-main{flex:1;min-width:0}
-.radar-nome{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.radar-prod{color:var(--muted);font-weight:600;font-size:12px}
-.radar-meta{font-size:12px;color:var(--muted);margin-top:2px}
-.radar-bar{height:3px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
-.radar-bar i{display:block;height:100%;border-radius:99px}
-.radar-rec{flex:none;text-align:right;line-height:1.1}
-.radar-rec b{display:block;font-size:13px;font-weight:950}
-.radar-rec span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+/* v1095 — o bloco de estilo do "Oportunidades esquecidas" saiu junto com a seção. */
 /* Insight de decisão na Home (Regra 5/10) — frase, não painel */
 .insight-foco{margin:0 2px 12px;padding:11px 14px;background:var(--accent-soft);border:1px solid rgba(255,98,88,.28);border-radius:12px;font-size:13px;line-height:1.5;color:var(--text)}
 .insight-foco b{color:var(--lime)}
