@@ -330,6 +330,11 @@ window.atualizarDiagnosticoPerformance = atualizarDiagnosticoPerformance;
 // "pendurada" por um tempo enquanto reconecta. Sem limite, o fetch nunca resolve nem
 // rejeita — e uma tela que depende dele fica travada no skeleton pra sempre. Isso força
 // o fetch a desistir depois de um tempo, pra sempre cair no catch/fallback de quem chamou.
+// v1100 — o dono viu "vencido há 43 dia(s)" na tela e perguntou o que estava errado. O "(s)" é
+// atalho de programador pra não decidir entre singular e plural — na tela de um corretor é lixo.
+// Este ajudante decide. Usar SEMPRE que um número acompanha uma palavra.
+function pl(n, um, muitos){ return Number(n) === 1 ? um : muitos; }
+
 async function fetchComTimeout(url, opts = {}, timeoutMs = 15000){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -1456,7 +1461,7 @@ function _prioridadeAtendimentoCalcular(l){
   else if(nivel === 6) motivo = `sem contato ${fmtDias(diasContato)} — hora de retomar`;
   else if(nivel === 7) motivo = "você chamou por último — aguardando a resposta do cliente";
   else if(grupo === "tratado-hoje") motivo = ehContatadoHoje(l) ? "você já atendeu este lead hoje" : "você atendeu este lead nos últimos dias";
-  else if(titulo === "Tem lembrete futuro") motivo = diasLembrete != null ? `retorno agendado para daqui a ${diasLembrete} dia(s)` : "tem lembrete futuro — não antecipar";
+  else if(titulo === "Tem lembrete futuro") motivo = diasLembrete != null ? `retorno agendado para daqui a ${diasLembrete} ${diasLembrete === 1 ? "dia" : "dias"}` : "tem lembrete futuro — não antecipar";
   else if(grupo === "pode-aguardar") motivo = "cliente pediu tempo ou ficou de avaliar";
   else if(grupo === "boa-sem-urgencia") motivo = "boa oportunidade, mas depende de evento externo";
   else motivo = (!msgsCli.length && !sinalCompra && !pendenciaCorretor && !temAgenda) ? "ainda não houve conversa comercial real" : "sem fato urgente no momento";
@@ -3103,7 +3108,7 @@ async function importarTelefonesCSV(){
         aplicar.push({ id: ld.id, telefone: tel });
       }
       if(!aplicar.length){ toast("Nada pra preencher — esses leads já têm número ou não bateram pelo nome."); return; }
-      const msgTel = `Vou preencher o telefone de ${aplicar.length} lead(s) que estavam sem número. Confirmar?`;
+      const msgTel = `Vou preencher o telefone de ${aplicar.length} ${pl(aplicar.length, "lead", "leads")} que ${pl(aplicar.length, "estava", "estavam")} sem número. Confirmar?`;
       const okTel = (typeof cp903Confirm === "function")
         ? await cp903Confirm({ titulo: "Preencher telefones", mensagem: msgTel, ok: "Preencher" })
         : confirm(msgTel);
@@ -3119,7 +3124,7 @@ async function importarTelefonesCSV(){
         }catch(_){ erro++; }
       }
       if(typeof invalidarLeadsCache === "function") invalidarLeadsCache();
-      toast(`✓ ${ok} telefone(s) preenchido(s)${erro?` · ${erro} falharam`:""}.`);
+      toast(`✓ ${ok} ${pl(ok, "telefone preenchido", "telefones preenchidos")}${erro?` · ${erro} ${pl(erro, "falhou", "falharam")}`:""}.`);
       if(typeof loadRecentLeads === "function") loadRecentLeads();
     }catch(err){ toast("Erro ao importar: " + (err?.message||err)); }
   };
@@ -3245,7 +3250,9 @@ function abrirGrupoHome(grupo, options={}){
         const prazo = (typeof limiarRetomada === "function") ? limiarRetomada(l) : null;
         if(desde == null || prazo == null) return COLUNA_PADRAO.valor(l);
         const faltam = Math.max(0, prazo - desde + 1);
-        return `<b>${faltam}</b> ${faltam === 1 ? "dia" : "dias"}<small class="lgt-sub">atendido há ${desde === 0 ? "hoje" : desde + "d"}</small>`;
+        // v1100 — saía "atendido há hoje" (erro meu na v1098): o "há" não cabe com "hoje".
+        const quando = desde === 0 ? "atendido hoje" : desde === 1 ? "atendido ontem" : `atendido há ${desde} dias`;
+        return `<b>${faltam}</b> ${faltam === 1 ? "dia" : "dias"}<small class="lgt-sub">${quando}</small>`;
       }
     },
     // Há quantos dias está sem atendimento — a mesma régua que monta e ordena a lista.
@@ -3419,7 +3426,7 @@ async function executarReanaliseTudo(items){
     if(erros > 0){
       const box = qs("#reanalErros");
       box.style.display = "block";
-      box.textContent = `${erros} erro(s) até agora.`;
+      box.textContent = `${erros} ${pl(erros, "erro", "erros")} até agora.`;
     }
   }
 
@@ -3477,11 +3484,11 @@ async function executarReanaliseTudo(items){
     const box = qs("#reanalErros");
     let html = "";
     if(semConversa.length){
-      html += `<div style="color:var(--muted);margin-bottom:8px">${semConversa.length} lead(s) sem conversa importada (nada pra analisar) — normal.</div>`;
+      html += `<div style="color:var(--muted);margin-bottom:8px">${semConversa.length} ${pl(semConversa.length, "lead sem conversa importada", "leads sem conversa importada")} (nada pra analisar) — normal.</div>`;
     }
     if(falhas.length){
       window._reanalFalhas = falhas; // guarda pra redo
-      html += `<div style="color:var(--risco);font-weight:800;margin-bottom:4px">${falhas.length} lead(s) falharam de verdade:</div>`;
+      html += `<div style="color:var(--risco);font-weight:800;margin-bottom:4px">${falhas.length} ${pl(falhas.length, "lead falhou", "leads falharam")} de verdade:</div>`;
       html += `<div style="max-height:140px;overflow:auto;color:var(--soft);font-size:11px;line-height:1.6;margin-bottom:8px">${falhas.map(f=>`• ${escapeHtml(f.nome)} <span style="color:var(--muted)">— ${escapeHtml(f.motivo||"erro")}</span>`).join("<br>")}</div>`;
       html += `<button type="button" onclick="reanalisarFalhas()" style="width:100%;padding:9px;background:var(--lime);color:var(--on-accent);border:0;border-radius:9px;font-weight:900;font-size:12px;cursor:pointer">↻ Tentar de novo só os que falharam</button>`;
     }
@@ -6061,7 +6068,7 @@ async function carregarAprendizado(){
     const historicos = Number(auto.historicosProcessados || 0);
     const pendenciasAuto = Number(auto.aprendizadosPendentes || 0);
     const autoStatus = auto.bootstrapConcluidoEm
-      ? (pendenciasAuto ? `${pendenciasAuto} atualização(ões) aguardando leitura automática.` : "Carteira inicial processada. Novas mensagens entram automaticamente.")
+      ? (pendenciasAuto ? `${pendenciasAuto} ${pl(pendenciasAuto, "atualização aguardando", "atualizações aguardando")} leitura automática.` : "Carteira inicial processada. Novas mensagens entram automaticamente.")
       : "Processando os históricos existentes em segundo plano.";
     const header = `<div style="margin-bottom:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
       <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:14px 16px;background:linear-gradient(135deg,rgba(255,98,88,.08),rgba(55,232,255,.04));border:1px solid var(--lime);border-radius:12px">
@@ -6343,7 +6350,7 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
     }
     cpAprendSalvarPendentes(aindaPendentes);
     if(aindaPendentes.length){
-      cpAprendAtualizarStatus(`${aindaPendentes.length} histórico(s) ainda não foram aprendidos. O sistema tentará novamente sem bloquear seu uso.`, true);
+      cpAprendAtualizarStatus(`${aindaPendentes.length} ${pl(aindaPendentes.length, "histórico ainda não foi aprendido", "históricos ainda não foram aprendidos")}. O sistema tentará novamente sem bloquear seu uso.`, true);
       cpAprendAgendarRetomada(90000);
       return false;
     }
@@ -6413,7 +6420,7 @@ async function carregarEstadoIA(){
     const casos = Number(auto.totalCasos || 0);
     const pendenciasAuto = Number(auto.aprendizadosPendentes || 0);
     const estado = auto.bootstrapConcluidoEm
-      ? (pendenciasAuto ? `${pendenciasAuto} conversa(s) nova(s) estão na fila de aprendizado automático.` : "A carteira existente já foi lida. Novas mensagens importadas, reimportações, reanálises e observações manuais atualizam esta memória automaticamente.")
+      ? (pendenciasAuto ? `${pendenciasAuto} ${pl(pendenciasAuto, "conversa nova está", "conversas novas estão")} na fila de aprendizado automático.` : "A carteira existente já foi lida. Novas mensagens importadas, reimportações, reanálises e observações manuais atualizam esta memória automaticamente.")
       : "A leitura inicial da carteira está acontecendo em segundo plano. Você pode continuar usando o sistema normalmente.";
     const grade = cats.map(c => `<div style="padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)">
       <div style="color:${c.cor};text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:9px;margin-bottom:3px">${c.label}</div>
@@ -6635,7 +6642,7 @@ function openAIErrorBlock(data){
   if(Number(data?.audiosComErro) > 0){
     blocks.push(
       '<div class="notice error" style="margin-top:10px">' +
-      '<b>'+ data.audiosComErro +' áudio(s) falharam ao transcrever.</b><br>' +
+      '<b>'+ data.audiosComErro +' '+ pl(data.audiosComErro, 'áudio falhou', 'áudios falharam') +' ao transcrever.</b><br>' +
       '<b>Motivo:</b> ' + escapeHtml(data.primeiroErroAudio || "abra o Diagnóstico") +
       '</div>'
     );
@@ -7234,7 +7241,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
       Object.assign(transcriptionMap, resposta.transcriptions || {});
     }
   }else{
-    renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} transcrição(ões) reaproveitada(s)` : "sem áudio para transcrever");
+    renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} ${pl(audiosReaproveitados, "transcrição reaproveitada", "transcrições reaproveitadas")}` : "sem áudio para transcrever");
   }
 
   renderEtapas(4, "validando as três mensagens pelo Cérebro");
@@ -7320,9 +7327,9 @@ async function renderProcessedResult(data, meta){
     `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}. <a href="#" onclick="show('cerebro');return false" style="color:var(--lime);text-decoration:underline">ajustar padrão</a></div>` : "";
 
   const sm = data.metrics || {};
-  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} mídia(s) ficaram ocultas — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
   const inc = data.incrementalMeta || {};
-  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} mensagem(ns) nova(s) · ${Number(inc.audiosNovosTranscritos)||0} áudio(s) novo(s) transcrito(s) · ${Number(inc.audiosReaproveitados)||0} áudio(s) reaproveitado(s).${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio reaproveitado", "áudios reaproveitados")}.${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
 
   // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
   // quando o nome exportado coincide (ou se parece) com um nome já salvo.
@@ -7565,8 +7572,8 @@ async function atualizarLeadComEvolucao(){
         const nReuso = Number(incrementalMeta.audiosReaproveitados)||0;
         txt += nMsg === 0
           ? `Nenhuma mensagem nova encontrada; mantive a análise anterior sem nova cobrança de texto. `
-          : `${nMsg} mensagem(ns) nova(s) incorporada(s) · ${nAudio} áudio(s) novo(s) transcrito(s) · ${nReuso} reaproveitado(s). `;
-      } else if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} mensagem(ns) que só estavam na conversa anterior). `;
+          : `${nMsg} ${pl(nMsg, "mensagem nova incorporada", "mensagens novas incorporadas")} · ${nAudio} ${pl(nAudio, "áudio novo transcrito", "áudios novos transcritos")} · ${nReuso} ${pl(nReuso, "reaproveitado", "reaproveitados")}. `;
+      } else if(juntou) txt += `Juntei as duas conversas (mantive ${data.preservadasDoAntigo} ${pl(data.preservadasDoAntigo, "mensagem que só estava", "mensagens que só estavam")} na conversa anterior). `;
       if(ev){
         txt += `O que mudou: ${escapeHtml(ev.oQueMudou||"—")}. `;
         if(ev.abordagemFuncionou && ev.abordagemFuncionou !== "sem-dados") txt += `Abordagem anterior: <b>${escapeHtml(ev.abordagemFuncionou)}</b>. `;
@@ -7576,7 +7583,7 @@ async function atualizarLeadComEvolucao(){
       pendingBox.innerHTML = txt;
     }
     toast(incrementalMeta?.reimportacao
-      ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} mensagem(ns) nova(s).`
+      ? `${primeiroNome} atualizado: ${Number(incrementalMeta.mensagensNovas)||0} ${pl(Number(incrementalMeta.mensagensNovas)||0, "mensagem nova", "mensagens novas")}.`
       : (juntou ? "Conversas juntadas e lead atualizado." : "Lead atualizado com evolução."));
     // Mesma correção do salvar: sem zerar o cache de 5 min, a Carteira seguia mostrando o
     // lead como estava ANTES da atualização (ainda em "preparação").
@@ -10219,12 +10226,12 @@ function ui671CompromissoAberto(lead){
     const diff=ui671DiasAte(String(ap.data||"").slice(0,10));
     const contato=/cliente|contato/i.test(String(ap.combinadoPor||""));
     if(diff!=null&&diff>=0){const quando=diff===0?"hoje":diff===1?"amanhã":`em ${diff} dias`;return {status:concreto.test(`${ap.oQue||""} ${prova}`)?"compromisso-agendado":"aguardando-resposta",responsavel:contato?"contato":"ambos",urgencia:diff<=1?"media":"baixa",descricao:concreto.test(`${ap.oQue||""} ${prova}`)?`Compromisso confirmado para ${quando}. Acompanhe sem antecipar uma nova abordagem.`:`Aguardar o retorno combinado do contato para ${quando}.`,texto:prova};}
-    if(diff!=null&&diff<0&&diff>=-30)return {status:"retomar",responsavel:"corretor",urgencia:Math.abs(diff)>=3?"alta":"media",descricao:`O compromisso combinado venceu há ${Math.abs(diff)} dia(s). Retome usando essa pendência como gancho.`,texto:prova};
+    if(diff!=null&&diff<0&&diff>=-30)return {status:"retomar",responsavel:"corretor",urgencia:Math.abs(diff)>=3?"alta":"media",descricao:`O compromisso combinado venceu há ${Math.abs(diff)} ${Math.abs(diff) === 1 ? "dia" : "dias"}. Retome usando essa pendência como gancho.`,texto:prova};
   }
   const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[],pn=String(lead?.name||"").toLowerCase().split(/\s+/)[0]||"";
   const re=/\b(vou|iremos|vamos|fico de|dou|darei|te|lhe)\b.{0,55}\b(retorno|retornar|respondo|responder|aviso|avisar|chamo|chamar|analiso|analisar|avalio|avaliar|converso|conversar|vejo|verificar)\b/i;
   const cancel=/\b(desisti|n[aã]o vou|n[aã]o precisa|j[aá] resolvi|comprei|fechei com outro|comprou outro|sem interesse)\b/i;
-  for(let i=msgs.length-1;i>=Math.max(0,msgs.length-24);i--){const m=msgs[i];if(!ehMsgDoCliente(m,pn))continue;const t=String(m?.text||"").trim();if(!re.test(t))continue;const canc=msgs.slice(i+1).some(x=>ehMsgDoCliente(x,pn)&&cancel.test(String(x?.text||"")));if(canc)continue;let idade=null;try{const d=m?.iso?new Date(m.iso):null;if(d&&!isNaN(d))idade=Math.floor((Date.now()-d.getTime())/86400000);}catch(_){}if(idade!=null&&idade>180)continue;if(idade!=null&&idade>30)return {status:"retomar",responsavel:"corretor",urgencia:"alta",descricao:`O retorno combinado está vencido há ${idade} dia(s). Retome pela pendência.`,texto:t};return {status:"aguardando-resposta",responsavel:"contato",urgencia:"baixa",descricao:"Aguardar o retorno que o contato se comprometeu a dar.",texto:t};}
+  for(let i=msgs.length-1;i>=Math.max(0,msgs.length-24);i--){const m=msgs[i];if(!ehMsgDoCliente(m,pn))continue;const t=String(m?.text||"").trim();if(!re.test(t))continue;const canc=msgs.slice(i+1).some(x=>ehMsgDoCliente(x,pn)&&cancel.test(String(x?.text||"")));if(canc)continue;let idade=null;try{const d=m?.iso?new Date(m.iso):null;if(d&&!isNaN(d))idade=Math.floor((Date.now()-d.getTime())/86400000);}catch(_){}if(idade!=null&&idade>180)continue;if(idade!=null&&idade>30)return {status:"retomar",responsavel:"corretor",urgencia:"alta",descricao:`O retorno combinado está vencido há ${idade} ${idade === 1 ? "dia" : "dias"}. Retome pela pendência.`,texto:t};return {status:"aguardando-resposta",responsavel:"contato",urgencia:"baixa",descricao:"Aguardar o retorno que o contato se comprometeu a dar.",texto:t};}
   return null;
 }
 

@@ -78,7 +78,7 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
   assert.equal(aguardando.titulo, 'Volta em', 'o título precisa responder "por que ele ainda está aqui?"');
   const espera = aguardando.valor(leadAtendidoHa('z', 3, 18));
   assert.match(espera, /\b12\b/, 'com descanso de 14 e atendido há 3, faltam 12 dias pra voltar');
-  assert.match(espera, /atendido há 3d/, 'e precisa mostrar de onde vem a conta');
+  assert.match(espera, /atendido há 3 dias/, 'e precisa mostrar de onde vem a conta');
   assert.doesNotMatch(espera, /\b18\b/,
     'o "18 dias" da última mensagem era justamente o que fazia parecer que o prazo tinha estourado');
 
