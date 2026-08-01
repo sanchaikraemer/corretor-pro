@@ -2122,7 +2122,7 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
 .cpio-anel{position:relative; width:132px; height:132px; flex:none}
 .cpio-anel svg{width:132px; height:132px; transform:rotate(-90deg); display:block}
 .cpio-trilho{stroke:var(--line)}
-.cpio-prog{stroke:var(--cp-coral,#FF6258); transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1)}
+.cpio-prog{stroke:var(--cp-coral,#FF6258); transition:stroke-dashoffset .12s linear}
 .cpio-pct{
   position:absolute; inset:0; display:grid; place-items:center;
   font-size:29px; font-weight:900; letter-spacing:-.02em; color:var(--text);

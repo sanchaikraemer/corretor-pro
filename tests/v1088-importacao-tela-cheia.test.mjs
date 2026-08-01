@@ -42,8 +42,14 @@ const corpo = sinc[0];
 // importação trava de vez.
 assert.match(corpo, /if\(opts && opts\.pausar\)\{ cpImportOverlayVisivel\(false\); return; \}/,
   'quando o app espera uma decisão do corretor, a tela cheia precisa sair ANTES de qualquer outra regra');
-assert.match(app, /renderEtapas\(5, "aguardando confirmação para salvar", \{ pausar: true \}\);/,
-  'o ponto que espera "Salvar lead" precisa avisar que é uma pausa');
+// v1089 — a etapa "aguardando confirmação" NÃO é mais uma pausa: no caminho normal o app salva
+// sozinho logo em seguida, e esconder a tela ali fazia os cartões da importação piscarem no meio
+// da análise ("apareceu essa tela e depois voltou pro carregamento", relato do dono).
+assert.ok(!app.includes('"aguardando confirmação para salvar", { pausar: true }'),
+  'a etapa de preparar o salvamento não pode mais esconder a tela cheia — o app salva sozinho ali');
+// A ÚNICA saída por decisão do corretor é o caso de nome só parecido, que realmente pergunta.
+assert.match(app, /Nome só parecido[\s\S]{0,400}?cpImportOverlayVisivel\(false\)/,
+  'o caso de nome só parecido (o único que pergunta de verdade) precisa liberar a tela cheia');
 
 // 3b. Falha recuperável (etapa 7) e qualquer índice fora do fluxo: sai.
 assert.match(corpo, /cpImportOverlayVisivel\(false\);\s*\n\}/,
@@ -81,5 +87,16 @@ assert.ok(pct, 'as porcentagens da tela cheia precisam existir');
 const lista = pct[1].split(',').map(n => Number(n.trim()));
 assert.deepEqual(lista, [8, 32, 48, 70, 86, 94, 100],
   'a porcentagem precisa continuar batendo com a barra antiga (pctPorEtapa em renderEtapas)');
+
+// ── 6. v1089 — o andamento anda sozinho, em vez de pular de etapa em etapa ────────────────────
+// As etapas duram tempos muito diferentes (ouvir áudios e analisar levam dezenas de segundos), e
+// o número ficava congelado entre um salto e outro.
+assert.match(app, /function cpioAnimarAte\(destino, teto\)\{/, 'precisa existir a animação do andamento');
+assert.match(app, /_cpioAlvo = Math\.max\(_cpioMostrado, destino\);/,
+  'o andamento nunca pode voltar atrás');
+assert.match(app, /if\(_cpioAlvo < _cpioTeto\) _cpioAlvo \+= \(_cpioTeto - _cpioAlvo\) \* [\d.]+;/,
+  'enquanto a etapa não termina, o andamento precisa se arrastar sozinho em direção ao teto');
+assert.match(app, /const proximo = CPIO_PCT\[idx \+ 1\] \?\? 100;\s*\n\s*cpioAnimarAte\(pct, Math\.max\(pct, proximo - 2\)\);/,
+  'o teto precisa ser a etapa SEGUINTE menos uma folga — o número nunca anuncia etapa que não começou');
 
 console.log('v1088-importacao-tela-cheia: ok');

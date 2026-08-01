@@ -6581,20 +6581,79 @@ function cpImportOverlayVisivel(mostrar){
   const el = qs("#cpImportOverlay");
   if(!el) return;
   if(mostrar){
-    if(el.hidden){ el.hidden = false; document.body.classList.add("cpio-aberto"); }
+    if(el.hidden){
+      // Importação nova começando: o andamento recomeça do zero.
+      if(_cpioMostrado >= 100) cpioZerar();
+      el.hidden = false; document.body.classList.add("cpio-aberto");
+    }
   }else{
     if(!el.hidden){ el.hidden = true; document.body.classList.remove("cpio-aberto"); }
+    cpioPararAnimacao();
   }
 }
 window.cpImportOverlayVisivel = cpImportOverlayVisivel;
+
+// v1089 — ANDAMENTO CONTÍNUO. Antes o número pulava de 8% pra 32%, pra 48%... e ficava parado
+// entre um pulo e outro — o dono descreveu como "pulando de bastante em bastante". Cada etapa tem
+// uma duração muito diferente (ouvir os áudios e analisar levam dezenas de segundos; as outras,
+// instantes), então a barra ficava longos períodos congelada e depois dava um salto.
+// Agora o número CAMINHA sozinho: ao entrar numa etapa ele mira o percentual dela e, enquanto a
+// etapa não termina, vai se arrastando devagar em direção à próxima (chegando cada vez mais
+// devagar, sem nunca alcançar) — assim está sempre andando e nunca "passa na frente" da verdade.
+// Quando a etapa seguinte chega de fato, ele alcança o novo valor suavemente.
+let _cpioMostrado = 0;   // o que está escrito na tela agora
+let _cpioAlvo = 0;       // pra onde ele está indo neste instante
+let _cpioTeto = 0;       // até onde pode se arrastar sozinho (nunca invade a etapa seguinte)
+let _cpioTimer = null;
+
+function cpioPintarPct(valor){
+  const v = Math.max(0, Math.min(100, valor));
+  const elPct = qs("#cpioPct"); if(elPct) elPct.textContent = Math.round(v) + "%";
+  const anel = qs("#cpioProgresso");
+  if(anel) anel.style.strokeDashoffset = String(CPIO_CIRCUNFERENCIA * (1 - v/100));
+}
+
+function cpioPararAnimacao(){
+  if(_cpioTimer){ clearInterval(_cpioTimer); _cpioTimer = null; }
+}
+
+function cpioAnimarAte(destino, teto){
+  // Nunca volta atrás: se a tela já mostra mais do que o destino, mantém o que está escrito.
+  _cpioAlvo = Math.max(_cpioMostrado, destino);
+  _cpioTeto = Math.max(_cpioAlvo, teto);
+  cpioPararAnimacao();
+  _cpioTimer = setInterval(() => {
+    // o alvo se arrasta em direção ao teto (cada vez mais devagar)…
+    if(_cpioAlvo < _cpioTeto) _cpioAlvo += (_cpioTeto - _cpioAlvo) * 0.010;
+    // …e o número exibido persegue o alvo, suavizando o movimento.
+    const passo = (_cpioAlvo - _cpioMostrado) * 0.14;
+    if(Math.abs(passo) < 0.01 && _cpioAlvo >= _cpioTeto - 0.05){ return; }
+    _cpioMostrado += passo;
+    cpioPintarPct(_cpioMostrado);
+  }, 70);
+}
+
+function cpioZerar(){
+  cpioPararAnimacao();
+  _cpioMostrado = 0; _cpioAlvo = 0; _cpioTeto = 0;
+  cpioPintarPct(0);
+}
 
 function cpImportOverlayAtualizar(idx, sub){
   const passo = CPIO_PASSOS[idx];
   if(!passo) return;
   const pct = CPIO_PCT[idx] ?? 0;
-  const elPct = qs("#cpioPct"); if(elPct) elPct.textContent = pct + "%";
-  const anel = qs("#cpioProgresso");
-  if(anel) anel.style.strokeDashoffset = String(CPIO_CIRCUNFERENCIA * (1 - pct/100));
+  if(idx === 6){
+    // Concluído: vai direto e para de se mexer.
+    cpioPararAnimacao();
+    _cpioMostrado = 100; _cpioAlvo = 100; _cpioTeto = 100;
+    cpioPintarPct(100);
+  }else{
+    // O teto é o percentual da etapa seguinte, com uma folga — o número nunca anuncia uma etapa
+    // que ainda não começou.
+    const proximo = CPIO_PCT[idx + 1] ?? 100;
+    cpioAnimarAte(pct, Math.max(pct, proximo - 2));
+  }
   const tit = qs("#cpioTitulo"); if(tit) tit.textContent = passo.rot;
   // O detalhe vindo do fluxo (ex.: "3/14 novos · 2 reaproveitados") é mais informativo que o
   // texto padrão — quando existe, ele manda.
@@ -7054,7 +7113,13 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // registrava atividade — por isso "Importações" (90) e "Análises feitas" (19) nunca batiam,
   // mesmo cada importação passando pela IA. Conta aqui, no sucesso real da análise.
   try{ cpRegistrarAtividade("analise"); }catch(_){}
-  renderEtapas(5, "aguardando confirmação para salvar", { pausar: true });
+  // v1089 — esta etapa NÃO esconde mais a tela cheia. No caminho normal (a esmagadora maioria) o
+  // app salva sozinho logo em seguida — não há confirmação nenhuma pra pedir. Esconder aqui fazia
+  // a tela de importação, com os cartões, aparecer por um instante e a tela cheia voltar logo
+  // depois: era a "tela que aparecia no meio da análise e voltava pro carregamento" que o dono
+  // relatou. Quem esconde agora é só o ÚNICO caso que realmente espera uma decisão dele (nome só
+  // parecido — ver renderProcessedResult).
+  renderEtapas(5, "preparando pra salvar");
   return result;
 }
 
@@ -7159,6 +7224,9 @@ async function renderProcessedResult(data, meta){
   if(nomeSoParecido){
     // Nome só parecido (não idêntico): espera o corretor confirmar se é o mesmo cliente ou
     // outro — a única ambiguidade real que ainda pergunta (ver v953 acima).
+    // v1089 — É AQUI, e só aqui, que a tela cheia sai de cena: é o único momento em que a
+    // importação para de verdade pra ouvir uma decisão. Sem isso, a pergunta ficaria coberta.
+    try{ cpImportOverlayVisivel(false); }catch(_){}
   }else if(perguntarNome){
     // Nome exato: já sabemos que é o mesmo cliente — atualiza direto, sem perguntar (v953).
     atualizarLeadComEvolucao();
@@ -7167,6 +7235,7 @@ async function renderProcessedResult(data, meta){
   }
  }catch(err){
   // Antes: erro aqui virava tela travada em silêncio (função chamada sem await/catch). Agora avisa.
+  try{ cpImportOverlayVisivel(false); }catch(_){}
   const box = qs("#resultBox");
   if(box){
     box.className = "notice error";
