@@ -3205,15 +3205,68 @@ function abrirGrupoHome(grupo, options={}){
   // (nº · cliente com interesse embaixo · próximo passo recomendado · dias parado), igual em
   // TODAS as listas abertas pelos cards da Home. Sem botão de WhatsApp na linha (o WhatsApp
   // vive dentro do atendimento) e sem etiquetas coloridas.
+  // v1098 — DOIS relatos do dono no mesmo dia, e a causa é a MESMA:
+  //
+  //   1) "por que Aguardando cliente aparece com mais dos 14 dias pré-definidos?" (viu 16 e 18)
+  //   2) "sem atender 30+ ... veja os dias ao lado, isso é incoerente, não tá funcionando meus
+  //      filtros" (a lista de 30d+ mostrando 1 dia, 12 dias, e fora de ordem)
+  //
+  // Os FILTROS estavam certos nos dois casos. Quem mentia era a COLUNA: ela mostrava sempre
+  // "dias desde a última MENSAGEM" (daysSinceLastInteraction), enquanto cada uma dessas listas é
+  // definida por outra régua — o último ATENDIMENTO marcado. São números diferentes, e postos
+  // lado a lado do título da lista faziam ela parecer quebrada:
+  //
+  //   • "Aguardando cliente": o descanso conta do seu último atendimento (regra única, v1052).
+  //     Cliente calado há 18 dias que você atendeu há 3 está corretamente em espera.
+  //   • "Sem atender 30d+": entra quem está 30+ dias sem ATENDIMENTO (ou nunca atendido). Um lead
+  //     nunca atendido que mandou mensagem ontem aparecia como "1 dia" — e a ordem, feita pela
+  //     data de atendimento, parecia bagunçada porque o número exibido era outro.
+  //
+  // Agora cada lista mostra O NÚMERO QUE A DEFINE, com o título certo em cima.
+  const COLUNA_PADRAO = {
+    titulo: "Parado há",
+    valor: (l) => {
+      const d = l.daysSinceLastInteraction;
+      return ehContatadoHoje(l)
+        ? '<i>atendido hoje</i>'
+        : (d != null ? `<b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
+    }
+  };
+  const diasDesdeAtendimento = (l) => {
+    const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
+    return ts ? diasCalendarioBR(ts) : null;
+  };
+  const COLUNAS_POR_GRUPO = {
+    // Quantos dias faltam pra ele voltar pra fila — é o que responde "por que está aqui?".
+    __aguardando: {
+      titulo: "Volta em",
+      valor: (l) => {
+        const desde = diasDesdeAtendimento(l);
+        const prazo = (typeof limiarRetomada === "function") ? limiarRetomada(l) : null;
+        if(desde == null || prazo == null) return COLUNA_PADRAO.valor(l);
+        const faltam = Math.max(0, prazo - desde + 1);
+        return `<b>${faltam}</b> ${faltam === 1 ? "dia" : "dias"}<small class="lgt-sub">atendido há ${desde === 0 ? "hoje" : desde + "d"}</small>`;
+      }
+    },
+    // Há quantos dias está sem atendimento — a mesma régua que monta e ordena a lista.
+    __semAtender30: {
+      titulo: "Sem atender há",
+      valor: (l) => {
+        const desde = diasDesdeAtendimento(l);
+        if(desde == null) return '<b>nunca</b><small class="lgt-sub">sem atendimento</small>';
+        return `<b>${desde}</b> ${desde === 1 ? "dia" : "dias"}`;
+      }
+    }
+  };
+  const coluna = COLUNAS_POR_GRUPO[grupo] || COLUNA_PADRAO;
+
   const linhaGrupo = (l, pos) => {
     const idJs = JSON.stringify(String(l.id||""));
     const interesse = produtosLabel(l) || "Não identificado";
     let passo = "";
     try{ passo = cp786ResumoAcao(l) || ""; }catch(_){ passo = ""; }
-    const d = l.daysSinceLastInteraction;
-    const dias = ehContatadoHoje(l)
-      ? '<i>atendido hoje</i>'
-      : (d != null ? `<b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
+    let dias = "—";
+    try{ dias = coluna.valor(l) || "—"; }catch(_){ dias = "—"; }
     return `<button type="button" class="lgt-row" onclick='abrirLead(${idJs})'>
       <span class="lgt-pos">${pos}</span>
       <span class="lgt-cli"><span class="lgt-nm">${escapeHtml(l.name||"Cliente")}</span><small>${escapeHtml(interesse)}</small></span>
@@ -3223,7 +3276,7 @@ function abrirGrupoHome(grupo, options={}){
     </button>`;
   };
   const tabelaGrupo = (leads, posInicial) => `<div class="lgt">
-    <div class="lgt-th"><span>#</span><span>Cliente</span><span class="lgt-passo">Próximo passo</span><span class="lgt-dias">Parado há</span><span></span></div>
+    <div class="lgt-th"><span>#</span><span>Cliente</span><span class="lgt-passo">Próximo passo</span><span class="lgt-dias">${escapeHtml(coluna.titulo)}</span><span></span></div>
     ${leads.map((l, i) => linhaGrupo(l, posInicial + i)).join("")}
   </div>`;
 

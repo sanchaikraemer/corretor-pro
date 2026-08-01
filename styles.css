@@ -211,6 +211,9 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .lgt-dias{text-align:right;white-space:nowrap;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
 .lgt-dias b{color:var(--lime);font-weight:900;font-size:14px;margin-right:3px}
 .lgt-dias i{font-style:normal;color:var(--muted);font-size:11px}
+/* v1098 — segunda linha da coluna de dias ("atendido há 3d", "sem atendimento"): explica de onde
+   vem o número principal, sem competir com ele. */
+.lgt-dias .lgt-sub{display:block;color:var(--muted);font-size:9.5px;font-weight:700;line-height:1.2;margin-top:1px}
 .lgt-chev{color:var(--muted);font-size:15px;text-align:right}
 @media(max-width:720px){
   .lgt-th{display:none}
