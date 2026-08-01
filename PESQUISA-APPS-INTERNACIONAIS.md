@@ -1,172 +1,119 @@
-# O que corretor de imóveis usa fora do Brasil — e o que dá pra trazer pra cá
+# Pesquisa internacional — conferida contra o que o Corretor Pro JÁ FAZ
 
-Pesquisa feita na madrugada de 01/08/2026, a pedido do dono. Foram lidos materiais em
-**inglês, espanhol, alemão e japonês** sobre apps e sistemas para corretor de imóveis.
+**Correção da versão anterior deste documento.** Na primeira versão eu apresentei quatro "ideias"
+tiradas de apps de outros países. O dono leu e cobrou, com razão:
 
-Aqui está o que achei, traduzido e já filtrado pela nossa realidade. **Nada disso foi
-implementado** — é lista de ideia pra você escolher. As fontes estão no final.
+> *"tudo que eu te falo há dias e meses que a gente trabalha no Corretor Pro é justamente o que
+> está ali naquelas ideias."*
 
----
+Fui conferir uma por uma dentro do nosso próprio código. **Ele está certo: as quatro já existem.**
 
-## Antes de tudo: a maior queixa do mundo inteiro é justamente o que a gente já resolveu
+O erro foi meu e é simples de nomear: eu li o que o mundo faz e comparei com uma ideia genérica de
+"app de corretor", em vez de auditar primeiro o que o Corretor Pro já faz. Pesquisei pra fora sem
+olhar pra dentro.
 
-Essa foi a descoberta mais importante da noite, e ela não é sobre o que falta — é sobre o que
-você já tem.
-
-Em todo país que pesquisei, o motivo número 1 de corretor **abandonar** o sistema é sempre o
-mesmo: *"não tenho tempo de ficar cadastrando isso tudo"*. Mais de **60% das implantações
-fracassam**, e os estudos são unânimes em dizer que **não é preguiça do corretor** — é que os
-sistemas foram desenhados sem olhar pra rotina real de quem trabalha na rua.
-
-O Corretor Pro ataca exatamente esse ponto: você joga a conversa do WhatsApp e ele preenche
-tudo sozinho. Enquanto o mundo discute "como convencer o corretor a alimentar o sistema", aqui
-o sistema se alimenta da conversa que você já teve.
-
-**Recomendação:** não vamos perder isso de vista. Toda ideia nova daqui pra frente devia passar
-por uma pergunta só: *isso vai me fazer digitar mais?* Se a resposta for sim, provavelmente não
-vale.
+Abaixo, o resultado da conferência — com o lugar exato onde cada coisa já está.
 
 ---
 
-## Ideia 1 — "Quem já pode estar pronto de novo" (a mais valiosa da pesquisa)
+## Ideia 1 — "Reativar quem já está na base"
 
-**De onde vem:** Estados Unidos. Um dado da associação nacional de corretores de lá mostra que
-**66% das vendas fechadas vieram de quem o corretor já conhecia** — cliente antigo, indicação,
-círculo próximo. Não de lead novo. Lá isso tem nome próprio: *database reactivation*
-(reativação da base) e é tratado como a maior fonte de negócio que existe.
+**Já existe. É o coração do app.**
 
-**Como funciona lá:** o sistema olha os clientes antigos e levanta quem tem chance de estar
-pronto pra se mexer de novo — pelo tempo desde a última compra e por coisas que a pessoa contou
-na conversa (casamento, filho nascendo, mudança de emprego, aluguel subindo).
+A fila **"Fazer agora"** é exatamente isso: ela não trabalha com contato novo, ela pega **os
+clientes que já estão na sua carteira**, separa quem nunca foi atendido ou quem já passou do prazo
+de descanso, e ordena por probabilidade de fechamento.
 
-**Na nossa realidade:** você já tem os Arquivados e as Oportunidades esquecidas — mas as duas
-respondem *"quem eu não atendi"*. Isso aqui responde outra pergunta, bem mais valiosa:
-***"quem tem motivo pra estar pronto agora"***.
+É literalmente o que os americanos chamam de *database reactivation* e vendem como "a maior fonte
+de negócio que existe". Está pronto e rodando aqui.
 
-E o melhor: a matéria-prima **já está dentro do app**. As conversas importadas estão cheias de
-frase do tipo *"agora não, quero esperar o fim do contrato de aluguel"*, *"vamos casar ano que
-vem"*, *"quando eu vender meu terreno"*. Hoje isso fica parado dentro da conversa. A ideia é a
-IA reler o que já está guardado e te avisar: *"faz 11 meses que a Lorena disse que o contrato
-de aluguel dela vencia em agosto"*.
+**E a parte que eu apresentei como novidade — a IA ler na conversa que o cliente pediu tempo ou que
+um prazo venceu — também já existe.** Está escrito no que a IA recebe: ela é instruída a marcar
+*"aguardar"* quando o cliente pediu espaço, e a apontar *"prazo combinado que já venceu",
+"compromisso vencendo", "material a enviar"* como motivo real de contato.
 
-Fiel à regra da casa: só usa o que a pessoa **falou de verdade** na conversa. Sem chute, sem
-adivinhação de perfil.
+**E tem mais:** isso já chegou a decidir quem entrava na fila — e **o dono mandou desligar**. Está
+registrado no código, com as palavras dele: *"esquece o que está escrito"* — só a data de
+atendimento decide quem volta.
 
-**Minha opinião:** é a de maior retorno da lista, e é a que mais aproveita o que o app já tem
-guardado sem você fazer nada.
+Ou seja: eu propus como novidade uma coisa que existe **e** que ele já tinha mandado tirar da
+frente. Se voltasse do jeito que sugeri, seria desobedecer uma ordem dele.
 
 ---
 
-## Ideia 2 — O relógio do primeiro contato
+## Ideia 2 — "Mostrar há quanto tempo o cliente está esperando"
 
-**De onde vem:** Estados Unidos e Espanha, com números muito parecidos.
+**Já existe.** Toda linha da tela inicial mostra **"há Xd"**, e passando o mouse ele explica se
+aquele número é desde o último atendimento marcado ou desde a última mensagem.
 
-Os dados são fortes:
-- **78% dos compradores fecham com o primeiro corretor que responde.**
-- Responder em até 5 minutos deixa você **21 vezes** mais perto de converter do que responder
-  em 30 minutos.
-- E o número que mais me chamou atenção: o corretor médio demora **mais de 15 horas** pra
-  responder um contato novo. Ou seja — quase todo mundo perde por isso, e ninguém percebe.
+E não é coisa recente: o dono mandou ajustar esse mesmo detalhe **três vezes** (nas versões 972,
+1053 e 1055), incluindo a decisão de padronizar o rótulo pra todo mundo.
 
-Na Espanha (mercado bem parecido com o nosso no uso de WhatsApp) a conta é a mesma: **90% da
-conversa comercial acontece no WhatsApp**, e quem responde em menos de 5 minutos converte
-muito mais.
-
-**Na nossa realidade:** o "Fazer agora" já é isso — mas ele te diz *quem* atender, não *há
-quanto tempo aquela pessoa está esperando*. A ideia é o cartão mostrar o tempo parado
-("esperando há 2 dias") e a lista subir sozinha quem está esperando há mais tempo.
-
-**Cuidado importante:** isso pode virar cobrança chata. Tem que ser informação, não dedo na
-cara. E respeitando os dias que você marcou no Cérebro — não faz sentido cobrar tempo de
-resposta num dia que você não atende.
+**A única diferença real que encontrei** — e é pequena: a fila é ordenada por **probabilidade de
+fechamento**, não por quem está esperando há mais tempo. O tempo aparece na tela, mas não é ele que
+decide a ordem. Isso é escolha, não falha, e foi bastante ajustada. Não estou propondo mudar.
 
 ---
 
-## Ideia 3 — A disciplina japonesa do follow-up
+## Ideia 3 — "Ritmo de contato, a disciplina japonesa"
 
-**De onde vem:** Japão. Lá o acompanhamento de cliente tem palavra própria — **追客
-(*tsuikyaku*)**, que dá pra traduzir como "perseguir o cliente", no bom sentido: nunca deixar
-esfriar.
+**Já existe, e mais completo do que o que eu descrevi.** O dono nomeou na hora: é o **tempo de
+descanso do cliente**, configurável no Cérebro.
 
-O que os sistemas japoneses fazem diferente é tratar o follow-up como **ritmo combinado**, não
-como lembrete solto: cada cliente entra numa cadência de contato, e o sistema garante que
-ninguém fique sem toque por tempo demais. O foco é **constância**, não volume.
+Na verdade são **três** controles, não um:
 
-**Na nossa realidade:** encaixa bem com o seu descanso pós-atendimento e a meta diária, que já
-existem. Seria a evolução natural: em vez de só "quem atender hoje", o app entender que cada
-cliente tem um ritmo próprio — tem gente pra tocar toda semana e gente pra tocar de dois em
-dois meses, sem sumir.
+- **descanso após atender** — quantos dias o cliente fica fora da fila;
+- **meta de atendimentos por dia** — quantos entram por dia;
+- **dias da semana em que você atende** — que ele escolheu na versão 1091.
+
+Os artigos japoneses descrevem "cadência combinada de contato". É isso, com o corretor no controle.
 
 ---
 
-## Ideia 4 — Histórico que serve como prova
+## Ideia 4 — "Exportar o histórico de um cliente"
 
-**De onde vem:** Alemanha, onde os sistemas vendem como diferencial a
-*rechtssichere Dokumentation* — documentação com validade jurídica: registro de tudo que foi
-combinado, quando, e com quem.
-
-**Na nossa realidade:** aqui isso encosta em duas coisas — LGPD e a papelada de CRECI. O app já
-guarda a conversa inteira; faltaria poder **exportar o histórico de um cliente** de forma
-organizada quando você precisar comprovar algo.
-
-**Sinceridade:** é a ideia menos empolgante da lista e a que menos muda seu dia. Só vira
-prioridade se você já tiver passado aperto por falta de comprovação.
+**Já existe.** Dentro de cada cliente tem o botão **"Copiar histórico"**, e existe também a
+exportação completa da carteira (o backup).
 
 ---
 
-## Ideia 5 — O que eu recomendo NÃO copiar
+## O que sobra de verdade da pesquisa
 
-Achei muita coisa lá fora que não faz sentido pra você, e acho mais útil dizer isso do que
-encher a lista:
+Sendo honesto: **nenhuma funcionalidade nova.** O que sobra é uma leitura de posição, e essa vale:
 
-- **Disparo em massa automático** (as tais "campanhas de gotejamento"): o mundo todo vende
-  isso, mas é o oposto do que o Corretor Pro faz. Aqui a mensagem sai do seu jeito de falar,
-  pra aquele cliente. Mensagem em massa queima o WhatsApp e queima o seu nome.
-- **Pontuação automática de cliente** ("esse lead vale 87 pontos"): sem explicar de onde saiu o
-  número, vira chute com cara de ciência. Se um dia entrar, tem que dizer **por que** — e o
-  "por que" tem que estar na conversa.
-- **Robô respondendo cliente sozinho:** apareceu bastante (principalmente na Espanha). É
-  justamente o contrário da sua regra — a IA aqui **sugere pra você mandar**, ela não fala
-  no seu lugar.
+**O Corretor Pro está à frente do que aqueles artigos descrevem como o estado da arte.** Os textos
+de fora tratam "reativar a base" e "cadência de follow-up" como o objetivo a alcançar. Aqui isso
+está pronto, rodando e configurável pelo corretor.
 
----
+E o ponto que continua sendo o mais forte, esse eu mantenho da versão anterior porque é verdade e
+foi confirmado pela conferência: em todo país, o motivo nº 1 de corretor largar o sistema é o
+esforço de cadastro manual — mais de 60% das implantações fracassam por isso. O Corretor Pro lê a
+conversa do WhatsApp e preenche sozinho. O mundo ainda está discutindo o problema que aqui já foi
+resolvido.
 
-## Se fosse eu escolhendo
-
-1. **"Quem já pode estar pronto de novo"** — maior retorno, aproveita o que já está guardado.
-2. **Tempo de espera no cartão** — barato de fazer, e ataca o erro mais caro da profissão.
-3. **Ritmo de contato por cliente** — bom, mas depende de a gente ver as duas primeiras
-   funcionando.
-4. **Exportar histórico** — só se você precisar.
-
-Me diz qual dessas te interessa que eu detalho como ficaria na tela, antes de mexer em
-qualquer coisa.
+**A lição prática pra mim, registrada:** antes de sugerir qualquer coisa "de fora", auditar
+primeiro o que o app já faz. Sugestão que ignora o que já existe não é ajuda — é ruído, e faz o
+dono perder tempo explicando o próprio produto.
 
 ---
 
-## Fontes
+## Fontes consultadas
 
 **Estados Unidos / inglês**
-- [Speed to Lead in Real Estate: Why the First 5 Minutes Matter — iHomefinder](https://www.ihomefinder.com/blog/uncategorized/speed-to-lead-real-estate/)
+- [Speed to Lead in Real Estate — iHomefinder](https://www.ihomefinder.com/blog/uncategorized/speed-to-lead-real-estate/)
 - [Real Estate Lead Response Statistics 2026 — AgentZap](https://agentzap.ai/blog/real-estate-lead-statistics)
-- [Real Estate Lead Response Time — Kyzo AI](https://kyzo.ai/blogs/real-estate-lead-response-time)
 - [Real Estate Database Reactivation — Happy Grasshopper](https://happygrasshopper.com/real-estate-database-reactivation/)
 - [Database Marketing for Real Estate Agents — RealScout](https://learn.realscout.com/academy/database-marketing/)
-- [Your Real Estate Database: The Most Important Asset — Luxury Presence](https://www.luxurypresence.com/blogs/your-real-estate-database-the-most-important-asset-youll-ever-build/)
 - [7 Reasons Why Real Estate CRM Implementations Fail — Metadata Corp](https://metadatacorp.com/7-reasons-real-estate-crm-implementations-fail/)
 - [Why CRM Adoption Fails (And How to Finally Fix It) — Hey DAN](https://heydan.ai/articles/why-crm-adoption-fails-and-how-to-finally-fix-it)
-- [Top Real Estate CRM Features 2026 — iHomefinder](https://www.ihomefinder.com/blog/agent-and-broker-resources/real-estate-crm-features-2026/)
 
 **Espanha / espanhol**
 - [Mejor CRM Inmobiliario España 2026 — Remmit](https://remmit.app/blog/mejor-crm-inmobiliario-espana-2026)
 - [Software para inmobiliarias y CRM inmobiliario con IA — Inmovilla](https://www.inmovilla.com/)
-- [Mejores Apps para Agentes Inmobiliarios en 2026 — Fincta](https://landing.fincta.app/apps-para-agentes-inmobiliarios/)
 
 **Alemanha / alemão**
 - [Immobilienmakler – Software für die Kundenverwaltung — selbststaendig.de](https://www.selbststaendig.de/immobilienmakler-software)
-- [Funktionen Immobilienmakler — EINFACH App](https://einfach-app.de/de/funktionen-immobilienmakler/)
 
 **Japão / japonês**
 - [不動産業を効率化する追客システムとは — Facilo](https://www.facilo.jp/blog/tsuikyaku_system)
 - [不動産営業に特化したCRM比較 — いえらぶCLOUD](https://ielove-cloud.jp/blog/entry-04780/)
-- [不動産業界向けCRM｜賃貸仲介の追客を自動化 — N-Create](https://www.n-create.co.jp/pr/product/mikomikyaku-kanri/)
