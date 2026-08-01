@@ -14,17 +14,20 @@ assert.ok(f1 && f2, 'cpSemAtenderHaDias/cpContarSemAtender não encontradas em a
 
 const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString();
 
-function montar(ultimoAtendimentoIso) {
-  const sandbox = new Function('ultimoAtendimentoTs', 'diasCalendarioBR', 'leadEhAtivo', `
+// v1102 — a régua passou a ser o ÚLTIMO CONTATO REAL do corretor: atendimento marcado OU a
+// última mensagem que ELE mandou na conversa (caso Jamil: atendido pelo WhatsApp inteiro, mas
+// nunca "marcado" — aparecia como "nunca atendido"). O sandbox injeta a régua nova.
+function montar(ultimoContatoIso) {
+  const sandbox = new Function('cpUltimoContatoCorretorTs', 'diasCalendarioBR', 'leadEhAtivo', `
     ${f1}
     ${f2}
     return { cpSemAtenderHaDias, cpContarSemAtender };
   `);
-  const ts = ultimoAtendimentoIso ? Date.parse(ultimoAtendimentoIso) : 0;
-  const ultimoAtendimentoTs = () => ts;
+  const ts = ultimoContatoIso ? Date.parse(ultimoContatoIso) : 0;
+  const cpUltimoContatoCorretorTs = () => ts;
   const diasCalendarioBR = (t) => t ? Math.floor((Date.now() - t) / 86400000) : null;
   const leadEhAtivo = () => true;
-  return sandbox(ultimoAtendimentoTs, diasCalendarioBR, leadEhAtivo);
+  return sandbox(cpUltimoContatoCorretorTs, diasCalendarioBR, leadEhAtivo);
 }
 
 // Nunca atendido → sempre conta como "falta atender", não importa o prazo.
@@ -40,7 +43,7 @@ assert.equal(montar(diasAtras(30)).cpSemAtenderHaDias({}, 30), true, 'atendido h
 assert.equal(montar(diasAtras(45)).cpSemAtenderHaDias({}, 30), true, 'atendido há 45 dias conta como falta atender');
 
 // cpContarSemAtender soma corretamente sobre uma lista de leads ativos.
-const { cpContarSemAtender } = new Function('ultimoAtendimentoTs', 'diasCalendarioBR', 'leadEhAtivo', `
+const { cpContarSemAtender } = new Function('cpUltimoContatoCorretorTs', 'diasCalendarioBR', 'leadEhAtivo', `
   ${f1}
   ${f2}
   return { cpContarSemAtender };

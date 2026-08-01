@@ -60,7 +60,9 @@ assert.equal(ultimoAtendimentoTs({}), 0);
 // v1075 — a aba "Últimos atendimentos" morava na tela Condução, deletada a pedido do dono
 // (já estava escondida por CSS desde a geração cp788). A ordenação pelo atendimento REAL
 // continua viva na lista "Sem atender 30d+" (mais antigo primeiro).
-assert.match(app, /comData\.sort\(\(a,b\) => ultimoAtendimentoTs\(a\) - ultimoAtendimentoTs\(b\)\)/, 'ordenação por atendimento real continua viva');
+// v1102 — a régua da lista virou o último CONTATO REAL do corretor (atendimento marcado OU
+// última mensagem dele na conversa) — caso Jamil: atendido pelo WhatsApp, mas nunca "marcado".
+assert.match(app, /comData\.sort\(\(a,b\) => cpUltimoContatoCorretorTs\(a\) - cpUltimoContatoCorretorTs\(b\)\)/, 'ordenação pelo contato real continua viva');
 // Rótulo de tempo relativo existe (§6.5): agora/hoje/ontem/há X dias.
 assert.match(app, /function rotuloTempoAtendimento\(ts\)\{[\s\S]*?"ontem"[\s\S]*?há \$\{dias\} dias/);
 

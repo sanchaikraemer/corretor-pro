@@ -25,13 +25,14 @@ function rodar(leadsAtivos) {
   const state = { itemsAtivos: leadsAtivos };
   const leadEhAtivo = () => true;
   const cpSemAtenderHaDias = (l) => !!l.__semAtender;
-  const ultimoAtendimentoTs = (l) => Number(l.__at || 0);
+  // v1102 — a lista passou a ordenar pelo último CONTATO REAL (marcado ou mensagem na conversa).
+  const cpUltimoContatoCorretorTs = (l) => Number(l.__at || 0);
   const toast = () => {};
   const abrirGrupoHome = (chave, opts) => { chamadasAbrirGrupo.push({ chave, opts }); };
   const fn = new Function(
-    'state', 'leadEhAtivo', 'cpSemAtenderHaDias', 'ultimoAtendimentoTs', 'toast', 'abrirGrupoHome',
+    'state', 'leadEhAtivo', 'cpSemAtenderHaDias', 'cpUltimoContatoCorretorTs', 'toast', 'abrirGrupoHome',
     `${fnSrc}\nreturn cpAbrirSemAtender30Dias;`
-  )(state, leadEhAtivo, cpSemAtenderHaDias, ultimoAtendimentoTs, toast, abrirGrupoHome);
+  )(state, leadEhAtivo, cpSemAtenderHaDias, cpUltimoContatoCorretorTs, toast, abrirGrupoHome);
   fn();
   return chamadasAbrirGrupo[0];
 }

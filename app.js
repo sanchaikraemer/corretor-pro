@@ -2113,9 +2113,41 @@ function temAtendimentoManual(l){
 // 30 dias (não o "descanso" configurável no Cérebro, que é outra régua, usada só pra decidir
 // quando um lead JÁ atendido volta a ser candidato em "Fazer agora"). Aqui é só uma leitura
 // direta: nunca atendido, ou último atendimento há 30 dias ou mais.
+// v1102 — O DONO, sobre o Jamil: "nunca atendido jamil?????". O Jamil recebeu apresentação,
+// visita, material — tudo pelo WhatsApp, tudo dentro da conversa importada. Mas esta lista só
+// contava atendimento MARCADO no app (botão "Marcar", mensagem copiada). Mensagem que o corretor
+// mandou na própria conversa não contava — e o app dizia na cara dele que ele nunca atendeu um
+// cliente que ele claramente atendeu.
+//
+// "Atender" pra corretor é falar com o cliente. Então o "sem atender" passa a contar o ÚLTIMO
+// CONTATO REAL DO CORRETOR, o que for mais recente entre:
+//   • atendimento marcado no app (o que já contava), e
+//   • a última mensagem QUE ELE MANDOU na conversa do WhatsApp.
+//
+// IMPORTANTE: isso vale SÓ pra esta lista/contador. A fila "Fazer agora" e o descanso continuam
+// contando exclusivamente do atendimento MARCADO — regra única que o dono fixou na v1052
+// ("esquece a data da última msg") e que não muda aqui.
+function cpUltimoContatoCorretorTs(l){
+  let max = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
+  for(const m of msgs){
+    if(!String(m?.text||"").trim()) continue;
+    // Registro manual já entra em ultimoAtendimentoTs; sugestão da IA nunca é um envio real.
+    if(typeof ehMsgManualTimeline === "function" && ehMsgManualTimeline(m)) continue;
+    if(String(m?.type||"") === "sugestao-ia" || String(m?.source||"") === "assistant") continue;
+    const autor = String(m?.author||"").trim();
+    if(!autor || autor === "Sistema") continue;
+    if(ehMsgDoCliente(m, pn)) continue; // fala do cliente não é contato SEU
+    const t = Date.parse(m?.iso || "");
+    if(!isNaN(t) && t > max) max = t;
+  }
+  return max;
+}
+window.cpUltimoContatoCorretorTs = cpUltimoContatoCorretorTs;
 function cpSemAtenderHaDias(l, dias){
-  const at = ultimoAtendimentoTs(l);
-  if(!at) return true; // nunca atendido = com certeza "falta atender"
+  const at = cpUltimoContatoCorretorTs(l);
+  if(!at) return true; // nenhum contato seu, nunca = com certeza "falta atender"
   const d = diasCalendarioBR(at);
   return d == null || d >= dias;
 }
@@ -2130,8 +2162,8 @@ function cpAbrirSemAtender30Dias(){
   const alvo = items.filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, 30));
   if(!alvo.length){ toast("Nenhum lead sem atendimento há 30 dias ou mais."); return; }
   const semData = [], comData = [];
-  for(const l of alvo){ (ultimoAtendimentoTs(l) ? comData : semData).push(l); }
-  comData.sort((a,b) => ultimoAtendimentoTs(a) - ultimoAtendimentoTs(b));
+  for(const l of alvo){ (cpUltimoContatoCorretorTs(l) ? comData : semData).push(l); }
+  comData.sort((a,b) => cpUltimoContatoCorretorTs(a) - cpUltimoContatoCorretorTs(b));
   const leads = [...semData, ...comData];
   const sub = `${leads.length} lead${leads.length>1?"s":""} sem atendimento há 30 dias ou mais — do mais antigo pro mais recente.`;
   abrirGrupoHome("__semAtender30", { meta:{ titulo:"Sem atender 30d+", sub }, leads });
@@ -3276,9 +3308,11 @@ function abrirGrupoHome(grupo, options={}){
     __semAtender30: {
       titulo: "Sem atender desde",
       valor: (l) => {
-        const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
-        if(!ts) return '<small class="lgt-rot">nunca</small><b>—</b><small class="lgt-sub">nunca atendido</small>';
-        const desde = diasDesdeAtendimento(l);
+        // v1102 — o contato REAL: atendimento marcado OU última mensagem que VOCÊ mandou na
+        // conversa, o mais recente. Era o que faltava pro Jamil não aparecer como "nunca".
+        const ts = (typeof cpUltimoContatoCorretorTs === "function") ? cpUltimoContatoCorretorTs(l) : 0;
+        if(!ts) return '<small class="lgt-rot">nunca</small><b>—</b><small class="lgt-sub">você nunca respondeu</small>';
+        const desde = diasCalendarioBR(ts);
         return `<small class="lgt-rot">sem atender desde</small><b>${dataBRcurta(ts)}</b>${desde != null ? `<small class="lgt-sub">${desde === 1 ? "há 1 dia" : `há ${desde} dias`}</small>` : ""}`;
       }
     }
