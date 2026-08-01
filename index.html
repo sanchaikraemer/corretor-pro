@@ -349,6 +349,21 @@
           <label>Descanso após atender <span class="small" style="color:var(--muted);font-weight:400">(dias fora da fila)</span></label>
           <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
           <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5.</div>
+
+          <!-- v1091 — antes, sábado e domingo eram fixos no código como dias sem fila (regra pedida
+               na v914/v937). Corretor de imóveis costuma trabalhar sábado, então virou escolha de
+               cada um, aqui. Marque os dias em que você quer receber a fila "Fazer agora". -->
+          <label>Dias em que você atende <span class="small" style="color:var(--muted);font-weight:400">(fila "Fazer agora")</span></label>
+          <div id="cerebroDiasSemana" class="cp-dias-semana">
+            <label><input type="checkbox" data-dia="1"><span>Seg</span></label>
+            <label><input type="checkbox" data-dia="2"><span>Ter</span></label>
+            <label><input type="checkbox" data-dia="3"><span>Qua</span></label>
+            <label><input type="checkbox" data-dia="4"><span>Qui</span></label>
+            <label><input type="checkbox" data-dia="5"><span>Sex</span></label>
+            <label><input type="checkbox" data-dia="6"><span>Sáb</span></label>
+            <label><input type="checkbox" data-dia="0"><span>Dom</span></label>
+          </div>
+          <div class="small" style="color:var(--muted);margin-top:4px">Nos dias desmarcados o "Fazer agora" fica pausado — o resto do app continua funcionando normal. Padrão: de segunda a sexta.</div>
         </div>
 
         <div class="btns btns-row" style="margin-top:14px">
