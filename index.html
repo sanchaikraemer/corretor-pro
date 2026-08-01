@@ -638,6 +638,30 @@
 <div id="menuDrawerBackdrop" onclick="fecharMenuGaveta()"></div>
 <div id="toast" class="toast"></div>
 
+<!-- v1088 — tela cheia da importação ("Foco total", modelo escolhido pelo dono). Antes, enquanto
+     o ZIP era lido, o app trocava de tela várias vezes: mostrava a tela de importação, fazia
+     aparecer e sumir quatro cartões (resultado, análise, mensagens, memória) e repintava a lista
+     por baixo — o dono relatou "5 telas mudando até firmar na análise, tem umas que piscam tão
+     rápido que nem consegui fazer o print". Esta camada cobre tudo enquanto o trabalho é
+     automático, e SAI DE CENA sozinha quando ele precisa decidir algo (salvar/atualizar) ou
+     quando dá erro — nunca prende ninguém. -->
+<div id="cpImportOverlay" hidden aria-live="polite" aria-busy="true">
+  <div class="cpio-conteudo" role="status">
+    <div class="cpio-anel">
+      <svg viewBox="0 0 128 128" aria-hidden="true">
+        <circle class="cpio-trilho" cx="64" cy="64" r="56" fill="none" stroke-width="10"></circle>
+        <circle id="cpioProgresso" class="cpio-prog" cx="64" cy="64" r="56" fill="none"
+                stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="351.9" stroke-dashoffset="351.9"></circle>
+      </svg>
+      <div class="cpio-pct" id="cpioPct">0%</div>
+    </div>
+    <h2 class="cpio-titulo" id="cpioTitulo">Preparando</h2>
+    <p class="cpio-sub" id="cpioSub"></p>
+    <ol class="cpio-passos" id="cpioPassos"></ol>
+  </div>
+</div>
+
 <script src="/vendor/jszip.min.js?v=__VERSION__"></script>
 <!-- v1004 — login por conta (Supabase): o app passa a reconhecer a sessão de quem entrou por
      entrar.html e a usar nas chamadas. Sem sessão, tudo segue como antes (chave compartilhada). -->
