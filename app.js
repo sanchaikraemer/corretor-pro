@@ -1894,7 +1894,12 @@ function ehPermuta(l){ return l.analysis?.permuta === true; }
 function produtosLabel(l){
   const arr = Array.isArray(l?.produtos) ? l.produtos.filter(Boolean) : [];
   if(arr.length) return arr.join(", ");
-  return l?.product || "--";
+  // v1093 — devolvia "--" quando o empreendimento não era identificado. Dois problemas: "--" não
+  // quer dizer nada pra quem lê, e — pior — como "--" é um texto preenchido, ele ATROPELAVA os
+  // avisos que os próprios cartões já traziam prontos ("Produto não identificado", "Não
+  // identificado", "Atendimento"). Ou seja: o texto certo existia no código e nunca aparecia.
+  // Devolvendo vazio, cada tela mostra o aviso que escolheu — e onde não há aviso, não fica lixo.
+  return l?.product || "";
 }
 // v978 — pedido do dono: na Home, o produto tem que ser SÓ o nome do empreendimento — dormitório,
 // condição, preço, tipo de imóvel ficam pra quando abre o lead ("ali tem que aparecer só o nome").
@@ -2213,19 +2218,39 @@ function lembreteHojeOuFuturo(l){
 // usava cp786Categoria==='programados' (que também conta compromisso VENCIDO, mantido em
 // destaque até ser atendido) — número maior que o da Agenda, que nunca lista o vencido de um
 // lead ativo. Mesma conta aqui, sem duplicar ranking.
-function cpAgendaContagem(items){
-  if(!Array.isArray(items)) return 0;
+// v1093 — o dono: "compromisso atrasado deve constar como atrasado, e precisa destaque de atenção
+// lá em cima no sininho, pois está muito discreto um compromisso que é importantíssimo".
+//
+// O que estava errado: este número escondia o compromisso VENCIDO. Isso fazia sentido na v931,
+// quando a tela Agenda realmente não listava vencido — mas a v1011 criou a seção "Atrasados" no
+// TOPO dessa tela. Ou seja, desde então o quadro da Home mostrava MENOS do que a Agenda tinha, e
+// justo o item mais urgente: o compromisso que já passou da hora ficava invisível na Home.
+//
+// Agora a conta é uma só, e devolve o detalhe pra quem precisa destacar o atraso.
+function cpAgendaResumo(items){
+  const vazio = { total:0, atrasados:0, agendados:0 };
+  if(!Array.isArray(items)) return vazio;
   const iniHojeA = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const fimHojeA = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
-  let n = 0;
+  let agendados = 0, atrasados = 0;
   for(const l of items){
     const t = lembreteTs(l);
-    if(!isNaN(t) && t >= iniHojeA) n++; // hoje ou futuro (vencido some, igual à tela Agenda)
+    if(!isNaN(t) && t >= iniHojeA) agendados++; // lembrete de hoje ou futuro
+    // Compromissos confirmados que ainda NÃO venceram. Os vencidos são descontados aqui pra não
+    // serem contados duas vezes (uma como agendado, outra como atrasado).
     const aps = l?.analysis?.confirmedAppointments;
-    if(Array.isArray(aps)) n += aps.length;
+    if(Array.isArray(aps)){
+      const vencidos = (typeof cpCompromissosVencidosDoLead === 'function') ? cpCompromissosVencidosDoLead(l).length : 0;
+      agendados += Math.max(0, aps.length - vencidos);
+    }
+    // Atrasado conta por LEAD (é assim que a seção "Atrasados" da tela Agenda mostra: um cartão
+    // por cliente, com os itens vencidos dele dentro).
+    if(typeof cp786CompromissoAtrasado === 'function' && cp786CompromissoAtrasado(l)) atrasados++;
   }
-  return n;
+  return { total: agendados + atrasados, atrasados, agendados };
 }
+window.cpAgendaResumo = cpAgendaResumo;
+
+function cpAgendaContagem(items){ return cpAgendaResumo(items).total; }
 window.cpAgendaContagem = cpAgendaContagem;
 
 // scorePrio = ORDENAÇÃO/prioridade do funil (usa a sentinela do lembrete pra jogar pro topo/rodapé).
@@ -2686,11 +2711,19 @@ window.copiarMensagemLead = function(id){
 // Leads VALIOSOS que tiveram um passo-chave (visita, proposta, negociação ou atendimento
 // registrado) e ESFRIARAM — escaparam da fila urgente de hoje. É "dinheiro parado": o
 // corretor já investiu e está prestes a perder por esquecimento. (ideia do podcast do Airton)
-function leadsEsquecidos(items){
-  // v914/v924 — não repete quem está na dose de hoje do "Fazer agora" (top da fila ranqueada,
-  // até a meta que ainda falta bater).
-  const doseHoje = new Set((typeof cpFilaFazerAgora === 'function' && typeof cpFazerAgoraDose === 'function'
-    ? cpFilaFazerAgora(items).slice(0, cpFazerAgoraDose(items)) : []).map(l => String(l.id)));
+function leadsEsquecidos(items, idsJaNaTela = null){
+  // v914/v924 — não repete quem está na dose de hoje do "Fazer agora".
+  //
+  // v1093 — o dono flagrou o MESMO cliente aparecendo duas vezes na Home. Causa: aqui só eram
+  // excluídos os leads da META do dia, mas o "Atender mais um" mostra ALÉM da meta (e o "Pular
+  // próximo" ainda reordena a fila). O cliente puxado a mais não era excluído e reaparecia logo
+  // abaixo, em "Oportunidades esquecidas". Agora quem monta a tela passa os ids que REALMENTE
+  // foram mostrados — assim a exclusão bate exatamente com o que está à vista, seja qual for a
+  // meta, o extra ou a ordem.
+  const doseHoje = idsJaNaTela instanceof Set
+    ? idsJaNaTela
+    : new Set((typeof cpFilaFazerAgora === 'function' && typeof cpFazerAgoraDose === 'function'
+        ? cpFilaFazerAgora(items).slice(0, cpFazerAgoraDose(items)) : []).map(l => String(l.id)));
   const out = [];
   for(const l of (items || [])){
     const etapa = normalizarEtapa(l.etapa);
@@ -2833,7 +2866,9 @@ function renderBotoesHome(){
   // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
   const btnPularHtml = urgentes.length > 1 ? `<button type="button" class="seq-link" onclick='pularProximo()'>⏭ Pular próximo</button>` : "";
 
-  const esquecidos = leadsEsquecidos(items);
+  // v1093 — passa exatamente quem já está aparecendo em "Fazer agora" (incluindo o que o
+  // "Atender mais um" puxou além da meta), pra ninguém aparecer duas vezes na mesma tela.
+  const esquecidos = leadsEsquecidos(items, new Set(dose.map(l => String(l.id))));
   const esquecidosHtml = esquecidos.length ? `
     <div class="radar-card">
       <div class="radar-tit">⏳ Oportunidades esquecidas <span class="radar-sub">valiosas e paradas — resgate antes de perder</span></div>
@@ -3679,15 +3714,21 @@ async function atualizarSinoAgenda(leadsAll){
   const ini = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
   const fim = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
   let agendaN = 0;
+  // v1093 — compromisso ATRASADO passa a acender o sino. Antes o pontinho só olhava a agenda de
+  // HOJE: quem tinha um compromisso vencido (e nada marcado pra hoje) não via aviso nenhum no
+  // topo — o item mais urgente do app era justamente o único invisível.
+  let atrasadosN = 0;
   for(const l of all){
     const e = normalizarEtapa(l.etapa);
     if(e === "Geladeira") continue;
+    if(typeof cp786CompromissoAtrasado === 'function' && cp786CompromissoAtrasado(l)){ atrasadosN++; continue; }
     const q = l.analysis?.lembrete?.quando;
     if(q){ const t = new Date(q).getTime(); if(!isNaN(t) && t >= ini && t <= fim){ agendaN++; continue; } }
     const aps = l.analysis?.confirmedAppointments;
     if(Array.isArray(aps) && aps.some(ap => /\bhoje\b/.test(String(ap.quando||"").toLowerCase()))) agendaN++;
   }
-  state.agendaCount = agendaN;
+  state.agendaAtrasados = atrasadosN;
+  state.agendaCount = agendaN + atrasadosN;
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
   // v787: o sino pertence exclusivamente à Central de atenção.
   // A agenda mantém sua contagem própria, sem disputar o mesmo badge visual.
@@ -6355,15 +6396,27 @@ async function carregarCerebro(){
   carregarEstadoIA();
   const status = qs("#cerebroStatus");
   status.textContent = "Carregando...";
+  // v1093 — o dono mandou print do "Carregando..." PRESO embaixo do botão Salvar, com a tela já
+  // carregada e nada acontecendo. Motivo: no fim desta função a mensagem só era trocada "se a
+  // caixa estivesse vazia" — e ela nunca está, porque o próprio "Carregando..." acima já a
+  // preenche. Resultado: a mensagem de espera ficava pra sempre. Agora o aviso é controlado por
+  // esta variável, não por "a caixa está vazia?".
+  let aviso = "";
+  let veioDoServidor = false;
   let config = null;
   try{
     const res = await fetch("./api/cerebro-config", { cache:"no-store" });
     const data = await res.json();
-    if(data?.ok && data.config) config = data.config;
-    if(data?.warning) status.innerHTML = '<span style="color:#ffc4f4">'+escapeHtml(data.warning)+'</span>';
+    if(data?.ok && data.config){ config = data.config; veioDoServidor = true; }
+    if(data?.warning) aviso = String(data.warning);
   }catch(_){ /* fallback local */ }
   if(!config){
     try{ config = JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null"); }catch(_){}
+  }
+  // Cair na cópia local é degradação silenciosa: a tela fica idêntica, mas o que está ali pode
+  // estar velho e o que ele salvar pode sobrescrever o do servidor. Precisa aparecer.
+  if(!veioDoServidor && config && !aviso){
+    aviso = "Sem conexão com o servidor — mostrando a última configuração salva neste aparelho.";
   }
   if(!config){
     config = { metodo:"", tom:"", diferenciais:"", evitar:"", diasImportacao:90, regrasTexto:"", objecoesTexto:"", regras:[], objecoes:[] };
@@ -6388,7 +6441,10 @@ async function carregarCerebro(){
   if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
   if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
   cerebroFormularioCarregado = true;
-  if(!status.innerHTML) status.textContent = "Configuração carregada.";
+  // Carregou certo: a caixa fica VAZIA. A prova de que carregou são os campos preenchidos logo
+  // acima — deixar um "Configuração carregada." fixo só repetiria na tela o que já está à vista.
+  if(aviso) status.innerHTML = '<span style="color:#ffc4f4">' + escapeHtml(aviso) + '</span>';
+  else status.textContent = "";
 }
 
 // v1066 — o dono mandou prints mostrando o computador e o celular escolhendo um lead DIFERENTE
@@ -8094,7 +8150,11 @@ function semAcento(s){ return String(s||"").toLowerCase().normalize("NFD").repla
 window.semAcento = semAcento;
 // Lead arquivado (arquivo morto / Perdido) ou na geladeira NÃO aparece na busca —
 // fica só na tela dedicada (arquivo morto). Busca é pra leads ativos.
-function foraDaBusca(l){ return normalizarEtapa(l?.etapa) === "Geladeira"; }
+// v1093 — antes esta função ESCONDIA o lead arquivado da busca: procurar pelo nome do cliente
+// não achava nada e dava a impressão de que ele tinha sumido do app. Agora o arquivado APARECE,
+// mas nunca disfarçado de ativo — vem sempre depois dos ativos e com a tarja "Arquivado", que é
+// a condição que o dono colocou: "pode aparecer, desde que exista alguma diferença visual".
+function leadArquivado(l){ return normalizarEtapa(l?.etapa) === "Geladeira"; }
 function renderBuscaGlobal(termo){
   const box = qs("#buscaGlobalResults");
   if(!box) return;
@@ -8105,9 +8165,9 @@ function renderBuscaGlobal(termo){
   const tt = semAcento(termo);
   const numeros = String(termo||"").replace(/\D/g,"");
   const matches = fonte.filter(l => {
-    if(foraDaBusca(l)) return false; // arquivado/geladeira não aparece na busca
     return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros));
-  }).slice(0, 12);
+  }).sort((a, b) => (leadArquivado(a) ? 1 : 0) - (leadArquivado(b) ? 1 : 0)) // ativos primeiro
+    .slice(0, 12);
   if(!matches.length){
     box.style.display = "block";
     box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(termo)}"</div>`;
@@ -8116,8 +8176,11 @@ function renderBuscaGlobal(termo){
   box.style.display = "block";
   box.innerHTML = matches.map(l => {
     const idJs = JSON.stringify(String(l.id||""));
-    return `<div onclick='abrirLead(${idJs});qs("#buscaGlobal").value="";qs("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
-      <div><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px">${escapeHtml(l.product||"--")}</div></div>
+    const arq = leadArquivado(l);
+    // O arquivado vem apagado (mais transparente) e com tarja — dá pra saber o que é sem abrir.
+    const tarja = arq ? `<span class="cp-busca-arquivado">Arquivado</span>` : "";
+    return `<div onclick='abrirLead(${idJs});qs("#buscaGlobal").value="";qs("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px${arq ? ";opacity:.62" : ""}" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
+      <div style="min-width:0"><div style="font-weight:950;font-size:13px;display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.name||"Cliente")}</span>${tarja}</div><div class="small" style="font-size:11px">${escapeHtml(l.product || (arq ? "Arquivado" : "Empreendimento não identificado"))}</div></div>
     </div>`;
   }).join("");
 }
@@ -8168,13 +8231,19 @@ function buscaLeadInline(termo, boxId){
     if((!state.todosLeads || !state.todosLeads.length) && typeof loadTodosLeadsBusca === "function") await loadTodosLeadsBusca();
     const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
     const numeros = String(termo||"").replace(/\D/g,"");
-    const matches = fonte.filter(l => !foraDaBusca(l) && (semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros)))).slice(0, 12);
+    // v1093 — igual à busca do topo: o arquivado aparece (senão some do app), mas sempre depois
+    // dos ativos e com tarja, pra nunca ser confundido com cliente em andamento.
+    const matches = fonte.filter(l => (semAcento(l.name).includes(t) || semAcento(l.product).includes(t) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros))))
+      .sort((a, b) => (leadArquivado(a) ? 1 : 0) - (leadArquivado(b) ? 1 : 0))
+      .slice(0, 12);
     box.style.display = "block";
     if(!matches.length){ box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(t)}"</div>`; return; }
     box.innerHTML = matches.map(l => {
       const idJs = JSON.stringify(String(l.id||""));
-      return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="min-width:0"><div style="font-weight:950;font-size:13px">${escapeHtml(l.name||"Cliente")}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product||"--")}</div></div>
+      const arq = leadArquivado(l);
+      const tarja = arq ? `<span class="cp-busca-arquivado">Arquivado</span>` : "";
+      return `<div onclick='ui677AbrirBuscaLead(${idJs}, ${JSON.stringify(boxId)})' style="padding:9px 11px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px${arq ? ";opacity:.62" : ""}">
+        <div style="min-width:0"><div style="font-weight:950;font-size:13px;display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.name||"Cliente")}</span>${tarja}</div><div class="small" style="font-size:11px;color:var(--muted)">${escapeHtml(l.product || (arq ? "Arquivado" : "Empreendimento não identificado"))}</div></div>
       </div>`;
     }).join("");
   }, 200);
@@ -11088,11 +11157,17 @@ function ui670DetailRows(lead,mc){
     // lembrete para o dia (state.agendaCount, calculado em atualizarSinoAgenda). Sem agenda
     // hoje, sem pontinho. O sino leva direto para a Agenda.
     const n = Number(state.agendaCount) || 0;
+    // v1093 — compromisso ATRASADO ganha destaque próprio. Pedido do dono: "está muito discreto
+    // um compromisso que é importantíssimo". Sem atraso, segue o pontinho discreto de sempre;
+    // COM atraso, o sino mostra o NÚMERO de atrasados e ganha a cor de risco.
+    const atr = Number(state.agendaAtrasados) || 0;
     badge.hidden = !n;
-    // Indicador discreto, sem número solto ou ambíguo na interface.
-    badge.textContent = '';
+    badge.textContent = atr > 0 ? String(atr) : '';
     bell.classList.toggle('tem-alerta', n > 0);
-    const label = n > 0
+    bell.classList.toggle('tem-atraso', atr > 0);
+    const label = atr > 0
+      ? `Central de atenção — ${atr} compromisso${atr===1?'':'s'} ATRASADO${atr===1?'':'S'}`
+      : n > 0
       ? `Central de atenção — ${n} compromisso${n===1?'':'s'} na agenda de hoje`
       : 'Central de atenção';
     bell.setAttribute('title', label);

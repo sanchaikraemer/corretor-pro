@@ -45,7 +45,11 @@ assert.equal(diasParado(antigo), 3, 'com mensagem mais recente que o atendimento
 assert.equal(diasParado({}), Infinity, 'sem dado de data nenhum, retorna Infinity');
 
 // 5. A lista de esquecidos e o radar usam diasParado (e não mais o cálculo antigo cru).
-const esqSrc = app.match(/function leadsEsquecidos\(items\)\{[\s\S]*?\n\}/)[0];
+// v1093 — a função ganhou um 2º parâmetro (os ids que já estão na tela, pra o "Atender mais um"
+// não duplicar cliente na Home), então a busca aqui não pode exigir a assinatura antiga exata.
+const esqMatch = app.match(/function leadsEsquecidos\([^)]*\)\{[\s\S]*?\n\}/);
+assert.ok(esqMatch, 'leadsEsquecidos não encontrada em app.js');
+const esqSrc = esqMatch[0];
 assert.match(esqSrc, /const parado = diasParado\(l\);/, 'leadsEsquecidos deve usar diasParado');
 const radarSrc = app.match(/function radarRowHTML\(l\)\{[\s\S]*?const parado =/)[0];
 assert.match(radarSrc, /diasParado\(l\)/, 'radarRowHTML deve usar diasParado');

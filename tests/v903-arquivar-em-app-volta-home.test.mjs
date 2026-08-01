@@ -31,10 +31,15 @@ assert.match(bloco, /toast\(/, 'avisa que arquivou');
 assert.ok(fn.indexOf('return;') < fn.indexOf('await abrirLead(id)'),
   'sai antes de reabrir o lead — não fica preso na tela do lead');
 
-// 4. As buscas continuam excluindo arquivados (foraDaBusca) — v1069: só existe "Ativo"/"Geladeira".
-assert.match(app, /function foraDaBusca\(l\)\{ return normalizarEtapa\(l\?\.etapa\) === "Geladeira"; \}/,
-  'foraDaBusca exclui arquivados (Geladeira)');
+// 4. v1093 — DECISÃO REVERTIDA PELO DONO. Antes as buscas escondiam o lead arquivado; procurar
+// pelo nome do cliente não achava nada e parecia que ele tinha sumido do app. A ordem nova foi
+// explícita: "pode até aparecer na busca, mas desde que exista alguma diferença visual entre o
+// arquivado e o atual, senão fica ruim do corretor saber só pela busca".
+// Então o arquivado APARECE — e o que este teste protege agora é a diferença visual.
+assert.doesNotMatch(app, /function foraDaBusca/,
+  'foraDaBusca escondia o arquivado da busca e foi removida na v1093');
 const busca = app.match(/function buscaLeadInline\(termo, boxId\)\{[\s\S]*?\n\}/)[0];
-assert.match(busca, /!foraDaBusca\(l\)/, 'a busca inline exclui arquivados');
+assert.doesNotMatch(busca, /!leadArquivado\(l\) &&/, 'a busca inline não pode mais descartar o arquivado');
+assert.match(busca, /cp-busca-arquivado/, 'o arquivado precisa vir com a tarja que o diferencia do ativo');
 
 console.log('v903-arquivar-em-app-volta-home: ok');
