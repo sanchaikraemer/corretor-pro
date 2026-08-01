@@ -20,12 +20,25 @@ assert.match(bloco, /action:\s*"aprendizado"/, 'precisa registrar o evento de ap
 assert.match(bloco, /evento:\s*"mensagem_copiada"/, 'precisa registrar o evento "mensagem_copiada" (o que o Desempenho conta)');
 assert.match(bloco, /id:\s*leadId/, 'precisa usar o lead aberto (state.lead) — dentro do lead, é o lead certo');
 
-// A ordem importa: registra o aprendizado ANTES de registrarMensagemEnviada, que é quem dispara
-// o recarregamento da lista de leads (senão o recarregamento pode acontecer antes do evento
-// estar salvo, e o Desempenho continua mostrando o número antigo até a próxima ação).
+// v1097 — A ORDEM FOI INVERTIDA DE PROPÓSITO, e vale registrar por quê.
+//
+// Antes o contador era gravado PRIMEIRO, pra já estar salvo quando registrarMensagemEnviada
+// recarregasse a lista. Só que copiar é justamente quando o corretor sai do app pro WhatsApp, e o
+// celular corta os pedidos de rede de app em segundo plano — então a primeira gravação consumia a
+// janela segura e o ATENDIMENTO (a segunda) se perdia. O dono relatou isso com print: "só marca
+// às vezes, na segunda vez que copia".
+//
+// Entre perder o atendimento e o contador atualizar um instante depois, perder o atendimento é
+// muito pior. Então o atendimento passou a vir primeiro.
+//
+// O motivo original deste teste continua protegido — só de outro jeito: depois de gravar o
+// contador, a lista é atualizada DE NOVO, então o Desempenho continua certo na hora.
 const idxFetchAprendizado = bloco.search(/action:\s*"aprendizado"/);
 const idxRegistrarEnviada = bloco.search(/registrarMensagemEnviada\(leadId, msg\)/);
-assert.ok(idxFetchAprendizado > -1 && idxRegistrarEnviada > -1 && idxFetchAprendizado < idxRegistrarEnviada,
-  'o registro de "mensagem_copiada" precisa acontecer ANTES de registrarMensagemEnviada (que recarrega a lista)');
+assert.ok(idxFetchAprendizado > -1 && idxRegistrarEnviada > -1 && idxRegistrarEnviada < idxFetchAprendizado,
+  'o ATENDIMENTO precisa ser gravado antes do contador — é o que não pode se perder');
+const depoisDoContador = bloco.slice(idxFetchAprendizado);
+assert.match(depoisDoContador, /invalidarLeadsCache\(\);\s*loadRecentLeads\(true\)/,
+  'depois de gravar o contador, a lista precisa ser atualizada de novo pro Desempenho não ficar atrasado');
 
 console.log('v985-copiar-fazer-agora-registra-copia: ok');
