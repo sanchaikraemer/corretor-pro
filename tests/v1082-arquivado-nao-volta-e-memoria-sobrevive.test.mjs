@@ -24,9 +24,17 @@ const leadUpdate = fs.readFileSync(new URL('../api/lead-update.js', import.meta.
   assert.match(persistencia, /status: "pronto",[\s\S]{0,900}?etapa: "Ativo",/,
     'a importação nova precisa gravar etapa "Ativo"');
 
-  // b) reimportar a conversa preserva a etapa que já estava salva (não desarquiva).
-  assert.match(persistencia, /etapa: anterior\.etapa \|\| "Ativo",/,
-    'reimportar precisa preservar a etapa do registro anterior, nunca sobrescrever');
+  // b) reimportar preserva a etapa anterior — mas NORMALIZADA (v1105). A auditoria do backup
+  // real achou 244 registros com TEXTO de análise gravado na coluna etapa; copiá-la "como
+  // estava" perpetuava a sujeira pra sempre. Preservar continua garantido: "Geladeira" segue
+  // "Geladeira" (arquivado não desarquiva), e a sujeira vira "Ativo" limpo.
+  assert.match(persistencia, /etapa: normalizarEtapaBanco\(anterior\.etapa\)/,
+    'reimportar preserva a etapa anterior normalizada — arquivado não desarquiva, sujeira não se perpetua');
+  {
+    const mod = await import('../api/_persistence.js');
+    assert.equal(mod.normalizarEtapaBanco('Geladeira'), 'Geladeira',
+      'a garantia original desta correção continua: reimportar quem está arquivado NÃO desarquiva');
+  }
 
   // c) a reanálise não mexe mais na etapa, em nenhum dos dois caminhos.
   assert.doesNotMatch(reanalise, /update\.etapa\s*=/, 'a reanálise completa não pode escrever na etapa');
