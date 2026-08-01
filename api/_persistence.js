@@ -808,9 +808,21 @@ export async function persistProcessingResult({
 // listagem, que já foi montada corretamente em memória de qualquer jeito.
 const STATS_CACHE_MAX_WRITEBACKS = 500;
 const STATS_CACHE_WRITE_CONCURRENCY = 20;
-async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) {
+// v1087 — TETO DE TEMPO. Este cache vence por DIA (ver cacheStats.dia === hoje em
+// listRecentProcessings): à meia-noite ele vence pra CARTEIRA INTEIRA de uma vez. Na primeira
+// abertura do dia, então, a listagem recalculava tudo E AINDA ESPERAVA até 500 gravações no banco
+// (25 rodadas de 20, cada uma regravando o resultado_analise inteiro do lead) ANTES de responder.
+// Era isso que fazia a primeira abertura do dia estourar o tempo e cair no "Carregamento demorou
+// mais que o normal" — depois dela, com o cache quente, tudo voltava ao normal.
+// A resposta NÃO depende dessas gravações: os números já foram calculados em memória e já estão
+// prontos. Então elas passam a ter um orçamento de tempo curto: o que não couber fica pra próxima
+// carga (que recalcula e tenta de novo), e nenhuma abertura paga mais que isso.
+const STATS_CACHE_WRITE_BUDGET_MS = 1500;
+export async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) {
+  const comecou = Date.now();
   const lote = pendentes.slice(0, STATS_CACHE_MAX_WRITEBACKS);
   for (let i = 0; i < lote.length; i += STATS_CACHE_WRITE_CONCURRENCY) {
+    if ((Date.now() - comecou) > STATS_CACHE_WRITE_BUDGET_MS) break;
     const fatia = lote.slice(i, i + STATS_CACHE_WRITE_CONCURRENCY);
     await Promise.all(fatia.map(async (item) => {
       try {

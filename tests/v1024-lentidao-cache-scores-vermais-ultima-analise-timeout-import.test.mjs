@@ -135,6 +135,12 @@ function extrairFn(nome) {
     const analiseAtualValida752 = () => false;
     function cpProbabilidadeFechamento(l){ contarChamada(); return Number(l.__msgs||0); }
     ${fdsSrc}
+    // v1087 — este teste é sobre ORDENAÇÃO e número de chamadas, não sobre fim de semana.
+    // Injetando a cpFimDeSemana real, ele passava a quebrar TODO sábado e domingo (a fila do
+    // "Fazer agora" é pausada no fim de semana e cpFilaFazerAgora devolvia []), deixando a suíte
+    // e o ✓ do CI vermelhos sem nada ter mudado no código — foi o que aconteceu em 01/08/2026.
+    // Fixa em "não é fim de semana" pra o teste medir só o que ele se propõe a medir.
+    function cpFimDeSemana(){ return false; }
     ${filaSrc}
     cpFilaFazerAgora;
   `, undefined);
