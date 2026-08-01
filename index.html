@@ -571,6 +571,13 @@
           <button type="button" class="menu-card menu-nav-item go" data-target="arquivados" data-nav-key="arquivo">
             <div class="menu-card-ico">▱</div><div class="menu-card-txt"><div class="menu-card-titulo">Arquivados</div><div class="menu-card-desc">Contatos pausados, guardados para reativar quando fizer sentido.</div></div><div class="menu-card-seta">›</div>
           </button>
+          <!-- v1104 — o botão de backup tinha sumido do Menu numa limpeza antiga; a função
+               (exportarBackupCompletoV681 → api/leads-recentes?export=full) ficou órfã. Sem
+               chamar com "this" de propósito: a função troca o textContent do botão, o que
+               apagaria os elementos internos deste card. -->
+          <button type="button" class="menu-card" onclick="exportarBackupCompletoV681()">
+            <div class="menu-card-ico">🛡</div><div class="menu-card-txt"><div class="menu-card-titulo">Baixar backup completo</div><div class="menu-card-desc">Todos os clientes e conversas num arquivo, pra guardar onde quiser.</div></div><div class="menu-card-seta">›</div>
+          </button>
           <button type="button" class="menu-card" onclick="reanalisarTudo()">
             <div class="menu-card-ico">↻</div><div class="menu-card-txt"><div class="menu-card-titulo">Reanalisar todos</div><div class="menu-card-desc">Recalcula a leitura de todos os leads da carteira.</div></div><div class="menu-card-seta">›</div>
           </button>
