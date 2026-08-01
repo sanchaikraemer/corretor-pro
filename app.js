@@ -6562,6 +6562,73 @@ const ETAPAS_PROCESSAMENTO = [
   "Falha recuperável"
 ];
 
+// v1088 — TELA CHEIA DA IMPORTAÇÃO ("Foco total", modelo 01 escolhido pelo dono).
+// Rótulos em português de gente: os nomes internos ("Extraindo", "Transcrevendo") diziam o que o
+// SISTEMA faz; estes dizem o que está acontecendo com a CONVERSA do cliente.
+const CPIO_PASSOS = [
+  { rot:"Recebendo a conversa",       sub:"o arquivo do WhatsApp chegou" },
+  { rot:"Enviando com segurança",     sub:"guardando sua conversa protegida" },
+  { rot:"Abrindo o arquivo",          sub:"separando textos, fotos e áudios" },
+  { rot:"Ouvindo os áudios",          sub:"cada áudio vira texto pra nada se perder" },
+  { rot:"Analisando pelo seu Cérebro",sub:"suas regras aplicadas a esta conversa" },
+  { rot:"Salvando na carteira",       sub:"confirmando na sua base" },
+  { rot:"Pronto",                     sub:"abrindo o cliente" }
+];
+const CPIO_PCT = [8, 32, 48, 70, 86, 94, 100];
+const CPIO_CIRCUNFERENCIA = 351.9; // 2πr com r=56, igual ao SVG do index.html
+
+function cpImportOverlayVisivel(mostrar){
+  const el = qs("#cpImportOverlay");
+  if(!el) return;
+  if(mostrar){
+    if(el.hidden){ el.hidden = false; document.body.classList.add("cpio-aberto"); }
+  }else{
+    if(!el.hidden){ el.hidden = true; document.body.classList.remove("cpio-aberto"); }
+  }
+}
+window.cpImportOverlayVisivel = cpImportOverlayVisivel;
+
+function cpImportOverlayAtualizar(idx, sub){
+  const passo = CPIO_PASSOS[idx];
+  if(!passo) return;
+  const pct = CPIO_PCT[idx] ?? 0;
+  const elPct = qs("#cpioPct"); if(elPct) elPct.textContent = pct + "%";
+  const anel = qs("#cpioProgresso");
+  if(anel) anel.style.strokeDashoffset = String(CPIO_CIRCUNFERENCIA * (1 - pct/100));
+  const tit = qs("#cpioTitulo"); if(tit) tit.textContent = passo.rot;
+  // O detalhe vindo do fluxo (ex.: "3/14 novos · 2 reaproveitados") é mais informativo que o
+  // texto padrão — quando existe, ele manda.
+  const det = qs("#cpioSub"); if(det) det.textContent = String(sub || passo.sub || "");
+  const ol = qs("#cpioPassos");
+  if(ol){
+    ol.innerHTML = CPIO_PASSOS.slice(0, 6).map((p, i) => {
+      const cls = i < idx ? "cpio-feito" : (i === idx ? "cpio-ativo" : "");
+      return `<li class="${cls}"><span class="cpio-mk">${i < idx ? "✓" : ""}</span>${escapeHtml(p.rot)}</li>`;
+    }).join("");
+  }
+}
+
+// idx 0..5 = trabalho automático (cobre a tela). idx 6 = concluído (mostra "Pronto" e sai).
+// idx 7 = falha recuperável (sai na hora, pro corretor ver o erro e os botões).
+// opts.pausar = ponto em que o app ESPERA uma decisão dele (salvar/atualizar): a tela cheia sai
+// de cena, senão os botões ficariam cobertos e a importação travaria de vez.
+function cpImportOverlaySincronizar(idx, sub, opts){
+  if(opts && opts.pausar){ cpImportOverlayVisivel(false); return; }
+  if(idx >= 0 && idx <= 5){ cpImportOverlayAtualizar(idx, sub); cpImportOverlayVisivel(true); return; }
+  if(idx === 6){
+    cpImportOverlayAtualizar(6, sub);
+    cpImportOverlayVisivel(true);
+    clearTimeout(cpImportOverlaySincronizar._t);
+    cpImportOverlaySincronizar._t = setTimeout(() => cpImportOverlayVisivel(false), 650);
+    return;
+  }
+  cpImportOverlayVisivel(false);
+}
+
+// Exposta pra poder ser dirigida de fora (teste em navegador de verdade e diagnóstico): é o
+// único ponto que decide se a tela cheia aparece, some ou espera uma decisão do corretor.
+window.cpImportOverlaySincronizar = cpImportOverlaySincronizar;
+
 // Bloqueia/reabilita os botões "Nova análise" e "Diagnóstico" da tela de
 // importação. Durante o processamento (Recebendo…Salvando) eles não podem ser
 // clicados; voltam a ficar ativos só quando a etapa chega em "Concluído" (ou
@@ -6575,10 +6642,14 @@ function setBotoesImportacao(desabilitados){
   });
 }
 
-function renderEtapas(idxAtual, sub){
+function renderEtapas(idxAtual, sub, opts){
   // Etapas 0..5 (Recebendo…Salvando) = em andamento → botões travados.
   // Etapa 6 (Concluído) e 7 (Falha recuperável) → botões liberados.
   setBotoesImportacao(idxAtual >= 0 && idxAtual <= 5);
+  // v1088 — a tela cheia da importação vem DEPOIS de travar os botões: se algo falhar aqui, os
+  // botões já estão no estado certo. O try/catch mantém a importação andando mesmo que a tela
+  // cheia não exista (é assim que os testes extraem esta função pra rodar contra um DOM falso).
+  try{ cpImportOverlaySincronizar(idxAtual, sub, opts); }catch(_){}
   const ol = qs("#processingSteps");
   if(!ol) return;
   const etapasVisiveis = idxAtual === 7
@@ -6983,7 +7054,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // registrava atividade — por isso "Importações" (90) e "Análises feitas" (19) nunca batiam,
   // mesmo cada importação passando pela IA. Conta aqui, no sucesso real da análise.
   try{ cpRegistrarAtividade("analise"); }catch(_){}
-  renderEtapas(5, "aguardando confirmação para salvar");
+  renderEtapas(5, "aguardando confirmação para salvar", { pausar: true });
   return result;
 }
 
@@ -7294,6 +7365,8 @@ async function atualizarLeadComEvolucao(){
     if(btn){ btn.disabled = false; btn.textContent = "Atualizar"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
     qs("#importCard")?.classList.remove("cp-import-rodando");
+    // v1088 — mesma rede de segurança do salvar: a tela cheia sai pro corretor ver o aviso.
+    try{ cpImportOverlayVisivel(false); }catch(_){}
     toast("Não foi possível atualizar: " + userFriendlyError(err));
   }
 }
@@ -7357,6 +7430,9 @@ async function salvarLeadPendente(){
     if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
     qs("#importCard")?.classList.remove("cp-import-rodando");
+    // v1088 — a tela cheia cobre tudo; num erro aqui ela precisa sair pro corretor ver o aviso
+    // e os botões de tentar de novo.
+    try{ cpImportOverlayVisivel(false); }catch(_){}
     toast("Não foi possível salvar: " + userFriendlyError(err));
   }
 }
@@ -7483,6 +7559,12 @@ async function processFile(file, options = {}){
   }finally{
     state.processing=false;
     if(!concluidaComSucesso) qs("#importCard")?.classList.remove("cp-import-rodando");
+    // v1088 — REDE DE SEGURANÇA da tela cheia. Ela cobre o app inteiro; se um caminho de erro
+    // qualquer terminar sem passar pelas etapas, ela ficaria aberta e o corretor não conseguiria
+    // fazer mais nada. Aqui, no fim de TODA importação (deu certo ou não), ela é fechada — quando
+    // o fluxo continua (ex.: "aguardando confirmação"), quem manda mostrá-la de novo é o próprio
+    // renderEtapas, na etapa seguinte.
+    try{ cpImportOverlayVisivel(false); }catch(_){}
   }
 }
 async function readShareDebug(){

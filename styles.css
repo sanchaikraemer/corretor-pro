@@ -2101,3 +2101,69 @@ html[data-theme="light"] .cp704-etapa-prog{background:rgba(9,30,38,.5)!important
   body.cp1064-imprimindo #cpImprimirLista th,body.cp1064-imprimindo #cpImprimirLista td{border:1px solid #999;padding:6px 8px;text-align:left}
   body.cp1064-imprimindo #cpImprimirLista th{background:#eee}
 }
+
+/* ===== v1088 — tela cheia da importação ("Foco total") =====
+   Cobre o app inteiro enquanto a importação roda sozinha, pra acabar com o vaivém de telas que o
+   dono relatou. Usa os tokens do tema (funciona no claro e no escuro). Sai de cena sozinha quando
+   ele precisa decidir algo ou quando dá erro — ver cpImportOverlayVisivel em app.js. */
+#cpImportOverlay{
+  position:fixed; inset:0; z-index:9000;
+  background:var(--bg);
+  display:grid; place-items:center;
+  padding:28px 22px calc(28px + env(safe-area-inset-bottom,0px));
+  animation:cpioEntra .22s ease-out;
+}
+#cpImportOverlay[hidden]{display:none}
+@keyframes cpioEntra{from{opacity:0}to{opacity:1}}
+.cpio-conteudo{
+  width:100%; max-width:360px; display:flex; flex-direction:column;
+  align-items:center; gap:18px; text-align:center;
+}
+.cpio-anel{position:relative; width:132px; height:132px; flex:none}
+.cpio-anel svg{width:132px; height:132px; transform:rotate(-90deg); display:block}
+.cpio-trilho{stroke:var(--line)}
+.cpio-prog{stroke:var(--cp-coral,#FF6258); transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1)}
+.cpio-pct{
+  position:absolute; inset:0; display:grid; place-items:center;
+  font-size:29px; font-weight:900; letter-spacing:-.02em; color:var(--text);
+  font-variant-numeric:tabular-nums;
+}
+.cpio-titulo{
+  margin:0; font-size:20px; font-weight:800; letter-spacing:-.01em; color:var(--text);
+  text-wrap:balance; line-height:1.25;
+}
+.cpio-sub{
+  margin:0; font-size:13.5px; color:var(--muted); min-height:20px;
+  text-wrap:balance; line-height:1.45;
+}
+.cpio-passos{
+  list-style:none; margin:6px 0 0; padding:0; width:100%;
+  display:grid; gap:9px; text-align:left;
+}
+.cpio-passos li{
+  display:flex; align-items:center; gap:10px;
+  font-size:13.5px; color:var(--muted); transition:color .3s;
+}
+.cpio-passos li .cpio-mk{
+  width:18px; height:18px; flex:none; border-radius:50%;
+  display:grid; place-items:center; font-size:11px; font-weight:900;
+  border:1.5px solid var(--line); color:transparent; transition:all .3s;
+}
+.cpio-passos li.cpio-feito{color:var(--secondary,#8FA0A8)}
+.cpio-passos li.cpio-feito .cpio-mk{
+  border-color:var(--acao); background:var(--acao); color:var(--bg);
+}
+.cpio-passos li.cpio-ativo{color:var(--text); font-weight:800}
+.cpio-passos li.cpio-ativo .cpio-mk{
+  border-color:var(--cp-coral,#FF6258);
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--cp-coral,#FF6258) 18%, transparent);
+  animation:cpioPulsa 1.5s ease-in-out infinite;
+}
+@keyframes cpioPulsa{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion: reduce){
+  #cpImportOverlay{animation:none}
+  .cpio-prog{transition:none}
+  .cpio-passos li.cpio-ativo .cpio-mk{animation:none}
+}
+/* Enquanto a tela cheia da importação está aberta, o app atrás não rola. */
+body.cpio-aberto{overflow:hidden}
