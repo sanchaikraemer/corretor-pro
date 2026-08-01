@@ -20,7 +20,8 @@ assert.match(html, /id="cpMetricasSemana"/, 'o novo contêiner da lista de métr
 // o MÊS CORRENTE (dia 1 até hoje) — não mais "últimos 7 dias corridos" (trocado na v984, a
 // pedido do dono: ele revisa Desempenho uma vez por mês, não por dia).
 const iniHelper = app.indexOf('function cpInicioMesMs(){');
-const iniFn = app.indexOf('function cpDesempenhoMetricas(items, all){');
+// v1106 — a função ganhou o 3º parâmetro (período), pro Desempenho mostrar o mês passado.
+const iniFn = app.indexOf('function cpDesempenhoMetricas(items, all, periodo){');
 const fim = app.indexOf('\nwindow.cpDesempenhoMetricas');
 assert.ok(iniHelper !== -1 && iniFn !== -1 && fim !== -1, 'cpInicioMesMs/cpDesempenhoMetricas não encontradas em app.js');
 // remove o "window.cpInicioMesMs = ..." no meio do trecho: não existe `window` neste eval isolado.
@@ -43,6 +44,8 @@ const dentroDaJanela = new Date().toISOString();
 const foraDaJanela = new Date(inicioMesMs - 2 * 24 * 60 * 60 * 1000).toISOString();
 
 const cpDesempenhoMetricas = eval(`
+  const window = {}; // v1106 — o trecho extraído publica helpers em window
+  const cpTempoAppLerMapa = () => ({});
   const produtosLabel = (l) => l.__produto || "";
   const cpTempoAppSegundosHoje = () => 7380;   // 2h03
   const cpTempoAppMediaSegundos7d = () => 6120; // 1h42
