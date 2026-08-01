@@ -1901,6 +1901,50 @@ html[data-theme="light"] [style*="color: #ffc"]{
   pointer-events:none!important;
 }
 
+/* v1093 — tarja "Arquivado" nos resultados de busca. O lead arquivado voltou a aparecer quando
+   você procura pelo nome dele, mas precisa ser reconhecível de relance, sem abrir. */
+.cp-busca-arquivado{
+  flex:0 0 auto;
+  padding:1px 7px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.08);
+  color:var(--muted);
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  line-height:15px;
+}
+
+/* v1093 — COMPROMISSO ATRASADO no sino.
+   Pedido do dono: "precisa destaque de atenção lá em cima no sininho, pois está muito discreto
+   um compromisso que é importantíssimo".
+   O bloco #787 logo acima transforma o badge num pontinho de 9px com font-size:0 e
+   color:transparent, tudo com !important — sem esta regra o número de atrasados seria gravado no
+   elemento mas ficaria INVISÍVEL na tela (foi conferido no navegador, não só no código).
+   Por isso aqui repete a mesma especificidade e desfaz item a item o que aquele bloco impõe. */
+#topBell.tem-atraso .bell-badge:not([hidden]){
+  width:auto!important;
+  min-width:18px!important;
+  height:18px!important;
+  padding:0 5px!important;
+  border-radius:999px!important;
+  background:#ff3b30!important;
+  color:#fff!important;
+  font-size:11px!important;
+  font-weight:950!important;
+  line-height:14px!important;
+  text-align:center!important;
+  box-shadow:0 0 0 4px rgba(255,59,48,.22)!important;
+}
+/* O sino inteiro assume a cor de risco quando há atraso, pra chamar atenção antes de abrir. */
+#topBell.tem-atraso{
+  color:#fff!important;
+  border-color:rgba(255,59,48,.85)!important;
+  background:rgba(255,59,48,.20)!important;
+}
+
 /* Atualização #788 — Atendimentos reais, em ordem cronológica */
 .cp788-att-page{max-width:760px;margin:0 auto;padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}
 .cp788-att-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}

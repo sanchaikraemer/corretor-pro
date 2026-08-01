@@ -25,7 +25,9 @@ assert.doesNotMatch(app, /raiox-mobile|function insightFocoHTML|function abrirRa
 assert.doesNotMatch(app, /abrirUltimosAtendimentos/, '"Últimos atendimentos" removido da home');
 
 // 6. "Oportunidades esquecidas" reformada: fato real, mais antigos primeiro, máx 10.
-const esq = app.match(/function leadsEsquecidos\(items\)\{[\s\S]*?\n\}/)[0];
+// v1093 — a função ganhou um 2º parâmetro (os ids já mostrados na tela), então a busca aqui
+// aceita qualquer assinatura.
+const esq = app.match(/function leadsEsquecidos\([^)]*\)\{[\s\S]*?\n\}/)[0];
 assert.match(esq, /temAtendimentoManual\(l\) \|\| mensagensDoCliente\(l\) >= CP_MIN_MSGS_PRIORIDADE/, 'entra por fato real (atendeu ou conversou)');
 assert.doesNotMatch(esq, /pesoRecuperacao|leadTemProposta|Visita\/Proposta|Negociação/, 'sem etapa/proposta no ranking');
 assert.match(esq, /out\.sort\(\(a,b\) => b\.parado - a\.parado\)/, 'ordena por mais tempo parado (mais antigos primeiro)');
