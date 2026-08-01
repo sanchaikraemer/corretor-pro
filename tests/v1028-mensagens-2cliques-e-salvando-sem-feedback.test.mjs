@@ -50,7 +50,12 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
   const salvarIni = app.indexOf('async function salvarLeadPendente(){');
   assert.ok(salvarIni > -1, 'salvarLeadPendente não encontrada');
-  const salvarFim = app.indexOf('\n}', app.indexOf('setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id)', salvarIni));
+  // v1090 — o marcador do fim mudou: a abertura do lead passou por cpioFecharQuandoLeadAbrir,
+  // pra a tela cheia da importação só sair DEPOIS que o lead está aberto (antes ela sumia num
+  // relógio curto e a tela de importação reaparecia por um instante).
+  const marcaAbrirLead = app.indexOf('cpioFecharQuandoLeadAbrir(state.lead?.id)', salvarIni);
+  assert.ok(marcaAbrirLead > -1, 'não localizei a abertura do lead ao fim de salvarLeadPendente');
+  const salvarFim = app.indexOf('\n}', marcaAbrirLead);
   const salvarSrc = app.slice(salvarIni, salvarFim);
   assert.match(salvarSrc, /renderEtapas\(5, "salvando no banco de dados\.\.\."\)/, 'salvarLeadPendente (lead genuinamente novo, salva sozinho sem perguntar) também precisa avisar que começou');
   assert.match(salvarSrc, /renderEtapas\(5, "liberando os arquivos temporários da importação\.\.\."\)/, 'precisa avisar a próxima etapa real (limpeza dos arquivos temporários) também, não só o início');

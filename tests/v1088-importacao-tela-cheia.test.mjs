@@ -64,8 +64,36 @@ assert.match(corpo, /if\(idx === 6\)\{[\s\S]*?setTimeout\(\(\) => cpImportOverla
 const saidas = app.match(/cpImportOverlayVisivel\(false\)/g) || [];
 assert.ok(saidas.length >= 5,
   `precisa haver várias saídas independentes da tela cheia (achei ${saidas.length})`);
-assert.match(app, /\}finally\{[\s\S]*?state\.processing=false;[\s\S]*?cpImportOverlayVisivel\(false\)/,
-  'o fim de TODA importação (deu certo ou não) precisa fechar a tela cheia');
+// v1090 — O FINALLY DE processFile NÃO PODE MAIS ESCONDER A TELA. processFile TERMINA ANTES do
+// salvamento (renderProcessedResult dispara salvarLeadPendente/atualizarLeadComEvolucao sem
+// esperar), então esconder ali fazia a tela sumir COM O SALVAMENTO EM CURSO: os cartões da
+// importação apareciam e o "salvando" trazia a tela de volta. Era a tela que piscava no meio.
+const finallyProcess = app.match(/\}finally\{\s*\n\s*state\.processing=false;[\s\S]*?\n  \}/);
+assert.ok(finallyProcess, 'não localizei o finally de processFile');
+assert.ok(!finallyProcess[0].includes('cpImportOverlayVisivel'),
+  'o finally de processFile não pode esconder a tela cheia — ele roda com o salvamento ainda em curso');
+
+// A proteção contra ficar presa virou um VIGIA POR TEMPO, que só dispara se NADA acontecer —
+// nunca no meio de um fluxo que está andando.
+assert.match(app, /const CPIO_VIGIA_MS = (\d+);/, 'precisa existir o vigia por tempo');
+const vigiaMs = Number(app.match(/const CPIO_VIGIA_MS = (\d+);/)[1]);
+assert.ok(vigiaMs >= 60000,
+  `o vigia precisa ser folgado (uma conversa cheia de áudio demora); está em ${vigiaMs}ms`);
+assert.match(app, /function cpioRearmarVigia\(\)\{[\s\S]*?clearTimeout\(_cpioVigia\);/,
+  'o vigia precisa ser rearmado a cada sinal de vida da importação');
+
+// v1090 — A SEGUNDA TELA QUE PISCAVA: ao concluir, a tela sumia num relógio curto (650ms) mas o
+// lead só abria aos 800ms — nesse vão a tela de importação reaparecia. Agora ela FICA até o lead
+// estar aberto, e quem a fecha é o próprio abrirLead.
+assert.match(app, /async function cpioFecharQuandoLeadAbrir\(id\)\{[\s\S]*?await abrirLead\(id\);[\s\S]*?finally\{[\s\S]*?cpImportOverlayVisivel\(false\)/,
+  'a tela cheia só pode fechar DEPOIS que o lead abriu');
+assert.match(app, /setTimeout\(\(\) => \{ cpioFecharQuandoLeadAbrir\(state\.lead\?\.id\); \}, 800\);/,
+  'o salvamento de lead novo precisa abrir o lead com a tela ainda de pé');
+assert.match(app, /setTimeout\(\(\) => \{ cpioFecharQuandoLeadAbrir\(existente\.id\); \}, 800\);/,
+  'a atualização de lead existente precisa abrir o lead com a tela ainda de pé');
+const fechaNoConcluido = corpo.match(/setTimeout\(\(\) => cpImportOverlayVisivel\(false\), (\d+)\);/);
+assert.ok(fechaNoConcluido && Number(fechaNoConcluido[1]) >= 3000,
+  'ao concluir, o relógio que fecha a tela é só saída de emergência — precisa ter folga pro lead abrir');
 assert.match(app, /cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}\s*\n\s*toast\("Não foi possível salvar: "/,
   'erro ao salvar precisa liberar a tela pro corretor ver o aviso');
 assert.match(app, /cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}\s*\n\s*toast\("Não foi possível atualizar: "/,
