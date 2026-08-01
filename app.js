@@ -2129,6 +2129,12 @@ function temAtendimentoManual(l){
 // ("esquece a data da última msg") e que não muda aqui.
 function cpUltimoContatoCorretorTs(l){
   let max = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs(l) : 0;
+  // v1102 — o servidor manda a última mensagem do corretor calculada sobre a conversa INTEIRA
+  // (lastCorretorMsgIso). É a fonte principal: a prévia local tem só as últimas 8 mensagens, e
+  // se todas forem do cliente, a varredura abaixo não acharia nada e o app mentiria "nunca
+  // respondeu" pra um cliente respondido mais atrás na conversa.
+  const doServidor = Date.parse(l?.lastCorretorMsgIso || "");
+  if(!isNaN(doServidor) && doServidor > max) max = doServidor;
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
   const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
   for(const m of msgs){
