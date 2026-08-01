@@ -1235,12 +1235,17 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // de HOJE, não só do conteúdo — precisam envelhecer mesmo sem mensagem nova). Fora isso, lê
     // direto o que já foi calculado, sem percorrer a timeline.
     const cacheStats = (analysisOriginal && typeof analysisOriginal === "object") ? analysisOriginal._statsCache : null;
-    const cacheValido = !!(cacheStats && cacheStats.v === 1 && cacheStats.len === timeline.length && cacheStats.dia === hoje);
+    // v1102 — cache v2: ganhou lastCorretorIso (última mensagem DO CORRETOR na conversa inteira).
+    // Caso Jamil: a lista só carrega as últimas 8 mensagens; se todas forem do cliente, o app
+    // dizia "nunca respondeu" mesmo com respostas mais antigas. O servidor enxerga o histórico
+    // inteiro — então é ele quem informa. Caches v1 antigos recalculam uma vez e regravam.
+    const cacheValido = !!(cacheStats && cacheStats.v === 2 && cacheStats.len === timeline.length && cacheStats.dia === hoje);
 
-    let lastReal, lastClient, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, hasProposal;
+    let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, hasProposal;
     if (cacheValido) {
       lastReal = cacheStats.lastIso ? { iso: cacheStats.lastIso } : null;
       lastClient = cacheStats.lastClientIso ? { iso: cacheStats.lastClientIso } : null;
+      lastCorretor = cacheStats.lastCorretorIso ? { iso: cacheStats.lastCorretorIso } : null;
       clientMessageCount = cacheStats.clientMessageCount;
       clientQuestionCount = cacheStats.clientQuestionCount;
       clientMessageDays = cacheStats.clientMessageDays;
@@ -1265,6 +1270,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // voltou a conversar em dias DIFERENTES (recorrência = interesse sustentado), quantas
       // perguntas ele fez (dúvida real = engajamento ativo). Mesma varredura, sem custo extra.
       lastClient = null;
+      lastCorretor = null;
       clientMessageCount = 0;
       clientQuestionCount = 0;
       const _diasComMsg = new Set();
@@ -1286,7 +1292,17 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         const tMs = m?.iso ? Date.parse(m.iso) : NaN;
         const dentro90d = Number.isFinite(tMs) && tMs >= cutoff90d;
         if (dentro90d) messageCount90d++;
-        if (!ehClienteMsg(m)) continue;
+        if (!ehClienteMsg(m)) {
+          // v1102 — mensagem real do CORRETOR (não manual, não sugestão da IA, autor de verdade).
+          if (!lastCorretor && !ehItemManual(m)) {
+            const tp = String(m?.type || ""), src = String(m?.source || "");
+            const autor = String(m?.author || "").trim();
+            if (tp !== "sugestao-ia" && src !== "assistant" && autor && autor !== "Sistema" && String(m?.text || "").trim()) {
+              lastCorretor = m;
+            }
+          }
+          continue;
+        }
         if (!lastClient) lastClient = m; // a mais recente (varre de trás pra frente)
         const txt = String(m?.text || "").trim();
         if (!txt) continue;
@@ -1311,11 +1327,12 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         resultado_analise: {
           ...(analysisOriginal && typeof analysisOriginal === "object" ? analysisOriginal : {}),
           _statsCache: {
-            v: 1,
+            v: 2,
             len: timeline.length,
             dia: hoje,
             lastIso: lastReal?.iso || null,
             lastClientIso: lastClient?.iso || null,
+            lastCorretorIso: lastCorretor?.iso || null,
             clientMessageCount, clientQuestionCount, clientMessageDays,
             messageCount90d, clientMessageCount90d, hasProposal
           }
@@ -1382,6 +1399,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       daysSinceLastInteraction: daysSince,
       daysSinceLastTouch: daysSinceTouch,
       daysSinceClientReply,
+      // v1102 — última mensagem do CORRETOR sobre o histórico INTEIRO (a prévia de 8 mensagens
+      // pode não conter nenhuma resposta dele, e aí o app diria "nunca respondeu" errado).
+      lastCorretorMsgIso: lastCorretor?.iso || null,
       audiosEncontrados: row.audios_encontrados ?? null,
       audiosTranscritos: row.audios_transcritos ?? null,
       messageCount: timeline.length,

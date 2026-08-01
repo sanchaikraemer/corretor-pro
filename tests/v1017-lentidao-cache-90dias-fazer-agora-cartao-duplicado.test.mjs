@@ -118,7 +118,7 @@ async function parteServidor() {
   // realmente PULADA (não é coincidência de dar o mesmo número).
   const rowComCachePlantado = {
     ...rowBase,
-    resultado_analise: { _statsCache: { v: 1, len: timeline.length, dia: HOJE_BR, lastIso: null, lastClientIso: null, clientMessageCount: 999, clientQuestionCount: 999, clientMessageDays: 999, messageCount90d: 999, clientMessageCount90d: 999, hasProposal: true } }
+    resultado_analise: { _statsCache: { v: 2, len: timeline.length, dia: HOJE_BR, lastIso: null, lastClientIso: null, lastCorretorIso: null, clientMessageCount: 999, clientQuestionCount: 999, clientMessageDays: 999, messageCount90d: 999, clientMessageCount90d: 999, hasProposal: true } }
   };
   const writeBacks2 = [];
   const supa2 = fakeSupabaseParaLista([rowComCachePlantado], { onUpdate: (p) => writeBacks2.push(p) });
@@ -133,7 +133,7 @@ async function parteServidor() {
   const rowComMensagemNova = {
     ...rowBase,
     timeline_json: timelineMaior,
-    resultado_analise: { _statsCache: { v: 1, len: timeline.length /* tamanho ANTIGO */, dia: HOJE_BR, clientMessageCount90d: 999 } }
+    resultado_analise: { _statsCache: { v: 2, len: timeline.length /* tamanho ANTIGO */, dia: HOJE_BR, clientMessageCount90d: 999 } }
   };
   const supa3 = fakeSupabaseParaLista([rowComMensagemNova]);
   const r3 = await listRecentProcessings(10, { supabase: supa3, organizationId: 'org-1' });
@@ -144,7 +144,7 @@ async function parteServidor() {
   // envelhece com o tempo mesmo sem mensagem nova) e recalcula de verdade.
   const rowComCacheDeOntem = {
     ...rowBase,
-    resultado_analise: { _statsCache: { v: 1, len: timeline.length, dia: '2020-01-01', clientMessageCount90d: 999 } }
+    resultado_analise: { _statsCache: { v: 2, len: timeline.length, dia: '2020-01-01', clientMessageCount90d: 999 } }
   };
   const supa4 = fakeSupabaseParaLista([rowComCacheDeOntem]);
   const r4 = await listRecentProcessings(10, { supabase: supa4, organizationId: 'org-1' });
