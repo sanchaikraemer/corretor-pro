@@ -39,7 +39,7 @@ círculo próximo. Não de lead novo. Lá isso tem nome próprio: *database reac
 pronto pra se mexer de novo — pelo tempo desde a última compra e por coisas que a pessoa contou
 na conversa (casamento, filho nascendo, mudança de emprego, aluguel subindo).
 
-**Na nossa realidade:** você já tem a Geladeira e as Oportunidades esquecidas — mas as duas
+**Na nossa realidade:** você já tem os Arquivados e as Oportunidades esquecidas — mas as duas
 respondem *"quem eu não atendi"*. Isso aqui responde outra pergunta, bem mais valiosa:
 ***"quem tem motivo pra estar pronto agora"***.
 

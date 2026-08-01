@@ -31,7 +31,9 @@ assert.doesNotMatch(app, /abrirVenda\(\$\{id\},\$\{nome\}\)/, 'barra rápida sem
 const jornada = app.match(/function cp704Jornada\(lead, mc\)\{[\s\S]*?\n  \}/)[0];
 assert.doesNotMatch(jornada, /label:'Vendido'/, 'jornada não rotula Vendido');
 assert.doesNotMatch(jornada, /label:'Perdido'/, 'jornada não rotula Perdido');
-assert.match(jornada, /normal==='Geladeira'/, 'Geladeira (Vendido/Perdido/Arquivado legados) vira Arquivado');
+// v1094 — a comparação passou a usar a constante ETAPA_ARQUIVADO em vez do texto solto
+// "Geladeira" (que agora aparece uma vez só, onde se explica que é o valor gravado no banco).
+assert.match(jornada, /normal===ETAPA_ARQUIVADO/, 'Vendido/Perdido/Arquivado legados viram Arquivado');
 
 // 5. As telas/cards de venda saíram do app.
 assert.doesNotMatch(html, /Vendas registradas/, 'sem menu/tela "Vendas registradas"');

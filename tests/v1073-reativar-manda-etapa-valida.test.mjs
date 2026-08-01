@@ -43,7 +43,11 @@ assert.match(moverEtapa[0], /const arquivando = etapa === ['"]Geladeira['"];/,
 
 // 3. O Reativar especificamente manda "Ativo" na linha do body (comentário explicativo pode
 // citar o valor antigo — só a requisição de verdade importa).
-const reativarFn = app.match(/async function reativarLeadGeladeira\(id, btn\)\{[\s\S]*?\n\}/)[0];
+// v1094 — a função foi renomeada de reativarLeadGeladeira pra reativarLeadArquivado (faxina dos
+// nomes internos das etapas abolidas). O valor gravado no banco continua "Geladeira".
+const reativarMatch = app.match(/async function reativarLeadArquivado\(id, btn\)\{[\s\S]*?\n\}/);
+assert.ok(reativarMatch, 'reativarLeadArquivado não encontrada em app.js');
+const reativarFn = reativarMatch[0];
 const linhaBody = reativarFn.split('\n').find(l => l.includes('action: "etapa"'));
 assert.ok(linhaBody, 'achei a linha do body no Reativar');
 assert.match(linhaBody, /etapa:\s*"Ativo"/, 'Reativar precisa mandar etapa "Ativo" na requisição');

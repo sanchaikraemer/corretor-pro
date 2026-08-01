@@ -14,7 +14,10 @@ const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const destinos = [
   ['propostas', 'Gerador de proposta'],
   ['relatorio', 'Desempenho'],
-  ['geladeira', 'Arquivados'],
+  // v1094 — o destino passou a se chamar "arquivados". Antes a mesma tela respondia por dois
+  // nomes de etapas que o dono aboliu ("geladeira" e "perdidos"); agora tem um nome só, igual
+  // ao que aparece na tela.
+  ['arquivados', 'Arquivados'],
 ];
 for(const [alvo, titulo] of destinos){
   assert.match(
