@@ -3966,12 +3966,39 @@ async function apagarLead(id, nome){
       toast("Lead apagado.");
       removerLeadDosCaches(id);
       if(typeof carregarDashboard === "function") carregarDashboard();
+    } else if(cpLeadJaNaoExiste(res, data)){
+      cpSumirComLeadFantasma(id);
     } else {
       toast("Erro: " + (data?.error || ""));
     }
   }catch(err){ toast("Erro: "+(err?.message||err)); }
 }
 window.apagarLead = apagarLead;
+
+// v1099 — o dono mandou print: apertava apagar e voltava "Erro: Lead não encontrado", de novo e de
+// novo, sem o cliente nunca sair da tela.
+//
+// "Não encontrado" quer dizer que o cadastro JÁ NÃO ESTÁ no banco (foi apagado antes, ou virou um
+// só com outro na reimportação) — mas a lista carregada no aparelho ainda tinha a cópia dele. Ou
+// seja: o app pedia pra apagar algo que já não existe, e o servidor, com razão, recusava.
+//
+// Ficar repetindo o erro é o pior dos dois mundos: o que o corretor quer (o cliente fora da lista)
+// JÁ É VERDADE no banco. Então o app tira o fantasma da tela e diz o que aconteceu.
+function cpLeadJaNaoExiste(res, data){
+  if(res && res.status === 404) return true;
+  return /n[ãa]o encontrad/i.test(String(data?.error || ""));
+}
+function cpSumirComLeadFantasma(id){
+  try{ removerLeadDosCaches(id); }catch(_){}
+  try{ invalidarLeadsCache(); }catch(_){}
+  if(String(state.focoLeadId||"") === String(id) || String(state.lead?.id||"") === String(id)){
+    state.lead = null; state.focoLeadId = null; state.analysis = null;
+    try{ show("home"); }catch(_){}
+  }
+  try{ loadRecentLeads(true); }catch(_){}
+  try{ refreshAllSections(); }catch(_){}
+  toast("Esse cliente já não existia mais no banco. Tirei ele da lista.");
+}
 
 // Modal pra editar nome/telefone do lead aberto + opção de excluir.
 // Heurística: nome que é na verdade um telefone (fallback do sistema).
@@ -4200,6 +4227,10 @@ async function excluirLeadDefinitivo(id, nome){
       removerLeadDosCaches(id);
       if(typeof carregarDashboard === "function") carregarDashboard();
       show("home");
+    } else if(cpLeadJaNaoExiste(res, data)){
+      // v1099 — mesma regra do apagarLead: se já não existe no banco, some da tela em vez de
+      // ficar repetindo erro num cliente que o corretor não consegue tirar da frente.
+      cpSumirComLeadFantasma(id);
     } else {
       toast("Erro ao excluir: " + (data?.error || ""));
     }
