@@ -85,16 +85,9 @@ function leadSeguroParaAnalise(lead = {}) {
   return out;
 }
 
-function contatoPareceParceiro(lead, timelineText) {
-  const nome = String(lead?.clientName || lead?.name || "");
-  const texto = String(timelineText || "").slice(0, 12000);
-  const base = `${nome}
-${texto}`.toLowerCase();
-  return /\b(corretor|corretora|imobili[áa]ria|im[oó]veis|creci)\b/.test(nome.toLowerCase())
-    || /\b(meu cliente|minha cliente|meu comprador|minha compradora|cliente comprador|cliente final|minha corretora|sou o gerente da empresa|comiss[aã]o|honor[aá]rios|pegou com a lisiane|chaves|imobili[áa]ria|corretor parceiro|corretora parceira)\b/.test(base);
-}
-
-
+// v1092 — contatoPareceParceiro/normalizarParceiroB2B (classificavam o contato como
+// "corretor parceiro") foram removidas: estavam sem nenhum chamador e a lista de expressões
+// carregava até nome de pessoa cravado no código, o que o projeto proíbe (ver CLAUDE.md).
 
 function normalizarTextoComparacao(txt) {
   return String(txt || "")
@@ -178,171 +171,21 @@ function textoCurto(valor, fallback = "") {
 // v724-2: bloco antigo de análise/mensagem removido.
 
 
-function normalizarParceiroB2B(parsed, lead, timelineText) {
-  if (!parsed || typeof parsed !== "object") return parsed;
-  if (!contatoPareceParceiro(lead, timelineText)) return parsed;
-  parsed.tipoContato = "corretor-parceiro";
-  parsed.diagnostico = (parsed.diagnostico && typeof parsed.diagnostico === "object") ? parsed.diagnostico : {};
-  parsed.diagnostico.papelContato = "corretor-parceiro";
-  parsed.diagnostico.papelClienteFinal = "comprador representado pelo corretor parceiro";
-  const obj = String(parsed.diagnostico.objetivo || "").toLowerCase();
-  if (obj === "moradia" || obj === "moradia-futura" || obj === "investimento") {
-    parsed.diagnostico.objetivo = "objetivo-do-cliente-final";
-  }
-  return parsed;
-}
-
-
-// Atualização #670 — modelo comercial único.
-// Separa a pessoa com quem o corretor conversa, a oportunidade específica e o
-// relacionamento futuro. A IA interpreta; esta camada aplica regras duras para
-// impedir estados incompatíveis na tela e nas mensagens.
-const MC_CONTATOS = new Set(["comprador-direto", "corretor-parceiro", "intermediario", "familiar", "investidor", "empresa", "outro"]);
-const MC_OPORTUNIDADES = new Set(["descoberta", "interesse", "comparacao", "analise-financeira", "negociacao", "decisao", "ganha", "perdida", "encerrada-sem-decisao"]);
-const MC_RESULTADOS = new Set(["em-andamento", "venda-conosco", "comprou-outra-opcao", "condicoes-incompativeis", "desistiu", "sem-resposta", "oportunidade-futura", "outro"]);
-const MC_RELACIONAMENTOS = new Set(["ativo", "aguardando-nova-oportunidade", "contato-periodico", "pausado", "encerrado"]);
-const MC_ACOES = new Set(["responder-agora", "aguardando-resposta", "compromisso-agendado", "retomar", "sem-acao-urgente"]);
-const MC_RESPONSAVEIS = new Set(["corretor", "contato", "ambos", "ninguem"]);
-const MC_URGENCIAS = new Set(["alta", "media", "baixa", "nenhuma"]);
-
-function mcEnum(valor, permitidos, fallback) {
-  const v = String(valor || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, "-");
-  return permitidos.has(v) ? v : fallback;
-}
-
-function mcTexto(valor, fallback = "") {
-  const v = String(valor || "").replace(/\s+/g, " ").trim();
-  return v || fallback;
-}
-
-function mcAutorEhContato(author, lead, corretorNome) {
-  const autor = String(author || "").trim().toLowerCase();
-  if (!autor) return null;
-  const contato = String(lead?.clientName || lead?.name || "").trim().toLowerCase();
-  const primeiroContato = contato.split(/\s+/)[0] || "";
-  const corretor = String(corretorNome || "").trim().toLowerCase();
-  if (corretor && (autor.includes(corretor) || corretor.includes(autor))) return false;
-  if (/\b(construtora|atendimento)\b/i.test(autor)) return false;
-  // O nome completo/primeiro nome do contato vence palavras de profissão presentes no nome.
-  if (contato && (autor.includes(contato) || contato.includes(autor))) return true;
-  if (primeiroContato && autor.includes(primeiroContato)) return true;
-  // Em uma exportação individual do WhatsApp, o outro participante real é o contato,
-  // inclusive quando o nome contém "Corretor", "Imobiliária" ou "Imóveis".
-  return true;
-}
-
-function mcUltimaMensagemReal(timeline, lead, corretorNome) {
-  const lista = Array.isArray(timeline) ? timeline : [];
-  for (let i = lista.length - 1; i >= 0; i--) {
-    const m = lista[i];
-    if (!m || !String(m.text || "").trim()) continue;
-    const source = String(m.source || "");
-    const type = String(m.type || "");
-    if (source === "manual" || source === "crm" || type === "print-whatsapp" || ["atendimento", "nota", "ligacao", "visita", "presencial"].includes(type)) continue;
-    if (/^(sistema|áudio sem referência exata)$/i.test(String(m.author || "").trim())) continue;
-    const ehContato = mcAutorEhContato(m.author, lead, corretorNome);
-    return { mensagem: m, falante: ehContato === true ? "contato" : ehContato === false ? "corretor" : "desconhecido" };
-  }
-  return { mensagem: null, falante: "desconhecido" };
-}
-
-
-function mcHojeIsoBR() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
-  }).format(new Date());
-}
-
-function mcDiasEntreIso(dataIso, hojeIso = mcHojeIsoBR()) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataIso || ""))) return null;
-  const a = new Date(`${hojeIso}T12:00:00-03:00`);
-  const b = new Date(`${dataIso}T12:00:00-03:00`);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-
-function mcDiasDesdeMensagem(m) {
-  try {
-    const iso = String(m?.iso || "");
-    let d = iso && !iso.startsWith("9999") ? new Date(iso) : null;
-    if (!d || Number.isNaN(d.getTime())) d = new Date(parseDateTime(m?.date, m?.time || "12:00"));
-    if (Number.isNaN(d.getTime())) return null;
-    return Math.floor((Date.now() - d.getTime()) / 86400000);
-  } catch (_) { return null; }
-}
-
-function mcUltimaMensagemPedeResposta(ultimo) {
-  if (ultimo?.falante !== "contato") return false;
-  const t = String(ultimo?.mensagem?.text || "").trim();
-  if (!t) return false;
-  return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|voc[eê] sabe|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
-}
-
-// v1023 — mcCompromissoAberto (lia confirmedAppointments/texto da conversa pra inferir um
-// "compromisso em aberto") foi removida: já estava sem nenhum chamador (dead code), e o
-// conceito que ela representava — tratar uma menção na conversa como um agendamento real —
-// é exatamente o que o dono baniu por completo (ver aplicarCompromisso em
-// api/reanalisar-lead.js e o corte em listRecentProcessings, api/_persistence.js).
+// v1092 — o "modelo comercial único" da atualização #670 (as listas MC_* e as funções
+// mcEnum/mcTexto/mcAutorEhContato/mcUltimaMensagemReal/mcHojeIsoBR/mcDiasEntreIso/
+// mcDiasDesdeMensagem/mcUltimaMensagemPedeResposta) foi removido: desde o reset da v724-2,
+// finalizarAnaliseComercial devolve a análise sem tocar em nada, e nenhuma dessas peças tinha
+// mais um único chamador. Vinha junto o comentário da v1023 sobre mcCompromissoAberto.
 
 export function finalizarAnaliseComercial(parsed = {}, lead = {}, timeline = [], corretorNome = "") {
   // v724-2: reset total. Não aplica modelo comercial, fallback, teto de probabilidade ou reescrita.
   return parsed;
 }
 
-// Lê um texto (próxima ação / fala do cliente) e devolve {dias, motivo} se houver
-// prazo claro pra retomar: "em N dias/semanas/meses", "dia 20" (próximo dia do mês),
-// Data de HOJE no fuso de Brasília como Date local (getDay/getDate corretos). Evita virar o dia no UTC à noite.
-function hojeBR() {
-  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const [y, mo, d] = p.split("-").map(Number);
-  return new Date(y, mo - 1, d);
-}
-// "semana/mês que vem", "amanhã". Senão null.
-function prazoEmDias(txt) {
-  const t = String(txt || "").toLowerCase();
-  if (!t) return null;
-  let m, dias = null;
-  if ((m = t.match(/(?:em|daqui\s*a?|depois\s+de)\s*(\d{1,3})\s*(dias?|semanas?|m[eê]s(?:es)?)\b/))) {
-    const n = parseInt(m[1], 10);
-    dias = /semana/.test(m[2]) ? n * 7 : /m[eê]s/.test(m[2]) ? n * 30 : n;
-  } else if (/\bhoje\b|ainda hoje|hoje mesmo|pra hoje|para hoje/.test(t)) {
-    dias = 0;
-  } else if (/\bamanh[ãa]\b/.test(t)) {
-    dias = 1;
-  } else if (/semana que vem|pr[óo]xima semana/.test(t)) {
-    dias = 7;
-  } else if (/m[eê]s que vem|pr[óo]ximo m[eê]s/.test(t)) {
-    dias = 30;
-  } else if ((m = t.match(/\b(domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:[\s-]*feira)?\b/))) {
-    // dia da semana ("sexta", "segunda"...): próxima ocorrência.
-    const mapa = { domingo: 0, segunda: 1, "terça": 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, "sábado": 6, sabado: 6 };
-    const alvo = mapa[m[1]];
-    if (alvo != null) {
-      let delta = (alvo - hojeBR().getDay() + 7) % 7;
-      if (delta === 0) delta = 7;
-      if (/que vem|pr[óo]xim/.test(t) && delta < 7) delta += 7;
-      dias = delta;
-    }
-  } else if ((m = t.match(/\bdia\s+(\d{1,2})\b/))) {
-    // "dia 20": próxima ocorrência desse dia do mês (a partir de amanhã).
-    const alvo = parseInt(m[1], 10);
-    if (alvo >= 1 && alvo <= 31) {
-      const hoje = hojeBR();
-      const cand = new Date(hoje.getFullYear(), hoje.getMonth(), alvo);
-      if (cand.getTime() <= hoje.getTime()) cand.setMonth(cand.getMonth() + 1);
-      dias = Math.round((cand.getTime() - hoje.getTime()) / 86400000);
-    }
-  }
-  if (dias == null || dias < 0 || dias > 1095) return null;
-  return { dias, motivo: String(txt).trim().slice(0, 160) || "Retomar contato" };
-}
-// Monta a data de um lembrete a partir de "dias a partir de hoje" (0 = hoje, daqui a pouco).
-function dataLembrete(dias) {
-  const q = new Date();
-  if (dias === 0) { q.setHours(Math.min(q.getHours() + 1, 22), 0, 0, 0); }
-  else { q.setDate(q.getDate() + dias); q.setHours(8, 0, 0, 0); }
-  return q;
-}
+// v1092 — prazoEmDias/dataLembrete (e o auxiliar hojeBR, usado só por elas) foram removidos:
+// liam um prazo solto na conversa ("semana que vem", "dia 20") pra virar lembrete automático.
+// Estavam sem chamador e o conceito foi banido pelo dono — agendamento só existe quando o
+// corretor marca, nunca inferido de uma menção na conversa.
 
 export const AUDIO_EXT = /\.(opus|ogg|mp3|m4a|wav|aac)$/i;
 export const IMAGE_EXT = /\.(jpg|jpeg|png|gif|webp|heic|bmp|tiff)$/i;
@@ -594,119 +437,8 @@ async function transcribeAudioOnce({ zip, audioName, openai, cache }) {
   return cache[base];
 }
 
-export async function buildTimeline({ zip, messages, audioFiles, audioFilesParaTranscrever = null, audioFilesForaDaJanela = [], openai }) {
-  const maxAudioTranscriptions = Number(process.env.MAX_AUDIO_TRANSCRIPTIONS || 40);
-  const audioNames = audioFiles.map(normalizeName);
-  const permitidosTranscrever = Array.isArray(audioFilesParaTranscrever) ? new Set(audioFilesParaTranscrever.map(normalizeName)) : null;
-  const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
-  const audioTranscriptions = {};
-  const timeline = [];
-
-  // 1) PARALELIZA TODAS AS TRANSCRIÇÕES EM LOTES.
-  // O modelo antigo era sequencial (uma por vez) e estourava o limite de 10s.
-  // Agora roda em batches de 5 simultâneas, ganhando 60-80% do tempo.
-  const audiosReferenciados = [];
-  for (const msg of messages) {
-    const audioRef = findReferencedAudio(msg.text, audioNames);
-    if (audioRef) {
-      if (permitidosTranscrever && !permitidosTranscrever.has(audioRef)) continue;
-      const fullAudioName = audioFiles.find(a => normalizeName(a) === audioRef);
-      if (fullAudioName) audiosReferenciados.push({ msg, audioRef, fullAudioName });
-    }
-  }
-
-  // Limita ao max de transcrições
-  const limitados = audiosReferenciados.slice(0, maxAudioTranscriptions);
-  const naoLimitados = audiosReferenciados.slice(maxAudioTranscriptions);
-
-  // Processa em batches de 5 paralelos
-  const BATCH = 5;
-  if (openai) {
-    for (let i = 0; i < limitados.length; i += BATCH) {
-      const batch = limitados.slice(i, i + BATCH);
-      await Promise.all(batch.map(async (item) => {
-        try {
-          const result = await transcribeAudioOnce({ zip, audioName: item.fullAudioName, openai, cache: audioTranscriptions });
-          audioTranscriptions[item.audioRef] = result;
-        } catch (error) {
-          audioTranscriptions[item.audioRef] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
-        }
-      }));
-    }
-  }
-  // Os que passaram do limite ficam como "limite_transcricao"
-  for (const item of naoLimitados) {
-    audioTranscriptions[item.audioRef] = { status: "limite_transcricao", text: "" };
-  }
-
-  // 2) Monta a timeline com base nos resultados (preservando a ordem das mensagens originais)
-  const usedAudio = new Set();
-  for (const msg of messages) {
-    const audioRef = findReferencedAudio(msg.text, audioNames);
-    if (audioRef) {
-      usedAudio.add(audioRef);
-      const transcription = audioTranscriptions[audioRef] || {
-        status: foraDaJanela.has(audioRef) ? "nao_transcrito_fora_do_periodo" : (openai ? "limite_transcricao" : "api_nao_configurada"),
-        text: ""
-      };
-      const textoAudio = transcription.text
-        ? `[Áudio transcrito] ${transcription.text}`
-        : (transcription.status === "nao_transcrito_fora_do_periodo"
-          ? `[Áudio: ${audioRef} — não transcrito por estar fora do período escolhido]`
-          : `[Áudio: ${audioRef} — ${transcription.status}]`);
-      timeline.push({
-        ...msg,
-        type: "audio",
-        mediaFile: audioRef,
-        audioStatus: transcription.status,
-        text: textoAudio,
-        source: "audio"
-      });
-      continue;
-    }
-    timeline.push({ ...msg, type: msg.type || "text", text: stripEmojis(msg.text), source: "txt" });
-  }
-
-  // 3) Áudios soltos no ZIP que não estavam referenciados no TXT, transcreve também em paralelo
-  const audiosSoltos = audioFiles.filter(a => !usedAudio.has(normalizeName(a)));
-  const restanteOrcamento = Math.max(0, maxAudioTranscriptions - limitados.length);
-  const soltosElegiveis = permitidosTranscrever ? audiosSoltos.filter(a => permitidosTranscrever.has(normalizeName(a))) : audiosSoltos;
-  const soltosParaTranscrever = soltosElegiveis.slice(0, restanteOrcamento);
-  if (openai && soltosParaTranscrever.length) {
-    for (let i = 0; i < soltosParaTranscrever.length; i += BATCH) {
-      const batch = soltosParaTranscrever.slice(i, i + BATCH);
-      await Promise.all(batch.map(async (audio) => {
-        try {
-          const result = await transcribeAudioOnce({ zip, audioName: audio, openai, cache: audioTranscriptions });
-          const base = normalizeName(audio);
-          audioTranscriptions[base] = result.status === "transcrito" ? { ...result, status: "transcrito_sem_posicao_exata" } : result;
-        } catch (_) {}
-      }));
-    }
-  }
-  for (const audio of audiosSoltos) {
-    const base = normalizeName(audio);
-    const transcription = audioTranscriptions[base] || { status: openai ? "nao_referenciado_no_txt" : "api_nao_configurada", text: "" };
-    const approxDate = dateFromAudioName(base);
-    timeline.push({
-      id: timeline.length + 1,
-      date: approxDate || "",
-      time: "",
-      iso: approxDate ? toIsoSafe(approxDate, "23:59", timeline.length) : "9999-12-31T23:59:59.000Z",
-      author: "Áudio sem referência exata",
-      text: transcription.text
-        ? `[Áudio transcrito sem posição exata no TXT: ${base}] ${transcription.text}`
-        : `[Áudio encontrado sem posição exata no TXT: ${base} — ${transcription.status}]`,
-      type: "audio_unlinked",
-      mediaFile: base,
-      audioStatus: transcription.status,
-      source: "audio"
-    });
-  }
-
-  timeline.sort((a, b) => String(a.iso).localeCompare(String(b.iso)) || Number(a.order || 0) - Number(b.order || 0));
-  return { timeline, audioTranscriptions, transcriptionEnabled: !!openai };
-}
+// v1092 — buildTimeline removida: era a montagem antiga da conversa a partir do .zip, exportada
+// mas sem nenhum importador. Quem faz esse trabalho hoje é montarTimelineComTranscricoes().
 
 function detectPhone(text = "") {
   const matches = String(text).match(/(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}/g) || [];
@@ -874,7 +606,9 @@ function hasCerebroInstructions(cfg) {
     }));
 }
 
-function formatCerebroPrompt(cfg) {
+// Exportada pra o teste verificar o EFEITO: que as regras e as objeções que o corretor escreveu
+// no Cérebro realmente chegam no texto que vai pra IA — ver tests/v858-cerebro-blocos-texto.
+export function formatCerebroPrompt(cfg) {
   const c = sanitizeCerebroConfig(cfg || {});
   const regrasTexto = String(c.regrasTexto || "").trim()
     || _regrasLegadasParaTextoPipeline(c.regras);
@@ -1628,34 +1362,14 @@ export function ranquearCasosAprendidos(casos, contexto, limite = 5) {
     .slice(0, Math.max(1, limite));
 }
 
-async function casosSemelhantesPrompt(contexto) {
-  const memoria = await loadMemoriaComercialV2();
-  const top = ranquearCasosAprendidos(memoria.casos, contexto, 5);
-  if (!top.length) return "";
-  const linhas = top.map((c, i) => {
-    const resultado = c.resultado === "validada" ? "resultado confirmado" : c.resultado === "nao-funcionou" ? "não funcionou — evite repetir" : c.resultado === "parcial" ? "resultado parcial" : "condução observada, ainda sem validação";
-    return `${i + 1}. Situação parecida: ${c.situacao}\n   O que você realmente fez: ${c.conducaoCorretor}\n   Regra extraída: ${c.regra}\n   Evidência: ${resultado}${c.evidenciaResultado ? ` — ${c.evidenciaResultado}` : ""}`;
-  });
-  return `CASOS REAIS RECUPERADOS DO SEU HISTÓRICO (use a LÓGICA, nunca copie nome, produto, preço ou frase sem confirmar na conversa atual):\n${linhas.join("\n")}\n\nREGRAS DE USO DOS CASOS:\n- Sua mensagem realmente enviada vale como condução observada, mesmo sem resposta posterior.\n- Só trate como estratégia comprovada quando estiver marcada como resultado confirmado.\n- Casos marcados como não funcionou servem para evitar o mesmo erro.\n- A conversa atual continua sendo a fonte dos fatos; os casos servem apenas para decidir COMO conduzir.`;
-}
+// v1092 — casosSemelhantesPrompt removida: sem chamador (o prompt usa jeitoAprendidoCompacto).
 
 // ─── CONHECIMENTO DO CORRETOR ─────────────────────────────────────────────────
 // Bloco curto acumulado de tudo que o corretor ensinou nas conversas reais
 // (regras de produto, FGTS, condições, respostas a objeções). Toda análise e
 // geração de mensagens lê esse bloco — é a "memória geral" do sistema.
-async function loadConhecimentoCorretor() {
-  try {
-    const { getSupabaseAdmin } = await import("./_persistence.js");
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return "";
-    const { data } = await supabase
-      .from("direciona_config")
-      .select("valor")
-      .eq("chave", "corretor-conhecimento")
-      .maybeSingle();
-    return String(data?.valor?.texto || "").trim();
-  } catch { return ""; }
-}
+// v1092 — loadConhecimentoCorretor removida pelo mesmo motivo: sem chamador e sem filtro por
+// empresa. Quem grava esse bloco (atualizarConhecimentoCorretor, logo abaixo) filtra certo.
 
 // Fire-and-forget. Após cada análise, extrai o que há de novo nas mensagens do
 // corretor e funde no bloco "corretor-conhecimento". Nunca bloqueia a resposta.
@@ -1756,15 +1470,8 @@ export async function aprenderRespostasDaCarteira(organizationId = ORGANIZACAO_P
   }
 }
 
-async function loadRespostasCorretor() {
-  try {
-    const { getSupabaseAdmin } = await import("./_persistence.js");
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return [];
-    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", "corretor-respostas").maybeSingle();
-    return Array.isArray(data?.valor?.exemplos) ? data.valor.exemplos : [];
-  } catch { return []; }
-}
+// v1092 — loadRespostasCorretor removida: sem chamador, e lia direciona_config SEM filtrar por
+// empresa (leria a configuração de outra conta se voltasse a ser usada).
 
 // Acumula a INTELIGÊNCIA COMERCIAL observada em cada análise (tons, técnicas, respostas
 // a objeções, matches produto×perfil, padrões de follow-up). Cada categoria limita a 30
@@ -2000,79 +1707,16 @@ IMPORTANTE: os itens abaixo dizem apenas QUAL CAMINHO investigar. Eles NÃO auto
 
 4) Conduza sempre pra UMA próxima ação concreta (visita, café na construtora, simulação, escolher unidade), seguindo o que o Cérebro Comercial abaixo definir sobre quais dessas ações essa organização realmente usa.`;
 
-function montarOrientacoes(config, contextoCliente = "") {
-  config = config || {};
-  const partes = [INTELIGENCIA_CARTEIRA];
-  // Palavras-chave do cliente atual — pra priorizar as lições aprendidas que mais batem.
-  const querySet = new Set(_tokensRank(contextoCliente));
-  if (config.metodo) partes.push("MÉTODO:\n" + config.metodo);
-  if (config.tom) partes.push("TOM DE VOZ:\n" + config.tom);
-  if (config.diferenciais) partes.push("DIFERENCIAIS:\n" + config.diferenciais);
-  if (config.evitar) partes.push("EVITAR:\n" + config.evitar);
-  // Regras comerciais em bloco único, editável por copiar e colar.
-  const regrasTexto = typeof config.regrasTexto === "string" && config.regrasTexto.trim()
-    ? config.regrasTexto.trim()
-    : (Array.isArray(config.regras) ? config.regras.map(r => (typeof r === "string" ? r : r?.texto) || "").filter(t => t.trim()).join("\n") : "");
-  if (regrasTexto) partes.push("REGRAS COMERCIAIS (siga integralmente ao decidir abordagem e mensagens):\n" + regrasTexto);
-
-  // Objeções e formas de condução também em bloco único.
-  const objecoesTexto = typeof config.objecoesTexto === "string" && config.objecoesTexto.trim()
-    ? config.objecoesTexto.trim()
-    : (Array.isArray(config.objecoes) ? config.objecoes.filter(o => o && (o.objecao || o.resposta)).map(o => `SINAL: ${(o.objecao || "").trim()}\nCOMO CONDUZIR: ${(o.resposta || "").trim()}`).join("\n\n") : "");
-  if (objecoesTexto) partes.push("SINAIS DE OBJEÇÃO E COMO CONDUZIR (reconheça o sinal pelo sentido e siga integralmente o bloco):\n" + objecoesTexto);
-  // INTELIGÊNCIA COMERCIAL APRENDIDA — observada conversa a conversa
-  // Aprendizado automático gerado por análises anteriores fica DESLIGADO por padrão.
-  // Ele pode carregar conclusões ruins de uma análise antiga para um caso novo. Só entra
-  // quando o responsável habilitar conscientemente DIRECIONA_USAR_APRENDIZADO_AUTO=1.
-  const usarAprendizadoAuto = process.env.DIRECIONA_USAR_APRENDIZADO_AUTO === "1";
-  const ia = usarAprendizadoAuto && config.inteligenciaAprendida && typeof config.inteligenciaAprendida === "object"
-    ? config.inteligenciaAprendida
-    : null;
-  if (ia) {
-    if (Array.isArray(ia.tons) && ia.tons.length) {
-      const linhas = ia.tons.slice(-5).map(e => "- " + (e.texto || "").trim()).filter(l => l.length > 4);
-      if (linhas.length) partes.push("TOM APRENDIDO DAS SUAS ÚLTIMAS RESPOSTAS REAIS NO WHATSAPP (combine com TOM DE VOZ acima):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.tecnicas) && ia.tecnicas.length) {
-      const linhas = _topRelevantes(ia.tecnicas, e => e.texto, querySet, 8).map(e => "- " + (e.texto || "").trim()).filter(l => l.length > 4);
-      if (linhas.length) partes.push("TÉCNICAS COMERCIAIS APRENDIDAS (o que VOCÊ já fez em outras conversas pra avançar a venda — use de novo quando a situação for parecida):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.objecoes) && ia.objecoes.length) {
-      const linhas = _topRelevantes(ia.objecoes, o => `${o.objecao||""} ${o.respostaUsada||""}`, querySet, 10).map(o => {
-        const tag = o.funcionou === true ? "[FUNCIONOU]" : (o.funcionou === false ? "[NÃO funcionou]" : "[resultado incerto]");
-        return `- Objeção: "${(o.objecao||"").trim()}" → você respondeu: ${(o.respostaUsada||"").trim()} ${tag}`;
-      }).filter(l => l.length > 8);
-      if (linhas.length) partes.push("RESPOSTAS A OBJEÇÕES APRENDIDAS (banco real de como você lida com objeções — prefira as marcadas [FUNCIONOU]; evite repetir as [NÃO funcionou]):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.produtoVsPerfil) && ia.produtoVsPerfil.length) {
-      const linhas = _topRelevantes(ia.produtoVsPerfil, m => `${m.perfilCliente||""} ${m.produto||""} ${m.reacao||""}`, querySet, 8).map(m => `- Perfil "${(m.perfilCliente||"").trim()}" → produto "${(m.produto||"").trim()}" → reação: ${(m.reacao||"").trim()}`).filter(l => l.length > 12);
-      if (linhas.length) partes.push("MATCH PRODUTO × PERFIL APRENDIDO (quando o perfil do cliente atual bater com um destes, priorize o mesmo produto/argumento):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.movimentosOk) && ia.movimentosOk.length) {
-      const linhas = _topRelevantes(ia.movimentosOk, e => e.texto, querySet, 6).map(e => "- " + (e.texto || "").trim()).filter(l => l.length > 4);
-      if (linhas.length) partes.push("MOVIMENTOS QUE DESTRANCARAM A VENDA (replique padrões em situações parecidas):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.movimentosTravaram) && ia.movimentosTravaram.length) {
-      const linhas = _topRelevantes(ia.movimentosTravaram, e => e.texto, querySet, 6).map(e => "- " + (e.texto || "").trim()).filter(l => l.length > 4);
-      if (linhas.length) partes.push("MOVIMENTOS QUE TRAVARAM (evite repetir estes erros):\n" + linhas.join("\n"));
-    }
-    if (Array.isArray(ia.padroesFollowup) && ia.padroesFollowup.length) {
-      const linhas = ia.padroesFollowup.slice(-6).map(e => "- " + (e.texto || "").trim()).filter(l => l.length > 4);
-      if (linhas.length) partes.push("PADRÕES DE FOLLOW-UP APRENDIDOS (quando for follow-up, use o ritmo/abordagem que você já usa):\n" + linhas.join("\n"));
-    }
-  }
-  // Compat: versão antiga que guardava só estiloHistorico (mantida pra não perder dados gravados antes).
-  if (Array.isArray(config.estiloHistorico) && config.estiloHistorico.length && !(ia && Array.isArray(ia.tons) && ia.tons.length)) {
-    const linhas = config.estiloHistorico.slice(-8).map(e => "- " + (e.estilo || "").trim()).filter(l => l.length > 4);
-    if (linhas.length) partes.push("TOM APRENDIDO DAS SUAS ÚLTIMAS RESPOSTAS REAIS NO WHATSAPP:\n" + linhas.join("\n"));
-  }
-  return partes.length ? "\n\nOrientações do corretor para o Cérebro Comercial:\n" + partes.join("\n\n") + "\n" : "";
-}
+// v1092 — montarOrientacoes (montava o bloco gigante de orientações + lições aprendidas pro
+// prompt) foi removida: sem chamador desde que o prompt passou a usar jeitoAprendidoCompacto(),
+// que manda só a voz do corretor e o que já funcionou com um lead parecido.
 
 // Versão ENXUTA do aprendizado pro GERADOR DE MENSAGENS: só a voz do corretor + o que já funcionou
 // (técnicas/objeções) que bate com o lead atual. Pouca coisa de propósito — pra conduzir como ELE
 // sem despejar as 249 observações e distorcer (igual jogar no ChatGPT com 2 exemplos do seu jeito).
-function jeitoAprendidoCompacto(config, contexto) {
+// Exportada pra o teste poder verificar o EFEITO (o que o aprendizado põe no prompt), em vez de
+// procurar texto no código-fonte — ver tests/aprendizado-continuo.
+export function jeitoAprendidoCompacto(config, contexto) {
   const ia = config?.inteligenciaAprendida;
   if (!ia || typeof ia !== "object") return "";
   const query = new Set(_tokensRank(contexto || ""));

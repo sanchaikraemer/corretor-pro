@@ -83,6 +83,11 @@ export default async function handler(req, res) {
   // salvar-novo / criar-manual não precisam de id (o banco gera ao salvar)
   if (action === "salvar-novo") return await acaoSalvarNovo(body, res, organizationId);
   if (action === "criar-manual") return await acaoCriarManual(body, res, organizationId);
+  // v1092 — "nova-oportunidade-parceiro" e "analise-comercial-set" (mais abaixo) já não são
+  // chamadas por nenhuma tela: as chamadas saíram do app na v1073 (29/07/2026). Ficam de
+  // propósito como CAUDA DE COMPATIBILIDADE — o app é instalável (PWA) e um celular que não
+  // abriu o app desde então ainda roda a versão antiga em cache, que chamaria estas rotas.
+  // Podem ser removidas com segurança numa faxina futura, depois que essa cauda expirar.
   if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, organizationId);
   if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
@@ -100,8 +105,6 @@ export default async function handler(req, res) {
     case "memoria-set":   return await acaoMemoriaSet(id, body, res, organizationId);
     case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res, organizationId);
     case "aprendizado":   return await acaoAprendizado(id, body, res, organizationId);
-    case "lembrete-set":  return await acaoLembreteSet(id, body, res, organizationId);
-    case "lembrete-clear":return await acaoLembreteClear(id, res, organizationId);
     case "apagar":        return await acaoApagar(id, res, body?.ids, organizationId);
     case "editar-dados":  return await acaoEditarDados(id, body, res, organizationId);
     case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res, organizationId);
@@ -164,71 +167,10 @@ async function acaoAnaliseComercialSet(id, analysis, res, organizationId) {
   return json(res, 200, { ok: true, analysis: persisted, schemaComercial: COMMERCIAL_SCHEMA_VERSION });
 }
 
-// ============ LEMBRETE (snooze manual) ============
-async function acaoLembreteSet(id, body, res, organizationId) {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-
-  const dias = Number(body?.dias) || 0;
-  if (dias < 0 || dias > 365) return json(res, 400, { ok: false, error: "Informe dias entre 0 e 365." });
-
-  const lembreteEm = new Date();
-  lembreteEm.setDate(lembreteEm.getDate() + dias);
-  lembreteEm.setHours(8, 0, 0, 0); // padrão 8h da manhã
-
-  const { data: current, error: getErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("resultado_analise")
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
-  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
-
-  const merged = { ...(current.resultado_analise || {}) };
-  // v1023 — agendamento (confirmedAppointments) só nasce de clique explícito em Agenda, nunca
-  // sobrevive a nenhuma gravação, nem a esta (que é sobre lembrete, não sobre compromisso).
-  merged.confirmedAppointments = [];
-  merged.lembrete = {
-    quando: lembreteEm.toISOString(),
-    motivo: String(body?.motivo || "").slice(0, 200),
-    diasAdicionados: dias,
-    criadoEm: new Date().toISOString()
-  };
-  const { error: putErr } = await supabase
-    .from("whatsapp_processamentos")
-    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id)
-    .eq("organization_id", organizationId);
-  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
-  return json(res, 200, { ok: true, lembrete: merged.lembrete });
-}
-
-async function acaoLembreteClear(id, res, organizationId) {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-
-  const { data: current, error: getErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("resultado_analise")
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
-  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
-
-  const merged = { ...(current.resultado_analise || {}) };
-  delete merged.lembrete;
-  // v1023 — agendamento (confirmedAppointments) nunca sobrevive a uma gravação — sem exceção.
-  merged.confirmedAppointments = [];
-  const { error: putErr } = await supabase
-    .from("whatsapp_processamentos")
-    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id)
-    .eq("organization_id", organizationId);
-  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
-  return json(res, 200, { ok: true });
-}
+// v1092 — as ações "lembrete-set" e "lembrete-clear" foram removidas. Eram duas rotas de API
+// que NENHUMA tela do app chamou em nenhum momento da história do projeto (conferido no
+// histórico do repositório), e o próprio conceito de lembrete automático foi banido: prazo só
+// existe quando o corretor marca na Agenda (ver v1023).
 
 // ============ SALVAR NOVO LEAD (após o usuário clicar em "Salvar lead") ============
 async function acaoSalvarNovo(body, res, organizationId) {

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID, timingSafeEqual, createHmac } from "crypto";
+import { timingSafeEqual, createHmac } from "crypto";
 
 
 function authJson(res, status, payload) {
@@ -17,18 +17,36 @@ function safeEqualSecret(a, b) {
 
 export function requireApiKey(req, res) {
   if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event === "test") return true;
+  // v1092 — interruptor pra desligar DEFINITIVAMENTE o caminho antigo (chave compartilhada, sem
+  // login). Basta definir CORRETOR_PRO_LEGADO_DESLIGADO=sim nas variáveis de ambiente. A partir
+  // daí só entra quem tem login de verdade. Está desligado por padrão porque o Atalho do iPhone e
+  // eventuais aparelhos antigos da conta original ainda podem depender dele — mas quem usa o app
+  // com login não perde nada ao ligar isto.
+  if (String(process.env.CORRETOR_PRO_LEGADO_DESLIGADO || "").toLowerCase() === "sim") {
+    authJson(res, 401, { ok: false, error: "O acesso por chave de segurança foi desligado nesta instalação. Entre com sua conta." });
+    return false;
+  }
   const expected = process.env.CORRETOR_PRO_API_KEY || process.env.API_SECRET || process.env.CP_API_SECRET || "";
   const allowUnprotected = String(process.env.ALLOW_UNPROTECTED_API || "").toLowerCase() === "true";
   if (!expected) {
     const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-    // v725: em produção, rota pública sem chave é risco real. Só libera sem chave se for escolha explícita.
-    // Para ambiente local/teste continua flexível; para Vercel produção configure CORRETOR_PRO_API_KEY
-    // ou defina ALLOW_UNPROTECTED_API=true conscientemente.
-    if (!isProduction || allowUnprotected) {
+    // v1092 — ALLOW_UNPROTECTED_API deixou de valer EM PRODUÇÃO.
+    //
+    // Este caminho só é alcançado por uma chamada SEM login (sem Authorization: Bearer). Toda
+    // chamada sem login é tratada como sendo da empresa principal (ver resolveOrganizationId).
+    // Ou seja: com ALLOW_UNPROTECTED_API=true e sem chave configurada, QUALQUER pessoa na
+    // internet podia ler e gravar os dados da conta original, sem nenhuma credencial.
+    // Fora de produção (desenvolvimento e testes) a variável continua valendo, que é onde ela
+    // realmente serve.
+    if (!isProduction) {
       try { res.setHeader("X-Corretor-Pro-Security", "api-key-not-configured"); } catch(_) {}
       return true;
     }
-    authJson(res, 500, { ok: false, error: "API bloqueada por segurança: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel ou defina ALLOW_UNPROTECTED_API=true conscientemente." });
+    if (allowUnprotected) {
+      authJson(res, 500, { ok: false, error: "ALLOW_UNPROTECTED_API não vale em produção: ela deixaria a conta original aberta pra qualquer um sem login. Configure CORRETOR_PRO_API_KEY, ou simplesmente remova a variável — quem entra com login não precisa dela." });
+      return false;
+    }
+    authJson(res, 500, { ok: false, error: "API bloqueada por segurança: configure CORRETOR_PRO_API_KEY nas variáveis de ambiente da Vercel. Quem usa o app com login por conta não depende dessa chave." });
     return false;
   }
   const received = req.headers?.["x-corretor-pro-key"] || req.headers?.["x-api-key"] || "";
@@ -53,6 +71,8 @@ export function getSupabaseAdmin() {
 // corretor pra API, uma chamada autenticada só pela chave compartilhada de sempre é tratada
 // como sendo dessa conta — é o único jeito de acesso que existia antes das contas por login,
 // e hoje é exatamente o que ela já representa (todos os dados de hoje já pertencem a ela).
+export { COLUNAS_ADAPTAVEIS, MOTIVO_COLUNA_CRITICA };
+
 export const EMPRESA_PRINCIPAL_ID = "00000000-0000-0000-0000-000000000001";
 
 // v1017 — cache em memória do processo (mesmo padrão já usado no cache de 5s de leads-recentes.js)
@@ -295,10 +315,78 @@ export function mergeStorageRefs(...refsList) {
   };
 }
 
+// v1092 — LISTA EXPLÍCITA do que pode ser adaptado sozinho.
+//
+// A gravação "adaptativa" existe porque o projeto arrastou nomes de coluna diferentes de fases
+// diferentes (nome_arquivo x arquivo_nome, criado_em x created_at...) e precisa funcionar em bases
+// antigas. O perigo é que ela fazia isso por REGRA GENÉRICA DE NOME: qualquer coluna que o banco
+// recusasse era descartada em silêncio, e qualquer coluna obrigatória que faltasse era preenchida
+// com um valor inventado — inclusive `organization_id`, que a regra `/^id$|_id$/` preenchia com um
+// UUID ALEATÓRIO. O resultado seria um lead pertencendo a uma empresa que não existe: dado
+// perdido, sem erro nenhum. É a mesma família do vazamento entre contas corrigido na v1082.
+//
+// Agora é o contrário: só o que está nesta lista pode ser adaptado. Todo o resto — em especial o
+// dono do registro, a identidade e o conteúdo — faz a gravação PARAR com um erro que diz o que
+// precisa ser corrigido.
+const COLUNAS_ADAPTAVEIS = new Set([
+  // Duplicatas de nomenclatura herdadas de versões diferentes do projeto.
+  "nome_arquivo", "arquivo_nome", "criado_em", "created_at", "atualizado_em", "updated_at",
+  // Metadados opcionais da importação — a ausência deles não corrompe nada.
+  "texto_extraido", "audios_encontrados", "audios_transcritos", "file_size",
+  "storage_bucket", "storage_path", "progresso", "erro", "status",
+  // Colunas das tabelas legadas leads/direciona_leads (só a conta original grava nelas).
+  "nome", "telefone", "empreendimento_interesse", "produto",
+  "melhor_horario", "proxima_acao", "resumo", "observacoes",
+  // Colunas de deduplicação normalizada (migração 0010) — ainda opcionais de propósito: sem elas
+  // o sistema continua funcionando pelo caminho antigo, só mais devagar.
+  "dedupe_fone8", "dedupe_nome", "dedupe_arquivo"
+]);
+
+// O que NUNCA pode ser descartado nem inventado, com o motivo de cada um.
+const MOTIVO_COLUNA_CRITICA = {
+  organization_id: "é o dono do registro — sem ele o dado fica órfão ou, pior, visível pra outra conta",
+  id: "é a identidade do registro — inventar um cria duplicata em vez de atualizar",
+  lead_id: "liga o registro ao lead certo",
+  user_id: "liga o registro à pessoa certa",
+  timeline_json: "é a conversa do cliente — descartar apaga o histórico",
+  resultado_analise: "é a análise inteira do lead",
+  etapa: "é o estado do lead (ativo/arquivado) — inventar desarquiva cliente sem o corretor mandar"
+};
+
+function erroColunaCritica(tabela, coluna, tipo) {
+  const motivo = MOTIVO_COLUNA_CRITICA[coluna] || "é um campo crítico para a integridade dos dados";
+  const detalhe = tipo === "ausente"
+    ? `a coluna "${coluna}" não existe na tabela "${tabela}"`
+    : `a coluna "${coluna}" da tabela "${tabela}" é obrigatória e veio vazia`;
+  const err = new Error(
+    `Gravação interrompida: ${detalhe}, e ela ${motivo}. ` +
+    `NENHUM dado foi gravado. Confira se todas as migrações de supabase/migrations/ foram aplicadas ` +
+    `no banco antes de tentar de novo.`
+  );
+  err.code = "COLUNA_CRITICA";
+  return err;
+}
+
+// O Supabase devolve o erro como objeto simples, não como Error. Jogar esse objeto direto
+// com "throw" produz uma falha sem rastro de origem e que nem sequer é reconhecida como erro
+// por quem tenta tratá-la. Aqui ele vira um Error de verdade, preservando os campos que o
+// banco mandou (code/details/hint) pra o diagnóstico não perder nada.
+function erroDoBanco(error, sufixo = "") {
+  if (error instanceof Error) {
+    if (sufixo) error.message += sufixo;
+    return error;
+  }
+  const err = new Error((error?.message || "falha desconhecida no banco") + sufixo);
+  if (error?.code) err.code = error.code;
+  if (error?.details) err.details = error.details;
+  if (error?.hint) err.hint = error.hint;
+  return err;
+}
+
+// Valores padrão só para colunas da lista de adaptáveis. Nunca inventa identificador.
 function defaultFor(col) {
-  if (/^id$|_id$/i.test(col)) return randomUUID();
   if (/_em$|_at$|timestamp|date/i.test(col)) return new Date().toISOString();
-  if (/etapa|status/i.test(col)) return "Novo";
+  if (/^status$/i.test(col)) return "Novo";
   if (/progresso|progress|count|total/i.test(col)) return 0;
   return "";
 }
@@ -315,6 +403,7 @@ async function adaptiveWrite(supabase, table, payload, mode, onConflict = "id") 
     const msg = error.message || "";
     const noCol = msg.match(/Could not find the '([^']+)' column/i);
     if (noCol && noCol[1] in current) {
+      if (!COLUNAS_ADAPTAVEIS.has(noCol[1])) throw erroColunaCritica(table, noCol[1], "ausente");
       removed.push(noCol[1]);
       const { [noCol[1]]: _drop, ...rest } = current;
       current = rest;
@@ -323,17 +412,21 @@ async function adaptiveWrite(supabase, table, payload, mode, onConflict = "id") 
     const notNull = msg.match(/null value in column "([^"]+)"/i);
     if (notNull && !filled.includes(notNull[1])) {
       const col = notNull[1];
+      if (!COLUNAS_ADAPTAVEIS.has(col)) throw erroColunaCritica(table, col, "obrigatoria");
       current = { ...current, [col]: defaultFor(col) };
       filled.push(col);
       continue;
     }
-    if (removed.length || filled.length) {
-      error.message += ` (descartadas: ${removed.join(", ") || "-"} | preenchidas: ${filled.join(", ") || "-"})`;
-    }
-    throw error;
+    throw erroDoBanco(error, (removed.length || filled.length)
+      ? ` (descartadas: ${removed.join(", ") || "-"} | preenchidas: ${filled.join(", ") || "-"})`
+      : "");
   }
   throw new Error(`${mode} ${table}: muitos retries (descartadas: ${removed.join(", ")} | preenchidas: ${filled.join(", ")})`);
 }
+
+// Exportadas pra o teste poder dirigir a gravação adaptativa de verdade (ver
+// tests/v1092-gravacao-nunca-inventa-nem-descarta-campo-critico).
+export { tryInsert, tryUpsert, adaptiveUpdateById };
 
 async function tryInsert(supabase, table, payload) {
   return adaptiveWrite(supabase, table, payload, "insert");
@@ -357,13 +450,13 @@ async function adaptiveUpdateById(supabase, table, id, payload) {
     const msg = error.message || "";
     const noCol = msg.match(/Could not find the '([^']+)' column/i);
     if (noCol && noCol[1] in current) {
+      if (!COLUNAS_ADAPTAVEIS.has(noCol[1])) throw erroColunaCritica(table, noCol[1], "ausente");
       removed.push(noCol[1]);
       const { [noCol[1]]: _drop, ...rest } = current;
       current = rest;
       continue;
     }
-    if (removed.length) error.message += ` (descartadas no update: ${removed.join(", ")})`;
-    throw error;
+    throw erroDoBanco(error, removed.length ? ` (descartadas no update: ${removed.join(", ")})` : "");
   }
   throw new Error(`${table}: muitos retries no update (descartadas: ${removed.join(", ")})`);
 }
@@ -471,6 +564,11 @@ export function _mesclarTimelinesV681(antiga, nova) {
   return { timeline: out, novasUnicas, preservadasDoAntigo, substituidasPelaReal: a0.length - a.length, duplicadasIgnoradas: Math.max(0, a.length + b.length - out.length) };
 }
 
+// null = ainda não sabemos; true = migração 0010 aplicada; false = não aplicada (não tenta mais).
+let _dedupeIndexadoDisponivel = null;
+export function _dedupeIndexadoEstado(){ return _dedupeIndexadoDisponivel; }
+export function _dedupeIndexadoResetar(){ _dedupeIndexadoDisponivel = null; }
+
 export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, organizationId }) {
   const analysis = result?.analysis || {};
   const lead = result?.lead || analysis?.lead || {};
@@ -480,6 +578,51 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phone = _digitsIdentity(lead?.phone || analysis?.lead?.phone || result?.phone || "");
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
+
+  // v1092 — CAMINHO RÁPIDO (migração 0010). As três regras de deduplicação são de IGUALDADE
+  // EXATA sobre texto normalizado (telefone: últimos 8 dígitos; arquivo e nome: minúsculas, sem
+  // acento, espaços colapsados — ver _nomesMesmoLead, que é literalmente `a === b`). Isso permite
+  // trocar a varredura da carteira por três consultas pontuais e indexadas.
+  //
+  // A regra de ouro aqui: este caminho SÓ ACELERA, nunca decide sozinho que um lead é novo. Se
+  // ele não encontrar ninguém, a varredura antiga roda logo abaixo e continua sendo a fonte da
+  // verdade. Assim, se a migração não tiver sido aplicada, ou se o preenchimento inicial das
+  // colunas discordar em algum caso da normalização daqui, o pior que acontece é continuar lento
+  // — nunca criar um cadastro duplicado.
+  if (_dedupeIndexadoDisponivel !== false) {
+    const tentativas = [
+      phoneKey ? { coluna: "dedupe_fone8", valor: phoneKey, via: "telefone" } : null,
+      arquivoKey.length >= 3 ? { coluna: "dedupe_arquivo", valor: arquivoKey, via: "arquivo" } : null,
+      (nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo)) ? { coluna: "dedupe_nome", valor: nomeNovo, via: "nome" } : null
+    ].filter(Boolean);
+    for (const t of tentativas) {
+      let achados = null, erroIdx = null;
+      try {
+        ({ data: achados, error: erroIdx } = await supabase
+        .from("whatsapp_processamentos")
+        .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+        .eq("organization_id", organizationId)
+        .eq(t.coluna, t.valor)
+        .order("atualizado_em", { ascending: false })
+        .limit(1));
+      } catch (_) {
+        // O construtor de consulta não aceitou este encadeamento (versão diferente do cliente
+        // Supabase, ou um duble de teste mais simples). O caminho rápido é só otimização: desliga
+        // e segue pela varredura, que dá exatamente o mesmo resultado.
+        _dedupeIndexadoDisponivel = false;
+        break;
+      }
+      if (erroIdx) {
+        // Coluna ainda não existe (migração 0010 não aplicada): desliga o caminho rápido neste
+        // processo e segue pela varredura. Não é erro — é o estado esperado antes da migração.
+        if (/column|schema cache/i.test(String(erroIdx.message || ""))) { _dedupeIndexadoDisponivel = false; break; }
+        break; // erro de rede/banco: cai na varredura, que tem o mesmo resultado
+      }
+      _dedupeIndexadoDisponivel = true;
+      const achado = Array.isArray(achados) && achados[0];
+      if (achado) return { row: achado, via: t.via };
+    }
+  }
 
   // v1086 — esta varredura roda DUAS VEZES por importação (no "preparar" e de novo ao salvar).
   // Ela precisa só de nome/telefone pra achar o cliente, mas trazer o timeline_json junto
@@ -645,10 +788,18 @@ export async function persistProcessingResult({
     ? null
     : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path, organizationId });
 
+  // v1092 — as três chaves de deduplicação vão gravadas junto (migração 0010). Elas são
+  // calculadas exatamente pelas MESMAS funções que a busca usa, então o caminho rápido e a
+  // varredura nunca podem discordar. Se as colunas ainda não existirem no banco, a gravação
+  // adaptativa as descarta em silêncio (elas estão na lista de COLUNAS_ADAPTAVEIS de propósito).
+  const _foneDedupe = _digitsIdentity(lead?.phone || analysis?.lead?.phone || "");
   const canonicalPayload = {
     organization_id: organizationId,
     nome_arquivo: nomeArquivo,
     arquivo_nome: nomeArquivo,
+    dedupe_fone8: _foneDedupe.length >= 8 ? _foneDedupe.slice(-8) : null,
+    dedupe_arquivo: _nomeIdentity(nomeArquivo) || null,
+    dedupe_nome: _nomeIdentity(analysis?.clientName || analysis?.lead?.clientName || lead?.clientName || nomeArquivo) || null,
     status: "pronto",
     // v1082 — a etapa é decisão DO CORRETOR, não da IA. Só existem dois valores desde a v1069
     // ("Ativo" e "Geladeira", ver ETAPAS_VALIDAS em api/lead-update.js). Antes entrava aqui o

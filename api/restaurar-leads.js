@@ -1,4 +1,4 @@
-import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
+import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, COLUNAS_ADAPTAVEIS, MOTIVO_COLUNA_CRITICA } from "./_persistence.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -236,6 +236,17 @@ async function adaptiveBatchUpsert(supabase, rows) {
     const noCol = message.match(/Could not find the '([^']+)' column/i);
     if (noCol) {
       const col = noCol[1];
+      // v1092 — mesma trava do adaptiveWrite: aqui a restauração grava direto em
+      // whatsapp_processamentos, e descartar organization_id em silêncio criaria leads sem dono
+      // (ou, com o id de outra empresa já na tabela, reescreveria o registro dela). Só o que está
+      // na lista de adaptáveis pode ser descartado.
+      if (!COLUNAS_ADAPTAVEIS.has(col)) {
+        const motivo = MOTIVO_COLUNA_CRITICA[col] || "é um campo crítico para a integridade dos dados";
+        throw new Error(
+          `Restauração interrompida: a coluna "${col}" não existe em whatsapp_processamentos, e ela ` +
+          `${motivo}. NENHUM lead foi restaurado. Confira as migrações de supabase/migrations/.`
+        );
+      }
       removed.push(col);
       current = current.map(({ [col]: _drop, ...rest }) => rest);
       continue;
