@@ -6586,9 +6586,11 @@ function cpImportOverlayVisivel(mostrar){
       if(_cpioMostrado >= 100) cpioZerar();
       el.hidden = false; document.body.classList.add("cpio-aberto");
     }
+    cpioRearmarVigia();
   }else{
     if(!el.hidden){ el.hidden = true; document.body.classList.remove("cpio-aberto"); }
     cpioPararAnimacao();
+    clearTimeout(_cpioVigia); _cpioVigia = null;
   }
 }
 window.cpImportOverlayVisivel = cpImportOverlayVisivel;
@@ -6611,6 +6613,17 @@ function cpioPintarPct(valor){
   const elPct = qs("#cpioPct"); if(elPct) elPct.textContent = Math.round(v) + "%";
   const anel = qs("#cpioProgresso");
   if(anel) anel.style.strokeDashoffset = String(CPIO_CIRCUNFERENCIA * (1 - v/100));
+}
+
+// v1089-2 — VIGIA POR TEMPO. Substitui a rede de segurança que fechava a tela no fim de
+// processFile (e disparava no meio do salvamento). Toda vez que a importação dá sinal de vida, o
+// relógio é rearmado; se ficar todo esse tempo sem nenhum sinal, a tela se fecha sozinha pra
+// nunca prender ninguém. É folgado de propósito: uma conversa cheia de áudio pode demorar.
+const CPIO_VIGIA_MS = 120000;
+let _cpioVigia = null;
+function cpioRearmarVigia(){
+  clearTimeout(_cpioVigia);
+  _cpioVigia = setTimeout(() => { try{ cpImportOverlayVisivel(false); }catch(_){} }, CPIO_VIGIA_MS);
 }
 
 function cpioPararAnimacao(){
@@ -6675,10 +6688,15 @@ function cpImportOverlaySincronizar(idx, sub, opts){
   if(opts && opts.pausar){ cpImportOverlayVisivel(false); return; }
   if(idx >= 0 && idx <= 5){ cpImportOverlayAtualizar(idx, sub); cpImportOverlayVisivel(true); return; }
   if(idx === 6){
+    // v1089-2 — Concluído mostra 100% e FICA. Antes ela sumia sozinha aos 650ms, mas o lead só
+    // abre aos 800ms: nesses ~150ms a tela de importação reaparecia — era a segunda tela que
+    // piscava, "mais uma vez antes de abrir o lead". Quem a fecha agora é o próprio abrirLead,
+    // depois que o lead já está na tela (ver cpioFecharQuandoLeadAbrir). O relógio abaixo é só
+    // uma saída de emergência, com folga, caso o lead não chegue a abrir.
     cpImportOverlayAtualizar(6, sub);
     cpImportOverlayVisivel(true);
     clearTimeout(cpImportOverlaySincronizar._t);
-    cpImportOverlaySincronizar._t = setTimeout(() => cpImportOverlayVisivel(false), 650);
+    cpImportOverlaySincronizar._t = setTimeout(() => cpImportOverlayVisivel(false), 6000);
     return;
   }
   cpImportOverlayVisivel(false);
@@ -6686,6 +6704,13 @@ function cpImportOverlaySincronizar(idx, sub, opts){
 
 // Exposta pra poder ser dirigida de fora (teste em navegador de verdade e diagnóstico): é o
 // único ponto que decide se a tela cheia aparece, some ou espera uma decisão do corretor.
+// Abre o lead com a tela cheia AINDA de pé e só a fecha depois — assim a troca é direto de
+// "Pronto" pro cliente, sem a tela de importação aparecer no meio do caminho.
+async function cpioFecharQuandoLeadAbrir(id){
+  try{ if(id) await abrirLead(id); }
+  catch(_){}
+  finally{ try{ cpImportOverlayVisivel(false); }catch(_){} }
+}
 window.cpImportOverlaySincronizar = cpImportOverlaySincronizar;
 
 // Bloqueia/reabilita os botões "Nova análise" e "Diagnóstico" da tela de
@@ -7429,7 +7454,7 @@ async function atualizarLeadComEvolucao(){
     // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
     // aparecer; ver a marcação "concluidaComSucesso" em processFile.
     qs("#importCard")?.classList.remove("cp-import-rodando");
-    setTimeout(() => { if(existente.id) abrirLead(existente.id); }, 800);
+    setTimeout(() => { cpioFecharQuandoLeadAbrir(existente.id); }, 800);
   }catch(err){
     if(btn){ btn.disabled = false; btn.textContent = "Atualizar"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
@@ -7494,7 +7519,7 @@ async function salvarLeadPendente(){
     // aparecer; ver a marcação "concluidaComSucesso" em processFile.
     qs("#importCard")?.classList.remove("cp-import-rodando");
     // Após salvar, abre o lead da home pra mostrar o card de foco completo (com badges, materiais, etc).
-    setTimeout(() => { if(state.lead?.id) abrirLead(state.lead.id); }, 800);
+    setTimeout(() => { cpioFecharQuandoLeadAbrir(state.lead?.id); }, 800);
   }catch(err){
     if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
@@ -7628,12 +7653,13 @@ async function processFile(file, options = {}){
   }finally{
     state.processing=false;
     if(!concluidaComSucesso) qs("#importCard")?.classList.remove("cp-import-rodando");
-    // v1088 — REDE DE SEGURANÇA da tela cheia. Ela cobre o app inteiro; se um caminho de erro
-    // qualquer terminar sem passar pelas etapas, ela ficaria aberta e o corretor não conseguiria
-    // fazer mais nada. Aqui, no fim de TODA importação (deu certo ou não), ela é fechada — quando
-    // o fluxo continua (ex.: "aguardando confirmação"), quem manda mostrá-la de novo é o próprio
-    // renderEtapas, na etapa seguinte.
-    try{ cpImportOverlayVisivel(false); }catch(_){}
+    // v1089-2 — AQUI NÃO SE ESCONDE MAIS NADA. Esta rede de segurança fechava a tela cheia no
+    // fim de processFile — só que processFile TERMINA ANTES do salvamento: renderProcessedResult
+    // dispara salvarLeadPendente()/atualizarLeadComEvolucao() sem esperar, então este "finally"
+    // rodava com o salvamento ainda em curso. A tela sumia, os cartões da importação apareciam, e
+    // o "salvando" trazia a tela de volta — era a tela que aparecia no meio da análise.
+    // A proteção contra ficar presa passou a ser o VIGIA POR TEMPO (cpioRearmarVigia), que só
+    // dispara se NADA acontecer por um bom tempo — nunca no meio de um fluxo que está andando.
   }
 }
 async function readShareDebug(){
