@@ -2660,7 +2660,11 @@ async function registrarMensagemEnviada(id, msg){
   // depois como se nunca tivesse sido atendido ("assim como Adão, vários outros atendi e não
   // marca corretamente as datas"). Agora tenta de novo uma vez antes de desistir, e avisa se
   // mesmo assim não conseguir — em vez de deixar o corretor sem saber.
-  const registrarAtendimentoDaCopia = () => fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"},
+  // v1097 — keepalive: copiar a mensagem é EXATAMENTE quando o corretor sai do app pro WhatsApp.
+  // Sem isso, o celular corta este pedido ao mandar o app pro fundo e o atendimento não é gravado,
+  // apesar da tela já ter dito "Mensagem copiada" e já ter marcado como atendido na hora. Com
+  // keepalive, o navegador termina o envio mesmo com o app fora da frente.
+  const registrarAtendimentoDaCopia = () => fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, keepalive:true,
     body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
   let respAtendimento = null;
   try{ respAtendimento = await registrarAtendimentoDaCopia(); }catch(_){ respAtendimento = null; }
@@ -3563,7 +3567,12 @@ function renderSaudacao(items){
       // v1091 — ÚNICO aviso de dia sem fila que sobrou na Home. Antes a mesma informação aparecia
       // em cinco lugares na mesma tela (o dono circulou três num print). E o texto dizia sempre
       // "volta na segunda", o que fica errado pra quem marcou sábado no Cérebro.
-      ? `<span class="destaque">Hoje você não atende.</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje mesmo assim — a fila volta ${cpProximoDiaDeAtendimento()}.`
+      // v1097 — o dono viu "Fazer agora: 0" num sábado e perguntou "por que isso? porque é
+      // sábado?". Ou seja: a mensagem dizia que hoje ele não atende, mas não deixava claro que
+      // isso é uma CONFIGURAÇÃO DELE, nem onde mudar. Essa dica só existia na outra versão da
+      // frase (a de quando ainda não tinha atendido ninguém) — justamente a que ele não viu.
+      // Agora as duas explicam de onde vem a regra e como mudá-la.
+      ? `<span class="destaque">Hoje você não atende.</span> ${tratadosHoje} atendido${tratadosHoje>1?"s":""} hoje mesmo assim — a fila volta ${cpProximoDiaDeAtendimento()}. Dá pra mudar seus dias no Cérebro.`
       : `<span class="destaque">Hoje você não atende.</span> A fila "Fazer agora" volta ${cpProximoDiaDeAtendimento()}. Dá pra mudar seus dias no Cérebro.`;
   } else if(acaoMostrada > 0){
     // v942 — a Home agora SEMPRE mostra os leads do dia (puxa da fila ranqueada completa), então
@@ -4897,20 +4906,38 @@ function cp704Css(){
     try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
     catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
     const leadId=state.lead?.id;
-    // v985 — este É o botão real de copiar usado de dentro do lead ("Fazer agora" > Copiar).
-    // Antes só chamava registrarMensagemEnviada (registra ATENDIMENTO), sem nunca gravar o
-    // evento "mensagem_copiada" que o Desempenho conta — por isso "Mensagens copiadas" ficava
-    // zerado mesmo copiando direto daqui o tempo todo. Registra ANTES de registrarMensagemEnviada
-    // pra já estar salvo quando ela recarrega a lista de leads (Desempenho lê dessa lista).
+    // v1097 — o dono relatou (com print): copiou a sugestão, a opção ficou marcada em coral, mas
+    // o ATENDIMENTO não foi marcado — e "só marca às vezes, na segunda vez que copia".
+    //
+    // Causa: copiar disparava DUAS gravações em sequência, e a do atendimento era a SEGUNDA. Só
+    // que copiar é justamente o momento em que o corretor sai do app pra colar no WhatsApp — e um
+    // app em segundo plano no celular tem os pedidos de rede cortados pelo sistema. A primeira
+    // gravação (a contagem do Desempenho, que é o detalhe menos importante) consumia a janela
+    // segura, e a que realmente importa saía tarde demais, morrendo no caminho. Copiar de novo,
+    // já olhando pra tela, funcionava — daí a intermitência.
+    //
+    // Duas correções:
+    //  1. O ATENDIMENTO vai PRIMEIRO. Se só uma sobreviver, que seja a que importa.
+    //  2. As duas usam keepalive, que manda o navegador terminar o pedido mesmo com o app no
+    //     fundo ou fechado. É pra isso que ele existe.
+    //
+    // Continuam em sequência (nunca em paralelo) de propósito: as duas gravam no MESMO campo do
+    // cliente, lendo antes de escrever — em paralelo, uma apagaria a outra.
+    try{ await registrarMensagemEnviada(leadId, msg); }catch(_){}
     if(leadId){
       try{
-        await fetch("./api/lead-update", {
-          method:"POST", headers:{"Content-Type":"application/json"},
+        const r = await fetch("./api/lead-update", {
+          method:"POST", headers:{"Content-Type":"application/json"}, keepalive:true,
           body: JSON.stringify({ id:leadId, action:"aprendizado", evento:"mensagem_copiada", detalhes:{ de:"fazer_agora", opcao:k||window.cp704SelectedMsg||'a' } })
-        }).catch(()=>{});
+        }).catch(()=>null);
+        // v1097 — o contador "Mensagens copiadas" do Desempenho era gravado ANTES do atendimento
+        // justamente pra já estar salvo quando a lista recarregasse. Agora que o atendimento vem
+        // primeiro (ele é o que não pode se perder), a lista recarrega antes deste número existir.
+        // Em vez de voltar à ordem antiga, atualiza a lista DE NOVO aqui: o atendimento fica
+        // protegido e o Desempenho continua certo na hora.
+        if(r && r.ok){ invalidarLeadsCache(); loadRecentLeads(true); }
       }catch(_){}
     }
-    try{ registrarMensagemEnviada(leadId, msg); }catch(_){}
   };
   window.cp704OpenWhats=function(){
     const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
