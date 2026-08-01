@@ -94,8 +94,16 @@ assert.match(app, /setTimeout\(\(\) => \{ cpioFecharQuandoLeadAbrir\(existente\.
 const fechaNoConcluido = corpo.match(/setTimeout\(\(\) => cpImportOverlayVisivel\(false\), (\d+)\);/);
 assert.ok(fechaNoConcluido && Number(fechaNoConcluido[1]) >= 3000,
   'ao concluir, o relógio que fecha a tela é só saída de emergência — precisa ter folga pro lead abrir');
-assert.match(app, /cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}\s*\n\s*toast\("Não foi possível salvar: "/,
-  'erro ao salvar precisa liberar a tela pro corretor ver o aviso');
+// v1096 — entre o fechamento da tela cheia e o aviso passou a existir a escolha da mensagem
+// (queda de conexão x demais erros). O que este teste protege continua igual: a tela cheia sai
+// ANTES do aviso, senão o corretor não enxerga o que aconteceu.
+{
+  const trecho = app.match(/cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}[\s\S]{0,900}?toast\(/g) || [];
+  const noSalvar = trecho.find(t => /pareceQuedaDeConexao/.test(t));
+  assert.ok(noSalvar, 'erro ao salvar precisa liberar a tela pro corretor ver o aviso');
+  assert.ok(noSalvar.indexOf('cpImportOverlayVisivel(false)') < noSalvar.indexOf('toast('),
+    'a tela cheia precisa sair ANTES do aviso aparecer');
+}
 assert.match(app, /cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}\s*\n\s*toast\("Não foi possível atualizar: "/,
   'erro ao atualizar precisa liberar a tela pro corretor ver o aviso');
 

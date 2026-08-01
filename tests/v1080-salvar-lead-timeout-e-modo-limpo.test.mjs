@@ -61,8 +61,13 @@ for (const [nome, bloco] of [['salvarLeadPendente', salvarBloco], ['atualizarLea
 }
 
 // 4. Erro final traduzido (não mais err.message cru) nas duas funções.
-assert.match(salvarBloco, /toast\("Não foi possível salvar: "\s*\+\s*userFriendlyError\(err\)\)/,
+// v1096 — o salvamento ganhou DOIS caminhos de mensagem: quando a conexão cai (ou a gravação não
+// termina a tempo), o aviso passa a dizer que a análise não se perdeu e que é só tentar de novo —
+// era o que faltava no print do dono. Nos demais erros, continua traduzindo com userFriendlyError.
+assert.match(salvarBloco, /userFriendlyError\(err\)/,
   'salvarLeadPendente precisa traduzir o erro final com userFriendlyError');
+assert.match(salvarBloco, /N[ÃA]O foi perdida/i,
+  'e precisa avisar que a análise não se perdeu quando a conexão cai');
 assert.match(atualizarBloco, /toast\("Não foi possível atualizar: "\s*\+\s*userFriendlyError\(err\)\)/,
   'atualizarLeadComEvolucao precisa traduzir o erro final com userFriendlyError');
 
