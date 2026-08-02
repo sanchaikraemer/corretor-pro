@@ -754,14 +754,10 @@ const LIMITE_ANALISES_IA_DIA_PADRAO = 200;
 // Teto bem menor SÓ durante o teste — quando a conta vira "ativo" (paga), volta pro limite normal.
 // v1108 — decisão comercial do dono (02/08/2026): 25 → 10 por dia durante o teste grátis. Ao
 // atingir, o aviso vira convite de contratação com botão pro WhatsApp comercial (ver abaixo).
-<<<<<<< HEAD
 // v1109 — dono achou 10 demais de graça: 10 → 5. Em 7 dias de teste ainda dá até 35 análises;
 // quem esbarra no teto é lead quente pro WhatsApp comercial. Ajustável sem publicar nada via
 // CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE na Vercel (a env var manda sobre este padrão).
 const LIMITE_ANALISES_IA_DIA_TESTE_PADRAO = 5;
-=======
-const LIMITE_ANALISES_IA_DIA_TESTE_PADRAO = 10;
->>>>>>> origin/main
 
 // WhatsApp comercial da plataforma (o número do DONO DO PRODUTO, não de corretor ou cliente —
 // por isso pode viver no código, com a variável de ambiente como override). Formato wa.me:
