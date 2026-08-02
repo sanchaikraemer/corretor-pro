@@ -135,9 +135,11 @@ const civilSP = (iso) =>
 
 // ── 9. Concordância e data local nos textos e arquivos ────────────────────────────────────────
 {
-  assert.ok(!/atendidos hoje\.`/.test(app.match(/Mandou bem![^`]*`/)?.[0] || 'atendidos hoje.`'.replace(/x/, '')) ||
-    /atendido\$\{tratadosHoje>1\?"s":""\} hoje/.test(app),
-    '"1 lead atendidos hoje" — o particípio precisa concordar');
+  // A frase do "Mandou bem!" especificamente (a revisão adversarial provou que um assert
+  // genérico casava com OUTRA frase correta e deixava o bug voltar despercebido).
+  const mandouBem = app.match(/Mandou bem![^\n]*/)?.[0] || '';
+  assert.ok(mandouBem.includes('atendido${tratadosHoje>1?"s":""} hoje'),
+    '"1 lead atendidos hoje" — o particípio do "Mandou bem!" precisa concordar');
   assert.ok(/lead\$\{items\.length===1\?"":"s"\}/.test(app), 'pill do topo: "1 leads" não pode');
   assert.ok(!/toISOString\(\)\.slice\(0,10\)\}\.csv/.test(app) && !/toISOString\(\)\.slice\(0,10\)\}\.json/.test(app),
     'nome dos arquivos de planilha/backup usa a data de Brasília, não a UTC (depois das 21h saía "amanhã")');

@@ -2592,8 +2592,9 @@ function filtrarMensagensRecentes(messages, dias) {
       dias,
       totalOriginal: messages.length,
       totalFiltrado: filtered.length,
-      janelaDe: new Date(cutoffTs).toISOString().slice(0, 10),
-      janelaAte: new Date(maxTs).toISOString().slice(0, 10)
+      // Dia civil de Brasília, não UTC — depois das 21h o rótulo saía com o dia seguinte.
+      janelaDe: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(cutoffTs)),
+      janelaAte: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(maxTs))
     }
   };
 }

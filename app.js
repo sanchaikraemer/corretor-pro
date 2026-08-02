@@ -1280,8 +1280,11 @@ function sinaisPrioridadeComercial682(l){
   const diasDistintos = (() => {
     const set = new Set();
     for(const m of msgs){
-      const iso = m && m.iso ? String(m.iso).slice(0,10) : "";
-      if(iso) set.add(iso);
+      // v1107 — m.date primeiro (dia civil como veio do WhatsApp); o slice do iso é dia UTC,
+      // que empurrava mensagem de 21h+ pro "dia seguinte" e inflava a contagem (mesmo fallback
+      // que as contagens irmãs já usam).
+      const dia = m ? (m.date || (m.iso ? String(m.iso).slice(0,10) : "")) : "";
+      if(dia) set.add(dia);
     }
     return set.size;
   })();
