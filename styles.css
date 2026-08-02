@@ -424,8 +424,10 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 .insight-foco b{color:var(--lime)}
 .ver-todas{background:none;border:0;color:var(--lime);font-weight:900;font-size:13px;cursor:pointer;padding:8px}
 @media(min-width:1000px){.home-saud-h{font-size:34px}}
-/* Saudação/KPI antigos não aparecem na home (a saudação grande os substitui) */
-#home #saudacao,#home #resumoDia{display:none !important}
+/* Saudação antiga não aparece na home (a saudação grande a substitui). O #resumoDia saiu desta
+   regra na v1107: ele voltou a aparecer em versão posterior (regra #home #resumoDia{display:grid
+   !important} mais abaixo sempre vencia esta) — a metade daqui era código morto confundindo. */
+#home #saudacao{display:none !important}
 /* Avatar do hero: anel verde + selo de fogo */
 /* Fila: rótulo da faixa embaixo do %, ícone WhatsApp e setinha */
 .fila-faixa{font-size:10px;font-weight:800;margin-top:2px;opacity:.9}

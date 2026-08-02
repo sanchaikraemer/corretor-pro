@@ -236,7 +236,11 @@ export function parseDateTime(date, time) {
   const [hh, mm] = String(time).split(":").map(Number);
   if (!d || !m || !yRaw || Number.isNaN(hh) || Number.isNaN(mm)) throw new Error("Data/hora inválida no TXT do WhatsApp.");
   const y = yRaw < 100 ? 2000 + yRaw : yRaw;
-  return new Date(y, m - 1, d, hh, mm, 0).toISOString();
+  // O export do WhatsApp vem no horário do Brasil (America/Sao_Paulo, -03:00 fixo desde 2019).
+  // new Date(y, m-1, d, hh, mm) usa o fuso do SERVIDOR — na Vercel é UTC, então mensagens de
+  // 00:00–02:59 caíam no dia civil anterior quando reconvertidas pra Brasília (datas nas listas,
+  // dias de espera e o "dias corridos" do prompt da IA saíam com 1 dia a mais).
+  return new Date(Date.UTC(y, m - 1, d, hh + 3, mm, 0)).toISOString();
 }
 
 function parseWhatsAppLine(line) {
@@ -2588,8 +2592,9 @@ function filtrarMensagensRecentes(messages, dias) {
       dias,
       totalOriginal: messages.length,
       totalFiltrado: filtered.length,
-      janelaDe: new Date(cutoffTs).toISOString().slice(0, 10),
-      janelaAte: new Date(maxTs).toISOString().slice(0, 10)
+      // Dia civil de Brasília, não UTC — depois das 21h o rótulo saía com o dia seguinte.
+      janelaDe: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(cutoffTs)),
+      janelaAte: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(maxTs))
     }
   };
 }
