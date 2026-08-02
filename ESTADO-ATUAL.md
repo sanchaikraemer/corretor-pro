@@ -88,7 +88,13 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 
 ### Custo e limites de IA
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia por empresa (padrão 200).
-- `CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE` — mesmo teto, mas pra contas em teste grátis (padrão 25 — ver `NOTAS-v1041.md`).
+- `CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE` — mesmo teto, mas pra contas em teste grátis (padrão 10
+  desde a v1108, era 25 — ver `NOTAS-v1041.md` e `NOTAS-v1108.md`). **Atenção:** se essa variável
+  estiver cadastrada na Vercel, ela MANDA sobre o padrão do código — confira lá antes de esperar
+  o teto novo valer.
+- `CORRETOR_PRO_WHATS_COMERCIAL` — WhatsApp comercial da plataforma (só dígitos, com código do
+  país), usado no convite de contratação quando a conta em teste atinge o limite diário (v1108).
+  Padrão embutido: o número do dono do produto.
 - `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
   mesmo tipo de teto, pra transcrição de voz avulsa (observação por voz do lead, `cp7Obs`) —
   padrão 100/dia (20/dia em teste, ver `NOTAS-v1068.md`). As 3 ações de visão (extrair print,

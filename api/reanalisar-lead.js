@@ -585,7 +585,9 @@ async function reanalisarLeadHandler702(req, res) {
       ok: false,
       error: "A reanálise não foi concluída e nenhuma sugestão foi salva.",
       detail: avisoReanalise,
-      mode: novoAnalysis?.mode || "erro_api"
+      mode: novoAnalysis?.mode || "erro_api",
+      // v1108 — limite do teste grátis: o app usa isto pra mostrar o botão do WhatsApp comercial.
+      ...(novoAnalysis?.upgrade ? { upgrade: novoAnalysis.upgrade } : {})
     });
   }
   novoAnalysis = finalizarAnaliseComercial(novoAnalysis, leadModelo, timelineFinal);
