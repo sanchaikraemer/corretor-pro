@@ -1474,10 +1474,11 @@ export function ranquearCasosAprendidos(casos, contexto, limite = 5) {
 // geração de mensagens lê esse bloco — é a "memória geral" do sistema.
 // v1092 — loadConhecimentoCorretor removida pelo mesmo motivo: sem chamador e sem filtro por
 // empresa. Quem grava esse bloco (atualizarConhecimentoCorretor, logo abaixo) filtra certo.
-// v1115 — CASO REAL (Carmen/Personalité): a remoção da v1092 formalizou um problema que já
-// existia — o conhecimento era GRAVADO a cada análise (pagando IA pra isso) e NUNCA LIDO por
-// prompt nenhum. Resultado: a cliente perguntou o endereço do empreendimento, o corretor já
-// tinha ensinado esse endereço em conversas anteriores, e as sugestões INVENTARAM outra cidade.
+// v1115 — caso real relatado pelo dono (ver NOTAS-v1115.md): a remoção da v1092 formalizou um
+// problema que já existia — o conhecimento era GRAVADO a cada análise (pagando IA pra isso) e
+// NUNCA LIDO por prompt nenhum. Resultado: uma cliente perguntou o endereço do empreendimento,
+// o corretor já tinha ensinado esse endereço em conversas anteriores, e as sugestões
+// INVENTARAM outra cidade.
 // A leitura volta aqui, com filtro por empresa e cache de 60s (mesmo padrão da memória v2).
 
 const _conhecimentoCorretorCache = new Map();
