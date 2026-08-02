@@ -785,9 +785,12 @@ export function limiteAnalisesIADoDiaTeste() {
 // mês (25×30 seriam 750 — o mensal de 250 é o que protege de verdade). A conta original (dono da
 // plataforma) fica FORA dos planos — só o fusível técnico de 200/dia. Cada número é ajustável
 // sem publicar nada, via variável de ambiente na Vercel.
+// v1111 — dono recalibrou (usando o próprio uso real como régua: 70–80 análises/MÊS com 200+
+// clientes na carteira): Pro 15/dia + 150/mês; Pro Master 30/dia + 300/mês (sempre o dobro).
+// Acima disso é plano personalizado, negociado no WhatsApp (o convite do Pro Master já leva lá).
 const PLANOS_COMERCIAIS = {
-  "pro": { tipo: "pro", nome: "Pro", dia: 25, mes: 250, envDia: "CORRETOR_PRO_LIMITE_DIA_PRO", envMes: "CORRETOR_PRO_LIMITE_MES_PRO" },
-  "pro-master": { tipo: "pro-master", nome: "Pro Master", dia: 50, mes: 500, envDia: "CORRETOR_PRO_LIMITE_DIA_PROMASTER", envMes: "CORRETOR_PRO_LIMITE_MES_PROMASTER" }
+  "pro": { tipo: "pro", nome: "Pro", dia: 15, mes: 150, envDia: "CORRETOR_PRO_LIMITE_DIA_PRO", envMes: "CORRETOR_PRO_LIMITE_MES_PRO" },
+  "pro-master": { tipo: "pro-master", nome: "Pro Master", dia: 30, mes: 300, envDia: "CORRETOR_PRO_LIMITE_DIA_PROMASTER", envMes: "CORRETOR_PRO_LIMITE_MES_PROMASTER" }
 };
 // Chave em direciona_config onde fica o plano contratado da conta: valor { tipo: "pro"|"pro-master" }.
 // Conta ativa sem registro = Pro (plano de entrada). Definido pelo painel administrativo.
