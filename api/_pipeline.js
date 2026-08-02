@@ -1474,6 +1474,38 @@ export function ranquearCasosAprendidos(casos, contexto, limite = 5) {
 // geração de mensagens lê esse bloco — é a "memória geral" do sistema.
 // v1092 — loadConhecimentoCorretor removida pelo mesmo motivo: sem chamador e sem filtro por
 // empresa. Quem grava esse bloco (atualizarConhecimentoCorretor, logo abaixo) filtra certo.
+// v1115 — caso real relatado pelo dono (ver NOTAS-v1115.md): a remoção da v1092 formalizou um
+// problema que já existia — o conhecimento era GRAVADO a cada análise (pagando IA pra isso) e
+// NUNCA LIDO por prompt nenhum. Resultado: uma cliente perguntou o endereço do empreendimento,
+// o corretor já tinha ensinado esse endereço em conversas anteriores, e as sugestões
+// INVENTARAM outra cidade.
+// A leitura volta aqui, com filtro por empresa e cache de 60s (mesmo padrão da memória v2).
+
+const _conhecimentoCorretorCache = new Map();
+export function invalidarConhecimentoCorretorCache(organizationId) {
+  if (organizationId) _conhecimentoCorretorCache.delete(organizationId);
+  else _conhecimentoCorretorCache.clear();
+}
+
+export async function conhecimentoCorretorTexto(organizationId = ORGANIZACAO_PADRAO_LEGADA) {
+  const agora = Date.now();
+  const emCache = _conhecimentoCorretorCache.get(organizationId);
+  if (emCache && agora - emCache.ts < 60000) return emCache.texto;
+  try {
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return "";
+    const { data } = await supabase
+      .from("direciona_config")
+      .select("valor")
+      .eq("chave", "corretor-conhecimento")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    const texto = String(data?.valor?.texto || "").trim().slice(0, 4000);
+    _conhecimentoCorretorCache.set(organizationId, { ts: agora, texto });
+    return texto;
+  } catch (_) { return ""; }
+}
 
 // Fire-and-forget. Após cada análise, extrai o que há de novo nas mensagens do
 // corretor e funde no bloco "corretor-conhecimento". Nunca bloqueia a resposta.
@@ -1498,7 +1530,7 @@ ${atual || "(vazio)"}
 CONVERSA DO CORRETOR COM CLIENTE:
 ${timelineText.slice(0, 5000)}
 
-Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa: regras de produto, condições de pagamento, FGTS, financiamento, empreendimentos, respostas a objeções reais. Se um fato já está no conhecimento atual, não repita. Funda tudo em texto corrido simples, máximo 400 palavras, sem títulos formais. Se não houver nada novo de concreto, devolva o CONHECIMENTO ATUAL sem alterar. Retorne SOMENTE o texto final.`;
+Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa: regras de produto, ENDEREÇOS e localização de empreendimentos (rua, bairro, cidade, pontos de referência), condições de pagamento, FGTS, financiamento, empreendimentos, respostas a objeções reais. Se um fato já está no conhecimento atual, não repita. Funda tudo em texto corrido simples, máximo 400 palavras, sem títulos formais. Se não houver nada novo de concreto, devolva o CONHECIMENTO ATUAL sem alterar. Retorne SOMENTE o texto final.`;
     const modeloUsado = modeloTarefasSimples();
     const completion = await openai.chat.completions.create({
       model: modeloUsado,
@@ -1509,6 +1541,7 @@ Identifique APENAS fatos NOVOS e concretos que o corretor ensinou nessa conversa
     const novo = String(completion.choices?.[0]?.message?.content || "").trim();
     if (!novo || novo.length < 20) return;
     await upsertConfigComOrganizacao(supabase, organizationId, { chave: "corretor-conhecimento", valor: { texto: novo }, atualizado_em: new Date().toISOString() });
+    invalidarConhecimentoCorretorCache(organizationId); // v1115 — a próxima análise já lê o fato novo
   } catch (e) {
     console.warn("[direciona] atualizarConhecimentoCorretor:", e?.message || e);
   }
@@ -1802,6 +1835,7 @@ CUIDADO com a palavra "investir": em fala coloquial ("se a gente for investir", 
 
 3) PARA ONDE OLHAR EM CADA SITUAÇÃO (roteiro, NÃO argumento pronto):
 IMPORTANTE: os itens abaixo dizem apenas QUAL CAMINHO investigar. Eles NÃO autorizam afirmar nenhuma condição comercial. Toda condição (congelamento de preço, desconto, prazo, forma de pagamento, valorização, aceitação de permuta) só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa. Se não estiver em nenhum dos dois, NÃO afirme — pergunte ou ofereça verificar.
+O MESMO vale para DADOS DE FATO do empreendimento — endereço, rua, bairro, CIDADE, região, localização, metragem, número de unidades, prazo de entrega: só afirme o que estiver escrito no Cérebro Comercial, no bloco de FATOS ENSINADOS PELO CORRETOR ou na própria conversa. Se o cliente perguntar algo assim (ex.: o endereço) e a informação não estiver em NENHUMA dessas fontes, a mensagem deve dizer que o corretor vai enviar/confirmar o dado — é PROIBIDO afirmar uma localização, cidade ou característica que não conste nas fontes. Afirmar a cidade errada destrói a credibilidade do corretor.
 - Acha caro o pronto / não tem pressa → verifique se há opção de planta/lançamento no Cérebro e, se houver, apresente as condições que o Cérebro descrever. Sem isso no Cérebro, não invente vantagem de planta.
 - Travado em pagamento → explore apenas as formas de pagamento que constarem no Cérebro ou que o cliente já citou.
 - Quer dar imóvel na troca (permuta) → trate como uma pergunta a confirmar (a construtora aceita? em que condições?), nunca como uma condição já garantida. O ponto de atenção real é de liquidez: imóvel difícil de vender trava o negócio.
@@ -2298,6 +2332,10 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
   // o prompt fica exatamente como era antes.
   const jeitoAprendido = jeitoAprendidoCompacto(configCerebro, timelineText);
+  // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
+  // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
+  // real no comentário de conhecimentoCorretorTexto).
+  const conhecimentoCorretor = await conhecimentoCorretorTexto(organizationId);
 
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a única autoridade sobre análise, estratégia e criação das mensagens.
@@ -2313,6 +2351,7 @@ O bloco acima é o piso comercial geral, válido sempre. Qualquer regra do Cére
 ${instrucoesCerebroTexto}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
+${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
 
 Responda somente com JSON válido no formato solicitado.`;
 

@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial,
   ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
-  upsertConfigComOrganizacao
+  upsertConfigComOrganizacao, invalidarConhecimentoCorretorCache
 } from "./_pipeline.js";
 import { registrarUsoIA } from "./_iaCusto.js";
 
@@ -1268,6 +1268,7 @@ async function limparAprendizadoDosLeads(supabase, ids, organizationId) {
   const { error: conhecimentoErr } = await supabase.from("direciona_config").delete().eq("chave", "corretor-conhecimento").eq("organization_id", organizationId);
   if (conhecimentoErr && !erroTabelaAusente(conhecimentoErr)) throw new Error(`corretor-conhecimento: ${conhecimentoErr.message}`);
   invalidarMemoriaComercialCache(organizationId);
+  invalidarConhecimentoCorretorCache(organizationId); // v1115 — o bloco voltou a ser lido nas análises
 }
 
 async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
