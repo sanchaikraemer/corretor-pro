@@ -6,7 +6,7 @@
 // separado — ver NOTAS-v1039.md: o plano Hobby da Vercel só permite 12 Serverless Functions).
 // GET ?relatorio=uso-ia devolve o relatório; POST {action:"excluir-conta"} continua igual.
 import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin, emptyBucket } from "./_persistence.js";
-import { invalidarMemoriaComercialCache } from "./_pipeline.js";
+import { invalidarMemoriaComercialCache, upsertConfigComOrganizacao, PLANO_CONTRATADO_KEY } from "./_pipeline.js";
 import { estimarCustoUsd, cotacaoUsdBrl } from "./_iaCusto.js";
 
 function json(res, status, payload) {
@@ -132,6 +132,42 @@ async function relatorioUsoIA(req, res, supabase) {
   });
 }
 
+// v1110 — planos comerciais (Pro 25/dia+250/mês, Pro Master 50/dia+500/mês): o plano de cada
+// conta vive em direciona_config (chave "plano-contratado"), definido só pelo painel
+// administrativo. Conta ativa sem registro = Pro (plano de entrada).
+async function relatorioPlanos(res, supabase) {
+  const { data, error } = await supabase
+    .from("direciona_config")
+    .select("organization_id,valor")
+    .eq("chave", PLANO_CONTRATADO_KEY);
+  if (error) return json(res, 500, { ok: false, error: error.message });
+  const planos = {};
+  for (const row of data || []) {
+    const tipo = String(row?.valor?.tipo || "").trim();
+    if (row?.organization_id && tipo) planos[String(row.organization_id)] = tipo;
+  }
+  return json(res, 200, { ok: true, planos });
+}
+
+async function definirPlano(body, res, supabase) {
+  const alvo = String(body?.organizationId || "").trim();
+  const tipo = String(body?.plano || "").trim();
+  if (!alvo) return json(res, 400, { ok: false, error: "Informe a conta." });
+  if (!["pro", "pro-master"].includes(tipo)) return json(res, 400, { ok: false, error: "Plano inválido — use pro ou pro-master." });
+  if (alvo === EMPRESA_PRINCIPAL_ID) return json(res, 400, { ok: false, error: "A conta original não usa pacotes — ela fica fora dos planos de propósito." });
+  const { data: org, error: orgErr } = await supabase.from("organizations").select("id").eq("id", alvo).maybeSingle();
+  if (orgErr) return json(res, 500, { ok: false, error: orgErr.message });
+  if (!org) return json(res, 404, { ok: false, error: "Conta não encontrada." });
+  const { error: upErr } = await upsertConfigComOrganizacao(supabase, alvo, {
+    chave: PLANO_CONTRATADO_KEY, valor: { tipo }, atualizado_em: new Date().toISOString()
+  }) || {};
+  if (upErr) return json(res, 500, { ok: false, error: upErr.message });
+  // Definir o plano já marca a conta como paga (ativo) — é o gesto único do fluxo de venda.
+  const { error: stErr } = await supabase.from("organizations").update({ status: "ativo" }).eq("id", alvo);
+  if (stErr) return json(res, 500, { ok: false, error: `Plano gravado, mas não consegui marcar a conta como ativa: ${stErr.message}` });
+  return json(res, 200, { ok: true, organizationId: alvo, plano: tipo });
+}
+
 export default async function handler(req, res) {
   // GET com relatorio=uso-ia é exclusivo do administrador da plataforma — nenhum organizationId
   // de chamador comum entra em jogo aqui (requirePlatformAdmin usa só o login do próprio token).
@@ -140,6 +176,12 @@ export default async function handler(req, res) {
     if (!supabaseUsoIA) return json(res, 500, { ok: false, error: "Supabase não configurado." });
     if (!(await requirePlatformAdmin(req, res, supabaseUsoIA))) return;
     return relatorioUsoIA(req, res, supabaseUsoIA);
+  }
+  if (req.method === "GET" && String(req.query?.relatorio || "") === "planos") {
+    const supabasePlanos = getSupabaseAdmin();
+    if (!supabasePlanos) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+    if (!(await requirePlatformAdmin(req, res, supabasePlanos))) return;
+    return relatorioPlanos(res, supabasePlanos);
   }
 
   // Valida o login de quem chama (e a conta dele estar em dia). O id resolvido aqui NÃO é o
@@ -156,7 +198,8 @@ export default async function handler(req, res) {
   if (!(await requirePlatformAdmin(req, res, supabase))) return;
 
   const body = await readJsonBody(req).catch(() => ({}));
-  if (body?.action !== "excluir-conta") return json(res, 400, { ok: false, error: "Informe action excluir-conta." });
+  if (body?.action === "definir-plano") return definirPlano(body, res, supabase);
+  if (body?.action !== "excluir-conta") return json(res, 400, { ok: false, error: "Informe action excluir-conta ou definir-plano." });
   const alvo = String(body?.organizationId || "").trim();
   if (!alvo) return json(res, 400, { ok: false, error: "Informe qual conta excluir." });
   if (alvo === EMPRESA_PRINCIPAL_ID) {
