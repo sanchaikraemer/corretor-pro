@@ -11,10 +11,10 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 const reanalisar = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.meta.url), "utf8");
 
-// ── 1. O padrão do teste grátis agora é 10 (e a variável de ambiente continua mandando) ───────
+// ── 1. O padrão do teste grátis agora é 5 (v1109 — era 10 na v1108; a env var continua mandando) ──
 {
   delete process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE;
-  assert.equal(limiteAnalisesIADoDiaTeste(), 10, "o teto padrão do teste grátis precisa ser 10/dia");
+  assert.equal(limiteAnalisesIADoDiaTeste(), 5, "o teto padrão do teste grátis precisa ser 5/dia (v1109)");
   process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE = "25";
   assert.equal(limiteAnalisesIADoDiaTeste(), 25, "variável de ambiente configurada continua mandando");
   delete process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE;
