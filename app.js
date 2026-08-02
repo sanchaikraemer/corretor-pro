@@ -2857,7 +2857,7 @@ window.copiarMensagemLead = function(id){
 function renderBotoesHome(){
   const foco = qs("#leadFocoArea");
   if(!foco) return;
-  document.body.classList.remove("lead-foco-aberto"); // volta o "Reanalisar todos" do topo
+  document.body.classList.remove("lead-foco-aberto");
   state.focoLeadId = null; // mostrando os botões iniciais = nenhum lead em foco
   state.grupoAtivo = null;
   state.sequencia = null; // voltar pra home encerra o modo sequência
@@ -3163,7 +3163,9 @@ function abrirDesempenhoInsights(){
   ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
 }
 window.abrirDesempenhoInsights = abrirDesempenhoInsights;
-// ➕ central da barra de baixo (mobile): Importar / Lead manual / Reanalisar todos.
+// ➕ central da barra de baixo (mobile): Importar / Lead manual / Aprender da carteira / Telefones.
+// v1114 — "Reanalisar todos" saiu daqui (e do Menu) por decisão do dono: queimava o limite de
+// análises do plano inteiro num toque, sem ganho real.
 function abrirMaisAcoes(){
   qs("#maisAcoesSheet")?.remove();
   const ov = document.createElement("div");
@@ -3173,7 +3175,6 @@ function abrirMaisAcoes(){
     <div style="width:40px;height:4px;border-radius:999px;background:rgba(255,255,255,.2);margin:0 auto 14px"></div>
     <button type="button" id="maAcImportar" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,98,88,.06);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">⇪ Importar conversa</button>
     <button type="button" id="maAcLead" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">＋ Lead manual</button>
-    <button type="button" id="maAcReanalisar" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">↻ Reanalisar todos</button>
     <button type="button" id="maAcAprender" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">🧠 Aprender da carteira <span style="font-weight:600;color:var(--muted);font-size:11px">(sem custo de análise)</span></button>
     <button type="button" id="maAcTelefones" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer">📞 Importar telefones (CSV) <span style="font-weight:600;color:var(--muted);font-size:11px">preenche quem está sem número</span></button>
   </div>`;
@@ -3182,7 +3183,6 @@ function abrirMaisAcoes(){
   ov.addEventListener("click", (e) => { if(e.target === ov) close(); });
   qs("#maAcImportar").onclick = () => { close(); show("zip"); };
   qs("#maAcLead").onclick = () => { close(); if(window.abrirNovoLead) abrirNovoLead(); };
-  qs("#maAcReanalisar").onclick = () => { close(); if(window.reanalisarTudo) reanalisarTudo(); };
   qs("#maAcAprender").onclick = () => { close(); if(window.aprenderDaCarteira) aprenderDaCarteira(); };
   qs("#maAcTelefones").onclick = () => { close(); if(window.importarTelefonesCSV) importarTelefonesCSV(); };
 }
@@ -3494,174 +3494,10 @@ function verListaHoje(){
 }
 window.verListaHoje = verListaHoje;
 
-// Reanalisa TODOS os leads ativos em sequência. Mostra progresso ao vivo,
-// permite cancelar. Pesado em tempo e custo OpenAI — sempre pede confirmação.
-async function reanalisarTudo(){
-  const items = state.itemsAtivos || [];
-  if(!items.length){ toast("Nenhum lead ativo pra reanalisar."); return; }
-  const total = items.length;
-  // Roda 5 em paralelo, então o tempo estimado é ~1/5 do sequencial.
-  const tempoEst = Math.max(1, Math.ceil((total * 10) / 60 / 5));
-  const custoMin = (total * 0.01).toFixed(2).replace(".", ",");
-  const custoMax = (total * 0.03).toFixed(2).replace(".", ",");
-  // Aviso visual claro de tempo e custo ANTES de rodar (em vez do popup do navegador).
-  qs("#reanalConfirmModal")?.remove();
-  const cm = document.createElement("div");
-  cm.id = "reanalConfirmModal";
-  cm.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-  cm.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:430px;width:100%">
-      <div style="font-size:17px;font-weight:950;margin-bottom:4px">Reanalisar todos os leads?</div>
-      <div class="small" style="color:var(--muted);margin-bottom:16px">Roda a análise de novo em todos os leads ativos, com o cérebro atualizado.</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-        <div style="text-align:center;padding:10px 6px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px"><b style="display:block;font-size:18px">${total}</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">leads</span></div>
-        <div style="text-align:center;padding:10px 6px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px"><b style="display:block;font-size:18px">~${tempoEst}min</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">tempo</span></div>
-        <div style="text-align:center;padding:10px 6px;background:rgba(184,194,201,.06);border:1px solid var(--morno);border-radius:10px"><b style="display:block;font-size:15px;color:var(--morno)">~R$${custoMin}–${custoMax}</b><span class="small" style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">custo análise</span></div>
-      </div>
-      <div class="small" style="color:var(--soft);font-size:11px;margin-bottom:16px;line-height:1.5">💡 Só precisa fazer isso quando muda algo grande. No dia a dia, cada lead já reanalisa sozinho quando você importa a conversa. Dá pra cancelar no meio.</div>
-      <div style="display:flex;gap:10px">
-        <button type="button" id="reanalNao" style="flex:1;padding:11px;background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--soft);font-weight:950;cursor:pointer">Cancelar</button>
-        <button type="button" id="reanalSim" style="flex:1;padding:11px;background:var(--accent);border:0;border-radius:10px;color:var(--on-accent);font-weight:950;cursor:pointer">Reanalisar agora</button>
-      </div>
-    </div>`;
-  document.body.appendChild(cm);
-  qs("#reanalNao").addEventListener("click", () => cm.remove(), { once: true });
-  qs("#reanalSim").addEventListener("click", () => { cm.remove(); executarReanaliseTudo(items); }, { once: true });
-}
-window.reanalisarTudo = reanalisarTudo;
-
-async function executarReanaliseTudo(items){
-  const total = items.length;
-  // Modal de progresso
-  qs("#reanalisarTudoModal")?.remove();
-  const overlay = document.createElement("div");
-  overlay.id = "reanalisarTudoModal";
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-  overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:440px;width:100%">
-      <div style="font-size:16px;font-weight:950;margin-bottom:6px">Reanalisando todos os leads…</div>
-      <div id="reanalProgresso" class="small" style="color:var(--muted);margin-bottom:14px">0 de ${total}</div>
-      <div style="height:8px;background:rgba(255,255,255,.05);border-radius:999px;overflow:hidden;margin-bottom:14px">
-        <div id="reanalBarra" style="width:0%;height:100%;background:var(--accent);transition:width .3s"></div>
-      </div>
-      <div id="reanalAtual" class="small" style="color:var(--soft);font-size:11px;margin-bottom:12px;min-height:14px"></div>
-      <div id="reanalErros" class="small" style="color:var(--risco);font-size:11px;margin-bottom:14px;display:none"></div>
-      <button type="button" id="reanalCancelar" style="width:100%;padding:10px;background:transparent;color:var(--risco);border:1px solid var(--risco);border-radius:10px;font-size:12px;font-weight:950;cursor:pointer">Cancelar</button>
-    </div>`;
-  document.body.appendChild(overlay);
-  let cancelado = false;
-  qs("#reanalCancelar").addEventListener("click", () => { cancelado = true; });
-  let erros = 0;
-  const erroNomes = [];
-  const semConversa = []; // leads que não têm conversa pra analisar (não é erro de verdade)
-  const falhas = [];      // {id, nome, motivo} — falhas reais, pra redo individual
-
-  // Roda em paralelo (vários leads ao mesmo tempo) pra não levar ~22min.
-  // Pool de CONCORRENCIA requisições simultâneas — corta o tempo em ~5x.
-  const CONCORRENCIA = 5;
-  const fila = items.filter(l => l && l.id);
-  let proximo = 0;
-  let feitos = 0;
-  const totalReal = fila.length;
-  const ativos = new Set(); // nomes sendo analisados AGORA (mostra o paralelismo)
-
-  function atualizaUI(){
-    qs("#reanalProgresso").textContent = `${feitos} de ${totalReal}`;
-    const lista = [...ativos];
-    qs("#reanalAtual").textContent = lista.length
-      ? `Analisando ${lista.length} ao mesmo tempo: ${lista.join(", ")}`
-      : "";
-    qs("#reanalBarra").style.width = ((feitos / totalReal) * 100) + "%";
-    if(erros > 0){
-      const box = qs("#reanalErros");
-      box.style.display = "block";
-      box.textContent = `${erros} ${pl(erros, "erro", "erros")} até agora.`;
-    }
-  }
-
-  // Uma tentativa de reanálise. Devolve {ok, motivo, semConversa}.
-  async function tentar(l){
-    try{
-      const res = await fetch("./api/reanalisar-lead", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payloadComCerebro({ id: l.id }))
-      });
-      const data = await res.json().catch(() => ({ ok: false, error: "Resposta inválida do servidor" }));
-      if(data?.ok){
-        // v971 — "Reanalisar todos" nunca contava pra "Análises feitas" do Desempenho (só o
-        // botão de reanalisar 1 lead por vez contava, linha ~10570) — cada lead reanalisado com
-        // sucesso aqui é uma análise de verdade, igual à individual.
-        try{ cpRegistrarAtividade("analise"); }catch(_){}
-        return { ok: true };
-      }
-      const motivo = String(data?.error || `Erro ${res.status}`);
-      if(/sem timeline|sem conteúdo|sem conversa/i.test(motivo)) return { ok: false, semConversa: true, motivo };
-      return { ok: false, motivo };
-    }catch(_){ return { ok: false, motivo: "Falha de conexão" }; }
-  }
-
-  async function worker(){
-    while(!cancelado){
-      const i = proximo++;
-      if(i >= totalReal) break;
-      const l = fila[i];
-      const nome = l.name || "Cliente sem nome";
-      ativos.add(nome);
-      atualizaUI();
-      // Até 3 tentativas: a maioria dos erros é temporário (limite/timeout da OpenAI).
-      let r = await tentar(l);
-      for(let t = 0; t < 2 && !r.ok && !r.semConversa && !cancelado; t++){
-        await new Promise(res => setTimeout(res, 1500 * (t + 1)));
-        r = await tentar(l);
-      }
-      if(!r.ok){
-        if(r.semConversa){ semConversa.push(nome); }
-        else { erros++; erroNomes.push(nome); falhas.push({ id: l.id, nome, motivo: r.motivo || "Erro desconhecido" }); }
-      }
-      ativos.delete(nome);
-      feitos++;
-      atualizaUI();
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(CONCORRENCIA, totalReal) }, () => worker()));
-  qs("#reanalBarra").style.width = "100%";
-  if(cancelado){
-    qs("#reanalProgresso").innerHTML = `<b style="color:var(--timing)">Cancelado.</b>`;
-  } else {
-    qs("#reanalProgresso").innerHTML = `<b style="color:var(--acao)">✓ Reanálise concluída.</b>`;
-    const box = qs("#reanalErros");
-    let html = "";
-    if(semConversa.length){
-      html += `<div style="color:var(--muted);margin-bottom:8px">${semConversa.length} ${pl(semConversa.length, "lead sem conversa importada", "leads sem conversa importada")} (nada pra analisar) — normal.</div>`;
-    }
-    if(falhas.length){
-      window._reanalFalhas = falhas; // guarda pra redo
-      html += `<div style="color:var(--risco);font-weight:800;margin-bottom:4px">${falhas.length} ${pl(falhas.length, "lead falhou", "leads falharam")} de verdade:</div>`;
-      html += `<div style="max-height:140px;overflow:auto;color:var(--soft);font-size:11px;line-height:1.6;margin-bottom:8px">${falhas.map(f=>`• ${escapeHtml(f.nome)} <span style="color:var(--muted)">— ${escapeHtml(f.motivo||"erro")}</span>`).join("<br>")}</div>`;
-      html += `<button type="button" onclick="reanalisarFalhas()" style="width:100%;padding:9px;background:var(--lime);color:var(--on-accent);border:0;border-radius:9px;font-weight:900;font-size:12px;cursor:pointer">↻ Tentar de novo só os que falharam</button>`;
-    }
-    if(html){ box.style.display = "block"; box.innerHTML = html; }
-  }
-  qs("#reanalCancelar").textContent = "Fechar";
-  qs("#reanalCancelar").style.color = "var(--text)";
-  qs("#reanalCancelar").style.borderColor = "var(--line)";
-  qs("#reanalCancelar").addEventListener("click", async () => {
-    overlay.remove();
-    // Recarrega dados
-    await loadRecentLeads();
-    await carregarDashboard();
-    toast("Lista atualizada com a reanálise.");
-  }, { once: true });
-}
-// Reroda APENAS os leads que falharam na última reanálise (botão no resumo final).
-function reanalisarFalhas(){
-  const lista = (window._reanalFalhas || []).map(f => ({ id: f.id, name: f.nome }));
-  if(!lista.length){ toast("Nenhuma falha pra repetir."); return; }
-  qs("#reanalisarTudoModal")?.remove();
-  executarReanaliseTudo(lista);
-}
-window.reanalisarFalhas = reanalisarFalhas;
+// v1114 — "Reanalisar todos" (reanalisarTudo/executarReanaliseTudo/reanalisarFalhas, v905→v971)
+// foi REMOVIDO por decisão do dono: com os planos por limite de análises (v1110+), um toque
+// reanalisava a carteira inteira e queimava o crédito do mês sem ganho real. A reanálise de
+// 1 lead por vez (ui670Reanalisar) e a reanálise automática na importação continuam.
 
 // Fila por prioridade: lista numerada dos próximos leads a atender (do 4º em diante),
 // ordenada por prioridade real de atendimento. Os 3 primeiros já estão nos cards do Top 3.
@@ -7452,7 +7288,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   }
   result.importId = importId;
   // v1069 — bug real relatado pelo dono: "Análises feitas" (Desempenho) só contava reanálise
-  // manual de um lead já existente (ui670Reanalisar/"Reanalisar todos"); a análise que a IA faz
+  // manual de um lead já existente (ui670Reanalisar); a análise que a IA faz
   // em TODA importação nova (esta etapa "analisar", que roda pra cada ZIP processado) nunca
   // registrava atividade — por isso "Importações" (90) e "Análises feitas" (19) nunca batiam,
   // mesmo cada importação passando pela IA. Conta aqui, no sucesso real da análise.

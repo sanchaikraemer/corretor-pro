@@ -239,7 +239,6 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
   #home > #saudacao{display:none !important}
   .saud-desktop{display:block;margin-top:4px;margin-bottom:0;font-size:13px}
   .home-m1-chips{display:none !important}
-  body.lead-foco-aberto #btnReanalisarTopo{display:none !important}
   #home .grid2{grid-template-columns:1fr 1fr}
   .analysis-grid .analysis-row{flex-direction:row;justify-content:space-between;gap:12px}
   .analysis-grid .analysis-row b{min-width:170px}
