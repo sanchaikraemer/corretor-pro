@@ -96,14 +96,15 @@ await comServidor({ plano: "pro-master", diario: 30 }, "org-master", (r) => {
 await comServidor({ status: "teste", diario: 5 }, "org-teste", (r) => {
   assert.equal(r.permitido, false); assert.equal(r.emTeste, true); assert.equal(r.limite, 5);
 });
-// Conta ORIGINAL: fora dos planos — fusível técnico de 200/dia, mês nunca conta, e nem consulta o status.
-await comServidor({ diario: 60, mensal: 5000 }, EMPRESA_PRINCIPAL, (r, chamadas) => {
-  assert.equal(r.permitido, true, "60 no dia passa longe do fusível de 200");
+// Conta ORIGINAL: fora dos planos — fusível técnico de 50/dia (v1112), mês nunca conta, e nem
+// consulta o status.
+await comServidor({ diario: 49, mensal: 5000 }, EMPRESA_PRINCIPAL, (r, chamadas) => {
+  assert.equal(r.permitido, true, "49 no dia ainda passa no fusível de 50 (e o mês não conta)");
   assert.equal(r.plano, null, "conta original não tem plano");
   assert.equal(chamadas.organizations, 0, "conta original nem consulta o status");
 });
-await comServidor({ diario: 200 }, EMPRESA_PRINCIPAL, (r) => {
-  assert.equal(r.permitido, false, "o fusível de 200 continua valendo pra conta original");
+await comServidor({ diario: 50 }, EMPRESA_PRINCIPAL, (r) => {
+  assert.equal(r.permitido, false, "o fusível de 50 vale pra conta original");
 });
 // A análise que passa grava os DOIS contadores (dia e mês) pra conta com plano.
 await comServidor({ diario: 1, mensal: 10 }, "org-pro", (r, chamadas) => {

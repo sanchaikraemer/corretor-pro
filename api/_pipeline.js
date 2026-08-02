@@ -747,7 +747,11 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
 // usar — isso é decisão do dono do produto, configurável por variável de ambiente) — é só uma
 // rede de segurança técnica contra consumo descontrolado. Contagem por dia civil (fuso não
 // importa aqui — é só um limite de segurança, não uma cobrança), reiniciando sozinha a cada dia.
-const LIMITE_ANALISES_IA_DIA_PADRAO = 200;
+// v1112 — dono baixou o fusível de 200 pra 50/dia ("pra nós ter uma segurança"): hoje isso só
+// alcança a conta original (as pagas usam os planos, o teste usa os 5/dia). Se um dia precisar
+// rodar "Reanalisar todos" na carteira inteira de uma vez, sobe temporariamente via
+// CORRETOR_PRO_LIMITE_ANALISES_DIA na Vercel, sem publicar nada.
+const LIMITE_ANALISES_IA_DIA_PADRAO = 50;
 // v1041 — auditoria item 6.3 ("Abuso do período de teste"): uma conta em teste grátis custava
 // exatamente o mesmo que uma conta paga, em análises por dia. Isso torna criar várias contas de
 // teste (mesmo sem confirmação de e-mail robusta ainda) um jeito barato de consumir IA de graça.
