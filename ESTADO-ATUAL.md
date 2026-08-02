@@ -87,7 +87,7 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
   caminho antigo; quem usa o app com login não perde nada ao ligar isto.
 
 ### Custo e limites de IA
-- `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia por empresa (padrão 200).
+- `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia (padrão 50 desde a v1112; era 200) — hoje só alcança a conta original, as demais usam os planos.
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA_TESTE` — mesmo teto, mas pra contas em teste grátis (padrão 5
   desde a v1109; era 10 na v1108 e 25 antes — ver `NOTAS-v1041.md`, `NOTAS-v1108.md`,
   `NOTAS-v1109.md`). **Atenção:** se essa variável estiver cadastrada na Vercel, ela MANDA sobre
@@ -100,7 +100,7 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
   de cada conta fica em `direciona_config` (chave `plano-contratado`), definido pelos botões
   "Pago · Pro" / "Pago · Pro Master" do painel administrativo (que também marcam a conta como
   ativa). Conta ativa sem registro = Pro. A conta original fica FORA dos planos (só o fusível
-  técnico de `CORRETOR_PRO_LIMITE_ANALISES_DIA`, padrão 200/dia). Overrides:
+  técnico de `CORRETOR_PRO_LIMITE_ANALISES_DIA`, padrão 50/dia desde a v1112). Overrides:
   `CORRETOR_PRO_LIMITE_DIA_PRO`, `CORRETOR_PRO_LIMITE_MES_PRO`,
   `CORRETOR_PRO_LIMITE_DIA_PROMASTER`, `CORRETOR_PRO_LIMITE_MES_PROMASTER`.
 - `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
