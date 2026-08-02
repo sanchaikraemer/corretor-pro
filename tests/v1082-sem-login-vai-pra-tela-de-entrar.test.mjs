@@ -54,9 +54,11 @@ assert.doesNotMatch(app, /async function arquivarLead\(/,
   'a geração antiga de arquivarLead (com confirm nativo) precisa ter saído');
 assert.match(app, /window\.arquivarLead = function\(id, nome\)\{/,
   'a versão viva do Arquivar (v1073) precisa continuar existindo');
+// v1114 — o "Reanalisar todos" inteiro foi removido (decisão do dono); a checagem original
+// (ponte não duplicada) vira a forma final: nenhuma ponte sobrando.
 const pontesReanalisarTudo = app.match(/window\.reanalisarTudo = reanalisarTudo;/g) || [];
-assert.equal(pontesReanalisarTudo.length, 1,
-  'window.reanalisarTudo só precisa ser publicado uma vez (a segunda linha era repetida)');
+assert.equal(pontesReanalisarTudo.length, 0,
+  'window.reanalisarTudo não existe mais (função removida na v1114)');
 
 
 console.log('v1082-sem-login-vai-pra-tela-de-entrar: ok');

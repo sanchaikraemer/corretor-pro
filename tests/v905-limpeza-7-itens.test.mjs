@@ -19,7 +19,9 @@ assert.doesNotMatch(acoes, />Ver todos</, 'sem "Ver todos" na home');
 assert.doesNotMatch(acoes, /Reanalisar todos/, 'sem "Reanalisar todos" na home');
 // v911: "Últimos atendimentos" também saiu da home (redundante com o "Atendimentos" da barra de baixo).
 assert.doesNotMatch(acoes, /Últimos atendimentos/, 'sem "Últimos atendimentos" na home (v911)');
-assert.match(html, /menu-card-titulo">Reanalisar todos/, '"Reanalisar todos" agora está no Menu');
+// v1114 — o card do Menu também saiu (decisão do dono: queimava o limite de análises do plano
+// num toque). "Reanalisar todos" não existe mais em NENHUMA tela.
+assert.doesNotMatch(html, /menu-card-titulo">Reanalisar todos/, '"Reanalisar todos" saiu do Menu (v1114)');
 // v931: abrirTodosLeads foi removida — "Ver todas as oportunidades" (Home) levava pro MESMO
 // destino do Menu → "Condução do atendimento" (show('pipeline')), sem nenhuma diferença real.
 assert.doesNotMatch(app, /window\.abrirTodosLeads/, 'abrirTodosLeads removida (porta redundante pra Condução)');
