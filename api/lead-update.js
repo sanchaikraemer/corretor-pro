@@ -226,9 +226,9 @@ async function acaoCriarManual(body, res, organizationId) {
   if (!nome) return json(res, 400, { ok: false, error: "Informe o nome do lead." });
   try {
     const now = new Date();
-    const p2 = (n) => String(n).padStart(2, "0");
-    const dataBR = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()}`;
-    const horaBR = `${p2(now.getHours())}:${p2(now.getMinutes())}`;
+    // Carimbo no fuso de Brasília — o servidor roda em UTC (mesma correção já feita em
+    // acaoObservacaoAdicionar e api/reanalisar-lead.js; aqui tinha ficado pra trás).
+    const { dataBR, horaBR } = dataHoraSaoPaulo(now);
     // Monta um "result" mínimo no formato esperado por persistProcessingResult
     const observacoesIniciais = `[${dataBR}] Lead criado manualmente.${observacao ? " " + observacao : ""}`;
     const timelineInicial = observacao ? [{
@@ -345,9 +345,8 @@ async function acaoNovaOportunidadeParceiro(body, res, organizationId) {
   if (!pareceParceiro) return json(res, 400, { ok: false, error: "Este contato não está classificado como corretor parceiro." });
 
   const now = new Date();
-  const p2 = n => String(n).padStart(2, "0");
-  const dataBR = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()}`;
-  const horaBR = `${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  // Fuso de Brasília, não o do servidor (UTC) — ver dataHoraSaoPaulo.
+  const { dataBR, horaBR } = dataHoraSaoPaulo(now);
   const oportunidadeId = `opp-${randomUUID()}`;
   const contatoId = String(mcOrigem?.contato?.id || mcOrigem?.oportunidade?.contatoId || idOrigem);
   const obsLinha = observacao ? ` Observação: ${observacao}` : "";

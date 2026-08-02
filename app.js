@@ -3706,7 +3706,7 @@ function renderSaudacao(items){
       ? `<span class="destaque">${naLista} lead${naLista>1?"s":""} pra atender hoje</span>, de cima pra baixo.`
       : `<span class="destaque">Tudo em dia!</span> Nenhum lead na fila agora — bom momento pra prospectar.`;
   } else if(tratadosHoje > 0){
-    html = `<span class="destaque">Mandou bem!</span> ${tratadosHoje} lead${tratadosHoje>1?"s":""} atendidos hoje.`;
+    html = `<span class="destaque">Mandou bem!</span> ${tratadosHoje} lead${tratadosHoje>1?"s":""} atendido${tratadosHoje>1?"s":""} hoje.`;
   } else {
     html = `Sem urgências agora. Bom momento pra prospectar.`;
   }
@@ -3890,9 +3890,9 @@ async function _processarDashboard(data){
     if(badgeGel) badgeGel.style.display = "none";
     // Total de leads ativos no pill do topo (mobile).
     const pillTotal = qs("#pillTotalLeads");
-    if(pillTotal) pillTotal.textContent = `${items.length} leads`;
+    if(pillTotal) pillTotal.textContent = `${items.length} lead${items.length===1?"":"s"}`;
     const pillTotalD = qs("#pillTotalLeadsDesktop");
-    if(pillTotalD) pillTotalD.textContent = `${items.length} leads`;
+    if(pillTotalD) pillTotalD.textContent = `${items.length} lead${items.length===1?"":"s"}`;
     // Onboarding: ensina o ritual diário pra quem ainda tem poucos leads (1-4) e
     // não dispensou. Quem chamou pelo Menu (forceOnboarding) vê independente da contagem.
     const onb = qs("#bannerOnboarding");
@@ -5699,6 +5699,9 @@ async function carregarAgenda(){
   box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
   try{ const data = await getLeadsData(); renderAgenda(data); }catch(err){ box.innerHTML = '<div class="notice error">Falha ao carregar.</div>'; }
 }
+// v1107 — o "×" de descartar compromisso atrasado (na própria Agenda) chama carregarAgenda()
+// no onclick; sem esta ponte o descarte gravava mas a lista não atualizava até sair e voltar.
+window.carregarAgenda = carregarAgenda;
 
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
@@ -8313,7 +8316,7 @@ function renderBuscaGlobal(termo){
     const arq = leadArquivado(l);
     // O arquivado vem apagado (mais transparente) e com tarja — dá pra saber o que é sem abrir.
     const tarja = arq ? `<span class="cp-busca-arquivado">Arquivado</span>` : "";
-    return `<div onclick='abrirLead(${idJs});qs("#buscaGlobal").value="";qs("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px${arq ? ";opacity:.62" : ""}" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
+    return `<div onclick='abrirLead(${idJs});document.querySelector("#buscaGlobal").value="";document.querySelector("#buscaGlobalResults").style.display="none"' style="padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px${arq ? ";opacity:.62" : ""}" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">
       <div style="min-width:0"><div style="font-weight:950;font-size:13px;display:flex;align-items:center;gap:6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.name||"Cliente")}</span>${tarja}</div><div class="small" style="font-size:11px">${escapeHtml(l.product || (arq ? "Arquivado" : "Empreendimento não identificado"))}</div></div>
     </div>`;
   }).join("");
@@ -8576,11 +8579,11 @@ async function exportarLeadsCSV(btn){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `leads-corretor-pro-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `leads-corretor-pro-${new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date())}.csv`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
-    toast(`Planilha de ${all.length} leads baixada.`);
+    toast(`Planilha de ${all.length} lead${all.length===1?"":"s"} baixada.`);
   }catch(err){
     toast("Falhou ao exportar: " + (err?.message || err));
   }finally{
@@ -8603,7 +8606,7 @@ async function exportarBackupCompletoV681(btn){
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `corretor-pro-backup-completo-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `corretor-pro-backup-completo-${new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date())}.json`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try{ document.body.removeChild(a); }catch(_){}; URL.revokeObjectURL(url); }, 1000);
@@ -8851,7 +8854,10 @@ async function checarVersaoServidor(){
     const servidor = m ? (parseInt(m[1], 10) || 0) : 0;
     sessionStorage.setItem("vchk", "1"); // só tenta 1x por sessão — nunca entra em loop
     if(servidor > atual){
-      try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } }catch(_){}
+      // v1107 — só apaga as caches ESTÁTICAS versionadas. A cache do compartilhamento
+      // (direciona-sharetarget-stable) pode guardar um ZIP compartilhado ainda não processado
+      // (fallback quando o IndexedDB falha) — apagar ela aqui perdia a importação.
+      try{ if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.filter(k => k.startsWith("corretor-pro-static")).map(k => caches.delete(k))); } }catch(_){}
       location.reload();
     }
   }catch(_){ /* offline/erro: ignora, segue na versão atual */ }
@@ -9970,9 +9976,13 @@ window.cpInicioMesMs = cpInicioMesMs;
 // virou o mês, os números zeravam na tela (os DADOS continuam — tudo tem data). Este é o começo
 // do mês anterior; o fim dele é cpInicioMesMs().
 function cpInicioMesAnteriorMs(){
-  const ini = new Date(cpInicioMesMs());
-  const y = ini.getFullYear(), m = ini.getMonth();
-  return new Date(y, m - 1, 1).getTime();
+  // Deriva de cpInicioMesMs() no calendário de America/Sao_Paulo — getFullYear()/getMonth()
+  // usariam o fuso do APARELHO: em Cuiabá/Manaus (UTC-4/-5) a virada do mês acontecia em outra
+  // hora e o "mês anterior" pulava um mês a mais pra trás (chip mostrava "Junho" em 1º de agosto).
+  const iniIso = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date(cpInicioMesMs()));
+  let y = Number(iniIso.slice(0,4)), m = Number(iniIso.slice(5,7)) - 1;
+  if(m === 0){ m = 12; y -= 1; }
+  return new Date(`${y}-${String(m).padStart(2,"0")}-01T00:00:00-03:00`).getTime();
 }
 window.cpInicioMesAnteriorMs = cpInicioMesAnteriorMs;
 function cpTempoAppSegundosPeriodo(iniMs, fimMs){

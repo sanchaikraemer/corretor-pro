@@ -1,6 +1,6 @@
 // Leitura de ZIP enviado direto no corpo da requisição (sem passar pelo Supabase Storage) —
-// usado por api/analisar.js (rota de compatibilidade) e api/receber-zip-atalho.js (Atalho do
-// iPhone). Extraído pra um arquivo só pra não duplicar o parser de multipart nas duas rotas.
+// usado por api/receber-zip-atalho.js (Atalho do iPhone). A outra consumidora, api/analisar.js,
+// foi removida na v1083 (rota de compatibilidade sem nenhum chamador).
 
 export async function readRawBody(req, maxBytes = 80 * 1024 * 1024) {
   const chunks = [];

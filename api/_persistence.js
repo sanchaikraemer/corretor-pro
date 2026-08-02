@@ -780,6 +780,12 @@ function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   const merged = { ...anterior, ...nova };
   const storageRefs = mergeStorageRefs(anterior?._storageRefs, nova?._storageRefs);
   if (storageRefs) merged._storageRefs = storageRefs;
+  // v1107 — o caminho "salvar-novo" chega aqui com _historicoImportacoes de 1 item; o spread
+  // acima fazia esse array SUBSTITUIR a lista acumulada do lead (perdendo a trilha de auditoria
+  // e enfraquecendo idsImportacaoDoRegistro). Acumula como o caminho atualizar-com-evolucao.
+  const histAnt = Array.isArray(anterior?._historicoImportacoes) ? anterior._historicoImportacoes : [];
+  const histNovo = Array.isArray(nova?._historicoImportacoes) ? nova._historicoImportacoes : [];
+  if (histAnt.length || histNovo.length) merged._historicoImportacoes = [...histAnt, ...histNovo].slice(-50);
   merged.memoria = { ...((anterior || {}).memoria || {}), ...((nova || {}).memoria || {}) };
   for (const key of ["aprendizado", "venda", "motivoPerda", "motivo_perda"]) {
     if (merged[key] === undefined || merged[key] === null || merged[key] === "") merged[key] = anterior?.[key];
@@ -932,7 +938,8 @@ export async function persistProcessingResult({
         organization_id: organizationId,
         arquivo_nome: nomeArquivo,
         status: "pronto",
-        etapa: "Conversa processada pelo Motor Real do Corretor Pro.",
+        // v1107 — era um texto descritivo, que semeava de novo a "etapa suja" que a v1105 limpou.
+        etapa: "Ativo",
         progresso: 100,
         erro: null,
         texto_extraido: result?.rawText || null,
