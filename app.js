@@ -6991,6 +6991,12 @@ function escolherPeriodoAudiosImportacao(){
     { valor:"all", label:"Todo o período" }
   ];
   return new Promise((resolve) => {
+    // v1116 — caso real (print do dono): a janela abria com o ANEL de % subindo atrás (a
+    // animação se arrasta por tempo até o teto da etapa, ~29-30%) — parecia que a importação
+    // seguia sem a escolha. Enquanto o corretor decide, NADA pode parecer estar rodando:
+    // a tela cheia sai de cena (mesmo `pausar` da decisão salvar/atualizar) e volta sozinha
+    // no próximo passo do fluxo, logo depois da escolha.
+    try{ cpImportOverlaySincronizar(0, "", { pausar: true }); }catch(_){}
     document.querySelector("#periodoAudioModal")?.remove();
     const overlay = document.createElement("div");
     overlay.id = "periodoAudioModal";
