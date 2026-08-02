@@ -752,7 +752,18 @@ const LIMITE_ANALISES_IA_DIA_PADRAO = 200;
 // exatamente o mesmo que uma conta paga, em análises por dia. Isso torna criar várias contas de
 // teste (mesmo sem confirmação de e-mail robusta ainda) um jeito barato de consumir IA de graça.
 // Teto bem menor SÓ durante o teste — quando a conta vira "ativo" (paga), volta pro limite normal.
-const LIMITE_ANALISES_IA_DIA_TESTE_PADRAO = 25;
+// v1108 — decisão comercial do dono (02/08/2026): 25 → 10 por dia durante o teste grátis. Ao
+// atingir, o aviso vira convite de contratação com botão pro WhatsApp comercial (ver abaixo).
+const LIMITE_ANALISES_IA_DIA_TESTE_PADRAO = 10;
+
+// WhatsApp comercial da plataforma (o número do DONO DO PRODUTO, não de corretor ou cliente —
+// por isso pode viver no código, com a variável de ambiente como override). Formato wa.me:
+// código do país + DDD + número, só dígitos.
+const WHATS_COMERCIAL_PADRAO = "5554999013331";
+export function whatsComercialPlataforma() {
+  const configurado = String(process.env.CORRETOR_PRO_WHATS_COMERCIAL || "").replace(/\D/g, "");
+  return configurado || WHATS_COMERCIAL_PADRAO;
+}
 
 export function limiteAnalisesIADoDia() {
   const configurado = Number(process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA);
@@ -789,27 +800,28 @@ export function limiteTranscricaoVozDoDiaTeste() {
 // menor no lugar de `limitePadrao` enquanto a conta ainda está em "teste" — falha na consulta
 // (ou organização sem status, ex. bases antigas) nunca bloqueia: cai no limite padrão normal.
 export async function verificarLimiteDiario(organizationId, chave, limitePadrao, limiteTeste = null) {
-  const semTeto = { permitido: true, usado: 0, limite: limitePadrao };
+  const semTeto = { permitido: true, usado: 0, limite: limitePadrao, emTeste: false };
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
     if (!supabase || !organizationId) return semTeto;
     let limite = limitePadrao;
+    let emTeste = false; // v1108 — quem bate no teto DURANTE O TESTE vê o convite de contratação
     if (limiteTeste != null) {
       const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
-      if (org?.status === "teste") limite = limiteTeste;
+      if (org?.status === "teste") { limite = limiteTeste; emTeste = true; }
     }
     const hojeStr = new Date().toISOString().slice(0, 10);
     const chaveConfig = `limite-diario:${chave}`;
     const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveConfig).eq("organization_id", organizationId).maybeSingle();
     const atual = data?.valor && typeof data.valor === "object" ? data.valor : {};
     const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
-    if (usado >= limite) return { permitido: false, usado, limite };
+    if (usado >= limite) return { permitido: false, usado, limite, emTeste };
     const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
       chave: chaveConfig, valor: { dia: hojeStr, contagem: usado + 1 }, atualizado_em: new Date().toISOString()
     }) || {};
-    if (error) return { ...semTeto, limite }; // falha ao gravar a contagem nunca pode bloquear uma análise real
-    return { permitido: true, usado: usado + 1, limite };
+    if (error) return { ...semTeto, limite, emTeste }; // falha ao gravar a contagem nunca pode bloquear uma análise real
+    return { permitido: true, usado: usado + 1, limite, emTeste };
   } catch (_) { return semTeto; }
 }
 
@@ -2129,10 +2141,17 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
   const limiteDiario = await verificarLimiteDiario(organizationId, "analises-ia", limiteAnalisesIADoDia(), limiteAnalisesIADoDiaTeste());
   if (!limiteDiario.permitido) {
+    // v1108 — decisão do dono: no TESTE GRÁTIS o aviso de limite vira convite de contratação,
+    // com botão direto pro WhatsApp comercial (o app monta o botão a partir de `upgrade`).
+    // Conta paga que bater no teto de segurança continua vendo o aviso neutro de sempre.
+    const aviso = limiteDiario.emTeste
+      ? `Você atingiu o limite de ${limiteDiario.limite} análises por dia do teste grátis. Para limite estendido, contrate o pacote Pro pelo WhatsApp abaixo.`
+      : `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`;
     return {
       mode: "limite_diario_excedido",
-      error: `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`,
-      summary: "Análise não gerada: limite diário de uso da IA foi atingido para esta conta.",
+      error: aviso,
+      summary: aviso,
+      ...(limiteDiario.emTeste ? { upgrade: { motivo: "limite-teste", limite: limiteDiario.limite, whatsapp: whatsComercialPlataforma() } } : {}),
       clientProfile: "—",
       bestTime: "—",
       objections: [],

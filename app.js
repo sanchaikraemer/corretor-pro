@@ -1110,6 +1110,14 @@ function renderAnalysis(analysis, lead){
     setMsgStyle(state.msgStyle);
     return;
   }
+  // v1108 — limite do teste grátis atingido: o aviso vira convite de contratação com botão
+  // direto pro WhatsApp comercial (o número vem do servidor, em analysis.upgrade).
+  if(analysis.mode === "limite_diario_excedido"){
+    box.className = "notice";
+    box.innerHTML = `<b>${escapeHtml(analysis.summary || analysis.error || "Limite diário de análises atingido.")}</b>` + cpUpgradeProHTML(analysis);
+    setMsgStyle(state.msgStyle);
+    return;
+  }
   box.className = "";
   const objArr = Array.isArray(analysis.objections) ? analysis.objections : (analysis.objections ? [analysis.objections] : []);
   let html = diagnosticoClienteHTML(analysis) + '<div class="analysis-grid">';
@@ -5162,6 +5170,20 @@ function cp704Css(){
 // Atualização #724-2: card "O que mudou" — antes → agora + por que importa.
 // Só aparece quando a análise traz mudanças reais; lead sem mudança não mostra o card.
 
+// v1108 — decisão comercial do dono: bater no limite do teste grátis vira momento de venda.
+// O servidor manda `upgrade: { whatsapp }` junto do aviso; aqui vira o botão verde que abre a
+// conversa no WhatsApp comercial já com a mensagem pronta. Conta paga não recebe `upgrade`.
+function cpUpgradeProHTML(a){
+  const fone = String(a?.upgrade?.whatsapp || "").replace(/\D/g, "");
+  if(a?.mode !== "limite_diario_excedido" || !fone) return "";
+  const msg = encodeURIComponent("Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar o pacote Pro.");
+  return `<div style="margin-top:12px;padding:12px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.45);border-radius:12px">`+
+    `<div class="small" style="margin-bottom:10px"><b>Quer continuar analisando hoje?</b> Fale direto com a gente e libere o pacote Pro na hora:</div>`+
+    `<a href="https://wa.me/${fone}?text=${msg}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25d366;color:#062b16;font-weight:950;text-decoration:none;padding:13px 18px;border-radius:12px;font-size:14px">`+
+    `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4 0-.5.1-.7l.5-.6c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.9.9-1.1 2.2-.2 3.9a10.2 10.2 0 0 0 4.3 4.1c1.6.8 2.6.9 3.5.6.5-.2 1.5-.7 1.7-1.3.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.4-.3Z"/></svg>`+
+    `Falar no WhatsApp e liberar o Pro</a></div>`;
+}
+
 function cp718LeituraComercialHtml(a,lead){
   const lc=(a&&a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
   const itens=[
@@ -7445,6 +7467,7 @@ async function renderProcessedResult(data, meta){
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
     janelaHtml + semMidiaHtml + incrementalHtml +
     `</div>` +
+    cpUpgradeProHTML(analysis) +
     openAIErrorBlock(data);
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
   // Decisão "é o mesmo / é outro" (nome só parecido, ambíguo de verdade): traz a pergunta pra
@@ -8408,6 +8431,10 @@ qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
       renderAnalysis(data.analysis, state.lead);
       qs("#memoriaStatus").textContent = "Reanálise concluída.";
       toast("Reanálise concluída.");
+    } else if(data?.upgrade){
+      // v1108 — limite do teste grátis: mostra o convite com o botão do WhatsApp comercial.
+      qs("#memoriaStatus").innerHTML = escapeHtml(data?.detail || data?.error || "Limite do teste atingido.") +
+        cpUpgradeProHTML({ mode: "limite_diario_excedido", upgrade: data.upgrade });
     } else {
       qs("#memoriaStatus").textContent = "Erro: " + (data?.error||"");
     }
