@@ -95,6 +95,13 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 - `CORRETOR_PRO_WHATS_COMERCIAL` — WhatsApp comercial da plataforma (só dígitos, com código do
   país), usado no convite de contratação quando a conta em teste atinge o limite diário (v1108).
   Padrão embutido: o número do dono do produto.
+- **Planos comerciais (v1110)** — Pro: 25/dia + 250/mês; Pro Master: 50/dia + 500/mês. O plano
+  de cada conta fica em `direciona_config` (chave `plano-contratado`), definido pelos botões
+  "Pago · Pro" / "Pago · Pro Master" do painel administrativo (que também marcam a conta como
+  ativa). Conta ativa sem registro = Pro. A conta original fica FORA dos planos (só o fusível
+  técnico de `CORRETOR_PRO_LIMITE_ANALISES_DIA`, padrão 200/dia). Overrides:
+  `CORRETOR_PRO_LIMITE_DIA_PRO`, `CORRETOR_PRO_LIMITE_MES_PRO`,
+  `CORRETOR_PRO_LIMITE_DIA_PROMASTER`, `CORRETOR_PRO_LIMITE_MES_PROMASTER`.
 - `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
   mesmo tipo de teto, pra transcrição de voz avulsa (observação por voz do lead, `cp7Obs`) —
   padrão 100/dia (20/dia em teste, ver `NOTAS-v1068.md`). As 3 ações de visão (extrair print,

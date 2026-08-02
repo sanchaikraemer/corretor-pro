@@ -778,6 +778,84 @@ export function limiteAnalisesIADoDiaTeste() {
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_ANALISES_IA_DIA_TESTE_PADRAO;
 }
 
+// ─── PLANOS COMERCIAIS (v1110) ────────────────────────────────────────────────
+// Decisão do dono (02/08/2026): Teste 5/dia; Pro 25/dia + 250/mês; Pro Master 50/dia + 500/mês
+// (o dobro do Pro em tudo, com preço próximo — estratégia de chamariz; o PREÇO nunca aparece no
+// app, fica na conversa de WhatsApp). O teto diário absorve o pico; o mensal segura o custo do
+// mês (25×30 seriam 750 — o mensal de 250 é o que protege de verdade). A conta original (dono da
+// plataforma) fica FORA dos planos — só o fusível técnico de 200/dia. Cada número é ajustável
+// sem publicar nada, via variável de ambiente na Vercel.
+const PLANOS_COMERCIAIS = {
+  "pro": { tipo: "pro", nome: "Pro", dia: 25, mes: 250, envDia: "CORRETOR_PRO_LIMITE_DIA_PRO", envMes: "CORRETOR_PRO_LIMITE_MES_PRO" },
+  "pro-master": { tipo: "pro-master", nome: "Pro Master", dia: 50, mes: 500, envDia: "CORRETOR_PRO_LIMITE_DIA_PROMASTER", envMes: "CORRETOR_PRO_LIMITE_MES_PROMASTER" }
+};
+// Chave em direciona_config onde fica o plano contratado da conta: valor { tipo: "pro"|"pro-master" }.
+// Conta ativa sem registro = Pro (plano de entrada). Definido pelo painel administrativo.
+export const PLANO_CONTRATADO_KEY = "plano-contratado";
+
+export function planoComercial(tipo) {
+  const base = PLANOS_COMERCIAIS[String(tipo || "").trim()] || PLANOS_COMERCIAIS["pro"];
+  const env = (nome, padrao) => { const n = Number(process.env[nome]); return Number.isFinite(n) && n > 0 ? n : padrao; };
+  return { tipo: base.tipo, nome: base.nome, dia: env(base.envDia, base.dia), mes: env(base.envMes, base.mes) };
+}
+
+function mesCalendarioSP() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
+}
+
+// Limite de análises com consciência de PLANO: dia + mês pra contas pagas, 5/dia no teste,
+// fusível técnico de 200/dia pra conta original. Substitui o verificarLimiteDiario genérico SÓ
+// pra "analises-ia" (os outros contadores — voz, diagnóstico — continuam no genérico).
+// Mesma regra de sempre: falha de leitura/gravação NUNCA bloqueia análise real (fail-open).
+export async function verificarLimiteAnalises(organizationId) {
+  const aberto = { permitido: true, usado: 0, limite: limiteAnalisesIADoDia(), limiteMes: null, usadoMes: 0, emTeste: false, plano: null, motivo: null };
+  try {
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return aberto;
+
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    const lerValor = async (chave) => {
+      const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chave).eq("organization_id", organizationId).maybeSingle();
+      return data?.valor && typeof data.valor === "object" ? data.valor : {};
+    };
+    const gravar = (chave, valor) => upsertConfigComOrganizacao(supabase, organizationId, { chave, valor, atualizado_em: new Date().toISOString() }).catch(() => ({}));
+
+    const diario = await lerValor("limite-diario:analises-ia");
+    const usadoDia = diario.dia === hojeStr ? (Number(diario.contagem) || 0) : 0;
+
+    // Conta original (dono da plataforma): fora dos planos — só o fusível técnico diário.
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) {
+      const limite = limiteAnalisesIADoDia();
+      if (usadoDia >= limite) return { ...aberto, permitido: false, usado: usadoDia, limite, motivo: "dia" };
+      await gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 });
+      return { ...aberto, usado: usadoDia + 1, limite };
+    }
+
+    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+    if (org?.status === "teste") {
+      const limite = limiteAnalisesIADoDiaTeste();
+      if (usadoDia >= limite) return { ...aberto, permitido: false, usado: usadoDia, limite, emTeste: true, motivo: "dia" };
+      await gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 });
+      return { ...aberto, usado: usadoDia + 1, limite, emTeste: true };
+    }
+
+    const contratado = await lerValor(PLANO_CONTRATADO_KEY);
+    const plano = planoComercial(contratado?.tipo);
+    const mesStr = mesCalendarioSP();
+    const mensal = await lerValor("limite-mensal:analises-ia");
+    const usadoMes = mensal.mes === mesStr ? (Number(mensal.contagem) || 0) : 0;
+    const base = { ...aberto, usado: usadoDia, usadoMes, limite: plano.dia, limiteMes: plano.mes, plano };
+    if (usadoMes >= plano.mes) return { ...base, permitido: false, motivo: "mes" };
+    if (usadoDia >= plano.dia) return { ...base, permitido: false, motivo: "dia" };
+    await Promise.all([
+      gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 }),
+      gravar("limite-mensal:analises-ia", { mes: mesStr, contagem: usadoMes + 1 })
+    ]);
+    return { ...base, usado: usadoDia + 1, usadoMes: usadoMes + 1 };
+  } catch (_) { return aberto; }
+}
+
 // v1069 — extrair-print/detectar-rosto/ler-prints-conversa (e os tetos de visão criados pra elas
 // na v1068) foram removidas do sistema inteiro — nenhuma tela chama mais essas ações.
 // Transcrição de voz avulsa (usada hoje pela nota de voz de um lead, não por "ensinar o Cérebro")
@@ -2142,19 +2220,41 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // v1013 — rede de segurança contra consumo descontrolado (ver verificarLimiteDiario acima):
   // checa DEPOIS de confirmar que o Cérebro existe (não gasta a checagem à toa numa conta que
   // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
-  const limiteDiario = await verificarLimiteDiario(organizationId, "analises-ia", limiteAnalisesIADoDia(), limiteAnalisesIADoDiaTeste());
+  const limiteDiario = await verificarLimiteAnalises(organizationId);
   if (!limiteDiario.permitido) {
-    // v1108 — decisão do dono: no TESTE GRÁTIS o aviso de limite vira convite de contratação,
-    // com botão direto pro WhatsApp comercial (o app monta o botão a partir de `upgrade`).
-    // Conta paga que bater no teto de segurança continua vendo o aviso neutro de sempre.
-    const aviso = limiteDiario.emTeste
-      ? `Você atingiu o limite de ${limiteDiario.limite} análises por dia do teste grátis. Para limite estendido, contrate o pacote Pro pelo WhatsApp abaixo.`
-      : `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`;
+    // v1108 — decisão do dono: bater no limite vira momento de venda, com botão direto pro
+    // WhatsApp comercial (o app monta o botão a partir de `upgrade`). v1110 — cada plano tem o
+    // seu degrau: teste → contrate; Pro → conheça o Pro Master; Pro Master → plano maior.
+    // A conta original (fusível técnico) segue com o aviso neutro de sempre, sem botão.
+    const zap = whatsComercialPlataforma();
+    let aviso, upgrade = null;
+    if (limiteDiario.emTeste) {
+      aviso = `Você atingiu o limite de ${limiteDiario.limite} análises por dia do teste grátis. Para limite estendido, contrate o pacote Pro pelo WhatsApp abaixo.`;
+      upgrade = { motivo: "limite-teste", limite: limiteDiario.limite, whatsapp: zap,
+        botao: "Falar no WhatsApp e liberar o Pro",
+        mensagemWhats: "Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar um plano." };
+    } else if (limiteDiario.plano?.tipo === "pro") {
+      aviso = limiteDiario.motivo === "mes"
+        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro. O Pro Master tem o dobro — fale com a gente pelo WhatsApp abaixo.`
+        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro. O Pro Master tem o dobro — fale com a gente pelo WhatsApp abaixo.`;
+      upgrade = { motivo: "upgrade-pro-master", whatsapp: zap,
+        botao: "Conhecer o Pro Master no WhatsApp",
+        mensagemWhats: "Olá! Atingi o limite do meu plano Pro no Corretor Pro e quero conhecer o Pro Master." };
+    } else if (limiteDiario.plano?.tipo === "pro-master") {
+      aviso = limiteDiario.motivo === "mes"
+        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro Master. Precisa de mais? Fale com a gente pelo WhatsApp abaixo.`
+        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro Master. Precisa de mais? Fale com a gente pelo WhatsApp abaixo.`;
+      upgrade = { motivo: "plano-personalizado", whatsapp: zap,
+        botao: "Falar no WhatsApp sobre um plano maior",
+        mensagemWhats: "Olá! Atingi o limite do meu plano Pro Master no Corretor Pro e preciso de um limite maior." };
+    } else {
+      aviso = `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`;
+    }
     return {
       mode: "limite_diario_excedido",
       error: aviso,
       summary: aviso,
-      ...(limiteDiario.emTeste ? { upgrade: { motivo: "limite-teste", limite: limiteDiario.limite, whatsapp: whatsComercialPlataforma() } } : {}),
+      ...(upgrade ? { upgrade } : {}),
       clientProfile: "—",
       bestTime: "—",
       objections: [],

@@ -5176,12 +5176,15 @@ function cp704Css(){
 function cpUpgradeProHTML(a){
   const fone = String(a?.upgrade?.whatsapp || "").replace(/\D/g, "");
   if(a?.mode !== "limite_diario_excedido" || !fone) return "";
-  const msg = encodeURIComponent("Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar o pacote Pro.");
+  // v1110 — o servidor manda o rótulo e a mensagem certos pra cada degrau (teste → Pro →
+  // Pro Master → plano maior); os textos fixos abaixo são só reserva de compatibilidade.
+  const rotulo = String(a?.upgrade?.botao || "Falar no WhatsApp e liberar o Pro");
+  const msg = encodeURIComponent(String(a?.upgrade?.mensagemWhats || "Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar o pacote Pro."));
   return `<div style="margin-top:12px;padding:12px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.45);border-radius:12px">`+
-    `<div class="small" style="margin-bottom:10px"><b>Quer continuar analisando hoje?</b> Fale direto com a gente e libere o pacote Pro na hora:</div>`+
+    `<div class="small" style="margin-bottom:10px"><b>Quer continuar analisando?</b> Fale direto com a gente e libere na hora:</div>`+
     `<a href="https://wa.me/${fone}?text=${msg}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25d366;color:#062b16;font-weight:950;text-decoration:none;padding:13px 18px;border-radius:12px;font-size:14px">`+
     `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4 0-.5.1-.7l.5-.6c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.9.9-1.1 2.2-.2 3.9a10.2 10.2 0 0 0 4.3 4.1c1.6.8 2.6.9 3.5.6.5-.2 1.5-.7 1.7-1.3.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.4-.3Z"/></svg>`+
-    `Falar no WhatsApp e liberar o Pro</a></div>`;
+    `${escapeHtml(rotulo)}</a></div>`;
 }
 
 function cp718LeituraComercialHtml(a,lead){

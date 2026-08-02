@@ -142,6 +142,10 @@ async function sairAdmin() {
 }
 
 const STATUS_LABEL = { teste: 'Teste', ativo: 'Ativo', bloqueado: 'Bloqueado' };
+// v1110 — plano contratado de cada conta (Pro / Pro Master), vindo do servidor. Conta ativa
+// sem registro conta como Pro (plano de entrada).
+const PLANO_LABEL = { 'pro': 'Pro', 'pro-master': 'Pro Master' };
+let planosPorConta = {};
 let ultimosDados = [];
 let filtroStatus = 'todos';
 let filtroBusca = '';
@@ -200,22 +204,35 @@ async function carregarEmpresas({ manter = false } = {}) {
   offsetContas += (data || []).length;
   renderizarPainel();
   carregarResumo();
+  carregarPlanos();
 }
 
 function carregarMaisContas() { carregarEmpresas({ manter: true }); }
+
+async function carregarPlanos() {
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return;
+    const resp = await fetch('/api/admin-contas?relatorio=planos', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await resp.json().catch(() => ({}));
+    if (r?.ok) { planosPorConta = r.planos || {}; renderizarPainel(); }
+  } catch (_) {}
+}
 
 function renderizarPainel() {
   const linhas = document.getElementById('linhas');
   linhas.innerHTML = ultimosDados.map(e => `
     <tr>
-      <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div><span>${escapeHtml(e.nome)}</span> <span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span></div></td>
+      <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div><span>${escapeHtml(e.nome)}</span> <span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span>${e.status === 'ativo' && String(e.id) !== String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '') ? ` <span class="pill ativo">${escapeHtml(PLANO_LABEL[planosPorConta[e.id]] || 'Pro')}</span>` : ''}</div></td>
       <td data-rotulo="Dias de teste">${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
       <td data-rotulo="Usuários">${e.qtd_usuarios}</td>
       <td data-rotulo="Criado em">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
       <td data-rotulo="">
         <button class="pequeno secundario btn-acoes-toggle" style="width:auto" onclick="toggleAcoes(this)">Ações ⌄</button>
         <div class="acoes-linha">
-          <button class="pequeno" style="width:auto" onclick="marcarPago('${e.id}')">Marcar pago</button>
+          <button class="pequeno" style="width:auto" onclick="definirPlano('${e.id}','pro')">Pago · Pro</button>
+          <button class="pequeno" style="width:auto" onclick="definirPlano('${e.id}','pro-master')">Pago · Pro Master</button>
           <button class="pequeno secundario" style="width:auto" onclick="bloquear('${e.id}')">Bloquear</button>
           <button class="pequeno secundario" style="width:auto" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
           ${String(e.id) === String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '') ? '' : `<button class="pequeno secundario btn-excluir" style="width:auto" onclick="excluirConta('${e.id}')">Excluir</button>`}
@@ -248,9 +265,23 @@ function buscarCorretor(valor) {
   buscaTimer = setTimeout(() => carregarEmpresas(), 350);
 }
 
-async function marcarPago(id) {
-  const { error } = await supabaseClient.from('organizations').update({ status: 'ativo' }).eq('id', id);
-  if (error) return alert('Erro: ' + error.message);
+// v1110 — "Marcar pago" agora define o PLANO junto (Pro ou Pro Master). A gravação acontece no
+// servidor (api/admin-contas, exclusivo do administrador), que também marca a conta como ativa.
+// A conta original não usa pacotes — o servidor recusa e explica.
+async function definirPlano(id, plano) {
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return alert('Sessão expirada — recarregue a página e entre de novo.');
+  try {
+    const resp = await fetch('/api/admin-contas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ action: 'definir-plano', organizationId: id, plano })
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok || !r.ok) return alert('Erro: ' + (r.error || `código ${resp.status}`));
+    planosPorConta[id] = plano;
+  } catch (e) { return alert('Erro: ' + (e?.message || e)); }
   carregarEmpresas();
 }
 

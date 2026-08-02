@@ -63,7 +63,7 @@ const reanalisar = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.m
 
 // ── 4. O resultado bloqueado carrega o convite SÓ no teste (upgrade condicionado a emTeste) ───
 {
-  assert.match(pipeline, /limiteDiario\.emTeste \? \{ upgrade: \{ motivo: "limite-teste"/,
+  assert.match(pipeline, /if \(limiteDiario\.emTeste\) \{[\s\S]{0,400}?motivo: "limite-teste"/,
     "o payload upgrade precisa existir e ser condicionado a emTeste");
   assert.match(pipeline, /contrate o pacote Pro pelo WhatsApp abaixo/,
     "a mensagem do teste precisa convidar pra contratação");
