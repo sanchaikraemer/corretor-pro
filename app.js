@@ -2068,6 +2068,70 @@ function rotuloTempoAtendimento(ts){
   return `há ${dias} dias`;
 }
 
+// ─── v1113 — CADÊNCIA DO CLIENTE QUE NUNCA RESPONDEU (10 retomadas em 6 meses) ────────────────
+// Ideia do dono (02/08/2026), casada com a pesquisa da v1107 (8–12 contatos convertem; 74% dos
+// que fecham, fecham 6+ meses depois): quem NUNCA respondeu não disputa a fila pelos sinais
+// normais (não tem sinal nenhum) — segue um calendário fixo a partir do 1º contato registrado:
+//   mês 1: 7, 14 e 21 dias · mês 2: 35 e 50 · mês 3: 65 e 80 · mês 4: 105 · mês 5: 135 ·
+//   mês 6: 165 (mensagem de ENCERRAMENTO) — 10 retomadas ao todo.
+// Regras fechadas com o dono: (1) toque só conta quando ele AGIU (atendimento registrado —
+// marcar atendido, copiar mensagem, nota manual; dias civis distintos, 3 cópias no mesmo dia
+// contam 1) — sugestão ignorada espera, não "queima"; (2) só entra quem nunca respondeu desde
+// o 1º contato — qualquer resposta do cliente numa reimportação tira do filtro na hora;
+// (3) ao completar as 10, o app SUGERE arquivar — nunca arquiva sozinho (regra da casa).
+// Intervalo mínimo de 7 dias entre toques: corretor atrasado não recebe sugestões em rajada.
+const CP_CADENCIA_OFFSETS_DIAS = [7, 14, 21, 35, 50, 65, 80, 105, 135, 165];
+const CP_CADENCIA_TOTAL = CP_CADENCIA_OFFSETS_DIAS.length;
+const CP_CADENCIA_MSG_ARQUIVAR = "Arquive este lead: esgotaram as 10 tentativas em 6 meses sem retorno.";
+
+function cpCadenciaSemResposta(l){
+  try{
+    if(!l || (typeof leadEhAtivo === 'function' && !leadEhAtivo(l))) return null;
+    if(((typeof mensagensDoCliente === 'function') ? mensagensDoCliente(l) : 0) > 0) return null;
+    const ts = [];
+    for(const e of (l?.analysis?.aprendizado?.eventos || [])){
+      if(e?.evento === 'contato_manual' && e?.quando){ const t = Date.parse(e.quando); if(!isNaN(t)) ts.push(t); }
+    }
+    for(const m of (Array.isArray(l?.recentMessages) ? l.recentMessages : [])){
+      const src = String(m?.source || "");
+      if((src === 'manual' || src === 'corretor-pro-manual') && TIPOS_ATENDIMENTO_TIMELINE.has(String(m?.type || ''))){
+        const t = Date.parse(m?.iso || ''); if(!isNaN(t)) ts.push(t);
+      }
+    }
+    for(const campo of [l?.lastAttendanceAt, l?.ultimoAtendimentoEm]){
+      const t = Date.parse(campo || ''); if(!isNaN(t)) ts.push(t);
+    }
+    if(!ts.length) return null; // sem 1º contato registrado → segue a regra normal de "nunca atendido"
+    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" });
+    const diasCivis = new Set(ts.map(t => fmt.format(t)));
+    const primeiro = Math.min(...ts), ultimo = Math.max(...ts);
+    const feitas = Math.min(Math.max(0, diasCivis.size - 1), CP_CADENCIA_TOTAL); // 1º contato não é retomada
+    if(feitas >= CP_CADENCIA_TOTAL){
+      return { ativo: true, encerrar: true, feitas, total: CP_CADENCIA_TOTAL, proximaTs: null, devida: false, encerramento: false };
+    }
+    const proximaTs = Math.max(primeiro + CP_CADENCIA_OFFSETS_DIAS[feitas] * 86400000, ultimo + 7 * 86400000);
+    return {
+      ativo: true, encerrar: false, feitas, total: CP_CADENCIA_TOTAL, proximaTs,
+      devida: Date.now() >= proximaTs,
+      encerramento: feitas === CP_CADENCIA_TOTAL - 1 // a 10ª é a mensagem de encerramento
+    };
+  }catch(_){ return null; }
+}
+
+// Aviso no detalhe do lead: situação da cadência, ou a sugestão de arquivar depois das 10.
+function cpCadenciaNoticeHTML(l){
+  const cad = cpCadenciaSemResposta(l);
+  if(!cad?.ativo) return "";
+  if(cad.encerrar){
+    const idJs = JSON.stringify(String(l?.id || ""));
+    return `<div class="notice" style="margin:0 0 12px;border-color:var(--risco)"><b>${escapeHtml(CP_CADENCIA_MSG_ARQUIVAR)}</b><div class="small" style="margin:6px 0 10px;color:var(--muted)">Cliente sem nenhuma resposta desde o primeiro contato. Se preferir, continue tentando — nada é arquivado sem você mandar.</div><button type="button" class="btn" style="width:auto;padding:10px 16px" onclick='arquivarLead(${idJs},${JSON.stringify(String(l?.name || ""))})'>Arquivar este lead</button></div>`;
+  }
+  const dataProx = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(new Date(cad.proximaTs));
+  const rotulo = cad.encerramento ? `mensagem de encerramento (${cad.total} de ${cad.total})` : `retomada ${cad.feitas + 1} de ${cad.total}`;
+  const quando = cad.devida ? "sugerida pra hoje" : `programada pra ${dataProx}`;
+  return `<div class="notice" style="margin:0 0 12px"><b>Cliente ainda não respondeu.</b> <span class="small">Este lead segue o plano de ${cad.total} retomadas em 6 meses: a próxima é a ${escapeHtml(rotulo)}, ${escapeHtml(quando)} — ${cad.feitas} já ${cad.feitas === 1 ? "feita" : "feitas"}. Se ele respondeu no WhatsApp, reimporte a conversa que ele volta pro fluxo normal.</span></div>`;
+}
+
 // Prazo de proteção: lead atendido não volta pra fila de prioritários antes do descanso escolhido
 // pelo corretor no Cérebro (cpDiasDescansoPosAtendimento — ver comentário perto de limiarRetomada).
 // v1022 — usava diasDesdeAtendimentoManual (função removida aqui), que só olhava
@@ -2676,10 +2740,22 @@ function cpHomeLeadRow(l, maxMsgs){
   // lead que está mais abaixo na lista.
   // v1046 — pedido do dono: tirar de vez o número de posição (1º/2º/3º...) da linha — ele achou
   // desnecessário; a lista em si (com a quantidade certa, configurada no Cérebro) já basta.
+  // v1113 — lead na cadência de "nunca respondeu": a barra de mensagens seria sempre vazia (o
+  // cliente nunca falou); no lugar dela, a linha mostra QUAL retomada é (ou a sugestão de
+  // arquivar, depois das 10) — é o aviso do plano de 10 toques em 6 meses.
+  let barHtml = cpBarraMensagensMini(l, maxMsgs);
+  try{
+    const cad = (typeof cpCadenciaSemResposta === 'function') ? cpCadenciaSemResposta(l) : null;
+    if(cad?.ativo){
+      const rot = cad.encerrar ? `Arquivar sugerido · ${cad.total}/${cad.total}`
+        : (cad.encerramento ? `↻ Encerramento (${cad.total} de ${cad.total})` : `↻ Retomada ${cad.feitas+1} de ${cad.total}`);
+      barHtml = `<span class="chr-bar" title="Cliente nunca respondeu — plano de ${cad.total} retomadas em 6 meses"><b style="min-width:0;white-space:nowrap;color:${cad.encerrar?'var(--risco)':'var(--morno)'}">${escapeHtml(rot)}</b></span>`;
+    }
+  }catch(_){}
   return `<button type="button" class="cp-hoje-row" onclick='abrirLead(${idJs})'>
     <span class="chr-nm">${escapeHtml(l.name||'Cliente')}</span>
     <span class="chr-pr" title="${escapeHtml(prod||'')}">${escapeHtml(prod||'')}</span>
-    ${cpBarraMensagensMini(l, maxMsgs)}
+    ${barHtml}
     <span class="chr-dd" title="${escapeHtml(diasTitle)}">${dias?`${diasRotulo} ${escapeHtml(dias)}`:''}</span>
   </button>`;
 }
@@ -5298,6 +5374,7 @@ function renderLeadFoco(lead){
           <div id="cp7ObsStatus" class="small" style="margin-top:8px;color:var(--muted)"></div>
         </section>
       </div>
+      ${typeof cpCadenciaNoticeHTML==='function'?cpCadenciaNoticeHTML(lead):''}
       <div class="cp704-workspace">
         <main class="cp704-primary">
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
@@ -9291,6 +9368,14 @@ function cpFilaFazerAgora(items){
   // recomendacaoContato.aguardar (v1059/v1068) NÃO gate mais essa fila — "esquece o que está
   // escrito", nas palavras do dono: só data de atendimento decide.
   const pool = ativos.filter(l => {
+    // v1113 — cliente que NUNCA respondeu segue o calendário de retomadas (cpCadenciaSemResposta),
+    // não os sinais normais: só aparece na fila quando a retomada vence (ou pra sugerir arquivar
+    // depois das 10). Entre uma retomada e outra, some da fila — sem cobrança fora de hora.
+    const cad = (typeof cpCadenciaSemResposta === 'function') ? cpCadenciaSemResposta(l) : null;
+    if(cad?.ativo){
+      if(ehContatadoHoje(l) || cp786TemCompromisso(l)) return false;
+      return cad.encerrar || cad.devida;
+    }
     const nuncaAtendido = !(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l));
     const passouPrazo = !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l));
     return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (nuncaAtendido || passouPrazo);
