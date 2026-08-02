@@ -3,10 +3,11 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { verificarLimiteAnalises, planoComercial, PLANO_CONTRATADO_KEY } from "../api/_pipeline.js";
 
-// v1110 — planos comerciais (decisão do dono, estratégia de chamariz tipo "pipoca de cinema"):
-// Teste 5/dia · Pro 25/dia + 250/mês · Pro Master 50/dia + 500/mês (o dobro em tudo, preço
-// próximo — o preço nunca aparece no app). Cada limite atingido é um degrau de venda no
-// WhatsApp comercial. A conta original fica FORA dos planos (só o fusível técnico de 200/dia).
+// v1110 — planos comerciais (decisão do dono, estratégia de chamariz tipo "pipoca de cinema");
+// v1111 — recalibrado pela régua do uso real do dono (70–80 análises/mês com 200+ clientes):
+// Teste 5/dia · Pro 15/dia + 150/mês · Pro Master 30/dia + 300/mês (o dobro em tudo, preço
+// próximo — o preço nunca aparece no app). Acima disso, plano personalizado no WhatsApp.
+// A conta original fica FORA dos planos (só o fusível técnico de 200/dia).
 
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 const adminContas = fs.readFileSync(new URL("../api/admin-contas.js", import.meta.url), "utf8");
@@ -20,8 +21,8 @@ const mesSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }
 // ── 1. Os números dos planos (com env mandando) ───────────────────────────────────────────────
 {
   for (const nome of ["CORRETOR_PRO_LIMITE_DIA_PRO", "CORRETOR_PRO_LIMITE_MES_PRO", "CORRETOR_PRO_LIMITE_DIA_PROMASTER", "CORRETOR_PRO_LIMITE_MES_PROMASTER"]) delete process.env[nome];
-  assert.deepEqual({ ...planoComercial("pro") }, { tipo: "pro", nome: "Pro", dia: 25, mes: 250 }, "Pro: 25/dia e 250/mês");
-  assert.deepEqual({ ...planoComercial("pro-master") }, { tipo: "pro-master", nome: "Pro Master", dia: 50, mes: 500 }, "Pro Master: 50/dia e 500/mês (o dobro)");
+  assert.deepEqual({ ...planoComercial("pro") }, { tipo: "pro", nome: "Pro", dia: 15, mes: 150 }, "Pro: 15/dia e 150/mês (v1111)");
+  assert.deepEqual({ ...planoComercial("pro-master") }, { tipo: "pro-master", nome: "Pro Master", dia: 30, mes: 300 }, "Pro Master: 30/dia e 300/mês (o dobro, v1111)");
   assert.equal(planoComercial("qualquer-coisa").tipo, "pro", "tipo desconhecido cai no plano de entrada (Pro)");
   assert.equal(planoComercial("").tipo, "pro", "conta ativa sem plano registrado = Pro");
   process.env.CORRETOR_PRO_LIMITE_MES_PRO = "999";
@@ -67,29 +68,29 @@ async function comServidor(opts, orgId, fn) {
   } finally { await new Promise(r => server.close(r)); }
 }
 
-// Conta ativa sem plano registrado → régua do Pro; 25ª do dia ainda passa, 26ª bloqueia.
-await comServidor({ diario: 24 }, "org-pro", (r) => {
-  assert.equal(r.permitido, true, "24 usadas: a 25ª ainda entra");
+// Conta ativa sem plano registrado → régua do Pro; 15ª do dia ainda passa, 16ª bloqueia.
+await comServidor({ diario: 14 }, "org-pro", (r) => {
+  assert.equal(r.permitido, true, "14 usadas: a 15ª ainda entra");
   assert.equal(r.plano?.tipo, "pro");
 });
-await comServidor({ diario: 25 }, "org-pro", (r) => {
-  assert.equal(r.permitido, false, "25 usadas: bloqueia a 26ª");
+await comServidor({ diario: 15 }, "org-pro", (r) => {
+  assert.equal(r.permitido, false, "15 usadas: bloqueia a 16ª");
   assert.equal(r.motivo, "dia");
-  assert.equal(r.limite, 25);
+  assert.equal(r.limite, 15);
 });
 // Teto MENSAL do Pro segura mesmo com o dia folgado.
-await comServidor({ diario: 3, mensal: 250 }, "org-pro", (r) => {
-  assert.equal(r.permitido, false, "250 no mês bloqueia mesmo com só 3 no dia");
+await comServidor({ diario: 3, mensal: 150 }, "org-pro", (r) => {
+  assert.equal(r.permitido, false, "150 no mês bloqueia mesmo com só 3 no dia");
   assert.equal(r.motivo, "mes");
-  assert.equal(r.limiteMes, 250);
+  assert.equal(r.limiteMes, 150);
 });
-// Pro Master: o dobro (50/dia, 500/mês).
-await comServidor({ plano: "pro-master", diario: 49, mensal: 499 }, "org-master", (r) => {
-  assert.equal(r.permitido, true, "49/dia e 499/mês: a próxima ainda entra no Pro Master");
+// Pro Master: o dobro (30/dia, 300/mês).
+await comServidor({ plano: "pro-master", diario: 29, mensal: 299 }, "org-master", (r) => {
+  assert.equal(r.permitido, true, "29/dia e 299/mês: a próxima ainda entra no Pro Master");
   assert.equal(r.plano?.nome, "Pro Master");
 });
-await comServidor({ plano: "pro-master", diario: 50 }, "org-master", (r) => {
-  assert.equal(r.permitido, false); assert.equal(r.motivo, "dia"); assert.equal(r.limite, 50);
+await comServidor({ plano: "pro-master", diario: 30 }, "org-master", (r) => {
+  assert.equal(r.permitido, false); assert.equal(r.motivo, "dia"); assert.equal(r.limite, 30);
 });
 // Conta em teste: 5/dia, com a marca emTeste (liga o convite).
 await comServidor({ status: "teste", diario: 5 }, "org-teste", (r) => {
