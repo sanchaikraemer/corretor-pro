@@ -839,6 +839,25 @@ function diaCalendarioSP() {
 // fusível técnico de 200/dia pra conta original. Substitui o verificarLimiteDiario genérico SÓ
 // pra "analises-ia" (os outros contadores — voz, diagnóstico — continuam no genérico).
 // Mesma regra de sempre: falha de leitura/gravação NUNCA bloqueia análise real (fail-open).
+// v1120 — reserva ATÔMICA via função do banco (migração 0012): checar+somar acontece numa
+// transação só, com trava por empresa, então cliques simultâneos não furam mais o teto. Retorna
+// o resultado da função, ou null se ela não existir/der erro (aí quem chama usa o jeito antigo).
+async function reservarAnaliseViaRPC(supabase, organizationId, hojeStr, mesStr, limiteDia, limiteMes) {
+  try {
+    if (!supabase || typeof supabase.rpc !== "function") return null;
+    const { data, error } = await supabase.rpc("reservar_analise_ia", {
+      p_org: organizationId, p_dia: hojeStr, p_mes: mesStr,
+      p_limite_dia: limiteDia, p_limite_mes: (limiteMes == null ? -1 : limiteMes)
+    });
+    if (error || !data || typeof data !== "object" || typeof data.permitido !== "boolean") return null;
+    return data;
+  } catch (_) { return null; }
+}
+
+// Limite de análises com consciência de PLANO: dia + mês pra contas pagas, 5/dia no teste,
+// fusível técnico pra conta original. Substitui o verificarLimiteDiario genérico SÓ pra
+// "analises-ia" (os outros contadores — voz, diagnóstico — continuam no genérico).
+// Mesma regra de sempre: falha de leitura/gravação NUNCA bloqueia análise real (fail-open).
 export async function verificarLimiteAnalises(organizationId) {
   const aberto = { permitido: true, usado: 0, limite: limiteAnalisesIADoDia(), limiteMes: null, usadoMes: 0, emTeste: false, plano: null, motivo: null };
   try {
@@ -847,39 +866,49 @@ export async function verificarLimiteAnalises(organizationId) {
     if (!supabase || !organizationId) return aberto;
 
     const hojeStr = diaCalendarioSP();
+    const mesStr = mesCalendarioSP();
     const lerValor = async (chave) => {
       const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chave).eq("organization_id", organizationId).maybeSingle();
       return data?.valor && typeof data.valor === "object" ? data.valor : {};
     };
     const gravar = (chave, valor) => upsertConfigComOrganizacao(supabase, organizationId, { chave, valor, atualizado_em: new Date().toISOString() }).catch(() => ({}));
 
+    // 1) Descobre o contexto: teto do dia, teto do mês (null = sem teto mensal), teste e plano.
+    let emTeste = false, plano = null, limiteDia, limiteMes = null;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) {
+      // Conta original (dono da plataforma): fora dos planos — só o fusível técnico diário.
+      limiteDia = limiteAnalisesIADoDia();
+    } else {
+      const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+      if (org?.status === "teste") {
+        emTeste = true; limiteDia = limiteAnalisesIADoDiaTeste();
+      } else {
+        const contratado = await lerValor(PLANO_CONTRATADO_KEY);
+        plano = planoComercial(contratado?.tipo);
+        limiteDia = plano.dia; limiteMes = plano.mes;
+      }
+    }
+    const meta = { ...aberto, emTeste, plano, limite: limiteDia, limiteMes };
+
+    // 2) Reserva atômica (0012). Se a função não existir/der erro, cai no jeito antigo abaixo.
+    const rpc = await reservarAnaliseViaRPC(supabase, organizationId, hojeStr, mesStr, limiteDia, limiteMes);
+    if (rpc) {
+      return { ...meta, permitido: rpc.permitido, usado: Number(rpc.usado_dia) || 0, usadoMes: Number(rpc.usado_mes) || 0, motivo: rpc.permitido ? null : rpc.motivo };
+    }
+
+    // 3) Jeito antigo (lê, decide, grava) — rede de segurança quando a 0012 não está no banco.
     const diario = await lerValor("limite-diario:analises-ia");
     const usadoDia = diario.dia === hojeStr ? (Number(diario.contagem) || 0) : 0;
-
-    // Conta original (dono da plataforma): fora dos planos — só o fusível técnico diário.
-    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) {
-      const limite = limiteAnalisesIADoDia();
-      if (usadoDia >= limite) return { ...aberto, permitido: false, usado: usadoDia, limite, motivo: "dia" };
+    if (limiteMes == null) {
+      if (usadoDia >= limiteDia) return { ...meta, permitido: false, usado: usadoDia, motivo: "dia" };
       await gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 });
-      return { ...aberto, usado: usadoDia + 1, limite };
+      return { ...meta, usado: usadoDia + 1 };
     }
-
-    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
-    if (org?.status === "teste") {
-      const limite = limiteAnalisesIADoDiaTeste();
-      if (usadoDia >= limite) return { ...aberto, permitido: false, usado: usadoDia, limite, emTeste: true, motivo: "dia" };
-      await gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 });
-      return { ...aberto, usado: usadoDia + 1, limite, emTeste: true };
-    }
-
-    const contratado = await lerValor(PLANO_CONTRATADO_KEY);
-    const plano = planoComercial(contratado?.tipo);
-    const mesStr = mesCalendarioSP();
     const mensal = await lerValor("limite-mensal:analises-ia");
     const usadoMes = mensal.mes === mesStr ? (Number(mensal.contagem) || 0) : 0;
-    const base = { ...aberto, usado: usadoDia, usadoMes, limite: plano.dia, limiteMes: plano.mes, plano };
-    if (usadoMes >= plano.mes) return { ...base, permitido: false, motivo: "mes" };
-    if (usadoDia >= plano.dia) return { ...base, permitido: false, motivo: "dia" };
+    const base = { ...meta, usado: usadoDia, usadoMes };
+    if (usadoMes >= limiteMes) return { ...base, permitido: false, motivo: "mes" };
+    if (usadoDia >= limiteDia) return { ...base, permitido: false, motivo: "dia" };
     await Promise.all([
       gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 }),
       gravar("limite-mensal:analises-ia", { mes: mesStr, contagem: usadoMes + 1 })
