@@ -9557,13 +9557,19 @@ renderResumoDia = function(items){
   // v1071 — pedido do dono: quantos leads estão sem atender há 30 dias ou mais (prazo fixo,
   // separado do "descanso" configurável do Cérebro — ver cpSemAtenderHaDias).
   const semAtender30=cpContarSemAtender(ativos, 30);
+  // v1124 — pedido do dono: um card com a quantidade de contatos ARQUIVADOS na Home. Ele NÃO sai
+  // de `items`/`ativos` (a Home só recebe a carteira ativa, ver _processarDashboard) — a conta vem
+  // de state.todosLeads, que é a carteira inteira que voltou do servidor. Sem essa lista (ex.: um
+  // render adiantado antes do primeiro carregamento) o card mostra 0 em vez de quebrar a tela.
+  const arquivados=(state.todosLeads||[]).filter(l=>normalizarEtapa(l.etapa)===ETAPA_ARQUIVADO).length;
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="abrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>`;
+    <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>
+    <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>`;
 };
 
 function ui631LeadMotivo(l){
