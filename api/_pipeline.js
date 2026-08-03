@@ -3028,10 +3028,14 @@ export async function prepararConversaDoZip(buffer, options = {}) {
 // teto: um lote grande abria todas as chamadas à OpenAI de uma vez (pico de memória e de custo
 // simultâneo, risco de estourar o tempo/limite da função). 4 de cada vez mantém boa velocidade sem
 // o pico. Ajustável por ambiente.
-const TRANSCRICAO_CONCORRENCIA_PADRAO = 4;
+// v1122 — 4 era conservador demais: o dono relatou importação passando de 1 minuto (antes era bem
+// mais rápida), porque uma conversa com muitos áudios virava várias rodadas em fila. 10 mantém a
+// proteção contra o pico descontrolado (que era o problema real: Promise.all sem teto nenhum) sem
+// enfileirar importação normal.
+const TRANSCRICAO_CONCORRENCIA_PADRAO = 10;
 function transcricaoConcorrencia() {
   const n = Number(process.env.CORRETOR_PRO_TRANSCRICAO_CONCORRENCIA);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 8) : TRANSCRICAO_CONCORRENCIA_PADRAO;
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 16) : TRANSCRICAO_CONCORRENCIA_PADRAO;
 }
 
 // Roda `fn` sobre `itens` com no máximo `limite` execuções simultâneas (pool simples).
