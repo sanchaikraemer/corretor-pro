@@ -51,7 +51,7 @@
 
       <div class="tabela-admin">
         <table>
-          <thead><tr><th>Corretor</th><th>Dias de teste</th><th>Usuários</th><th>Criado em</th><th>Ação</th></tr></thead>
+          <thead><tr><th>Corretor</th><th>Contato</th><th>Cidade/UF</th><th>Dias de teste</th><th>Usuários</th><th>Criado em</th><th>Ação</th></tr></thead>
           <tbody id="linhas"></tbody>
         </table>
       </div>
@@ -162,6 +162,31 @@ function iniciais(nome) {
   return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
 }
 
+// v1117 — os dados de contato (telefone/cidade/estado/e-mail) vêm do cadastro. Contas antigas,
+// de antes desta versão, não têm esses campos preenchidos — por isso todo acesso é tolerante a
+// vazio e cai num "—" discreto em vez de quebrar a linha.
+// Monta o link de WhatsApp a partir do que a pessoa digitou: tira tudo que não é dígito e, se o
+// número não começar com o código do Brasil (55), acrescenta — assim o clique abre a conversa.
+function linkWhatsApp(telefone) {
+  const digitos = String(telefone || '').replace(/\D/g, '');
+  if (digitos.length < 10) return '';
+  return 'https://wa.me/' + (digitos.startsWith('55') ? digitos : '55' + digitos);
+}
+function celulaContato(e) {
+  const zap = linkWhatsApp(e.telefone);
+  const email = String(e.email_contato || '').trim();
+  const linhas = [];
+  if (zap) linhas.push(`<a href="${escapeHtml(zap)}" target="_blank" rel="noopener" class="link-zap">📱 ${escapeHtml(e.telefone)}</a>`);
+  if (email) linhas.push(`<a href="mailto:${escapeHtml(email)}" class="link-email">${escapeHtml(email)}</a>`);
+  return linhas.length ? linhas.join('<br>') : '—';
+}
+function celulaCidade(e) {
+  const cidade = String(e.cidade || '').trim();
+  const uf = String(e.estado || '').trim();
+  if (cidade && uf) return escapeHtml(`${cidade}/${uf}`);
+  return escapeHtml(cidade || uf || '—');
+}
+
 // v1008 — o painel precisa aguentar MILHARES de corretores: a lista carrega em lotes de 50
 // ("Mostrar mais"), e busca/filtros/contadores são feitos pelo BANCO, não varrendo a tela.
 const PAGINA_CONTAS = 50;
@@ -225,6 +250,8 @@ function renderizarPainel() {
   linhas.innerHTML = ultimosDados.map(e => `
     <tr>
       <td data-rotulo=""><div class="nome-corretor"><div class="avatar-admin" style="background:var(--st-${e.status === 'ativo' ? 'ativo' : e.status === 'bloqueado' ? 'bloq' : 'teste'})">${escapeHtml(iniciais(e.nome))}</div><span>${escapeHtml(e.nome)}</span> <span class="pill ${e.status}">${escapeHtml(STATUS_LABEL[e.status] || e.status)}</span>${e.status === 'ativo' && String(e.id) !== String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '') ? ` <span class="pill ativo">${escapeHtml(PLANO_LABEL[planosPorConta[e.id]] || 'Pro')}</span>` : ''}</div></td>
+      <td data-rotulo="Contato">${celulaContato(e)}</td>
+      <td data-rotulo="Cidade/UF">${celulaCidade(e)}</td>
       <td data-rotulo="Dias de teste">${e.status === 'teste' ? e.dias_restantes_teste : '—'}</td>
       <td data-rotulo="Usuários">${e.qtd_usuarios}</td>
       <td data-rotulo="Criado em">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>

@@ -96,9 +96,23 @@ async function entrar() {
     // sempre. Aqui, no primeiro login de verdade (sessão já existe), cria a empresa que faltou,
     // usando o nome que o cadastro salvou em user_metadata.nome_empresa.
     if (!vinculo || !vinculo.organizations) {
-      const nomeSalvoNoCadastro = String(loginData.user.user_metadata?.nome_empresa || '').trim();
+      const meta = loginData.user.user_metadata || {};
+      const nomeSalvoNoCadastro = String(meta.nome_empresa || '').trim();
       const nomeParaEmpresa = nomeSalvoNoCadastro || String(email.split('@')[0] || 'Minha empresa').trim();
-      const { error: rpcError } = await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeParaEmpresa });
+      // Cria com os dados de contato salvos no cadastro (options.data). Se a migração 0011 ainda
+      // não tiver sido aplicada, a função é a versão antiga (só nome) e a chamada completa falha —
+      // aí tentamos de novo só com o nome, pra o primeiro login nunca travar por isso.
+      const criar = async (comContato) => comContato
+        ? supabaseClient.rpc('criar_empresa_e_dono', {
+            p_nome: nomeParaEmpresa,
+            p_telefone: String(meta.telefone || '').trim(),
+            p_cidade: String(meta.cidade || '').trim(),
+            p_estado: String(meta.estado || '').trim(),
+            p_email: email
+          })
+        : supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeParaEmpresa });
+      let { error: rpcError } = await criar(true);
+      if (rpcError) ({ error: rpcError } = await criar(false));
       if (!rpcError) {
         const retry = await buscarVinculo();
         vinculo = retry.data;

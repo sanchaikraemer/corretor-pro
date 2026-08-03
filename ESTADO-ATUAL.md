@@ -142,6 +142,7 @@ Supabase — nenhuma ferramenta de migração automática está configurada). Li
 | `0008_telemetria_uso_ia.sql` | Tabela `ai_usage_events` (uso de IA por empresa). |
 | `0009_travas_concorrencia_e_search_path.sql` | Restrição única real contra empresa duplicada, `organization_id` obrigatório em `whatsapp_processamentos`, `search_path` fixo nas funções `SECURITY DEFINER`. |
 | `0010_dedupe_indexado.sql` | **Aditiva e opcional (v1092).** Cria três colunas de deduplicação (`dedupe_fone8`, `dedupe_arquivo`, `dedupe_nome`) com índice por empresa, pra a importação parar de varrer a carteira inteira só pra saber se o cliente já existe. Enquanto não for aplicada, o sistema funciona igual, só mais devagar — o app detecta a ausência sozinho. |
+| `0011_cadastro_contato_corretor.sql` | **Aditiva (v1117).** Adiciona `telefone`, `cidade`, `estado`, `email_contato` em `organizations`; faz `criar_empresa_e_dono` gravar esses campos; e os expõe em `admin_visao_empresas` (pra o painel mostrar como falar com cada corretor). As telas de cadastro/login funcionam antes e depois dela — enquanto não for aplicada, o cadastro segue no ar, só não grava os campos novos. |
 
 **Importante**: esta sessão não tem acesso ao Supabase de produção (ver `CLAUDE.md`). Não há
 confirmação automática de quais migrações já foram de fato aplicadas no banco real — isso precisa

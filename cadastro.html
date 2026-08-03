@@ -20,6 +20,26 @@
 
       <label>Seu nome</label>
       <input id="nomeEmpresa" placeholder="Ex.: João da Silva">
+      <label>Seu WhatsApp (com DDD)</label>
+      <input id="telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ex.: (51) 99999-9999">
+      <div class="dois-campos">
+        <div>
+          <label>Cidade</label>
+          <input id="cidade" name="cidade" autocomplete="address-level2" placeholder="Ex.: Porto Alegre">
+        </div>
+        <div>
+          <label>Estado</label>
+          <select id="estado" name="estado">
+            <option value="">UF</option>
+            <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+            <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+            <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+            <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+            <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+            <option>SE</option><option>TO</option>
+          </select>
+        </div>
+      </div>
       <label>Seu e-mail</label>
       <input id="email" name="email" type="email" autocomplete="username" placeholder="voce@email.com">
       <label>Crie uma senha</label>
@@ -52,8 +72,25 @@ function alternarSenha(id, btn) {
 // Ícone inicial (senha oculta -> mostra o olho aberto, convidando a clicar pra revelar).
 document.querySelectorAll('.btn-olho').forEach(b => { b.innerHTML = SVG_OLHO; });
 
+// Cria a empresa passando os dados de contato. Se a migração 0011 ainda não tiver sido aplicada
+// no banco (a função ainda ser a versão antiga, só com o nome), a chamada com os campos novos
+// falha — e aí tentamos de novo só com o nome, pra o cadastro NUNCA travar por causa disso. Os
+// dados de contato ficam guardados nos metadados do login de qualquer jeito (options.data), então
+// não se perdem: assim que a migração for aplicada, o primeiro login grava o que faltou.
+async function criarEmpresaComContato(dados) {
+  const completo = await supabaseClient.rpc('criar_empresa_e_dono', {
+    p_nome: dados.nome, p_telefone: dados.telefone, p_cidade: dados.cidade,
+    p_estado: dados.estado, p_email: dados.email
+  });
+  if (!completo.error) return completo;
+  return await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: dados.nome });
+}
+
 async function cadastrar() {
   const nomeEmpresa = document.getElementById('nomeEmpresa').value.trim();
+  const telefone = document.getElementById('telefone').value.trim();
+  const cidade = document.getElementById('cidade').value.trim();
+  const estado = document.getElementById('estado').value.trim();
   const email = document.getElementById('email').value.trim();
   const senha = document.getElementById('senha').value;
   const msg = document.getElementById('msg');
@@ -61,9 +98,16 @@ async function cadastrar() {
   msg.className = '';
   msg.textContent = '';
 
-  if (!nomeEmpresa || !email || !senha) {
+  if (!nomeEmpresa || !telefone || !cidade || !estado || !email || !senha) {
     msg.className = 'erro';
-    msg.textContent = 'Preencha seu nome, e-mail e senha.';
+    msg.textContent = 'Preencha todos os campos: nome, WhatsApp, cidade, estado, e-mail e senha.';
+    return;
+  }
+  // Precisa ter pelo menos DDD + número (10 dígitos). Guardamos o que a pessoa digitou; a limpeza
+  // pra virar link de WhatsApp acontece no painel.
+  if ((telefone.replace(/\D/g, '')).length < 10) {
+    msg.className = 'erro';
+    msg.textContent = 'Digite um WhatsApp válido, com DDD (ex.: (51) 99999-9999).';
     return;
   }
 
@@ -71,13 +115,13 @@ async function cadastrar() {
   btn.textContent = 'Criando conta...';
 
   try {
-    // O nome informado aqui vai também nos metadados do login (options.data) — é o único
-    // jeito de recuperá-lo depois, no primeiro login, PARA QUANDO a confirmação de e-mail
-    // estiver ativada (ver comentário abaixo sobre !signUpData.session).
+    // Nome e contato vão também nos metadados do login (options.data) — é o único jeito de
+    // recuperá-los depois, no primeiro login, PARA QUANDO a confirmação de e-mail estiver
+    // ativada (ver comentário abaixo sobre !signUpData.session).
     const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
       email,
       password: senha,
-      options: { data: { nome_empresa: nomeEmpresa } }
+      options: { data: { nome_empresa: nomeEmpresa, telefone, cidade, estado } }
     });
     if (signUpError) throw signUpError;
 
@@ -100,7 +144,7 @@ async function cadastrar() {
       return;
     }
 
-    const { error: rpcError } = await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeEmpresa });
+    const { error: rpcError } = await criarEmpresaComContato({ nome: nomeEmpresa, telefone, cidade, estado, email });
     if (rpcError) throw rpcError;
 
     msg.className = 'ok';
