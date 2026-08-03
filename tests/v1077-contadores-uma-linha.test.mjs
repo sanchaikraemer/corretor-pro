@@ -9,21 +9,22 @@ import assert from 'node:assert/strict';
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
-// Os 5 cards continuam existindo com os destinos certos.
+// Os cards continuam existindo com os destinos certos (v1124: entrou o sexto, "Arquivados").
 for (const destino of ['abrirFazerAgora()', 'abrirCarteiraAtiva()', "show('agenda')",
-  'abrirAguardandoCliente()', 'cpAbrirSemAtender30Dias()']) {
+  'abrirAguardandoCliente()', 'cpAbrirSemAtender30Dias()', "show('arquivados')"]) {
   assert.ok(app.includes(`onclick="${destino}"`), `o card com ${destino} continua na Home`);
 }
 
 // Iconezinhos fora dos contadores (em qualquer tamanho de tela).
 assert.match(css, /#resumoDia \.ui-kpi i\{display:none\}/, 'os iconezinhos saem dos contadores');
 
-// No computador: 5 colunas numa linha só, cards compactos. IMPORTANTE (v1078): quem manda no
-// desktop é o bloco de tema #664, todo com !important — a regra das 5 colunas PRECISA morar
-// nele, senão perde a briga (foi exatamente o erro da v1077, flagrado pelo dono com print;
-// verificado depois em navegador real: 5 colunas ≥1000px, 4 no tablet, 2 no celular).
-assert.match(css, /#home \.resumo-dia\{display:grid!important;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)!important/,
-  'no computador os 5 contadores ficam numa linha só (na regra !important que manda)');
+// No computador: uma linha só, cards compactos (5 colunas na v1077, 6 desde a v1124 com o card
+// "Arquivados"). IMPORTANTE (v1078): quem manda no desktop é o bloco de tema #664, todo com
+// !important — a regra das colunas PRECISA morar nele, senão perde a briga (foi exatamente o erro
+// da v1077, flagrado pelo dono com print; verificado depois em navegador real: uma linha só
+// ≥1000px, 4 de rolagem no tablet, 2 no celular).
+assert.match(css, /#home \.resumo-dia\{display:grid!important;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/,
+  'no computador os contadores ficam numa linha só (na regra !important que manda)');
 assert.match(css, /#home \.ui-kpi\{[^}]*min-height:0!important;padding:12px 14px!important\}/,
   'cards mais compactos no computador');
 assert.match(css, /#home \.ui-kpi b\{[^}]*font-size:24px!important\}/, 'número em 24px no computador');
