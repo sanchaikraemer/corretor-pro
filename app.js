@@ -603,10 +603,39 @@ function removerLeadDosCaches(id){
   invalidarLeadsCache();
   if(Array.isArray(state.todosLeads)) state.todosLeads = state.todosLeads.filter(l => String(l.id) !== sid);
   if(Array.isArray(state.leads)) state.leads = state.leads.filter(l => String(l.id) !== sid);
+  // v1125 — state.itemsAtivos ficava de fora, e é JUSTAMENTE a lista que a Home usa como cache
+  // (carregarDashboard só vai na rede quando ela está vazia). Sem limpar aqui, o lead recém
+  // apagado continuava aparecendo nas listas e nos contadores da Home até um F5.
+  if(Array.isArray(state.itemsAtivos)) state.itemsAtivos = state.itemsAtivos.filter(l => String(l.id) !== sid);
   if(typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
 }
 window.invalidarLeadsCache = invalidarLeadsCache;
 window.removerLeadDosCaches = removerLeadDosCaches;
+
+// v1125 — ARQUIVAR NÃO É APAGAR, e essa diferença passou a importar quando a Home ganhou o card
+// "Arquivados" (v1124). Arquivar usava removerLeadDosCaches, que tira o lead de TODAS as listas —
+// inclusive de state.todosLeads, a carteira inteira, que é de onde sai o número do card. Relato do
+// dono: "arquivei, foi pra home certinho, porém não aumentou o número de arquivados, tive que
+// atualizar a página."
+//
+// Aqui o lead NÃO some da carteira: ele muda de etapa, exatamente como o servidor vai devolver no
+// próximo carregamento. As listas de ativos são re-derivadas da carteira (uma fonte só de verdade,
+// em vez de mexer em cada lista na mão e deixar uma discordar da outra). Serve pros dois sentidos:
+// arquivar e reativar.
+function cpMarcarEtapaLocal(id, etapa){
+  const sid = String(id || "");
+  if(!sid || !etapa) return;
+  invalidarLeadsCache();
+  const trocar = l => (String(l.id) === sid ? { ...l, etapa } : l);
+  if(Array.isArray(state.todosLeads)) state.todosLeads = state.todosLeads.map(trocar);
+  if(Array.isArray(state.leads)) state.leads = state.leads.map(trocar);
+  if(Array.isArray(state.itemsAtivos)){
+    const base = Array.isArray(state.todosLeads) ? state.todosLeads : state.itemsAtivos.map(trocar);
+    state.itemsAtivos = base.filter(l => normalizarEtapa(l.etapa) !== ETAPA_ARQUIVADO);
+  }
+  if(typeof loadTodosLeadsBusca === "function") loadTodosLeadsBusca();
+}
+window.cpMarcarEtapaLocal = cpMarcarEtapaLocal;
 
 // Confirmação em-app (no lugar do confirm() nativo do navegador — a "tela feia" com a URL
 // "corretor-pro-zeta.vercel.app diz"). Retorna Promise<boolean>. Enter confirma, Esc/clique
@@ -3964,12 +3993,17 @@ async function apagarLead(id, nome){
       toast("Lead apagado.");
       removerLeadDosCaches(id);
       if(typeof carregarDashboard === "function") carregarDashboard();
+      return true;
     } else if(cpLeadJaNaoExiste(res, data)){
       cpSumirComLeadFantasma(id);
+      return true;
     } else {
       toast("Erro: " + (data?.error || ""));
     }
   }catch(err){ toast("Erro: "+(err?.message||err)); }
+  // v1125 — devolve se o lead saiu mesmo. Quem chama usa isso pra decidir se leva o corretor de
+  // volta pra Home: cancelar a confirmação ou tomar erro não pode tirá-lo da tela do cliente.
+  return false;
 }
 window.apagarLead = apagarLead;
 
@@ -3990,8 +4024,9 @@ function cpSumirComLeadFantasma(id){
   try{ removerLeadDosCaches(id); }catch(_){}
   try{ invalidarLeadsCache(); }catch(_){}
   if(String(state.focoLeadId||"") === String(id) || String(state.lead?.id||"") === String(id)){
-    state.lead = null; state.focoLeadId = null; state.analysis = null;
-    try{ show("home"); }catch(_){}
+    // v1125 — era show("home") puro, que deixava o MODO DETALHE ligado: a Home voltava escondida
+    // e com o fantasma ainda desenhado na tela (ver cpVoltarProHomeSemLead).
+    try{ cpVoltarProHomeSemLead(); }catch(_){ state.lead = null; state.focoLeadId = null; state.analysis = null; }
   }
   try{ loadRecentLeads(true); }catch(_){}
   try{ refreshAllSections(); }catch(_){}
@@ -4200,10 +4235,11 @@ window.salvarEditarLead = salvarEditarLead;
 
 async function excluirLeadDoModal(id, nome){
   fecharEditarLead();
-  await apagarLead(id, nome);
-  // Volta pra home depois de excluir
-  state.lead = null; state.focoLeadId = null;
-  show("home");
+  const apagou = await apagarLead(id, nome);
+  // Volta pra Home depois de excluir — de verdade, com cabeçalho, cartões e listas de volta.
+  // v1125 — só sai da tela do lead se ele foi mesmo apagado: antes ia pra Home até quando o
+  // corretor clicava "Cancelar" na confirmação (ou quando dava erro), perdendo a tela à toa.
+  if(apagou) cpVoltarProHomeSemLead();
 }
 window.excluirLeadDoModal = excluirLeadDoModal;
 
@@ -4221,10 +4257,11 @@ async function excluirLeadDefinitivo(id, nome){
     const data = await res.json();
     if(data?.ok){
       toast("Lead excluído.");
-      state.lead = null; state.focoLeadId = null; state.analysis = null;
       removerLeadDosCaches(id);
+      // v1125 — era state.lead=null + show("home"), que deixava o MODO DETALHE ligado e a Home
+      // aparecia vazia/travada com o lead apagado ainda desenhado (ver cpVoltarProHomeSemLead).
+      cpVoltarProHomeSemLead();
       if(typeof carregarDashboard === "function") carregarDashboard();
-      show("home");
     } else if(cpLeadJaNaoExiste(res, data)){
       // v1099 — mesma regra do apagarLead: se já não existe no banco, some da tela em vez de
       // ficar repetindo erro num cliente que o corretor não consegue tirar da frente.
@@ -4534,6 +4571,29 @@ function iniciarBarraProgresso(btn, texto){
 // ação". Agora sempre limpa o lead e renderiza a Home direto, sem depender do histórico do
 // navegador, e substitui a rota salva por uma de Home (pra um refresh logo em seguida também
 // não achar um lead salvo).
+// v1125 — relato do dono: "depois que excluir um lead, ele deve voltar a tela da home, e não
+// ficar travado ali sem fazer nada."
+//
+// Causa: abrir um lead liga o MODO DETALHE (ui667ModoDetalheLead) — isso põe a classe
+// lead-foco-aberto no body E um display:none!important direto no cabeçalho da Home, nos cartões
+// de números, no top3 e na coluna lateral. Excluir apenas zerava state.lead/focoLeadId e chamava
+// show("home"), e NADA disso desliga o modo detalhe: a Home voltava a ser a tela ativa, mas com
+// tudo escondido, e a área do lead ainda com o cliente que acabou de ser apagado. Da parte do
+// corretor, é uma tela morta.
+//
+// Este é o mesmo caminho do botão "Voltar" (voltarDoLead), com uma diferença de propósito: NÃO
+// volta pra lista de onde o lead veio (ele não existe mais lá) — volta pra Home, que é o que o
+// dono pediu.
+function cpVoltarProHomeSemLead(){
+  try{ if(typeof cp7ObsPararGravacaoSeAtiva === "function") cp7ObsPararGravacaoSeAtiva(); }catch(_){}
+  cpClearLeadState();      // zera o lead E desliga o modo detalhe (devolve cabeçalho e cartões)
+  state.grupoAtivo = null; // Home de verdade, não a lista de onde o lead tinha sido aberto
+  show("home", { skipHistory:true });
+  renderBotoesHome();
+  cpReplaceRoute(cpRouteForScreen("home"));
+}
+window.cpVoltarProHomeSemLead = cpVoltarProHomeSemLead;
+
 function voltarDoLead(){
   if(typeof cp7ObsPararGravacaoSeAtiva === "function") cp7ObsPararGravacaoSeAtiva();
   cpClearLeadState();
@@ -8763,6 +8823,10 @@ async function reativarLeadArquivado(id, btn){
     });
     if(!res.ok) throw new Error("falha");
     toast("Lead reativado.");
+    // v1125 — o outro lado da mesma moeda: sem atualizar a carteira em memória, o card
+    // "Arquivados" da Home continuava contando este cliente (e o "Total de leads" não subia)
+    // até um F5. Ele volta pra etapa Ativo nas listas que a Home já tem na mão.
+    try{ cpMarcarEtapaLocal(id, "Ativo"); }catch(_){}
     const card = document.querySelector(`[data-arquivado-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
@@ -10980,12 +11044,17 @@ function ui670DetailRows(lead,mc){
       await ui683RegistrarEvento(id, evento || 'etapa_alterada', { etapa, label: label || etapa, de:'botao_rapido' });
       invalidarLeadsCache();
       if(arquivando){
-        // Some da busca/listas na hora (sem esperar refresh) e volta pra home. "Acabou."
-        try{ removerLeadDosCaches(id); }catch(_){}
-        state.lead = null; state.focoLeadId = null; state.grupoAtivo = null;
-        document.body.classList.remove('lead-foco-aberto');
+        // Sai dos atendimentos ativos na hora (sem esperar refresh) e volta pra home. "Acabou."
+        // v1125 — era removerLeadDosCaches, que sumia com o lead até da carteira inteira e por
+        // isso o card "Arquivados" da Home não subia sem F5. Agora ele só troca de etapa.
+        try{ cpMarcarEtapaLocal(id, etapa); }catch(_){ try{ removerLeadDosCaches(id); }catch(_){} }
         toast('Lead arquivado.');
-        try{ if(typeof show === 'function') show('home'); }catch(_){}
+        // v1125 — mesma volta pra Home usada pela exclusão: desliga o modo detalhe (senão o
+        // cabeçalho da Home continua escondido por estilo direto) e redesenha as listas.
+        try{
+          if(typeof window.cpVoltarProHomeSemLead === 'function') window.cpVoltarProHomeSemLead();
+          else { state.lead = null; state.focoLeadId = null; state.grupoAtivo = null; document.body.classList.remove('lead-foco-aberto'); show('home'); }
+        }catch(_){}
         try{ await carregarDashboard(); }catch(_){}
         return;
       }
