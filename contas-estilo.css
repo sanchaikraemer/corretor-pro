@@ -197,3 +197,11 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .dois-campos{ display:grid; grid-template-columns:1fr 96px; gap:10px; }
 .dois-campos > div{ display:flex; flex-direction:column; min-width:0; }
 .dois-campos select{ width:100%; }
+
+/* v1118 — botão de WhatsApp na tela de "teste acabou" (entrar.html). */
+.botao-zap-teste{
+  display:block; margin-top:12px; text-align:center; text-decoration:none;
+  background:#12a150; color:#fff; font-weight:800; font-size:15px;
+  padding:12px 16px; border-radius:10px;
+}
+.botao-zap-teste:hover{ background:#0e8a44; }

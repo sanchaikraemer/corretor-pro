@@ -806,6 +806,24 @@ export function planoComercial(tipo) {
   return { tipo: base.tipo, nome: base.nome, dia: env(base.envDia, base.dia), mes: env(base.envMes, base.mes) };
 }
 
+// ─── PREÇO DA ASSINATURA (v1118) ──────────────────────────────────────────────
+// Atenção: isto é o preço da PRÓPRIA plataforma (a mensalidade que o corretor paga pra usar o
+// Corretor Pro) — NÃO é preço de imóvel. A regra do CLAUDE.md que proíbe cravar preço no código
+// é sobre informação comercial do LEAD (empreendimento, condição), que tem que vir do Cérebro.
+// O preço da assinatura é decisão do dono e pode viver aqui, com override por variável de ambiente.
+// Decisão do dono (03/08/2026): Pro R$ 67/mês; Pro Master R$ 97/mês. Aparece no convite quando o
+// corretor bate no limite e na tela de "teste acabou" (entrar.html usa os mesmos valores).
+const PRECOS_PLANOS = { "pro": 67, "pro-master": 97 };
+export function precoPlano(tipo) {
+  const chave = String(tipo || "").trim() === "pro-master" ? "CORRETOR_PRO_PRECO_PROMASTER" : "CORRETOR_PRO_PRECO_PRO";
+  const env = Number(process.env[chave]);
+  if (Number.isFinite(env) && env > 0) return env;
+  return PRECOS_PLANOS[String(tipo || "").trim()] ?? PRECOS_PLANOS["pro"];
+}
+export function precoPlanoBR(tipo) {
+  return "R$ " + Number(precoPlano(tipo)).toLocaleString("pt-BR");
+}
+
 function mesCalendarioSP() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
 }
@@ -2270,14 +2288,14 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     const zap = whatsComercialPlataforma();
     let aviso, upgrade = null;
     if (limiteDiario.emTeste) {
-      aviso = `Você atingiu o limite de ${limiteDiario.limite} análises por dia do teste grátis. Para limite estendido, contrate o pacote Pro pelo WhatsApp abaixo.`;
+      aviso = `Você atingiu o limite de ${limiteDiario.limite} análises por dia do teste grátis. Continue sem limite de teste: Pro por ${precoPlanoBR("pro")}/mês ou Pro Master por ${precoPlanoBR("pro-master")}/mês — contrate pelo WhatsApp abaixo.`;
       upgrade = { motivo: "limite-teste", limite: limiteDiario.limite, whatsapp: zap,
-        botao: "Falar no WhatsApp e liberar o Pro",
+        botao: `Assinar pelo WhatsApp — Pro ${precoPlanoBR("pro")}/mês`,
         mensagemWhats: "Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar um plano." };
     } else if (limiteDiario.plano?.tipo === "pro") {
       aviso = limiteDiario.motivo === "mes"
-        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro. O Pro Master tem o dobro — fale com a gente pelo WhatsApp abaixo.`
-        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro. O Pro Master tem o dobro — fale com a gente pelo WhatsApp abaixo.`;
+        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro. O Pro Master tem o dobro por ${precoPlanoBR("pro-master")}/mês — fale com a gente pelo WhatsApp abaixo.`
+        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro. O Pro Master tem o dobro por ${precoPlanoBR("pro-master")}/mês — fale com a gente pelo WhatsApp abaixo.`;
       upgrade = { motivo: "upgrade-pro-master", whatsapp: zap,
         botao: "Conhecer o Pro Master no WhatsApp",
         mensagemWhats: "Olá! Atingi o limite do meu plano Pro no Corretor Pro e quero conhecer o Pro Master." };
