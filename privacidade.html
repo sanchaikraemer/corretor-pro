@@ -26,7 +26,7 @@
     </div>
     <div class="cartao legal">
       <h1>Política de Privacidade</h1>
-      <p class="atualizado">Última atualização: 28/07/2026 — versão 1045</p>
+      <p class="atualizado">Última atualização: 03/08/2026 — versão 1119</p>
 
       <div class="aviso">
         Este texto foi escrito pra refletir com fidelidade o que o sistema realmente faz hoje.
@@ -57,7 +57,7 @@
       <h3>2.2 Dos leads/clientes do corretor (contidos nas conversas importadas)</h3>
       <ul>
         <li>Nome e telefone, quando aparecem na conversa.</li>
-        <li>O conteúdo da conversa de WhatsApp exportada pelo corretor: mensagens de texto, áudios (e sua transcrição), e o que puder ser lido de imagens/prints compartilhados.</li>
+        <li>O conteúdo da conversa de WhatsApp exportada pelo corretor: mensagens de texto e áudios (com sua transcrição). Imagens, vídeos e documentos enviados na conversa <b>não são analisados</b> — o sistema trabalha apenas com o texto e os áudios.</li>
         <li>Informações comerciais mencionadas na conversa: interesse em produto/imóvel, condição de pagamento, objeções, observações que o corretor registra manualmente sobre o atendimento.</li>
       </ul>
       <p>
@@ -75,10 +75,11 @@
       </ul>
 
       <h2>4. Com quem os dados são compartilhados</h2>
-      <p>Os dados passam por dois prestadores de serviço (nenhum deles pode usar os dados pra fins próprios):</p>
+      <p>Os dados passam por prestadores de serviço de infraestrutura (nenhum deles pode usar os dados pra fins próprios):</p>
       <ul>
-        <li><b>OpenAI</b> — recebe o texto da conversa (e o áudio, pra transcrição) no momento da análise, processa e devolve o resultado. A OpenAI não recebe o telefone completo do lead nem dados de outros corretores.</li>
+        <li><b>OpenAI</b> — recebe o texto da conversa (e o áudio, pra transcrição) no momento da análise, processa e devolve o resultado. A OpenAI <b>não recebe o telefone do lead</b> (o número é retirado antes do envio) nem dados de outros corretores.</li>
         <li><b>Supabase</b> — armazena o banco de dados, os logins e os arquivos (ZIPs exportados do WhatsApp, áudios extraídos) de forma isolada por corretor.</li>
+        <li><b>Vercel</b> — hospeda o aplicativo e executa o processamento no servidor (a infraestrutura por onde os dados trafegam durante o uso).</li>
       </ul>
       <p>O Corretor Pro não vende, aluga nem compartilha esses dados com nenhum outro terceiro pra fins de marketing ou publicidade.</p>
 
@@ -87,8 +88,10 @@
         Os dados de um corretor ficam armazenados enquanto a conta estiver ativa. Arquivos
         temporários de processamento (ZIP recém-importado, antes da análise terminar) são
         removidos automaticamente após o processamento. Ao excluir a conta pelo painel
-        administrativo, os dados dessa empresa (leads, Cérebro, arquivos) são apagados de forma
-        definitiva e transacional — não fica resquício.
+        administrativo, os dados dessa empresa no banco de dados (leads, Cérebro, configurações) são
+        apagados de forma definitiva e transacional. A remoção dos arquivos guardados (ZIPs e áudios)
+        e do login é feita em seguida; nos casos raros em que algum arquivo não puder ser removido na
+        hora, o painel mostra um aviso pra que a remoção seja concluída.
       </p>
 
       <h2>6. Seus direitos (Lei Geral de Proteção de Dados — LGPD)</h2>

@@ -5,7 +5,9 @@ import {
   prepararConversaDoZip,
   transcreverArquivosExtraidos,
   finalizarAnaliseDaConversa,
-  normalizeName
+  normalizeName,
+  verificarLimiteTranscricaoImport,
+  registrarConsumoTranscricaoImport
 } from "./_pipeline.js";
 
 function json(res, status, payload) {
@@ -510,9 +512,23 @@ export default async function handler(req, res) {
         if (!audioPath) continue;
         arquivos.push({ name: nome, buffer: await baixarBuffer(storage, audioPath) });
       }
+      // v1119 — teto diário de transcrição de importação (a parte mais cara do custo, antes sem
+      // trava nenhuma). Corta o excedente do dia ANTES de gastar Whisper; o que não couber hoje
+      // fica como "não transcrito" e pode ser pedido de novo depois (o app já lida com áudio sem
+      // transcrição). Fail-open: qualquer erro na checagem não bloqueia (restante = Infinity).
+      let limiteTranscricao = { permitido: true, restante: Infinity, emTeste: false, limite: Infinity };
+      if (arquivos.length) {
+        limiteTranscricao = await verificarLimiteTranscricaoImport(organizationId);
+        if (Number.isFinite(limiteTranscricao.restante) && arquivos.length > limiteTranscricao.restante) {
+          arquivos.length = Math.max(0, limiteTranscricao.restante);
+        }
+      }
       const lote = arquivos.length
         ? await transcreverArquivosExtraidos(arquivos, organizationId)
         : { transcriptions: {}, transcriptionEnabled: true };
+      // Conta só o que virou texto de verdade (não cobra cache nem erro).
+      const transcritosAgora = Object.values(lote.transcriptions || {}).filter(t => t?.status === "transcrito").length;
+      if (transcritosAgora) await registrarConsumoTranscricaoImport(organizationId, transcritosAgora);
       Object.assign(existentes, lote.transcriptions || {});
       for (const [nome, item] of Object.entries(lote.transcriptions || {})) {
         if (item?.text) await salvarTranscricaoCache(storage, manifest?.audioHashes?.[nome], item, organizationId);
@@ -529,7 +545,10 @@ export default async function handler(req, res) {
         transcriptionEnabled: lote.transcriptionEnabled,
         importId,
         reused: audioNames.filter(nome => solicitadas[nome]?.reused).length,
-        zipDownloadedAgain: false
+        zipDownloadedAgain: false,
+        // v1119 — sinaliza quando o teto diário de transcrição foi atingido (áudios que sobraram
+        // ficam sem transcrever hoje). O app segue funcionando; é só metadado pra um aviso futuro.
+        transcricaoLimiteAtingido: limiteTranscricao.permitido === false
       });
     }
 
