@@ -186,3 +186,14 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
   color:var(--cp-soft);
   line-height:1.6;
 }
+
+/* v1117 — contato do corretor na lista do painel (WhatsApp + e-mail). */
+.tabela-admin .link-zap{ color:#12a150; font-weight:700; text-decoration:none; white-space:nowrap; }
+.tabela-admin .link-zap:hover{ text-decoration:underline; }
+.tabela-admin .link-email{ color:var(--cp-soft); font-size:12px; text-decoration:none; word-break:break-all; }
+.tabela-admin .link-email:hover{ text-decoration:underline; }
+
+/* v1117 — cidade e estado (UF) lado a lado no cadastro. */
+.dois-campos{ display:grid; grid-template-columns:1fr 96px; gap:10px; }
+.dois-campos > div{ display:flex; flex-direction:column; min-width:0; }
+.dois-campos select{ width:100%; }

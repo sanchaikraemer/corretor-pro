@@ -24,14 +24,17 @@ const migracao0006 = fs.readFileSync(new URL('../supabase/migrations/0006_uma_em
 const buildJs = fs.readFileSync(new URL('../build.js', import.meta.url), 'utf8');
 
 // 1. cadastro.html salva o nome nos metadados do signUp (recuperável depois, sem sessão).
-assert.match(cadastro, /options:\s*\{\s*data:\s*\{\s*nome_empresa:\s*nomeEmpresa\s*\}\s*\}/,
+// v1117 — agora os metadados carregam também telefone/cidade/estado (ver
+// tests/v1117-cadastro-contato-corretor), mas o nome continua sendo o campo essencial pro
+// caminho sem sessão imediata (confirmação de e-mail ligada).
+assert.match(cadastro, /data:\s*\{\s*nome_empresa:\s*nomeEmpresa/,
   'signUp precisa salvar nome_empresa em user_metadata pro caso sem sessão imediata');
 
 // 2. entrar.html cria a empresa que faltou (lazy) quando não acha vínculo nenhum, usando o
 // nome salvo — e SÓ nesse caso (não mexe em quem já tem empresa).
 assert.match(entrar, /if \(!vinculo \|\| !vinculo\.organizations\)/, 'entrar.html detecta ausência de vínculo antes de tentar criar a empresa');
 assert.match(entrar, /criar_empresa_e_dono/, 'entrar.html chama o mesmo RPC de criação de empresa como fallback');
-assert.match(entrar, /user_metadata\?\.nome_empresa/, 'entrar.html usa o nome salvo no cadastro pra criar a empresa que faltou');
+assert.match(entrar, /user_metadata \|\| \{\}[\s\S]*meta\.nome_empresa/, 'entrar.html usa o nome salvo no cadastro pra criar a empresa que faltou');
 
 // 3. Seleção de empresa é determinística (order por criado_em desc) em entrar.html, no backend
 // (resolveOrganizationId) e na exibição do nome da conta em app.js — nenhum .limit(1) "cego".
