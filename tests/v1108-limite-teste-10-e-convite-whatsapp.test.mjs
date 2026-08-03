@@ -65,8 +65,10 @@ const reanalisar = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.m
 {
   assert.match(pipeline, /if \(limiteDiario\.emTeste\) \{[\s\S]{0,400}?motivo: "limite-teste"/,
     "o payload upgrade precisa existir e ser condicionado a emTeste");
-  assert.match(pipeline, /contrate o pacote Pro pelo WhatsApp abaixo/,
-    "a mensagem do teste precisa convidar pra contratação");
+  // v1118 — a mensagem do teste passou a mostrar o preço dos planos (Pro/Pro Master) e convidar
+  // pra contratação pelo WhatsApp.
+  assert.match(pipeline, /Pro por \$\{precoPlanoBR\("pro"\)\}\/mês ou Pro Master por \$\{precoPlanoBR\("pro-master"\)\}\/mês — contrate pelo WhatsApp abaixo/,
+    "a mensagem do teste precisa mostrar o preço e convidar pra contratação");
   assert.match(pipeline, /Tente novamente amanhã\./,
     "conta paga continua com o aviso neutro");
   // A reanálise bloqueada não sobrescreve análise boa (regra pré-existente) e repassa o convite.

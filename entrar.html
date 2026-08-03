@@ -132,8 +132,17 @@ async function entrar() {
       || (minhaEmpresa.status === 'teste' && diasRestantes <= 0);
 
     if (bloqueado) {
+      // v1118 — antes, o teste vencido caía numa mensagem seca, sem preço nem botão: o momento de
+      // maior intenção de compra terminava sem saída. Agora mostra os planos e um botão que abre o
+      // WhatsApp comercial já com a mensagem pronta. Preços iguais aos do convite de limite
+      // (api/_pipeline.js precoPlano) — se mudar lá, mudar aqui. O nome vem do banco: escapado.
+      const zap = '5554999013331';
+      const nomeSeguro = String(minhaEmpresa.nome ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const textoZap = encodeURIComponent('Olá! Meu teste grátis do Corretor Pro acabou e quero assinar um plano.');
       msg.className = 'erro';
-      msg.textContent = `Seu teste grátis acabou, ${minhaEmpresa.nome}. Para continuar usando o Corretor Pro, é preciso confirmar o pagamento.`;
+      msg.innerHTML = `Seu teste grátis acabou, ${nomeSeguro}. Continue usando o Corretor Pro: `
+        + `<b>Pro por R$ 67/mês</b> ou <b>Pro Master por R$ 97/mês</b>.`
+        + `<a href="https://wa.me/${zap}?text=${textoZap}" target="_blank" rel="noopener" class="botao-zap-teste">Assinar pelo WhatsApp</a>`;
       btn.disabled = false; btn.textContent = 'Entrar';
       return;
     }
