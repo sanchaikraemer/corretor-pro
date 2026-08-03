@@ -828,6 +828,13 @@ function mesCalendarioSP() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
 }
 
+// v1119 — o dia do contador de limite tem que virar à MEIA-NOITE de Brasília, não às 21h. Antes o
+// mês usava horário de São Paulo e o dia usava toISOString() (UTC): no fim da noite de Brasília já
+// era "amanhã" em UTC, e o teto diário virava cedo demais. Agora os dois usam o mesmo fuso.
+function diaCalendarioSP() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
 // Limite de análises com consciência de PLANO: dia + mês pra contas pagas, 5/dia no teste,
 // fusível técnico de 200/dia pra conta original. Substitui o verificarLimiteDiario genérico SÓ
 // pra "analises-ia" (os outros contadores — voz, diagnóstico — continuam no genérico).
@@ -839,7 +846,7 @@ export async function verificarLimiteAnalises(organizationId) {
     const supabase = getSupabaseAdmin();
     if (!supabase || !organizationId) return aberto;
 
-    const hojeStr = new Date().toISOString().slice(0, 10);
+    const hojeStr = diaCalendarioSP();
     const lerValor = async (chave) => {
       const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chave).eq("organization_id", organizationId).maybeSingle();
       return data?.valor && typeof data.valor === "object" ? data.valor : {};
@@ -899,6 +906,60 @@ export function limiteTranscricaoVozDoDiaTeste() {
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_TRANSCRICAO_VOZ_DIA_TESTE_PADRAO;
 }
 
+// ─── TETO DE TRANSCRIÇÃO DE IMPORTAÇÃO (v1119) ────────────────────────────────
+// Achado da auditoria (minha e do parecer externo): a transcrição de áudio da IMPORTAÇÃO — a parte
+// MAIS CARA e mais variável do custo (uma conversa com 20 áudios custa muito mais que uma de texto)
+// — não tinha teto NENHUM. O teto de "análises" só é checado na etapa de análise, DEPOIS de o
+// Whisper já ter sido pago. Uma conta em teste grátis podia importar áudio à vontade. Este teto
+// conta os áudios transcritos por dia e é generoso pra conta paga, menor no teste. Fail-open: erro
+// de leitura/gravação NUNCA bloqueia a importação. Conta original fica de fora (fusível geral).
+const LIMITE_TRANSCRICAO_IMPORT_DIA_PADRAO = 600;
+const LIMITE_TRANSCRICAO_IMPORT_DIA_TESTE_PADRAO = 80;
+const TRANSCRICAO_IMPORT_KEY = "limite-diario:transcricao-import";
+
+function limiteTranscricaoImport(emTeste) {
+  const env = Number(process.env[emTeste ? "CORRETOR_PRO_LIMITE_TRANSCRICAO_IMPORT_DIA_TESTE" : "CORRETOR_PRO_LIMITE_TRANSCRICAO_IMPORT_DIA"]);
+  if (Number.isFinite(env) && env > 0) return env;
+  return emTeste ? LIMITE_TRANSCRICAO_IMPORT_DIA_TESTE_PADRAO : LIMITE_TRANSCRICAO_IMPORT_DIA_PADRAO;
+}
+
+// Diz quantos áudios ainda podem ser transcritos hoje pra esta empresa. restante = Infinity quando
+// não há teto (conta original, ou falha de consulta — fail-open).
+export async function verificarLimiteTranscricaoImport(organizationId) {
+  const aberto = { permitido: true, usado: 0, limite: Infinity, emTeste: false, restante: Infinity };
+  try {
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return aberto;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return aberto;
+    const hojeStr = diaCalendarioSP();
+    const { data: cfg } = await supabase.from("direciona_config").select("valor").eq("chave", TRANSCRICAO_IMPORT_KEY).eq("organization_id", organizationId).maybeSingle();
+    const atual = cfg?.valor && typeof cfg.valor === "object" ? cfg.valor : {};
+    const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
+    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+    const emTeste = org?.status === "teste";
+    const limite = limiteTranscricaoImport(emTeste);
+    return { permitido: usado < limite, usado, limite, emTeste, restante: Math.max(0, limite - usado) };
+  } catch (_) { return aberto; }
+}
+
+// Soma ao contador do dia os áudios que foram REALMENTE transcritos agora (não conta cache/erro).
+export async function registrarConsumoTranscricaoImport(organizationId, quantidade = 0) {
+  try {
+    const qtd = Number(quantidade) || 0;
+    if (qtd <= 0) return;
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return;
+    const hojeStr = diaCalendarioSP();
+    const { data: cfg } = await supabase.from("direciona_config").select("valor").eq("chave", TRANSCRICAO_IMPORT_KEY).eq("organization_id", organizationId).maybeSingle();
+    const atual = cfg?.valor && typeof cfg.valor === "object" ? cfg.valor : {};
+    const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
+    await upsertConfigComOrganizacao(supabase, organizationId, { chave: TRANSCRICAO_IMPORT_KEY, valor: { dia: hojeStr, contagem: usado + qtd }, atualizado_em: new Date().toISOString() }).catch(() => ({}));
+  } catch (_) {}
+}
+
 // Não é atômico (lê, decide, grava) — condição de corrida sob concorrência alta deixaria passar
 // 1-2 chamadas a mais no pior caso. Aceitável: é uma rede de segurança contra abuso/loop
 // descontrolado, não uma trava de cobrança que precise ser exata.
@@ -917,7 +978,7 @@ export async function verificarLimiteDiario(organizationId, chave, limitePadrao,
       const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
       if (org?.status === "teste") { limite = limiteTeste; emTeste = true; }
     }
-    const hojeStr = new Date().toISOString().slice(0, 10);
+    const hojeStr = diaCalendarioSP();
     const chaveConfig = `limite-diario:${chave}`;
     const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chaveConfig).eq("organization_id", organizationId).maybeSingle();
     const atual = data?.valor && typeof data.valor === "object" ? data.valor : {};
@@ -2331,10 +2392,13 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // v827 §7.4: o nome do corretor vem SEMPRE da configuração do Cérebro ("Seu nome
   // como aparece no WhatsApp"). Sem nome fixo no código; na ausência, um rótulo genérico.
   const corretorNome = clean(configCerebro?.corretorNome || lead?.corretorNome || lead?.brokerName) || "o corretor";
+  // Privacidade (v1119): o telefone do cliente NÃO é mais enviado à OpenAI. Ele não é necessário
+  // pra produzir a análise nem as mensagens, e a política de privacidade afirma que o número
+  // completo não sai pra IA — antes o objeto do lead levava `telefone` no prompt, contradizendo
+  // isso. O número continua guardado no banco (dedup, WhatsApp), só não vai mais pro modelo.
   const leadIA = {
     nomeArquivo: clean(lead?.fileName || lead?.filename || lead?.txtFile).slice(0, 180),
-    nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120),
-    telefone: clean(lead?.phone || lead?.telefone).slice(0, 40)
+    nomeContato: clean(lead?.clientName || lead?.name || lead?.nome).slice(0, 120)
   };
 
   const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
@@ -2931,6 +2995,29 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   };
 }
 
+// v1119 — quantos áudios são transcritos EM PARALELO num mesmo lote. Antes era `Promise.all` sem
+// teto: um lote grande abria todas as chamadas à OpenAI de uma vez (pico de memória e de custo
+// simultâneo, risco de estourar o tempo/limite da função). 4 de cada vez mantém boa velocidade sem
+// o pico. Ajustável por ambiente.
+const TRANSCRICAO_CONCORRENCIA_PADRAO = 4;
+function transcricaoConcorrencia() {
+  const n = Number(process.env.CORRETOR_PRO_TRANSCRICAO_CONCORRENCIA);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 8) : TRANSCRICAO_CONCORRENCIA_PADRAO;
+}
+
+// Roda `fn` sobre `itens` com no máximo `limite` execuções simultâneas (pool simples).
+async function mapComLimiteConcorrencia(itens, limite, fn) {
+  const lista = Array.isArray(itens) ? itens : [];
+  let proximo = 0;
+  const trabalhador = async () => {
+    while (proximo < lista.length) {
+      const indice = proximo++;
+      await fn(lista[indice], indice);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limite, lista.length)) }, trabalhador));
+}
+
 export async function transcreverArquivosExtraidos(arquivos = [], organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   const openai = getOpenAI();
   const resultado = {};
@@ -2939,7 +3026,7 @@ export async function transcreverArquivosExtraidos(arquivos = [], organizationId
     for (const item of entradas) resultado[normalizeName(item?.name)] = { status: "api_nao_configurada", text: "" };
     return { transcriptions: resultado, transcriptionEnabled: false };
   }
-  await Promise.all(entradas.map(async item => {
+  await mapComLimiteConcorrencia(entradas, transcricaoConcorrencia(), async item => {
     const base = normalizeName(item?.name);
     const buffer = Buffer.isBuffer(item?.buffer) ? item.buffer : Buffer.from(item?.buffer || []);
     if (!base || !buffer.length) return;
@@ -2949,7 +3036,7 @@ export async function transcreverArquivosExtraidos(arquivos = [], organizationId
     } catch (error) {
       resultado[base] = { status: "erro_transcricao", text: "", error: describeOpenAIError(error) };
     }
-  }));
+  });
   return { transcriptions: resultado, transcriptionEnabled: true };
 }
 

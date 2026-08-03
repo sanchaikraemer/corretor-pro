@@ -336,7 +336,11 @@ async function excluirConta(id) {
     });
     const r = await resp.json().catch(() => ({}));
     if (!resp.ok || !r.ok) return alert('Erro ao excluir: ' + (r.error || `código ${resp.status}`));
-    alert(`Conta "${nome}" excluída${r.loginsApagados ? ` (${r.loginsApagados} login(s) apagado(s))` : ''}.`);
+    // v1119 — o servidor pode excluir o banco com sucesso mas não conseguir remover todos os
+    // arquivos/logins (é best-effort). Antes o painel dizia só "excluída", escondendo isso. Agora,
+    // quando vem um aviso, ele aparece pra que a limpeza seja concluída.
+    const extra = r.loginsApagados ? ` (${r.loginsApagados} login(s) apagado(s))` : '';
+    alert(`Conta "${nome}" excluída${extra}.` + (r.aviso ? `\n\n⚠️ ${r.aviso}` : ''));
   } catch (e) {
     return alert('Erro ao excluir: ' + (e?.message || e));
   }
