@@ -30,14 +30,11 @@
 
       <div class="linkbar"><a href="recuperar-senha.html">Esqueci minha senha</a></div>
       <div class="linkbar">Não tem conta? <a href="cadastro.html">Criar conta grátis</a></div>
-      <!-- v1082 — porta do acesso antigo por chave de segurança (anterior às contas por login).
-           Antes, a única forma de informar essa chave era uma caixinha do navegador que o app
-           abria sozinho quando a API recusava a chamada — o que confundia quem só precisava
-           entrar na conta. A caixinha saiu; esta porta discreta fica no lugar dela pra não
-           deixar sem saída um aparelho que ainda dependa desse caminho. -->
-      <div class="linkbar" style="margin-top:14px;opacity:.6;font-size:12px">
-        <a href="#" id="linkChaveAntiga">Acesso por chave de segurança</a>
-      </div>
+      <!-- v1123 — o link "Acesso por chave de segurança" saiu daqui. O caminho antigo (chave
+           compartilhada, anterior às contas por login) foi DESLIGADO em produção na v1119/v1120
+           (CORRETOR_PRO_LEGADO_DESLIGADO=sim na Vercel): o servidor recusa esse acesso, então o
+           link só podia confundir quem o visse — clicava, informava a chave e tomava erro. Hoje
+           só existe uma porta de entrada: e-mail e senha. -->
     </div>
   </div>
 
@@ -164,19 +161,9 @@ async function entrar() {
     btn.disabled = false; btn.textContent = 'Entrar';
   }
 }
-// v1082 — acesso antigo por chave de segurança (anterior às contas por login). Guarda a chave
-// neste aparelho, na mesma gaveta que o app sempre leu, e abre o sistema. Fica no FIM do script,
-// depois de entrar(): é um caminho à parte, que não pode se meter na ordem do fluxo de login
-// (a trava de conta bloqueada/teste vencido tem que continuar sendo a primeira coisa antes de
-// qualquer redirecionamento — ver tests/v994-login-empresa-principal-vai-pro-sistema).
-document.getElementById('linkChaveAntiga').addEventListener('click', (ev) => {
-  ev.preventDefault();
-  const atual = (() => { try { return localStorage.getItem('corretor_pro_api_key_v679') || ''; } catch (_) { return ''; } })();
-  const valor = prompt('Chave de segurança do Corretor Pro (só para quem usa o acesso antigo, sem conta):', atual);
-  if (!valor || !valor.trim()) return;
-  try { localStorage.setItem('corretor_pro_api_key_v679', valor.trim()); } catch (_) {}
-  window.location.assign('/');
-});
+// v1123 — o gatilho do "Acesso por chave de segurança" saiu junto com o link (ver comentário no
+// HTML acima): o caminho antigo está desligado no servidor, então guardar a chave neste aparelho
+// não abriria nada — só geraria erro depois. Entrada única: e-mail e senha.
 </script>
 </body>
 </html>
