@@ -9826,8 +9826,15 @@ async function iniciarDireciona(){
 }
 requestAnimationFrame(iniciarDireciona);
 
-// Sincronização entre aparelhos: consulta o banco a cada 30 s quando a Home está visível.
+// Sincronização entre aparelhos: consulta o banco periodicamente quando a Home está visível.
 // A chamada força leitura nova; o cache local continua servindo só para navegação imediata.
+// v1121 — subiu de 30s para 2min. A cada tique isto baixa a base INTEIRA de clientes (com a
+// conversa de cada um) fresca do banco; a 30s, com a Home aberta o dia todo, eram ~120 downloads
+// da base por hora — o maior gasto de tráfego (egress) do Supabase, que estava estourando o plano
+// grátis. 2min mantém a sincronização celular↔PC (mudança aparece em até 2min, ótimo pra um CRM) e
+// corta ~75% desse tráfego. Qualquer ação real (importar, salvar, mudar etapa, trocar de aba) já
+// força uma leitura nova na hora, então nada fica "velho" durante o uso ativo.
+const CP_SYNC_FUNDO_MS = 120 * 1000;
 setInterval(() => {
   // v818: não atualizar a Home enquanto um lead está aberto. O detalhe do lead é
   // renderizado DENTRO da Home (#leadFocoArea), então state.active continua "home".
@@ -9838,7 +9845,7 @@ setInterval(() => {
     carregarDashboard(true);
     carregarAgendaTopo();
   }
-}, 30 * 1000);
+}, CP_SYNC_FUNDO_MS);
 // Refresh quando a aba volta a ficar visível (depois de mudar pra outra aba)
 let __lastVisibleRefresh = 0;
 document.addEventListener("visibilitychange", () => {
