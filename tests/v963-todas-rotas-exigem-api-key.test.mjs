@@ -15,8 +15,10 @@ import assert from 'node:assert/strict';
 // quando existe login; ou, a partir da v1035, resolveOrganizationIdByAtalhoToken — mesma força,
 // mas pra chamadas do Atalho do iPhone, que não tem sessão do Supabase; ou, a partir da v1038,
 // requirePlatformAdmin — mais forte ainda, exige login real de administrador da plataforma, usada
-// em rotas que não fazem sentido pra nenhum corretor comum) — pra um endpoint novo nunca nascer
-// sem alguma dessas checagens.
+// em rotas que não fazem sentido pra nenhum corretor comum; ou, a partir da v1128,
+// requireLoginSemEmpresa — confirma o token de login no Supabase igual às outras, mas SEM exigir
+// que o login já tenha empresa, porque a única rota que a usa é justamente a que cria a empresa
+// de quem acabou de se cadastrar) — pra um endpoint novo nunca nascer sem alguma dessas checagens.
 
 const apiDir = new URL('../api/', import.meta.url);
 const arquivos = fs.readdirSync(apiDir).filter(f => f.endsWith('.js'));
@@ -30,7 +32,7 @@ for (const nome of arquivos) {
   const ehRota = /export default async function handler\s*\(/.test(src);
   if (!ehRota) { rotasSemHandler.push(nome); continue; }
   rotasVerificadas.push(nome);
-  if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src) && !/resolveOrganizationIdByAtalhoToken\s*\(/.test(src) && !/requirePlatformAdmin\s*\(/.test(src)) rotasSemApiKey.push(nome);
+  if (!/requireApiKey\s*\(/.test(src) && !/resolveOrganizationId\s*\(/.test(src) && !/resolveOrganizationIdByAtalhoToken\s*\(/.test(src) && !/requirePlatformAdmin\s*\(/.test(src) && !/requireLoginSemEmpresa\s*\(/.test(src)) rotasSemApiKey.push(nome);
 }
 
 // v1083 — api/analisar.js foi removida (rota de compatibilidade sem nenhum chamador). A
