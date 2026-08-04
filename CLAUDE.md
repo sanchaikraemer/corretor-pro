@@ -39,9 +39,17 @@ npm test
 
 Isso roda `node --check` em todos os arquivos de API + `app.js`/`build.js`/`service-worker.js`
 e a suíte inteira de testes em `tests/*.test.mjs`. Qualquer alteração precisa manter isso
-verde. Ao corrigir um bug, adicione um teste de regressão em `tests/` e inclua-o na lista
-de comandos do script `test` em `package.json` (é uma cadeia de `&&`, não um runner que
-descobre arquivos sozinho).
+verde. Ao corrigir um bug, adicione um teste de regressão em `tests/` — **e só isso**: desde a
+v1092 o executor (`tests/run-all.mjs`) descobre os arquivos `tests/*.test.mjs` sozinho, em ordem
+alfabética, e para no primeiro erro. Não existe mais a cadeia de `&&` no `package.json` que
+precisava ser editada na mão a cada teste novo (a orientação antiga sobrevivia aqui e foi
+corrigida na v1128, depois da auditoria completa) — basta criar o arquivo com o sufixo
+`.test.mjs`. Rotas novas em `api/` também entram sozinhas na checagem de sintaxe.
+
+Dois testes funcionam como guarda de documentação e vão falhar de propósito se você esquecer:
+`tests/v963-todas-rotas-exigem-api-key.test.mjs` (toda rota nova precisa de uma das checagens de
+acesso) e `tests/v1044-estado-atual-documentacao.test.mjs` (toda rota e a migração mais recente
+precisam estar citadas em `ESTADO-ATUAL.md`).
 
 ## Convenções já estabelecidas no projeto (ver NOTAS-v827*.md para o histórico completo)
 

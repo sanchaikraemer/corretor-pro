@@ -72,12 +72,34 @@ function alternarSenha(id, btn) {
 // Ícone inicial (senha oculta -> mostra o olho aberto, convidando a clicar pra revelar).
 document.querySelectorAll('.btn-olho').forEach(b => { b.innerHTML = SVG_OLHO; });
 
-// Cria a empresa passando os dados de contato. Se a migração 0011 ainda não tiver sido aplicada
-// no banco (a função ainda ser a versão antiga, só com o nome), a chamada com os campos novos
-// falha — e aí tentamos de novo só com o nome, pra o cadastro NUNCA travar por causa disso. Os
-// dados de contato ficam guardados nos metadados do login de qualquer jeito (options.data), então
-// não se perdem: assim que a migração for aplicada, o primeiro login grava o que faltou.
+// v1128 — a empresa passa a ser criada PELO SERVIDOR (api/criar-conta.js), não mais direto pelo
+// navegador. É lá que mora a trava contra cadastro falso em massa (quantas contas novas saíram da
+// mesma conexão de internet hoje) — trava que não pede nada de quem se cadastra: sem confirmar
+// e-mail, sem captcha, entra na hora, do jeito que o dono pediu.
+//
+// Enquanto a migração 0013 não for aplicada no banco, o servidor devolve "migração pendente" e a
+// gente cai no caminho antigo (criar a empresa direto daqui), pra NINGUÉM ficar sem se cadastrar
+// nesse meio-tempo. Dentro do caminho antigo, a mesma reserva de sempre: se a migração 0011 também
+// não tiver rodado, a chamada com os campos de contato falha e repetimos só com o nome.
 async function criarEmpresaComContato(dados) {
+  try {
+    const { data: sessao } = await supabaseClient.auth.getSession();
+    const token = sessao?.session?.access_token;
+    if (token) {
+      const resposta = await fetch('/api/criar-conta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(dados)
+      });
+      const corpo = await resposta.json().catch(() => ({}));
+      if (resposta.ok && corpo.ok) return { data: corpo.organizationId, error: null };
+      // Limite de contas por conexão: é uma recusa de propósito, com texto pronto pra tela —
+      // NUNCA cair no caminho antigo aqui, senão a trava não valeria de nada.
+      if (resposta.status === 429) return { data: null, error: new Error(corpo.error || 'Limite de contas novas atingido nesta conexão.') };
+      if (!corpo.migracaoPendente) return { data: null, error: new Error(corpo.error || 'Não foi possível criar a empresa.') };
+    }
+  } catch (_) { /* servidor fora do ar ou sem rede — cai no caminho antigo abaixo */ }
+
   const completo = await supabaseClient.rpc('criar_empresa_e_dono', {
     p_nome: dados.nome, p_telefone: dados.telefone, p_cidade: dados.cidade,
     p_estado: dados.estado, p_email: dados.email

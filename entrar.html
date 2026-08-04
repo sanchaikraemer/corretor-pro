@@ -99,6 +99,32 @@ async function entrar() {
       // Cria com os dados de contato salvos no cadastro (options.data). Se a migração 0011 ainda
       // não tiver sido aplicada, a função é a versão antiga (só nome) e a chamada completa falha —
       // aí tentamos de novo só com o nome, pra o primeiro login nunca travar por isso.
+      // v1128 — primeiro tenta pelo servidor (api/criar-conta.js), igual ao cadastro: é lá que
+      // fica a trava contra cadastro falso em massa. Quem já tem empresa recebe a que existe, sem
+      // gastar nenhuma tentativa da conexão. Só cai no caminho antigo (criar direto daqui) se a
+      // migração 0013 ainda não tiver sido aplicada — assim ninguém fica trancado fora do app.
+      const criarPeloServidor = async () => {
+        try {
+          const token = loginData.session?.access_token;
+          if (!token) return { feito: false };
+          const resposta = await fetch('/api/criar-conta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              nome: nomeParaEmpresa,
+              telefone: String(meta.telefone || '').trim(),
+              cidade: String(meta.cidade || '').trim(),
+              estado: String(meta.estado || '').trim(),
+              email
+            })
+          });
+          const corpo = await resposta.json().catch(() => ({}));
+          if (resposta.ok && corpo.ok) return { feito: true };
+          if (resposta.status === 429) return { feito: false, erroFinal: new Error(corpo.error || 'Limite de contas novas atingido nesta conexão.') };
+          return { feito: false };
+        } catch (_) { return { feito: false }; }
+      };
+
       const criar = async (comContato) => comContato
         ? supabaseClient.rpc('criar_empresa_e_dono', {
             p_nome: nomeParaEmpresa,
@@ -108,8 +134,14 @@ async function entrar() {
             p_email: email
           })
         : supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeParaEmpresa });
-      let { error: rpcError } = await criar(true);
-      if (rpcError) ({ error: rpcError } = await criar(false));
+
+      const peloServidor = await criarPeloServidor();
+      if (peloServidor.erroFinal) throw peloServidor.erroFinal;
+      let rpcError = null;
+      if (!peloServidor.feito) {
+        ({ error: rpcError } = await criar(true));
+        if (rpcError) ({ error: rpcError } = await criar(false));
+      }
       if (!rpcError) {
         const retry = await buscarVinculo();
         vinculo = retry.data;

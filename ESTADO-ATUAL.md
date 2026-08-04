@@ -10,11 +10,13 @@
 > Regras de trabalho (como versionar, como rodar os testes, convenções já estabelecidas) continuam
 > em `CLAUDE.md`, na raiz do projeto — este arquivo não repete aquilo, só descreve o estado técnico.
 
-_Atualizado pela última vez na v1068 (28/07/2026) — a seção 8 (pendências) estava desatualizada
-desde a v1043: apontava que política de privacidade e termos de uso "ainda não existiam", mas as
-duas páginas já foram publicadas na v1045 (só faltam os dois campos de identificação do responsável
-e a revisão jurídica, ver seção 8). A v1068 também trouxe uma nova auditoria completa (segurança,
-comercial e código morto) — ver `NOTAS-v1068.md` e a seção 8 atualizada._
+_Atualizado pela última vez na v1128 (04/08/2026), depois da auditoria completa do sistema pedida
+pelo dono. O cabeçalho vinha dizendo "atualizado na v1068" havia 60 versões, mesmo com trechos já
+reescritos até a v1120 — a auditoria pegou isso e a v1128 acertou. Mudanças desta rodada: a rota
+nova `criar-conta.js` (seção 2), a trava de cadastro por conexão e a migração `0013` (seções 3 e
+4), e a seção 8 (pendências) revisada de ponta a ponta — a confirmação de e-mail saiu de vez da
+lista (decisão do dono: quem se cadastra entra na hora e a venda é fechada por telefone depois), e
+a cobrança manual deixou de ser pendência pelo mesmo motivo. Ver `NOTAS-v1128.md`._
 
 ## 1. Arquitetura
 
@@ -41,14 +43,15 @@ comercial e código morto) — ver `NOTAS-v1068.md` e a seção 8 atualizada._
 O plano gratuito (Hobby) da Vercel permite no máximo **12** Serverless Functions por publicação
 (ver `NOTAS-v1039.md` — isso já travou publicações por dias sem ninguém perceber). O projeto
 esteve nas 12 até a v1082; a v1083 removeu duas rotas (`analisar.js`, sem nenhum chamador, e
-`limpar-tudo.js`, junto com o botão "Apagar tudo" — decisão do dono). **Hoje são 10, com 2 vagas
-livres.**
+`limpar-tudo.js`, junto com o botão "Apagar tudo" — decisão do dono); a v1128 acrescentou
+`criar-conta.js`. **Hoje são 11, com 1 vaga livre.**
 
 | Rota | O que faz |
 |---|---|
-| `admin-contas.js` | Painel administrativo: excluir conta (`POST action:excluir-conta`) e relatório de uso de IA por empresa (`GET ?relatorio=uso-ia`) — as duas exclusivas do administrador da plataforma. |
+| `admin-contas.js` | Painel administrativo: excluir conta (`POST action:excluir-conta`), definir plano/marcar pago (`POST action:definir-plano`) e relatórios de uso de IA e de planos (`GET ?relatorio=uso-ia` / `?relatorio=planos`) — todas exclusivas do administrador da plataforma. |
 | `atalho-zip-token.js` | Gera/mostra a chave pessoal do Atalho do iPhone (ver `NOTAS-v1035.md`). |
 | `cerebro-config.js` | Configuração do Cérebro Comercial + aprendizado contínuo. |
+| `criar-conta.js` | Cria a empresa de quem acabou de se cadastrar, com a trava contra cadastro falso em massa (quantas contas novas saíram da mesma conexão de internet nas últimas 24h). Única rota que usa `requireLoginSemEmpresa` em vez de `resolveOrganizationId` — quem chega aqui ainda não tem empresa, que é justamente o que ela vai criar (ver `NOTAS-v1128.md`). |
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
 | `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1092): `lembrete-set`/`lembrete-clear` foram REMOVIDAS — o histórico do repositório mostra que nenhuma tela as chamou em nenhum momento do projeto (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js). Já `analise-comercial-set` e `nova-oportunidade-parceiro` continuam de propósito: as chamadas saíram do front só na v1073 (29/07/2026) e, como o app é PWA instalável, um celular que não abriu o app desde então ainda roda a versão em cache que as chamaria. Remover agora daria erro pra quem está desatualizado — sair numa faxina futura. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
@@ -95,6 +98,12 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 - `CORRETOR_PRO_WHATS_COMERCIAL` — WhatsApp comercial da plataforma (só dígitos, com código do
   país), usado no convite de contratação quando a conta em teste atinge o limite diário (v1108).
   Padrão embutido: o número do dono do produto.
+- `CORRETOR_PRO_LIMITE_CADASTROS_CONEXAO_DIA` — quantas contas novas a mesma conexão de internet
+  pode abrir em 24h (padrão 5, v1128). É a trava que entrou no lugar da confirmação de e-mail,
+  descartada por decisão do dono. Folgada de propósito: um corretor cria uma conta, uma imobiliária
+  inteira no mesmo Wi-Fi cabe, e um script numa máquina só trava na sexta tentativa. Vale de
+  verdade só com a migração `0013` aplicada (ela é que tira do navegador o direito de criar empresa
+  por fora). Ver `NOTAS-v1128.md`.
 - **Planos comerciais (v1110, recalibrados na v1111)** — Pro: 15/dia + 150/mês; Pro Master:
   30/dia + 300/mês (acima disso, plano personalizado negociado no WhatsApp). O plano
   de cada conta fica em `direciona_config` (chave `plano-contratado`), definido pelos botões
@@ -144,6 +153,7 @@ Supabase — nenhuma ferramenta de migração automática está configurada). Li
 | `0010_dedupe_indexado.sql` | **Aditiva e opcional (v1092).** Cria três colunas de deduplicação (`dedupe_fone8`, `dedupe_arquivo`, `dedupe_nome`) com índice por empresa, pra a importação parar de varrer a carteira inteira só pra saber se o cliente já existe. Enquanto não for aplicada, o sistema funciona igual, só mais devagar — o app detecta a ausência sozinho. |
 | `0011_cadastro_contato_corretor.sql` | **Aditiva (v1117).** Adiciona `telefone`, `cidade`, `estado`, `email_contato` em `organizations`; faz `criar_empresa_e_dono` gravar esses campos; e os expõe em `admin_visao_empresas` (pra o painel mostrar como falar com cada corretor). As telas de cadastro/login funcionam antes e depois dela — enquanto não for aplicada, o cadastro segue no ar, só não grava os campos novos. |
 | `0012_contadores_atomicos.sql` | **Aditiva (v1120).** Cria as funções `reservar_analise_ia` e `reservar_contador_dia`, que fazem "checar + somar" o uso numa transação só, com trava (advisory lock) por empresa — cliques simultâneos não furam mais o teto. O app usa `reservar_analise_ia` quando ela existe e, se não existir (ou der erro), volta pro jeito antigo (lê/decide/grava) — nunca bloqueia análise real. `reservar_contador_dia` fica disponível pra uma faxina futura ligar os contadores de voz/diagnóstico/transcrição. |
+| `0013_limite_cadastro_por_conexao.sql` | **Aditiva, mas com um fechamento (v1128).** Cria a tabela `cadastros_por_conexao` (o contador da trava contra cadastro falso; guarda só uma impressão embaralhada da conexão, nunca o endereço de internet) e a função `criar_empresa_e_dono_para`, que é a criação de empresa feita pelo backend. **Também tira do navegador (`anon`/`authenticated`) o direito de chamar `criar_empresa_e_dono`** — é esse fechamento que faz a trava valer, já que a chave "anon" do Supabase é pública. Enquanto não for aplicada, o cadastro continua funcionando pelo caminho antigo (`api/criar-conta.js` responde `migracaoPendente` e as telas caem nele sozinhas), só sem a trava. De quebra, restaura a checagem amigável de "uma empresa por login" que a migração `0011` tinha derrubado sem querer da `criar_empresa_e_dono` da `0009`. |
 
 **Importante**: esta sessão não tem acesso ao Supabase de produção (ver `CLAUDE.md`). Não há
 confirmação automática de quais migrações já foram de fato aplicadas no banco real — isso precisa
@@ -208,11 +218,18 @@ montar isso:
 
 ## 8. Pendências conhecidas
 
-- **Confirmação de e-mail no cadastro** — o código já suporta (`cadastro.html`), só falta ligar a
-  opção "Confirm email" no painel do Supabase (Authentication → Providers → Email). Ação manual do
-  dono.
-- **Captcha no cadastro** — dá pra fazer (Supabase suporta hCaptcha/Turnstile), mas exige criar
-  conta num provedor externo — combinar com o dono antes.
+- ~~Confirmação de e-mail no cadastro~~ — **descartada por decisão do dono na v1128**, e não é mais
+  pendência: quem se cadastra precisa entrar no app na hora e usar os 7 dias de teste; a venda é
+  fechada depois, por telefone, no WhatsApp que o próprio cadastro pede. O código continua
+  aguentando as duas situações (`cadastro.html` trata tanto a sessão que já vem pronta quanto a
+  ausência dela), então ligar a opção no Supabase no futuro não quebraria nada — mas a intenção
+  registrada é deixar desligada. **Não reabra isto como "pendência" numa auditoria futura.**
+- ~~Captcha no cadastro~~ — **resolvido de outro jeito na v1128**, sem provedor externo. Como a
+  confirmação de e-mail (que na prática segurava robô criando conta com e-mail inventado) saiu, a
+  proteção passou a ser server-side: `api/criar-conta.js` conta quantas contas novas saíram da
+  mesma conexão de internet em 24h e recusa acima do limite (`CORRETOR_PRO_LIMITE_CADASTROS_
+  CONEXAO_DIA`, padrão 5). Não pede nada de quem se cadastra. **Só vale de verdade com a migração
+  `0013` aplicada** — sem ela, o navegador ainda consegue criar empresa por fora.
 - **`app.js` é um arquivo só, com ~11,3 mil linhas** — funciona, mas dificulta manutenção. Ainda
   não foi dividido em módulos. Detalhe importante pra quem for mexer: `app.js` é um **módulo ES**
   (`<script type="module">` no `index.html`), então uma `function` declarada no topo do arquivo
@@ -239,8 +256,11 @@ montar isso:
   (antes só havia link na tela de criar conta, então quem já era cliente não achava as páginas).
   **Pendência restante: uma revisão jurídica de verdade** antes de tratar o texto como definitivo —
   o aviso disso continua visível no topo das duas páginas.
-- **Cobrança/assinatura automatizada** — hoje o "virar pago" é manual, pelo botão "Marcar pago" no
-  painel administrativo. Não há integração com nenhum meio de pagamento.
+- **Cobrança/assinatura automatizada** — não há integração com meio de pagamento, e **isso é
+  intencional desde a v1128**: o dono acompanha os dias restantes pela coluna "Dias de teste" do
+  painel, liga pro WhatsApp cadastrado antes de o teste vencer, fecha o pacote por telefone e
+  marca o plano no painel (que já ativa a conta). Continua listado aqui como característica
+  conhecida, não como tarefa em aberto.
 - **App nativo pro iPhone** (aparecer direto no botão Compartilhar do WhatsApp, como no Android) —
   projeto à parte, não iniciado; o Atalho do iPhone (Shortcuts) já cobre a mesma necessidade de um
   jeito mais manual (ver `NOTAS-v1035.md`).

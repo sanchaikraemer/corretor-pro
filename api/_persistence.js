@@ -275,6 +275,84 @@ export async function requirePlatformAdmin(req, res, supabase) {
   return adminUserId;
 }
 
+// v1128 — guarda das rotas de quem AINDA NÃO TEM EMPRESA (hoje só api/criar-conta.js).
+//
+// resolveOrganizationId não serve aqui: ela exige que o login já esteja vinculado a uma empresa e
+// responde 403 quando não está — que é exatamente a situação de quem acabou de se cadastrar. Esta
+// checagem é a mesma coisa um passo antes: confirma que o token de login é de verdade (pergunta ao
+// Supabase, nunca acredita no que o navegador manda) e devolve o id do usuário. Nunca aceita id de
+// usuário enviado pelo cliente — isso deixaria qualquer chamada criar empresa em nome de outra pessoa.
+export async function requireLoginSemEmpresa(req, res, { supabase } = {}) {
+  const bearer = /^Bearer\s+(.+)$/i.exec(String(req.headers?.authorization || req.headers?.Authorization || "").trim())?.[1];
+  if (!bearer) {
+    authJson(res, 401, { ok: false, error: "Faça login antes de criar a empresa." });
+    return null;
+  }
+  const client = supabase || getSupabaseAdmin();
+  if (!client) {
+    authJson(res, 500, { ok: false, error: "Supabase não configurado no ambiente." });
+    return null;
+  }
+  const { data, error } = await client.auth.getUser(bearer);
+  const userId = data?.user?.id || "";
+  if (error || !userId) {
+    authJson(res, 401, { ok: false, error: "Sessão inválida ou expirada. Faça login novamente." });
+    return null;
+  }
+  return { userId, email: data?.user?.email || "", metadata: data?.user?.user_metadata || {} };
+}
+
+// v1128 — impressão digital da conexão de internet de quem está chamando.
+//
+// PRIVACIDADE: o endereço de internet (IP) NUNCA é gravado. O que vai pro banco é este resumo
+// embaralhado (SHA-256 com um segredo que só existe no servidor) — serve pra dizer "estas duas
+// contas vieram da mesma conexão" e pra mais nada; não dá pra voltar dele ao endereço original,
+// nem pra conferir um endereço suspeito sem ter o segredo. Mesma linha da v1119.
+export function impressaoDaConexao(req) {
+  const cru = String(
+    req?.headers?.["x-forwarded-for"] || req?.headers?.["x-real-ip"] ||
+    req?.socket?.remoteAddress || ""
+  ).split(",")[0].trim();
+  if (!cru) return "";
+  const segredo = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.ATALHO_ZIP_TOKEN_SECRET || "corretor-pro";
+  return createHmac("sha256", segredo).update(cru).digest("hex").slice(0, 32);
+}
+
+const LIMITE_CADASTROS_CONEXAO_DIA_PADRAO = 5;
+
+// Quantas contas novas a mesma conexão pode abrir por dia. Folgado de propósito: um corretor cria
+// uma; uma imobiliária inteira no mesmo Wi-Fi cabe; um script numa máquina só trava na sexta.
+// Ajustável em CORRETOR_PRO_LIMITE_CADASTROS_CONEXAO_DIA (Vercel) sem publicar nada.
+export function limiteCadastrosPorConexaoDia() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_CADASTROS_CONEXAO_DIA);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_CADASTROS_CONEXAO_DIA_PADRAO;
+}
+
+// Conta os cadastros das últimas 24h vindos da mesma conexão. Se a tabela ainda não existir (a
+// migração 0013 é aplicada à mão pelo dono, como todas as outras), NÃO trava ninguém: devolve
+// "pode passar" e segue — cadastro travado por infraestrutura faltando seria muito pior que a
+// abertura que essa trava fecha.
+export async function contarCadastrosRecentesDaConexao(supabase, conexaoHash) {
+  if (!supabase || !conexaoHash) return { disponivel: false, total: 0 };
+  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("cadastros_por_conexao")
+    .select("id", { count: "exact", head: true })
+    .eq("conexao_hash", conexaoHash)
+    .gte("criado_em", desde);
+  if (error) return { disponivel: false, total: 0, erro: error.message };
+  return { disponivel: true, total: Number(count || 0) };
+}
+
+// Registra o cadastro que acabou de acontecer. Falha aqui nunca derruba o cadastro em si — o
+// corretor já tem a empresa criada; perder uma linha de contador é irrelevante perto disso.
+export async function registrarCadastroDaConexao(supabase, conexaoHash, organizationId) {
+  if (!supabase || !conexaoHash) return;
+  try {
+    await supabase.from("cadastros_por_conexao").insert({ conexao_hash: conexaoHash, organization_id: organizationId || null });
+  } catch (_) { /* contador é acessório — nunca atrapalha quem está entrando */ }
+}
+
 // Dias de CALENDÁRIO entre uma data e agora, no fuso de Brasília (NÃO "períodos de 24h" — senão
 // uma mensagem de ontem à noite conta como "hoje" de manhã, porque passaram <24h). 0 = hoje, 1 = ontem.
 function diasCalendarioBR(iso) {
