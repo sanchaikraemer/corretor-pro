@@ -34,8 +34,12 @@ assert.match(liga[0], /ev\.target\.value = ""/,
 
 // 3) As instruções não podem mandar o corretor de iPhone "compartilhar com o Corretor Pro" —
 //    lá isso não existe, e era exatamente o que o fazia girar em falso.
+// v1130 — os passos da Home deixaram de ser cpPassosComoFunciona() (texto corrido) e viraram
+// cpPassosImportar() (lista numerada, com o caminho do WhatsApp por extenso). O que este teste
+// protege continua igual: iPhone e Android não podem receber a MESMA instrução, e o iPhone nunca
+// pode ser mandado "compartilhar com o Corretor Pro" — lá isso não existe.
 const ajuda = app.match(/function cpTextoAjudaImportar\(\)\{[\s\S]*?\n\}/)[0];
-const passos = app.match(/function cpPassosComoFunciona\(\)\{[\s\S]*?\n\}/)[0];
+const passos = app.match(/function cpPassosImportar\(\)\{[\s\S]*?\n\}/)[0];
 for (const [nome, txt] of [['ajuda da tela', ajuda], ['passos da Home', passos]]) {
   assert.match(txt, /cpEhIOS\(\)/, `${nome}: precisa distinguir iPhone de Android`);
 }
@@ -44,22 +48,24 @@ assert.match(ajuda, /Atalho/,
 
 // 4) Comportamento isolado: o mesmo texto NÃO pode sair pros dois aparelhos, e só o do Android
 //    pode mandar "compartilhar o ZIP com o Corretor Pro".
-function rodar(fnSrc, nomeFn, ehIphone) {
+function rodar(fnSrc, nomeFn, ehIphone, ehDesktop = false) {
   const fn = new Function('navigator', `
     function cpEhIOS(){ return ${ehIphone ? 'true' : 'false'}; }
+    function isDesktop(){ return ${ehDesktop ? 'true' : 'false'}; }
     ${fnSrc}
     return ${nomeFn};
   `);
   return fn({ userAgent: '', platform: '', maxTouchPoints: 0 })();
 }
-const passosIphone = rodar(passos, 'cpPassosComoFunciona', true);
-const passosAndroid = rodar(passos, 'cpPassosComoFunciona', false);
+const passosIphone = rodar(passos, 'cpPassosImportar', true).join(' | ');
+const passosAndroid = rodar(passos, 'cpPassosImportar', false).join(' | ');
 assert.notEqual(passosIphone, passosAndroid, 'iPhone e Android precisam receber instruções diferentes');
-assert.doesNotMatch(passosIphone, /Compartilhe o ZIP com o Corretor Pro/i,
+assert.doesNotMatch(passosIphone, /toque no <b>ícone do Corretor Pro<\/b>/i,
   'no iPhone essa instrução é impossível de cumprir — foi ela que travou o dono');
-assert.match(passosAndroid, /Compartilhe o ZIP com o Corretor Pro/i,
+assert.match(passosAndroid, /ícone do Corretor Pro/i,
   'no Android o compartilhar continua sendo o caminho principal');
 assert.match(passosIphone, /Salvar em Arquivos/, 'no iPhone, salvar em Arquivos e escolher aqui');
+assert.match(passosIphone, /Atalho/, 'no iPhone os passos também apontam o Atalho, que evita o vai e volta');
 
 const ajudaIphone = rodar(ajuda, 'cpTextoAjudaImportar', true);
 assert.match(ajudaIphone, /Escolher o arquivo da conversa/, 'a ajuda do iPhone aponta o botão novo');

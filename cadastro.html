@@ -72,6 +72,16 @@ function alternarSenha(id, btn) {
 // Ícone inicial (senha oculta -> mostra o olho aberto, convidando a clicar pra revelar).
 document.querySelectorAll('.btn-olho').forEach(b => { b.innerHTML = SVG_OLHO; });
 
+// v1130 — enquanto nenhum estado foi escolhido, o "UF" fica cinza de dica (igual ao "Ex.: Porto
+// Alegre" do campo Cidade ao lado); assim que o corretor escolhe, vira texto normal. O CSS sozinho
+// não consegue fazer isso — ele não enxerga qual opção está selecionada.
+const campoEstado = document.getElementById('estado');
+if (campoEstado) {
+  const marcarEstado = () => campoEstado.classList.toggle('sem-escolha', !campoEstado.value);
+  campoEstado.addEventListener('change', marcarEstado);
+  marcarEstado();
+}
+
 // v1128 — a empresa passa a ser criada PELO SERVIDOR (api/criar-conta.js), não mais direto pelo
 // navegador. É lá que mora a trava contra cadastro falso em massa (quantas contas novas saíram da
 // mesma conexão de internet hoje) — trava que não pede nada de quem se cadastra: sem confirmar
