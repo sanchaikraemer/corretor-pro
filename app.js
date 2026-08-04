@@ -5167,6 +5167,20 @@ function cpUpgradeProHTML(a){
     `${escapeHtml(rotulo)}</a></div>`;
 }
 
+// v1132 — convite que aparece na análise de quem ainda não configurou a Inteligência Comercial.
+// NÃO é aviso de erro nem bloqueio: a análise acima dele é real e utilizável, feita a partir da
+// própria conversa. Ele só mostra o que o corretor GANHA ao configurar — que é o momento certo de
+// pedir isso: depois de ele ver o sistema funcionando com a conversa dele, não antes.
+function cpPreviaCerebroHTML(a){
+  if(!a?.modoPrevia) return "";
+  return `<div style="margin-top:12px;padding:12px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:12px">`+
+    `<div class="small" style="margin-bottom:8px"><b>Esta análise saiu só da conversa que você enviou.</b><br>`+
+    `A IA ainda não conhece o seu jeito de falar, os seus empreendimentos nem as suas condições — por isso ela evita afirmar preço, prazo ou localização e prefere oferecer confirmar.</div>`+
+    `<div class="small" style="margin-bottom:10px;color:var(--soft)">Ensine isso uma vez e as próximas mensagens saem no seu tom, com as suas condições e as suas respostas de objeção.</div>`+
+    `<button type="button" class="btn" id="btnPreviaConfigurarCerebro" style="padding:11px 18px;font-size:14px">Ensinar a IA a falar como eu</button>`+
+    `</div>`;
+}
+
 function cp718LeituraComercialHtml(a,lead){
   const lc=(a&&a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
   const itens=[
@@ -7525,8 +7539,10 @@ async function renderProcessedResult(data, meta){
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
     janelaHtml + semMidiaHtml + incrementalHtml +
     `</div>` +
+    cpPreviaCerebroHTML(analysis) +
     cpUpgradeProHTML(analysis) +
     openAIErrorBlock(data);
+  qs("#btnPreviaConfigurarCerebro")?.addEventListener("click", () => { try{ show("cerebro"); }catch(_){ } });
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
   // Decisão "é o mesmo / é outro" (nome só parecido, ambíguo de verdade): traz a pergunta pra
   // vista, senão fica embaixo e parece que travou. Nome exato não pergunta mais (v953) — sem

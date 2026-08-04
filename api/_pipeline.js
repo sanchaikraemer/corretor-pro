@@ -2346,26 +2346,25 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     dataHoraAtualAnalise = _agoraDt.toISOString();
   }
   const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
-  if (!hasCerebroInstructions(configCerebro)) {
-    return {
-      mode: "cerebro_ausente",
-      error: "O Cérebro Comercial não foi carregado com instruções. A análise não foi gerada para evitar sugestões genéricas.",
-      summary: "Análise não gerada: carregue e salve o Cérebro Comercial.",
-      clientProfile: "—",
-      bestTime: "—",
-      objections: [],
-      risk: "—",
-      produtoInteresse: null,
-      produtosInteresse: [],
-      etapaSugerida: null,
-      nextAction: null,
-      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
-      sugestoesPendentes: true,
-      validacaoSugestoes: ["Cérebro Comercial sem instruções carregadas."],
-      messages: emptyMessages,
-      _cerebroFonte: configCerebro?._fonte || "ausente"
-    };
-  }
+  // v1132 — MODO PRÉVIA (conta nova, Cérebro ainda vazio).
+  //
+  // Até aqui, sem Cérebro configurado a análise era RECUSADA ("A análise não foi gerada para evitar
+  // sugestões genéricas"). A intenção era boa e está errada pro produto: quem acabou de criar a
+  // conta não faz ideia do que é o Cérebro nem pra que serve — e era obrigado a configurá-lo ANTES
+  // de ver o sistema funcionar uma vez. Ninguém preenche formulário pra um produto que ainda não
+  // provou nada. Era o primeiro passo de todo cliente novo, e ele terminava num beco.
+  //
+  // Por que é seguro analisar sem Cérebro: o piso comercial (INTELIGENCIA_CARTEIRA), que entra no
+  // prompt SEMPRE, já proíbe afirmar qualquer condição comercial, valor, empreendimento ou
+  // localização que não esteja escrita na conversa — nesses casos ele manda a IA perguntar ou
+  // oferecer confirmar. A regra do projeto ("nada comercial cravado no código; tudo vem do Cérebro
+  // OU DA PRÓPRIA CONVERSA ANALISADA") continua respeitada à risca: a prévia se apoia só na
+  // conversa que o corretor acabou de exportar.
+  //
+  // O que a prévia NÃO tem: o jeito de falar dele, as condições da construtora dele, as regras e
+  // objeções que ele ensina. É exatamente isso que o Cérebro acrescenta — e é muito mais fácil ele
+  // querer configurar DEPOIS de ver a análise da própria conversa funcionando.
+  const modoPrevia = !hasCerebroInstructions(configCerebro);
   // v1013 — rede de segurança contra consumo descontrolado (ver verificarLimiteDiario acima):
   // checa DEPOIS de confirmar que o Cérebro existe (não gasta a checagem à toa numa conta que
   // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
@@ -2459,7 +2458,21 @@ ${INTELIGENCIA_CARTEIRA}
 O bloco acima é o piso comercial geral, válido sempre. Qualquer regra do Cérebro Comercial abaixo que disser algo diferente prevalece sobre este piso.
 
 === INÍCIO DO CÉREBRO COMERCIAL ===
-${instrucoesCerebroTexto}
+${modoPrevia
+  ? `(VAZIO — este corretor ainda não configurou o Cérebro Comercial.)
+
+MODO PRÉVIA. Sem Cérebro, a Inteligência Comercial Base acima é a única autoridade, e a ÚNICA fonte
+de fatos é a conversa analisada. Portanto, nesta execução:
+- Analise a conversa normalmente e entregue as três mensagens — elas precisam ser úteis de verdade,
+  não um texto de exemplo.
+- Escreva em português brasileiro, no tom de um corretor profissional, cordial e direto.
+- NUNCA afirme preço, condição de pagamento, desconto, prazo, nome de empreendimento, endereço,
+  cidade, bairro, metragem ou qualquer característica que não esteja ESCRITA na conversa. Se o
+  cliente perguntou algo que não está lá, a mensagem deve oferecer confirmar e enviar a informação —
+  jamais preencher com um palpite.
+- Campos sem base na conversa ficam em "Não identificado". Não complete lacuna com suposição.
+- Não invente jeito de falar do corretor: use o que a própria conversa mostra sobre como ele fala.`
+  : instrucoesCerebroTexto}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
 ${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
@@ -2690,7 +2703,11 @@ ${timelineText}`;
       validacaoSugestoes: trioOk ? [] : validacaoMensagens.motivos,
       mensagensValidadasEm: nowIso,
       contextoTemporalMensagens: contextoTemporal,
-      _cerebroFonte: configCerebro?._fonte || "backend-default",
+      // v1132 — a tela usa isto pra mostrar o convite "isto é uma prévia; configure a Inteligência
+      // Comercial pra IA falar do SEU jeito e com as SUAS condições". A análise em si é real e
+      // utilizável — nada aqui a marca como pendente ou inválida.
+      modoPrevia,
+      _cerebroFonte: configCerebro?._fonte || (modoPrevia ? "ausente" : "backend-default"),
       _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
       melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName, configCerebro?.corretorNome)
     };
