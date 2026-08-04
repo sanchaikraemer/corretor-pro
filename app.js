@@ -3878,14 +3878,22 @@ async function _processarDashboard(data){
       if(foco){
         foco.innerHTML = `
           <div class="card compact" style="background:linear-gradient(135deg,rgba(255,98,88,.04),rgba(55,232,255,.04));border:1px solid var(--line)">
-            <div style="text-align:center;padding:30px 16px">
-              <div style="font-size:48px;margin-bottom:12px"></div>
-              <h2 class="title" style="font-size:22px;margin-bottom:8px">Pronto pra começar</h2>
-              <div class="small" style="color:var(--soft);margin-bottom:18px;line-height:1.6">Importe a primeira conversa do WhatsApp.<br>O Corretor Pro vai ler, transcrever os áudios e te mostrar quem atender agora, por que, quando e o que falar.</div>
-              <button type="button" class="btn pickZipShortcut" style="padding:14px 28px;font-size:14px">⇪ Importar conversa do WhatsApp</button>
-              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);text-align:left">
-                <div class="small" style="color:var(--muted);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:950;margin-bottom:8px">Como funciona</div>
-                <div class="small" style="line-height:1.7;color:var(--soft)">${cpPassosComoFunciona()}</div>
+            <div style="padding:28px 20px">
+              <h2 class="title" style="font-size:22px;margin:0 0 8px;text-align:center">Comece pelo WhatsApp</h2>
+              <div class="small" style="color:var(--soft);margin:0 auto 22px;line-height:1.6;text-align:center;max-width:520px">
+                O Corretor Pro não entra nas suas conversas — quem envia é você, e leva 20 segundos.<br>
+                <b>O WhatsApp não guarda conversa exportada</b>: você exporta e manda pro Corretor Pro no mesmo gesto.
+              </div>
+              <ol style="margin:0 auto;padding:0;max-width:560px;list-style:none">
+                ${cpPassosImportar().map((p, i) => `
+                  <li style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)">
+                    <span style="flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:950;font-size:12px;display:flex;align-items:center;justify-content:center">${i + 1}</span>
+                    <span class="small" style="line-height:1.6;color:var(--soft);flex:1;min-width:0">${p}</span>
+                  </li>`).join("")}
+              </ol>
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);text-align:center">
+                <div class="small" style="color:var(--muted);margin-bottom:10px">Já exportou e salvou o arquivo no aparelho?</div>
+                <button type="button" class="btn secondary pickZipShortcut" style="padding:12px 24px;font-size:14px">Escolher o arquivo da conversa</button>
               </div>
             </div>
           </div>`;
@@ -8267,21 +8275,44 @@ qsa(".pickZipShortcut").forEach(b=>b.addEventListener("click",()=>show("zip")));
 // Um seletor de arquivo comum resolve nos dois sistemas e reusa o mesmo processFile do
 // compartilhamento — o resto do fluxo (extração, transcrição, análise) não muda em nada.
 // Declaração de função (não `const`) de propósito: a Home é montada por _processarDashboard, que
-// vive lá em cima no arquivo e chama cpPassosComoFunciona — com `const` isso quebraria por ordem.
+// vive lá em cima no arquivo e chama cpPassosImportar — com `const` isso quebraria por ordem.
 function cpEhIOS(){
   return /iphone|ipad|ipod/i.test(navigator.userAgent||"") ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
-// Os 3 passos do "Como funciona" da Home vazia. No iPhone o passo 2 NÃO pode ser "compartilhe com
-// o Corretor Pro": lá isso não existe, e era exatamente a instrução que deixava o corretor girando
-// em falso procurando o app na lista de compartilhar.
-function cpPassosComoFunciona(){
-  const p1 = '1. No WhatsApp, abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → "Exportar conversa" → "Incluir mídia"';
-  const p2 = cpEhIOS()
-    ? '2. Na tela de compartilhar, role para baixo e toque em "Salvar em Arquivos" — depois volte aqui e toque no botão acima pra escolher o arquivo'
-    : '2. Compartilhe o ZIP com o Corretor Pro (ou salve o arquivo e escolha ele aqui pelo botão acima)';
-  return `${p1}<br>${p2}<br>3. Em 30-60 segundos o Corretor Pro mostra o que falar e quando`;
+// v1130 — os passos da Home vazia, reescritos a pedido do dono. A tela abria com um botão grande
+// "Importar conversa do WhatsApp", e isso passa a ideia errada em dois pontos: (1) o Corretor Pro
+// não entra na conversa de ninguém — quem exporta e envia é o corretor, de dentro do WhatsApp; e
+// (2) o WhatsApp NÃO guarda conversa exportada em lugar nenhum, então não existe "arquivo lá
+// esperando" pra buscar: a exportação e o envio acontecem no mesmo gesto, na hora. Quem chega novo
+// clicava no botão esperando ver as conversas e não via nada.
+//
+// Agora a tela abre com o caminho dentro do WhatsApp, passo a passo, e o botão vira o que ele
+// realmente é: o caso de quem JÁ tem o arquivo salvo no aparelho.
+function cpPassosImportar(){
+  const noCelular = isDesktop() ? " (no celular)" : "";
+  const abrirMenu = cpEhIOS()
+    ? 'Toque no <b>nome do contato</b>, lá em cima da conversa'
+    : (isDesktop()
+      ? 'Toque no <b>nome do contato</b> (iPhone) ou no <b>“⋮”</b> do canto de cima (Android)'
+      : 'Toque no <b>“⋮”</b> no canto de cima da conversa');
+  const entregar = cpEhIOS()
+    ? 'Role a lista <b>para baixo</b>, passando dos ícones dos apps, e toque em <b>“Salvar em Arquivos”</b>. Depois volte aqui e use o botão abaixo pra escolher o arquivo.<br><span style="color:var(--muted)">Pra pular esse vai e volta, configure uma vez o Atalho em <b>Menu → “Compartilhar direto do WhatsApp (iPhone)”</b> — aí o Corretor Pro passa a aparecer direto na lista.</span>'
+    : (isDesktop()
+      ? 'Na lista que abrir, toque no <b>ícone do Corretor Pro</b>. Se preferir fazer pelo computador, salve o arquivo e use o botão abaixo.'
+      : 'Na lista que abrir, toque no <b>ícone do Corretor Pro</b> — é aqui que a conversa chega.');
+  return [
+    `Abra o WhatsApp${noCelular} e entre na conversa do cliente`,
+    abrirMenu,
+    'Role até <b>“Exportar conversa”</b> e toque. Escolha <b>“Incluir mídia”</b> — é o que traz os áudios junto',
+    entregar,
+    'Em 30-60 segundos o Corretor Pro mostra quem atender, por que, quando e o que falar'
+  ];
 }
+// v1130 — cpPassosComoFunciona() (os 3 passos antigos em linha corrida) saiu daqui: virou
+// cpPassosImportar(), acima, em lista numerada e com o caminho do WhatsApp por extenso. Era a
+// única chamadora, então a versão antiga ficou sem uso — removida junto pra não sobrar texto
+// morto dizendo uma coisa enquanto a tela diz outra.
 function cpTextoAjudaImportar(){
   const passoWhats = 'No WhatsApp: abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → <b>Exportar conversa</b> → <b>Incluir mídia</b>.';
   if(cpEhIOS()){

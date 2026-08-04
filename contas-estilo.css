@@ -13,6 +13,11 @@
   --st-teste:#ffcf7d; --st-teste-bg:rgba(255,196,90,.15);
   --st-ativo:#5fe0a0; --st-ativo-bg:rgba(95,224,160,.15);
   --st-bloq:#ff8f87; --st-bloq-bg:rgba(255,98,88,.18);
+  /* v1130 — avisa o navegador que estas telas são escuras. Sem isto, tudo que o navegador desenha
+     por conta própria (a listinha que abre no campo Estado, as barras de rolagem, a moldura de
+     destaque) sai no visual claro padrão dele — foi o que deixou o campo UF com aquela borda
+     amarelada, destoando de todos os outros campos da tela. */
+  color-scheme: dark;
 }
 *{ box-sizing:border-box; }
 html,body{ height:100%; margin:0; }
@@ -62,7 +67,10 @@ body > *{ margin-top:auto; margin-bottom:auto; }
 h1{ font-size:19px; margin:0 0 4px; font-weight:800; }
 p.sub{ color:var(--cp-soft); font-size:13.5px; margin-top:0; line-height:1.5; }
 label{ display:block; font-size:13px; font-weight:700; color:var(--cp-soft); margin:16px 0 6px; }
-input{
+/* v1130 — o campo Estado (UF) do cadastro era o ÚNICO da tela sem estilo nenhum: saía com o visual
+   cru do navegador (fundo claro, moldura amarelada, altura diferente) no meio de campos escuros.
+   Agora `select` usa exatamente a mesma regra de `input` — mesma altura, mesma borda, mesma cor. */
+input, select{
   width:100%;
   padding:11px 13px;
   border-radius:10px;
@@ -70,8 +78,35 @@ input{
   background:var(--cp-sidebar);
   color:var(--cp-text);
   font-size:14px;
+  font-family:inherit;
+  line-height:1.2;
 }
 input::placeholder{ color:var(--cp-muted); }
+
+select{
+  /* Tira a setinha nativa (que vem com o fundo claro colado nela) e desenha a nossa, na cor do
+     texto secundário. O espaço à direita abre lugar pra ela não encostar no "RS". */
+  appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  padding-right:30px;
+  cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.75 6 6.25l5-4.5' fill='none' stroke='%238FA0A8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 11px center;
+  background-size:11px 8px;
+}
+/* A listinha que abre ao clicar é desenhada pelo sistema; no Windows ela respeita estas cores. */
+select option{ background:var(--cp-sidebar); color:var(--cp-text); }
+/* Enquanto nenhum estado foi escolhido, "UF" se comporta como dica (cinza), igual ao "Ex.: Porto
+   Alegre" do campo Cidade ao lado — e não como se já fosse uma resposta preenchida. */
+select.sem-escolha{ color:var(--cp-muted); }
+
+/* Antes, o destaque de "campo em foco" era o do navegador (aquele contorno que não combina com
+   nada). Agora é o mesmo nos dois tipos de campo. */
+input:focus, select:focus{
+  outline:none;
+  border-color:var(--cp-coral);
+  box-shadow:0 0 0 3px rgba(255,98,88,.18);
+}
 .campo-senha{ position:relative; }
 .campo-senha input{ padding-right:44px; }
 .btn-olho{
