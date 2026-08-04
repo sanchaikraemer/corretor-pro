@@ -244,6 +244,22 @@ function contentTypeAudio(name = "") {
   return ({ opus:"audio/opus", ogg:"audio/ogg", mp3:"audio/mpeg", m4a:"audio/mp4", wav:"audio/wav", aac:"audio/aac" })[ext] || "application/octet-stream";
 }
 
+// v1131 — roda `fn` sobre a lista com no máximo `limite` execuções ao mesmo tempo, preservando o
+// índice de cada item (quem escreve o resultado é a própria `fn`, usando o índice que recebe).
+// Mesmo desenho do pool que a transcrição já usa em _pipeline.js — repetido aqui, e não importado,
+// porque aquele não é exportado e este arquivo é a única outra parte que precisa disso.
+async function mapComLimiteParalelo(itens, limite, fn) {
+  const lista = Array.isArray(itens) ? itens : [];
+  let proximo = 0;
+  const trabalhador = async () => {
+    while (proximo < lista.length) {
+      const indice = proximo++;
+      await fn(lista[indice], indice);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limite, lista.length)) }, trabalhador));
+}
+
 async function baixarBuffer(storage, storagePath) {
   const { data: blob, error } = await storage.download(storagePath);
   if (error || !blob) {
@@ -499,19 +515,25 @@ export default async function handler(req, res) {
       const manifest = await carregarManifesto(storage, manifestPath);
       if (!manifest?.audioStorage) return json(res, 409, { ok: false, error: "A extração desta importação não foi encontrada. Tente preparar novamente sem reenviar o ZIP." });
       const existentes = manifest.transcriptions && typeof manifest.transcriptions === "object" ? { ...manifest.transcriptions } : {};
-      const arquivos = [];
-      for (const nome of audioNames) {
-        if (existentes[nome]?.text) continue;
+      // v1131 — esta preparação era SEQUENCIAL: pra cada áudio, esperava a consulta ao cache e
+      // depois o download, um atrás do outro. Num lote de 8 áudios são 16 idas e voltas ao Storage
+      // em fila, antes de a transcrição começar — e é justamente aí que o dia de banco lento (cota
+      // do Supabase estourada) vira minuto de espera na tela. Agora as leituras acontecem em
+      // paralelo, com o mesmo teto de simultaneidade que a transcrição já usa.
+      //
+      // A ORDEM do resultado é preservada de propósito (índice fixo + filtro no fim): o lote
+      // precisa sair na mesma sequência em que os áudios foram pedidos.
+      const preparados = new Array(audioNames.length).fill(null);
+      await mapComLimiteParalelo(audioNames, 8, async (nome, i) => {
+        if (existentes[nome]?.text) return;
         const hash = manifest?.audioHashes?.[nome];
         const cached = await carregarTranscricaoCache(storage, hash, organizationId);
-        if (cached) {
-          existentes[nome] = cached;
-          continue;
-        }
+        if (cached) { existentes[nome] = cached; return; }
         const audioPath = manifest.audioStorage[nome];
-        if (!audioPath) continue;
-        arquivos.push({ name: nome, buffer: await baixarBuffer(storage, audioPath) });
-      }
+        if (!audioPath) return;
+        preparados[i] = { name: nome, buffer: await baixarBuffer(storage, audioPath) };
+      });
+      const arquivos = preparados.filter(Boolean);
       // v1119 — teto diário de transcrição de importação (a parte mais cara do custo, antes sem
       // trava nenhuma). Corta o excedente do dia ANTES de gastar Whisper; o que não couber hoje
       // fica como "não transcrito" e pode ser pedido de novo depois (o app já lida com áudio sem

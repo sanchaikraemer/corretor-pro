@@ -18,7 +18,11 @@ const fnSrc = app.slice(iniFn, fimFn);
 
 // Precisa registrar "analise" só depois que o resultado da IA passou pelas validações (sem
 // sugestões pendentes, com as 3 mensagens), nunca antes de saber que a análise deu certo.
-const marcaValidacao = 'A análise permanece pendente porque uma das três mensagens não passou pelas regras do Cérebro.';
+// v1131 — a validação continua no mesmo lugar, mas deixou de lançar uma frase fixa: agora ela
+// carrega o motivo REAL vindo do servidor (Cérebro não configurado, limite do dia, IA fora do ar)
+// pra a tela poder explicar o que fazer. O que este teste protege não muda: o registro de
+// "analise" só pode acontecer DEPOIS dessa validação.
+const marcaValidacao = 'sugestoesPendentes === true || !trioOk';
 const idxValidacao = fnSrc.indexOf(marcaValidacao);
 const idxRegistro = fnSrc.indexOf('cpRegistrarAtividade("analise")');
 assert.ok(idxValidacao > -1, 'checagem de sugestões pendentes não encontrada');

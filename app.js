@@ -6988,6 +6988,32 @@ function startProgresso(){
   };
 }
 
+// v1131 — traduz o motivo REAL de uma análise que voltou sem as três mensagens. O servidor já manda
+// a razão em `validacaoSugestoes` (ver api/_pipeline.js: Cérebro sem instruções, limite diário
+// atingido, OpenAI não configurada), mas o app jogava tudo fora e escrevia "Não foi possível
+// analisar" — o corretor não tinha como saber que bastava configurar a Inteligência Comercial.
+function cpMotivoAnalisePendente(analysis){
+  const motivos = Array.isArray(analysis?.validacaoSugestoes) ? analysis.validacaoSugestoes.filter(Boolean).map(String) : [];
+  const texto = motivos.join(" ");
+  if(/[Cc]érebro|[Cc]erebro/.test(texto)){
+    return "A Inteligência Comercial ainda não foi configurada. É ela que ensina a IA a falar como você — sem isso não há o que sugerir. Configure uma vez e importe de novo (a conversa já está guardada, você não precisa exportar outra).";
+  }
+  if(/[Ll]imite diário/.test(texto)){
+    return texto + " A conversa já está guardada aqui — amanhã o limite zera e você importa sem exportar de novo.";
+  }
+  if(/OpenAI/i.test(texto)){
+    return "A IA não está configurada neste servidor (chave da OpenAI ausente). Isso é configuração do sistema, não da sua conta.";
+  }
+  return texto || "A análise voltou sem as três mensagens sugeridas.";
+}
+
+// A ação que resolve cada motivo — vira o botão do aviso na tela de importação.
+function cpAcaoAnalisePendente(analysis){
+  const texto = (Array.isArray(analysis?.validacaoSugestoes) ? analysis.validacaoSugestoes : []).join(" ");
+  if(/[Cc]érebro|[Cc]erebro/.test(texto)) return { rotulo: "Configurar a Inteligência Comercial", alvo: "cerebro" };
+  return null;
+}
+
 function userFriendlyError(err,file){
   const raw=String(err?.message||err||"");
   if(raw.includes("Supabase") && raw.includes("configurado")){
@@ -7211,12 +7237,30 @@ async function uploadLargeZipToSupabase(file, options = {}){
     setBotoesImportacao(false);
     qs("#progressBar").style.width="100%";
     const ehTimeout = err?.name === "AbortError" || /aborted|abort/i.test(String(err?.message||""));
-    qs("#processingText").textContent = ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.";
-    qs("#resultBox").className="notice error";
+    // v1131 — quando o servidor DISSE por que não saíram as três mensagens (Cérebro não
+    // configurado, limite do dia, IA fora do ar), a tela mostra esse motivo e o botão que resolve —
+    // em vez do antigo "Não foi possível analisar", que não dava nenhuma pista do que fazer.
+    const pendente = err?.analisePendente?.analysis || null;
+    const acao = pendente ? cpAcaoAnalisePendente(pendente) : null;
+    qs("#processingText").textContent = pendente
+      ? "Falta um passo pra IA conseguir sugerir."
+      : (ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.");
+    qs("#resultBox").className = pendente ? "notice" : "notice error";
     qs("#resultBox").innerHTML =
-      "<b>Não foi possível analisar a conversa agora.</b><br><br>" +
-      escapeHtml(userFriendlyError(err, file)) +
-      `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="btn" id="btnRetomarAnalise" style="flex:1;min-width:180px">Tentar analisar novamente</button><button type="button" class="btn secondary" id="btnDescartarUpload" style="flex:1;min-width:140px">Descartar importação</button></div>`;
+      (pendente ? "<b>A conversa foi lida, mas a IA ainda não pode sugerir as mensagens.</b><br><br>"
+                : "<b>Não foi possível analisar a conversa agora.</b><br><br>") +
+      escapeHtml(pendente ? cpMotivoAnalisePendente(pendente) : userFriendlyError(err, file)) +
+      `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">${
+        acao ? `<button type="button" class="btn" id="btnIrConfigurarCerebro" style="flex:1;min-width:200px">${escapeHtml(acao.rotulo)}</button>` : ""
+      }<button type="button" class="btn${acao ? " secondary" : ""}" id="btnRetomarAnalise" style="flex:1;min-width:180px">Tentar analisar novamente</button><button type="button" class="btn secondary" id="btnDescartarUpload" style="flex:1;min-width:140px">Descartar importação</button></div>`;
+    if(acao){
+      qs("#btnIrConfigurarCerebro")?.addEventListener("click", () => {
+        // A importação NÃO é descartada: fica guardada, e o botão "Tentar analisar novamente"
+        // continua valendo quando ele voltar — sem precisar exportar a conversa de novo.
+        toast("Configure a Inteligência Comercial e volte aqui pra analisar.");
+        try{ show(acao.alvo); }catch(_){ }
+      });
+    }
     qs("#btnRetomarAnalise")?.addEventListener("click", async () => {
       const stored = state.ultimoUploadStorage;
       if(stored?.bucket && stored?.path){
@@ -7314,7 +7358,16 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   const audiosReaproveitados = audiosTodos.length - audios.length;
 
   if(audios.length){
-    const LOTE = 3;
+    // v1131 — era 3. A v1122 subiu a capacidade do SERVIDOR de 4 pra 10 áudios ao mesmo tempo pra
+    // acabar com a lentidão da importação — mas o app nunca mandava mais que 3 de cada vez, então
+    // o servidor jamais chegava perto de usar os 10: a fila continuava igual, só que agora com uma
+    // correção que parecia feita. Uma conversa com 30 áudios virava 10 idas e voltas em sequência,
+    // cada uma pagando de novo a leitura do manifesto e dos arquivos.
+    //
+    // 8 (não 10) de propósito: a função tem 60 segundos de teto na Vercel, e cada lote também lê o
+    // manifesto e baixa os áudios. 8 corta as idas e voltas pela metade e ainda sobra folga —
+    // subir até o teto de 10 deixaria a margem curta demais num dia de banco lento.
+    const LOTE = 8;
     for(let i=0; i<audios.length; i+=LOTE){
       const lote = audios.slice(i,i+LOTE);
       renderEtapas(3, `${Math.min(i+LOTE,audios.length)}/${audios.length} novos · ${audiosReaproveitados} reaproveitados`);
@@ -7356,9 +7409,20 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     }catch(error){ erroAnalise=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
   }
   if(!result) throw erroAnalise || new Error("Falha recuperável ao analisar a conversa.");
+  // v1131 — este ponto jogava a importação inteira no lixo e mostrava "Não foi possível analisar",
+  // sem dizer por quê. Era o que acontecia com TODA conta nova: quem acabou de se cadastrar ainda
+  // não configurou a Inteligência Comercial, o servidor devolve "Cérebro Comercial sem instruções
+  // carregadas" — e o corretor via só um erro genérico, na primeira coisa que tentou fazer no app.
+  //
+  // Além de ser péssimo pra quem chega, contrariava a regra registrada em CLAUDE.md desde a v827-12:
+  // uma análise NUNCA pode ser descartada inteira só porque as três mensagens não saíram. Agora o
+  // motivo real vem junto e a tela explica o que fazer (ver mostrarAnaliseIncompleta).
   const msgs = result?.analysis?.messages || {};
-  if(result?.analysis?.sugestoesPendentes === true || ![msgs.a,msgs.b,msgs.c].every(v=>String(v||"").trim().length>=10)){
-    throw new Error("A análise permanece pendente porque uma das três mensagens não passou pelas regras do Cérebro.");
+  const trioOk = [msgs.a,msgs.b,msgs.c].every(v=>String(v||"").trim().length>=10);
+  if(result?.analysis?.sugestoesPendentes === true || !trioOk){
+    const erro = new Error(cpMotivoAnalisePendente(result?.analysis));
+    erro.analisePendente = result;
+    throw erro;
   }
   result.importId = importId;
   // v1069 — bug real relatado pelo dono: "Análises feitas" (Desempenho) só contava reanálise
@@ -7385,7 +7449,11 @@ async function renderProcessedResult(data, meta){
   const _msgsAnalise = analysis?.messages || {};
   const _temTrioAnalise = [_msgsAnalise.a, _msgsAnalise.b, _msgsAnalise.c].every(v => String(v || "").trim().length >= 10);
   if(!analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !_temTrioAnalise){
-    throw new Error(analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A análise comercial não foi concluída; tente novamente.");
+    // v1131 — mesma tradução usada na tela de importação: o motivo em português, não a lista crua
+    // que o servidor manda ("Cérebro Comercial sem instruções carregadas.").
+    const erroRender = new Error(analysis?.error || cpMotivoAnalisePendente(analysis));
+    erroRender.analisePendente = data;
+    throw erroRender;
   }
   state.lead = limparLead({
     name: lead.clientName || "Cliente importado",
