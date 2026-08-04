@@ -2514,6 +2514,24 @@ sem opção pronta equivalente"). Se o pedido já foi atendido ou não há pedid
 use exatamente "Nenhum". Isso é diferente de "compromissoCorretorNaoCumprido" (uma promessa que o
 CORRETOR fez e não cumpriu) — aqui é sobre um PEDIDO DO CLIENTE que ainda não teve resposta direta.
 
+CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO: se a última mensagem do cliente for uma
+resposta afirmativa a algo que o corretor ofereceu ou propôs ("pode sim", "pode mandar", "sim",
+"claro", "manda aí", "quero sim", "pode ser", "bora"), essa autorização JÁ FOI DADA. NENHUMA das três
+mensagens pode voltar a pedir a mesma permissão ("posso te mostrar?", "posso te enviar?", "já posso
+encaminhar?", "posso sugerir?") — repetir o pedido deixa o cliente esperando um segundo sim e esfria
+a conversa. As três precisam DAR SEGUIMENTO ao que foi autorizado: entregar o que foi prometido ou,
+quando faltar um dado do cliente pra entregar certo (faixa de valor, tipologia, prazo, localização),
+fazer a pergunta que falta JÁ EMENDANDO com o envio — a pergunta vem junto da entrega, nunca no lugar
+dela, e o envio nunca fica condicionado a uma nova autorização. Também não devolva a autorização em
+linguagem de protocolo ("recebi sua autorização", "conforme autorizado", "mediante sua confirmação"):
+no WhatsApp isso soa burocrático; emende de forma natural no que o cliente acabou de dizer.
+
+PERGUNTA DO CORRETOR SEM RESPOSTA: se em algum momento o corretor fez ao cliente uma pergunta de
+qualificação (faixa de valor, perfil, prazo, tipologia) e o cliente nunca respondeu, esse dado
+continua DESCONHECIDO — não o trate como sabido e não presuma o valor pelo produto que foi oferecido.
+Retomar essa pergunta em aberto costuma ser o passo que mais destrava a conversa; priorize-a entre as
+três mensagens (respeitando a regra acima: emendada na entrega, não como novo pedido de permissão).
+
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
 desistiu, não quer continuar), E não houver nenhum fato novo e concreto na conversa que justifique
