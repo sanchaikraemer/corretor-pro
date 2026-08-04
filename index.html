@@ -141,7 +141,12 @@
     <section id="zip" class="screen">
       <div class="card compact" id="importCard">
         <div class="label">Importar conversa</div>
-        <div class="small" style="color:var(--muted);margin-bottom:10px;line-height:1.6">Sempre direto do WhatsApp: abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia" e compartilhe o ZIP com o Corretor Pro. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.<br><br>No iPhone (que não deixa compartilhar direto pro app), use o <b>Atalho</b> — configure em Menu, no card "Compartilhar direto do WhatsApp (iPhone)".</div>
+        <div class="small" id="importAjuda" style="color:var(--muted);margin-bottom:10px;line-height:1.6">Sempre direto do WhatsApp: abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia" e compartilhe o ZIP com o Corretor Pro. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.</div>
+        <!-- v1126 — o dono ficou sem saída no iPhone: a Apple não deixa o app receber arquivo pelo
+             botão Compartilhar (limitação do Safari, não do app), e esta tela NÃO tinha nenhum
+             lugar pra escolher o ZIP. Este botão é a porta que faltava, e serve nos dois sistemas. -->
+        <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" hidden>
+        <button class="btn" id="btnEscolherZip" type="button" style="width:100%">📂 Escolher o arquivo da conversa (.zip)</button>
         <div class="file-name" id="fileName"></div>
         <div class="btns btns-row" style="margin-top:10px">
           <button class="btn secondary" id="clearAnalysis" type="button">Nova análise</button>

@@ -105,7 +105,11 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
   const velho = semAtender.valor(leadAtendidoHa('y', 53, 12));
   assert.match(velho, DATA, 'precisa mostrar a DATA do último atendimento');
   assert.match(velho, /53/, 'e há quantos dias foi, como apoio');
-  assert.doesNotMatch(velho, /\b12\b/, 'o número da última mensagem não pode aparecer aqui');
+  // v1126 — este teste passou a quebrar sozinho dependendo do dia do ano: a DATA renderizada pode
+  // cair num dia 12 (rodando em 04/08, 53 dias antes dá "12/06") e batia com a checagem do "12" da
+  // última mensagem. O que precisa ser garantido é o 12 FORA da data — então tira a data antes.
+  assert.doesNotMatch(velho.replace(/\b\d{2}\/\d{2}\b/g, ''), /\b12\b/,
+    'o número da última mensagem não pode aparecer aqui');
 
   // "Aguardando cliente" — o caso da Silvana: atendida ontem, descanso de 14.
   const aguardando = COLUNAS_POR_GRUPO.__aguardando;

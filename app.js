@@ -3885,7 +3885,7 @@ async function _processarDashboard(data){
               <button type="button" class="btn pickZipShortcut" style="padding:14px 28px;font-size:14px">⇪ Importar conversa do WhatsApp</button>
               <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);text-align:left">
                 <div class="small" style="color:var(--muted);text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:950;margin-bottom:8px">Como funciona</div>
-                <div class="small" style="line-height:1.7;color:var(--soft)">1. No WhatsApp, abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia"<br>2. Compartilhe o ZIP com o Corretor Pro<br>3. Em 30-60 segundos o Corretor Pro mostra o que falar e quando</div>
+                <div class="small" style="line-height:1.7;color:var(--soft)">${cpPassosComoFunciona()}</div>
               </div>
             </div>
           </div>`;
@@ -8251,6 +8251,60 @@ qsa(".nav[data-target],.go").forEach(b=>b.addEventListener("click",()=>{
 // Qualquer item da lista lateral/gaveta fecha a gaveta do celular ao ser tocado (inclui os que usam onclick, como "Últimos atendimentos").
 qsa(".sb-item").forEach(b=>b.addEventListener("click", fecharMenuGaveta));
 qsa(".pickZipShortcut").forEach(b=>b.addEventListener("click",()=>show("zip")));
+
+// v1126 — A PORTA DE ENTRADA QUE FALTAVA (relato do dono, com prints, no iPhone).
+//
+// Até aqui existia UM jeito só de o ZIP entrar no app: o WhatsApp "compartilhar com o Corretor
+// Pro" (Share Target do manifest) — que o iPhone NÃO suporta. Não é escolha nossa: o motor do
+// Safari não implementa Web Share Target (pedido aberto no WebKit desde 2019, bug 194593), então
+// nenhum app instalado pela tela inicial aparece na lista de compartilhar do iPhone.
+//
+// Consequência real, que o dono levou na mão: no iPhone ele exportava a conversa, não achava o
+// Corretor Pro pra enviar, abria a tela "Importar conversa"... e ela não tinha NENHUM lugar pra
+// escolher o arquivo. Beco sem saída — o app dependia 100% de um caminho que o aparelho dele não
+// tem. No Android ninguém tinha esbarrado nisso porque lá o compartilhar funciona.
+//
+// Um seletor de arquivo comum resolve nos dois sistemas e reusa o mesmo processFile do
+// compartilhamento — o resto do fluxo (extração, transcrição, análise) não muda em nada.
+// Declaração de função (não `const`) de propósito: a Home é montada por _processarDashboard, que
+// vive lá em cima no arquivo e chama cpPassosComoFunciona — com `const` isso quebraria por ordem.
+function cpEhIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent||"") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+// Os 3 passos do "Como funciona" da Home vazia. No iPhone o passo 2 NÃO pode ser "compartilhe com
+// o Corretor Pro": lá isso não existe, e era exatamente a instrução que deixava o corretor girando
+// em falso procurando o app na lista de compartilhar.
+function cpPassosComoFunciona(){
+  const p1 = '1. No WhatsApp, abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → "Exportar conversa" → "Incluir mídia"';
+  const p2 = cpEhIOS()
+    ? '2. Na tela de compartilhar, role para baixo e toque em "Salvar em Arquivos" — depois volte aqui e toque no botão acima pra escolher o arquivo'
+    : '2. Compartilhe o ZIP com o Corretor Pro (ou salve o arquivo e escolha ele aqui pelo botão acima)';
+  return `${p1}<br>${p2}<br>3. Em 30-60 segundos o Corretor Pro mostra o que falar e quando`;
+}
+function cpTextoAjudaImportar(){
+  const passoWhats = 'No WhatsApp: abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → <b>Exportar conversa</b> → <b>Incluir mídia</b>.';
+  if(cpEhIOS()){
+    return `${passoWhats}<br><br><b>No iPhone</b> a Apple não deixa mandar o arquivo direto pro Corretor Pro. Faça assim:<br>
+      1. Na tela de compartilhar que abrir, <b>role para baixo</b> (passando dos ícones dos apps) e toque em <b>“Salvar em Arquivos”</b>.<br>
+      2. Volte aqui e toque em <b>“Escolher o arquivo da conversa”</b> acima.<br><br>
+      Pra pular esses passos, configure uma vez o <b>Atalho</b> em <b>Mais → “Compartilhar direto do WhatsApp (iPhone)”</b>: aí o Corretor Pro passa a aparecer na lista de compartilhar do iPhone.`;
+  }
+  return `${passoWhats}<br><br>Depois é só <b>compartilhar o ZIP com o Corretor Pro</b> — ou, se você já salvou o arquivo no aparelho, tocar em <b>“Escolher o arquivo da conversa”</b> acima. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.`;
+}
+(function cpLigarSeletorDeZip(){
+  const ajuda = qs("#importAjuda");
+  if(ajuda) ajuda.innerHTML = cpTextoAjudaImportar();
+  const input = qs("#zipFileInput");
+  qs("#btnEscolherZip")?.addEventListener("click", () => input?.click());
+  input?.addEventListener("change", (ev) => {
+    const file = ev.target.files?.[0];
+    // Zera o campo: sem isso, escolher DE NOVO o mesmo arquivo (ex.: depois de um erro) não
+    // dispara nada, porque o navegador entende que o valor não mudou.
+    ev.target.value = "";
+    if(file) processFile(file);
+  });
+})();
 qs("#clearAnalysis").addEventListener("click",clearAnalysis);
 qs("#diagnoseOpenAI").addEventListener("click",runOpenAIDiagnostics);
 qsa(".msg-tab").forEach(btn => btn.addEventListener("click", () => setMsgStyle(btn.dataset.style)));
