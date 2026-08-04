@@ -127,16 +127,25 @@ revoke all on function criar_empresa_e_dono_para(uuid, text, text, text, text, t
 grant execute on function criar_empresa_e_dono_para(uuid, text, text, text, text, text) to service_role;
 
 -- 3) O navegador não cria mais empresa sozinho ------------------------------------------
+--
+-- ATENÇÃO — `public` PRECISA estar aqui, e essa é a linha que faz a trava existir.
+-- O Postgres, ao criar qualquer função, já libera a execução dela pro grupo `public` (todo mundo)
+-- sem ninguém pedir. Tirar o acesso só de `anon`/`authenticated` NÃO fecha nada: os dois continuam
+-- podendo chamar a função por serem membros de `public`. Isso foi pego rodando a migração num
+-- Postgres de verdade antes de aplicar (a primeira versão desta migração revogava só de
+-- anon/authenticated e a porta continuava escancarada — o teste mostrou "pode chamar: sim" depois
+-- de rodar). Se um dia alguém reescrever este trecho, não remova `public`.
+--
 -- Bloco protegido: se a função não existir com essa assinatura (base antiga, ordem diferente de
 -- migrações), o "revoke" daria erro e derrubaria a migração inteira. Aqui ele é ignorado.
 do $$
 begin
   begin
-    revoke execute on function criar_empresa_e_dono(text, text, text, text, text) from anon, authenticated;
+    revoke execute on function criar_empresa_e_dono(text, text, text, text, text) from public, anon, authenticated;
   exception when undefined_function then null;
   end;
   begin
-    revoke execute on function criar_empresa_e_dono(text) from anon, authenticated;
+    revoke execute on function criar_empresa_e_dono(text) from public, anon, authenticated;
   exception when undefined_function then null;
   end;
 end;
