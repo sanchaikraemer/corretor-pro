@@ -18,10 +18,19 @@ assert.match(
   /\{ role: "system", content: String\(systemPrompt\)\.trim\(\) \}/,
   'O Cérebro deve seguir em mensagem system, separada dos dados da conversa'
 );
+// v1132 — o bloco do Cérebro passou a ser condicional: quem ainda não configurou recebe, no mesmo
+// lugar, as instruções de MODO PRÉVIA (analisar só com base na conversa, sem afirmar nada
+// comercial). O que este teste protege não muda — o conteúdo do Cérebro, quando existe, continua
+// sendo a instrução de maior prioridade, entre os mesmos marcadores e na mensagem system.
 assert.match(
   pipeline,
-  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*\$\{instrucoesCerebroTexto\}[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
+  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*instrucoesCerebroTexto[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
   'O conteúdo atual do Cérebro deve compor a instrução de maior prioridade'
+);
+assert.match(
+  pipeline,
+  /=== INÍCIO DO CÉREBRO COMERCIAL ===\s*\$\{modoPrevia[\s\S]*?MODO PRÉVIA[\s\S]*?:\s*instrucoesCerebroTexto\}/,
+  'sem Cérebro, o mesmo lugar precisa receber as instruções de modo prévia — nunca ficar vazio e solto'
 );
 assert.match(
   pipeline,

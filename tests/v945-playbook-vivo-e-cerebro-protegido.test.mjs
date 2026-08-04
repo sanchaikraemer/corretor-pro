@@ -13,9 +13,13 @@ const cerebroApi = fs.readFileSync(new URL("../api/cerebro-config.js", import.me
 //    dentro do systemPromptAnalise de verdade, entre as instruções de maior
 //    prioridade e o bloco do Cérebro do corretor.
 // ---------------------------------------------------------------------------
+// v1132 — o bloco do Cérebro virou condicional (sem Cérebro configurado, o mesmo lugar recebe as
+// instruções de MODO PRÉVIA). A ordem que este teste protege continua igual: o playbook base vem
+// ANTES, sempre — e é justamente ele que segura a prévia, porque já proíbe afirmar qualquer
+// condição comercial que não esteja na conversa.
 assert.match(
   pipeline,
-  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*\$\{INTELIGENCIA_CARTEIRA\}[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*\$\{instrucoesCerebroTexto\}[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
+  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*\$\{INTELIGENCIA_CARTEIRA\}[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*instrucoesCerebroTexto[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
   "o playbook base precisa estar no prompt vivo, antes do Cérebro do corretor"
 );
 

@@ -22,6 +22,9 @@ assert.match(pipeline, /cfg\.regrasTexto,\s*cfg\.objecoesTexto/);
 assert.match(pipeline, /REGRAS COMERCIAIS SALVAS:\\n\$\{regrasTexto\}/);
 assert.match(pipeline, /RESPOSTAS A OBJEÇÕES SALVAS:\\n\$\{objecoesTexto\}/);
 assert.match(pipeline, /const instrucoesCerebroTexto = formatCerebroPrompt\(configCerebro\)/);
-assert.match(pipeline, /=== INÍCIO DO CÉREBRO COMERCIAL ===\n\$\{instrucoesCerebroTexto\}/);
+// v1132 — o bloco virou condicional (quem ainda não configurou recebe as instruções de modo prévia
+// no mesmo lugar). Quando o Cérebro EXISTE, o texto integral dele continua indo pro prompt sem
+// nenhum intermediário — que é o que este teste protege desde a v859.
+assert.match(pipeline, /=== INÍCIO DO CÉREBRO COMERCIAL ===\n\$\{modoPrevia[\s\S]*?:\s*instrucoesCerebroTexto\}/);
 
 console.log('v859-cerebro-blocos-chegam-ia: ok');

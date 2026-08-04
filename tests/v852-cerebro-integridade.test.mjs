@@ -20,26 +20,73 @@ const loadEnd = pipeline.indexOf("// Carrega SÓ o banco", loadStart);
 const loadBlock = pipeline.slice(loadStart, loadEnd);
 assert.ok(loadBlock.indexOf('eq("chave", "direciona-cerebro")') < loadBlock.indexOf("hasCerebroInstructions(frontendConfig)"));
 
-// Sem instruções do Cérebro, nenhuma chamada à IA pode acontecer e nenhuma mensagem
-// genérica pode ser criada.
+// v1132 — ESTA PARTE MUDOU DE PROPÓSITO. NÃO "restaure" o comportamento antigo.
+//
+// Até a v1131, sem Cérebro configurado a análise era RECUSADA: nenhuma chamada à IA, nenhuma
+// mensagem, e uma tela de erro. A intenção (não inventar conversa fiada comercial) continua valendo
+// e continua protegida abaixo — mas a RECUSA era errada pro produto, e o dono flagrou isso testando
+// como cliente: quem acabou de criar a conta não sabe o que é o Cérebro nem pra que serve, e era
+// obrigado a configurá-lo ANTES de ver o sistema funcionar uma vez. Ninguém preenche formulário pra
+// um produto que ainda não provou nada — o primeiro passo de todo cliente novo terminava num beco.
+//
+// Agora, sem Cérebro, a análise ACONTECE em modo prévia, apoiada só na conversa que ele exportou.
+// O que este teste passa a garantir é que a prévia não abre a porta pra invenção.
 let chamadas = 0;
-const openaiNunca = {
-  chat: { completions: { create: async () => {
+let systemPromptCapturado = "";
+const openaiPrevia = {
+  chat: { completions: { create: async (args) => {
     chamadas++;
-    throw new Error("não deveria chamar a IA");
+    systemPromptCapturado = String(args?.messages?.find(m => m.role === "system")?.content || "");
+    return {
+      model: "gpt-teste",
+      choices: [{ message: { content: JSON.stringify({
+        summary: "Cliente pediu informações; ninguém respondeu ainda.",
+        mensagens: {
+          recomendada: "Oi! Vi sua mensagem por aqui, me conta o que você procura que eu já te ajudo.",
+          maisSuave: "Olá! Passando pra saber se você ainda tem interesse — fico à disposição.",
+          maisDireta: "Oi! Consegue me dizer hoje o que procura pra eu te mandar as opções certas?"
+        }
+      }) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 10 }
+    };
   } } }
 };
 const timeline = [{ date: "16/07/2026", time: "10:00", author: "Cliente", text: "Quero informações." }];
 const semCerebro = await analyzeWithBrain({
   lead: { clientName: "Cliente" },
   timeline,
-  openai: openaiNunca,
+  openai: openaiPrevia,
   cerebroConfig: { corretorNome: "Sanchai", metodo: "", tom: "", diferenciais: "", evitar: "", regras: [], objecoes: [] }
 });
-assert.equal(chamadas, 0);
-assert.equal(semCerebro.mode, "cerebro_ausente");
-assert.equal(semCerebro.sugestoesPendentes, true);
-assert.deepEqual([semCerebro.messages.a, semCerebro.messages.b, semCerebro.messages.c], ["", "", ""]);
+
+// 1. A prévia acontece de verdade — é o que o cliente novo precisa ver no primeiro uso.
+assert.equal(chamadas, 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
+assert.equal(semCerebro.mode, "openai");
+assert.equal(semCerebro.modoPrevia, true, "o resultado precisa se identificar como prévia, pra a tela convidar a configurar");
+assert.equal(semCerebro.sugestoesPendentes, false, "a prévia é utilizável: não pode voltar marcada como pendente");
+assert.ok([semCerebro.messages.a, semCerebro.messages.b, semCerebro.messages.c].every(m => String(m || "").trim().length >= 10),
+  "a prévia precisa entregar as três mensagens preenchidas");
+
+// 2. E a prévia precisa ir pra IA AMARRADA: sem Cérebro, a única fonte de fato é a conversa.
+//    Estas instruções são o que impede a prévia de virar invenção comercial.
+assert.match(systemPromptCapturado, /MODO PRÉVIA/, "o prompt precisa avisar a IA de que está sem Cérebro");
+assert.match(systemPromptCapturado, /NUNCA afirme preço, condição de pagamento, desconto, prazo, nome de empreendimento, endereço/,
+  "a prévia precisa proibir explicitamente afirmar qualquer dado comercial que não esteja na conversa");
+assert.match(systemPromptCapturado, /Não identificado/,
+  "campo sem base na conversa precisa continuar caindo em Não identificado");
+assert.match(systemPromptCapturado, /INTELIGÊNCIA COMERCIAL BASE/,
+  "o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt");
+
+// 3. Com Cérebro configurado, nada muda: não é prévia.
+const comCerebro = await analyzeWithBrain({
+  lead: { clientName: "Cliente" },
+  timeline,
+  openai: openaiPrevia,
+  cerebroConfig: { corretorNome: "Sanchai", metodo: "Método próprio de atendimento", tom: "", diferenciais: "", evitar: "", regras: [], objecoes: [] }
+});
+assert.equal(comCerebro.modoPrevia, false, "quem já configurou o Cérebro não pode receber o convite de prévia");
+assert.doesNotMatch(systemPromptCapturado, /MODO PRÉVIA/, "com Cérebro, as instruções de prévia não podem aparecer no prompt");
+assert.match(systemPromptCapturado, /Método próprio de atendimento/, "com Cérebro, o conteúdo dele precisa chegar no prompt");
 
 // Nenhum texto comercial pronto pode permanecer nos fallbacks de criação manual.
 assert.doesNotMatch(leadUpdate, /Oi \$\{primeiroNome\}/);
