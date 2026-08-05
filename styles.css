@@ -1664,6 +1664,12 @@ html[data-theme="light"] .cp704-quickbar{
 html[data-theme="light"] .cp704-copy:hover,
 html[data-theme="light"] .cp704-full-btn:hover,
 html[data-theme="light"] .cp704-reanalyse:hover{background:#f8fbfc!important;border-color:var(--cp-border-strong)!important}
+/* v1146 — a opção COPIADA fica coral nos dois temas. No tema claro, os blocos acima forçam branco
+   com !important (lição registrada na v1078: regra nova pode ser atropelada por bloco antigo com
+   !important), então a marca da cópia precisa vir com a mesma força — senão o dono toca em Copiar
+   e nada muda de cor, que foi exatamente o que ele relatou. */
+html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada{background:rgba(255,98,88,.10)!important;border-color:var(--cp-coral)!important}
+html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada .cp704-copy{background:var(--cp-coral)!important;border-color:transparent!important;color:#ffffff!important}
 html[data-theme="light"] .cp704-attended:disabled{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.4)!important;color:#138348!important}
 html[data-theme="light"] .cp704-pill{background:rgba(255,163,45,.12)!important;border-color:rgba(255,163,45,.42)!important;color:#9b5b00!important}
 html[data-theme="light"] .cp704-pill.green{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.40)!important;color:#138348!important}

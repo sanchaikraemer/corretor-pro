@@ -25,8 +25,11 @@ assert.match(app, /focoSkel\.innerHTML = `<div class="cp-loading-leads">/,
   'o recarregamento vazio da Home usa a rodinha (não o esqueleto)');
 assert.match(app, /cp694-loading cp-loading-leads/,
   'o embrulho com vigia de 9s usa o mesmo loader');
-assert.match(app, /\/Carregando os leads\/i\.test\(area\.textContent/,
-  'o vigia de 9s reconhece o texto novo');
+// v1146 — o vigia deixou de depender da tela ativa e passou a reconhecer também as mensagens de
+// espera longa (relógio na tela + saída). O que este teste protege continua: ele identifica a tela
+// de carregamento pelo texto, pra não sobrescrever conteúdo real.
+assert.match(app, /Carregando os leads\|Ainda buscando sua carteira\|Sua carteira está demorando\/i\.test\(area\.textContent/,
+  'o vigia reconhece o texto de carregamento (incluindo as mensagens de espera longa)');
 
 // 3. A rodinha é CORAL (var(--lime) é o token coral da paleta) e gira.
 assert.match(css, /\.cp-loading-spinner\{[^}]*border-top-color:var\(--lime\)[^}]*animation:cpLoadingGira/,
