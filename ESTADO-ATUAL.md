@@ -184,6 +184,51 @@ Não há script de rollback automatizado. Duas formas manuais:
   escrita de um jeito que só adiciona (nunca remove/altera destrutivamente) — é o padrão que todas
   as migrações até aqui já seguem.
 
+## 5-A. Jornada do cliente novo (o caminho que decide a venda)
+
+Reescrita entre a v1128 e a v1135, depois de o dono testar o produto como cliente e travar em cada
+passo. Está aqui porque é o caminho mais importante do sistema e o mais fácil de quebrar sem querer.
+
+1. **Recebe o link** → `entrar.html` mostra o **convite** (o que o produto faz + "Criar minha conta
+   grátis"), nunca um formulário de senha. Quem já entrou naquele aparelho cai direto no login. O
+   que decide é `localStorage['cp-ja-entrou']`, marcado só por login/cadastro concluído (v1134).
+2. **Cria a conta** → entra na hora, sem confirmar e-mail (decisão do dono, v1128). A proteção
+   contra cadastro falso em massa é por conexão de internet, no servidor (`api/criar-conta.js` +
+   migração `0013`).
+3. **Importa a primeira conversa** → a Home vazia abre com o caminho dentro do WhatsApp, passo a
+   passo, e o botão de escolher arquivo é secundário (v1130). O app **não** busca conversa nenhuma:
+   quem exporta e envia é o corretor, e o WhatsApp não guarda exportação.
+4. **Recebe a análise** → mesmo **sem Cérebro configurado**. É o `modoPrevia` (v1132): a análise
+   sai apoiada só na conversa enviada, com as três mensagens, e o prompt proíbe afirmar preço,
+   condição, empreendimento ou localização que não esteja escrita ali. Depois da análise aparece o
+   convite "Ensinar a IA a falar como eu", que leva ao Cérebro.
+   **Não reintroduza a recusa por falta de Cérebro** — ver `NOTAS-v1132.md` e o teste
+   `v1132-conta-nova-ve-o-produto-funcionando`.
+5. **Configura o Cérebro** quando quiser, já tendo visto o valor.
+
+## 5-B. Cache de tela e memória (a armadilha que já gerou 3 bugs)
+
+As telas desenham a partir de listas em memória (`state.todosLeads`, `state.itemsAtivos`) para não
+mostrarem "Carregando..." a cada navegação. Isso é bom para a percepção de velocidade e é a origem
+de uma classe inteira de bug: **gravar no servidor sem atualizar a memória deixa a tela mostrando o
+dado velho**, sem erro nenhum. Já aconteceu três vezes (v1125 arquivar, v1133 excluir lembrete, e
+remarcar lembrete, que ninguém chegou a relatar).
+
+Como está hoje:
+
+- `state.dataRevision` sobe a cada `invalidarLeadsCache()` (isto é, depois de toda gravação) e a
+  cada busca nova de leads.
+- `state.carteiraRevisao` (v1135) guarda **em que revisão a carteira em memória foi preenchida a
+  partir do servidor**. Só é carimbada onde os dados vieram mesmo de `getLeadsData` — nunca onde a
+  lista recebe uma cópia da própria memória.
+- `carregarAgenda()` pinta da memória (rápido) e, se `carteiraRevisao !== dataRevision`, revalida no
+  servidor e repinta. Esquecer de sincronizar a memória numa ação nova deixa a tela um pouco mais
+  lenta em vez de mostrar dado errado.
+
+Ao criar uma ação que grava no servidor, prefira sempre atualizar a memória (`cpMarcarEtapaLocal`,
+`cpAtualizarLembreteLocal`, `removerLeadDosCaches` são os exemplos existentes). A revalidação é rede
+de segurança, não substituta.
+
 ## 6. Ambiente de homologação (staging)
 
 **Ainda não existe.** Hoje só há um projeto Supabase (produção) e uma publicação Vercel de
@@ -217,6 +262,22 @@ montar isso:
 - Telemetria de custo de IA por empresa, visível no painel administrativo (`NOTAS-v1038.md`).
 
 ## 8. Pendências conhecidas
+
+- **[MAIOR PENDÊNCIA TÉCNICA] A listagem lê a conversa inteira de todos os leads a cada carga.**
+  Achado da auditoria da madrugada de 05/08/2026. `listRecentProcessings` (em `_persistence.js`)
+  seleciona `timeline_json` de **todo** lead a cada chamada de `/api/leads-recentes` — e manda pro
+  celular só uma prévia de 8 mensagens. O cache de estatísticas da v1017 evita **recalcular**, mas
+  não evita **trafegar**: a conversa inteira sai do Supabase em toda listagem. Como a Home busca a
+  carteira a cada 2 minutos (e a cada volta de aba, e depois de cada gravação), isso é quase
+  certamente o que estoura a cota de egress do plano grátis (5 GB) que o painel vem acusando desde
+  a v1122.
+  **Correção proposta, sem migração de banco:** hoje o cache só é considerado válido se
+  `_statsCache.len === timeline.length` — e saber o `length` obriga a trazer a timeline. Trocando
+  essa chave por `atualizado_em` (coluna minúscula, já selecionada), a listagem pode **deixar de
+  pedir `timeline_json`** e buscá-la numa segunda consulta apenas para as poucas linhas cujo cache
+  está velho. Não foi feito na auditoria de propósito: mexe na consulta mais crítica do app e nos
+  números que o corretor usa pra decidir o dia (dias sem contato, contadores) — precisa ser
+  publicado com o dono acordado, conferindo contra os dados reais dele.
 
 - ~~Confirmação de e-mail no cadastro~~ — **descartada por decisão do dono na v1128**, e não é mais
   pendência: quem se cadastra precisa entrar no app na hora e usar os 7 dias de teste; a venda é

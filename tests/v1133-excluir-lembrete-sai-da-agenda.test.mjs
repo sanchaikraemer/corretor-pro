@@ -77,10 +77,17 @@ assert.match(reagendar, /cpAtualizarLembreteLocal\(id,/,
   'remarcar tem o mesmo problema: sem atualizar a memória, a data nova não aparece até sair da tela');
 
 // ---------------------------------------------------------------------------
-// 4) O atalho de memória da Agenda continua lá (é o que evita o "Carregando..." a cada volta) —
-//    este teste existe pra lembrar que, existindo o atalho, TODA ação precisa sincronizar a memória.
+// 4) O atalho de memória da Agenda continua lá (é o que evita o "Carregando..." a cada volta), mas
+//    a partir da v1135 ele parou de ser cego: pinta rápido a partir da memória E revalida quando a
+//    memória não está em dia. Antes, uma camada acima já sabia que os dados tinham mudado e mandava
+//    recarregar — e aqui dentro a Agenda se redesenhava do mesmo pedaço velho, anulando tudo.
+//    Com a revalidação, esquecer de sincronizar a memória numa ação nova deixa a tela um pouco mais
+//    lenta em vez de mostrar dado errado. A sincronia acima continua sendo exigida porque é ela que
+//    evita o piscar; a revalidação é a rede de segurança.
 // ---------------------------------------------------------------------------
-assert.match(app, /if\(state\.todosLeads\?\.length\)\{\s*\n\s*renderAgenda\(\{ items: state\.todosLeads \}\);/,
-  'se o atalho de memória da Agenda mudar, revise as ações que dependem dele (é a origem deste bug)');
+assert.match(app, /renderAgenda\(\{ items: state\.todosLeads \}\);\s*\n\s*if\(cpCarteiraEstaEmDia\(\)\) return;/,
+  'a Agenda precisa pintar da memória E revalidar quando ela não estiver em dia');
+assert.match(app, /function cpCarteiraEstaEmDia\(\)\{[\s\S]*?carteiraRevisao\) === \(Number\(state\.dataRevision\)/,
+  'a checagem precisa comparar a revisão em que a carteira foi preenchida com a revisão atual');
 
 console.log('v1133-excluir-lembrete-sai-da-agenda: ok');
