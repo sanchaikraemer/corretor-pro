@@ -2870,17 +2870,37 @@ async function registrarMensagemEnviada(id, msg){
   // na entrada real que a Home lê depois — e ao fechar o lead essa marcação local se perdia de
   // vez. Agora marca TODAS as cópias em memória, igual ui667MarcarAtendido já fazia.
   let quando = "", dataLocal = "", horaLocal = "";
+  // v1142 — o mesmo detalhe que o servidor grava pra esta ação (`de:"copiar_msg"`). Antes a marca
+  // local entrava como "botao_atendido", o que fazia a marcação local e a do banco virarem dois
+  // eventos diferentes na mesma conversa depois de recarregar.
+  const DETALHES_COPIA = { tipo:"Mensagem enviada", de:"copiar_msg" };
   try{
     quando = new Date().toISOString();
     const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
     dataLocal = `${p.day}/${p.month}/${p.year}`;
     horaLocal = `${p.hour}:${p.minute}`;
-    if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, dataLocal, horaLocal);
+    if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, dataLocal, horaLocal, DETALHES_COPIA);
     for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
       const item = Array.isArray(lista) ? lista.find(x => String(x.id) === String(id)) : null;
-      if(item) ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal);
+      if(item) ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal, DETALHES_COPIA);
     }
   }catch(_){}
+  // v1142 — A TELA PRECISA MOSTRAR O ATENDIMENTO NA HORA, SEM DEPENDER DE REDE.
+  //
+  // Print do dono (05/08/2026, 17:33): copiou a sugestão e o botão do cliente continuava
+  // "Marcar", como se nada tivesse sido registrado — "de novo o mesmo problema recorrente que
+  // você nunca arruma". Motivo: a marcação acima só existia na MEMÓRIA. Quem redesenhava o
+  // cliente era o recarregamento pela rede, no fim desta função (recarregarLeadFoco) — se ele
+  // demorasse, falhasse ou fosse cortado (celular indo pro WhatsApp), NINGUÉM redesenhava e o
+  // botão ficava em "Marcar" mesmo com o atendimento gravado no banco. Daí o "às vezes marca,
+  // às vezes não". O botão "Marcar atendimento" nunca teve esse problema porque ele redesenha
+  // na hora — agora copiar faz igual.
+  const repintarLead = () => {
+    try{
+      if(state.lead && String(state.lead.id) === String(id) && typeof renderLeadFoco === "function") renderLeadFoco(state.lead);
+    }catch(_){}
+  };
+  repintarLead();
   // v1019 — "copiar mensagem" marca atendimento nesta MESMA chamada (registrarAtendimento:true).
   // Antes, uma falha aqui (timeout, instabilidade) era engolida em silêncio — a tela já tinha
   // mostrado "Mensagem copiada" e marcado atendido NA HORA (otimista, acima), então o corretor
@@ -2892,23 +2912,65 @@ async function registrarMensagemEnviada(id, msg){
   // Sem isso, o celular corta este pedido ao mandar o app pro fundo e o atendimento não é gravado,
   // apesar da tela já ter dito "Mensagem copiada" e já ter marcado como atendido na hora. Com
   // keepalive, o navegador termina o envio mesmo com o app fora da frente.
+  // v1142 — 3 tentativas com 30s, igual ao botão "Marcar atendimento" (ui667MarcarAtendido). Eram
+  // 2 tentativas de 15s: numa rede engasgada (o normal ao voltar do WhatsApp) as duas morriam
+  // antes de o servidor responder, e o atendimento realmente não era gravado.
   const registrarAtendimentoDaCopia = () => fetchComTimeout("./api/reanalisar-lead", { method:"POST", headers:{"Content-Type":"application/json"}, keepalive:true,
-    body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) });
-  let respAtendimento = null;
-  try{ respAtendimento = await registrarAtendimentoDaCopia(); }catch(_){ respAtendimento = null; }
-  if(!respAtendimento || !respAtendimento.ok){
-    try{ respAtendimento = await registrarAtendimentoDaCopia(); }catch(_){ respAtendimento = null; }
+    body: JSON.stringify({ id, novoAtendimento: texto.slice(0,4000), apenasSalvar:true, autorManual:"Mensagem enviada (você)", tipoManual:"mensagem_enviada", registrarAtendimento:true }) }, 30000);
+  let atendimentoConfirmado = null;
+  for(let tentativa=1; tentativa<=3 && !atendimentoConfirmado; tentativa++){
+    try{
+      const resp = await registrarAtendimentoDaCopia();
+      const dados = await resp.json().catch(()=>({}));
+      if(resp.ok && dados?.ok) atendimentoConfirmado = dados;
+    }catch(_){}
+    if(!atendimentoConfirmado && tentativa < 3) await new Promise(r=>setTimeout(r,1200));
   }
-  if(!respAtendimento || !respAtendimento.ok){
-    toast("Mensagem copiada, mas não consegui confirmar o atendimento agora. Se este lead voltar a aparecer antes da hora, marque \"Atendido\" manualmente.");
+  if(atendimentoConfirmado){
+    // Alinha a marca local com o horário gravado no banco: sem isso, o mesmo atendimento voltava
+    // do servidor com outro horário e virava um segundo evento na conversa do cliente.
+    const quandoSalvo = String(atendimentoConfirmado.quando || "");
+    if(quandoSalvo && quando){
+      try{
+        for(const alvo of [state.lead, ...[state.itemsAtivos, state.todosLeads, state.leads].map(lista => Array.isArray(lista) ? lista.find(x => String(x.id) === String(id)) : null)]){
+          if(!alvo || String(alvo.id) !== String(id)) continue;
+          const evs = alvo.analysis?.aprendizado?.eventos;
+          if(Array.isArray(evs)) for(const e of evs){ if(e?.quando === quando && e?.detalhes?.de === "copiar_msg") e.quando = quandoSalvo; }
+          if(alvo.lastAttendanceAt === quando){ alvo.lastAttendanceAt = quandoSalvo; alvo.ultimoAtendimentoEm = quandoSalvo; }
+        }
+      }catch(_){}
+    }
+  }else{
+    // v1142 — a tela não pode mentir nos DOIS sentidos: se o atendimento não foi gravado mesmo
+    // depois das 3 tentativas, desfaz a marca local (só o evento DESTA cópia — atendimento de
+    // outro momento do dia continua valendo) e repinta, pra o cliente não ficar como "Atendido"
+    // sem estar. O aviso abaixo continua explicando o que fazer.
+    try{
+      for(const alvo of [state.lead, ...[state.itemsAtivos, state.todosLeads, state.leads].map(lista => Array.isArray(lista) ? lista.find(x => String(x.id) === String(id)) : null)]){
+        if(!alvo || String(alvo.id) !== String(id)) continue;
+        const evs = alvo.analysis?.aprendizado?.eventos;
+        if(Array.isArray(evs)){
+          alvo.analysis.aprendizado.eventos = evs.filter(e => !(e?.quando === quando && e?.detalhes?.de === "copiar_msg"));
+        }
+        const ts = (typeof ultimoAtendimentoTs === "function") ? ultimoAtendimentoTs({ ...alvo, lastAttendanceAt:null, ultimoAtendimentoEm:null }) : 0;
+        alvo.lastAttendanceAt = ts ? new Date(ts).toISOString() : null;
+        alvo.ultimoAtendimentoEm = alvo.lastAttendanceAt;
+      }
+    }catch(_){}
+    repintarLead();
+    toast("Mensagem copiada, mas NÃO consegui registrar o atendimento (rede). Toque em \"Marcar\" no cliente pra registrar.");
   }
   invalidarLeadsCache();
   // v1031 — mesma rede de segurança do ui667MarcarAtendido: o recarregamento pode responder com
   // uma versão de alguns instantes atrás (antes da marcação terminar de persistir no banco) — sem
   // reaplicar a marcação local depois, ela se perdia de novo, silenciosamente, exatamente como
   // reaplicá-la aqui evita.
-  if(quando){
-    loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(id, item => ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal))).catch(()=>{});
+  // v1142 — a reaplicação só acontece quando o atendimento FOI gravado (antes ela rodava sempre e
+  // ressuscitava a marca local de uma gravação que falhou, deixando o cliente "Atendido" na tela
+  // sem estar no banco). Usa o horário confirmado pelo servidor e o mesmo detalhe da cópia.
+  if(quando && atendimentoConfirmado){
+    const quandoFinal = String(atendimentoConfirmado.quando || quando);
+    loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(id, item => ui667AplicarAtendidoLocal(item, quandoFinal, dataLocal, horaLocal, DETALHES_COPIA))).catch(()=>{});
   } else {
     try{ loadRecentLeads(false); }catch(_){}
   }
@@ -9109,8 +9171,20 @@ async function reativarLeadArquivado(id, btn){
 window.reativarLeadArquivado = reativarLeadArquivado;
 
 qs("#copyMessage").addEventListener("click",async()=>{
-  try{await navigator.clipboard.writeText(qs("#messageText").value);toast("Mensagem copiada.")}
+  const textoCopiado = qs("#messageText").value;
+  try{await navigator.clipboard.writeText(textoCopiado);toast("Mensagem copiada.")}
   catch(e){qs("#messageText").select();document.execCommand("copy");toast("Mensagem copiada.")}
+  // v1142 — SEGUNDA CAUSA do "copio a sugestão e não marca atendimento".
+  //
+  // Este é o "Copiar" do card "Resposta pronta pra enviar", que aparece na tela de importação
+  // logo depois de a análise sair — um dos momentos em que o corretor mais copia. Ele registrava
+  // SÓ o contador de mensagens copiadas: nunca marcava atendimento, nunca entrava na conversa do
+  // cliente como "Mensagem enviada". Copiar a MESMA sugestão de dentro do cliente marcava.
+  // Mesma ação, dois comportamentos — era literalmente o "às vezes marca, às vezes não".
+  //
+  // O atendimento vai PRIMEIRO (lição da v1097: copiar é quando o app vai pro fundo e a segunda
+  // gravação morre no caminho — se só uma sobreviver, que seja a que importa).
+  try{ await registrarMensagemEnviada(state.lead?.id, textoCopiado); }catch(_){}
   registrarAprendizado("mensagem_copiada");
 });
 qs("#openWhatsapp").addEventListener("click",()=>{

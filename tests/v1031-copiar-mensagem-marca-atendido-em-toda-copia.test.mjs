@@ -22,17 +22,24 @@ const bloco = app.slice(ini, fim);
 
 // 1. Marca o detalhe aberto (quando é o mesmo lead) E TAMBÉM cada array em memória — não mais
 // um "ou outro" que deixava a entrada real da Home sem a marcação.
-assert.match(bloco, /if\(state\.lead && String\(state\.lead\.id\) === String\(id\)\) ui667AplicarAtendidoLocal\(state\.lead, quando, dataLocal, horaLocal\)/,
+// v1142 — a marca local passou a levar o MESMO detalhe que o servidor grava (DETALHES_COPIA,
+// de:"copiar_msg"), pra a marca da tela e a do banco não virarem dois eventos diferentes.
+assert.match(bloco, /if\(state\.lead && String\(state\.lead\.id\) === String\(id\)\) ui667AplicarAtendidoLocal\(state\.lead, quando, dataLocal, horaLocal, DETALHES_COPIA\)/,
   'precisa marcar o detalhe aberto (state.lead) quando for o mesmo lead');
 assert.match(bloco, /for\(const lista of \[state\.itemsAtivos, state\.todosLeads, state\.leads\]\)\{/,
   'precisa também percorrer TODOS os arrays em memória (itemsAtivos/todosLeads/leads), não só um');
-assert.match(bloco, /if\(item\) ui667AplicarAtendidoLocal\(item, quando, dataLocal, horaLocal\)/,
+assert.match(bloco, /if\(item\) ui667AplicarAtendidoLocal\(item, quando, dataLocal, horaLocal, DETALHES_COPIA\)/,
   'cada entrada encontrada nos arrays precisa ser marcada');
 
 // 2. Depois do recarregamento, reaplica a marcação local (mesma rede de segurança do
 // ui667MarcarAtendido) — sem isso, um recarregamento com dado do banco de alguns instantes
 // atrás (antes da marcação persistir) apagava a marcação local de novo, silenciosamente.
-assert.match(bloco, /loadRecentLeads\(false\)\.then\(\(\) => ui667ReconciliarAtendimentoLocal\(id, item => ui667AplicarAtendidoLocal\(item, quando, dataLocal, horaLocal\)\)\)/,
+// v1142 — a reaplicação continua, com duas diferenças: usa o horário CONFIRMADO pelo servidor e
+// só roda quando o atendimento foi realmente gravado (antes ela ressuscitava a marca local mesmo
+// depois de a gravação falhar, deixando "Atendido" na tela sem estar no banco).
+assert.match(bloco, /loadRecentLeads\(false\)\.then\(\(\) => ui667ReconciliarAtendimentoLocal\(id, item => ui667AplicarAtendidoLocal\(item, quandoFinal, dataLocal, horaLocal, DETALHES_COPIA\)\)\)/,
   'precisa reaplicar a marcação local depois do recarregamento, encadeado (não solto/fire-and-forget)');
+assert.match(bloco, /if\(quando && atendimentoConfirmado\)\{/,
+  'a reaplicação só vale quando o servidor confirmou a gravação');
 
 console.log('v1031 (copiar mensagem marca atendido em toda cópia): a marcação não se perde mais ao fechar o lead — ok');
