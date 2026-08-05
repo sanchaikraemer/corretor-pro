@@ -3,6 +3,11 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { verificarLimiteDiario, limiteAnalisesIADoDiaTeste, whatsComercialPlataforma } from "../api/_pipeline.js";
 
+// v1133 — usava a data em UTC como "hoje", mas o código conta o limite pelo dia civil de
+// São Paulo. Depois das 21h em Brasília já é o dia seguinte em UTC, e o teste falhava sozinho
+// toda noite (ver a explicação completa em tests/v1013-limite-diario-uso-ia.test.mjs).
+const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 // v1108 — decisão comercial do dono (02/08/2026): o teste grátis cai de 25 pra 10 análises/dia,
 // e bater no limite vira momento de venda — aviso com botão direto pro WhatsApp comercial.
 // Conta paga que bater no teto de segurança (200) segue vendo o aviso neutro, sem convite.
@@ -42,7 +47,7 @@ const reanalisar = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.m
       res.end("{}");
     });
   }
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = _hojeSP;
   const casos = [
     { statusOrganizacao: "teste", valorSalvo: { dia: hoje, contagem: 10 }, esperaPermitido: false, esperaEmTeste: true, esperaLimite: 10 },
     { statusOrganizacao: "ativo", valorSalvo: { dia: hoje, contagem: 10 }, esperaPermitido: true, esperaEmTeste: false, esperaLimite: 200 }
