@@ -14,10 +14,15 @@ const fimRBH = app.indexOf('\nfunction ', iniRBH + 1);
 assert.ok(iniRBH !== -1 && fimRBH !== -1, 'renderBotoesHome não encontrada em app.js');
 const rbh = app.slice(iniRBH, fimRBH);
 
-// 1. A dose do dia vem da FILA RANQUEADA completa (cpFilaFazerAgora), e o extra (state.fazerAgoraExtra)
+// 1. A dose do dia vem da FILA RANQUEADA completa, e o extra (state.fazerAgoraExtra)
 // puxa além da meta.
-assert.match(rbh, /let filaRanqueada ?= ?typeof cpFilaFazerAgora ?=== ?'function' ?\? ?cpFilaFazerAgora\(items\) ?: ?\[\]/,
-  'a dose deve vir da fila ranqueada completa (cpFilaFazerAgora)');
+// v1139 — a Home passou a puxar a fila JÁ com as vagas de resgate aplicadas
+// (cpFilaFazerAgoraComResgates, que por dentro é a mesma cpFilaFazerAgora reordenada);
+// o fallback continua sendo a fila ranqueada crua.
+assert.match(rbh, /let filaRanqueada ?= ?typeof cpFilaFazerAgoraComResgates ?=== ?'function' ?\? ?cpFilaFazerAgoraComResgates\(items\)/,
+  'a dose deve vir da fila com as vagas de resgate (v1139)');
+assert.match(rbh, /typeof cpFilaFazerAgora === 'function' \? cpFilaFazerAgora\(items\) : \[\]/,
+  'o fallback continua sendo a fila ranqueada completa (cpFilaFazerAgora)');
 assert.match(rbh, /const extraHoje ?= ?Math\.max\(0, ?Number\(state\.fazerAgoraExtra\|\|0\)\)/,
   'renderBotoesHome deve ler state.fazerAgoraExtra pra puxar mais um');
 assert.match(rbh, /const dose ?= ?filaRanqueada\.slice\(0, ?quantosMostrar\)/,

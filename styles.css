@@ -393,10 +393,7 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 .home-saud-h{font-family:var(--font-display);font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;display:flex;align-items:center;gap:8px;color:var(--text)}
 .home-saud-sub{color:var(--muted);font-size:13px;margin-top:5px}
 .home-saud-titulo{display:block;margin-bottom:9px}
-.home-saud-acoes{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
-.home-saud-acoes::-webkit-scrollbar{display:none}
-.seq-link{flex:0 0 auto;background:none;border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.6);font-weight:600;font-size:11px;cursor:pointer;padding:5px 11px;white-space:nowrap;border-radius:999px;line-height:1;transition:background .15s,border-color .15s,color .15s}
-.seq-link:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.32);color:rgba(255,255,255,.85)}
+/* v1139 — .home-saud-acoes/.seq-link removidos: só existiam pro botão "Pular próximo", que saiu. */
 
 /* Leitura do cliente (diagnóstico) no topo do lead */
 .diag-card{margin-bottom:14px;padding:13px 15px;background:rgba(55,232,255,.05);border:1px solid rgba(55,232,255,.22);border-radius:14px}
@@ -770,8 +767,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 .resumo-dia .item.sel{background:var(--accent-soft);border-color:var(--accent)}
 .top3-mini .pct-mini,.top3-mini .pct-mini.warn{background:var(--accent);color:#fff}
 .top3-mini .dias-mini{background:var(--accent-soft);color:var(--accent)}
-.seq-link{border-color:var(--line);color:var(--muted)}
-.seq-link:hover{background:var(--surface-hover);border-color:var(--line2);color:var(--text)}
 
 /* Sidebar e topo desktop */
 .sidebar{

@@ -135,7 +135,9 @@ function extrair(nome){
 // A garantia de que ela não volta está em tests/v1095-so-ativo-ou-arquivado. Aqui só se confirma
 // que a Home passou a ter UMA lista de clientes.
 {
-  const home = app.match(/const urgentes = dose;[\s\S]*?foco\.innerHTML = `/);
+  // v1139 — a âncora era "const urgentes = dose;", que só existia pro botão "Pular próximo"
+  // (removido a pedido do dono). A montagem da Home agora começa logo após a dose ser cortada.
+  const home = app.match(/const disponiveisParaPuxar = filaRanqueada\.slice[\s\S]*?foco\.innerHTML = `/);
   assert.ok(home, 'não localizei a montagem da Home');
   assert.doesNotMatch(home[0], /esquecid/i,
     'a Home não pode voltar a montar uma segunda lista de clientes');

@@ -14,8 +14,11 @@ assert.match(app, /async function importarTelefonesCSV\(/, '"Importar telefones 
 assert.match(app, /exportarLeadsCSV/, 'export ⬇ Excel permanece');
 
 // 2 e 3. Home perde "Ver todos" e "Reanalisar todos"; "Reanalisar todos" vira card no Menu.
-const acoes = app.match(/home-saud-acoes">[\s\S]*?<\/div><\/div>/)[0];
-assert.doesNotMatch(acoes, />Ver todos</, 'sem "Ver todos" na home');
+// v1139 — a div home-saud-acoes sumiu por inteiro junto com seu ÚLTIMO botão ("Pular próximo",
+// removido a pedido do dono). A garantia continua a mesma, com âncora nova: o bloco da saudação
+// não pode voltar a carregar botão/atalho nenhum.
+const acoes = app.match(/home-saud-sub">[\s\S]*?<\/div>/)[0];
+assert.doesNotMatch(acoes, /<button|>Ver todos</, 'sem botões nem "Ver todos" na saudação da home');
 assert.doesNotMatch(acoes, /Reanalisar todos/, 'sem "Reanalisar todos" na home');
 // v911: "Últimos atendimentos" também saiu da home (redundante com o "Atendimentos" da barra de baixo).
 assert.doesNotMatch(acoes, /Últimos atendimentos/, 'sem "Últimos atendimentos" na home (v911)');

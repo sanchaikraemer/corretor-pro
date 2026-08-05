@@ -545,12 +545,12 @@ function mensagensDoCliente(l){
   return n;
 }
 // v1017 — mesma métrica de cima, mas só dos ÚLTIMOS 90 DIAS (clientMessageCount90d, calculado no
-// servidor na mesma varredura). Usada SÓ na barra do "Fazer agora" (cpBarraMensagensMini): o dono
-// pediu que essa barra passasse a respeitar os 90 dias, igual "Total de mensagens" (v1016).
-// NÃO usar isto pra ranking/elegibilidade (cpProbabilidadeFechamento, dose, leadsEsquecidos) —
-// essas continuam com mensagensDoCliente (histórico inteiro) de propósito: leadsEsquecidos existe
-// justamente pra resgatar lead antigo que esfriou (ver comentário da v942 acima), e uma janela de
-// 90 dias zeraria exatamente esses leads.
+// servidor na mesma varredura). Nasceu só pra barra do "Fazer agora" (cpBarraMensagensMini).
+// v1139 — o RANKING do "Fazer agora" (cpProbabilidadeFechamento) passou a usar esta régua TAMBÉM
+// (decisão do dono: barrinha e ordem contando a mesma história). Quem esfriou não some da fila —
+// volta pelas vagas de resgate diário (cpAplicarResgatesNaFila). Elegibilidade e radar de lead
+// antigo continuam com mensagensDoCliente (histórico inteiro), de propósito: reconhecer um lead
+// antigo que esfriou precisa do total (ver comentário da v942 acima).
 function mensagensDoClienteRecente(l){
   const stored = Number(l?.clientMessageCount90d);
   if(Number.isFinite(stored)) return stored;
@@ -2978,21 +2978,17 @@ function renderBotoesHome(){
   // direto da FILA RANQUEADA completa (cpFilaFazerAgora — os elegíveis, já fora de quem foi
   // atendido hoje e de quem está na janela de espera). Nunca mais um card dizendo que "não tem
   // trabalho" com 160+ leads na carteira.
-  // "Pular próximo": leads que o corretor mandou pular NESTA sessão vão pro FIM da fila (por
-  // sessão; zera ao recarregar).
-  let filaRanqueada = typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : [];
-  {
-    const pulados = state.pulados instanceof Set ? state.pulados : null;
-    if(pulados && pulados.size){
-      filaRanqueada = filaRanqueada.filter(l => !pulados.has(String(l.id))).concat(filaRanqueada.filter(l => pulados.has(String(l.id))));
-    }
-  }
+  // v1139 — a fila chega aqui com as vagas de resgate do dia já aplicadas
+  // (cpFilaFazerAgoraComResgates). O "Pular próximo" foi REMOVIDO nesta versão (pedido do dono:
+  // nunca usou, "empurrar atendimento pra frente é coisa de preguiçoso") — junto saíram
+  // state.pulados e a reordenação por sessão que só existiam por causa dele.
+  let filaRanqueada = typeof cpFilaFazerAgoraComResgates === 'function' ? cpFilaFazerAgoraComResgates(items)
+    : (typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : []);
   const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof cpMetaAtendimentosDia==='function'?cpMetaAtendimentosDia():10);
   // "Atender mais um" (state.fazerAgoraExtra) puxa além da meta, sem esperar o dia seguinte.
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
   const quantosMostrar = Math.max(0, metaHoje) + extraHoje;
   const dose = filaRanqueada.slice(0, quantosMostrar);
-  const urgentes = dose; // usado no botão "Pular próximo"
   const disponiveisParaPuxar = filaRanqueada.slice(dose.length);
   let top3Html;
   if(dose.length){
@@ -3020,9 +3016,6 @@ function renderBotoesHome(){
     // na mesma tela, já explicou. Fica em branco pra tela não ficar dizendo a mesma coisa duas vezes.
     top3Html = cpFimDeSemana() ? "" : `<div class="cp-hoje-vazio">Nenhum lead pra atender agora. Bom momento pra importar conversas novas.</div>`;
   }
-
-  // Botão "Pular próximo" só faz sentido com 2+ na fila de urgentes (precisa ter pra onde pular).
-  const btnPularHtml = urgentes.length > 1 ? `<button type="button" class="seq-link" onclick='pularProximo()'>⏭ Pular próximo</button>` : "";
 
   foco.innerHTML = `
     <style>
@@ -3090,7 +3083,7 @@ function renderBotoesHome(){
       }
     </style>
     <div class="home-saud">
-      <div class="home-saud-sub"><span class="home-saud-titulo"></span><div class="home-saud-acoes">${btnPularHtml}</div></div>
+      <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
     </div>
     ${barraBuscaLeadHTML("home")}
     <div class="home-m1-list">${top3Html}</div>
@@ -3100,28 +3093,11 @@ function renderBotoesHome(){
   });
 }
 
-// "Pular próximo": tira o lead EM FOCO da vez de agora (vai pro FIM da fila de urgentes) e joga o
-// próximo pro card "Prioridade agora". NÃO remove das prioridades — só adia ele nesta sessão.
-function pularProximo(){
-  // v1084 — o botão era desenhado a partir da fila do "Fazer agora" (cpFilaFazerAgora), mas
-  // pulava o primeiro de OUTRA lista: o grupo "acao-hoje", que é montado por cp786Categoria e
-  // tem membros e ordem diferentes. Na prática, ou a tela era redesenhada idêntica (o lead
-  // "pulado" nem estava à vista), ou rebaixava um cliente que o corretor não escolheu. Pior:
-  // quando "acao-hoje" tinha menos de 2 itens a função saía calada, e o botão virava um botão
-  // morto. Agora ele opera exatamente sobre a fila de onde nasceu.
-  const items = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
-  let fila = (typeof cpFilaFazerAgora === 'function') ? cpFilaFazerAgora(items) : [];
-  const pulados = state.pulados instanceof Set ? state.pulados : (state.pulados = new Set());
-  if(pulados.size){
-    fila = fila.filter(l => !pulados.has(String(l.id))).concat(fila.filter(l => pulados.has(String(l.id))));
-  }
-  if(fila.length < 2){ toast("Não há outro lead na fila pra trocar."); return; }
-  pulados.add(String(fila[0].id));
-  renderBotoesHome();
-}
-window.pularProximo = pularProximo;
+// v1139 — "Pular próximo" (e o state.pulados que só existia pra ele) foi REMOVIDO de vez.
+// Pedido do dono: nunca pulou ninguém, achou o botão obsoleto e contra o jeito certo de
+// trabalhar ("empurrar atendimento pra frente é coisa de preguiçoso").
 
-// v925 — "Vamos atender mais um?": puxa mais um lead da fila além da meta batida de hoje (mesma
+// v925 — "Atender mais um": puxa mais um lead da fila além da meta batida de hoje (mesma
 // variável de sessão do botão "Atender +1" de abrirFazerAgora — clicar em qualquer um dos dois
 // lugares soma no mesmo contador, então ficam sempre em sincronia).
 function cpAtenderMaisUmHoje(){
@@ -5847,6 +5823,9 @@ function sanitizeCerebroConfigV762(cfg) {
     diasImportacao: (Number(c.diasImportacao) > 0 && Number(c.diasImportacao) <= 365) ? Number(c.diasImportacao) : 90,
     // v1012 — meta diária do "Fazer agora" configurável por corretor; fora de 1–50 vira 10.
     atendimentosPorDia: (Number(c.atendimentosPorDia) >= 1 && Number(c.atendimentosPorDia) <= 50) ? Math.round(Number(c.atendimentosPorDia)) : 10,
+    // v1139 — vagas da dose reservadas pro resgate diário (0 desliga). Fora de 0–20 vira 2.
+    // Diferente dos vizinhos, 0 é VÁLIDO aqui — por isso o teste é Number.isFinite, não ">= 1".
+    resgatesPorDia: (Number.isFinite(Number(c.resgatesPorDia)) && Number(c.resgatesPorDia) >= 0 && Number(c.resgatesPorDia) <= 20) ? Math.round(Number(c.resgatesPorDia)) : 2,
     // v1048 — dias de "descanso" pós-atendimento, configurável por corretor; fora de 1–60 vira 5.
     diasDescansoPosAtendimento: (Number(c.diasDescansoPosAtendimento) >= 1 && Number(c.diasDescansoPosAtendimento) <= 60) ? Math.round(Number(c.diasDescansoPosAtendimento)) : 5,
     // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Lista vazia ou
@@ -5875,6 +5854,9 @@ function obterCerebroConfigParaAnalise() {
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
       diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
+      // v1139 — não dá pra usar "||" aqui: 0 (resgate desligado) é escolha válida e "||" jogaria
+      // fora. Campo vazio = vale o que está salvo.
+      resgatesPorDia: cpLerResgatesDiaDoFormulario(cfg),
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || cfg?.diasDescansoPosAtendimento || 5,
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
@@ -5884,6 +5866,15 @@ function obterCerebroConfigParaAnalise() {
     };
   }
   return sanitizeCerebroConfigV762(cfg || { metodo: "", diasImportacao: 90 });
+}
+// v1139 — lê "Resgates por dia" do formulário do Cérebro. 0 é valor válido (desliga o resgate),
+// então campo vazio/não montado NUNCA pode virar 0 à força — vazio = vale o que está salvo
+// (ou o padrão 2, aplicado pelo sanitizador).
+function cpLerResgatesDiaDoFormulario(cfg){
+  const raw = String(qs("#cerebroResgatesDia")?.value ?? "").trim();
+  if(raw === "") return cfg?.resgatesPorDia ?? 2;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : (cfg?.resgatesPorDia ?? 2);
 }
 // Devolve os dias marcados na tela do Cérebro, ou null se a tela ainda não foi montada — nesse
 // caso vale o que está salvo, nunca uma lista vazia acidental.
@@ -6666,6 +6657,8 @@ async function carregarCerebro(){
   if(inpDias) inpDias.value = (config.diasImportacao && Number(config.diasImportacao) > 0) ? config.diasImportacao : 90;
   const inpAtend = qs("#cerebroAtendimentosDia");
   if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
+  const inpResg = qs("#cerebroResgatesDia");
+  if(inpResg) inpResg.value = Number.isFinite(Number(config.resgatesPorDia)) ? config.resgatesPorDia : 2;
   const inpDescanso = qs("#cerebroDiasDescanso");
   if(inpDescanso) inpDescanso.value = (Number(config.diasDescansoPosAtendimento) >= 1) ? config.diasDescansoPosAtendimento : 5;
   // v1091 — marca os dias em que ele atende.
@@ -6709,7 +6702,8 @@ async function cp7SincronizarCerebroConfigInicial(){
     localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(fresco));
     const mudouRegraDeFila = !anterior
       || Number(anterior.diasDescansoPosAtendimento) !== Number(fresco.diasDescansoPosAtendimento)
-      || Number(anterior.atendimentosPorDia) !== Number(fresco.atendimentosPorDia);
+      || Number(anterior.atendimentosPorDia) !== Number(fresco.atendimentosPorDia)
+      || Number(anterior.resgatesPorDia) !== Number(fresco.resgatesPorDia); // v1139 — muda a ordem da dose
     if(mudouRegraDeFila && typeof refreshAllSections === "function") refreshAllSections();
   }catch(_){ /* sem rede/sessão ainda — a Home continua com o que já tinha */ }
 }
@@ -6730,6 +6724,9 @@ async function salvarCerebro(){
   const diasN = Number(diasRaw);
   const atendRaw = qs("#cerebroAtendimentosDia")?.value;
   const atendN = Number(atendRaw);
+  // v1139 — 0 é válido (desliga o resgate); só campo realmente vazio cai no padrão (via NaN).
+  const resgRaw = qs("#cerebroResgatesDia")?.value;
+  const resgN = String(resgRaw ?? "").trim() === "" ? NaN : Number(resgRaw);
   const descansoRaw = qs("#cerebroDiasDescanso")?.value;
   const descansoN = Number(descansoRaw);
   const config = {
@@ -6740,6 +6737,7 @@ async function salvarCerebro(){
     evitar: qs("#cerebroEvitar").value,
     diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
+    resgatesPorDia: (Number.isFinite(resgN) && resgN >= 0 && resgN <= 20) ? Math.round(resgN) : 2,
     diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
     diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
@@ -6793,9 +6791,10 @@ async function zerarCerebroTudo(){
       metodo: "", tom: "", evitar: "",
       diferenciais: "",
       diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
-      // Meta diária e dias de descanso são preferência de trabalho (como o período dos áudios),
-      // não aprendizado — ficam.
+      // Meta diária, resgates e dias de descanso são preferência de trabalho (como o período
+      // dos áudios), não aprendizado — ficam.
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,
+      resgatesPorDia: cpLerResgatesDiaDoFormulario(null),
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || 5,
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
@@ -9614,17 +9613,33 @@ function cpProbabilidadeFechamento(l){
   // mensagens mas recorrente + qualificado. Por isso engajamento tem teto BAIXO (30) e peso 1,
   // enquanto recorrência/perguntas/negociação (os fatores que indicam interesse REAL, não só
   // volume) têm peso maior.
-  const engajamento = Math.min((typeof mensagensDoCliente === 'function' ? mensagensDoCliente(l) : 0), 30);
-  const recorrencia = Math.min(Number(l?.clientMessageDays) || 0, 20);
-  const perguntas = Math.min(Number(l?.clientQuestionCount) || 0, 20);
-  let sinalNegociacao = 0;
-  try{
-    const ctx = (typeof contextoPrioridadeIA === 'function') ? contextoPrioridadeIA(l) : null;
-    if(ctx?.propostaAtiva) sinalNegociacao += 1;   // já se falou de valor/condição/entrada/financiamento
-    if(ctx?.retornoProposta) sinalNegociacao += 1; // negociação num ponto avançado (proposta/contraproposta)
-  }catch(_){}
+  // v1139 — RÉGUA ÚNICA DE 90 DIAS (aprovada pelo dono): a barrinha da Home já contava só os
+  // últimos 90 dias (v1017), mas a ORDEM seguia contando a conversa inteira desde sempre — papo
+  // de proposta de meses atrás pesava como negociação ativa, e um lead com barra "2" aparecia
+  // acima de um com barra "36" (foi exatamente a dúvida que o dono trouxe). Agora os fatores de
+  // conversa (engajamento, recorrência, perguntas, sinal de negociação) valem dentro da MESMA
+  // janela de 90 dias da barrinha — tela e ordem contam a mesma história. Quem esfriou não some:
+  // o resgate diário (cpAplicarResgatesNaFila) é o caminho de volta dele. Os campos *90d vêm do
+  // servidor (mesma varredura do _statsCache); dado antigo em cache, ainda sem os campos novos,
+  // cai nos totais históricos (o comportamento anterior) até a carga seguinte — por isso os
+  // fallbacks "?? l?.clientMessageDays"/"?? l?.clientQuestionCount"/mensagensDoCliente abaixo.
+  const engajamento = Math.min((typeof mensagensDoClienteRecente === 'function' ? mensagensDoClienteRecente(l)
+    : (typeof mensagensDoCliente === 'function' ? mensagensDoCliente(l) : 0)), 30);
+  const recorrencia = Math.min(Number(l?.clientMessageDays90d ?? l?.clientMessageDays) || 0, 20);
+  const perguntas = Math.min(Number(l?.clientQuestionCount90d ?? l?.clientQuestionCount) || 0, 20);
   const resp = Number(l?.daysSinceClientReply);
   const toque = Number(l?.daysSinceLastTouch);
+  let sinalNegociacao = 0;
+  // v1139 — o sinal de negociação vem do TEXTO da análise (não tem data própria), então usa a
+  // última fala do cliente como relógio: cliente calado há mais de 90 dias = negociação fria,
+  // não soma mais os +35/+70 pra sempre.
+  if(Number.isFinite(resp) && resp <= 90){
+    try{
+      const ctx = (typeof contextoPrioridadeIA === 'function') ? contextoPrioridadeIA(l) : null;
+      if(ctx?.propostaAtiva) sinalNegociacao += 1;   // já se falou de valor/condição/entrada/financiamento
+      if(ctx?.retornoProposta) sinalNegociacao += 1; // negociação num ponto avançado (proposta/contraproposta)
+    }catch(_){}
+  }
   // v944: falar por último não basta — se a última mensagem do cliente foi só uma despedida/
   // agradecimento ("Claro", "Obrigado pela atenção"), sem pergunta nem pedido, não existe bola
   // com o cliente esperando resposta. Só pondera quando a última fala dele de fato pede resposta.
@@ -9733,12 +9748,60 @@ function cpMetaAtendimentosDia(){
 }
 // Dose do dia (o número do card "Fazer agora"): meta do corretor menos quem já foi atendido hoje.
 function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.max(0, cpMetaAtendimentosDia() - cpAtendidosHojeTotal(items)); }
+// v1139 — RESGATE DIÁRIO (aprovado pelo dono junto com a régua de 90 dias): a ordem por
+// probabilidade deixa quem tem conversa rica sempre em cima — numa carteira grande, lead de
+// conversa curta afundava e ficava meses sem aparecer (o card "Sem atender 30d+" só crescia).
+// Agora, dentro da própria dose do dia, as ÚLTIMAS N vagas são de quem está há mais tempo sem
+// atendimento (mesma régua do card "Sem atender 30d+": nunca contatado primeiro, depois o
+// contato mais antigo — cpUltimoContatoCorretorTs). N é configurável no Cérebro ("Resgates por
+// dia", 0 desliga; "como tem atendimento por dia, crie resgates por dia" — palavras do dono),
+// padrão 2. Ninguém entra por fora: o resgate só REORDENA a fila elegível (cpFilaFazerAgora),
+// então as regras de entrada (descanso, dias de atendimento, cadência de quem nunca respondeu)
+// continuam decidindo quem pode aparecer.
+const CP_RESGATES_DIA_PADRAO = 2;
+function cpResgatesPorDia(){
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    const n = Number(cfg?.resgatesPorDia);
+    if(Number.isFinite(n) && n >= 0 && n <= 20) return Math.round(n);
+  }catch(_){}
+  return CP_RESGATES_DIA_PADRAO;
+}
+// Função pura (testável isolada): recebe a fila JÁ ordenada por probabilidade, o total de vagas
+// do dia e quantas delas são de resgate. Devolve a fila reordenada — topo por probabilidade, o
+// fim da dose com os resgatados, e o resto atrás na ordem de sempre. Se a fila inteira já cabe
+// nas vagas, não há o que resgatar (todo mundo aparece de qualquer jeito).
+function cpAplicarResgatesNaFila(fila, vagas, resgates){
+  const lista = Array.isArray(fila) ? fila.slice() : [];
+  const v = Math.max(0, Number(vagas) || 0);
+  const r = Math.max(0, Math.min(Number(resgates) || 0, v));
+  if(!r || lista.length <= v) return lista;
+  const quentes = lista.slice(0, v - r);
+  const resto = lista.slice(v - r);
+  const ts = (l) => { try{ return (typeof cpUltimoContatoCorretorTs === 'function') ? (cpUltimoContatoCorretorTs(l) || 0) : 0; }catch(_){ return 0; } };
+  const resgatados = resto.map((l, i) => ({ l, t: ts(l), i }))
+    .sort((a, b) => (a.t - b.t) || (a.i - b.i)) // 0 (nunca contatado) primeiro, depois o mais antigo
+    .slice(0, r).map(x => x.l);
+  return [...quentes, ...resgatados, ...resto.filter(l => !resgatados.includes(l))];
+}
+// A fila que as TELAS usam (Home e a lista do card "Fazer agora"): a ranqueada com o resgate
+// aplicado nas vagas de hoje (meta restante + "Atender mais um"). As CONTAGENS continuam usando
+// cpFilaFazerAgora direto — reordenar não muda quantos são.
+function cpFilaFazerAgoraComResgates(items){
+  const fila = (typeof cpFilaFazerAgora === 'function') ? cpFilaFazerAgora(items) : [];
+  const extra = (typeof state !== 'undefined' && state) ? Math.max(0, Number(state.fazerAgoraExtra || 0)) : 0;
+  const vagas = ((typeof cpFazerAgoraDose === 'function') ? cpFazerAgoraDose(items) : 0) + extra;
+  return cpAplicarResgatesNaFila(fila, vagas, cpResgatesPorDia());
+}
 window.cpNotaPrioridade = cpNotaPrioridade;
 window.cpFilaFazerAgora = cpFilaFazerAgora;
 window.cpFimDeSemana = cpFimDeSemana;
 window.cpAtendidosHojeTotal = cpAtendidosHojeTotal;
 window.cpFazerAgoraDose = cpFazerAgoraDose;
 window.cpMetaAtendimentosDia = cpMetaAtendimentosDia;
+window.cpResgatesPorDia = cpResgatesPorDia;
+window.cpAplicarResgatesNaFila = cpAplicarResgatesNaFila;
+window.cpFilaFazerAgoraComResgates = cpFilaFazerAgoraComResgates;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
@@ -9949,7 +10012,9 @@ window.cp786Badge=cp786Badge;
 function cpPrecisaAcaoHoje(l){ return cp786Categoria(l)==='agora'; } // "precisa de ação" = fila do Fazer agora
 function abrirFazerAgora(){
   const ativos=(state.itemsAtivos||[]).filter(leadEhAtivo);
-  const fila=cpFilaFazerAgora(ativos);
+  // v1139 — mesma fila da Home (com as vagas de resgate aplicadas), pra lista do card e a lista
+  // da Home nunca divergirem.
+  const fila=(typeof cpFilaFazerAgoraComResgates==='function')?cpFilaFazerAgoraComResgates(ativos):cpFilaFazerAgora(ativos);
   // v924 — dose = meta do dia (10) menos quem já foi atendido hoje (cpFazerAgoraDose); "Atender
   // +1" revela mais um além da meta, por vez, enquanto o corretor quiser continuar no mesmo dia.
   const restante=cpFazerAgoraDose(ativos);

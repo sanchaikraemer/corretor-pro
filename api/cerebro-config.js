@@ -11,6 +11,9 @@ const DEFAULTS = {
   evitar: "",
   diasImportacao: 90,
   atendimentosPorDia: 10,
+  // v1139 — vagas da dose diária reservadas pro resgate de quem está há mais tempo sem
+  // atendimento (0 desliga o resgate).
+  resgatesPorDia: 2,
   diasDescansoPosAtendimento: 5,
   // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Padrão segunda a
   // sexta, que era o comportamento cravado no código antes desta versão.
@@ -42,6 +45,15 @@ function clampDiasImportacao(v) {
 function clampAtendimentosDia(v) {
   const n = Number(v);
   return (Number.isFinite(n) && n >= 1 && n <= 50) ? Math.round(n) : 10;
+}
+
+// v1139 — vagas de resgate dentro da dose do "Fazer agora" ("como tem atendimento por dia, crie
+// resgates por dia" — pedido do dono). 0 é escolha VÁLIDA (desliga o resgate), então só
+// vazio/inválido cai no padrão 2 — diferente dos clamps vizinhos, onde 0 é inválido.
+function clampResgatesDia(v) {
+  if (v == null || String(v).trim() === "") return 2;
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 0 && n <= 20) ? Math.round(n) : 2;
 }
 
 // v1048 — pedido do dono: quantos dias de "descanso" um lead ganha depois de atendido, antes de
@@ -86,6 +98,7 @@ function sanitizeCerebroConfig(valor = {}) {
     evitar: typeof v.evitar === "string" ? capTexto(v.evitar) : "",
     diasImportacao: clampDiasImportacao(v.diasImportacao),
     atendimentosPorDia: clampAtendimentosDia(v.atendimentosPorDia),
+    resgatesPorDia: clampResgatesDia(v.resgatesPorDia),
     diasDescansoPosAtendimento: clampDiasDescanso(v.diasDescansoPosAtendimento),
     diasAtendimento: normalizarDiasAtendimento(v.diasAtendimento),
     regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
@@ -399,6 +412,7 @@ export default async function handler(req, res) {
       evitar: typeof body.evitar === "string" ? capTexto(body.evitar) : DEFAULTS.evitar,
       diasImportacao: clampDiasImportacao(body.diasImportacao),
       atendimentosPorDia: clampAtendimentosDia(body.atendimentosPorDia),
+      resgatesPorDia: clampResgatesDia(body.resgatesPorDia),
       diasDescansoPosAtendimento: clampDiasDescanso(body.diasDescansoPosAtendimento),
       diasAtendimento: normalizarDiasAtendimento(body.diasAtendimento),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
