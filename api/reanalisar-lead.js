@@ -333,12 +333,32 @@ async function reanalisarLeadHandler702(req, res) {
     const lembrete = { ...(prev.lembrete || {}), quando: q.toISOString(), auto: false };
     if (!lembrete.motivo) lembrete.motivo = "Retomar contato";
     const merged = { ...prev, lembrete };
+    // v1148 — pedido do dono: "se for feito agendamento, tem que marcar como atendido também,
+    // automaticamente, como se copiasse sugestão de mensagem". Faz sentido: agendar um retorno é
+    // uma ação REAL dele com aquele cliente naquele dia — e é o mesmo evento (contato_manual) que
+    // a cópia de mensagem e o botão "Marcar atendimento" já registram. Sem isso, o cliente que ele
+    // acabou de agendar continuava contando como "sem atender" e voltava pra fila do dia.
+    // Um agendamento por dia = um atendimento (se agendar de novo no mesmo dia, atualiza a hora).
+    {
+      const aprend = { ...(merged.aprendizado || {}) };
+      const evs = Array.isArray(aprend.eventos) ? [...aprend.eventos] : [];
+      const quando = new Date().toISOString();
+      const brA = agoraBR(new Date(quando));
+      const jaHoje = evs.findIndex(e => e?.evento === "contato_manual" && e?.detalhes?.de === "agendamento"
+        && e?.quando && agoraBR(new Date(e.quando)).dataBR === brA.dataBR);
+      const ev = { evento: "contato_manual", estilo: null, detalhes: { tipo: "Agendamento", de: "agendamento" }, quando };
+      if (jaHoje >= 0) evs[jaHoje] = ev; else evs.push(ev);
+      aprend.eventos = evs.slice(-50);
+      merged.aprendizado = aprend;
+    }
     const { error: rgErr } = await supabase
       .from("whatsapp_processamentos")
       .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
       .eq("id", id).eq("organization_id", organizationId);
     if (rgErr) return json(res, 500, { ok: false, error: rgErr.message });
-    return json(res, 200, { ok: true, reagendado: true, quando: q.toISOString() });
+    // atendimentoQuando: o horário que ficou gravado como atendimento (o app usa pra marcar na
+    // tela na hora, sem esperar a carteira recarregar).
+    return json(res, 200, { ok: true, reagendado: true, quando: q.toISOString(), atendimentoRegistrado: true, atendimentoQuando: merged.aprendizado.eventos[merged.aprendizado.eventos.length - 1]?.quando || null });
   }
 
   // Excluir o lembrete da agenda (rápido, sem reanalisar). Marca lembreteRemovido pra NÃO

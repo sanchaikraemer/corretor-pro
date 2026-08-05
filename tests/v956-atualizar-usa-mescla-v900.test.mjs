@@ -13,7 +13,10 @@ import { _mesclarTimelinesV681, _assinaturaTimelineV681 } from '../api/_persiste
 const leadUpdateSrc = fs.readFileSync(new URL('../api/lead-update.js', import.meta.url), 'utf8');
 
 // 1. O import busca as funções de _persistence.js.
-assert.match(leadUpdateSrc, /_assinaturaTimelineV681, _mesclarTimelinesV681 \} from "\.\/_persistence\.js"/,
+// v1148 — a lista de importados cresceu (entrou _mesclarAnaliseV681, usada pela ação de juntar
+// dois cadastros do mesmo cliente). O que este teste garante segue igual: as funções de mescla
+// vêm de _persistence.js, nunca de uma cópia local.
+assert.match(leadUpdateSrc, /_assinaturaTimelineV681, _mesclarTimelinesV681(, _mesclarAnaliseV681)? \} from "\.\/_persistence\.js"/,
   'lead-update.js importa as funções de mescla de _persistence.js');
 
 // 2. acaoAtualizarComEvolucao usa as funções importadas, não uma versão local.

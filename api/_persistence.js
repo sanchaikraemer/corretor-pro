@@ -948,7 +948,10 @@ function _semScoreComercial(value) {
   return out;
 }
 
-function _mesclarAnaliseV681(anterior = {}, nova = {}) {
+// v1148 — exportada pra a ação de juntar dois cadastros do mesmo cliente (api/lead-update.js)
+// usar exatamente a MESMA mesclagem de análise que a reimportação usa. Duas regras diferentes pra
+// juntar dados do mesmo cliente é como se cria divergência silenciosa.
+export function _mesclarAnaliseV681(anterior = {}, nova = {}) {
   anterior = _semScoreComercial(anterior || {});
   nova = _semScoreComercial(nova || {});
   const merged = { ...anterior, ...nova };
