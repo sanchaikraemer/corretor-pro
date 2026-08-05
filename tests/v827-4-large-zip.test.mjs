@@ -6,7 +6,10 @@ const storage = fs.readFileSync(new URL('../api/processar-storage.js', import.me
 const vercel = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
 
 // v827-4 (ZIP grande) — extrai SOMENTE os áudios que serão transcritos na janela.
-assert.match(pipeline, /const nomesNecessarios = new Set\(audiosParaTranscrever\.map\(normalizeName\)\)/);
+// v1141 — e nem todos esses: quem já tem transcrição salva deste cliente sai da lista antes da
+// extração (não descomprime, não sobe pro Storage, não paga transcrição de novo).
+assert.match(pipeline, /const nomesNecessarios = new Set\(audiosParaTranscrever\.map\(normalizeName\)\.filter\(nome => !jaTranscritos\.has\(nome\)\)\)/);
+assert.match(pipeline, /const jaTranscritos = new Set\(Object\.keys\(options\.audiosJaTranscritos \|\| \{\}\)\.map\(normalizeName\)\)/);
 assert.match(pipeline, /if \(!nomesNecessarios\.has\(base\)\) continue/);
 assert.doesNotMatch(pipeline, /for \(const fullName of audioFiles\) \{\s*const entry = zip\.files\[fullName\]/);
 

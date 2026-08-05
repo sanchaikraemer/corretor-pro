@@ -369,7 +369,11 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   }
 
   const buffer = await baixarBuffer(storage, storagePath); // único download integral do ZIP
-  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId }); // única extração
+  // v1141 — os áudios que já têm transcrição guardada deste cliente (cacheDoLead, casados pelo
+  // nome do arquivo) nem são descomprimidos: o texto deles já está pronto e entra direto em
+  // `transcriptions` logo abaixo. Antes eles eram extraídos e subiam pro Storage só pra calcular
+  // um hash que ninguém usaria — numa reimportação sem novidade era quase toda a espera da etapa.
+  const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId, audiosJaTranscritos: cacheDoLead }); // única extração
   const extracted = prep._extractedFiles || {};
   delete prep._extractedFiles;
 
@@ -377,6 +381,13 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   const audioHashes = {};
   const transcriptions = {};
   const arquivosTemporarios = [];
+  // O reaproveitamento por cliente é registrado aqui (e não dentro do upload) justamente porque
+  // esses áudios não passam mais pelo upload. `audiosParaTranscrever` é a lista da janela: só
+  // conta como reaproveitado o áudio que ESTA importação realmente precisaria transcrever.
+  for (const nome of (prep.audiosParaTranscrever || []).map(normalizeName)) {
+    const doLead = cacheDoLead[nome];
+    if (doLead) transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
+  }
   // v827-4 (ZIP grande): sobe os áudios em LOTES paralelos, senão um upload de cada vez
   // estourava o tempo da função serverless em ZIPs com muitos áudios.
   const CONCORRENCIA_UPLOAD = 4;
@@ -394,17 +405,12 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
     const hash = hashAudio(audioBuffer);
     audioStorage[nome] = audioPath;
     audioHashes[nome] = hash;
-    // Primeiro tenta pelo histórico do MESMO cliente (nome do arquivo — mais confiável, ver
-    // nota acima de transcricoesDoLeadAnterior). Só cai pro cache por hash de conteúdo se não
-    // achou nada ali (esse cache por hash raramente bate entre importações separadas, mas não
-    // custa manter como reforço).
-    const doLead = cacheDoLead[nome];
-    if (doLead) {
-      transcriptions[nome] = { status: "transcrito_reaproveitado", text: doLead, reused: true, viaLeadAnterior: true };
-    } else {
-      const cached = await carregarTranscricaoCache(storage, hash, organizationId);
-      if (cached) transcriptions[nome] = cached;
-    }
+    // O histórico do MESMO cliente (nome do arquivo — mais confiável, ver nota acima de
+    // transcricoesDoLeadAnterior) já foi resolvido antes desta etapa: quem chega aqui não tinha
+    // texto pronto. Sobra o cache por hash de conteúdo, que raramente bate entre importações
+    // separadas, mas não custa manter como reforço.
+    const cached = await carregarTranscricaoCache(storage, hash, organizationId);
+    if (cached) transcriptions[nome] = cached;
     arquivosTemporarios.push(audioPath);
   };
   for (let i = 0; i < entradas.length; i += CONCORRENCIA_UPLOAD) {
@@ -498,10 +504,22 @@ export default async function handler(req, res) {
         .catch((e) => { avisoCacheAudio = e?.message || String(e); return null; });
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
       const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, organizationId });
+      // v1141 — o cliente já salvo é descoberto AQUI (por telefone/arquivo/nome) e essa descoberta
+      // era jogada no lixo: só servia pra pegar o cache de áudio. A etapa de análise não recebia o
+      // id, então o servidor tratava TODA importação como conversa nova — reanalisava (e cobrava) a
+      // conversa inteira mesmo quando não havia uma única mensagem nova. Devolvendo o id, a análise
+      // consegue comparar com o que já está salvo e cobrar só o que é realmente novo.
+      const leadAnterior = matchAnterior?.row?.id ? {
+        id: String(matchAnterior.row.id),
+        via: String(matchAnterior.via || ""),
+        mensagensSalvas: Array.isArray(matchAnterior.row.timeline_json) ? matchAnterior.row.timeline_json.length : 0,
+        transcricoesDisponiveis: Object.keys(cacheDoLead).length
+      } : null;
       return json(res, 200, {
         ok: true, bucket, path: storagePath, importId, manifestPath: `organizations/${organizationId}/imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
         ...(avisoCacheAudio ? { avisoCacheAudio } : {}),
+        leadAnterior,
         audioStorage: manifest.audioStorage,
         cachedTranscriptions: manifest.transcriptions || {}
       });
@@ -577,10 +595,18 @@ export default async function handler(req, res) {
     if (action === "analisar") {
       let existingTimeline = Array.isArray(body?.existingTimeline) ? body.existingTimeline : [];
       const existingLeadId = body?.existingLeadId ? String(body.existingLeadId) : "";
-      if (existingLeadId && !existingTimeline.length) {
-        const { data: anterior, error: anteriorError } = await supabase.from("whatsapp_processamentos").select("timeline_json").eq("id", existingLeadId).eq("organization_id", organizationId).maybeSingle();
+      // v1141 — junto com a conversa salva vem a ANÁLISE salva. Sem novidade nenhuma na conversa,
+      // ela é reaproveitada como está e nenhuma chamada de IA acontece (ver
+      // finalizarAnaliseDaConversa). Antes, reimportar o mesmo arquivo pagava a análise inteira
+      // de novo pra devolver praticamente o mesmo texto.
+      let previousAnalysis = null;
+      if (existingLeadId) {
+        const { data: anterior, error: anteriorError } = await supabase.from("whatsapp_processamentos").select("timeline_json,resultado_analise").eq("id", existingLeadId).eq("organization_id", organizationId).maybeSingle();
         if (anteriorError) throw new Error(`Não consegui recuperar o histórico anterior: ${anteriorError.message}`);
-        if (anterior) existingTimeline = Array.isArray(anterior.timeline_json) ? anterior.timeline_json : existingTimeline;
+        if (anterior) {
+          if (!existingTimeline.length) existingTimeline = Array.isArray(anterior.timeline_json) ? anterior.timeline_json : existingTimeline;
+          previousAnalysis = anterior.resultado_analise && typeof anterior.resultado_analise === "object" ? anterior.resultado_analise : null;
+        }
       }
       const result = await finalizarAnaliseDaConversa({
         txtFile: body?.txtFile, rawText: body?.rawText, messages: body?.messages,
@@ -588,7 +614,7 @@ export default async function handler(req, res) {
         transcriptionMap: body?.transcriptionMap, janelaConversa: body?.janelaConversa,
         ignoredFilesCount: body?.ignoredFilesCount, ignoredFiles: body?.ignoredFiles,
         audiosTotalNoZip: body?.audiosTotalNoZip, audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
-        metricsBase: body?.metricsBase, existingTimeline, previousAnalysis: null, existingLeadId,
+        metricsBase: body?.metricsBase, existingTimeline, previousAnalysis, existingLeadId,
         audiosReaproveitados: body?.audiosReaproveitados, audiosNovosSolicitados: body?.audiosNovosSolicitados,
         cerebroConfig: body?.cerebroConfig || null,
         organizationId

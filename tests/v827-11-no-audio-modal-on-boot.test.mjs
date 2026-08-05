@@ -12,7 +12,10 @@ assert.match(check, /if\(!cameFromShare\)\{[\s\S]*return \{handled:false\};/, 'a
 assert.ok(check.indexOf('if(!cameFromShare)') < check.indexOf('localizarSharePendente'), 'guarda de abertura normal deve vir antes da leitura do IndexedDB');
 assert.match(check, /15\*60\*1000/, 'URL antiga de compartilhamento precisa expirar');
 assert.match(check, /staleShare:true/, 'share antigo deve ser ignorado explicitamente');
-assert.match(check, /document\.querySelector\('#periodoAudioModal'\)\?\.remove\(\)/, 'modal residual deve ser removido');
+// v1141 — a janela "Período dos áudios" deixou de existir (a importação usa o padrão do Cérebro),
+// então não há mais modal residual pra limpar aqui. O que este teste guarda continua valendo: uma
+// abertura normal do app, ou um compartilhamento antigo, NUNCA começa uma importação sozinho.
+assert.doesNotMatch(app, /periodoAudioModal/, 'a janela do período não existe mais em nenhum lugar');
 
 const processStart = app.indexOf('async function processFile(file, options = {})');
 const processEnd = app.indexOf('async function readShareDebug()', processStart);

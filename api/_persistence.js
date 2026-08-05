@@ -605,14 +605,34 @@ export function _digitsIdentity(value = "") {
   return String(value || "").replace(/\D/g, "");
 }
 
+// v1141 — CAUSA REAL do "0 reaproveitados" que sobreviveu à v954/v1022/v1026/v1027.
+//
+// O MESMO arquivo chega nesta função com dois nomes diferentes:
+//   • na hora de SALVAR, o nome como está no aparelho — "Conversa do WhatsApp com X-enxuto.zip"
+//     (com espaços);
+//   • na hora de PREPARAR (onde o cache de transcrição do cliente é procurado), o nome do objeto
+//     no Storage, que passou por sanitizeFileNameUpload — "Conversa-do-WhatsApp-com-X-enxuto.zip"
+//     (espaços viraram traço).
+//
+// A ordem antiga tirava o prefixo "Conversa do WhatsApp com" ANTES de transformar traço/underscore
+// em espaço: a versão com espaços virava "x" e a sanitizada virava "conversa do whatsapp com x".
+// Duas chaves diferentes pro mesmo arquivo → a busca pelo cliente já salvo falhava exatamente na
+// etapa que reaproveita as transcrições → toda reimportação transcrevia (e pagava) tudo de novo,
+// e o contador mostrava "0 reaproveitados" pra sempre.
+//
+// Agora os separadores são normalizados PRIMEIRO, e só depois caem os sufixos técnicos e o
+// prefixo — as duas formas do mesmo arquivo chegam na mesma chave.
 function _cleanArquivoIdentity(value = "") {
-  return String(value || "")
+  let t = String(value || "")
     .replace(/\.zip$/i, "")
     .replace(/\.txt$/i, "")
-    .replace(/-enxuto$/i, "")
-    .replace(/\s*\(\d+\)\s*$/g, "")
-    .replace(/^Conversa do WhatsApp com\s+/i, "")
     .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Sufixos técnicos podem vir em qualquer ordem ("X enxuto (1)" ou "X (1) enxuto").
+  for (let i = 0; i < 3; i++) t = t.replace(/\s*(?:enxuto|\(\d+\))$/i, "").trim();
+  return t
+    .replace(/^Conversa do WhatsApp com\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }
