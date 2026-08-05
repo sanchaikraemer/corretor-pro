@@ -484,6 +484,21 @@ function invalidarLeadDetail(id){
   if(id == null) _leadDetailCache.clear();
   else _leadDetailCache.delete(String(id));
 }
+// v1135 — carimba que a carteira em memória acabou de ser preenchida com o que o servidor
+// devolveu. Chamado SÓ onde state.todosLeads recebe resultado de getLeadsData — nunca onde ele
+// recebe uma cópia da própria memória, senão o carimbo mentiria.
+//
+// Se alguém esquecer de chamar isto num lugar novo, o pior que acontece é a tela revalidar à toa
+// (fica um pouco mais lenta). O contrário — carimbar sem ter buscado — mostraria dado velho como
+// se fosse novo, que é o defeito que esta peça existe pra impedir. A direção da falha importa.
+function cpCarteiraSincronizada(){
+  state.carteiraRevisao = Number(state.dataRevision) || 0;
+}
+function cpCarteiraEstaEmDia(){
+  return Array.isArray(state.todosLeads) && state.todosLeads.length > 0
+    && Number(state.carteiraRevisao) === (Number(state.dataRevision) || 0);
+}
+
 function invalidarLeadsCache(){
   _leadsCache = { ts: 0, data: null, inflight: null };
   _leadsForceFresh = true; // a próxima busca ignora o cache de 30s do servidor
@@ -1012,6 +1027,7 @@ async function loadRecentLeads(force = false){
     if(data?.ok && Array.isArray(data.items)){
       state.todosLeads = data.items.map(limparLead);
       state.leads = state.todosLeads.slice(0, 8);
+      cpCarteiraSincronizada(); // v1135 — veio do servidor: a memória está em dia
     }
   }catch(_){
     // Não bloqueia o app se o banco ainda não responder.
@@ -1025,6 +1041,7 @@ async function loadTodosLeadsBusca(){
     const data = await res.json().catch(()=>({ok:false,items:[]}));
     if(res.ok && data.ok && Array.isArray(data.items)){
       state.todosLeads = data.items.map(limparLead);
+      cpCarteiraSincronizada(); // v1135 — veio do servidor: a memória está em dia
     }
   }catch(_){ /* silencioso */ }
 }
@@ -3856,6 +3873,10 @@ async function carregarDashboard(force){
       return;
     }
     _processarDashboard(data);
+    // v1135 — só aqui, no caminho que REALMENTE foi ao servidor. _processarDashboard também é
+    // chamado com uma cópia da própria memória (o atalho logo acima), e carimbar lá dentro faria
+    // a memória velha se declarar em dia.
+    cpCarteiraSincronizada();
   }catch(err){ console.warn("carregarDashboard:", err); }
 }
 async function _processarDashboard(data){
@@ -5751,8 +5772,24 @@ async function carregarAgenda(){
     box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
   }
   };
-  if(state.todosLeads?.length){
+  // v1135 — ANTES: `if(state.todosLeads?.length){ renderAgenda(...); return; }`, sem nenhuma
+  // pergunta sobre a memória estar em dia. Era o buraco por onde passavam os bugs de "mexi e a
+  // tela não mudou" (v1125 arquivar, v1133 excluir lembrete): uma camada acima já sabia que os
+  // dados tinham mudado e mandava recarregar, e aqui dentro a Agenda se redesenhava do mesmo
+  // pedaço de memória velho, anulando tudo.
+  //
+  // Agora são duas coisas separadas: PINTAR RÁPIDO (a memória serve pra isso, mesmo velha — é
+  // melhor que "Carregando...") e ESTAR CERTO (se a memória não está em dia, vai ao servidor e
+  // repinta). Quem esquecer de sincronizar a memória numa ação nova não quebra mais a tela: ela
+  // só revalida.
+  if(Array.isArray(state.todosLeads) && state.todosLeads.length){
     renderAgenda({ items: state.todosLeads });
+    if(cpCarteiraEstaEmDia()) return;
+    try{
+      const data = await getLeadsData();
+      if(state.active !== "agenda") return; // saiu da tela enquanto buscava
+      if(data?.ok !== false) renderAgenda(data);
+    }catch(_){ /* já tem a lista pintada; falha de rede não pode apagá-la */ }
     return;
   }
   box.innerHTML = '<div class="small" style="color:var(--muted);padding:18px 0;text-align:center">Carregando...</div>';
@@ -10096,6 +10133,7 @@ async function iniciarDireciona(){
     if(data?.ok && Array.isArray(data.items)){
       state.todosLeads = data.items;
       state.leads = data.items.slice(0,8);
+      cpCarteiraSincronizada(); // v1135 — veio do servidor: a memória está em dia
     }
   }catch(err){ console.warn("iniciarDireciona", err); }
 }
