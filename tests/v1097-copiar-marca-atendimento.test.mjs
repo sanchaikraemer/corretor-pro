@@ -50,11 +50,13 @@ const copiar = extrair(/window\.cp704CopyMsg=async function\(k\)\{[\s\S]*?\n  \}
 }
 
 // ── 4. A gravação do atendimento continua tentando de novo e avisando se não conseguir ────────
+// v1142 — as duas tentativas escritas na mão viraram um laço de 3, com 30s cada (igual ao botão
+// "Marcar atendimento"), e o aviso de falha ficou mais direto porque agora ele vem junto com a
+// marca local sendo DESFEITA: a tela não mostra mais "Atendido" quando o banco não recebeu.
 {
   const fn = extrair(/async function registrarMensagemEnviada\(id, msg\)\{[\s\S]*?\n\}/, 'registrarMensagemEnviada');
-  const tentativas = (fn.match(/registrarAtendimentoDaCopia\(\)/g) || []).length;
-  assert.ok(tentativas >= 2, `precisa tentar mais de uma vez antes de desistir (achei ${tentativas})`);
-  assert.match(fn, /não consegui confirmar o atendimento/i,
+  assert.match(fn, /tentativa<=3 && !atendimentoConfirmado/, 'precisa tentar 3 vezes antes de desistir');
+  assert.match(fn, /NÃO consegui registrar o atendimento/,
     'se nem assim gravar, o corretor precisa ser avisado — nunca ficar achando que marcou');
 }
 
