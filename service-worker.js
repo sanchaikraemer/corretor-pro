@@ -247,3 +247,79 @@ async function handleShare(request) {
 
   return redirect();
 }
+
+// ============ v1138 — LEMBRETE DIÁRIO DE CLIENTES SEM RESPOSTA ============
+// A pesquisa de mercado da auditoria (05/08/2026): a maioria das vendas sai depois do 5º contato,
+// e quase metade dos corretores para no 1º. O app sabe QUEM está esperando resposta — mas só
+// avisava dentro do app (sino). Isto aqui é o aviso de fora: uma notificação por dia, com o app
+// FECHADO, quando há cliente esperando há mais de 24h.
+//
+// Sem servidor nenhum: o app (quando aberto) grava um retrato compacto no IndexedDB — total de
+// clientes esperando + até 3 nomes (ver cpAtualizarRetratoCobranca em app.js) — e o navegador
+// acorda este worker periodicamente (Periodic Background Sync; Android com o app instalado).
+// O worker NÃO tem sessão nem token: ele só lê esse retrato local. Nenhum dado sai do aparelho.
+const NOTIF_DB = 'corretor-pro-notif';
+function swNotifDB() {
+  return new Promise((resolve, reject) => {
+    const rq = indexedDB.open(NOTIF_DB, 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+function swNotifLer(chave) {
+  return swNotifDB().then(db => new Promise(resolve => {
+    const tx = db.transaction('kv', 'readonly');
+    const rq = tx.objectStore('kv').get(chave);
+    rq.onsuccess = () => { resolve(rq.result); db.close(); };
+    rq.onerror = () => { resolve(null); db.close(); };
+  })).catch(() => null);
+}
+function swNotifGravar(chave, valor) {
+  return swNotifDB().then(db => new Promise(resolve => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(valor, chave);
+    tx.oncomplete = () => { resolve(); db.close(); };
+    tx.onerror = () => { resolve(); db.close(); };
+  })).catch(() => {});
+}
+
+self.addEventListener('periodicsync', event => {
+  if (event.tag !== 'cp-cobranca-diaria') return;
+  event.waitUntil((async () => {
+    const retrato = await swNotifLer('retrato');
+    if (!retrato || !Number(retrato.total)) return;
+    // Anti-incômodo: no máximo um aviso a cada 20h (o navegador pode acordar mais vezes).
+    const ultimo = Number(await swNotifLer('ultimoAviso') || 0);
+    if (Date.now() - ultimo < 20 * 60 * 60 * 1000) return;
+    // Honestidade com retrato velho: o app fechado não recalcula. Até 48h, o número vale; depois
+    // disso o texto vira genérico (sem número, que pode ter mudado); com mais de 30 dias, para de
+    // avisar — insistir com dado de um mês só faria o corretor silenciar o app de vez.
+    const idade = Date.now() - Number(retrato.calculadoEm || 0);
+    if (idade > 30 * 24 * 60 * 60 * 1000) return;
+    const total = Number(retrato.total);
+    const nomes = Array.isArray(retrato.nomes) && retrato.nomes.length
+      ? ` — ${retrato.nomes.slice(0, 3).join(', ')}${total > 3 ? '…' : ''}` : '';
+    const corpo = idade > 48 * 60 * 60 * 1000
+      ? 'Há clientes esperando sua resposta no Corretor Pro. Abra pra ver quem.'
+      : (total === 1
+        ? `1 cliente está esperando sua resposta há mais de 24 horas${nomes}.`
+        : `${total} clientes estão esperando sua resposta há mais de 24 horas${nomes}.`);
+    await self.registration.showNotification('Corretor Pro', {
+      body: corpo,
+      tag: 'cp-cobranca-diaria',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: '/' }
+    });
+    await swNotifGravar('ultimoAviso', Date.now());
+  })());
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(janelas => {
+    for (const j of janelas) { if ('focus' in j) return j.focus(); }
+    return self.clients.openWindow('/');
+  }));
+});
