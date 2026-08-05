@@ -2608,19 +2608,53 @@ ${observacoesManuaisTexto}
 ${timelineText}`;
 
   try {
-    // v946: 1 retry (não 3) com backoff curto — a chamada principal não tinha nenhuma rede contra
-    // erro transitório (429/5xx/timeout), diferente da transcrição (que já usa withRetries). Preso
-    // a 2 tentativas de propósito: as rotas que chamam analyzeWithBrain têm maxDuration:60 no
-    // vercel.json: 2 tentativas × até 26s + 800ms de espera ≈ 52.8s, com margem segura sob o teto —
-    // 3 tentativas estourariam os 60s antes da nossa própria lógica desistir.
-    const r = await withRetries(() => chamarGPT4Json({
-      openai,
-      systemPrompt: systemPromptAnalise,
-      prompt,
-      model: modeloAnalise(),
-      maxOutputTokens: Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600),
-      timeout: Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 26000)
-    }), { tries: 2, baseDelayMs: 800 });
+    // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
+    // v1140 — caso real do dono (prints de 05/08/2026, importação travando aos 92% em "validando
+    // as três mensagens pelo Cérebro"): quando a análise REAL precisa de mais de 26s (conversa +
+    // Cérebro grandes), repetir a MESMA chamada curta falha sempre — as duas tentativas estouram
+    // em sequência e o corretor espera ~2 minutos pra receber "Não foi possível analisar".
+    // Repetição conserta erro passageiro, não lentidão. Desenho novo, no mesmo orçamento (~52s,
+    // folga sob o maxDuration:60 das rotas — conta travada pelos testes v947/v1140):
+    //   1ª tentativa: modelo principal com janela GRANDE (34s por padrão) — cobre a análise
+    //      honesta que só precisa de mais fôlego;
+    //   2ª tentativa (se a 1ª falhar por timeout OU erro transitório): modelo rápido
+    //      (modeloTarefasSimples) com o tempo que sobrou — análise um pouco mais simples é
+    //      infinitamente melhor que nenhuma (mesmo prompt, mesmas regras do Cérebro; o resultado
+    //      leva modeloFallback:true pra ficar registrado).
+    const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 52000);
+    const inicioAnaliseTs = Date.now();
+    const janelaPrincipalMs = Math.min(Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 34000), Math.max(15000, orcamentoAnaliseMs - 14000));
+    const maxTokensAnalise = Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600);
+    let r = null, erroPrincipal = null, modeloFallbackUsado = false;
+    try {
+      r = await chamarGPT4Json({
+        openai,
+        systemPrompt: systemPromptAnalise,
+        prompt,
+        model: modeloAnalise(),
+        maxOutputTokens: maxTokensAnalise,
+        timeout: janelaPrincipalMs
+      });
+    } catch (e) { erroPrincipal = e; }
+    if (!r) {
+      // 2s de folga pra resposta ainda ser serializada/gravada antes do teto da Vercel.
+      const sobraMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
+      if (sobraMs >= 10000) {
+        try {
+          r = await chamarGPT4Json({
+            openai,
+            systemPrompt: systemPromptAnalise,
+            prompt,
+            model: modeloTarefasSimples(),
+            maxOutputTokens: maxTokensAnalise,
+            timeout: sobraMs
+          });
+          modeloFallbackUsado = true;
+        } catch (e2) { throw erroPrincipal || e2; }
+      } else {
+        throw erroPrincipal || new Error("A análise não coube no orçamento de tempo desta chamada.");
+      }
+    }
     const parsedRaw = r.parsed;
     const completion = r.response;
     await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloAnalise(), rota: "analise", usage: completion?.usage });
@@ -2647,6 +2681,9 @@ ${timelineText}`;
       // mostrar no cabeçalho do lead ("Última análise" ficava sempre vazia nesse caso).
       geradoEm: new Date().toISOString(),
       summary: clean(raw.summary),
+      // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
+      // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
+      ...(modeloFallbackUsado ? { modeloFallback: true } : {}),
       diagnostico: {
         ultimaPessoaFalar: clean(d.ultimaPessoaFalar, "Não identificado"),
         ultimoCompromissoCliente: clean(d.ultimoCompromissoCliente, "Não identificado"),
