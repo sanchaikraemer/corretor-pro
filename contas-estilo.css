@@ -72,8 +72,10 @@ label{ display:block; font-size:13px; font-weight:700; color:var(--cp-soft); mar
    Agora `select` usa exatamente a mesma regra de `input` — mesma altura, mesma borda, mesma cor. */
 input, select{
   width:100%;
-  padding:11px 13px;
-  border-radius:10px;
+  /* v1134 — campos mais altos e mais arredondados (era 11px/10px). Alvo de toque maior no celular,
+     que é onde o corretor usa. Vale pras telas de conta inteiras, não só a de entrar. */
+  padding:14px 14px;
+  border-radius:13px;
   border:1px solid var(--cp-border);
   background:var(--cp-sidebar);
   color:var(--cp-text);
@@ -130,9 +132,10 @@ input:focus, select:focus{
 button{
   margin-top:22px;
   width:100%;
-  padding:12px;
+  /* v1134 — mesmo aumento dos campos: botão mais alto e mais arredondado. */
+  padding:15px;
   border:none;
-  border-radius:10px;
+  border-radius:13px;
   background:var(--cp-coral);
   color:#fff;
   font-weight:800;
@@ -143,6 +146,36 @@ button.secundario{ background:var(--cp-panel-2); color:var(--cp-text); }
 button.pequeno{ width:auto; padding:9px 16px; margin-top:0; font-size:13px; }
 .erro{ color:#ff8f87; font-size:13px; margin-top:12px; }
 .ok{ color:#5fe0a0; font-size:13px; margin-top:12px; }
+/* v1134 — tela de entrar em dois estados (ver o comentário no topo de entrar.html).
+   ESTADO 1, o convite: é a primeira coisa que um corretor que nunca ouviu falar do produto vê
+   quando recebe o link. Sem cartão, sem formulário — só o que o produto faz e um botão. */
+.selo-teste{
+  display:inline-block;
+  font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--cp-coral); background:rgba(255,98,88,.12);
+  border:1px solid rgba(255,98,88,.34); border-radius:999px;
+  padding:6px 12px; margin-bottom:16px;
+}
+h1.chamada{ font-size:25px; line-height:1.22; letter-spacing:-.02em; margin:0 0 10px; }
+h1.chamada em{ color:var(--cp-coral); font-style:normal; }
+p.apoio{ font-size:14px; color:var(--cp-soft); line-height:1.55; margin:0 0 4px; }
+
+/* ESTADO 2, o login: "Criar conta grátis" deixou de ser a menor letra da tela e virou botão.
+   Fundo transparente de propósito — continua sendo a ação secundária de quem já tem conta. */
+.separador-conta{
+  display:flex; align-items:center; gap:12px;
+  margin:20px 0 0; color:var(--cp-muted); font-size:11.5px;
+}
+.separador-conta::before, .separador-conta::after{
+  content:""; flex:1; height:1px; background:var(--cp-border);
+}
+button.btn-fora{
+  margin-top:12px;
+  background:transparent; color:var(--cp-text);
+  border:1.5px solid var(--cp-border); font-weight:800;
+}
+button.btn-fora:hover{ background:rgba(255,255,255,.04); }
+
 .linkbar{ text-align:center; margin-top:18px; font-size:13px; color:var(--cp-soft); }
 a{ color:var(--cp-coral); text-decoration:none; font-weight:700; }
 .rodape-conta{

@@ -10,6 +10,23 @@
 </head>
 <body>
   <div>
+    <!-- v1134 — DOIS ESTADOS NA MESMA TELA, decisão do dono ("os dois").
+         Quem chega pela primeira vez neste aparelho vê o CONVITE: o que o produto faz e um botão
+         só, criar conta. Quem já entrou alguma vez cai direto no LOGIN, sem explicação nenhuma —
+         esse não quer ler nada, quer digitar a senha. Antes, uma tela só atendia os dois e por isso
+         não atendia bem nenhum: o primeiro corretor que recebia o link do dono via um formulário de
+         senha de uma conta que ele ainda não tinha. Quem decide qual estado aparece é a memória do
+         próprio aparelho (ver cpJaEntrouAqui, no fim do arquivo). -->
+    <div id="convite" style="display:none;max-width:400px">
+      <img src="logo-cp.png" alt="" style="width:52px;height:52px;border-radius:14px;display:block;margin-bottom:20px">
+      <div class="selo-teste">7 dias grátis · sem cartão</div>
+      <h1 class="chamada">Suas conversas do WhatsApp viram <em>plano de ação</em>.</h1>
+      <p class="apoio">Exporte uma conversa e o Corretor Pro diz quem atender agora, por quê, quando e o que falar.</p>
+      <button type="button" onclick="location.href='cadastro.html'">Criar minha conta grátis</button>
+      <div class="linkbar" style="text-align:left">Já tem conta? <a href="#" onclick="mostrarLogin(true); return false;">Entrar</a></div>
+    </div>
+
+    <div id="areaLogin" style="display:none">
     <div class="marca">
       <img src="logo-cp.png" alt="">
       <b>Corretor <strong>Pro</strong></b>
@@ -29,12 +46,17 @@
       <div id="msg"></div>
 
       <div class="linkbar"><a href="recuperar-senha.html">Esqueci minha senha</a></div>
-      <div class="linkbar">Não tem conta? <a href="cadastro.html">Criar conta grátis</a></div>
+      <!-- v1134 — "Criar conta grátis" era a menor letra da tela, num rodapé. Virou botão de
+           verdade: é a ação mais importante pra quem ainda não é cliente, e mesmo no estado de
+           login existe quem chegue aqui sem conta (link compartilhado de segunda mão). -->
+      <div class="separador-conta">ainda não tem conta?</div>
+      <button type="button" class="btn-fora" onclick="location.href='cadastro.html'">Criar conta grátis · 7 dias</button>
       <!-- v1123 — o link "Acesso por chave de segurança" saiu daqui. O caminho antigo (chave
            compartilhada, anterior às contas por login) foi DESLIGADO em produção na v1119/v1120
            (CORRETOR_PRO_LEGADO_DESLIGADO=sim na Vercel): o servidor recusa esse acesso, então o
            link só podia confundir quem o visse — clicava, informava a chave e tomava erro. Hoje
            só existe uma porta de entrada: e-mail e senha. -->
+    </div>
     </div>
   </div>
 
@@ -53,6 +75,34 @@ function alternarSenha(id, btn) {
 }
 
 document.querySelectorAll('.btn-olho').forEach(b => { b.innerHTML = SVG_OLHO; });
+
+// v1134 — a memória que decide qual dos dois estados aparece. Só um login que DEU CERTO (ou um
+// cadastro concluído) marca o aparelho como conhecido; abrir a tela e ir embora não marca nada.
+// Fica no aparelho, não na conta: um corretor que entra no computador do escritório pela primeira
+// vez vê o convite lá também, e tudo bem — ele clica em "Entrar" uma vez e nunca mais vê.
+const CP_JA_ENTROU = 'cp-ja-entrou';
+function cpJaEntrouAqui() {
+  try { return localStorage.getItem(CP_JA_ENTROU) === '1'; } catch (_) { return false; }
+}
+function cpMarcarQueJaEntrou() {
+  try { localStorage.setItem(CP_JA_ENTROU, '1'); } catch (_) {}
+}
+// focar=true só quando a pessoa PEDIU o login (clicou em "Já tem conta?"). Na abertura normal da
+// tela não focamos: no celular isso abre o teclado sozinho e empurra a tela pra cima antes de ela
+// ter decidido qualquer coisa.
+function mostrarLogin(focar) {
+  document.getElementById('convite').style.display = 'none';
+  document.getElementById('areaLogin').style.display = 'block';
+  // Não marca o aparelho aqui de propósito: clicar em "Já tem conta?" é uma intenção, não uma
+  // prova. Se a pessoa se enganou e fechou, na próxima vez ela volta a ver o convite.
+  if (focar) { try { document.getElementById('email').focus(); } catch (_) {} }
+}
+function mostrarConvite() {
+  document.getElementById('convite').style.display = 'block';
+  document.getElementById('areaLogin').style.display = 'none';
+}
+// Decide ANTES de a tela aparecer, pra não piscar um estado e trocar pro outro na frente da pessoa.
+if (cpJaEntrouAqui()) mostrarLogin(false); else mostrarConvite();
 
 
 async function entrar() {
@@ -186,6 +236,8 @@ async function entrar() {
     // e o app passa a usá-la nas chamadas — cada um vê só a própria carteira e o próprio Cérebro.
     msg.textContent = `Login confirmado, ${minhaEmpresa.nome} — ${situacao}. Abrindo o sistema...`;
     btn.textContent = 'Login confirmado ✓';
+    // v1134 — daqui em diante este aparelho abre direto no login, sem passar pelo convite.
+    cpMarcarQueJaEntrou();
     setTimeout(() => { window.location.href = '/'; }, 600);
   } catch (e) {
     msg.className = 'erro';

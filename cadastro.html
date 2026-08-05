@@ -181,6 +181,9 @@ async function cadastrar() {
 
     msg.className = 'ok';
     msg.textContent = 'Conta criada! Seu teste grátis de 7 dias começou agora. Entrando...';
+    // v1134 — quem acabou de criar a conta JÁ É cliente: ao voltar pra tela de entrar ele precisa
+    // ver o login, não o convite pra criar conta (que ele acabou de fazer).
+    try { localStorage.setItem('cp-ja-entrou', '1'); } catch (_) {}
     setTimeout(() => { location.href = 'entrar.html'; }, 1200);
   } catch (e) {
     msg.className = 'erro';
