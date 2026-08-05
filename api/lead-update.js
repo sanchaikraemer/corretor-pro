@@ -7,7 +7,7 @@ import { COMMERCIAL_SCHEMA_VERSION, commercialSchemaFrom, stampCommercialSchema 
 // Actions: "salvar-novo", "etapa", "memoria-get", "memoria-set", "aprendizado", "apagar"
 
 import { resolveOrganizationId, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
-import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681 } from "./_persistence.js";
+import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681, _mesclarAnaliseV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial,
@@ -106,6 +106,7 @@ export default async function handler(req, res) {
     case "observacao-adicionar": return await acaoObservacaoAdicionar(id, body, res, organizationId);
     case "aprendizado":   return await acaoAprendizado(id, body, res, organizationId);
     case "apagar":        return await acaoApagar(id, res, body?.ids, organizationId);
+    case "juntar-clientes": return await acaoJuntarClientes(id, body?.idDuplicado, res, organizationId);
     case "editar-dados":  return await acaoEditarDados(id, body, res, organizationId);
     case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res, organizationId);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
@@ -1296,6 +1297,100 @@ async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
     atualizados++;
   }
   return atualizados;
+}
+
+// ============ JUNTAR DOIS CADASTROS DO MESMO CLIENTE (v1148) ============
+// Caso real (05/08/2026): o dono atendeu um cliente e a lista "Sem atender 30d+" continuava
+// mostrando o MESMO cliente num segundo cadastro, com outro nome de arquivo. Dois cadastros da
+// mesma pessoa nascem quando o arquivo exportado do WhatsApp vem com nome diferente em cada
+// importação — e o app até então só sabia APAGAR duplicata, nunca juntar. Apagar perderia a
+// conversa de um dos dois.
+//
+// Aqui a conversa dos dois é fundida (mesma função que a reimportação usa, sem repetir mensagem),
+// a análise mais recente prevalece e o que é decisão do corretor no cadastro que FICA — etapa,
+// lembrete, memória — nunca é sobrescrito pelo cadastro que sai. Só depois de a fusão estar
+// GRAVADA o duplicado é apagado (com a mesma faxina completa do "apagar").
+async function acaoJuntarClientes(idFica, idSai, res, organizationId) {
+  const manter = String(idFica || "").trim();
+  const remover = String(idSai || "").trim();
+  if (!manter || !remover) return json(res, 400, { ok: false, error: "Informe os dois cadastros (id e idDuplicado)." });
+  if (manter === remover) return json(res, 400, { ok: false, error: "Os dois ids são o mesmo cadastro." });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+
+  const { data: rows, error: erroBusca } = await supabase
+    .from("whatsapp_processamentos")
+    .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,timeline_json,criado_em,created_at,atualizado_em")
+    .in("id", [manter, remover])
+    .eq("organization_id", organizationId);
+  if (erroBusca) return json(res, 500, { ok: false, error: erroBusca.message });
+  const fica = (rows || []).find(r => String(r.id) === manter);
+  const sai = (rows || []).find(r => String(r.id) === remover);
+  if (!fica || !sai) return json(res, 404, { ok: false, error: "Um dos cadastros não foi encontrado nesta conta." });
+
+  const tlFica = Array.isArray(fica.timeline_json) ? fica.timeline_json : [];
+  const tlSai = Array.isArray(sai.timeline_json) ? sai.timeline_json : [];
+  const { timeline, preservadasDoAntigo } = _mesclarTimelinesV681(tlSai, tlFica); // a conversa dos dois, sem duplicar
+  const anaFica = (fica.resultado_analise && typeof fica.resultado_analise === "object") ? fica.resultado_analise : {};
+  const anaSai = (sai.resultado_analise && typeof sai.resultado_analise === "object") ? sai.resultado_analise : {};
+  // Qual análise é a "nova": a do cadastro atualizado mais recentemente. A outra entra como base.
+  const ficaEhMaisNovo = String(fica.atualizado_em || "") >= String(sai.atualizado_em || "");
+  let analiseFinal = ficaEhMaisNovo ? _mesclarAnaliseV681(anaSai, anaFica) : _mesclarAnaliseV681(anaFica, anaSai);
+  // Decisões do corretor no cadastro que FICA mandam sempre.
+  analiseFinal = {
+    ...analiseFinal,
+    memoria: { ...(anaSai.memoria || {}), ...(anaFica.memoria || {}) },
+    lembrete: (anaFica.lembrete && anaFica.lembrete.auto !== true) ? anaFica.lembrete : null,
+    confirmedAppointments: [],
+    _clientesJuntados: [...(Array.isArray(anaFica._clientesJuntados) ? anaFica._clientesJuntados : []), {
+      idRemovido: remover,
+      nomeRemovido: String(anaSai.clientName || anaSai?.lead?.clientName || sai.nome_arquivo || ""),
+      mensagensTrazidas: Number(preservadasDoAntigo) || 0,
+      quando: new Date().toISOString()
+    }].slice(-20)
+  };
+
+  const agora = new Date().toISOString();
+  const { error: erroGravar } = await supabase
+    .from("whatsapp_processamentos")
+    .update({
+      resultado_analise: analiseFinal,
+      timeline_json: timeline,
+      texto_extraido: timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
+      telefone: fica.telefone || sai.telefone || null,
+      criado_em: [fica.criado_em || fica.created_at, sai.criado_em || sai.created_at].filter(Boolean).sort()[0] || agora,
+      atualizado_em: agora,
+      updated_at: agora
+    })
+    .eq("id", manter)
+    .eq("organization_id", organizationId);
+  if (erroGravar) return json(res, 500, { ok: false, error: `A fusão não foi gravada: ${erroGravar.message}` });
+
+  // Só agora o duplicado sai — se a gravação acima falhasse, nada teria sido perdido.
+  const apagado = await (async () => {
+    try {
+      const storage = await apagarStorageDosLeads(supabase, [sai], organizationId);
+      await limparAprendizadoDosLeads(supabase, [remover], organizationId);
+      const vinculos = await removerVinculosComLeadsApagados(supabase, [remover], organizationId);
+      for (const tabela of ["leads", "direciona_leads"]) await apagarTabelaAuxiliar(supabase, tabela, [remover]);
+      const { error } = await supabase.from("whatsapp_processamentos").delete().eq("id", remover).eq("organization_id", organizationId);
+      if (error) throw new Error(error.message);
+      return { ok: true, storage, vinculos };
+    } catch (error) {
+      // A conversa já está junta no cadastro que fica; o duplicado apenas continua existindo.
+      return { ok: false, error: error?.message || String(error) };
+    }
+  })();
+
+  return json(res, 200, {
+    ok: true,
+    id: manter,
+    idRemovido: remover,
+    mensagensFinais: timeline.length,
+    mensagensTrazidas: Number(preservadasDoAntigo) || 0,
+    duplicadoApagado: apagado.ok,
+    ...(apagado.ok ? {} : { avisoDuplicado: `A conversa foi juntada, mas o cadastro duplicado não pôde ser apagado agora: ${apagado.error}` })
+  });
 }
 
 async function acaoApagar(id, res, ids, organizationId) {

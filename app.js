@@ -4402,6 +4402,81 @@ async function excluirLeadDefinitivo(id, nome){
 }
 window.excluirLeadDefinitivo = excluirLeadDefinitivo;
 
+// v1148 — JUNTAR DOIS CADASTROS DO MESMO CLIENTE.
+//
+// Caso do dono (05/08/2026): ele atendeu um cliente e a lista "Sem atender 30d+" seguia mostrando
+// a MESMA pessoa num segundo cadastro, com outro nome. Isso nasce quando o arquivo exportado do
+// WhatsApp vem com nome diferente em cada importação. Até aqui o app só sabia APAGAR duplicata —
+// e apagar perde a conversa de um dos dois. Agora dá pra juntar: a conversa dos dois vira uma só
+// (sem repetir mensagem), o cadastro escolhido fica, o outro sai.
+window.cp1148JuntarCliente = async function(idFica, nomeFica){
+  const id = String(idFica||"");
+  if(!id){ toast("Não consegui identificar este cliente."); return; }
+  let base = [];
+  try{
+    const dados = await getLeadsData(false);
+    base = (Array.isArray(dados?.items) ? dados.items : []).map(limparLead).filter(l => l?.id && String(l.id) !== id);
+  }catch(_){ base = []; }
+  if(!base.length){ toast("Não achei outros clientes pra juntar."); return; }
+  document.querySelector("#cp1148Modal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "cp1148Modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0";
+  const linha = (l) => `<button type="button" class="cp1148-item" data-id="${escapeHtml(String(l.id))}" data-nome="${escapeHtml(String(l.name||"Cliente"))}" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);padding:13px 14px;font-size:14px;font-weight:800;cursor:pointer">${escapeHtml(String(l.name||"Cliente"))}<span style="display:block;color:var(--muted);font-size:12px;font-weight:500;margin-top:2px">${escapeHtml(String(l.product||"Produto não identificado"))} · ${Number(l.messageCount||0)} mensagens</span></button>`;
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border-top-left-radius:18px;border-top-right-radius:18px;width:100%;max-width:520px;max-height:82vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px">
+        <div style="font-size:17px;font-weight:950">Juntar cliente duplicado</div>
+        <div class="small" style="color:var(--muted);margin-top:4px">Escolha o cadastro que é a MESMA pessoa que <b>${escapeHtml(String(nomeFica||"este cliente"))}</b>. As duas conversas viram uma só; este cadastro fica e o outro é apagado.</div>
+        <input id="cp1148Busca" placeholder="Buscar por nome..." style="margin-top:10px;width:100%">
+      </div>
+      <div id="cp1148Lista" style="overflow:auto;flex:1;border-top:1px solid var(--line)">${base.slice(0,60).map(linha).join("")}</div>
+      <div style="padding:12px 16px"><button type="button" id="cp1148Cancelar" class="btn secondary" style="width:100%">Cancelar</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const fechar = () => overlay.remove();
+  overlay.querySelector("#cp1148Cancelar")?.addEventListener("click", fechar);
+  overlay.addEventListener("click", (ev) => { if(ev.target === overlay) fechar(); });
+  const busca = overlay.querySelector("#cp1148Busca");
+  const lista = overlay.querySelector("#cp1148Lista");
+  const norm = (v) => String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  busca?.addEventListener("input", () => {
+    const q = norm(busca.value).trim();
+    const filtrados = q ? base.filter(l => norm(l.name).includes(q)) : base;
+    lista.innerHTML = filtrados.slice(0,60).map(linha).join("") || `<div class="small" style="padding:16px;color:var(--muted)">Nenhum cliente com esse nome.</div>`;
+  });
+  lista?.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".cp1148-item");
+    if(!btn) return;
+    const idSai = String(btn.dataset.id||"");
+    const nomeSai = String(btn.dataset.nome||"cliente");
+    const msg = `Juntar "${nomeSai}" dentro de "${nomeFica||"este cliente"}"?\n\nAs duas conversas ficam num cadastro só. O cadastro "${nomeSai}" é apagado depois de juntar. Não tem como desfazer.`;
+    const ok = (typeof cp903Confirm === "function")
+      ? await cp903Confirm({ titulo:"Juntar clientes", mensagem: msg, ok:"Juntar", perigo:true })
+      : confirm(msg);
+    if(!ok) return;
+    btn.disabled = true;
+    try{
+      const res = await fetchComTimeout("./api/lead-update", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ action:"juntar-clientes", id, idDuplicado: idSai })
+      }, 45000);
+      const d = await res.json().catch(()=>({}));
+      if(!res.ok || !d?.ok) throw new Error(d?.error || "Não foi possível juntar agora.");
+      fechar();
+      removerLeadDosCaches(idSai);
+      invalidarLeadsCache();
+      toast(`Juntado: ${Number(d.mensagensTrazidas)||0} mensagens trazidas, ${Number(d.mensagensFinais)||0} no total.`);
+      if(d.avisoDuplicado) toast(d.avisoDuplicado);
+      await loadRecentLeads(true);
+      try{ await abrirLead(id); }catch(_){ refreshAllSections(); }
+    }catch(err){
+      btn.disabled = false;
+      toast("Não consegui juntar: " + userFriendlyError(err));
+    }
+  });
+};
+
 async function abrirLead(id, options={}){
   if(!id) return;
   const sid = String(id);
@@ -5290,7 +5365,7 @@ function cp704Css(){
     const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
     // Só "Arquivar" como desfecho (v904): sem Vendido/Perdido/Geladeira. "Excluir" fica no Perigo.
     return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button></div></div>
+    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" onclick='cp1148JuntarCliente(${id},${name})'>Juntar cliente duplicado</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
   // v908: as ações (Proposta/Arquivar/Excluir/Mensagens) subiram pra barra de ícones do topo.
@@ -5707,7 +5782,23 @@ async function reagendarLembrete(id, dateStr){
     // v1133 — põe a data nova na carteira em memória (é dela que a Agenda redesenha). Sem isto o
     // cartão continuava mostrando a data antiga até sair e voltar da tela.
     cpAtualizarLembreteLocal(id, d?.lembrete || { quando: new Date(dateStr+"T12:00:00").toISOString(), motivo: "Retomar contato" });
-    toast("Lembrete remarcado para " + new Date(dateStr+"T12:00:00").toLocaleDateString("pt-BR") + ".");
+    // v1148 — agendar TAMBÉM marca atendimento (pedido do dono: "como se copiasse sugestão de
+    // mensagem"). O servidor já gravou o atendimento nesta mesma chamada; aqui a tela reflete na
+    // hora, sem esperar a carteira recarregar — mesma marcação local que a cópia de mensagem usa.
+    if(d?.atendimentoRegistrado){
+      try{
+        const quando = String(d.atendimentoQuando || new Date().toISOString());
+        const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false,hourCycle:"h23"}).formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+        const detalhes = { tipo:"Agendamento", de:"agendamento" };
+        if(state.lead && String(state.lead.id) === String(id)) ui667AplicarAtendidoLocal(state.lead, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`, detalhes);
+        for(const lista of [state.itemsAtivos, state.todosLeads, state.leads]){
+          const item = Array.isArray(lista) ? lista.find(x => String(x.id) === String(id)) : null;
+          if(item) ui667AplicarAtendidoLocal(item, quando, `${p.day}/${p.month}/${p.year}`, `${p.hour}:${p.minute}`, detalhes);
+        }
+        invalidarLeadsCache();
+      }catch(_){}
+    }
+    toast("Agendado para " + new Date(dateStr+"T12:00:00").toLocaleDateString("pt-BR") + " — e marcado como atendido hoje.");
     await atualizarSinoAgenda(); // sino do topo na hora, em qualquer tela (sem F5)
     if(state.active === "agenda") carregarAgenda();
     else if(state.lead?.id) { try{ abrirLead(id); }catch(_){} }
