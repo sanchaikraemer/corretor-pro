@@ -30,7 +30,15 @@ assert.match(passos, /“Mais”/, "avisa que em alguns celulares a opção est�
 assert.match(passos, /áudios/, "explica por que escolher Incluir mídia (os áudios)");
 
 // ── 2. Cada passo tem desenho (não é só texto) ────────────────────────────────────────────────
-assert.equal((passos.match(/desenho: cp1149Telinha\(/g) || []).length, 5, "os cinco passos têm ilustração");
+assert.equal((passos.match(/desenho: cp1149Telinha\(/g) || []).length, 6, "os seis passos têm ilustração");
+
+// ── 1b. O passo do "e se não aparecer o ícone?" (v1152) ────────────────────────────────────────
+// Pergunta do dono no primeiro teste com conta nova. Acontece de verdade: o Android só oferece na
+// lista de compartilhar quem está INSTALADO — e o jeito 2 precisa funcionar mesmo sem instalar.
+assert.ok(passos.includes("Não apareceu o Corretor Pro na lista?"), "existe o passo do ícone que não aparece");
+assert.match(passos, /não está instalado/, "explica o motivo real");
+assert.match(passos, /“Baixar app”/, "mostra o caminho de instalar");
+assert.match(passos, /“Escolher o arquivo da conversa”/, "e a saída que funciona sem instalar nada");
 assert.match(app, /function cp1149Telinha\(conteudo\)\{/, "o desenho do celular é montado em SVG no próprio app (sem imagem externa)");
 
 // ── 3. Sempre à mão no botão da tela de importação ────────────────────────────────────────────
