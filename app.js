@@ -12312,8 +12312,16 @@ function ui670DetailRows(lead,mc){
   }
 
   // Meta do dia gamificada: um prédio que "sobe" (enche de coral, de baixo pra cima) conforme
-  // os atendimentos do dia, completando a imagem ao bater a META (10). Coral = identidade do app.
-  const CP788_META_DIA = 10;
+  // os atendimentos do dia, completando a imagem ao bater a META do corretor. Coral = identidade.
+  //
+  // v1147 — a meta estava CRAVADA em 10 aqui. O dono mudou a dele pra 20 no Cérebro e esta tela
+  // continuou dizendo "meta 10/dia", com o prédio cheio em 20/10 — ele flagrou com print ("o
+  // prédio deve ficar cheio somente quando atender 20, que é pré-definido, não acha?"). Agora usa
+  // a MESMA meta do card "Fazer agora" (cpMetaAtendimentosDia → Cérebro), que é a única fonte
+  // dessa regra no app. O 10 continua só como último recurso, se a função não existir.
+  // Função (não constante): a meta é lida NO MOMENTO de desenhar. Como constante, ela congelava o
+  // valor de quando o app abriu — mudar a meta no Cérebro só valeria depois de recarregar.
+  const cp788MetaDia = () => (typeof cpMetaAtendimentosDia === 'function') ? cpMetaAtendimentosDia() : 10;
   function cp788PredioSVG(count, meta){
     const p = Math.min(Math.max(Number(count)||0, 0) / meta, 1);
     const topY = 16, botY = 176, H = botY - topY;
@@ -12356,6 +12364,7 @@ function ui670DetailRows(lead,mc){
       if(d!=null && d>=0 && d<7) perDay[d].itens.push(x);
     }
     const totalSemana=perDay.reduce((s,p)=>s+p.itens.length,0);
+    const CP788_META_DIA = cp788MetaDia();
     box.innerHTML=`<section class="cp788-att-page">
       <header class="cp788-att-head">
         <div><h2>Atendimentos</h2><p>Últimos 7 dias · ${totalSemana} atendimento${totalSemana===1?'':'s'} · meta ${CP788_META_DIA}/dia</p></div>
