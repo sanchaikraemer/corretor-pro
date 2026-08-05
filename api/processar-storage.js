@@ -318,6 +318,13 @@ async function salvarTranscricaoCache(storage, hash, item, organizationId) {
 // arquivo de áudio (ex.: AUD-20240115-WA0007.opus), por outro lado, é estável entre exportações
 // — mas só é seguro comparar DENTRO do histórico do MESMO cliente já identificado, nunca contra
 // outros clientes (nome de arquivo sozinho pode repetir entre conversas diferentes).
+// v1143 — teto de mensagens pra a análise sair na MESMA chamada do preparar (ver ação "preparar").
+// A extração de uma conversa desse tamanho leva menos de 1s, então ela cabe junto da análise
+// dentro dos 60s da função. Acima disso, as duas etapas continuam separadas como sempre foram.
+const ANALISE_JUNTA_MAX_MENSAGENS = Number(process.env.CORRETOR_PRO_ANALISE_JUNTA_MAX_MENSAGENS) > 0
+  ? Number(process.env.CORRETOR_PRO_ANALISE_JUNTA_MAX_MENSAGENS)
+  : 400;
+
 const AUDIO_TRANSCRITO_PREFIXO = "[Áudio transcrito] ";
 
 // v1026 — "0 aproveitados" voltava a acontecer num lead recorrente MESMO com este reaproveitamento
@@ -515,13 +522,75 @@ export default async function handler(req, res) {
         mensagensSalvas: Array.isArray(matchAnterior.row.timeline_json) ? matchAnterior.row.timeline_json.length : 0,
         transcricoesDisponiveis: Object.keys(cacheDoLead).length
       } : null;
+      // v1143 — ANÁLISE NA MESMA IDA, quando não há áudio novo pra transcrever.
+      //
+      // Reclamação do dono: "quando exporto a análise mesmo com 2 ou 3 mensagens e sem áudio,
+      // demora demais, está impraticável". Uma conversa dessas não tem NADA pra transcrever, e o
+      // app ainda fazia duas viagens separadas ao servidor (preparar e analisar) — cada uma com
+      // partida a frio da função, leitura/gravação do manifesto e a conversa inteira subindo de
+      // volta no corpo do pedido. Sem áudio pendente, isso é ida e volta pura.
+      //
+      // Aqui a análise sai junto, reaproveitando o que ESTA chamada já tem em mãos: a conversa
+      // preparada, o cliente já identificado, a conversa salva e a análise salva (a busca do
+      // cache de áudio já trouxe tudo isso do banco) — ou seja, sem nenhuma leitura extra.
+      //
+      // Segurança: só quando não sobrou áudio pendente E o ZIP é pequeno (a análise tem orçamento
+      // de ~52s e a função morre em 60s — num ZIP grande a extração já consome tempo demais pra
+      // caber junto). Se der qualquer problema, a resposta volta como sempre e o app faz a
+      // chamada "analisar" separada, com todas as redes de proteção que já existiam.
+      const manifestPath = `organizations/${organizationId}/imports/${importId}/manifest.json`;
+      const audiosPendentes = (manifest.prep?.audiosParaTranscrever || [])
+        .map(normalizeName)
+        .filter(nome => !manifest.transcriptions?.[nome]?.text);
+      const zipPequeno = Number(manifest.prep?.metricsBase?.totalMensagensOriginais || 0) <= ANALISE_JUNTA_MAX_MENSAGENS;
+      let analiseIncluida = null;
+      if (body?.analisarDireto === true && !audiosPendentes.length && zipPequeno) {
+        try {
+          const timelineAnterior = Array.isArray(matchAnterior?.row?.timeline_json) ? matchAnterior.row.timeline_json : [];
+          const analiseAnterior = matchAnterior?.row?.resultado_analise && typeof matchAnterior.row.resultado_analise === "object"
+            ? matchAnterior.row.resultado_analise : null;
+          const resultado = await finalizarAnaliseDaConversa({
+            ...manifest.prep,
+            transcriptionMap: manifest.transcriptions || {},
+            existingTimeline: timelineAnterior,
+            previousAnalysis: analiseAnterior,
+            existingLeadId: leadAnterior?.id || "",
+            audiosReaproveitados: Object.keys(manifest.transcriptions || {}).length,
+            audiosNovosSolicitados: 0,
+            cerebroConfig: body?.cerebroConfig || null,
+            organizationId
+          });
+          const msgs = resultado?.analysis?.messages || {};
+          const trioOk = [msgs.a, msgs.b, msgs.c].every(v => String(v || "").trim().length >= 10);
+          const analiseOk = resultado?.analysis && resultado.analysis.mode !== "erro_api" && resultado.analysis.mode !== "sem_api"
+            && resultado.analysis.sugestoesPendentes !== true && trioOk;
+          if (analiseOk) {
+            resultado.analysis._storageRefs = {
+              version: 1,
+              bucket,
+              importIds: [importId],
+              sourceZipPaths: [storagePath],
+              transcriptionCachePaths: [...new Set(Object.values(manifest.audioHashes || {}).filter(Boolean).map(hash => caminhoCacheTranscricao(hash, organizationId)))]
+            };
+            manifest.status = "analysis-ready";
+            manifest.analysisReadyAt = new Date().toISOString();
+            manifest.updatedAt = manifest.analysisReadyAt;
+            await salvarManifesto(storage, manifestPath, manifest);
+            analiseIncluida = { ok: true, bucket, path: storagePath, importId, autoSaved: false, ...resultado };
+          }
+        } catch (_) {
+          // Cai no caminho de sempre: o app chama "analisar" e trata erro/retentativa como já fazia.
+          analiseIncluida = null;
+        }
+      }
       return json(res, 200, {
         ok: true, bucket, path: storagePath, importId, manifestPath: `organizations/${organizationId}/imports/${importId}/manifest.json`,
         reusedPreparation, extractionCompleted: true, ...manifest.prep,
         ...(avisoCacheAudio ? { avisoCacheAudio } : {}),
         leadAnterior,
         audioStorage: manifest.audioStorage,
-        cachedTranscriptions: manifest.transcriptions || {}
+        cachedTranscriptions: manifest.transcriptions || {},
+        analiseIncluida
       });
     }
 
