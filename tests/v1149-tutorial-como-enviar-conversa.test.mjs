@@ -43,8 +43,16 @@ assert.match(app, /if\(!items\.length\)\{ try\{ window\.cp1149AbrirSePrimeiraVez
   "abre sozinho pra quem ainda não tem cliente nenhum");
 const primeira = app.slice(app.indexOf("window.cp1149AbrirSePrimeiraVez = function(){"));
 const blocoPrimeira = primeira.slice(0, primeira.indexOf("\n};"));
-assert.match(blocoPrimeira, /localStorage\.getItem\(CP1149_VISTO_KEY\)/, "não repete pra quem já viu");
-assert.match(blocoPrimeira, /if\(temLead\)\{ localStorage\.setItem\(CP1149_VISTO_KEY, "1"\); return false; \}/,
+assert.match(blocoPrimeira, /localStorage\.getItem\(cp1149VistoKey\(\)\)/, "não repete pra quem já viu");
+assert.match(blocoPrimeira, /if\(temLead\)\{ localStorage\.setItem\(cp1149VistoKey\(\), "1"\); return false; \}/,
   "quem já usa o app não é interrompido");
+
+// ── 5. A marca de "já vi" é POR CONTA, não por aparelho (v1150) ────────────────────────────────
+// O dono vai criar contas de teste NO MESMO CELULAR. Se a marca fosse do aparelho, o segundo
+// corretor nunca veria o passo a passo — justamente o que o teste precisa validar.
+assert.match(app, /function cp1149VistoKey\(\)\{[\s\S]*?corretor_pro_tutorial_envio_visto:\$\{conta\}/,
+  "a chave inclui a conta logada");
+assert.match(app, /window\.__cpContaId = String\(data\.session\.user\.id \|\| ""\)/,
+  "o app guarda quem está logado pra montar essa chave");
 
 console.log("v1149-tutorial-como-enviar-conversa: ok");

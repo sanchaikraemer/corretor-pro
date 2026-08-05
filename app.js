@@ -83,6 +83,10 @@ import './js/pwa-install.js?v=__VERSION__';
       const { data: vinculo } = await cliente.from("memberships").select("organizations(nome)").eq("user_id", data.session.user.id).order("criado_em", { ascending: false }).limit(1).maybeSingle();
       const nome = String(vinculo?.organizations?.nome || "").trim();
       if (nome) { window.__cpContaNome = nome; }
+      // v1150 — guarda QUEM está logado. Usado pra marcar "já vi o tutorial" por CONTA, não por
+      // aparelho: no mesmo celular, uma conta nova precisa ver o passo a passo mesmo que outra
+      // conta já tenha visto (é exatamente o caso do teste com corretores).
+      try{ window.__cpContaId = String(data.session.user.id || ""); }catch(_){}
       window.cpAtualizarIdentidadeVisivel();
     } catch(_) {}
   })();
@@ -8754,7 +8758,13 @@ function cpTextoAjudaImportar(){
 // Incluir mídia → Corretor Pro). Abre sozinho na primeira vez e fica sempre à mão no botão
 // "Como enviar sua conversa".
 // ============================================================================
-const CP1149_VISTO_KEY = "corretor_pro_tutorial_envio_visto";
+// v1150 — a marca de "já vi" é POR CONTA (não por aparelho): o dono vai criar contas novas de
+// teste no mesmo celular, e cada corretor novo precisa ver o passo a passo na primeira vez dele.
+// Sem sessão identificada (caminho antigo por chave compartilhada), cai numa chave geral.
+function cp1149VistoKey(){
+  const conta = String(window.__cpContaId || "").trim();
+  return conta ? `corretor_pro_tutorial_envio_visto:${conta}` : "corretor_pro_tutorial_envio_visto";
+}
 
 function cp1149Telinha(conteudo){
   return `<svg viewBox="0 0 200 300" width="150" height="225" aria-hidden="true" style="max-width:100%">
@@ -8837,7 +8847,7 @@ window.cp1149ComoEnviar = function(passoInicial){
   document.body.appendChild(overlay);
   const card = overlay.querySelector("#cp1149Card");
   const fechar = () => {
-    try{ localStorage.setItem(CP1149_VISTO_KEY, "1"); }catch(_){}
+    try{ localStorage.setItem(cp1149VistoKey(), "1"); }catch(_){}
     overlay.remove();
   };
   const desenhar = () => {
@@ -8869,10 +8879,10 @@ window.cp1149ComoEnviar = function(passoInicial){
 // não sabe o que fazer. Uma vez visto, só volta pelo botão.
 window.cp1149AbrirSePrimeiraVez = function(){
   try{
-    if(localStorage.getItem(CP1149_VISTO_KEY)) return false;
+    if(localStorage.getItem(cp1149VistoKey())) return false;
     const temLead = Array.isArray(state?.itemsAtivos) ? state.itemsAtivos.length > 0
       : (Array.isArray(state?.leads) ? state.leads.length > 0 : false);
-    if(temLead){ localStorage.setItem(CP1149_VISTO_KEY, "1"); return false; } // já usa o app: não atrapalha
+    if(temLead){ localStorage.setItem(cp1149VistoKey(), "1"); return false; } // já usa o app: não atrapalha
     window.cp1149ComoEnviar(0);
     return true;
   }catch(_){ return false; }
