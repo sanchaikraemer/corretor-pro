@@ -58,7 +58,13 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const salvarFim = app.indexOf('\n}', marcaAbrirLead);
   const salvarSrc = app.slice(salvarIni, salvarFim);
   assert.match(salvarSrc, /renderEtapas\(5, "salvando no banco de dados\.\.\."\)/, 'salvarLeadPendente (lead genuinamente novo, salva sozinho sem perguntar) também precisa avisar que começou');
-  assert.match(salvarSrc, /renderEtapas\(5, "liberando os arquivos temporários da importação\.\.\."\)/, 'precisa avisar a próxima etapa real (limpeza dos arquivos temporários) também, não só o início');
+  // v1143 — a limpeza dos arquivos temporários DEIXOU DE SER UMA ESPERA: ela roda por trás, depois
+  // que o cliente já abriu (eram 3 exclusões no armazenamento seguradas na frente do corretor, sem
+  // mudar nada do que ele vê). Como não há mais espera, não há mais etapa a anunciar — o que este
+  // teste protege (nunca uma etiqueta parada durante uma espera real) continua valendo nas duas
+  // esperas que sobraram: a gravação e a confirmação, checadas acima.
+  assert.doesNotMatch(salvarSrc, /await finalizarImportacaoStorage/, 'a faxina dos temporários não pode voltar a segurar a abertura do cliente');
+  assert.match(salvarSrc, /finalizarImportacaoStorage\(importacaoConcluida\)\.catch\(\(\)=>\{\}\)/, 'ela continua acontecendo, só em segundo plano');
 
   console.log('v1028 ("Salvando" não parece mais travado): etapa visível progride de verdade durante o salvamento — ok');
 }

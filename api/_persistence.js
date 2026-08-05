@@ -797,28 +797,59 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   // Agora tem as duas coisas: a varredura é leve E a conversa do lead encontrado nunca some em
   // silêncio — a segunda busca tenta 3 vezes e, se ainda assim não conseguir, ESTOURA. Quem chama
   // decide o que fazer com o erro, mas ninguém mais recebe uma conversa vazia achando que é real.
-  const { data, error } = await supabase
+  // v1143 — a varredura ficou LEVE DE VERDADE. A v1086 tirou daqui a conversa (timeline_json),
+  // mas continuou trazendo `resultado_analise` — a ANÁLISE INTEIRA (diagnóstico, três mensagens,
+  // memória, histórico) de até 5 mil clientes, duas vezes por importação, pra usar só duas coisas:
+  // o telefone e o nome do cliente. Numa carteira de verdade isso é megabytes de tráfego e
+  // segundos de espera em CADA importação — inclusive na conversa de 2 mensagens sem áudio que o
+  // dono relatou ("demora demais, está impraticável").
+  //
+  // Agora o banco devolve só esses dois campos, extraídos direto do JSON. Se a versão do banco não
+  // aceitar essa forma de pedir, cai automaticamente na consulta antiga — nunca deixa de achar o
+  // cliente por causa de otimização.
+  const COLUNAS_LEVES = "id,nome_arquivo,arquivo_nome,telefone,etapa,criado_em,created_at,atualizado_em,updated_at,fone_analise:resultado_analise->lead->>phone,nome_analise:resultado_analise->>clientName,nome_analise_lead:resultado_analise->lead->>clientName";
+  const COLUNAS_COMPLETAS = "id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,criado_em,created_at,atualizado_em,updated_at";
+  const varrer = (colunas) => supabase
     .from("whatsapp_processamentos")
-    .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,criado_em,created_at,atualizado_em,updated_at")
+    .select(colunas)
     .eq("organization_id", organizationId)
     .order("atualizado_em", { ascending: false })
     .limit(5000);
+  let data = null, error = null;
+  try { ({ data, error } = await varrer(COLUNAS_LEVES)); }
+  catch (e) { error = { message: e?.message || String(e) }; }
+  if (error || !Array.isArray(data)) {
+    try { ({ data, error } = await varrer(COLUNAS_COMPLETAS)); }
+    catch (e) { return null; }
+  }
   if (error || !Array.isArray(data)) return null;
 
+  // A releitura do cliente encontrado traz o que a varredura deixou de fora: a conversa E a
+  // análise salva (esta última é o que permite reaproveitar a análise numa reimportação sem
+  // novidade — ver v1141 — e o que a gravação mescla ao salvar).
   const comTimeline = async (row, via) => {
     let ultimoErro = null;
     for (let tentativa = 0; tentativa < 3; tentativa++) {
       if (tentativa) await new Promise(r => setTimeout(r, 300 * tentativa));
       const { data: cheio, error: erroTl } = await supabase
         .from("whatsapp_processamentos")
-        .select("id,timeline_json")
+        .select("id,timeline_json,resultado_analise")
         .eq("id", row.id)
         .order("atualizado_em", { ascending: false })
         .limit(1);
       if (erroTl) { ultimoErro = new Error(erroTl.message); continue; }
       const achado = Array.isArray(cheio) ? cheio.find(r => String(r?.id) === String(row.id)) : null;
       if (!achado) { ultimoErro = new Error("registro não voltou na releitura"); continue; }
-      return { row: { ...row, timeline_json: Array.isArray(achado.timeline_json) ? achado.timeline_json : [] }, via };
+      return {
+        row: {
+          ...row,
+          timeline_json: Array.isArray(achado.timeline_json) ? achado.timeline_json : [],
+          resultado_analise: (achado.resultado_analise && typeof achado.resultado_analise === "object")
+            ? achado.resultado_analise
+            : (row.resultado_analise || {})
+        },
+        via
+      };
     }
     // Nunca devolve conversa vazia como se fosse a real: sem isso, o salvamento apagaria o
     // histórico do lead e a importação re-transcreveria todos os áudios sem ninguém perceber.
@@ -826,7 +857,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   };
   for (const row of data) {
     const ra = row.resultado_analise || {};
-    const rowPhone = _digitsIdentity(ra?.lead?.phone || row.telefone || "");
+    const rowPhone = _digitsIdentity(row.fone_analise || ra?.lead?.phone || row.telefone || "");
     if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return comTimeline(row, "telefone");
   }
   for (const row of data) {
@@ -842,7 +873,7 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   if (nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo)) {
     for (const row of data) {
       const ra = row.resultado_analise || {};
-      const rowName = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
+      const rowName = _nomeIdentity(row.nome_analise || row.nome_analise_lead || ra?.clientName || ra?.lead?.clientName || row.nome_arquivo || row.arquivo_nome || "");
       if (rowName && !_nomeRuimIdentity(rowName) && _nomesMesmoLead(rowName, nomeNovo)) return comTimeline(row, "nome");
     }
   }

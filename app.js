@@ -7502,7 +7502,16 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // além do necessário ("analisar" não grava nada no banco; só "Salvar lead" grava).
   let prep = null, erroPrep = null;
   for(let tentativa=1; tentativa<=2 && !prep; tentativa++){
-    try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90" }, 90000); }
+    // v1143 — "analisarDireto": autoriza o servidor a já devolver a análise pronta nesta MESMA
+    // resposta quando a conversa é pequena e não sobrou áudio pra transcrever (o caso do dono:
+    // "2 ou 3 mensagens e sem áudio"). Assim a importação faz UMA viagem em vez de duas, sem
+    // partida a frio extra, sem gravar/ler o manifesto de novo e sem a conversa inteira subir de
+    // volta no corpo do pedido. Se o servidor não puder (ZIP grande, áudio pendente, qualquer
+    // falha), ele devolve só a preparação e o fluxo segue igual ao de sempre, logo abaixo.
+    // Na SEGUNDA tentativa nunca pede a análise junto: se a primeira morreu no teto de tempo do
+    // servidor, a análise pode ter sido feita (e paga) sem a resposta chegar. Repetir só a
+    // preparação — que é idempotente — e depois analisar separado nunca paga duas vezes à toa.
+    try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90", analisarDireto: tentativa === 1 }, 90000); }
     catch(error){ erroPrep=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
   }
   if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
@@ -7549,6 +7558,10 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // banco (só devolve o resultado pro navegador — quem grava é "Salvar lead", ação separada e
   // explícita), então repetir aqui não duplica nem gasta 2x à toa em caso de sucesso.
   let result = null, erroAnalise = null;
+  // v1143 — a conversa era pequena e sem áudio pendente: a análise JÁ VEIO pronta na resposta do
+  // preparar (uma viagem em vez de duas). Nada a pedir de novo aqui — repetir seria pagar a
+  // análise duas vezes pela mesma conversa.
+  if(prep?.analiseIncluida?.ok && !audios.length) result = prep.analiseIncluida;
   for(let tentativa=1; tentativa<=2 && !result; tentativa++){
     try{
       result = await chamar({
@@ -7887,8 +7900,12 @@ async function atualizarLeadComEvolucao(){
     const confirmado = await confirmarAtualizacaoPersistida(existente.id, importacaoConcluida?.importId, totalEsperado);
     const incrementalMeta = state.pendingSave?.result?.incrementalMeta || null;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
-    renderEtapas(5, "liberando os arquivos temporários da importação...");
-    const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
+    // v1143 — a faxina dos arquivos temporários (3 exclusões no armazenamento) era ESPERADA aqui,
+    // com o corretor olhando a tela de "Salvando", só pra depois o cliente abrir. Ela não muda
+    // nada do que ele vê: agora roda por trás. Se falhar, o sistema já tenta de novo sozinho
+    // depois (a limpeza dos antigos), e o lead está salvo de qualquer jeito.
+    const limpezaEmSegundoPlano = finalizarImportacaoStorage(importacaoConcluida).catch(() => ({ ok:false, pending:true }));
+    const limpeza = { ok:true, adiada:true };
     state.pendingSave = null;
     state.activeImportId = null;
     cpLimparImportPendente();
@@ -7927,7 +7944,14 @@ async function atualizarLeadComEvolucao(){
     invalidarLeadsCache();
     state.lead = confirmado;
     state.analysis = confirmado.analysis || null;
-    await loadRecentLeads(true); refreshAllSections();
+    // v1143 — a recarga da carteira INTEIRA era esperada aqui, antes de o cliente abrir: é a
+    // busca mais pesada do app (pode levar segundos numa carteira grande) e o cliente que vai
+    // abrir já veio confirmado do banco na linha de cima. Agora ela roda por trás e as seções da
+    // Home se atualizam quando os dados chegarem — o corretor não espera mais por isso.
+    loadRecentLeads(true).then(() => { try{ refreshAllSections(); }catch(_){} }).catch(()=>{});
+    limpezaEmSegundoPlano.then((r) => { if(r && r.ok === false) console.warn("Limpeza temporária ficou pendente; será refeita na próxima faxina."); });
+    // A limpeza do compartilhamento continua ESPERADA: é local (IndexedDB/cache do aparelho), não
+    // usa rede, e sem ela um ZIP antigo pode ser reprocessado — importação paga de novo.
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     qs("#pendingActions")?.remove();
     renderEtapas(6, "lead atualizado e importação confirmada");
@@ -7973,8 +7997,10 @@ async function salvarLeadPendente(){
     state.lead.status = "Conversa processada";
     const importacaoConcluida = state.pendingSave;
     const shareConcluidoId = String(state.pendingSharedRecordId || "");
-    renderEtapas(5, "liberando os arquivos temporários da importação...");
-    const limpeza = await finalizarImportacaoStorage(importacaoConcluida);
+    // v1143 — mesma mudança do caminho de atualizar: a faxina dos arquivos temporários não segura
+    // mais a abertura do cliente. Ela roda por trás; o lead já está salvo.
+    const limpeza = { ok:true, adiada:true };
+    finalizarImportacaoStorage(importacaoConcluida).catch(()=>{});
     state.pendingSave = null;
     state.activeImportId = null;
     cpLimparImportPendente();
@@ -7992,7 +8018,9 @@ async function salvarLeadPendente(){
     // estado ANTES de salvar — o lead recém-importado nunca saía da "preparação" e parecia
     // que a importação não tinha sido salva. Zera o cache pra a lista reler o banco.
     invalidarLeadsCache();
-    loadRecentLeads(true); refreshAllSections();
+    loadRecentLeads(true).then(() => { try{ refreshAllSections(); }catch(_){} }).catch(()=>{});
+    // Local e rápida (IndexedDB/cache): continua esperada, senão um ZIP antigo pode ser
+    // reprocessado depois — importação paga de novo.
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     renderEtapas(6, "lead salvo e importação confirmada");
     // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
