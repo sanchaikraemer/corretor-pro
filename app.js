@@ -3974,6 +3974,12 @@ async function _processarDashboard(data){
       const mostrar = state.forceOnboarding || (!visto && items.length >= 1 && items.length < 5);
       onb.style.display = mostrar ? "block" : "none";
     }
+    // v1149 — corretor NOVO (nenhum cliente ainda): o passo a passo de como mandar a conversa do
+    // WhatsApp abre sozinho, uma única vez. É o momento em que ele não sabe o que fazer — e é
+    // exatamente o que o dono pediu pra vender pra corretores de Android ("ele vai ter que ter uma
+    // explicação, alguma forma dele entender"). Depois de visto, só volta pelo botão da tela de
+    // importação.
+    if(!items.length){ try{ window.cp1149AbrirSePrimeiraVez?.(); }catch(_){} }
     renderSaudacao(items);
     renderResumoDia(items);
     // v928 — removido cálculo morto de "vendas do mês"/"vendas da semana" (o dono não marca
@@ -8735,11 +8741,150 @@ function cpTextoAjudaImportar(){
   }
   return `${passoWhats}<br><br>Depois é só <b>compartilhar o ZIP com o Corretor Pro</b> — ou, se você já salvou o arquivo no aparelho, tocar em <b>“Escolher o arquivo da conversa”</b> acima. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.`;
 }
+// ============================================================================
+// v1149 — COMO ENVIAR SUA CONVERSA (passo a passo ilustrado, Android e iPhone)
+//
+// Pedido do dono: começar a vender pra corretores de Android. "Quando o cliente entrar no link do
+// Corretor Pro, ele vai ter que ter uma explicação, alguma forma dele entender, que ele abre a
+// conversa, clica nos três pontinhos, vai em mais, daí exportar conversa e seleciona o app."
+//
+// O caminho já estava escrito em texto na tela de importação — só que texto corrido é justamente o
+// que ninguém lê no primeiro uso. Aqui ele vira 5 passos, um por vez, com um desenho do celular
+// mostrando ONDE tocar (o mesmo caminho dos prints que ele mandou: ⋮ → Exportar conversa →
+// Incluir mídia → Corretor Pro). Abre sozinho na primeira vez e fica sempre à mão no botão
+// "Como enviar sua conversa".
+// ============================================================================
+const CP1149_VISTO_KEY = "corretor_pro_tutorial_envio_visto";
+
+function cp1149Telinha(conteudo){
+  return `<svg viewBox="0 0 200 300" width="150" height="225" aria-hidden="true" style="max-width:100%">
+    <rect x="6" y="4" width="188" height="292" rx="20" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+    <rect x="14" y="26" width="172" height="246" rx="8" fill="rgba(255,255,255,.05)"/>
+    ${conteudo}
+  </svg>`;
+}
+const CP1149_PASSOS = [
+  {
+    titulo: "1. Abra a conversa do cliente",
+    texto: "No WhatsApp, entre na conversa que você quer analisar. Pode ser qualquer conversa — nova ou antiga.",
+    desenho: cp1149Telinha(`
+      <circle cx="34" cy="16" r="7" fill="rgba(255,255,255,.5)"/>
+      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.55)"/>
+      <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+      <rect x="24" y="40" width="110" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
+      <rect x="66" y="76" width="110" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="24" y="106" width="90" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
+      <rect x="86" y="142" width="90" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="24" y="248" width="152" height="18" rx="9" fill="rgba(255,255,255,.08)"/>`)
+  },
+  {
+    titulo: "2. Toque nos três pontinhos",
+    texto: "No canto de cima, à direita. Em alguns celulares é preciso tocar em <b>“Mais”</b> depois disso.",
+    desenho: cp1149Telinha(`
+      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.45)"/>
+      <circle cx="170" cy="9" r="3" fill="#FF6258"/><circle cx="170" cy="17" r="3" fill="#FF6258"/><circle cx="170" cy="25" r="3" fill="#FF6258"/>
+      <circle cx="170" cy="17" r="17" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <rect x="24" y="60" width="110" height="24" rx="8" fill="rgba(255,255,255,.08)"/>
+      <rect x="66" y="94" width="110" height="24" rx="8" fill="rgba(255,255,255,.08)"/>`)
+  },
+  {
+    titulo: "3. Escolha “Exportar conversa”",
+    texto: "É uma das opções do menu que abriu. Se não aparecer, entre em <b>“Mais”</b> — ela está lá dentro.",
+    desenho: cp1149Telinha(`
+      <rect x="86" y="30" width="98" height="120" rx="10" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="96" y="42" width="66" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+      <rect x="96" y="60" width="52" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+      <rect x="96" y="78" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+      <rect x="90" y="92" width="90" height="22" rx="6" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="96" y="100" width="74" height="6" rx="3" fill="#FF6258"/>
+      <rect x="96" y="126" width="56" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>`)
+  },
+  {
+    titulo: "4. Toque em “Incluir mídia”",
+    texto: "O WhatsApp pergunta se quer incluir as mídias. Escolha <b>Incluir mídia</b> — é o que traz <b>os áudios</b>, e áudio é onde o cliente diz o que ele realmente quer.",
+    desenho: cp1149Telinha(`
+      <rect x="22" y="96" width="156" height="76" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="34" y="110" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
+      <rect x="34" y="122" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
+      <rect x="34" y="142" width="58" height="20" rx="6" fill="rgba(255,255,255,.06)"/>
+      <rect x="102" y="142" width="66" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="110" y="149" width="50" height="6" rx="3" fill="#FF6258"/>`)
+  },
+  {
+    titulo: "5. Escolha o Corretor Pro na lista",
+    texto: "Abre a lista de compartilhar do celular. Toque no ícone do <b>Corretor Pro</b>. Pronto: em 30 a 60 segundos ele mostra quem atender, por quê, quando e o que falar.",
+    desenho: cp1149Telinha(`
+      <rect x="18" y="120" width="164" height="150" rx="14" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="30" y="134" width="140" height="22" rx="6" fill="rgba(255,255,255,.07)"/>
+      <rect x="38" y="142" width="104" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
+      <circle cx="46" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+      <g><rect x="72" y="173" width="30" height="30" rx="9" fill="rgba(255,98,88,.18)" stroke="#FF6258" stroke-width="2.5"/>
+      <path d="M79 192 L87 183 L95 192" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/></g>
+      <circle cx="128" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+      <circle cx="164" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+      <rect x="66" y="212" width="42" height="5" rx="2.5" fill="#FF6258"/>
+      <rect x="30" y="238" width="140" height="18" rx="9" fill="rgba(255,255,255,.06)"/>`)
+  }
+];
+
+window.cp1149ComoEnviar = function(passoInicial){
+  let i = Math.min(Math.max(Number(passoInicial)||0, 0), CP1149_PASSOS.length-1);
+  document.querySelector("#cp1149Modal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "cp1149Modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.innerHTML = `<div id="cp1149Card" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;max-width:420px;width:100%;max-height:92vh;overflow:auto;padding:18px 18px 16px"></div>`;
+  document.body.appendChild(overlay);
+  const card = overlay.querySelector("#cp1149Card");
+  const fechar = () => {
+    try{ localStorage.setItem(CP1149_VISTO_KEY, "1"); }catch(_){}
+    overlay.remove();
+  };
+  const desenhar = () => {
+    const p = CP1149_PASSOS[i];
+    const ultimo = i === CP1149_PASSOS.length - 1;
+    card.innerHTML = `
+      <div class="small" style="color:var(--muted);font-weight:900;letter-spacing:.04em;text-transform:uppercase">Como enviar sua conversa</div>
+      <div style="font-size:19px;font-weight:950;margin:6px 0 6px">${p.titulo}</div>
+      <div class="small" style="color:var(--soft);line-height:1.55;margin-bottom:12px">${p.texto}</div>
+      <div style="display:flex;justify-content:center;margin-bottom:12px">${p.desenho}</div>
+      <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
+        ${CP1149_PASSOS.map((_,k)=>`<span style="width:${k===i?18:7}px;height:7px;border-radius:9px;background:${k===i?'var(--lime)':'rgba(255,255,255,.22)'};display:inline-block"></span>`).join("")}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${i>0?`<button type="button" class="btn secondary" id="cp1149Voltar" style="flex:1">Voltar</button>`:`<button type="button" class="btn secondary" id="cp1149Fechar" style="flex:1">Fechar</button>`}
+        <button type="button" class="btn" id="cp1149Proximo" style="flex:1.4">${ultimo?'Entendi, vamos lá':'Próximo'}</button>
+      </div>`;
+    card.querySelector("#cp1149Voltar")?.addEventListener("click", () => { i--; desenhar(); });
+    card.querySelector("#cp1149Fechar")?.addEventListener("click", fechar);
+    card.querySelector("#cp1149Proximo")?.addEventListener("click", () => {
+      if(ultimo){ fechar(); return; }
+      i++; desenhar();
+    });
+  };
+  desenhar();
+  overlay.addEventListener("click", (ev) => { if(ev.target === overlay) fechar(); });
+};
+// Abre sozinho na PRIMEIRA vez de quem ainda não importou nada — o momento em que o corretor novo
+// não sabe o que fazer. Uma vez visto, só volta pelo botão.
+window.cp1149AbrirSePrimeiraVez = function(){
+  try{
+    if(localStorage.getItem(CP1149_VISTO_KEY)) return false;
+    const temLead = Array.isArray(state?.itemsAtivos) ? state.itemsAtivos.length > 0
+      : (Array.isArray(state?.leads) ? state.leads.length > 0 : false);
+    if(temLead){ localStorage.setItem(CP1149_VISTO_KEY, "1"); return false; } // já usa o app: não atrapalha
+    window.cp1149ComoEnviar(0);
+    return true;
+  }catch(_){ return false; }
+};
+
 (function cpLigarSeletorDeZip(){
   const ajuda = qs("#importAjuda");
   if(ajuda) ajuda.innerHTML = cpTextoAjudaImportar();
   const input = qs("#zipFileInput");
   qs("#btnEscolherZip")?.addEventListener("click", () => input?.click());
+  // v1149 — passo a passo ilustrado do WhatsApp (Android e iPhone), sempre à mão.
+  qs("#btnComoEnviar")?.addEventListener("click", () => { try{ window.cp1149ComoEnviar(0); }catch(_){} });
   input?.addEventListener("change", (ev) => {
     const file = ev.target.files?.[0];
     // Zera o campo: sem isso, escolher DE NOVO o mesmo arquivo (ex.: depois de um erro) não

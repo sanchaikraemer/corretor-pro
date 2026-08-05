@@ -146,6 +146,9 @@
              botão Compartilhar (limitação do Safari, não do app), e esta tela NÃO tinha nenhum
              lugar pra escolher o ZIP. Este botão é a porta que faltava, e serve nos dois sistemas. -->
         <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" hidden>
+        <!-- v1149 — o corretor NOVO (teste com Android) precisa aprender o caminho dentro do
+             WhatsApp antes de qualquer coisa. Este botão abre o passo a passo ilustrado. -->
+        <button class="btn secondary" id="btnComoEnviar" type="button" style="width:100%;margin-bottom:8px">▶︎ Como enviar sua conversa (30 segundos)</button>
         <button class="btn" id="btnEscolherZip" type="button" style="width:100%">📂 Escolher o arquivo da conversa (.zip)</button>
         <div class="file-name" id="fileName"></div>
         <div class="btns btns-row" style="margin-top:10px">
