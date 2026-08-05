@@ -38,6 +38,15 @@ assert.match(app, /limparImportacoesRemotasAntigas/);
 assert.match(app, /X-Shared-At/);
 assert.match(app, /Falha recuperável/);
 assert.match(app, /cachedTranscriptions/);
-assert.doesNotMatch(app.slice(app.indexOf('async function processarStorageEmEtapas'), app.indexOf('// ============ RENDERIZAÇÃO')), /existingLeadId/);
+// v1141 — o que o navegador NÃO pode mandar é a conversa já salva (o histórico inteiro subindo de
+// volta era exatamente o peso que este pipeline em etapas nasceu pra evitar; o servidor lê isso do
+// banco). Já o ID do cliente pode: ele não é um palpite do app, é a identificação que o PRÓPRIO
+// servidor devolveu na etapa "preparar" — e é ela que permite reaproveitar a análise salva quando a
+// reimportação não trouxe nada novo, em vez de pagar a análise inteira de novo.
+{
+  const bloco = app.slice(app.indexOf('async function processarStorageEmEtapas'), app.indexOf('// ============ RENDERIZAÇÃO'));
+  assert.doesNotMatch(bloco, /existingTimeline/, 'o app nunca reenvia a conversa já salva');
+  assert.match(bloco, /existingLeadId: prep\?\.leadAnterior\?\.id/, 'manda só o id que o servidor identificou na etapa preparar');
+}
 
 console.log('v825-storage-pipeline: ok');

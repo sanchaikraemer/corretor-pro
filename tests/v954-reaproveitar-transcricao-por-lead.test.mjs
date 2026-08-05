@@ -74,14 +74,21 @@ assert.match(blocoPreparar, /_buscarProcessamentoExistenteV681\(supabase, \{ res
   'ação preparar busca o lead correspondente só pelo nome do arquivo (e sempre dentro da MESMA organização), sem result/analysis ainda');
 assert.match(blocoPreparar, /cacheDoLead/, 'passa o cache do lead anterior pra prepararExtracaoPersistente');
 
-// 8. Dentro da extração, o cache do lead é tentado ANTES do cache por hash de conteúdo (mais
-//    confiável — ver nota no topo do arquivo).
-const subirUmInicio = storage.indexOf('const subirUm = async');
-const subirUmFim = storage.indexOf('for (let i = 0; i < entradas.length', subirUmInicio);
-const blocoSubirUm = storage.slice(subirUmInicio, subirUmFim);
-const idxCacheDoLead = blocoSubirUm.indexOf('cacheDoLead[nome]');
-const idxCacheHash = blocoSubirUm.indexOf('carregarTranscricaoCache(storage, hash, organizationId)');
-assert.ok(idxCacheDoLead > -1 && idxCacheHash > -1 && idxCacheDoLead < idxCacheHash,
-  'cache do lead é checado antes do cache por hash de conteúdo');
+// 8. O cache do lead é resolvido ANTES do cache por hash de conteúdo (mais confiável — ver nota no
+//    topo do arquivo). v1141: agora ele é resolvido antes até da EXTRAÇÃO — o áudio que já tem
+//    texto salvo deste cliente não é descomprimido nem sobe pro Storage só pra calcular um hash
+//    que ninguém usaria. O cache por hash continua existindo, só pra quem sobrou.
+const prepararInicio = storage.indexOf('export async function prepararExtracaoPersistente');
+const prepararFim = storage.indexOf('async function removerImportacao', prepararInicio);
+const blocoPreparo = storage.slice(prepararInicio, prepararFim);
+const idxCacheDoLead = blocoPreparo.indexOf('cacheDoLead[nome]');
+const idxExtracao = blocoPreparo.indexOf('const subirUm = async');
+const idxCacheHash = blocoPreparo.indexOf('carregarTranscricaoCache(storage, hash, organizationId)');
+assert.ok(idxCacheDoLead > -1 && idxExtracao > -1 && idxCacheHash > -1,
+  'sanidade: os três pontos (cache do lead, upload dos que sobraram, cache por hash) existem');
+assert.ok(idxCacheDoLead < idxExtracao && idxCacheDoLead < idxCacheHash,
+  'cache do lead é resolvido antes de extrair/subir e antes do cache por hash de conteúdo');
+assert.match(blocoPreparo, /audiosJaTranscritos: cacheDoLead/,
+  'a extração recebe a lista do que já tem texto salvo, pra não descomprimir de novo');
 
 console.log('v954-reaproveitar-transcricao-por-lead: ok');

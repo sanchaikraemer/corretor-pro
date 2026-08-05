@@ -756,7 +756,11 @@ async function slimZipKeepingTextAndAudio(file, onProgress){
     const [path, entry] = entries[i];
     if(KEEP_RE.test(path)){
       const data = await entry.async("uint8array");
-      newZip.file(path, data);
+      // v1141 — áudio do WhatsApp (.opus/.m4a/.mp3) JÁ É COMPRIMIDO: passar DEFLATE nele de novo
+      // gasta segundos de processador do celular pra economizar quase nada (às vezes o arquivo até
+      // cresce). Só o texto da conversa compensa compactar. Numa conversa com dezenas de áudios,
+      // isso era parte do "por que demora tanto antes de sequer começar a subir".
+      newZip.file(path, data, { compression: /\.txt$/i.test(path) ? "DEFLATE" : "STORE" });
       kept++;
     } else {
       dropped++;
@@ -764,7 +768,7 @@ async function slimZipKeepingTextAndAudio(file, onProgress){
     if(onProgress) onProgress({processed:i+1, total:entries.length, kept, dropped});
   }
 
-  const blob = await newZip.generateAsync({type:"blob", compression:"DEFLATE"});
+  const blob = await newZip.generateAsync({type:"blob", compression:"STORE"});
   const slim = new File([blob], file.name.replace(/\.zip$/i,"")+"-enxuto.zip", {type:"application/zip"});
   return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size };
 }
@@ -7190,45 +7194,26 @@ function janelaAudioPadrao(){
   return "90";
 }
 
-function escolherPeriodoAudiosImportacao(){
-  const salvo = janelaAudioPadrao();
-  const opcoes = [
-    { valor:"30", label:"30 dias" },
-    { valor:"60", label:"60 dias" },
-    { valor:"90", label:"90 dias" },
-    { valor:"all", label:"Todo o período" }
-  ];
-  return new Promise((resolve) => {
-    // v1116 — caso real (print do dono): a janela abria com o ANEL de % subindo atrás (a
-    // animação se arrasta por tempo até o teto da etapa, ~29-30%) — parecia que a importação
-    // seguia sem a escolha. Enquanto o corretor decide, NADA pode parecer estar rodando:
-    // a tela cheia sai de cena (mesmo `pausar` da decisão salvar/atualizar) e volta sozinha
-    // no próximo passo do fluxo, logo depois da escolha.
-    try{ cpImportOverlaySincronizar(0, "", { pausar: true }); }catch(_){}
-    document.querySelector("#periodoAudioModal")?.remove();
-    const overlay = document.createElement("div");
-    overlay.id = "periodoAudioModal";
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
-      <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;max-width:360px;width:100%">
-        <div style="font-size:17px;font-weight:950;margin-bottom:4px">Período dos áudios</div>
-        <div class="small" style="color:var(--muted);margin-bottom:16px">Áudios fora do período não são transcritos. As mensagens escritas entram completas em qualquer opção.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          ${opcoes.map(o => `<button type="button" class="periodoAudioBtn" data-valor="${o.valor}" style="padding:14px 8px;background:${o.valor===salvo?'var(--accent)':'transparent'};border:1px solid ${o.valor===salvo?'transparent':'var(--line)'};border-radius:10px;color:${o.valor===salvo?'var(--on-accent)':'var(--text)'};font-weight:950;cursor:pointer">${escapeHtml(o.label)}</button>`).join("")}
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelectorAll(".periodoAudioBtn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const final = normalizarJanelaAudioCliente(btn.dataset.valor);
-        // §7.4: a escolha na importação é exceção SÓ daquela importação — não vira o
-        // padrão persistente (esse é ajustado no Cérebro). Fica só na sessão atual.
-        state.ultimaJanelaAudio = final;
-        overlay.remove();
-        resolve(final);
-      }, { once:true });
-    });
-  });
+// v1141 — A JANELA "Período dos áudios" FOI REMOVIDA DA IMPORTAÇÃO.
+//
+// Ela parava TODA importação pra pedir uma escolha que, na prática, quase nunca muda alguma
+// coisa: o período limita só a TRANSCRIÇÃO DE ÁUDIO. As mensagens escritas entram completas em
+// qualquer opção e a análise (a etapa que realmente demora) lê a conversa inteira do mesmo jeito.
+// Numa conversa com pouco áudio — o caso comum de reimportação — "30 dias" e "todo o período"
+// dão exatamente o mesmo tempo e o mesmo resultado. O dono flagrou isso ("não importa se coloco
+// 30 ou todo período, sempre demora o mesmo tempo") e, junto, a incoerência visual: a tela de
+// progresso já aparecia atrás da pergunta (8%, "Recebendo"), como se algo estivesse rodando
+// antes da decisão — foi a v1116 tentando esconder o anel, mas o card de progresso continuava lá.
+//
+// O período continua existindo e continua configurável: vem do Cérebro ("Período padrão dos
+// áudios"), e o resultado da importação segue mostrando qual período foi aplicado com o atalho
+// "ajustar padrão". O que acabou foi o pedágio a cada importação.
+function janelaAudioDaImportacao(){
+  const final = janelaAudioPadrao();
+  // Guarda a janela desta importação pra uma retentativa usar exatamente a mesma (o servidor só
+  // reaproveita a extração já feita quando a janela é a mesma — ver prepararExtracaoPersistente).
+  state.ultimaJanelaAudio = final;
+  return final;
 }
 
 function criarImportId(){
@@ -7506,6 +7491,12 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     try{
       result = await chamar({
         action:"analisar",
+        // v1141 — o cliente já salvo foi identificado na etapa anterior (por telefone, nome do
+        // arquivo ou nome). Mandar o id aqui é o que permite ao servidor comparar com a conversa
+        // já gravada: sem uma única mensagem nova, ele reaproveita a análise salva e NÃO chama a
+        // IA (nem cobra). Antes esse id ficava só do lado do servidor, na etapa de preparar, e a
+        // análise inteira era refeita e paga em toda reimportação.
+        existingLeadId: prep?.leadAnterior?.id || "",
         txtFile:prep.txtFile,
         messages:prep.messages,
         audioFilesRelevantes:prep.audioFilesRelevantes,
@@ -7597,11 +7588,11 @@ async function renderProcessedResult(data, meta){
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
   const inc = data.incrementalMeta || {};
-  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio reaproveitado", "áudios reaproveitados")}.${inc.analiseReutilizada ? " Nenhuma novidade encontrada." : " A análise foi refeita sem reutilizar sugestão antiga."}</div>` : "";
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>Nada novo nesta conversa:</b> a análise que já estava salva foi mantida e nenhuma análise nova foi gerada (nada a pagar por retrabalho)." : " Havia novidade, então a análise foi refeita sobre a conversa completa."}</div>` : "";
 
   // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
   // quando o nome exportado coincide (ou se parece) com um nome já salvo.
-  const match = await acharLeadExistente(state.lead.name);
+  const match = await acharLeadExistente(state.lead.name, inc.existingLeadId || "");
   const existente = match?.lead || null;
   state.pendingExistente = existente;
   const perguntarNome = !!existente;
@@ -7654,7 +7645,9 @@ async function renderProcessedResult(data, meta){
   const timeline = (data.timeline || []).slice(-200).map(m =>
     `<div class="event"><b>${escapeHtml((m.date || "") + " " + (m.time || "") + " — " + (m.author || ""))}</b><p>${escapeHtml(m.text || "")}</p></div>`
   ).join("");
-  qs("#timeline").innerHTML = timeline || '<div class="event"><b>Conversa recebida</b><p>Arquivo processado.</p></div>';
+  qs("#timeline").innerHTML = timeline || (inc.reimportacao
+    ? '<div class="event"><b>Nada novo nesta conversa</b><p>O arquivo não trouxe nenhuma mensagem que já não estivesse salva. A conversa completa continua no cadastro do cliente.</p></div>'
+    : '<div class="event"><b>Conversa recebida</b><p>Arquivo processado.</p></div>');
 
   qs("#btnSalvarLead")?.addEventListener("click", salvarLeadPendente);
   qs("#btnSalvarComoNovo")?.addEventListener("click", salvarLeadPendente);
@@ -7716,17 +7709,28 @@ function nomesParecemMesmoCliente(nomeA, nomeB){
 // Procura na base inteira um lead com o mesmo nome técnico (maiúsculas, espaços e acentos ignorados)
 // e, na ausência desse, um lead com nome só PARECIDO (ver nomesParecemMesmoCliente acima).
 // Nomes apenas parecidos e telefone nunca decidem uma fusão automática — só levantam a pergunta.
-async function acharLeadExistente(nome){
+async function acharLeadExistente(nome, idConhecido = ""){
   const norm = (valor) => String(valor || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/\s+/g, " ").trim();
   const alvo = norm(nome);
-  if(alvo.length < 2) return null;
+  const idAlvo = String(idConhecido || "").trim();
+  if(alvo.length < 2 && !idAlvo) return null;
   let leads = state.leads || [];
   try{
     const data = await getLeadsData(true);
     if(Array.isArray(data?.items)) leads = data.items.map(limparLead);
   }catch(_){}
+  // v1141 \u2014 quando o SERVIDOR j\u00e1 identificou o cliente (por telefone, nome do arquivo ou nome, na
+  // etapa de preparar), essa identifica\u00e7\u00e3o vale mais que a busca por nome daqui: \u00e9 ela que evitou
+  // a rean\u00e1lise paga e o retrabalho de transcri\u00e7\u00e3o. Sem isso, um nome escrito diferente entre as
+  // duas importa\u00e7\u00f5es fazia a tela seguir pelo caminho de "cliente novo" logo depois de o servidor
+  // ter tratado tudo como reimporta\u00e7\u00e3o do mesmo cliente.
+  if(idAlvo){
+    const porId = leads.find(l => String(l?.id || "") === idAlvo);
+    if(porId) return { lead:porId, via:"id-do-servidor" };
+  }
+  if(alvo.length < 2) return null;
   const exato = leads.find(l => l?.id && norm(l.name) === alvo);
   if(exato) return { lead:exato, via:"nome-exato" };
   const parecido = leads.find(l => l?.id && nomesParecemMesmoCliente(nome, l.name));
@@ -8009,7 +8013,7 @@ async function processFile(file, options = {}){
   }
 
   try{
-    const audioWindowDays = await escolherPeriodoAudiosImportacao();
+    const audioWindowDays = janelaAudioDaImportacao();
     renderEtapas(0, "áudios: " + rotuloJanelaAudio(audioWindowDays) + "; textos completos");
 
     // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
@@ -8341,10 +8345,9 @@ async function _checkSharedImpl(){
 
   // Uma abertura normal do aplicativo nunca deve procurar ZIPs antigos no IndexedDB/cache.
   // Antes, checkShared() era chamado no boot mesmo sem Share Target e acabava escolhendo o
-  // primeiro registro pendente antigo, abrindo sozinho a janela "Período dos áudios".
+  // primeiro registro pendente antigo, começando sozinho uma importação já feita.
   if(!cameFromShare){
     window.__cpShareImportActive=false;
-    document.querySelector('#periodoAudioModal')?.remove();
     return {handled:false};
   }
 
@@ -8376,7 +8379,6 @@ async function _checkSharedImpl(){
     if(!registroRecente){
       window.__cpShareImportActive=false;
       state.pendingSharedRecordId='';
-      document.querySelector('#periodoAudioModal')?.remove();
       try{ history.replaceState(null,'',location.pathname); }catch(_){ }
       return {handled:false,staleShare:true};
     }

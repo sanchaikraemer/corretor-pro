@@ -18,6 +18,10 @@ nova `criar-conta.js` (seção 2), a trava de cadastro por conexão e a migraç�
 lista (decisão do dono: quem se cadastra entra na hora e a venda é fechada por telefone depois), e
 a cobrança manual deixou de ser pendência pelo mesmo motivo. Ver `NOTAS-v1128.md`._
 
+_Retoque na v1141: a importação **não pergunta mais o período dos áudios** (usa o "Período padrão
+dos áudios" do Cérebro) e a reimportação passou a reaproveitar o que já está salvo — a seção 2
+descreve como isso funciona em `processar-storage.js`. Ver `NOTAS-v1141.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
@@ -55,7 +59,7 @@ esteve nas 12 até a v1082; a v1083 removeu duas rotas (`analisar.js`, sem nenhu
 | `diagnostico.js` | `?mode=status` (variáveis de ambiente configuradas), `?mode=openai` (teste real da chave OpenAI), `?mode=bucket` (configura o bucket do Storage — só admin). |
 | `lead-update.js` | Ações sobre um lead: etapa (só Ativo/Geladeira), memória, aprendizado, lembrete, apagar, editar, salvar novo, criar manual, etc. Nota (v1092): `lembrete-set`/`lembrete-clear` foram REMOVIDAS — o histórico do repositório mostra que nenhuma tela as chamou em nenhum momento do projeto (o app usa `reagendar-lembrete`/`remover-lembrete` de reanalisar-lead.js). Já `analise-comercial-set` e `nova-oportunidade-parceiro` continuam de propósito: as chamadas saíram do front só na v1073 (29/07/2026) e, como o app é PWA instalável, um celular que não abriu o app desde então ainda roda a versão em cache que as chamaria. Remover agora daria erro pra quem está desatualizado — sair numa faxina futura. |
 | `leads-recentes.js` | Listagem da Carteira + auditoria de qualidade dos dados (`?audit=1`) + backup completo (`?export=full`) — as três sempre filtradas pela própria empresa (ver `NOTAS-v1037.md`). |
-| `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. |
+| `processar-storage.js` | Pipeline de importação por Storage: criar URL de upload (absorveu `criar-upload-url.js`, ver `NOTAS-v1039.md`), preparar, transcrever, analisar, finalizar, limpar antigos. **Reimportação (v1141)**: "preparar" identifica o cliente já salvo (telefone/arquivo/nome) e devolve o id; "analisar" recebe esse id, lê do banco a conversa e a análise já gravadas e — se a reimportação não trouxer NENHUMA mensagem nova e a análise salva estiver completa — reaproveita essa análise **sem nenhuma chamada de IA**. Áudio que já tem transcrição salva do mesmo cliente nem é extraído do ZIP. Ver `NOTAS-v1141.md`. |
 | `reanalisar-lead.js` | Reanálise de um lead já importado. |
 | `receber-zip-atalho.js` | Recebe o ZIP mandado pelo Atalho do iPhone (autenticação própria, por token — não é sessão do app). |
 | `restaurar-leads.js` | Restauração de leads das tabelas legadas pré-multiempresa — exclusiva da empresa original (ver `NOTAS-v1042.md`). |

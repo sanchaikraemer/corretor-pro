@@ -3072,7 +3072,13 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     // v827-4 (ZIP grande): extrai SOMENTE os áudios que serão transcritos na janela
     // escolhida. Os demais ficam registrados como fora da janela, sem ocupar memória
     // nem gerar upload à toa — o que travava a extração de ZIPs com muitos áudios.
-    const nomesNecessarios = new Set(audiosParaTranscrever.map(normalizeName));
+    //
+    // v1141 — e nem todo áudio DA janela precisa ser extraído: numa reimportação, os que já têm
+    // transcrição guardada deste mesmo cliente chegam aqui em `audiosJaTranscritos`. Descomprimir
+    // e depois SUBIR pro Storage um áudio que já virou texto é trabalho puro de fila — era o que
+    // fazia a etapa "Abrindo o arquivo" demorar quase o mesmo tempo numa conversa sem novidade.
+    const jaTranscritos = new Set(Object.keys(options.audiosJaTranscritos || {}).map(normalizeName));
+    const nomesNecessarios = new Set(audiosParaTranscrever.map(normalizeName).filter(nome => !jaTranscritos.has(nome)));
     const totalSelecionado = audioFiles.reduce((sum, fullName) => nomesNecessarios.has(normalizeName(fullName)) ? sum + zipEntrySize(zip.files[fullName]) : sum, 0);
     if (totalSelecionado > MAX_SELECTED_AUDIO_BYTES) throw new Error("Os áudios selecionados para transcrição excedem o limite seguro da importação.");
     for (const fullName of audioFiles) {
@@ -3246,6 +3252,21 @@ function contextoAnteriorEnxuto(analysis) {
   };
 }
 
+// v1141 — a análise já salva deste cliente só pode ser reaproveitada se estiver COMPLETA: as três
+// mensagens de verdade (a regra que o resto do sistema exige em toda gravação) e sem marca de
+// falha. Análise pela metade nunca é reaproveitada — nesse caso a IA roda, como sempre rodou.
+function analiseAnteriorReutilizavel(previousAnalysis) {
+  const a = previousAnalysis && typeof previousAnalysis === "object" && !Array.isArray(previousAnalysis) ? previousAnalysis : null;
+  if (!a) return null;
+  if (a.mode === "erro_api" || a.mode === "sem_api" || a.sugestoesPendentes === true) return null;
+  const m = a.messages && typeof a.messages === "object" ? a.messages : {};
+  if (![m.a, m.b, m.c].every(v => String(v || "").trim().length >= 10)) return null;
+  const copia = { ...a, analiseReutilizadaDeImportacaoAnterior: true, analiseReutilizadaEm: new Date().toISOString() };
+  // Estado intermediário de uma importação anterior não pode ser ressuscitado como se fosse atual.
+  delete copia._importacaoPendente;
+  return copia;
+}
+
 function ehAnotacaoManualIncremental(m) {
   const source = String(m?.source || "");
   const type = String(m?.type || "");
@@ -3287,7 +3308,29 @@ export async function finalizarAnaliseDaConversa(payload) {
   // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
   // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
   if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
-  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  // v1141 — REIMPORTAR SEM NOVIDADE NÃO PAGA ANÁLISE.
+  //
+  // Reclamação do dono, com razão: "temos que achar um jeito de reimportar ou reanalisar SOMENTE o
+  // que já não foi feito, senão vou perder MUITO DINHEIRO com retrabalho que já está salvo". Era
+  // exatamente o que acontecia: quando a conversa reimportada não trazia UMA mensagem nova (o caso
+  // clássico de reexportar o mesmo cliente pra conferir algo), a IA era chamada de novo sobre a
+  // conversa inteira, gastava os mesmos tokens e devolvia praticamente o mesmo texto. Pior: a tela
+  // já dizia "mantive a análise anterior sem nova cobrança" — uma promessa que o código não
+  // cumpria, porque `analiseReutilizada` nunca virava true em lugar nenhum.
+  //
+  // Regras da reutilização (conservadoras de propósito): só com cliente já identificado, só com
+  // ZERO mensagem nova, e só se a análise salva estiver completa (as 3 mensagens validadas). Se
+  // qualquer uma dessas condições falhar, a análise roda normalmente — mensagem nova, áudio que
+  // finalmente virou texto ou análise anterior incompleta são novidade real e merecem IA.
+  const analiseAnteriorOk = (mensagensNovas.length === 0 && reimportacao)
+    ? analiseAnteriorReutilizavel(previousAnalysis)
+    : null;
+  if (analiseAnteriorOk) {
+    analysis = analiseAnteriorOk;
+    analiseReutilizada = true;
+  } else {
+    analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  }
 
   const audioValues = Object.values(transcriptionMap || {});
   const audiosTranscritosNoArquivo = audioValues.filter(item => String(item?.status || "").includes("transcrito") && item?.text).length;
