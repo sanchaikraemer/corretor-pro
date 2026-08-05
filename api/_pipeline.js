@@ -2572,18 +2572,11 @@ Formato JSON obrigatório:
 {
   "summary":"texto",
   "diagnostico":{
-    "ultimaPessoaFalar":"texto",
+    "ultimaPessoaFalar":"contato ou corretor",
     "ultimoCompromissoCliente":"texto",
-    "ultimaInformacaoPrometida":"texto",
-    "compromissoCorretorNaoCumprido":"texto",
     "pedidoSemResposta":"texto",
-    "produtoPrincipal":"texto",
-    "produtosParalelos":"texto",
     "objecaoPrincipal":"texto",
-    "pendenciaFinanceira":"texto",
-    "quemDeveAgirAgora":"texto",
-    "etapaFunil":"texto",
-    "mensagemQueEuEnviariaHoje":"texto"
+    "pendenciaFinanceira":"texto"
   },
   "mensagens":{
     "recomendada":"texto",
@@ -2684,6 +2677,23 @@ ${timelineText}`;
       // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
       // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
       ...(modeloFallbackUsado ? { modeloFallback: true } : {}),
+      // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
+      //
+      // O JSON pedido à IA tinha 12 campos de diagnóstico e a tela mostra CINCO. Os outros sete só
+      // eram gravados — e o tempo de espera da importação é justamente o tempo que a IA leva pra
+      // ESCREVER. O caso mais absurdo: "mensagemQueEuEnviariaHoje" fazia a IA escrever uma quarta
+      // mensagem inteira que a linha lá embaixo já jogava fora em favor da mensagem A.
+      //
+      // O que a IA escreve agora: ultimaPessoaFalar, ultimoCompromissoCliente, pedidoSemResposta,
+      // objecaoPrincipal e pendenciaFinanceira. Os quatro primeiros aparecem no cliente (bloco
+      // "Detalhes comerciais" e "Último compromisso"); ultimaPessoaFalar decide o "cliente
+      // esperando você" da fila.
+      //
+      // O objeto gravado continua com a MESMA forma: cada campo que saiu do pedido é preenchido
+      // pelas reservas que já existiam aqui (produto vem de produtoInteresse, etapa vem de
+      // etapaSugerida, próximo passo vem de nextAction). Lead antigo não perde nada, e nenhuma
+      // tela deixou de receber o que recebia. Não devolva esses campos ao pedido sem antes
+      // colocá-los na tela.
       diagnostico: {
         ultimaPessoaFalar: clean(d.ultimaPessoaFalar, "Não identificado"),
         ultimoCompromissoCliente: clean(d.ultimoCompromissoCliente, "Não identificado"),
