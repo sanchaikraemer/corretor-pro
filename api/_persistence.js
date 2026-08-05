@@ -720,7 +720,7 @@ let _dedupeIndexadoDisponivel = null;
 export function _dedupeIndexadoEstado(){ return _dedupeIndexadoDisponivel; }
 export function _dedupeIndexadoResetar(){ _dedupeIndexadoDisponivel = null; }
 
-export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, organizationId }) {
+export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, organizationId, idJaIdentificado = "" }) {
   const analysis = result?.analysis || {};
   const lead = result?.lead || analysis?.lead || {};
   const nomeArquivoNovo = _cleanArquivoIdentity(fileName || result?.txtFile || path?.split("/").pop() || "");
@@ -729,6 +729,51 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const phone = _digitsIdentity(lead?.phone || analysis?.lead?.phone || result?.phone || "");
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
+
+  // v1144 — "por que 2x em cada importação? não tem nem coerência isso" (dono). Ele está certo.
+  //
+  // Esta busca sempre rodou DUAS vezes por importação, respondendo perguntas escritas em épocas
+  // diferentes, uma sem saber da outra:
+  //   1ª — ao abrir o ZIP: "esse cliente já existe?", pra reaproveitar as transcrições já pagas
+  //        (e, desde a v1141, a análise já salva);
+  //   2ª — ao salvar: "atualizo o cadastro que existe ou crio um novo?", a trava contra duplicata.
+  //
+  // A resposta é a MESMA nas duas. Desde a v1141 a primeira já devolve o id do cliente encontrado,
+  // então a segunda só precisa CONFERIR aquele id — uma leitura pontual de UMA linha — em vez de
+  // varrer a carteira de novo.
+  //
+  // Por que conferir e não confiar direto: o id vai e volta pelo navegador (viaja dentro do
+  // resultado da análise), e nada que vem de fora manda numa decisão de fundir cadastros. A
+  // conferência usa as MESMAS regras da busca (telefone, nome do arquivo ou nome do cliente). Se
+  // não bater, ou se a linha não existir, a busca normal roda inteira logo abaixo — a trava contra
+  // duplicata continua sendo a mesma de sempre.
+  const idConferir = String(idJaIdentificado || "").trim();
+  if (idConferir) {
+    try {
+      const { data: linha, error: erroId } = await supabase
+        .from("whatsapp_processamentos")
+        .select("id,nome_arquivo,arquivo_nome,telefone,etapa,resultado_analise,timeline_json,criado_em,created_at,atualizado_em,updated_at")
+        .eq("id", idConferir)
+        .eq("organization_id", organizationId)
+        .maybeSingle();
+      if (!erroId && linha?.id) {
+        const ra = linha.resultado_analise || {};
+        const foneLinha = _digitsIdentity(ra?.lead?.phone || linha.telefone || "");
+        const arquivoLinha = _nomeIdentity(linha.nome_arquivo || linha.arquivo_nome || "");
+        const nomeLinha = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || linha.nome_arquivo || linha.arquivo_nome || "");
+        const bateFone = !!phoneKey && foneLinha.length >= 8 && foneLinha.slice(-8) === phoneKey;
+        const bateArquivo = arquivoKey.length >= 3 && !!arquivoLinha && arquivoLinha === arquivoKey;
+        const bateNome = nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo) && !!nomeLinha
+          && !_nomeRuimIdentity(nomeLinha) && _nomesMesmoLead(nomeLinha, nomeNovo);
+        if (bateFone || bateArquivo || bateNome) {
+          return {
+            row: { ...linha, timeline_json: Array.isArray(linha.timeline_json) ? linha.timeline_json : [] },
+            via: bateFone ? "id-conferido-telefone" : (bateArquivo ? "id-conferido-arquivo" : "id-conferido-nome")
+          };
+        }
+      }
+    } catch (_) { /* qualquer problema aqui: segue pela busca completa abaixo */ }
+  }
 
   // v1092 — CAMINHO RÁPIDO (migração 0010). As três regras de deduplicação são de IGUALDADE
   // EXATA sobre texto normalizado (telefone: últimos 8 dígitos; arquivo e nome: minúsculas, sem
@@ -981,9 +1026,15 @@ export async function persistProcessingResult({
   const attempts = [];
   let processingRow = null;
 
+  // v1144 — o id que a etapa de abrir o ZIP já identificou viaja aqui dentro do resultado da
+  // análise (incrementalMeta.existingLeadId). Com ele, a busca ao salvar confere UMA linha em vez
+  // de varrer a carteira inteira de novo — e continua caindo na busca completa se não bater.
   const existenteV681 = forceNew
     ? null
-    : await _buscarProcessamentoExistenteV681(supabase, { result, fileName: nomeArquivo, path, organizationId });
+    : await _buscarProcessamentoExistenteV681(supabase, {
+      result, fileName: nomeArquivo, path, organizationId,
+      idJaIdentificado: result?.incrementalMeta?.existingLeadId || ""
+    });
 
   // v1092 — as três chaves de deduplicação vão gravadas junto (migração 0010). Elas são
   // calculadas exatamente pelas MESMAS funções que a busca usa, então o caminho rápido e a
