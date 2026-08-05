@@ -8822,7 +8822,7 @@ const CP1149_PASSOS = [
   },
   {
     titulo: "5. Escolha o Corretor Pro na lista",
-    texto: "Abre a lista de compartilhar do celular. Toque no ícone do <b>Corretor Pro</b>. Pronto: em 30 a 60 segundos ele mostra quem atender, por quê, quando e o que falar.",
+    texto: "Abre a lista de compartilhar do celular. Toque no ícone do <b>Corretor Pro</b> — ele aparece ali porque o app está instalado no seu celular. Pronto: em 30 a 60 segundos ele mostra quem atender, por quê, quando e o que falar.",
     desenho: cp1149Telinha(`
       <rect x="18" y="120" width="164" height="150" rx="14" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
       <rect x="30" y="134" width="140" height="22" rx="6" fill="rgba(255,255,255,.07)"/>
@@ -8834,6 +8834,26 @@ const CP1149_PASSOS = [
       <circle cx="164" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
       <rect x="66" y="212" width="42" height="5" rx="2.5" fill="#FF6258"/>
       <rect x="30" y="238" width="140" height="18" rx="9" fill="rgba(255,255,255,.06)"/>`)
+  },
+  {
+    // v1152 — pergunta do dono no primeiro teste com conta nova: "e se não aparecer o ícone do
+    // Corretor Pro pra enviar?". Acontece de verdade, e tem UM motivo: o celular só oferece o app
+    // na lista de compartilhar depois que ele está INSTALADO na tela inicial. Este passo é a saída,
+    // e a segunda opção funciona mesmo sem instalar nada.
+    titulo: "Não apareceu o Corretor Pro na lista?",
+    texto: "Isso quer dizer que o app ainda <b>não está instalado</b> no celular — e o Android só oferece na lista quem está instalado.<br><br><b>Jeito 1 (recomendado):</b> na tela inicial do Corretor Pro toque em <b>“Baixar app”</b> (ou no menu do navegador → <b>“Adicionar à tela inicial”</b>). Depois repita a exportação: o ícone estará lá.<br><br><b>Jeito 2 (funciona sempre):</b> na lista de compartilhar escolha <b>salvar o arquivo</b> no celular. Depois, aqui no Corretor Pro, toque em <b>“Escolher o arquivo da conversa”</b> e selecione o ZIP que você salvou.",
+    desenho: cp1149Telinha(`
+      <rect x="22" y="40" width="156" height="54" rx="12" fill="rgba(255,98,88,.14)" stroke="#FF6258" stroke-width="2"/>
+      <circle cx="46" cy="67" r="12" fill="rgba(255,98,88,.35)"/>
+      <path d="M46 61 v11 M41 67 l5 5 l5 -5" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="66" y="58" width="92" height="6" rx="3" fill="#FF6258"/>
+      <rect x="66" y="70" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.45)"/>
+      <rect x="22" y="112" width="156" height="1.5" fill="rgba(255,255,255,.14)"/>
+      <rect x="22" y="130" width="156" height="44" rx="10" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
+      <rect x="34" y="144" width="76" height="6" rx="3" fill="rgba(255,255,255,.55)"/>
+      <rect x="34" y="156" width="112" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
+      <rect x="22" y="192" width="156" height="30" rx="10" fill="rgba(255,255,255,.05)"/>
+      <rect x="34" y="203" width="60" height="7" rx="3.5" fill="rgba(255,255,255,.45)"/>`)
   }
 ];
 
