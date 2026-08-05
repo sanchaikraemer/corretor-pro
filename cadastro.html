@@ -187,10 +187,43 @@ async function cadastrar() {
     setTimeout(() => { location.href = 'entrar.html'; }, 1200);
   } catch (e) {
     msg.className = 'erro';
-    msg.textContent = 'Erro ao criar conta: ' + (e.message || e);
+    // v1151 — print do dono ao criar a segunda conta de teste: a tela mostrou "Erro ao criar conta:
+    // User already registered" — em inglês, cru do Supabase, sem dizer o que fazer. Quem está
+    // testando o app com corretores não pode topar com isso. Aqui as mensagens comuns viram
+    // português com a AÇÃO ao lado; o que não estiver na lista continua aparecendo como veio (é
+    // melhor um texto estranho que nenhuma informação).
+    msg.innerHTML = cpErroCadastroEmPortugues(e);
     btn.disabled = false;
     btn.textContent = 'Criar conta e começar teste grátis';
   }
+}
+
+// v1151 — tradução das falhas de cadastro que o corretor pode ver de verdade.
+function cpErroCadastroEmPortugues(e){
+  const cru = String(e?.message || e || '').trim();
+  const baixo = cru.toLowerCase();
+  const entrar = ' <a href="entrar.html" style="color:var(--cp-coral,#FF6258);font-weight:900">Entrar</a>';
+  const recuperar = ' <a href="recuperar-senha.html" style="color:var(--cp-coral,#FF6258);font-weight:900">Esqueci minha senha</a>';
+  if (baixo.includes('already registered') || baixo.includes('already been registered') || baixo.includes('user already exists')) {
+    return '<b>Esse e-mail já tem conta.</b> Use outro e-mail, ou entre com este.' + entrar + ' ·' + recuperar;
+  }
+  if (baixo.includes('invalid email') || baixo.includes('email address') && baixo.includes('invalid')) {
+    return '<b>E-mail inválido.</b> Confira se está escrito certinho (exemplo: nome@gmail.com).';
+  }
+  if (baixo.includes('password') && (baixo.includes('at least') || baixo.includes('short') || baixo.includes('6 characters'))) {
+    return '<b>Senha curta.</b> Use pelo menos 6 caracteres.';
+  }
+  if (baixo.includes('rate limit') || baixo.includes('too many requests') || baixo.includes('for security purposes')) {
+    return '<b>Muitas tentativas em pouco tempo.</b> Espere um minuto e tente de novo.';
+  }
+  if (baixo.includes('failed to fetch') || baixo.includes('networkerror') || baixo.includes('load failed')) {
+    return '<b>Sem conexão.</b> Confira a internet do aparelho e toque em criar conta de novo.';
+  }
+  if (baixo.includes('cadastros') || baixo.includes('limite')) {
+    // Trava contra cadastro falso em massa (api/criar-conta.js) já responde em português.
+    return '<b>' + cru + '</b>';
+  }
+  return 'Não consegui criar a conta agora: ' + cru;
 }
 </script>
 </body>
