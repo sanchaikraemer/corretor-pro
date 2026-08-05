@@ -43,7 +43,12 @@ assert.match(persistence, /cutoff90d/, 'precisa existir o corte de 90 dias usado
 assert.match(persistence, /messageCount90d,\s*\n\s*clientMessageCount,/,
   'messageCount90d precisa estar no objeto retornado pro cliente, junto dos outros contadores');
 // messageCount (histórico completo) não pode ter sido removido — ranking/dedupe interno ainda usa ele
-assert.match(persistence, /messageCount: timeline\.length,/, 'messageCount (histórico completo) precisa continuar existindo pro uso interno (ranking)');
+// v1136 — o total deixou de vir sempre de timeline.length: quando o cache v3 está em dia, a
+// conversa nem é buscada e o total sai do cache (messageCountTotal = timeline.length quando a
+// conversa está em mãos; cache.len quando não está). O que este teste protege segue igual:
+// messageCount (histórico completo) continua existindo pro uso interno (ranking).
+assert.match(persistence, /messageCount: messageCountTotal,/, 'messageCount (histórico completo) precisa continuar existindo pro uso interno (ranking)');
+assert.match(persistence, /const messageCountTotal = temTimeline\s*\n?\s*\? timeline\.length/, 'com a conversa em mãos, o total continua sendo o tamanho real do histórico');
 
 assert.match(appJs, /function totalMensagensLead\(l\)\{/, 'totalMensagensLead precisa continuar existindo');
 const iniFn = appJs.indexOf('function totalMensagensLead(l){');

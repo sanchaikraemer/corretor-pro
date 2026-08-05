@@ -263,21 +263,17 @@ montar isso:
 
 ## 8. Pendências conhecidas
 
-- **[MAIOR PENDÊNCIA TÉCNICA] A listagem lê a conversa inteira de todos os leads a cada carga.**
-  Achado da auditoria da madrugada de 05/08/2026. `listRecentProcessings` (em `_persistence.js`)
-  seleciona `timeline_json` de **todo** lead a cada chamada de `/api/leads-recentes` — e manda pro
-  celular só uma prévia de 8 mensagens. O cache de estatísticas da v1017 evita **recalcular**, mas
-  não evita **trafegar**: a conversa inteira sai do Supabase em toda listagem. Como a Home busca a
-  carteira a cada 2 minutos (e a cada volta de aba, e depois de cada gravação), isso é quase
-  certamente o que estoura a cota de egress do plano grátis (5 GB) que o painel vem acusando desde
-  a v1122.
-  **Correção proposta, sem migração de banco:** hoje o cache só é considerado válido se
-  `_statsCache.len === timeline.length` — e saber o `length` obriga a trazer a timeline. Trocando
-  essa chave por `atualizado_em` (coluna minúscula, já selecionada), a listagem pode **deixar de
-  pedir `timeline_json`** e buscá-la numa segunda consulta apenas para as poucas linhas cujo cache
-  está velho. Não foi feito na auditoria de propósito: mexe na consulta mais crítica do app e nos
-  números que o corretor usa pra decidir o dia (dias sem contato, contadores) — precisa ser
-  publicado com o dono acordado, conferindo contra os dados reais dele.
+- ~~[MAIOR PENDÊNCIA TÉCNICA] A listagem lê a conversa inteira de todos os leads a cada carga~~ —
+  **resolvida na v1136** (era o achado nº 1 da auditoria de 05/08/2026 e a causa quase certa da
+  cota de egress estourada desde a v1122). A listagem normal **não pede mais `timeline_json`**: o
+  `_statsCache` virou v3 (marca d'água = `atualizado_em` da linha, prévia de 8 mensagens e último
+  toque gravados juntos) e responde tudo; só linhas com cache frio/vencido têm a conversa buscada,
+  numa segunda consulta, em lotes de 50. No regime normal a carga é **uma** consulta sem conversa
+  nenhuma; na virada do dia (os números de 90 dias envelhecem) todo mundo recalcula **uma** vez e
+  volta ao regime barato. O detalhe do lead (`includeFullTimeline`) segue trazendo o histórico
+  completo. Guardas: `tests/v1136-listagem-nao-traz-conversa-inteira.test.mjs` (usa um banco de
+  mentira que **respeita** o select — os fakes antigos devolviam a linha inteira fosse qual fosse a
+  coluna pedida, e por isso nunca enxergariam esta regressão). Ver `NOTAS-v1136.md`.
 
 - ~~Confirmação de e-mail no cadastro~~ — **descartada por decisão do dono na v1128**, e não é mais
   pendência: quem se cadastra precisa entrar no app na hora e usar os 7 dias de teste; a venda é

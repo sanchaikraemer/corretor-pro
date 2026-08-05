@@ -1157,9 +1157,18 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   const previewLimit = Math.min(20, Math.max(3, Number(options?.previewLimit || 8)));
 
   // Evita trazer texto_extraido, storage e outros campos grandes que não entram na tela.
-  // timeline_json ainda é lida no servidor para calcular dias, último falante e contagens,
-  // mas só a prévia é enviada ao celular. Em esquemas antigos, cai para select("*").
-  const LIST_COLUMNS = "id,nome_arquivo,arquivo_nome,status,etapa,progresso,timeline_json,audios_encontrados,audios_transcritos,resultado_analise,criado_em,created_at,atualizado_em,updated_at";
+  // Em esquemas antigos, cai para select("*").
+  //
+  // v1136 — timeline_json SAIU da listagem normal. Auditoria de 05/08/2026: a lista puxava a
+  // conversa INTEIRA de todo lead a cada carga e mandava pro celular só 8 mensagens — com a Home
+  // buscando a carteira a cada 2 minutos, era quase certamente o que estourava a cota de egress
+  // do Supabase (5 GB no plano grátis, painel acusando desde a v1122). Agora a listagem confia no
+  // _statsCache v3 (que carrega marca d'água, prévia e último toque — ver abaixo) e só busca a
+  // timeline, numa SEGUNDA consulta e apenas das linhas cujo cache está frio/vencido. No detalhe
+  // do lead (includeFullTimeline) a timeline continua vindo na consulta principal, como sempre.
+  const LIST_COLUMNS_SEM_TIMELINE = "id,nome_arquivo,arquivo_nome,status,etapa,progresso,audios_encontrados,audios_transcritos,resultado_analise,criado_em,created_at,atualizado_em,updated_at";
+  const LIST_COLUMNS_COM_TIMELINE = "id,nome_arquivo,arquivo_nome,status,etapa,progresso,timeline_json,audios_encontrados,audios_transcritos,resultado_analise,criado_em,created_at,atualizado_em,updated_at";
+  const LIST_COLUMNS = includeFullTimeline ? LIST_COLUMNS_COM_TIMELINE : LIST_COLUMNS_SEM_TIMELINE;
   const montarQuery = (colunaData, colunas = LIST_COLUMNS) => {
     let q = supabase
       .from("whatsapp_processamentos")
@@ -1277,10 +1286,75 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   const statsCacheWriteBacks = [];
   const hoje = hojeCalendarioBR();
+
+  // v1136 — o cache v3 vale quando: mesma versão, mesmo dia (os números de 90 dias envelhecem) e
+  // a MESMA marca d'água de alteração da linha (atualizado_em — é a mesma marca que a gravação de
+  // volta da v1082 já usa como trava, e que toda mutação real de lead atualiza). Quando a timeline
+  // está em mãos (detalhe, esquemas antigos com "*", clientes de teste), o tamanho dela também é
+  // conferido — cinto e suspensório. Quando NÃO está (o caminho novo, sem egress), o cache ainda
+  // precisa carregar a prévia e o total de mensagens, senão não há o que mostrar.
+  const cacheV3Valido = (row, c, timelineOuNull) => {
+    if (!c || c.v !== 3 || c.dia !== hoje) return false;
+    const marcaRow = String(row.atualizado_em || row.updated_at || "");
+    if (String(c.marca || "") !== marcaRow) return false;
+    if (timelineOuNull) return c.len === timelineOuNull.length;
+    return Number.isFinite(Number(c.len)) && Array.isArray(c.preview)
+      && c.preview.length >= Math.min(previewLimit, Number(c.len) || 0);
+  };
+
+  // Segunda consulta: só as linhas cujo cache não serve (frio, vencido, de versão antiga) têm a
+  // conversa buscada — em lotes de 50 pra não estourar o tamanho da URL do PostgREST. Falha aqui
+  // é melhor esforço: a linha usa o último cache conhecido (números de ontem na tela são melhores
+  // que zerar tudo) e a próxima carga tenta de novo.
+  const timelinesBuscadas = new Map();
+  if (!includeFullTimeline) {
+    const precisamTimeline = [];
+    for (const row of (data || [])) {
+      if (Array.isArray(row.timeline_json)) continue; // veio na consulta principal (fallback "*")
+      const ana = row.resultado_analise || row.analysis || {};
+      const c = (ana && typeof ana === "object") ? ana._statsCache : null;
+      if (!cacheV3Valido(row, c, null)) precisamTimeline.push(String(row.id));
+    }
+    for (let i = 0; i < precisamTimeline.length; i += 50) {
+      const fatia = precisamTimeline.slice(i, i + 50);
+      try {
+        const { data: cheios, error: erroTl } = await supabase
+          .from("whatsapp_processamentos")
+          .select("id,timeline_json")
+          .eq("organization_id", organizationId)
+          .in("id", fatia);
+        if (erroTl || !Array.isArray(cheios)) continue;
+        for (const r of cheios) timelinesBuscadas.set(String(r.id), Array.isArray(r.timeline_json) ? r.timeline_json : []);
+      } catch (_) { /* melhor esforço — essas linhas seguem com o cache velho nesta carga */ }
+    }
+  }
+
+  // Mesmo formato nos dois lugares que materializam mensagens (prévia do cache e resposta).
+  const mapearMsgLista = (m) => ({
+    date: m?.date,
+    time: m?.time,
+    author: m?.author,
+    text: m?.text,
+    type: m?.type,
+    source: m?.source,
+    proposta: m?.proposta || null,
+    iso: m?.iso || null,
+    mediaFile: m?.mediaFile || null,
+    audioStatus: m?.audioStatus || null,
+    audioFingerprint: m?.audioFingerprint || null,
+    order: m?.order ?? null
+  });
+
   const mapped = (data || []).map(row => {
     const analysisOriginal = row.resultado_analise || row.analysis || {};
     let analysis = _semScoreComercial(analysisOriginal);
-    const timeline = Array.isArray(row.timeline_json) ? row.timeline_json : [];
+    // v1136 — três origens possíveis da conversa: veio na consulta principal (detalhe/fallback),
+    // veio na segunda consulta (cache frio), ou NÃO veio (cache v3 em dia — o caminho barato).
+    const timelineCarregada = Array.isArray(row.timeline_json)
+      ? row.timeline_json
+      : (timelinesBuscadas.has(String(row.id)) ? timelinesBuscadas.get(String(row.id)) : null);
+    const temTimeline = timelineCarregada !== null;
+    const timeline = timelineCarregada || [];
     const last = timeline.length ? timeline[timeline.length - 1] : null;
 
     // v1023 — pedido explícito e repetido do dono, mesmo princípio já aplicado ao lembrete
@@ -1336,8 +1410,12 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // v1102 — cache v2: ganhou lastCorretorIso (última mensagem DO CORRETOR na conversa inteira).
     // Caso Jamil: a lista só carrega as últimas 8 mensagens; se todas forem do cliente, o app
     // dizia "nunca respondeu" mesmo com respostas mais antigas. O servidor enxerga o histórico
-    // inteiro — então é ele quem informa. Caches v1 antigos recalculam uma vez e regravam.
-    const cacheValido = !!(cacheStats && cacheStats.v === 2 && cacheStats.len === timeline.length && cacheStats.dia === hoje);
+    // inteiro — então é ele quem informa.
+    // v1136 — cache v3: ganhou a marca d'água (atualizado_em), a prévia de mensagens e o último
+    // toque — é o que permite a listagem nem BUSCAR a conversa quando nada mudou (ver o
+    // comentário em LIST_COLUMNS_SEM_TIMELINE). Caches v1/v2 antigos recalculam uma vez, com a
+    // conversa vinda da segunda consulta, e regravam já no formato novo.
+    const cacheValido = cacheV3Valido(row, cacheStats, temTimeline ? timeline : null);
 
     let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, hasProposal;
     if (cacheValido) {
@@ -1350,6 +1428,21 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       messageCount90d = cacheStats.messageCount90d;
       clientMessageCount90d = cacheStats.clientMessageCount90d;
       hasProposal = cacheStats.hasProposal;
+    } else if (!temTimeline) {
+      // v1136 — cache frio E a segunda consulta falhou (rede/banco): melhor esforço. Usa o último
+      // cache conhecido, mesmo vencido — números de ontem na tela são melhores que zerar tudo e
+      // parecer que os dados sumiram. Nada é gravado de volta (nada novo foi calculado); a
+      // próxima carga tenta buscar a conversa de novo.
+      const c = (cacheStats && typeof cacheStats === "object") ? cacheStats : {};
+      lastReal = c.lastIso ? { iso: c.lastIso } : null;
+      lastClient = c.lastClientIso ? { iso: c.lastClientIso } : null;
+      lastCorretor = c.lastCorretorIso ? { iso: c.lastCorretorIso } : null;
+      clientMessageCount = Number(c.clientMessageCount) || 0;
+      clientQuestionCount = Number(c.clientQuestionCount) || 0;
+      clientMessageDays = Number(c.clientMessageDays) || 0;
+      messageCount90d = Number(c.messageCount90d) || 0;
+      clientMessageCount90d = Number(c.clientMessageCount90d) || 0;
+      hasProposal = !!c.hasProposal;
     } else {
       // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
       // aumentando muito memória e CPU quando havia centenas de mensagens por lead.
@@ -1429,22 +1522,36 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         resultado_analise: {
           ...(analysisOriginal && typeof analysisOriginal === "object" ? analysisOriginal : {}),
           _statsCache: {
-            v: 2,
+            v: 3,
             len: timeline.length,
             dia: hoje,
+            // v1136 — a marca d'água que faz a listagem confiar neste cache SEM buscar a conversa:
+            // qualquer mutação real do lead troca o atualizado_em e derruba o cache sozinha.
+            marca: String(row.atualizado_em || row.updated_at || ""),
             lastIso: lastReal?.iso || null,
             lastClientIso: lastClient?.iso || null,
             lastCorretorIso: lastCorretor?.iso || null,
+            // Último item da conversa (inclui itens manuais): alimenta "dias desde o último toque"
+            // e o horário de fallback do card — antes vinham direto da timeline a cada carga.
+            lastTouchIso: last?.iso || null,
+            lastTouchTime: last?.time || null,
             clientMessageCount, clientQuestionCount, clientMessageDays,
-            messageCount90d, clientMessageCount90d, hasProposal
+            messageCount90d, clientMessageCount90d, hasProposal,
+            // A prévia que o celular recebe (as mesmas ~8 mensagens de sempre) — guardada pronta
+            // pra lista não precisar da conversa inteira só pra montar isto.
+            preview: timeline.slice(-8).map(mapearMsgLista)
           }
         }
       });
     }
 
-    const lastIso = lastReal?.iso || last?.iso || row.atualizado_em || row.updated_at || row.criado_em || row.created_at || null;
+    // v1136 — sem a conversa em mãos, o "último toque" vem do cache (lastTouchIso/lastTouchTime,
+    // gravados na última varredura). Com ela, o comportamento é o de sempre.
+    const ultimoToqueIso = temTimeline ? (last?.iso || null) : (cacheStats?.lastTouchIso || null);
+    const ultimoToqueTime = temTimeline ? (last?.time || null) : (cacheStats?.lastTouchTime || null);
+    const lastIso = lastReal?.iso || ultimoToqueIso || row.atualizado_em || row.updated_at || row.criado_em || row.created_at || null;
     const daysSince = diasCalendarioBR(lastIso);
-    const lastTouchIso = last?.iso || lastIso;
+    const lastTouchIso = ultimoToqueIso || lastIso;
     const daysSinceTouch = diasCalendarioBR(lastTouchIso);
     const lastClientIso = lastClient?.iso || null;
     const daysSinceClientReply = diasCalendarioBR(lastClientIso);
@@ -1464,21 +1571,14 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
     // Só materializa as mensagens que realmente serão enviadas ao navegador.
     // O histórico completo continua intacto no banco e é retornado em action=detalhe.
-    const timelineForResponse = includeFullTimeline ? timeline : timeline.slice(-previewLimit);
-    const recentMessages = timelineForResponse.map(m => ({
-      date: m?.date,
-      time: m?.time,
-      author: m?.author,
-      text: m?.text,
-      type: m?.type,
-      source: m?.source,
-      proposta: m?.proposta || null,
-      iso: m?.iso || null,
-      mediaFile: m?.mediaFile || null,
-      audioStatus: m?.audioStatus || null,
-      audioFingerprint: m?.audioFingerprint || null,
-      order: m?.order ?? null
-    }));
+    // v1136 — sem a conversa em mãos (cache v3 em dia), a prévia sai pronta do próprio cache:
+    // são as mesmas ~8 mensagens que a lista sempre mostrou, gravadas na última varredura.
+    const recentMessages = temTimeline
+      ? (includeFullTimeline ? timeline : timeline.slice(-previewLimit)).map(mapearMsgLista)
+      : (Array.isArray(cacheStats?.preview) ? cacheStats.preview.slice(-previewLimit) : []);
+    const messageCountTotal = temTimeline
+      ? timeline.length
+      : (Number(cacheStats?.len) || recentMessages.length);
 
     return {
       id: row.id,
@@ -1490,7 +1590,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       name: nomeResolvido,
       product: productFrom(fileName, analysis, row),
       produtos: Array.isArray(analysis?.produtosInteresse) ? analysis.produtosInteresse.filter(Boolean) : null,
-      bestTime: analysis?.bestTime || last?.time || (analyzed ? "Ver análise" : "Aguardando nova análise"),
+      bestTime: analysis?.bestTime || ultimoToqueTime || (analyzed ? "Ver análise" : "Aguardando nova análise"),
       summary: analysis?.summary || (analyzed ? "Análise disponível." : "Conversa importada do histórico. Reimporte ou gere nova análise para atualizar."),
       nextAction: analysis?.nextAction || null,
       messages: analysis?.messages || null,
@@ -1506,7 +1606,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       lastCorretorMsgIso: lastCorretor?.iso || null,
       audiosEncontrados: row.audios_encontrados ?? null,
       audiosTranscritos: row.audios_transcritos ?? null,
-      messageCount: timeline.length,
+      messageCount: messageCountTotal,
       messageCount90d,
       clientMessageCount,
       clientMessageCount90d,
