@@ -3887,6 +3887,8 @@ async function _processarDashboard(data){
     state.itemsAtivos = items;
     state.todosLeads = all;
     try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
+    // v1138 — atualiza o retrato que o lembrete diário lê (total de clientes esperando resposta).
+    try{ cpAtualizarRetratoCobranca(all); }catch(_){}
     // Contagem da Agenda permanece separada da Central de atenção.
     // agora no helper atualizarSinoAgenda (reusado ao excluir/reagendar lembrete, pra refletir sem F5).
     atualizarSinoAgenda(all);
@@ -9274,6 +9276,145 @@ function ui631Icon(nome){
 function leadEhAtivo(l){
   return normalizarEtapa(l?.etapa) !== ETAPA_ARQUIVADO;
 }
+
+// ============ v1138 — LEMBRETE DIÁRIO DE CLIENTES SEM RESPOSTA ============
+// Item 4 do plano aprovado pelo dono. A pesquisa da auditoria: a maioria das vendas sai depois do
+// 5º contato e quase metade dos corretores para no 1º — e os concorrentes ganham exatamente aqui,
+// no lembrete automático. O app já sabe QUEM espera resposta; agora ele COBRA: uma notificação por
+// dia, com o app fechado (Android com o app instalado — Periodic Background Sync), lida de um
+// retrato local que o próprio app grava. Nenhum servidor novo, nenhuma rota nova, nada sai do
+// aparelho.
+const CP_LEMBRETE_DIARIO_KEY = "cp-lembrete-diario";
+
+// Quem está esperando resposta há mais de 24h. Regras (todas sobre dados que o app JÁ tem):
+//   - lead ativo (arquivado não cobra);
+//   - o cliente tem mensagem real no histórico (daysSinceClientReply existe — sem isso, um lead
+//     só de anotações manuais entraria na lista por causa do fallback de lastInteractionAt);
+//   - a última mensagem real da conversa NÃO é do corretor (ele não respondeu depois);
+//   - não há atendimento registrado (botão/cópia/observação) depois dela;
+//   - e ela tem mais de 24 horas.
+function cpLeadsAguardandoResposta(items){
+  const DIA = 24 * 60 * 60 * 1000;
+  const agora = Date.now();
+  const lista = [];
+  for(const l of (items || [])){
+    if(!leadEhAtivo(l)) continue;
+    // Cuidado com Number(null) === 0: sem mensagem do cliente o servidor manda null, e null
+    // "virando zero" colocaria na cobrança um lead que só tem anotações manuais.
+    if(l?.daysSinceClientReply == null || !Number.isFinite(Number(l.daysSinceClientReply))) continue;
+    const ultima = Date.parse(l?.lastInteractionAt || "");
+    if(!Number.isFinite(ultima) || (agora - ultima) < DIA) continue;
+    const corretorMsg = Date.parse(l?.lastCorretorMsgIso || "");
+    if(Number.isFinite(corretorMsg) && corretorMsg >= ultima) continue;
+    if(ultimoAtendimentoTs(l) >= ultima) continue;
+    lista.push({ nome: String(l?.name || "Cliente"), desde: ultima });
+  }
+  lista.sort((a,b) => a.desde - b.desde); // quem espera há mais tempo primeiro
+  return lista;
+}
+
+function cpNotifDB(){
+  return new Promise((resolve, reject) => {
+    const rq = indexedDB.open("corretor-pro-notif", 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore("kv"); };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function cpNotifGravar(chave, valor){
+  try{
+    const db = await cpNotifDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(valor, chave);
+      tx.oncomplete = resolve; tx.onerror = resolve;
+    });
+    db.close();
+  }catch(_){ /* sem IndexedDB, sem retrato — o lembrete simplesmente não dispara */ }
+}
+
+// Grava o retrato compacto que o service worker lê de madrugada: total + até 3 nomes. Roda em
+// segundo plano a cada carga de leads — barato (só conta o que já está em memória) e sempre
+// atualizado enquanto o app for usado.
+function cpAtualizarRetratoCobranca(items){
+  try{
+    const lista = cpLeadsAguardandoResposta(items);
+    cpNotifGravar("retrato", {
+      total: lista.length,
+      nomes: lista.slice(0, 3).map(x => x.nome),
+      calculadoEm: Date.now()
+    });
+  }catch(_){ }
+}
+
+function cpLembreteDiarioLigado(){
+  try{ return localStorage.getItem(CP_LEMBRETE_DIARIO_KEY) === "on"; }catch(_){ return false; }
+}
+async function cpLembreteDiarioRegistrarSync(){
+  try{
+    const reg = await navigator.serviceWorker?.ready;
+    if(!reg || !("periodicSync" in reg)) return false;
+    await reg.periodicSync.register("cp-cobranca-diaria", { minInterval: 20 * 60 * 60 * 1000 });
+    return true;
+  }catch(_){ return false; }
+}
+async function cpLembreteDiarioDesregistrar(){
+  try{
+    const reg = await navigator.serviceWorker?.ready;
+    if(reg && ("periodicSync" in reg)) await reg.periodicSync.unregister("cp-cobranca-diaria");
+  }catch(_){ }
+}
+
+function cpLembreteDiarioStatus(texto, cor){
+  const el = qs("#lembreteDiarioStatus");
+  if(el){ el.textContent = texto; el.style.color = cor || "var(--muted)"; }
+}
+function cpLembreteDiarioRender(){
+  const btn = qs("#btnLembreteDiario");
+  if(!btn) return;
+  if(!("Notification" in window)){
+    btn.style.display = "none";
+    cpLembreteDiarioStatus("Este navegador não mostra notificações. No celular Android, instale o app pra ter o lembrete.");
+    return;
+  }
+  if(cpLembreteDiarioLigado() && Notification.permission === "granted"){
+    btn.textContent = "Desativar lembrete diário";
+    btn.classList.add("secondary");
+  } else {
+    btn.textContent = "Ativar lembrete diário";
+    btn.classList.remove("secondary");
+    if(Notification.permission === "denied"){
+      cpLembreteDiarioStatus("O navegador está bloqueando notificações deste site — libere nas configurações do navegador e tente de novo.");
+    }
+  }
+}
+async function cpLembreteDiario(){
+  if(!("Notification" in window)) return;
+  if(cpLembreteDiarioLigado()){
+    try{ localStorage.setItem(CP_LEMBRETE_DIARIO_KEY, "off"); }catch(_){ }
+    await cpLembreteDiarioDesregistrar();
+    cpLembreteDiarioStatus("Lembrete desativado.");
+    cpLembreteDiarioRender();
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if(perm !== "granted"){
+    cpLembreteDiarioStatus("Sem a permissão de notificação o lembrete não tem como chegar. Se mudar de ideia, toque de novo.");
+    cpLembreteDiarioRender();
+    return;
+  }
+  try{ localStorage.setItem(CP_LEMBRETE_DIARIO_KEY, "on"); }catch(_){ }
+  // Atualiza o retrato agora, com o que estiver em memória — pra primeira notificação não sair velha.
+  cpAtualizarRetratoCobranca(state.todosLeads || state.itemsAtivos || []);
+  const fundo = await cpLembreteDiarioRegistrarSync();
+  cpLembreteDiarioStatus(fundo
+    ? "Ativado. O aviso chega uma vez por dia, mesmo com o app fechado."
+    : "Ativado. Neste navegador o aviso em segundo plano não é suportado — no Android, com o app instalado, ele chega mesmo fechado. Aqui, o sino do topo segue mostrando quem espera.",
+    "var(--acao)");
+  cpLembreteDiarioRender();
+}
+window.cpLembreteDiario = cpLembreteDiario;
+try{ cpLembreteDiarioRender(); }catch(_){ }
 function leadEhQuente(l){
   if(!leadEhAtivo(l)) return false;
   const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
