@@ -14,6 +14,9 @@
     "api/processar-storage.js": {
       "maxDuration": 60
     },
+    "api/leads-recentes.js": {
+      "maxDuration": 60
+    },
     "api/reanalisar-lead.js": {
       "maxDuration": 60
     },

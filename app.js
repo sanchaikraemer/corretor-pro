@@ -373,7 +373,19 @@ async function getLeadsData(force){
   _leadsForceFresh = false;
   _leadsCache.inflight = (async () => {
     try{
-      const res = await fetchComTimeout(`./api/leads-recentes?limit=2000${usarFresh ? "&fresh=1" : ""}`, { cache:"no-store" });
+      // v1140 — dois consertos do "dando pau no carregamento dos leads" (prints do dono em
+      // 05/08/2026): (1) o tempo de espera era o padrão de 15s, MENOR que o teto novo de 60s da
+      // própria rota (vercel.json) — o app desistia com o servidor ainda trabalhando; agora espera
+      // até 65s. (2) uma única queda de rede/timeout derrubava a carteira inteira na hora — agora
+      // respira 1,5s e tenta mais uma vez antes de desistir (mesma rede das gravações v1019/v1034).
+      const urlLeads = `./api/leads-recentes?limit=2000${usarFresh ? "&fresh=1" : ""}`;
+      let res = null;
+      try{
+        res = await fetchComTimeout(urlLeads, { cache:"no-store" }, 65000);
+      }catch(_e1){
+        await new Promise(r => setTimeout(r, 1500));
+        res = await fetchComTimeout(urlLeads, { cache:"no-store" }, 65000);
+      }
       const data = await res.json().catch(() => ({ ok:false, items:[] }));
       // Só guarda no cache resposta BOA (HTTP 2xx + ok != false).
       // Respostas 401/403/500 com items[] não envenenam o cache.
@@ -11952,14 +11964,26 @@ function ui670DetailRows(lead,mc){
       if(state?.active === 'home' && foco && !foco.children.length){
         foco.innerHTML = '<div class="cp694-loading cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>';
       }
+      // v1140 — o vigia de 9s dizia "demorou demais" e virava beco sem saída com a busca AINDA
+      // viva (o servidor tem até 60s e o app agora espera 65s — ver getLeadsData). Print do dono
+      // em 05/08/2026: a tela desistia e ele ficava sem carteira. Agora são dois estágios:
+      // aos 9s só avisa que está demorando (e SEGUE carregando, com o spinner na tela); o beco
+      // com botões só aparece aos 75s, quando o prazo real de servidor + retentativa já passou —
+      // e ganhou o botão de atualizar a página, que é o que resolve na prática.
       const watchdog = setTimeout(()=>{
         const area = document.querySelector('#leadFocoArea');
         if(state?.active === 'home' && area && /Carregando os leads/i.test(area.textContent||'')){
-          area.innerHTML = '<div class="cp694-loading"><b>Carregamento demorou mais que o normal.</b><span>Atualize a página ou abra Atendimentos para continuar usando a carteira.</span><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
+          area.innerHTML = '<div class="cp694-loading cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads… está demorando mais que o normal.</b><span>Ainda buscando sua carteira — só um instante.</span></div>';
         }
       }, 9000);
+      const watchdogFinal = setTimeout(()=>{
+        const area = document.querySelector('#leadFocoArea');
+        if(state?.active === 'home' && area && /Carregando os leads|Ainda buscando sua carteira/i.test(area.textContent||'')){
+          area.innerHTML = '<div class="cp694-loading"><b>Carregamento demorou mais que o normal.</b><span>Atualize a página ou abra Atendimentos para continuar usando a carteira.</span><button type="button" onclick="location.reload()">Atualizar a página</button><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
+        }
+      }, 75000);
       try{ return await oldDash.apply(this, arguments); }
-      finally{ clearTimeout(watchdog); }
+      finally{ clearTimeout(watchdog); clearTimeout(watchdogFinal); }
     };
     try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
   }

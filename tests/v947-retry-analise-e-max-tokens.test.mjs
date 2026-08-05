@@ -25,28 +25,38 @@ const withRetriesSrc = extrai('withRetries');
 const chamarGPT4JsonSrc = extrai('chamarGPT4Json');
 assert.match(chamarGPT4JsonSrc, /err\.code = "ETIMEDOUT"/, 'o timeout da chamada principal é marcado como retentável');
 
-// 3. analyzeWithBrain envolve a ÚNICA chamada com withRetries — 2 tentativas, não 3.
+// 3. v1140 — o desenho mudou (caso real: análise que PRECISA de mais de 26s falhava sempre, nas
+// duas tentativas iguais, e a importação morria aos 92%). A 1ª tentativa (modelo principal) ganha
+// a janela grande; se ela falhar (timeout/429/5xx), a 2ª roda no modelo RÁPIDO com o tempo que
+// sobrou do orçamento. A intenção original deste teste continua travada: erro passageiro não
+// descarta a análise (sempre existe uma segunda chance) e o envelope cabe no maxDuration.
 const inicio = pipeline.indexOf('export async function analyzeWithBrain');
 const fim = pipeline.indexOf('export async function compararEvolucao', inicio);
 const analyzeSrc = pipeline.slice(inicio, fim);
-assert.match(analyzeSrc, /await withRetries\(\(\) => chamarGPT4Json\(/, 'a chamada principal usa withRetries');
-assert.match(analyzeSrc, /\{\s*tries:\s*2,\s*baseDelayMs:\s*800\s*\}/, 'exatamente 2 tentativas com 800ms de backoff — não 3');
+assert.match(analyzeSrc, /model: modeloAnalise\(\),[\s\S]*?timeout: janelaPrincipalMs/,
+  '1ª tentativa: modelo principal com a janela grande');
+assert.match(analyzeSrc, /model: modeloTarefasSimples\(\),[\s\S]*?timeout: sobraMs/,
+  '2ª tentativa: modelo rápido com o tempo restante do orçamento');
+assert.match(analyzeSrc, /modeloFallbackUsado = true/,
+  'quando o modelo rápido salva a análise, o resultado registra isso (modeloFallback)');
 
-// 4. Restrição de tempo: 2 tentativas × timeout da análise + o backoff entre elas precisa caber
-// com folga dentro do maxDuration:60 configurado no vercel.json para as rotas que chamam
+// 4. Restrição de tempo (refeita na v1140): a janela da 1ª tentativa deixa espaço pro fallback
+// dentro do orçamento, e o orçamento cabe com folga dentro do maxDuration:60 das rotas que chamam
 // analyzeWithBrain (reanalisar-lead.js e processar-storage.js, via finalizarAnaliseDaConversa).
-// Se algum dia subirem DIRECIONA_ANALYSIS_TIMEOUT_MS ou o número de tentativas sem checar essa
-// conta, a função vai estourar o teto do Vercel e virar 504 no meio da execução (pior que o
-// timeout de 26s isolado que existia antes).
+// Se algum dia subirem DIRECIONA_ANALYSIS_TIMEOUT_MS/BUDGET_MS sem refazer essa conta, a função
+// estoura o teto da Vercel e vira 504 no meio da execução.
+const budgetMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_BUDGET_MS \|\| (\d+)/);
 const timeoutMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_TIMEOUT_MS \|\| (\d+)/);
-assert.ok(timeoutMatch, 'timeout default da análise não encontrado');
-const timeoutMs = Number(timeoutMatch[1]);
-const piorCasoMs = 2 * timeoutMs + 800; // 2 tentativas + 1 espera de backoff entre elas
+assert.ok(budgetMatch && timeoutMatch, 'orçamento/janela default da análise não encontrados');
+const orcamentoMs = Number(budgetMatch[1]);
+const janelaMs = Number(timeoutMatch[1]);
+assert.ok(janelaMs + 14000 <= orcamentoMs,
+  `a janela principal (${janelaMs}ms) precisa deixar >=14s pro fallback dentro do orçamento (${orcamentoMs}ms)`);
 for (const rota of ['api/processar-storage.js', 'api/reanalisar-lead.js']) {
   const maxDurationMs = Number(vercelConfig.functions?.[rota]?.maxDuration || 0) * 1000;
   assert.ok(maxDurationMs > 0, `maxDuration de ${rota} não encontrado no vercel.json`);
-  assert.ok(piorCasoMs < maxDurationMs - 5000,
-    `pior caso do retry (${piorCasoMs}ms) precisa caber com folga (>=5s) dentro do maxDuration de ${rota} (${maxDurationMs}ms)`);
+  assert.ok(orcamentoMs < maxDurationMs - 5000,
+    `o orçamento da análise (${orcamentoMs}ms) precisa caber com folga (>=5s) dentro do maxDuration de ${rota} (${maxDurationMs}ms)`);
 }
 
 // 5. max_tokens da análise subiu (2300 era apertado) — continua configurável por env var.
