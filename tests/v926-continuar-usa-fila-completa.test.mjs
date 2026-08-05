@@ -11,13 +11,17 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // decisão da Home (extraído do app.js) e confirma: a dose vem da fila ranqueada, "Atender mais um"
 // puxa além da meta, e nunca aparece um card dizendo que não há trabalho quando há fila.
 
+// v1139 — o marcador de fim deixou de ser o comentário do botão "Pular próximo" (o botão foi
+// removido de vez a pedido do dono); o trecho de decisão agora termina onde a Home é montada
+// (foco.innerHTML). No eval, cpFilaFazerAgoraComResgates não existe de propósito: o trecho cai
+// no fallback cpFilaFazerAgora, que é o que este teste sempre exercitou.
 const ini = app.indexOf('let filaRanqueada = typeof cpFilaFazerAgora');
-const fim = app.indexOf('// Botão "Pular próximo"');
+const fim = app.indexOf('foco.innerHTML');
 assert.ok(ini !== -1 && fim !== -1 && fim > ini, 'trecho de decisão da Home não encontrado em app.js');
 const trecho = app.slice(ini, fim);
 
 function rodar({ fila, meta, extra }){
-  const state = { fazerAgoraExtra: extra, pulados: null };
+  const state = { fazerAgoraExtra: extra };
   const cpFilaFazerAgora = () => fila;
   const cpFazerAgoraDose = () => meta;
   const CP_DOSE_DIA = 10;

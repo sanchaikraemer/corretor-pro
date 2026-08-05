@@ -1417,7 +1417,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     // conversa vinda da segunda consulta, e regravam já no formato novo.
     const cacheValido = cacheV3Valido(row, cacheStats, temTimeline ? timeline : null);
 
-    let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, hasProposal;
+    let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal;
     if (cacheValido) {
       lastReal = cacheStats.lastIso ? { iso: cacheStats.lastIso } : null;
       lastClient = cacheStats.lastClientIso ? { iso: cacheStats.lastClientIso } : null;
@@ -1427,6 +1427,12 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientMessageDays = cacheStats.clientMessageDays;
       messageCount90d = cacheStats.messageCount90d;
       clientMessageCount90d = cacheStats.clientMessageCount90d;
+      // v1139 — campos novos: cache gravado antes desta versão não os tem (ficam undefined e o
+      // navegador cai nos totais históricos). Como o cache vence todo dia (c.dia !== hoje), no
+      // máximo até a virada do dia todos são regravados já com eles — sem precisar subir a
+      // versão do cache e forçar uma varredura geral no meio do dia.
+      clientQuestionCount90d = cacheStats.clientQuestionCount90d;
+      clientMessageDays90d = cacheStats.clientMessageDays90d;
       hasProposal = cacheStats.hasProposal;
     } else if (!temTimeline) {
       // v1136 — cache frio E a segunda consulta falhou (rede/banco): melhor esforço. Usa o último
@@ -1442,6 +1448,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientMessageDays = Number(c.clientMessageDays) || 0;
       messageCount90d = Number(c.messageCount90d) || 0;
       clientMessageCount90d = Number(c.clientMessageCount90d) || 0;
+      // v1139 — sem "|| 0" aqui de propósito: cache antigo não tem esses campos, e mandar 0
+      // apagaria a recorrência/perguntas no ranking do navegador — ausente (null) faz o app cair
+      // nos totais históricos, que é a degradação certa.
+      clientQuestionCount90d = Number.isFinite(Number(c.clientQuestionCount90d)) ? Number(c.clientQuestionCount90d) : null;
+      clientMessageDays90d = Number.isFinite(Number(c.clientMessageDays90d)) ? Number(c.clientMessageDays90d) : null;
       hasProposal = !!c.hasProposal;
     } else {
       // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
@@ -1475,9 +1486,15 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // 90 dias. Isso NÃO muda clientMessageCount (continua histórico inteiro, de propósito — ver
       // comentário da v942 acima): leadsEsquecidos/radar de resgate (app.js) dependem do total
       // histórico pra reconhecer um lead antigo que esfriou; zerar isso quebraria aquele recurso.
+      // v1139 — o RANKING do "Fazer agora" passou a usar a mesma janela de 90 dias da barra
+      // (régua única, decisão do dono) — então a recorrência (dias distintos) e as perguntas
+      // ganham a versão 90d aqui, na MESMA varredura, sem custo extra. As versões de histórico
+      // inteiro continuam existindo (elegibilidade/radar de lead antigo dependem delas).
       const cutoff90d = Date.now() - 90 * 24 * 60 * 60 * 1000;
       messageCount90d = 0;
       clientMessageCount90d = 0;
+      clientQuestionCount90d = 0;
+      const _diasComMsg90d = new Set();
       for (let i = timeline.length - 1; i >= 0; i--) {
         const m = timeline[i];
         const tMs = m?.iso ? Date.parse(m.iso) : NaN;
@@ -1499,11 +1516,18 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         if (!txt) continue;
         clientMessageCount++;
         if (dentro90d) clientMessageCount90d++;
-        if (txt.includes("?")) clientQuestionCount++;
+        if (txt.includes("?")) {
+          clientQuestionCount++;
+          if (dentro90d) clientQuestionCount90d++;
+        }
         const diaChave = m?.date || (m?.iso ? String(m.iso).slice(0, 10) : "");
-        if (diaChave) _diasComMsg.add(diaChave);
+        if (diaChave) {
+          _diasComMsg.add(diaChave);
+          if (dentro90d) _diasComMsg90d.add(diaChave);
+        }
       }
       clientMessageDays = _diasComMsg.size;
+      clientMessageDays90d = _diasComMsg90d.size;
 
       hasProposal = false;
       for (let i = timeline.length - 1; i >= 0; i--) {
@@ -1536,7 +1560,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
             lastTouchIso: last?.iso || null,
             lastTouchTime: last?.time || null,
             clientMessageCount, clientQuestionCount, clientMessageDays,
-            messageCount90d, clientMessageCount90d, hasProposal,
+            messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal,
             // A prévia que o celular recebe (as mesmas ~8 mensagens de sempre) — guardada pronta
             // pra lista não precisar da conversa inteira só pra montar isto.
             preview: timeline.slice(-8).map(mapearMsgLista)
@@ -1612,6 +1636,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientMessageCount90d,
       clientQuestionCount,
       clientMessageDays,
+      // v1139 — janela de 90 dias pro ranking (régua única); null quando o cache antigo ainda
+      // não tem os campos (o app cai nos totais acima).
+      clientQuestionCount90d: Number.isFinite(Number(clientQuestionCount90d)) ? clientQuestionCount90d : null,
+      clientMessageDays90d: Number.isFinite(Number(clientMessageDays90d)) ? clientMessageDays90d : null,
       hasProposal,
       recentMessages,
       historyLoaded: includeFullTimeline,
