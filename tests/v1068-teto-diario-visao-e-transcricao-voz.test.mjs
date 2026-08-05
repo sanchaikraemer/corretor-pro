@@ -1,6 +1,11 @@
 import http from "node:http";
 import assert from "node:assert/strict";
 
+// v1133 — usava a data em UTC como "hoje", mas o código conta o limite pelo dia civil de
+// São Paulo. Depois das 21h em Brasília já é o dia seguinte em UTC, e o teste falhava sozinho
+// toda noite (ver a explicação completa em tests/v1013-limite-diario-uso-ia.test.mjs).
+const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 // v1068 — auditoria de segurança achou que transcrever-audio (api/cerebro-config.js) chamava a
 // OpenAI sem NENHUM teto diário — diferente da análise principal (api/_pipeline.js,
 // verificarLimiteDiario, desde a v1013). Um script (ou uma conta de teste grátis, o mesmo cenário
@@ -37,7 +42,7 @@ async function comServidor(contagemJaUsada, fn) {
     if (url.pathname === "/rest/v1/direciona_config" && req.method === "GET") {
       chamadasConfig.push(url.search);
       // Simula que a conta já usou "contagemJaUsada" chamadas hoje, pra esse "chave" específico.
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = _hojeSP;
       res.end(JSON.stringify({ valor: { dia: hoje, contagem: contagemJaUsada } }));
       return;
     }

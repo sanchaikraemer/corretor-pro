@@ -3,6 +3,11 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { verificarLimiteAnalises, planoComercial, PLANO_CONTRATADO_KEY } from "../api/_pipeline.js";
 
+// v1133 — usava a data em UTC como "hoje", mas o código conta o limite pelo dia civil de
+// São Paulo. Depois das 21h em Brasília já é o dia seguinte em UTC, e o teste falhava sozinho
+// toda noite (ver a explicação completa em tests/v1013-limite-diario-uso-ia.test.mjs).
+const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 // v1110 — planos comerciais (decisão do dono, estratégia de chamariz tipo "pipoca de cinema");
 // v1111 — recalibrado pela régua do uso real do dono (70–80 análises/mês com 200+ clientes):
 // Teste 5/dia · Pro 15/dia + 150/mês · Pro Master 30/dia + 300/mês (o dobro em tudo, preço
@@ -15,7 +20,7 @@ const painel = fs.readFileSync(new URL("../admin-plataforma.html", import.meta.u
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
 const EMPRESA_PRINCIPAL = "00000000-0000-0000-0000-000000000001";
-const hoje = new Date().toISOString().slice(0, 10);
+const hoje = _hojeSP;
 const mesSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
 
 // ── 1. Os números dos planos (com env mandando) ───────────────────────────────────────────────

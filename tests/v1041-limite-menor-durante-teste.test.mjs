@@ -2,6 +2,11 @@ import http from "node:http";
 import assert from "node:assert/strict";
 import { verificarLimiteDiario, limiteAnalisesIADoDia, limiteAnalisesIADoDiaTeste } from "../api/_pipeline.js";
 
+// v1133 — usava a data em UTC como "hoje", mas o código conta o limite pelo dia civil de
+// São Paulo. Depois das 21h em Brasília já é o dia seguinte em UTC, e o teste falhava sozinho
+// toda noite (ver a explicação completa em tests/v1013-limite-diario-uso-ia.test.mjs).
+const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 // v1041 — auditoria item 6.3 ("Abuso do período de teste"): uma conta em teste grátis tinha
 // exatamente o mesmo teto diário de análises de IA que uma conta paga (200/dia) — criar contas de
 // teste era um jeito barato de consumir IA de graça. Agora, enquanto a organização estiver com
@@ -78,7 +83,7 @@ await comServidor({ statusOrganizacao: null }, async () => {
 });
 
 // 5. O teto reduzido realmente bloqueia mais cedo que o normal — não é só um número decorativo.
-await comServidor({ statusOrganizacao: "teste", valorSalvo: { dia: new Date().toISOString().slice(0, 10), contagem: 25 } }, async () => {
+await comServidor({ statusOrganizacao: "teste", valorSalvo: { dia: _hojeSP, contagem: 25 } }, async () => {
   const r = await verificarLimiteDiario("org-teste-no-limite", "analises-ia", 200, 25);
   assert.equal(r.permitido, false, "com 25 já usadas e teto de teste = 25, a próxima análise precisa ser bloqueada");
   assert.equal(r.limite, 25);

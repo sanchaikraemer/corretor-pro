@@ -637,6 +637,38 @@ function cpMarcarEtapaLocal(id, etapa){
 }
 window.cpMarcarEtapaLocal = cpMarcarEtapaLocal;
 
+// v1133 — relato do dono, com print da Agenda: "deletei e não saiu daí". Ele excluiu o lembrete
+// vencido de um atrasado e o cartão continuou na lista, no mesmo lugar.
+//
+// A exclusão FUNCIONAVA — o servidor apagava o lembrete. O que não acontecia era a tela mudar:
+// carregarAgenda() começa com `if(state.todosLeads?.length){ renderAgenda(...); return; }`, ou seja,
+// redesenha a partir da carteira que já está na memória e NEM CHEGA a buscar o dado novo.
+// invalidarLeadsCache() limpa o cache de rede, mas não mexe em state.todosLeads — então a Agenda
+// se redesenhava idêntica, com o lembrete que acabara de ser apagado. Só saindo e voltando (ou
+// dando F5) a lista ficava certa.
+//
+// É o MESMO tipo de erro que a v1125 corrigiu no arquivar (a Home também renderiza de uma lista em
+// memória), e a solução é a mesma daquela vez: atualizar a carteira em memória para o estado que o
+// servidor acabou de gravar, em vez de esperar que alguém vá buscar. Uma fonte só de verdade.
+//
+// lembrete = null apaga; um objeto {quando, motivo} remarca. Serve pros dois sentidos.
+function cpAtualizarLembreteLocal(id, lembrete){
+  const sid = String(id || "");
+  if(!sid) return;
+  invalidarLeadsCache();
+  const trocar = l => {
+    if(String(l.id) !== sid) return l;
+    const analysis = { ...(l.analysis || {}) };
+    if(lembrete) analysis.lembrete = lembrete;
+    else delete analysis.lembrete;
+    return { ...l, analysis };
+  };
+  if(Array.isArray(state.todosLeads)) state.todosLeads = state.todosLeads.map(trocar);
+  if(Array.isArray(state.leads)) state.leads = state.leads.map(trocar);
+  if(Array.isArray(state.itemsAtivos)) state.itemsAtivos = state.itemsAtivos.map(trocar);
+}
+window.cpAtualizarLembreteLocal = cpAtualizarLembreteLocal;
+
 // Confirmação em-app (no lugar do confirm() nativo do navegador — a "tela feia" com a URL
 // "corretor-pro-zeta.vercel.app diz"). Retorna Promise<boolean>. Enter confirma, Esc/clique
 // fora cancela. Usado no arquivar/perder pra ficar dentro da identidade do app.
@@ -5542,7 +5574,9 @@ async function reagendarLembrete(id, dateStr){
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
-    invalidarLeadsCache();
+    // v1133 — põe a data nova na carteira em memória (é dela que a Agenda redesenha). Sem isto o
+    // cartão continuava mostrando a data antiga até sair e voltar da tela.
+    cpAtualizarLembreteLocal(id, d?.lembrete || { quando: new Date(dateStr+"T12:00:00").toISOString(), motivo: "Retomar contato" });
     toast("Lembrete remarcado para " + new Date(dateStr+"T12:00:00").toLocaleDateString("pt-BR") + ".");
     await atualizarSinoAgenda(); // sino do topo na hora, em qualquer tela (sem F5)
     if(state.active === "agenda") carregarAgenda();
@@ -5565,7 +5599,9 @@ async function removerLembrete(id){
     });
     const d = await res.json().catch(()=>({}));
     if(!d?.ok) throw new Error(d?.error||"falha");
-    invalidarLeadsCache();
+    // v1133 — tira o lembrete da carteira em memória, que é de onde a Agenda redesenha. Era isto
+    // que faltava: sem esta linha o cartão excluído continuava na lista ("deletei e não saiu daí").
+    cpAtualizarLembreteLocal(id, null);
     toast("Lembrete excluído da agenda.");
     await atualizarSinoAgenda(); // sino do topo na hora, em qualquer tela (sem F5)
     if(state.active === "agenda") carregarAgenda();

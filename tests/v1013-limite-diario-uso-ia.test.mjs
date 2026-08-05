@@ -54,8 +54,17 @@ await comServidor(null, async ({ getValor }) => {
   assert.equal(getValor().contagem, 1);
 });
 
+// v1133 — este teste quebrava TODA NOITE, das 21h às 00h no horário do Brasil, e ninguém tinha
+// percebido porque ninguém rodava a suíte nessa faixa. Ele montava o "dia de hoje" com a data em
+// UTC (`toISOString()`), enquanto o código conta o limite pelo dia civil de São Paulo. Depois das
+// 21h em Brasília já é o dia seguinte em UTC: o teste gravava a contagem no dia de amanhã, o código
+// procurava a de hoje, não achava, e concluía que o corretor ainda não tinha usado nada — o teste
+// falhava sozinho, sem ninguém ter mexido em nada. (Descoberto às 23h17 de Brasília, ao rodar a
+// suíte da v1133.) Agora o teste usa o MESMO dia civil que o código usa.
+const hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 // 2. Contagem já no limite (mesmo dia) → bloqueia, sem incrementar mais.
-await comServidor({ dia: new Date().toISOString().slice(0, 10), contagem: 3 }, async ({ getValor }) => {
+await comServidor({ dia: hojeSP, contagem: 3 }, async ({ getValor }) => {
   const r = await verificarLimiteDiario("org-a", "analises-ia", 3);
   assert.equal(r.permitido, false);
   assert.equal(r.usado, 3);
