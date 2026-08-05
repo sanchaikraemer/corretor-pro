@@ -717,6 +717,7 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
   // localStorage desatualizado não pode substituir silenciosamente o conteúdo
   // completo que já está persistido.
+  let doBanco = null;
   try {
     const { getSupabaseAdmin } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
@@ -727,14 +728,25 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
         .eq("chave", "direciona-cerebro")
         .eq("organization_id", organizationId)
         .maybeSingle();
-      if (!error && hasCerebroInstructions(data?.valor)) {
-        return { ...sanitizeCerebroConfig(data.valor), _fonte: "banco" };
+      if (!error && data?.valor && typeof data.valor === "object") doBanco = data.valor;
+      if (hasCerebroInstructions(doBanco)) {
+        return { ...sanitizeCerebroConfig(doBanco), _fonte: "banco" };
       }
     }
   } catch (_) { /* tenta o conteúdo enviado pelo navegador abaixo */ }
 
   if (hasCerebroInstructions(frontendConfig)) {
     return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-localStorage" };
+  }
+  // v1137 — antes, sem instruções manuais isto devolvia null — e jogava fora o que o APRENDIZADO
+  // AUTOMÁTICO já tinha guardado (inteligenciaAprendida) exatamente pra conta que mais precisa
+  // dele: a nova, que ainda não escreveu nada e roda em modo prévia. Agora o Cérebro salvo (ou o
+  // do navegador) volta mesmo sem instruções, só que marcado como "sem instruções" — a análise
+  // continua caindo em modo prévia (a decisão é de hasCerebroInstructions, que não mudou), mas a
+  // voz aprendida das conversas dele entra no prompt como sempre deveria.
+  if (doBanco) return { ...sanitizeCerebroConfig(doBanco), _fonte: "banco-sem-instrucoes" };
+  if (frontendConfig && typeof frontendConfig === "object") {
+    return { ...sanitizeCerebroConfig(frontendConfig), _fonte: "frontend-sem-instrucoes" };
   }
   return null;
 }
@@ -2707,6 +2719,11 @@ ${timelineText}`;
       // Comercial pra IA falar do SEU jeito e com as SUAS condições". A análise em si é real e
       // utilizável — nada aqui a marca como pendente ou inválida.
       modoPrevia,
+      // v1137 — quando o aprendizado automático já leu as conversas deste corretor, a prévia NÃO
+      // pode dizer "a IA ainda não conhece o seu jeito" (conhece — aprendeu sozinha). A tela usa
+      // esta marca pra trocar o texto do convite: o que falta são as condições comerciais, que só
+      // ele pode confirmar.
+      previaComAprendizado: modoPrevia && !!jeitoAprendido,
       _cerebroFonte: configCerebro?._fonte || (modoPrevia ? "ausente" : "backend-default"),
       _cerebroMetodoTeste: /TESTE-CEREBRO/i.test(String(configCerebro?.metodo || "")),
       melhorHorarioContato: calcularMelhorHorario(timelineArr, lead?.clientName, configCerebro?.corretorNome)

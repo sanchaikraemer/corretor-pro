@@ -5226,11 +5226,19 @@ function cpUpgradeProHTML(a){
 // pedir isso: depois de ele ver o sistema funcionando com a conversa dele, não antes.
 function cpPreviaCerebroHTML(a){
   if(!a?.modoPrevia) return "";
+  // v1137 — quando o aprendizado automático JÁ leu as conversas dele, dizer "a IA não conhece o
+  // seu jeito" seria mentira (conhece — aprendeu sozinha). O que falta nesse caso são as condições
+  // comerciais, que só ele pode confirmar. O servidor manda a marca (previaComAprendizado).
+  const corpo = a.previaComAprendizado
+    ? `<div class="small" style="margin-bottom:8px"><b>A IA já aprendeu seu jeito de falar com as suas conversas.</b><br>`+
+      `O que ela ainda não tem são as suas condições comerciais — valores, empreendimentos, regras — e por isso evita afirmar preço, prazo ou localização.</div>`+
+      `<div class="small" style="margin-bottom:10px;color:var(--soft)">Confirme isso uma vez e as mensagens saem completas: no seu tom e com as suas condições.</div>`
+    : `<div class="small" style="margin-bottom:8px"><b>Esta análise saiu só da conversa que você enviou.</b><br>`+
+      `A IA ainda não conhece o seu jeito de falar, os seus empreendimentos nem as suas condições — por isso ela evita afirmar preço, prazo ou localização e prefere oferecer confirmar.</div>`+
+      `<div class="small" style="margin-bottom:10px;color:var(--soft)">Ensine isso uma vez e as próximas mensagens saem no seu tom, com as suas condições e as suas respostas de objeção.</div>`;
   return `<div style="margin-top:12px;padding:12px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:12px">`+
-    `<div class="small" style="margin-bottom:8px"><b>Esta análise saiu só da conversa que você enviou.</b><br>`+
-    `A IA ainda não conhece o seu jeito de falar, os seus empreendimentos nem as suas condições — por isso ela evita afirmar preço, prazo ou localização e prefere oferecer confirmar.</div>`+
-    `<div class="small" style="margin-bottom:10px;color:var(--soft)">Ensine isso uma vez e as próximas mensagens saem no seu tom, com as suas condições e as suas respostas de objeção.</div>`+
-    `<button type="button" class="btn" id="btnPreviaConfigurarCerebro" style="padding:11px 18px;font-size:14px">Ensinar a IA a falar como eu</button>`+
+    corpo+
+    `<button type="button" class="btn" id="btnPreviaConfigurarCerebro" style="padding:11px 18px;font-size:14px">${a.previaComAprendizado ? "Confirmar minhas condições" : "Ensinar a IA a falar como eu"}</button>`+
     `</div>`;
 }
 
@@ -6665,6 +6673,12 @@ async function carregarCerebro(){
   if(qs("#cerebroRegrasTexto")) qs("#cerebroRegrasTexto").value = config.regrasTexto || "";
   if(qs("#cerebroObjecoesTexto")) qs("#cerebroObjecoesTexto").value = config.objecoesTexto || "";
   cerebroFormularioCarregado = true;
+  // v1137 — o guia de primeiro uso aparece enquanto o Cérebro está VAZIO (mesma régua do servidor,
+  // hasCerebroInstructions: só os campos de instrução contam — nome sozinho não tira o guia).
+  const cerebroTemConteudo = [config.metodo, config.tom, config.diferenciais, config.evitar, config.regrasTexto, config.objecoesTexto]
+    .some(v => String(v || "").trim());
+  const guiaInicio = qs("#cerebroGuiaInicio");
+  if(guiaInicio) guiaInicio.style.display = cerebroTemConteudo ? "none" : "block";
   // Carregou certo: a caixa fica VAZIA. A prova de que carregou são os campos preenchidos logo
   // acima — deixar um "Configuração carregada." fixo só repetiria na tela o que já está à vista.
   if(aviso) status.innerHTML = '<span style="color:#ffc4f4">' + escapeHtml(aviso) + '</span>';

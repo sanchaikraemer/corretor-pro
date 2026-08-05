@@ -295,14 +295,33 @@
       </div>
       <div class="card compact" id="estadoIACard">
         <div class="label">Estado do aprendizado da IA</div>
-        <div class="small" style="color:var(--muted);margin-bottom:12px">Para preencher isto, abra a aba <b>Cérebro</b> e toque em <b>“Aprender de toda a carteira agora”</b>: a IA relê suas conversas e extrai seus padrões. Quanto maior esse banco, menos os campos manuais são necessários — a IA passa a se guiar pelo seu jeito real.</div>
+        <!-- v1137 — o texto antigo mandava tocar num botão de aprender a carteira inteira que não
+             existe mais: o aprendizado virou automático e roda em segundo plano. -->
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Isto se preenche <b>sozinho</b>: cada conversa importada é lida em segundo plano e vira memória de estilo. Quanto maior esse banco, menos os campos manuais do Cérebro são necessários — a IA passa a se guiar pelo seu jeito real.</div>
         <div id="estadoIABox"><div class="small" style="color:var(--muted);padding:14px 0">Carregando…</div></div>
       </div>
       </div><!--/icAprendizado-->
       <div id="icCerebro">
       <div class="card compact">
         <div class="label">Cérebro Comercial</div>
-        <div class="small" style="color:var(--muted);margin-bottom:12px">Estas instruções entram no prompt da OpenAI a cada análise. Toque em cada campo pra abrir e editar.</div>
+        <div class="small" style="color:var(--muted);margin-bottom:12px">Tudo que você ensinar aqui vale pra todas as análises e mensagens. Toque em cada campo pra abrir e editar.</div>
+        <!-- v1137 — guia de primeiro uso (a "segunda parede" da auditoria): quem chega aqui pelo
+             convite da prévia via 15 campos vazios e um texto técnico, sem saber por onde começar.
+             Aparece só enquanto o Cérebro está vazio (ver carregarCerebro em app.js). -->
+        <div id="cerebroGuiaInicio" style="display:none;margin-bottom:16px;padding:13px 14px;border:1px solid var(--accent-line);border-radius:12px;background:var(--accent-soft)">
+          <div style="font-weight:950;font-size:13.5px;margin-bottom:8px">Por onde começar</div>
+          <div class="small" style="line-height:1.6;color:var(--soft);margin-bottom:10px">
+            A IA <b>já aprende sozinha</b> com cada conversa que você importa — seu tom, suas respostas,
+            o que funciona. Você não precisa preencher tudo isto pra ela trabalhar.
+          </div>
+          <div class="small" style="line-height:1.7;color:var(--soft);margin-bottom:12px">
+            O que <b>só você</b> pode ensinar — e que mais muda as mensagens:<br>
+            <b>1.</b> Seu nome (pra IA saber quem é o corretor na conversa)<br>
+            <b>2.</b> Regras comerciais — condições, valores, o que pode prometer<br>
+            <b>3.</b> O que evitar — o que a IA nunca deve dizer por você
+          </div>
+          <button type="button" class="btn" style="padding:10px 18px;font-size:13px" onclick="var c=document.getElementById('cerebroCorretorNome'); if(c){ c.scrollIntoView({behavior:'smooth',block:'center'}); c.focus(); }">Começar pelo meu nome</button>
+        </div>
         <div style="margin-bottom:14px">
           <label>Seu nome (como aparece no WhatsApp)</label>
           <input type="text" id="cerebroCorretorNome" placeholder="Ex.: João Silva" style="width:100%;box-sizing:border-box">
