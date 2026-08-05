@@ -378,11 +378,23 @@ async function getLeadsData(force){
       // própria rota (vercel.json) — o app desistia com o servidor ainda trabalhando; agora espera
       // até 65s. (2) uma única queda de rede/timeout derrubava a carteira inteira na hora — agora
       // respira 1,5s e tenta mais uma vez antes de desistir (mesma rede das gravações v1019/v1034).
+      // v1146 — a segunda tentativa passou a ser CONDICIONAL. A v1140 acertou em esperar 65s (a
+      // rota tem 60s de teto no servidor, então desistir aos 15s era desistir com o servidor ainda
+      // trabalhando), mas errou em repetir SEMPRE: quando a primeira tentativa queimava os 65s
+      // inteiros, a segunda dobrava a espera e o corretor ficava mais de DOIS MINUTOS olhando
+      // "Carregando os leads…" (print do dono, 05/08/2026, 19:04→19:06 — "travou de novo").
+      //
+      // Repetir só conserta tropeço de rede, que falha RÁPIDO (conexão caindo ao voltar de outro
+      // app). Se a primeira já esperou muito, o problema não é tropeço: é melhor devolver o
+      // controle pra tela avisar e oferecer "tentar de novo" do que continuar preso em silêncio.
       const urlLeads = `./api/leads-recentes?limit=2000${usarFresh ? "&fresh=1" : ""}`;
+      const inicioBusca = Date.now();
       let res = null;
       try{
         res = await fetchComTimeout(urlLeads, { cache:"no-store" }, 65000);
       }catch(_e1){
+        const gastou = Date.now() - inicioBusca;
+        if(gastou > 20000) throw _e1; // já esperou demais: quem chamou decide o que mostrar
         await new Promise(r => setTimeout(r, 1500));
         res = await fetchComTimeout(urlLeads, { cache:"no-store" }, 65000);
       }
@@ -4806,7 +4818,7 @@ function cp704Css(){
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:#68ff95;font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
-      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
+      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:#ff7f74!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
@@ -5078,6 +5090,19 @@ function cp704Css(){
     if(typeof window.abrirPropostaSalva === 'function') window.abrirPropostaSalva(leadId, cp704Text(lead?.name), m.proposta);
     else toast('Gerador de proposta indisponível nesta versão.');
   };
+  // v1146 — a opção copiada continua marcada depois do redesenho (ver cp704CopyMsg). Só vale pro
+  // MESMO cliente e enquanto o texto daquela opção for o mesmo que foi copiado: análise nova
+  // troca as mensagens, e mensagem diferente não pode herdar a marca da anterior.
+  function cp704FoiCopiada(lead,k,texto){
+    const c = window.cp704Copiada;
+    if(!c || !texto) return false;
+    if(String(c.leadId||'') !== String(lead?.id||'')) return false;
+    if(String(c.key||'') !== String(k)) return false;
+    const norm = (v) => String(v||'').replace(/\s+/g,' ').trim();
+    return norm(c.texto) === norm(texto);
+  }
+  function cp704MarcaCopiada(lead,k,texto){ return cp704FoiCopiada(lead,k,texto) ? ' cp704-msg-copiada' : ''; }
+  function cp704RotuloCopiar(lead,k,texto){ return cp704FoiCopiada(lead,k,texto) ? 'Copiado' : 'Copiar'; }
   function cp704DetailRows(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
     // v935 — quando o cliente cita MAIS DE UMA unidade específica (lote/quadra/apartamento),
@@ -5162,6 +5187,26 @@ function cp704Css(){
   function cp704GetMessage(k){ const el=document.querySelector(`.cp704-msg-item[data-key="${k||window.cp704SelectedMsg}"] p`); return cp704Text(el?.innerText || el?.textContent); }
   window.cp704CopyMsg=async function(k){
     const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
+    // v1146 — MARCA DA OPÇÃO COPIADA.
+    //
+    // Antes, o que ficava coral depois do toque era só o efeito do próprio botão pressionado — e
+    // a v1142, ao redesenhar o cliente na hora (pra mostrar "Atendido"), trocava o botão por um
+    // novo e apagava esse coral. O dono notou na primeira vez que usou ("por que não ficou
+    // vermelho o 'copiar' quando clico, como era antes?").
+    //
+    // Agora a marca é de verdade, não efeito de toque: fica guardada e é reaplicada em cada
+    // redesenho — a opção copiada aparece destacada e o botão dela diz "Copiado". Guardando o
+    // TEXTO copiado, a marca não sobrevive a uma análise nova (mensagem diferente no mesmo lugar
+    // não pode continuar marcada como copiada).
+    window.cp704Copiada = { leadId: String(state.lead?.id || ''), key: k || window.cp704SelectedMsg || 'a', texto: msg };
+    try{
+      const item = document.querySelector(`.cp704-msg-item[data-key="${window.cp704Copiada.key}"]`);
+      if(item){
+        item.classList.add('cp704-msg-copiada');
+        const b = item.querySelector('.cp704-copy');
+        if(b) b.textContent = 'Copiado';
+      }
+    }catch(_){}
     try{ await navigator.clipboard.writeText(msg); toast('Mensagem copiada.'); }
     catch(_){ const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Mensagem copiada.'); }
     const leadId=state.lead?.id;
@@ -5419,7 +5464,7 @@ function renderLeadFoco(lead){
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
-            <div class="cp704-msg-list"><div class="cp704-msg-item" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">Copiar</button></div>${msgs.b?`<div class="cp704-msg-item" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">Copiar</button></div>`:''}${msgs.c?`<div class="cp704-msg-item" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">Copiar</button></div>`:''}</div>`}
+            <div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button></div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button></div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button></div>`:''}</div>`}
           </section>
           ${cp717MudancasHtml(a)}
         </main>
@@ -12074,20 +12119,46 @@ function ui670DetailRows(lead,mc){
       // aos 9s só avisa que está demorando (e SEGUE carregando, com o spinner na tela); o beco
       // com botões só aparece aos 75s, quando o prazo real de servidor + retentativa já passou —
       // e ganhou o botão de atualizar a página, que é o que resolve na prática.
-      const watchdog = setTimeout(()=>{
+      // v1146 — ESPERA COM RELÓGIO NA TELA E SAÍDA DESDE O COMEÇO.
+      //
+      // Print do dono (05/08/2026, 19:04 e 19:06): dois minutos olhando "Carregando os leads…" sem
+      // nada mudando — "travou". O app não estava travado, estava esperando (a v1140 deu 65s pra
+      // busca e repetia mais uma vez). Só que spinner mudo por minutos É travado, do ponto de vista
+      // de quem usa. Três correções aqui:
+      //
+      //  1. O aviso não depende mais de `state.active === 'home'`: se a mensagem de carregamento
+      //     está na tela, ela é atualizada. Antes, se a tela ativa fosse outra no momento do vigia,
+      //     o texto ficava congelado pra sempre (era o caso do print).
+      //  2. Aparece o TEMPO decorrido, de 1 em 1 segundo, a partir dos 6s — dá pra ver que está
+      //     vivo, e o dono consegue me dizer em quanto tempo parou.
+      //  3. Aos 12s já aparecem os botões de saída (tentar de novo / abrir Atendimentos) SEM
+      //     cancelar a busca em andamento: se ela chegar, a Home desenha normal por cima.
+      const areaCarregando = () => {
         const area = document.querySelector('#leadFocoArea');
-        if(state?.active === 'home' && area && /Carregando os leads/i.test(area.textContent||'')){
-          area.innerHTML = '<div class="cp694-loading cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads… está demorando mais que o normal.</b><span>Ainda buscando sua carteira — só um instante.</span></div>';
-        }
-      }, 9000);
+        return (area && /Carregando os leads|Ainda buscando sua carteira|Sua carteira está demorando/i.test(area.textContent || '')) ? area : null;
+      };
+      const inicioEspera = Date.now();
+      const relogio = setInterval(()=>{
+        const area = areaCarregando();
+        if(!area) return;
+        const seg = Math.round((Date.now() - inicioEspera)/1000);
+        if(seg < 6) return;
+        const marcador = area.querySelector('.cp694-espera');
+        const texto = `Buscando sua carteira… ${seg}s`;
+        if(marcador){ marcador.textContent = texto; return; }
+        const saida = seg >= 12
+          ? '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px"><button type="button" onclick="location.reload()">Tentar de novo</button><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>'
+          : '';
+        area.innerHTML = `<div class="cp694-loading cp-loading-leads"><div class="cp-loading-spinner"></div><b>Sua carteira está demorando pra chegar.</b><span class="cp694-espera">${texto}</span><span>Pode esperar — ou usar os atalhos abaixo. Nada se perde.</span>${saida}</div>`;
+      }, 1000);
       const watchdogFinal = setTimeout(()=>{
-        const area = document.querySelector('#leadFocoArea');
-        if(state?.active === 'home' && area && /Carregando os leads|Ainda buscando sua carteira/i.test(area.textContent||'')){
-          area.innerHTML = '<div class="cp694-loading"><b>Carregamento demorou mais que o normal.</b><span>Atualize a página ou abra Atendimentos para continuar usando a carteira.</span><button type="button" onclick="location.reload()">Atualizar a página</button><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
+        const area = areaCarregando();
+        if(area){
+          area.innerHTML = '<div class="cp694-loading"><b>Não consegui carregar sua carteira agora.</b><span>Sua base está salva — isto é só a leitura desta tela. Tente de novo ou abra Atendimentos.</span><button type="button" onclick="location.reload()">Tentar de novo</button><button type="button" onclick="show(\'carteira\')">Abrir Atendimentos</button></div>';
         }
-      }, 75000);
+      }, 70000);
       try{ return await oldDash.apply(this, arguments); }
-      finally{ clearTimeout(watchdog); clearTimeout(watchdogFinal); }
+      finally{ clearInterval(relogio); clearTimeout(watchdogFinal); }
     };
     try{ carregarDashboard = window.carregarDashboard; }catch(_){ }
   }

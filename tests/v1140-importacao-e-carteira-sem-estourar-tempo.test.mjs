@@ -36,25 +36,33 @@ assert.match(leadsSrc, /fetchComTimeout\(urlLeads, \{ cache:"no-store" \}, 65000
 const chamadas65 = (leadsSrc.match(/fetchComTimeout\(urlLeads, \{ cache:"no-store" \}, 65000\)/g) || []).length;
 assert.equal(chamadas65, 2, "uma queda de rede não pode derrubar a carteira: tem que existir a 2ª tentativa");
 assert.match(leadsSrc, /setTimeout\(r, 1500\)/, "respiro curto entre a 1ª e a 2ª tentativa");
+// v1146 — a 2ª tentativa virou CONDICIONAL: só quando a 1ª falhou RÁPIDO (tropeço de rede). Se a
+// 1ª queimou os 65s inteiros, repetir dobrava a espera e o dono ficava mais de DOIS MINUTOS num
+// spinner mudo (prints de 05/08/2026, 19:04→19:06). Esperar 65s pelo servidor continua certo;
+// esperar 130s em silêncio, não.
+assert.match(leadsSrc, /if\(gastou > 20000\) throw _e1;/,
+  "a 2ª tentativa só vale quando a 1ª falhou rápido — senão quem chamou decide o que mostrar");
 
-// ── 3. Vigia da Home em dois estágios: 9s tranquiliza (e segue carregando), beco só aos 75s ───
-const iniVigia = app.indexOf("const watchdog = setTimeout(");
+// ── 3. Espera da Home: relógio na tela desde os 6s, saída aos 12s, beco só no fim ─────────────
+// v1146 — o vigia de 9s + beco de 75s virou um relógio de 1s: aos 6s mostra os segundos ("está
+// vivo"), aos 12s oferece as saídas SEM cancelar a busca, e o beco final só aos 70s. E nada disso
+// depende mais da tela ativa: o texto na área de carregamento é o que manda (antes, se a tela ativa
+// não fosse a Home no instante do vigia, a mensagem congelava pra sempre — era o caso do print).
+const iniVigia = app.indexOf("const areaCarregando = () => {");
 assert.ok(iniVigia !== -1, "vigia da Home não encontrado");
-const vigiaSrc = app.slice(iniVigia, iniVigia + 2600);
-// Estágio 1 (9s): mantém o spinner e a classe de carregamento (homeAindaEmSkeleton depende dela).
-assert.match(vigiaSrc, /\}, 9000\);/, "estágio 1 continua aos 9s");
-const estagio1 = vigiaSrc.slice(0, vigiaSrc.indexOf("}, 9000);"));
-assert.match(estagio1, /cp-loading-spinner/, "aos 9s o spinner CONTINUA na tela (a busca está viva)");
-assert.match(estagio1, /cp-loading-leads/, "aos 9s a classe de carregamento continua (detecção de skeleton)");
-assert.doesNotMatch(estagio1, /Abrir Atendimentos/, "aos 9s NÃO pode aparecer o beco sem saída");
-// Estágio 2 (75s): só depois do prazo real (60s do servidor + retentativa) vem o beco — agora
-// com o botão de atualizar a página, que é o que resolve na prática.
-assert.match(vigiaSrc, /\}, 75000\);/, "o beco sem saída só aos 75s");
-const estagio2 = vigiaSrc.slice(vigiaSrc.indexOf("}, 9000);"));
-assert.match(estagio2, /location\.reload\(\)/, "o beco ganhou o botão de atualizar a página");
-assert.match(estagio2, /Abrir Atendimentos/, "a saída pra Atendimentos continua existindo");
-assert.match(vigiaSrc.slice(0, 400) + app.slice(iniVigia, iniVigia + 4000), /clearTimeout\(watchdog\); clearTimeout\(watchdogFinal\);/,
-  "os dois vigias são desligados quando a carteira chega");
+const vigiaSrc = app.slice(iniVigia, iniVigia + 3200);
+assert.doesNotMatch(vigiaSrc, /state\?\.active === 'home'/, "a espera não pode mais depender da tela ativa");
+assert.match(vigiaSrc, /}, 1000\);/, "o relógio bate de 1 em 1 segundo");
+assert.match(vigiaSrc, /if\(seg < 6\) return;/, "abaixo de 6s não muda nada (carregamento normal)");
+assert.match(vigiaSrc, /cp-loading-spinner/, "a rodinha continua na tela enquanto a busca está viva");
+assert.match(vigiaSrc, /cp-loading-leads/, "a classe de carregamento continua (detecção de skeleton)");
+const antesDe12 = vigiaSrc.slice(0, vigiaSrc.indexOf("seg >= 12"));
+assert.doesNotMatch(antesDe12, /Abrir Atendimentos/, "as saídas só aparecem a partir dos 12s");
+assert.match(vigiaSrc, /seg >= 12[\s\S]*?location\.reload\(\)[\s\S]*?Abrir Atendimentos/,
+  "aos 12s aparecem 'tentar de novo' e 'abrir Atendimentos' — sem cancelar a busca");
+assert.match(vigiaSrc, /}, 70000\);/, "o beco final fica pro fim do prazo real do servidor");
+assert.match(vigiaSrc, /clearInterval\(relogio\); clearTimeout\(watchdogFinal\);/,
+  "relógio e beco são desligados quando a carteira chega");
 
 // ── 4. O tempo do cliente cobre o do servidor também na importação ────────────────────────────
 // A chamada "analisar" do app espera 150s por tentativa — precisa continuar MAIOR que o

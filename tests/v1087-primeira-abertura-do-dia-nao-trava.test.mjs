@@ -12,8 +12,18 @@ import { persistStatsCacheWriteBacks } from "../api/_persistence.js";
 //
 // A resposta não depende dessas gravações (os números já estão calculados em memória), então elas
 // passaram a ter um orçamento de tempo curto. Este teste prova que o orçamento é respeitado.
+//
+// v1146 — o orçamento subiu de 1500ms pra 6000ms de propósito, e isso NÃO reabre o problema: na
+// mesma versão entrou um teto de leituras por carga (STATS_TIMELINES_POR_CARGA), então o volume
+// pendente por carga passou a ser pequeno e conhecido. Antes, 1500ms era tão curto que quase nada
+// grudava — e a carga seguinte recalculava tudo de novo, para sempre. O que este teste continua
+// garantindo é o essencial: existe um teto de tempo, ele é respeitado, e o que não couber fica
+// pra próxima carga sem erro nenhum.
 
-const ATRASO_POR_GRAVACAO_MS = 120;
+// v1146 — 400ms por gravação (era 120ms): com o orçamento novo de 6000ms, 120ms cabia tudo e o
+// teste não provava mais o corte. Banco lento de verdade é assim mesmo — é o cenário que o teto
+// precisa cobrir.
+const ATRASO_POR_GRAVACAO_MS = 400;
 
 function supabaseLento(contador) {
   const lento = () => new Promise(r => setTimeout(() => { contador.n++; r({ error: null }); }, ATRASO_POR_GRAVACAO_MS));
@@ -40,10 +50,10 @@ const t0 = Date.now();
 await persistStatsCacheWriteBacks(supabaseLento(contador), pendentes, "org-1");
 const levou = Date.now() - t0;
 
-// Sem o teto, seriam 25 rodadas sequenciais de 120ms = ~3s só de espera de banco, somadas ao
+// Sem o teto, seriam 25 rodadas sequenciais de 400ms = ~10s só de espera de banco, somadas ao
 // recálculo — em cima do tempo que o navegador já esperou pra listagem inteira.
-assert.ok(levou < 2600,
-  `a gravação do cache não pode segurar a resposta: levou ${levou}ms (orçamento é 1500ms + uma rodada em curso)`);
+assert.ok(levou < 7000,
+  `a gravação do cache não pode segurar a resposta sem limite: levou ${levou}ms (orçamento é 6000ms + uma rodada em curso)`);
 
 // E o que não coube tem que simplesmente ficar pra próxima carga, sem erro nenhum.
 assert.ok(contador.n > 0, "as gravações que couberam no orçamento precisam acontecer");

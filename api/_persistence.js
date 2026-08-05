@@ -1208,6 +1208,13 @@ export async function persistProcessingResult({
 // listagem, que já foi montada corretamente em memória de qualquer jeito.
 const STATS_CACHE_MAX_WRITEBACKS = 500;
 const STATS_CACHE_WRITE_CONCURRENCY = 20;
+// v1146 — quantas conversas esta carga pode buscar no banco pra recalcular os números do lead.
+// É o teto que garante que a listagem SEMPRE responde rápido, mesmo no pior caso (virada do dia,
+// que vence o cache da carteira inteira de uma vez). O que não couber fica pra próxima carga, com
+// os números da carga anterior na tela. Configurável por variável de ambiente na Vercel.
+const STATS_TIMELINES_POR_CARGA = Number(process.env.CORRETOR_PRO_STATS_TIMELINES_POR_CARGA) > 0
+  ? Number(process.env.CORRETOR_PRO_STATS_TIMELINES_POR_CARGA)
+  : 150;
 // v1087 — TETO DE TEMPO. Este cache vence por DIA (ver cacheStats.dia === hoje em
 // listRecentProcessings): à meia-noite ele vence pra CARTEIRA INTEIRA de uma vez. Na primeira
 // abertura do dia, então, a listagem recalculava tudo E AINDA ESPERAVA até 500 gravações no banco
@@ -1217,7 +1224,12 @@ const STATS_CACHE_WRITE_CONCURRENCY = 20;
 // A resposta NÃO depende dessas gravações: os números já foram calculados em memória e já estão
 // prontos. Então elas passam a ter um orçamento de tempo curto: o que não couber fica pra próxima
 // carga (que recalcula e tenta de novo), e nenhuma abertura paga mais que isso.
-const STATS_CACHE_WRITE_BUDGET_MS = 1500;
+// v1146 — 1500ms era pouco DEMAIS pro trabalho grudar. Com 20 gravações por rodada, o orçamento
+// antigo salvava umas poucas dezenas de leads por carga — então a carga seguinte recalculava quase
+// tudo de novo, e a carteira nunca "esquentava". Combinado com o teto de leituras logo abaixo
+// (STATS_TIMELINES_POR_CARGA), o volume por carga agora é conhecido e pequeno: dá pra gravar tudo
+// o que foi calculado nesta carga, que é o que faz a próxima ser rápida de verdade.
+const STATS_CACHE_WRITE_BUDGET_MS = 6000;
 export async function persistStatsCacheWriteBacks(supabase, pendentes, organizationId) {
   const comecou = Date.now();
   const lote = pendentes.slice(0, STATS_CACHE_MAX_WRITEBACKS);
@@ -1409,14 +1421,44 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   // é melhor esforço: a linha usa o último cache conhecido (números de ontem na tela são melhores
   // que zerar tudo) e a próxima carga tenta de novo.
   const timelinesBuscadas = new Map();
+  // v1146 — quantos leads ficaram pra próxima carga (ver STATS_TIMELINES_POR_CARGA). Vai na
+  // resposta pra dar pra ver, num diagnóstico, se a carteira está esquentando ou parada.
+  let statsPendentes = 0;
   if (!includeFullTimeline) {
-    const precisamTimeline = [];
+    // v1146 — TETO DE LEITURAS POR CARGA, com prioridade. Esta era a causa real do "carteira
+    // travada" (prints do dono, 05/08/2026 19:04 e 19:06: dois minutos em "Carregando os leads").
+    //
+    // O cache por lead vence por DIA — ou seja, à meia-noite ele vence pra CARTEIRA INTEIRA. Sem
+    // teto, a primeira carga do dia buscava a conversa de TODOS os leads (megabytes, em fatias de
+    // 50, uma atrás da outra) e ainda tentava regravar tudo. Numa carteira grande isso não cabe nos
+    // 60s da rota: a resposta morria no meio, quase nada era gravado, e a carga seguinte repetia o
+    // mesmo trabalho condenado. Ficava preso nesse ciclo até a sorte de uma carga caber.
+    //
+    // Agora cada carga faz um pedaço e a carteira esquenta em algumas cargas, sempre respondendo
+    // rápido. Ordem de prioridade das leituras:
+    //   1. lead SEM cache nenhum (se ficar de fora, apareceria zerado — inaceitável);
+    //   2. lead cujo cache é de OUTRA versão do registro (mudou de verdade: números errados);
+    //   3. lead cujo cache só está de outro DIA (números de ontem, diferença mínima) — estes são
+    //      os que sobram pra próxima carga, e é exatamente o que a v1136 já previa como aceitável
+    //      ("números de ontem na tela são melhores que zerar tudo").
+    const semCacheNenhum = [];
+    const cacheDeOutraVersao = [];
+    const cacheDeOutroDia = [];
     for (const row of (data || [])) {
       if (Array.isArray(row.timeline_json)) continue; // veio na consulta principal (fallback "*")
       const ana = row.resultado_analise || row.analysis || {};
       const c = (ana && typeof ana === "object") ? ana._statsCache : null;
-      if (!cacheV3Valido(row, c, null)) precisamTimeline.push(String(row.id));
+      if (cacheV3Valido(row, c, null)) continue;
+      const id = String(row.id);
+      const temNumeros = !!c && Number.isFinite(Number(c.len));
+      if (!temNumeros) { semCacheNenhum.push(id); continue; }
+      const marcaRow = String(row.atualizado_em || row.updated_at || "");
+      if (String(c.marca || "") !== marcaRow) cacheDeOutraVersao.push(id);
+      else cacheDeOutroDia.push(id);
     }
+    const precisamTimeline = [...semCacheNenhum, ...cacheDeOutraVersao, ...cacheDeOutroDia]
+      .slice(0, STATS_TIMELINES_POR_CARGA);
+    statsPendentes = Math.max(0, semCacheNenhum.length + cacheDeOutraVersao.length + cacheDeOutroDia.length - precisamTimeline.length);
     for (let i = 0; i < precisamTimeline.length; i += 50) {
       const fatia = precisamTimeline.slice(i, i + 50);
       try {
@@ -1800,7 +1842,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     meta: {
       totalFetched: (data || []).length,
       totalReturned: unique.length,
-      deduplicated: Math.max(0, mapped.length - unique.length)
+      deduplicated: Math.max(0, mapped.length - unique.length),
+      // v1146 — leads cujos números ficaram pra próxima carga (teto de leituras por carga).
+      statsPendentes,
+      statsRecalculados: statsCacheWriteBacks.length
     }
   };
 }
