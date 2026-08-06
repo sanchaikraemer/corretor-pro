@@ -1,6 +1,6 @@
 # Guia de Início Rápido — material de onboarding do Corretor Pro
 
-Material de apresentação entregue junto com o acesso ao sistema. Duas páginas A4,
+Material de apresentação entregue junto com o acesso ao sistema. Três páginas A4,
 seguindo a identidade visual oficial do app (petróleo #052B36, coral #FF6258,
 Plus Jakarta Sans / Space Grotesk) e usando telas reais do sistema.
 
@@ -11,6 +11,7 @@ Plus Jakarta Sans / Space Grotesk) e usando telas reais do sistema.
 | `Corretor-Pro-Guia-de-Inicio-Rapido.pdf` | Versão principal — impressão em alta resolução (A4, texto vetorial, fontes embutidas) |
 | `Corretor-Pro-Guia-pagina-1.png` | Capa em imagem — pronta pra mandar no WhatsApp |
 | `Corretor-Pro-Guia-pagina-2.png` | Passo a passo em imagem — pronta pra mandar no WhatsApp |
+| `Corretor-Pro-Guia-pagina-3.png` | O dia a dia (ciclo, telas do app e dicas) — pronta pra mandar no WhatsApp |
 
 O quadradinho do QR Code na página 2 está de propósito vazio (placeholder): quando o
 vídeo de treinamento existir, é só gerar o QR e colocar ali.
