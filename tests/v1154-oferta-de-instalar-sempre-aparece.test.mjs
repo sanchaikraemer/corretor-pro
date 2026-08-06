@@ -60,4 +60,59 @@ assert.match(pwa, /function mostrarOpcoesInstalar\(\)\{\s*\n\s*if\(ehStandalone\
   }
 }
 
+// ── 3. v1155 — sem convite do navegador, o "Como instalar" mostra o caminho COM DESENHO ───────
+// "Como que essa merda não está baixando se antes funcionava?" — não é o app: o botão de um toque
+// só existe quando o navegador convida, e o Chrome para de convidar depois que a pessoa
+// desinstala. O caminho pelo menu do navegador sempre funciona, então ele deixou de ser uma linha
+// de texto e virou passo a passo ilustrado.
+{
+  const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(pwa, /if\(typeof window\.cpMostrarComoInstalar === "function"\)\{ window\.cpMostrarComoInstalar\(\); return; \}/,
+    "sem convite, abre o passo a passo ilustrado");
+  assert.match(app, /window\.cpMostrarComoInstalar = function\(\)\{/, "o passo a passo existe");
+  assert.match(app, /const CP1155_PASSOS_ANDROID = \[/, "com o caminho do Android");
+  assert.match(app, /const CP1155_PASSOS_IOS = \[/, "e o do iPhone");
+  assert.match(app, /“Instalar app”/, "Android: o nome real da opção");
+  assert.match(app, /“Adicionar à Tela de Início”/, "iPhone: o nome real da opção");
+  assert.equal((app.match(/desenho: \(\) => cp1149Telinha\(/g) || []).length, 6, "todos os passos de instalação têm desenho");
+  // Quando o convite chega DEPOIS, o rótulo volta a prometer o que é verdade.
+  assert.match(pwa, /const bb = qs\("#bannerInstalarBtn"\); if\(bb && !ehIOS\(\)\) bb\.textContent = "Baixar app";/,
+    "convite que chega depois devolve o rótulo 'Baixar app'");
+}
+
+// ── 4. v1155 — "antes baixava no botão instalar, agora não mais" ──────────────────────────────
+// No Android, tirar o ícone da tela inicial NÃO desinstala o app. O navegador continua vendo o
+// Corretor Pro como instalado e nunca mais oferece baixar — nenhum site consegue forçar isso. O
+// app precisa DESCOBRIR essa situação e dizer a verdade (onde o ícone está / como desinstalar de
+// verdade), em vez de ensinar a instalar o que já existe.
+{
+  const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
+
+  // A descoberta só é possível com o manifest declarando o próprio app como "app relacionado".
+  assert.equal(manifest.prefer_related_applications, false,
+    "o app preferido é o próprio site — se virasse true o navegador PARARIA de oferecer instalar");
+  assert.deepEqual(manifest.related_applications, [{ platform: "webapp", url: "/manifest.json" }],
+    "o manifest aponta pra ele mesmo, que é o que permite perguntar 'já estou instalado?'");
+
+  assert.match(pwa, /navigator\.getInstalledRelatedApps/, "o app pergunta ao navegador se já está instalado");
+  assert.match(pwa, /if\(ehStandalone \|\| typeof navigator\.getInstalledRelatedApps !== "function"\) return;/,
+    "navegador que não sabe responder (iPhone) não quebra nada");
+  assert.match(pwa, /bb\.textContent = "Onde está meu app"/,
+    "quando já está instalado, o botão para de prometer download");
+  assert.match(pwa, /window\.cpAppJaInstaladoNoAparelho = \(\) => appJaInstaladoNoAparelho;/,
+    "o passo a passo consegue consultar isso");
+  assert.match(app, /const jaInstalado = \(typeof window\.cpAppJaInstaladoNoAparelho === "function"\) && window\.cpAppJaInstaladoNoAparelho\(\);/,
+    "e consulta");
+  assert.match(app, /const passos = jaInstalado \? \[CP1155_PASSO_JA_INSTALADO, \.\.\.base\] : base;/,
+    "nesse caso a explicação certa vem PRIMEIRO, antes de ensinar a instalar");
+  assert.match(app, /gaveta de apps/, "diz onde o ícone foi parar");
+  assert.match(app, /Configurações → Apps → Corretor Pro/, "e como desinstalar de verdade, se for o caso");
+
+  // O convite do navegador vale UM toque só: depois de recusado, o botão não pode continuar
+  // prometendo "Baixar app" — foi exatamente essa promessa quebrada que o dono viu.
+  assert.match(pwa, /if\(escolha\?\.outcome !== "accepted"\)\{[\s\S]{0,140}bb\.textContent = "Como instalar"/,
+    "convite recusado/fechado devolve o rótulo honesto");
+}
+
 console.log("v1154-oferta-de-instalar-sempre-aparece: ok");

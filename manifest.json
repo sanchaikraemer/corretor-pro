@@ -43,6 +43,10 @@
       "purpose": "maskable"
     }
   ],
+  "prefer_related_applications": false,
+  "related_applications": [
+    { "platform": "webapp", "url": "/manifest.json" }
+  ],
   "share_target": {
     "action": "/share-target",
     "method": "POST",
