@@ -44,16 +44,47 @@ function textoDicaInstalar(){
   }
   return 'No celular: toque no menu do navegador (⋮) e em <b>“Adicionar à tela inicial”</b> / <b>“Instalar app”</b>.';
 }
+// v1155 — "antes baixava o app no botão instalar, agora não mais". No Android, tirar o ícone da
+// tela inicial NÃO desinstala o app: o Chrome continua enxergando o Corretor Pro como instalado e,
+// por regra dele, deixa de oferecer a instalação (nenhum site consegue forçar). Esta checagem é o
+// único jeito de o app saber disso — aí a tela para de prometer download e diz onde o app está e
+// como desinstalar de verdade, em vez de deixar o corretor achando que quebrou.
+let appJaInstaladoNoAparelho = false;
+async function conferirSeJaEstaInstalado(){
+  try{
+    if(ehStandalone || typeof navigator.getInstalledRelatedApps !== "function") return;
+    const lista = await navigator.getInstalledRelatedApps();
+    if(!Array.isArray(lista) || !lista.length) return;
+    appJaInstaladoNoAparelho = true;
+    const bb = qs("#bannerInstalarBtn"); if(bb) bb.textContent = "Onde está meu app";
+    const titulo = qs("#bannerInstalar b"); if(titulo) titulo.textContent = "O Corretor Pro já está instalado";
+    const sub = qs("#bannerInstalar .cp-install-txt span");
+    if(sub) sub.textContent = "O ícone pode ter saído da tela inicial — ele continua na gaveta de apps.";
+    const cardTitulo = qs("#btnInstalarApp .menu-card-titulo"); if(cardTitulo) cardTitulo.textContent = "Onde está meu app";
+    const cardDesc = qs("#btnInstalarApp .menu-card-desc");
+    if(cardDesc) cardDesc.textContent = "O Corretor Pro já está instalado neste aparelho.";
+  }catch(_){}
+}
 async function dispararInstalacao(){
   const convite = deferredInstallPrompt || window.__deferredInstallPrompt;
   if(convite){
     convite.prompt();
-    try{ await convite.userChoice; }catch(_){}
+    let escolha = null;
+    try{ escolha = await convite.userChoice; }catch(_){}
     deferredInstallPrompt = null;
     window.__deferredInstallPrompt = null;
+    // O convite só vale UM toque. Se o corretor fechou a caixa do navegador, o botão não baixa
+    // mais nada nesta visita — o rótulo passa a dizer a verdade, e o próximo toque abre o passo a
+    // passo pelo menu do navegador, que sempre funciona.
+    if(escolha?.outcome !== "accepted"){
+      const bb = qs("#bannerInstalarBtn"); if(bb && !ehIOS()) bb.textContent = "Como instalar";
+    }
     return;
   }
-  // Sem instalação automática (iPhone, ou já registrado) — mostra o passo a passo certo pro aparelho.
+  // Sem instalação automática (iPhone, ou o Chrome não convidou) — abre o passo a passo COM DESENHO
+  // (v1155). O caminho pelo menu do navegador sempre funciona; o botão de um toque só existe
+  // quando o navegador convida, e isso não é o site que decide.
+  if(typeof window.cpMostrarComoInstalar === "function"){ window.cpMostrarComoInstalar(); return; }
   const dicaHtml = textoDicaInstalar();
   const d1 = qs("#instalarDica"); if(d1){ d1.innerHTML = dicaHtml; d1.style.display = "block"; }
   const d2 = qs("#bannerInstalarDica"); if(d2){ d2.innerHTML = dicaHtml; d2.style.display = "block"; }
@@ -65,7 +96,12 @@ window.addEventListener("beforeinstallprompt", (e) => {
   deferredInstallPrompt = e;
   window.__deferredInstallPrompt = e;
   mostrarOpcoesInstalar();
+  // v1155 — o convite costuma chegar DEPOIS da tela montar. Se o rótulo já tinha virado
+  // "Como instalar" (v1154, quando não havia convite), ele volta a prometer o que agora é
+  // verdade: um toque instala.
+  const bb = qs("#bannerInstalarBtn"); if(bb && !ehIOS()) bb.textContent = "Baixar app";
   const dica = qs("#instalarDica"); if(dica) dica.style.display = "none";
+  const dicaBanner = qs("#bannerInstalarDica"); if(dicaBanner && !ehIOS()) dicaBanner.style.display = "none";
 });
 // Convite capturado cedo pelo index.html: usa assim que o app.js sobe.
 window.addEventListener("direciona-install-ready", () => {
@@ -100,6 +136,7 @@ if(!ehStandalone){
   };
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", mostrarDeQualquerJeito, { once:true });
   else mostrarDeQualquerJeito();
+  conferirSeJaEstaInstalado();
 }
 // v1153 — o passo a passo "Como enviar sua conversa" precisa oferecer a instalação NA HORA. O dono
 // testou com conta nova e disse: "mas não apareceu onde baixar pra mim". O banner "Baixar app" só
@@ -110,6 +147,10 @@ window.cpInstalarApp = dispararInstalacao;
 window.cpDicaInstalarTexto = textoDicaInstalar;
 window.cpTemConviteInstalar = () => !!(deferredInstallPrompt || window.__deferredInstallPrompt);
 window.cpAppJaInstalado = () => ehStandalone;
+// v1155 — "instalado no aparelho" é diferente de "estou rodando dentro do app": o corretor pode
+// estar no navegador com o app instalado (ícone escondido). O passo a passo usa isso pra abrir
+// direto na explicação certa em vez de ensinar a instalar o que já existe.
+window.cpAppJaInstaladoNoAparelho = () => appJaInstaladoNoAparelho;
 
 qs("#btnInstalarApp")?.addEventListener("click", dispararInstalacao);
 qs("#bannerInstalarBtn")?.addEventListener("click", dispararInstalacao);

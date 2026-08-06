@@ -8880,6 +8880,128 @@ const CP1149_PASSOS = [
   }
 ];
 
+// v1155 — "COMO INSTALAR" COM DESENHO.
+//
+// O dono, com a conta de teste no celular dele: "como que essa merda não está baixando se antes
+// funcionava?". Não é o app: o botão que instala com UM toque só existe quando o NAVEGADOR
+// convida (beforeinstallprompt), e o Chrome para de convidar depois que a pessoa desinstala —
+// é regra dele, nenhum site consegue forçar. O caminho pelo menu do navegador SEMPRE funciona,
+// então ele deixou de ser uma linha de texto e virou passo a passo com desenho, igual ao de
+// enviar a conversa.
+const CP1155_PASSOS_ANDROID = [
+  {
+    titulo: "1. Toque no menu do navegador",
+    texto: "É o <b>“⋮”</b> no canto de cima do Chrome (do lado da barra de endereço). No Samsung Internet é o <b>“☰”</b> embaixo, à direita.",
+    desenho: () => cp1149Telinha(`
+      <rect x="14" y="26" width="172" height="22" rx="6" fill="rgba(255,255,255,.10)"/>
+      <rect x="26" y="34" width="104" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
+      <circle cx="170" cy="31" r="3" fill="#FF6258"/><circle cx="170" cy="38" r="3" fill="#FF6258"/><circle cx="170" cy="45" r="3" fill="#FF6258"/>
+      <circle cx="170" cy="38" r="16" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <rect x="26" y="70" width="148" height="60" rx="10" fill="rgba(255,255,255,.06)"/>
+      <rect x="26" y="142" width="120" height="8" rx="4" fill="rgba(255,255,255,.18)"/>`)
+  },
+  {
+    titulo: "2. Toque em “Instalar app”",
+    texto: "Na lista que abre, procure <b>“Instalar app”</b> ou <b>“Adicionar à tela inicial”</b> — depende do celular, mas é sempre uma dessas duas.",
+    desenho: () => cp1149Telinha(`
+      <rect x="70" y="30" width="114" height="150" rx="10" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="80" y="44" width="62" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
+      <rect x="80" y="62" width="76" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
+      <rect x="74" y="78" width="106" height="24" rx="6" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="82" y="87" width="82" height="6" rx="3" fill="#FF6258"/>
+      <rect x="80" y="114" width="58" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>
+      <rect x="80" y="132" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.32)"/>`)
+  },
+  {
+    titulo: "3. Confirme e pronto",
+    texto: "O celular pergunta se quer adicionar — confirme. O <b>ícone do Corretor Pro</b> aparece na tela inicial, e a partir daí ele também aparece na lista de compartilhar do WhatsApp.",
+    desenho: () => cp1149Telinha(`
+      <rect x="34" y="80" width="132" height="90" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="46" y="96" width="30" height="30" rx="9" fill="rgba(255,98,88,.18)" stroke="#FF6258" stroke-width="2.5"/>
+      <path d="M53 115 L61 106 L69 115" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="86" y="102" width="66" height="6" rx="3" fill="rgba(255,255,255,.55)"/>
+      <rect x="86" y="114" width="44" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
+      <rect x="96" y="140" width="58" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="106" y="147" width="38" height="6" rx="3" fill="#FF6258"/>`)
+  }
+];
+const CP1155_PASSOS_IOS = [
+  {
+    titulo: "1. Toque em Compartilhar",
+    texto: "No iPhone tem que ser pelo <b>Safari</b>. Toque no ícone de <b>quadrado com a seta para cima</b>, na barra de baixo.",
+    desenho: () => cp1149Telinha(`
+      <rect x="14" y="240" width="172" height="30" rx="8" fill="rgba(255,255,255,.10)"/>
+      <rect x="60" y="250" width="26" height="12" rx="3" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <path d="M73 258 v-12 M68 250 l5 -5 l5 5" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="73" cy="255" r="18" fill="none" stroke="#FF6258" stroke-width="2"/>
+      <rect x="26" y="60" width="148" height="120" rx="10" fill="rgba(255,255,255,.05)"/>`)
+  },
+  {
+    titulo: "2. “Adicionar à Tela de Início”",
+    texto: "Role a lista para baixo até achar <b>“Adicionar à Tela de Início”</b> e confirme. O ícone aparece junto dos seus apps.",
+    desenho: () => cp1149Telinha(`
+      <rect x="22" y="60" width="156" height="150" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="34" y="76" width="80" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
+      <rect x="34" y="96" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>
+      <rect x="28" y="112" width="144" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="38" y="122" width="112" height="6" rx="3" fill="#FF6258"/>
+      <rect x="34" y="152" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.30)"/>`)
+  }
+];
+// v1155 — quando o aparelho AINDA TEM o app instalado, ensinar a instalar é enganar: o navegador
+// nunca vai oferecer, porque na conta dele o app já existe. Esta é a primeira tela nesse caso.
+const CP1155_PASSO_JA_INSTALADO = {
+  titulo: "O app já está neste celular",
+  texto: "O navegador não oferece baixar porque o <b>Corretor Pro já está instalado</b> aqui. Se o ícone sumiu da tela inicial, ele continua na <b>gaveta de apps</b> (a lista com todos os apps do celular) — é só arrastar de volta pra tela inicial. Se quiser instalar do zero, desinstale de verdade primeiro em <b>Configurações → Apps → Corretor Pro</b>.",
+  desenho: () => cp1149Telinha(`
+    <rect x="24" y="40" width="152" height="140" rx="12" fill="rgba(255,255,255,.05)"/>
+    <rect x="38" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="86" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="134" y="56" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="38" y="104" width="28" height="28" rx="8" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2.5"/>
+    <circle cx="52" cy="118" r="17" fill="none" stroke="#FF6258" stroke-width="2"/>
+    <rect x="86" y="104" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="134" y="104" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="38" y="148" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>
+    <rect x="86" y="148" width="28" height="28" rx="8" fill="rgba(255,255,255,.14)"/>`)
+};
+window.cpMostrarComoInstalar = function(){
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const base = ios ? CP1155_PASSOS_IOS : CP1155_PASSOS_ANDROID;
+  const jaInstalado = (typeof window.cpAppJaInstaladoNoAparelho === "function") && window.cpAppJaInstaladoNoAparelho();
+  const passos = jaInstalado ? [CP1155_PASSO_JA_INSTALADO, ...base] : base;
+  let i = 0;
+  document.querySelector("#cp1155Modal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "cp1155Modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.innerHTML = `<div id="cp1155Card" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;max-width:420px;width:100%;max-height:92vh;overflow:auto;padding:18px"></div>`;
+  document.body.appendChild(overlay);
+  const card = overlay.querySelector("#cp1155Card");
+  const fechar = () => overlay.remove();
+  const desenhar = () => {
+    const p = passos[i];
+    const ultimo = i === passos.length - 1;
+    card.innerHTML = `
+      <div class="small" style="color:var(--muted);font-weight:900;letter-spacing:.04em;text-transform:uppercase">${p === CP1155_PASSO_JA_INSTALADO ? "O app no seu celular" : "Instalar o Corretor Pro"}</div>
+      <div style="font-size:19px;font-weight:950;margin:6px 0 6px">${p.titulo}</div>
+      <div class="small" style="color:var(--soft);line-height:1.55;margin-bottom:12px">${p.texto}</div>
+      <div style="display:flex;justify-content:center;margin-bottom:12px">${p.desenho()}</div>
+      <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
+        ${passos.map((_,k)=>`<span style="width:${k===i?18:7}px;height:7px;border-radius:9px;background:${k===i?'var(--lime)':'rgba(255,255,255,.22)'};display:inline-block"></span>`).join("")}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${i>0?`<button type="button" class="btn secondary" id="cp1155Voltar" style="flex:1">Voltar</button>`:`<button type="button" class="btn secondary" id="cp1155Fechar" style="flex:1">Fechar</button>`}
+        <button type="button" class="btn" id="cp1155Proximo" style="flex:1.4">${ultimo?'Entendi':'Próximo'}</button>
+      </div>`;
+    card.querySelector("#cp1155Voltar")?.addEventListener("click", () => { i--; desenhar(); });
+    card.querySelector("#cp1155Fechar")?.addEventListener("click", fechar);
+    card.querySelector("#cp1155Proximo")?.addEventListener("click", () => { if(ultimo){ fechar(); return; } i++; desenhar(); });
+  };
+  desenhar();
+  overlay.addEventListener("click", (ev) => { if(ev.target === overlay) fechar(); });
+};
+
 window.cp1149ComoEnviar = function(passoInicial){
   let i = Math.min(Math.max(Number(passoInicial)||0, 0), CP1149_PASSOS.length-1);
   document.querySelector("#cp1149Modal")?.remove();
