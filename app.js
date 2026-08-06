@@ -10205,7 +10205,6 @@ function cpProbabilidadeFechamento(l){
   const recorrencia = Math.min(Number(l?.clientMessageDays90d ?? l?.clientMessageDays) || 0, 20);
   const perguntas = Math.min(Number(l?.clientQuestionCount90d ?? l?.clientQuestionCount) || 0, 20);
   const resp = Number(l?.daysSinceClientReply);
-  const toque = Number(l?.daysSinceLastTouch);
   let sinalNegociacao = 0;
   // v1139 — o sinal de negociação vem do TEXTO da análise (não tem data própria), então usa a
   // última fala do cliente como relógio: cliente calado há mais de 90 dias = negociação fria,
@@ -10217,12 +10216,13 @@ function cpProbabilidadeFechamento(l){
       if(ctx?.retornoProposta) sinalNegociacao += 1; // negociação num ponto avançado (proposta/contraproposta)
     }catch(_){}
   }
-  // v944: falar por último não basta — se a última mensagem do cliente foi só uma despedida/
-  // agradecimento ("Claro", "Obrigado pela atenção"), sem pergunta nem pedido, não existe bola
-  // com o cliente esperando resposta. Só pondera quando a última fala dele de fato pede resposta.
-  // v1017 — extraído pra ultimaMsgClientePedeResposta (compartilhada com emJanelaDeEspera/
-  // entraEmRetomada, que tinham o MESMO problema sem essa checagem — ver comentário ali).
-  const clienteEsperaVoce = Number.isFinite(resp) && (!Number.isFinite(toque) || resp <= toque) && ultimaMsgClientePedeResposta(l);
+  // v1158 — SAIU O BÔNUS DE "CLIENTE ESPERANDO SUA RESPOSTA" (+30). Ordem do dono, com o motivo:
+  // "retire isso e do código também, já te falei ontem que você não tem como saber, pois não é
+  // integrado com o WhatsApp". Está certo: o app vê um retrato da conversa (o arquivo exportado),
+  // não o WhatsApp ao vivo. Se ele respondeu o cliente depois da exportação, o app continuava
+  // achando que a bola estava com ele — e empurrava esse lead pro topo por um palpite. Fatores que
+  // sobraram são todos verificáveis no que foi importado: dias em que o cliente escreveu,
+  // perguntas, sinal de negociação, volume, e o tempo desde o último atendimento MARCADO por ele.
   // v1056 — pedido original do dono, do início desta rodada: "fazer o tempo parado pesar contra
   // a posição na fila" — sem tirar o lead da lista de vez, só derrubar pra trás de quem está
   // ativo de verdade. Corrigido pra usar SÓ o último atendimento (ultimoAtendimentoTs), nunca
@@ -10240,7 +10240,7 @@ function cpProbabilidadeFechamento(l){
     }
   }catch(_){}
   diasFrio = Math.min(diasFrio, 90);
-  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 + (clienteEsperaVoce ? 30 : 0) - diasFrio*2;
+  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 - diasFrio*2;
 }
 // candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
 // falou) e fora da janela de espera. Ordem = probabilidade de fechamento (cpProbabilidadeFechamento,
