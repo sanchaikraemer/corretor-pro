@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Corretor Pro — Guia de Início Rápido</title>
+<style>
+/* ============ Identidade extraída do sistema (styles.css, tema dark oficial) ============ */
+@font-face{
+  font-family:"Plus Jakarta Sans";
+  src:url("assets/PlusJakartaSans.ttf") format("truetype");
+  font-weight:200 800;
+}
+@font-face{
+  font-family:"Space Grotesk";
+  src:url("assets/SpaceGrotesk.ttf") format("truetype");
+  font-weight:300 700;
+}
+:root{
+  --bg:#052B36;
+  --bg2:#082F3B;
+  --panel:#0D3946;
+  --panel2:#124653;
+  --line:rgba(32,86,101,.55);
+  --line2:#205665;
+  --text:#F7FAFB;
+  --soft:#D6E0E4;
+  --secondary:#C2CDD2;
+  --muted:#8FA0A8;
+  --accent:#FF6258;
+  --accent-soft:rgba(255,98,88,.14);
+  --accent-line:rgba(255,98,88,.42);
+  --dados:#61C7E8;
+  --acao:#70D49D;
+  --timing:#E89BB7;
+  --cerebro:#A99AF8;
+  --wa:#25D366;
+  --font-display:"Plus Jakarta Sans",system-ui,sans-serif;
+  --font-num:"Space Grotesk","Plus Jakarta Sans",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+@page{size:A4;margin:0}
+html,body{background:#04222B}
+body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+.page{
+  width:210mm;height:297mm;
+  position:relative;overflow:hidden;
+  page-break-after:always;
+  background:
+    radial-gradient(120% 75% at 85% -10%, rgba(18,70,83,.85) 0%, rgba(18,70,83,0) 55%),
+    radial-gradient(90% 60% at -10% 105%, rgba(8,47,59,.9) 0%, rgba(8,47,59,0) 60%),
+    linear-gradient(158deg, #073444 0%, #052B36 46%, #041E27 100%);
+}
+.page:last-child{page-break-after:auto}
+/* trama sutil de pontos — matéria fosca, quase invisível */
+.page::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(247,250,251,.05) 0.45mm, transparent 0.45mm);
+  background-size:5.6mm 5.6mm;
+  mask-image:linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.12) 40%, rgba(0,0,0,.4));
+  -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.12) 40%, rgba(0,0,0,.4));
+}
+.inner{position:absolute;inset:0;padding:13mm 13mm 11mm}
+
+/* ============ utilitários ============ */
+.eyebrow{
+  font-size:7.4pt;font-weight:800;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);
+}
+.card{
+  background:linear-gradient(180deg, rgba(230,238,240,.028), rgba(230,238,240,0) 60%), var(--panel);
+  border:1px solid var(--line);border-radius:4.2mm;
+  box-shadow:0 6mm 14mm rgba(0,0,0,.22);
+}
+
+/* ============ PÁGINA 1 — CAPA ============ */
+.brandrow{display:flex;align-items:center;gap:4mm}
+.brandrow img{width:9.5mm;height:9.5mm;border-radius:2.4mm;box-shadow:0 2mm 6mm rgba(0,0,0,.35)}
+.brandrow .bn{font-size:11pt;font-weight:800;letter-spacing:-.02em}
+.brandrow .bn b{color:var(--accent);font-weight:800}
+.brandrow .bt{font-size:6.4pt;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:.8mm}
+.badge-beta{
+  margin-left:auto;font-size:6.8pt;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);
+  border-radius:99px;padding:1.6mm 4mm;
+}
+
+.hero{margin-top:17mm;display:grid;grid-template-columns:82mm 1fr;gap:8mm;align-items:center}
+.hero h1{
+  font-size:38pt;font-weight:800;letter-spacing:-.045em;line-height:.98;
+}
+.hero h1 .pro{color:var(--accent)}
+.hero .sub{
+  margin-top:3.4mm;font-size:9.6pt;font-weight:600;letter-spacing:.01em;color:var(--dados);
+}
+.hero .lede{
+  margin-top:5.5mm;font-size:9.2pt;line-height:1.66;color:var(--secondary);max-width:80mm;
+}
+.hero .lede b{color:var(--text);font-weight:700}
+.hero-rule{width:14mm;height:1.1mm;border-radius:99px;background:var(--accent);margin-top:5mm}
+
+/* mockups */
+.devices{position:relative;height:84mm}
+.laptop{
+  position:absolute;right:-3mm;top:2mm;width:101mm;
+  filter:drop-shadow(0 7mm 9mm rgba(0,0,0,.42));
+}
+.laptop .lid{
+  background:#0A2830;border:1.1mm solid #143a45;border-bottom-width:0;
+  border-radius:3.2mm 3.2mm 0 0;padding:1.2mm 1.2mm 0;
+}
+.laptop .lid img{display:block;width:100%;border-radius:2mm 2mm 0 0}
+.laptop .base{
+  height:2.6mm;background:linear-gradient(180deg,#1a4350,#0c2d38);
+  border-radius:0 0 3mm 3mm;position:relative;
+}
+.laptop .base::after{
+  content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
+  width:14mm;height:1mm;border-radius:0 0 2mm 2mm;background:rgba(0,0,0,.35);
+}
+.phone{
+  position:absolute;left:4mm;bottom:-1mm;width:24.5mm;z-index:2;
+  background:#0A2830;border:1mm solid #143a45;border-radius:4.6mm;padding:1mm;
+  filter:drop-shadow(0 5mm 7mm rgba(0,0,0,.5));
+}
+.phone img{display:block;width:100%;border-radius:3.4mm}
+
+/* cards de recursos */
+.features{margin-top:15mm;display:grid;grid-template-columns:repeat(3,1fr);gap:5mm}
+.feature{padding:6.5mm 6.5mm 6mm;position:relative}
+.feature .fic{
+  width:9.6mm;height:9.6mm;border-radius:3mm;display:grid;place-items:center;
+  background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);
+  margin-bottom:3.8mm;
+}
+.feature .fic svg{width:5.2mm;height:5.2mm}
+.feature h3{font-size:9.6pt;font-weight:800;letter-spacing:-.015em;margin-bottom:2mm}
+.feature p{font-size:7.7pt;line-height:1.56;color:var(--muted)}
+.feature p b{color:var(--soft);font-weight:700}
+.feature .dot{position:absolute;top:6mm;right:6mm;width:1.7mm;height:1.7mm;border-radius:50%}
+
+.foot{
+  position:absolute;left:13mm;right:13mm;bottom:8mm;
+  display:flex;align-items:center;gap:4mm;
+  border-top:1px solid var(--line);padding-top:3.6mm;
+}
+.foot .ft{font-size:7.6pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
+.foot .fsep{width:1.4mm;height:1.4mm;border-radius:50%;background:var(--accent)}
+.foot .fv{font-size:7.6pt;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.foot .fr{margin-left:auto;font-size:7pt;color:var(--muted);letter-spacing:.06em}
+
+/* ============ PÁGINA 2 — PRIMEIROS PASSOS ============ */
+.p2head{display:flex;align-items:flex-end;justify-content:space-between;gap:8mm}
+.p2head h2{font-size:20pt;font-weight:800;letter-spacing:-.04em;line-height:1}
+.p2head .p2sub{margin-top:2.6mm;font-size:9pt;color:var(--secondary)}
+.p2head .p2sub b{color:var(--accent);font-weight:700}
+
+.steps{margin-top:6mm;display:grid;grid-template-columns:1fr 1fr;gap:4.6mm}
+.step{padding:5.2mm;display:grid;grid-template-columns:1fr 31mm;gap:4.5mm;min-height:54mm}
+.step.stack{display:flex;flex-direction:column;gap:3.2mm}
+.step.stack .svis{width:88%;align-self:center}
+.step.stack .svis img{width:100%;box-shadow:0 3mm 8mm rgba(0,0,0,.35);border:1px solid rgba(32,86,101,.7)}
+.svis .anota{position:absolute;inset:0;pointer-events:none}
+.step .stx .snum{
+  font-family:var(--font-num);font-size:16pt;font-weight:700;color:var(--accent);
+  line-height:1;letter-spacing:-.02em;
+}
+.step .stx h3{font-size:10pt;font-weight:800;letter-spacing:-.02em;margin:2.2mm 0 2mm}
+.step .stx p{font-size:7.3pt;line-height:1.56;color:var(--secondary)}
+.step .stx p b{color:var(--text);font-weight:700}
+.step .hint{
+  align-self:flex-start;
+}
+.step .stx .hint,
+.step .hint{
+  display:inline-flex;align-items:center;gap:1.8mm;margin-top:2.8mm;
+  font-size:6.6pt;font-weight:700;color:var(--accent);
+  background:var(--accent-soft);border:1px solid var(--accent-line);
+  border-radius:99px;padding:1.4mm 3mm;
+}
+.step .svis{position:relative;display:grid;place-items:center}
+.step .svis img{max-width:100%;border-radius:2.6mm}
+
+/* fluxograma */
+.flow{margin-top:7mm}
+.flow .flabel{margin-bottom:3mm}
+.flowrow{display:flex;align-items:stretch;gap:0}
+.fnode{
+  flex:1;position:relative;text-align:center;
+  background:linear-gradient(180deg, rgba(230,238,240,.03), rgba(230,238,240,0)), var(--panel);
+  border:1px solid var(--line);border-radius:3mm;
+  padding:3.6mm 1mm 3.2mm;
+}
+.fnode .fi{display:grid;place-items:center;margin-bottom:2.2mm;color:var(--accent)}
+.fnode .fi svg{width:5mm;height:5mm}
+.fnode b{display:block;font-size:7.1pt;font-weight:800;letter-spacing:-.01em}
+.fnode small{display:block;font-size:6.1pt;color:var(--muted);margin-top:1.1mm;line-height:1.38}
+.farrow{
+  flex:none;width:6.5mm;display:grid;place-items:center;color:var(--accent);
+}
+.farrow svg{width:3.4mm;height:3.4mm}
+.fnode.hot{border-color:var(--accent-line);background:linear-gradient(180deg, rgba(255,98,88,.10), rgba(255,98,88,.02)), var(--panel)}
+
+/* QR */
+.qrrow{margin-top:6.5mm;display:flex;align-items:center;gap:7mm}
+.qrbox{
+  width:23mm;height:23mm;border-radius:3mm;flex:none;position:relative;
+  background:var(--bg2);
+}
+.qrbox::before{
+  content:"";position:absolute;inset:3mm;border-radius:1.6mm;
+  background-image:radial-gradient(rgba(247,250,251,.16) .5mm, transparent .5mm);
+  background-size:2.4mm 2.4mm;
+}
+.qrbox::after{
+  content:"";position:absolute;inset:0;border-radius:3mm;
+  background:
+    linear-gradient(var(--accent),var(--accent)) top left/5mm 1mm,
+    linear-gradient(var(--accent),var(--accent)) top left/1mm 5mm,
+    linear-gradient(var(--accent),var(--accent)) top right/5mm 1mm,
+    linear-gradient(var(--accent),var(--accent)) top right/1mm 5mm,
+    linear-gradient(var(--accent),var(--accent)) bottom left/5mm 1mm,
+    linear-gradient(var(--accent),var(--accent)) bottom left/1mm 5mm,
+    linear-gradient(var(--accent),var(--accent)) bottom right/5mm 1mm,
+    linear-gradient(var(--accent),var(--accent)) bottom right/1mm 5mm;
+  background-repeat:no-repeat;
+}
+.qrtx h4{font-size:10pt;font-weight:800;letter-spacing:-.02em}
+.qrtx p{font-size:7.4pt;color:var(--secondary);margin-top:1.6mm;line-height:1.55;max-width:96mm}
+</style>
+</head>
+<body>
+
+<!-- ================= PÁGINA 1 — CAPA ================= -->
+<section class="page" id="pg1">
+  <div class="inner">
+    <div class="brandrow">
+      <img src="assets/icon-512.png" alt="">
+      <div>
+        <div class="bn">Corretor <b>Pro</b></div>
+        <div class="bt">Plataforma de vendas imobiliárias</div>
+      </div>
+      <div class="badge-beta">Versão Beta</div>
+    </div>
+
+    <div class="hero">
+      <div>
+        <h1>CORRETOR<br><span class="pro">PRO</span></h1>
+        <div class="sub">Inteligência Comercial para Corretores de Imóveis</div>
+        <div class="hero-rule"></div>
+        <p class="lede"><b>Mais do que organizar clientes.</b><br>
+        O Corretor Pro analisa conversas, interpreta intenções, sugere respostas
+        estratégicas e organiza automaticamente seus atendimentos para que você
+        dedique seu tempo ao que realmente importa: <b>vender</b>.</p>
+      </div>
+      <div class="devices">
+        <div class="laptop">
+          <div class="lid"><img src="shots/final-desktop.png" alt=""></div>
+          <div class="base"></div>
+        </div>
+        <div class="phone"><img src="shots/final-mobile.png" alt=""></div>
+      </div>
+    </div>
+
+    <div class="features">
+      <div class="feature card">
+        <span class="dot" style="background:var(--dados)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.4 8.5 8.5 0 0 1-3.4-.7L3 21l1.8-5.6A8.38 8.38 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/><path d="M8 10h8M8 13.5h5"/></svg></div>
+        <h3>Analisa toda a conversa</h3>
+        <p>Não apenas a última mensagem. A inteligência entende <b>todo o contexto</b> da negociação.</p>
+      </div>
+      <div class="feature card">
+        <span class="dot" style="background:var(--cerebro)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg></div>
+        <h3>Sugere respostas inteligentes</h3>
+        <p>Mensagens estratégicas <b>personalizadas</b>, prontas para enviar ao cliente.</p>
+      </div>
+      <div class="feature card">
+        <span class="dot" style="background:var(--acao)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg></div>
+        <h3>Atualiza automaticamente</h3>
+        <p>Exporte novamente a conversa. O atendimento continua <b>exatamente de onde parou</b>.</p>
+      </div>
+      <div class="feature card">
+        <span class="dot" style="background:var(--timing)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9.5 15.5l2 2 3.5-3.5"/></svg></div>
+        <h3>Agenda retornos</h3>
+        <p>Nunca esqueça um cliente. O retorno certo, <b>na hora certa</b>.</p>
+      </div>
+      <div class="feature card">
+        <span class="dot" style="background:var(--accent)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></div>
+        <h3>Criado para o mercado imobiliário</h3>
+        <p>Desenvolvido <b>especificamente</b> para o dia a dia do corretor.</p>
+      </div>
+      <div class="feature card">
+        <span class="dot" style="background:var(--dados)"></span>
+        <div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></div>
+        <h3>Muito mais do que um CRM</h3>
+        <p>CRMs armazenam informações. O Corretor Pro ajuda você a <b>conduzir negociações</b>.</p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span class="ft">Guia de Início Rápido</span>
+      <span class="fsep"></span>
+      <span class="fv">Versão Beta</span>
+      <span class="fr">corretor-pro · inteligência comercial</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PÁGINA 2 — PRIMEIROS PASSOS ================= -->
+<section class="page" id="pg2">
+  <div class="inner">
+    <div class="brandrow">
+      <img src="assets/icon-512.png" alt="">
+      <div>
+        <div class="bn">Corretor <b>Pro</b></div>
+        <div class="bt">Guia de início rápido</div>
+      </div>
+      <div class="badge-beta">Passo a passo</div>
+    </div>
+
+    <div class="p2head" style="margin-top:8mm">
+      <div>
+        <h2>Primeiros Passos</h2>
+        <div class="p2sub">Comece em <b>menos de dois minutos</b>.</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step card">
+        <div class="stx">
+          <div class="snum">01</div>
+          <h3>Abra o WhatsApp</h3>
+          <p>Entre na conversa do cliente, toque nos <b>três pontinhos (⋮)</b> no canto
+          de cima e escolha <b>“Exportar conversa”</b>.</p>
+          <span class="hint">Exporte COM mídia — o áudio diz o que o cliente quer</span>
+        </div>
+        <div class="svis">
+          <!-- desenho do próprio sistema (tutorial "Como enviar sua conversa"): ⋮ → Exportar conversa -->
+          <svg viewBox="0 0 200 300" style="width:27mm">
+            <rect x="6" y="4" width="188" height="292" rx="20" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+            <rect x="14" y="26" width="172" height="246" rx="8" fill="rgba(255,255,255,.05)"/>
+            <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.45)"/>
+            <circle cx="170" cy="9" r="3" fill="#FF6258"/><circle cx="170" cy="17" r="3" fill="#FF6258"/><circle cx="170" cy="25" r="3" fill="#FF6258"/>
+            <circle cx="170" cy="17" r="17" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+            <rect x="86" y="44" width="98" height="120" rx="10" fill="rgba(4,26,33,.96)" stroke="rgba(255,255,255,.18)"/>
+            <rect x="96" y="56" width="66" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+            <rect x="96" y="74" width="52" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+            <rect x="96" y="92" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+            <rect x="90" y="106" width="90" height="22" rx="6" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+            <rect x="96" y="114" width="74" height="6" rx="3" fill="#FF6258"/>
+            <rect x="96" y="140" width="56" height="5" rx="2.5" fill="rgba(255,255,255,.35)"/>
+            <rect x="24" y="190" width="110" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
+            <rect x="66" y="226" width="110" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+            <rect x="24" y="256" width="152" height="14" rx="7" fill="rgba(255,255,255,.08)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="step card">
+        <div class="stx">
+          <div class="snum">02</div>
+          <h3>Compartilhe com o Corretor Pro</h3>
+          <p>Na lista de compartilhar do celular, toque no <b>ícone do Corretor Pro</b>.
+          Pronto — a conversa chega sozinha.</p>
+          <span class="hint">É aqui que você toca</span>
+        </div>
+        <div class="svis">
+          <!-- desenho do próprio sistema: a lista de compartilhar com o ícone do Corretor Pro -->
+          <svg viewBox="0 0 200 300" style="width:27mm">
+            <rect x="6" y="4" width="188" height="292" rx="20" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+            <rect x="14" y="26" width="172" height="246" rx="8" fill="rgba(255,255,255,.05)"/>
+            <rect x="24" y="44" width="110" height="24" rx="8" fill="rgba(255,255,255,.08)"/>
+            <rect x="66" y="78" width="110" height="20" rx="8" fill="rgba(255,98,88,.22)"/>
+            <rect x="18" y="120" width="164" height="150" rx="14" fill="rgba(4,26,33,.96)" stroke="rgba(255,255,255,.18)"/>
+            <rect x="30" y="134" width="140" height="22" rx="6" fill="rgba(255,255,255,.07)"/>
+            <rect x="38" y="142" width="104" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
+            <circle cx="46" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+            <g>
+              <rect x="72" y="173" width="30" height="30" rx="9" fill="rgba(255,98,88,.18)" stroke="#FF6258" stroke-width="2.5"/>
+              <path d="M79 192 L87 183 L95 192" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>
+            </g>
+            <circle cx="128" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+            <circle cx="164" cy="188" r="15" fill="rgba(255,255,255,.10)"/>
+            <rect x="66" y="212" width="42" height="5" rx="2.5" fill="#FF6258"/>
+            <rect x="30" y="238" width="140" height="18" rx="9" fill="rgba(255,255,255,.06)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="step stack card">
+        <div class="stx">
+          <div class="snum">03</div>
+          <h3>Aguarde a análise</h3>
+          <p>Em 30 a 60 segundos o Corretor Pro monta o <b>diagnóstico</b>, organiza o
+          <b>histórico</b> e prepara as <b>respostas sugeridas</b>.</p>
+        </div>
+        <div class="svis">
+          <img src="shots/final-passo3.png" alt="">
+          <svg class="anota" viewBox="0 0 1090 610" preserveAspectRatio="none">
+            <rect x="12" y="176" width="620" height="90" rx="24" fill="none" stroke="#FF6258" stroke-width="5" opacity=".9"/>
+          </svg>
+        </div>
+        <span class="hint">A leitura da negociação, pronta — sem digitar nada</span>
+      </div>
+      <div class="step stack card">
+        <div class="stx">
+          <div class="snum">04</div>
+          <h3>Responda e agende</h3>
+          <p><b>Copie</b> uma resposta e envie ao cliente. Depois, <b>marque o
+          atendimento</b> e <b>agende o retorno</b> — o app lembra por você.</p>
+        </div>
+        <div class="svis">
+          <img src="shots/final-passo4.png" alt="">
+          <svg class="anota" viewBox="0 0 1040 680" preserveAspectRatio="none">
+            <ellipse cx="835" cy="588" rx="135" ry="62" fill="none" stroke="#FF6258" stroke-width="6"/>
+            <path d="M700 588 C 560 588 520 520 520 470" fill="none" stroke="#FF6258" stroke-width="4" stroke-dasharray="2 10" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="hint">Toque em Copiar e cole direto no WhatsApp</span>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="eyebrow flabel">O ciclo do atendimento</div>
+      <div class="flowrow">
+        <div class="fnode">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.4 8.5 8.5 0 0 1-3.4-.7L3 21l1.8-5.6A8.38 8.38 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/></svg></div>
+          <b>Recebe mensagem</b><small>o cliente chama<br>no WhatsApp</small>
+        </div>
+        <div class="farrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fnode">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 21h16"/></svg></div>
+          <b>Exporta conversa</b><small>dois toques,<br>direto do WhatsApp</small>
+        </div>
+        <div class="farrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fnode hot">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <b>Corretor Pro analisa</b><small>diagnóstico e<br>intenção do cliente</small>
+        </div>
+        <div class="farrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fnode">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/></svg></div>
+          <b>Resposta inteligente</b><small>pronta pra copiar<br>e enviar</small>
+        </div>
+        <div class="farrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fnode">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></div>
+          <b>Cliente avança</b><small>a negociação<br>anda de etapa</small>
+        </div>
+        <div class="farrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="fnode">
+          <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+          <b>Agenda automaticamente</b><small>o retorno certo,<br>na hora certa</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="qrrow">
+      <div class="qrbox"></div>
+      <div class="qrtx">
+        <h4>Assista ao vídeo de treinamento</h4>
+        <p>Aponte a câmera do celular para o código quando ele estiver disponível e veja,
+        em poucos minutos, o Corretor Pro trabalhando numa negociação de verdade.</p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span class="ft">Guia de Início Rápido</span>
+      <span class="fsep"></span>
+      <span class="fv">Versão Beta</span>
+      <span class="fr">página 2 · primeiros passos</span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
