@@ -3961,7 +3961,28 @@ async function carregarDashboard(force){
     // chamado com uma cópia da própria memória (o atalho logo acima), e carimbar lá dentro faria
     // a memória velha se declarar em dia.
     cpCarteiraSincronizada();
-  }catch(err){ console.warn("carregarDashboard:", err); }
+  }catch(err){
+    console.warn("carregarDashboard:", err);
+    // v1161 — "fica 'carregando os leads...' faz 5 min e nada" (dono, 06/08/2026, logo depois de
+    // uma importação que não terminou). CAUSA REAL: quando a busca da carteira FALHA DE VEZ
+    // (getLeadsData esgota as tentativas e estoura o erro), este catch só anotava no console — a
+    // tela ficava com o "Carregando os leads…" congelado pra sempre, sem botão e sem nova
+    // tentativa. O caminho irmão (resposta ok:false, logo acima) sempre teve as duas coisas; o
+    // caminho do ERRO não tinha nenhuma. Mesma recuperação agora: aviso com botão + tenta de novo
+    // sozinho em 6s (um pouco mais de espaço que os 3s do ok:false, porque aqui a falha foi de
+    // rede/tempo, não uma resposta rápida do servidor).
+    const foco = qs("#leadFocoArea");
+    const aindaCarregando = foco && /Carregando os leads|Sua carteira está demorando|Ainda buscando/i.test(foco.textContent || "");
+    if(aindaCarregando && !state.itemsAtivos?.length && !state.grupoAtivo){
+      foco.innerHTML = `<div class="card compact"><div class="empty" style="padding:24px 16px;text-align:center;color:var(--muted)">A busca da sua carteira falhou (rede ou servidor ocupado). Vou tentar de novo sozinho. <button type="button" onclick="invalidarLeadsCache();carregarDashboard()" style="margin-left:6px;background:transparent;border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--lime);font-weight:950;cursor:pointer">Tentar agora</button></div></div>`;
+      // A retentativa só se arma quando a tela está mesmo presa no carregamento — carteira já
+      // desenhada não precisa de laço próprio (a sincronização de fundo de 30s já cobre). O
+      // unref é pros testes de Node, que rodam esta função de verdade: sem ele, o timer segura
+      // o processo aberto pra sempre (foi exatamente o que travou a suíte na primeira rodada).
+      const t = setTimeout(() => { if(state.active === "home" && !state.itemsAtivos?.length) carregarDashboard(); }, 6000);
+      if(t && typeof t.unref === "function") t.unref();
+    }
+  }
 }
 async function _processarDashboard(data){
   if(!data?.items) return;
@@ -10435,6 +10456,30 @@ function cp1160TemPromessa(texto){
   const t = String(texto || "");
   return CP1160_PROMETE_RETORNO.test(t) || CP1160_VAI_CONSULTAR.test(t) || CP1160_VAI_PENSAR.test(t);
 }
+// v1161 — RESPIRO. A v1160 propunha retomar no dia seguinte ao prazo do cliente. O dono cortou:
+// "retomar hoje NUNCA acontecerá... temos que dar tempo pro cliente respirar... se é pra ser chato
+// assim instalo um robô no WhatsApp pra mandar msg o tempo todo. Temos que ter ESTRATÉGIA
+// COMERCIAL, e não insistência."
+//
+// A primeira tentativa criou um campo novo no Cérebro pra isso, e ele cortou de novo — com razão:
+// "mas já não temos isso no Cérebro em 'descanso após atender'? não é a mesma coisa?". É a mesma
+// ideia (dar espaço), então é o MESMO número: nada de duas configurações pra ele manter.
+function cp1160RespiroDias(){
+  return (typeof cpDiasDescansoPosAtendimento === 'function') ? cpDiasDescansoPosAtendimento() : 5;
+}
+// A conta parte do que aconteceu POR ÚLTIMO: o prazo que o cliente deu ou o seu último atendimento.
+// Sem isso, um cliente atendido ontem podia aparecer hoje só porque a promessa dele era antiga.
+function cp1160BaseDoRespiro(l, momentoOuDiaIso){
+  let base = momentoOuDiaIso;
+  try{
+    const ts = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
+    if(ts){
+      const diaAtendimento = new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo" }).format(new Date(ts));
+      if(/^\d{4}-\d{2}-\d{2}$/.test(diaAtendimento) && diaAtendimento > base) base = diaAtendimento;
+    }
+  }catch(_){}
+  return base;
+}
 function cp1160SomaDias(iso, n){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||""))) return null;
   const d = new Date(String(iso).slice(0,10) + "T12:00:00-03:00");
@@ -10515,7 +10560,7 @@ function cp1160PromessaDoCliente(l){
     const diasAtras = Math.abs(idade);
     if(diasAtras > 45) continue;                       // promessa velha é caso de resgate, não disto
     const momento = cp1160MomentoIso(texto, diaIso);
-    const retornoIso = cp1160SomaDias(momento || diaIso, 1);
+    const retornoIso = cp1160SomaDias(cp1160BaseDoRespiro(l, momento || diaIso), cp1160RespiroDias());
     if(!retornoIso) continue;
     const hoje = (typeof ui671HojeIso === 'function') ? ui671HojeIso() : "";
     const atrasado = (typeof ui671DiasAte === 'function') ? (ui671DiasAte(retornoIso) < 0) : false;
@@ -10549,6 +10594,15 @@ function cp1160Quando(dias){
   if(dias === 1) return "ontem";
   return `há ${dias} dias`;
 }
+// "sex, 09/08" — a data proposta aparece SEMPRE por extenso, nunca só "amanhã"/"em 3 dias": é um
+// combinado que vai pra Agenda, e ele precisa bater o olho e saber o dia (v1161).
+function cp1160DataCurta(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||""))) return "";
+  const d = new Date(String(iso).slice(0,10) + "T12:00:00-03:00");
+  if(isNaN(d)) return "";
+  const dias = ["dom","seg","ter","qua","qui","sex","sáb"];
+  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+}
 // Faixa na Home, acima da fila do dia. Some sozinha quando não há ninguém nessa situação.
 function cp1160FaixaHomeHTML(items){
   const lista = cp1160Pendentes(items).slice(0, 6);
@@ -10567,7 +10621,7 @@ function cp1160FaixaHomeHTML(items){
   return `<div class="cp1160-faixa">
     <div class="cp1160-tit">Ficaram de te dar uma resposta · ${lista.length}</div>
     ${linhas}
-    <div class="cp1160-pe">O prazo que eles mesmos deram já passou. Agendar coloca na sua Agenda de hoje.</div>
+    <div class="cp1160-pe">Já passou o prazo que eles deram mais o respiro de ${cp1160RespiroDias()} ${cp1160RespiroDias() === 1 ? "dia" : "dias"} — o mesmo "Descanso após atender" do Cérebro. Agendar coloca na sua Agenda de hoje.</div>
   </div>`;
 }
 // Dentro do cliente: a proposta aparece mesmo quando o dia ainda não chegou (aí com a data certa).
@@ -10576,14 +10630,20 @@ function cp1160BannerLeadHTML(lead){
   const p = cp1160PromessaDoCliente(lead);
   if(!p) return "";
   const dias = (typeof ui671DiasAte === 'function') ? ui671DiasAte(p.retornoIso) : null;
-  const quandoTxt = dias == null ? "hoje" : dias < 0 ? "hoje (o prazo já passou)" : dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`;
+  const respiro = cp1160RespiroDias();
+  const venceu = dias != null && dias <= 0;
+  // Plano, não cobrança (v1161): a data proposta é o prazo que o cliente deu + o respiro do Cérebro,
+  // e aparece por extenso. Só quando esse dia já chegou é que a sugestão vira "hoje".
+  const plano = venceu
+    ? `O respiro de ${respiro} ${respiro === 1 ? "dia" : "dias"} já passou (era ${escapeHtml(cp1160DataCurta(p.retornoIso))}).`
+    : `Sugiro retomar <b>${escapeHtml(cp1160DataCurta(p.retornoIso))}</b> — o respiro de ${respiro} ${respiro === 1 ? "dia" : "dias"} que você configurou, contado do prazo que o cliente deu.`;
   const idJs = JSON.stringify(String(lead?.id || ""));
   return `<div class="cp1160-lead">
     <b>Ficou de te dar uma resposta</b>
     <span>“${escapeHtml(cp1160Trecho(p.texto, 160))}” — disse ${escapeHtml(cp1160Quando(p.diasAtras))}.</span>
     <div class="cp1160-lead-acao">
-      <span>Retomar ${escapeHtml(quandoTxt)}?</span>
-      <button type="button" onclick='cp1160Agendar(${idJs},${JSON.stringify(p.sugestaoIso)})'>Agendar ${escapeHtml(dias != null && dias === 1 ? "amanhã" : "hoje")}</button>
+      <span>${plano}</span>
+      <button type="button" onclick='cp1160Agendar(${idJs},${JSON.stringify(p.sugestaoIso)})'>Agendar ${escapeHtml(venceu ? "hoje" : cp1160DataCurta(p.retornoIso))}</button>
     </div>
   </div>`;
 }

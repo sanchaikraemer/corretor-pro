@@ -68,6 +68,34 @@
   <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:var(--boot-sub,#8FB1BF);font-size:14px">Carregando os leads...</div></div>
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
+<script>
+  // v1161 — VIGIA DO BOOT. Caso real do dono: "fica 'carregando os leads...' faz 5 min e nada".
+  // Se o código principal morrer antes de desenhar a Home (erro de JS, arquivo que não carregou),
+  // NENHUM vigia lá de dentro roda — este aqui é de fora, no próprio HTML, e sempre roda.
+  // Aos 30s: se a tela ainda estiver no "Carregando os leads…" ORIGINAL (sem relógio de espera e
+  // sem botão — ou seja, nada vivo por cima), vira um aviso com botão de tentar de novo e, se
+  // houve erro de JS, o texto do erro (é o que permite diagnosticar por print).
+  (function(){
+    window.__cpErroBoot = "";
+    window.addEventListener("error", function(e){
+      try{ if(!window.__cpErroBoot) window.__cpErroBoot = String((e && (e.message || (e.error && e.error.message))) || ""); }catch(_){ }
+    });
+    setTimeout(function(){
+      try{
+        var a = document.getElementById("leadFocoArea");
+        if(!a) return;
+        if(!/Carregando os leads/.test(a.textContent || "")) return;   // já saiu do carregamento
+        if(a.querySelector(".cp694-espera") || a.querySelector("button")) return; // tem gente viva cuidando
+        var erro = window.__cpErroBoot ? '<div style="margin-top:10px;font-size:11px;color:#8FB1BF;word-break:break-word">Detalhe técnico: ' + String(window.__cpErroBoot).replace(/[<>]/g, "") + '</div>' : '';
+        a.innerHTML = '<div style="min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:0 16px">'
+          + '<b style="font-size:15px">O app não conseguiu terminar de abrir.</b>'
+          + '<span style="color:#8FB1BF;font-size:13px">Sua base está salva — isto é só a leitura desta tela.</span>'
+          + '<button type="button" onclick="location.reload()" style="margin-top:8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:#FF6258;color:#fff;padding:10px 18px;font-weight:900;cursor:pointer">Tentar de novo</button>'
+          + erro + '</div>';
+      }catch(_){ }
+    }, 30000);
+  })();
+</script>
 
 <main class="app">
   <aside class="sidebar">
@@ -378,7 +406,7 @@
           <div class="small" style="color:var(--muted);margin-top:4px">Dentro da meta acima, quantas vagas do "Fazer agora" ficam reservadas pra resgatar os clientes há mais tempo sem atendimento — assim ninguém cai no esquecimento (de 0 a 20; 0 desliga). Padrão: 2.</div>
           <label>Descanso após atender <span class="small" style="color:var(--muted);font-weight:400">(dias fora da fila)</span></label>
           <input type="number" id="cerebroDiasDescanso" min="1" max="60" placeholder="5" style="max-width:120px">
-          <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5.</div>
+          <div class="small" style="color:var(--muted);margin-top:4px">Depois que você atende um cliente, quantos dias ele fica fora da fila "Fazer agora" antes de poder voltar a aparecer (de 1 a 60). Padrão: 5. <b>Este mesmo número é o respiro</b> quando o cliente fica de te dar uma resposta ("vou falar com meu marido hoje à noite"): a data sugerida pra retomar é o prazo que ele deu mais estes dias.</div>
 
           <!-- v1091 — antes, sábado e domingo eram fixos no código como dias sem fila (regra pedida
                na v914/v937). Corretor de imóveis costuma trabalhar sábado, então virou escolha de
