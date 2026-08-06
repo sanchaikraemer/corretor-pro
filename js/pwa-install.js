@@ -7,34 +7,44 @@ import { state } from './state.js?v=__VERSION__';
 let deferredInstallPrompt = window.__deferredInstallPrompt || null;
 const ehStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const BANNER_INSTALAR_KEY = "direciona_banner_instalar_fechado";
-// v1156 — FECHAR O AVISO NÃO PODE SER PRA SEMPRE.
+// v1157 — FECHAR FECHA PRA SEMPRE; DESINSTALAR TRAZ DE VOLTA.
 //
-// O dono: "tô sem app instalado e ainda não me oferece pra baixar app" — com a v1155 na tela. A
-// causa não era o navegador desta vez: era daqui. Quem tocasse no "✕" (ou em "Continuar na web")
-// UMA vez gravava um "fechado" eterno naquele celular, e a oferta nunca mais voltava. Ou seja: a
-// promessa da v1154 ("a oferta aparece sempre") não valia justamente pra quem já usava o app —
-// inclusive pro dono. Agora o "✕" descansa a oferta por 7 dias e ela volta; e o "fechado" eterno
-// gravado pelas versões antigas é apagado no primeiro carregamento.
-const BANNER_INSTALAR_DIAS = 7;
-function bannerInstalarDispensado(){
-  let valor = "";
-  try{ valor = localStorage.getItem(BANNER_INSTALAR_KEY) || ""; }catch(_){ return false; }
-  if(!valor) return false;
-  const quando = Number(valor);
-  // Data de verdade é um número grande (milissegundos desde 1970). Qualquer coisa menor é o
-  // formato antigo ("1" = pra sempre): some, e a oferta volta agora.
-  if(!Number.isFinite(quando) || quando < 1e12){
-    try{ localStorage.removeItem(BANNER_INSTALAR_KEY); }catch(_){}
-    return false;
-  }
-  return (Date.now() - quando) < BANNER_INSTALAR_DIAS * 24 * 60 * 60 * 1000;
+// Pedido do dono, palavra dele: "quero que fechar feche pra sempre, a não ser que o app seja
+// desinstalado e quando entrar no link apareça novamente". Faz sentido: enquanto o app está no
+// celular, insistir é incômodo; quando ele sai do celular, a oferta é justamente o que falta.
+//
+// (A v1156 tinha resolvido o mesmo problema com prazo de 7 dias. O prazo saiu: quem manda agora é
+// o estado real do aparelho, não o calendário.)
+//
+// Pra isso o app precisa saber a diferença entre INSTALADO e NÃO INSTALADO. Três sinais, todos do
+// próprio navegador:
+//   • está rodando como app (tela cheia, sem barra de endereço)  → instalado;
+//   • navigator.getInstalledRelatedApps() responde que sim       → instalado (Android);
+//   • o navegador oferece instalar (beforeinstallprompt)         → NÃO instalado (ele só oferece
+//     quando o app não está no aparelho).
+// O app anota "estava instalado" quando vê o primeiro caso; quando depois vê o último, a conclusão
+// é uma só: foi desinstalado. Aí o "fechado" é apagado e a oferta volta na próxima abertura.
+const APP_ESTAVA_INSTALADO_KEY = "direciona_app_estava_instalado";
+function lerGuardado(chave){ try{ return localStorage.getItem(chave) || ""; }catch(_){ return ""; } }
+function guardar(chave, valor){ try{ localStorage.setItem(chave, valor); }catch(_){} }
+function apagarGuardado(chave){ try{ localStorage.removeItem(chave); }catch(_){} }
+
+function bannerInstalarDispensado(){ return !!lerGuardado(BANNER_INSTALAR_KEY); }
+function anotarQueEstaInstalado(){ guardar(APP_ESTAVA_INSTALADO_KEY, "1"); }
+// Chamado só quando há CERTEZA de que o app não está no aparelho. Se ele já estivera instalado,
+// isto é uma desinstalação: a oferta volta a valer, mesmo que o corretor tenha fechado antes.
+function anotarQueNaoEstaInstalado(){
+  if(lerGuardado(APP_ESTAVA_INSTALADO_KEY) !== "1") return false;
+  apagarGuardado(APP_ESTAVA_INSTALADO_KEY);
+  apagarGuardado(BANNER_INSTALAR_KEY);
+  return true;
 }
 
 function mostrarOpcoesInstalar(){
   if(ehStandalone) return; // já está rodando como app
   // Botão no Menu — este NUNCA some enquanto o app não estiver instalado.
   const btn = qs("#btnInstalarApp"); if(btn) btn.style.display = "flex";
-  // Banner no topo da Hoje — descansa 7 dias se a pessoa fechou.
+  // Banner no topo da Hoje — respeita o "fechar" até o app ser desinstalado.
   if(!bannerInstalarDispensado()){
     const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "block";
   }
@@ -76,8 +86,17 @@ async function conferirSeJaEstaInstalado(){
   try{
     if(ehStandalone || typeof navigator.getInstalledRelatedApps !== "function") return;
     const lista = await navigator.getInstalledRelatedApps();
-    if(!Array.isArray(lista) || !lista.length) return;
+    if(!Array.isArray(lista) || !lista.length){
+      // Certeza de que NÃO está instalado. Se estava antes, foi desinstalado: a oferta volta,
+      // mesmo que o corretor tenha fechado o aviso alguma vez (v1157).
+      if(anotarQueNaoEstaInstalado()) mostrarOpcoesInstalar();
+      return;
+    }
     appJaInstaladoNoAparelho = true;
+    anotarQueEstaInstalado();
+    // Está instalado: não é hora de oferecer instalação nenhuma. O aviso sai da Hoje e o cartão do
+    // Menu passa a servir pra outra coisa — achar o ícone que sumiu da tela inicial.
+    const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "none";
     const bb = qs("#bannerInstalarBtn"); if(bb) bb.textContent = "Onde está meu app";
     const titulo = qs("#bannerInstalar b"); if(titulo) titulo.textContent = "O Corretor Pro já está instalado";
     const sub = qs("#bannerInstalar .cp-install-txt span");
@@ -113,10 +132,12 @@ async function dispararInstalacao(){
   if(ehIOS() && typeof toast === "function") toast("No iPhone é pelo Safari: Compartilhar → Adicionar à Tela de Início.");
 }
 
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  window.__deferredInstallPrompt = e;
+// v1157 — o navegador só oferece instalar quando o app NÃO está no aparelho. Então convite que
+// chega é prova de "não instalado": se o app estava instalado antes, ele foi desinstalado, e a
+// oferta volta a aparecer mesmo que o corretor tenha fechado o aviso um dia.
+function conviteDeInstalacaoChegou(){
+  appJaInstaladoNoAparelho = false;
+  anotarQueNaoEstaInstalado();
   mostrarOpcoesInstalar();
   // v1155 — o convite costuma chegar DEPOIS da tela montar. Se o rótulo já tinha virado
   // "Como instalar" (v1154, quando não havia convite), ele volta a prometer o que agora é
@@ -124,17 +145,19 @@ window.addEventListener("beforeinstallprompt", (e) => {
   const bb = qs("#bannerInstalarBtn"); if(bb && !ehIOS()) bb.textContent = "Baixar app";
   const dica = qs("#instalarDica"); if(dica) dica.style.display = "none";
   const dicaBanner = qs("#bannerInstalarDica"); if(dicaBanner && !ehIOS()) dicaBanner.style.display = "none";
+}
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  window.__deferredInstallPrompt = e;
+  conviteDeInstalacaoChegou();
 });
 // Convite capturado cedo pelo index.html: usa assim que o app.js sobe.
 window.addEventListener("direciona-install-ready", () => {
   deferredInstallPrompt = window.__deferredInstallPrompt;
-  mostrarOpcoesInstalar();
-  const dica = qs("#instalarDica"); if(dica) dica.style.display = "none";
+  conviteDeInstalacaoChegou();
 });
-if(deferredInstallPrompt){
-  mostrarOpcoesInstalar();
-  const dicaJa = qs("#instalarDica"); if(dicaJa) dicaJa.style.display = "none";
-}
+if(deferredInstallPrompt) conviteDeInstalacaoChegou();
 
 // v1154 — O CONVITE DO NAVEGADOR NÃO É GARANTIDO, E A OFERTA DE INSTALAR PRECISA SER.
 //
@@ -177,8 +200,9 @@ window.cpAppJaInstaladoNoAparelho = () => appJaInstaladoNoAparelho;
 qs("#btnInstalarApp")?.addEventListener("click", dispararInstalacao);
 qs("#bannerInstalarBtn")?.addEventListener("click", dispararInstalacao);
 function fecharBannerInstalar(){
-  // Guarda QUANDO foi fechado (não um "pra sempre"): daqui a 7 dias a oferta volta sozinha.
-  try{ localStorage.setItem(BANNER_INSTALAR_KEY, String(Date.now())); }catch(_){}
+  // Fechou, fechou: fica fechado (a data serve só pra saber quando foi). Só volta se o app for
+  // desinstalado do aparelho — quem apaga essa marca é anotarQueNaoEstaInstalado() (v1157).
+  guardar(BANNER_INSTALAR_KEY, String(Date.now()));
   const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "none";
 }
 // "✕" e "Continuar na web" dispensam o convite (útil no iPhone, onde não há instalação por
@@ -204,9 +228,12 @@ function abrirOnboarding(){
 window.abrirOnboarding = abrirOnboarding;
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
+  anotarQueEstaInstalado(); // v1157 — é daqui que o app passa a saber que ESTÁ instalado
   esconderOpcoesInstalar();
   toast("App instalado! Procure o ícone do Corretor Pro na tela inicial.");
 });
+// Abrir pelo ícone (tela cheia) é a prova mais direta de que está instalado.
+if(ehStandalone) anotarQueEstaInstalado();
 // Sempre que NÃO estiver rodando como app instalado, oferece a instalação.
 // (Mesmo sem o evento do navegador — no iPhone ou quando já houve registro — o
 // caminho manual aparece, então o usuário nunca fica sem opção.)
