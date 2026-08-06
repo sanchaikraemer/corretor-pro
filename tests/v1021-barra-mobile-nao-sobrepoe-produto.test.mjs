@@ -11,7 +11,12 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // chr-bar não tinha limite de largura (justify-self:start = tamanho pelo conteúdo, não pela
 // coluna) — o conjunto vazava por cima do texto do produto em vez de encolher.
 
-const iniMobile = app.indexOf('@media(max-width:560px){');
+// v1160 — o bloco é achado a partir da regra de DESKTOP do cp-hoje-row, não pelo primeiro
+// "@media(max-width:560px)" do arquivo: outras faixas da Home podem ganhar media query antes desta
+// (foi o que aconteceu na v1160) e o teste passava a medir o CSS errado.
+const iniDesktopRow = app.indexOf('.cp-hoje-row{width:100%');
+assert.ok(iniDesktopRow > -1, 'regra desktop do cp-hoje-row não encontrada');
+const iniMobile = app.indexOf('@media(max-width:560px){', iniDesktopRow);
 assert.ok(iniMobile > -1, 'bloco @media mobile do cp-hoje-row não encontrado');
 const fimMobile = app.indexOf('\n      }', iniMobile);
 const blocoMobile = app.slice(iniMobile, fimMobile);

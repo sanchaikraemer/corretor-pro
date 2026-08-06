@@ -3154,6 +3154,19 @@ function renderBotoesHome(){
       /* v945 introduziu uma 2ª linha (data-exp) pro motivo do ranking, reformatada em v972/v974 —
          v975 tirou o motivo da Home de vez (pedido do dono: já existe dentro do lead, repetir
          aqui só poluía). Linha voltou a ser sempre de 1 linha só; sem essas regras. */
+      /* v1160 — "Ficaram de te dar uma resposta": faixa acima da fila do dia. Cor de destaque
+         (accent), pra separar do resto sem competir com a lista. */
+      .cp1160-faixa{border:1px solid rgba(255,98,88,.34);background:rgba(255,98,88,.06);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+      .cp1160-tit{color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:11px;margin-bottom:8px}
+      .cp1160-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);flex-wrap:wrap}
+      .cp1160-row:last-of-type{border-bottom:0}
+      .cp1160-abrir{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer;padding:0}
+      .cp1160-abrir b{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp1160-abrir span{font-size:12px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .cp1160-abrir i{font-size:11px;color:var(--muted);font-style:normal}
+      .cp1160-btn{flex:0 0 auto;border:1px solid rgba(255,98,88,.5);background:rgba(255,98,88,.12);color:var(--accent);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:950;cursor:pointer}
+      .cp1160-btn:hover{background:rgba(255,98,88,.2)}
+      .cp1160-pe{font-size:11px;color:var(--muted);margin-top:8px}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
@@ -3180,6 +3193,7 @@ function renderBotoesHome(){
       <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
     </div>
     ${barraBuscaLeadHTML("home")}
+    ${typeof cp1160FaixaHomeHTML === 'function' ? cp1160FaixaHomeHTML(items) : ""}
     <div class="home-m1-list">${top3Html}</div>
   `;
   qsa(".pickZipShortcut").forEach(b => {
@@ -4908,6 +4922,18 @@ function cp704Css(){
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:rgba(104,255,149,.35);color:#68ff95}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:#ff7f74}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:#ff7f74!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:#68ff95;border-color:rgba(104,255,149,.35)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
+      /* v1160 — "Ficou de te dar uma resposta" dentro do cliente, no topo do Fazer agora. */
+      .cp1160-lead{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);border-radius:14px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+      .cp1160-lead>b{font-size:12px;font-weight:950;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+      /* Cor pelas variáveis do tema, NÃO cravada: o resto deste bloco usa rgba clarinho (feito pro
+         tema escuro) e depende de um override antigo com !important pro tema claro. Classe nova não
+         entra nesse override — cravar aqui deixaria texto quase branco no fundo claro (foi o que a
+         conferência em Chromium pegou antes de publicar). */
+      .cp1160-lead>span{font-size:13px;line-height:1.45;color:var(--text)}
+      .cp1160-lead-acao{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:2px}
+      .cp1160-lead-acao>span{font-size:12px;color:var(--soft);font-weight:800}
+      .cp1160-lead-acao button{border:1px solid rgba(255,98,88,.55);background:rgba(255,98,88,.14);color:var(--accent);border-radius:999px;padding:9px 14px;font-size:12px;font-weight:950;cursor:pointer}
+      .cp1160-lead-acao button:hover{background:rgba(255,98,88,.22)}
       .cp704-body{overflow-wrap:anywhere;word-break:normal}.cp704-row div{overflow-wrap:anywhere}.cp704-tag,.cp704-pill{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .cp704-card,.cp704-details,.cp704-hero{box-sizing:border-box;max-width:100%}.cp704-lead *{box-sizing:border-box}
       .ui682-analysis-progress{box-sizing:border-box;max-width:100%!important;min-width:0!important;width:100%!important;overflow:hidden;grid-column:1/-1;flex-basis:100%;clear:both}.ui682-analysis-progress div{min-width:0}.ui682-analysis-progress span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cp704-top .ui682-analysis-progress{margin-left:0!important;margin-right:0!important}
@@ -5545,6 +5571,7 @@ function renderLeadFoco(lead){
           ${needsAnalysis?`<section class="cp704-card cp704-stale"><div class="cp704-card-title"><h2>${stale?'Análise comercial antiga':'Análise comercial pendente'}</h2></div><p>${stale?'Atualize para recalcular oportunidade, próxima ação e mensagem.':'Ainda não há 3 mensagens comerciais válidas para este lead.'}</p><button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button></section>`:''}
           <section class="cp704-card">
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
+            ${typeof cp1160BannerLeadHTML === 'function' ? cp1160BannerLeadHTML(lead) : ''}
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
@@ -10380,6 +10407,198 @@ window.cpMetaAtendimentosDia = cpMetaAtendimentosDia;
 window.cpResgatesPorDia = cpResgatesPorDia;
 window.cpAplicarResgatesNaFila = cpAplicarResgatesNaFila;
 window.cpFilaFazerAgoraComResgates = cpFilaFazerAgoraComResgates;
+
+// ===== v1160 — "O CLIENTE FICOU DE TE DAR UMA RESPOSTA" =====
+// Caso real do dono: a cliente pediu informações, ele mandou, e ela ficou de falar com o marido à
+// noite. No dia seguinte o app não lembrava disso — ela tinha ACABADO de ser atendida, então estava
+// no descanso e não aparecia em lugar nenhum. Ele teve que lembrar de cabeça. Daí o pedido: quando o
+// cliente ficar de dar uma resposta, o app já propõe o retorno e ele confirma com um toque.
+//
+// Tudo sai do que JÁ FOI IMPORTADO (as próprias mensagens do cliente): nenhuma chamada de IA,
+// nenhum custo, e vale pra carteira inteira na hora — sem reanalisar ninguém.
+//
+// Só olha as 3 ÚLTIMAS falas do cliente: promessa velha, com o cliente tendo falado outras coisas
+// depois, não vale mais (e quem esfriou de vez volta pelas vagas de resgate do dia).
+
+// Promessa dirigida a você: "te falo amanhã", "te aviso", "fico de te retornar".
+const CP1160_PROMETE_RETORNO = /\b(?:te|lhe)\s+(?:falo|aviso|retorno|respondo|confirmo|chamo|digo|dou\s+(?:uma\s+)?(?:resposta|retorno|posi[cç][ãa]o))\b|\bfic(?:o|amos)\s+de\s+(?:te\s+|lhe\s+)?(?:falar|avisar|retornar|responder|confirmar|dar)\b|\bqualquer\s+coisa\s+(?:eu\s+)?(?:te\s+)?(?:chamo|falo|aviso)\b/i;
+// Vai consultar alguém antes de decidir: "vou falar com meu marido", "preciso ver com o banco".
+// Exige o INTERLOCUTOR de propósito: "vou ver o apartamento" é visita, não promessa de resposta.
+const CP1160_VAI_CONSULTAR = /\b(?:vou|vamos|preciso|tenho\s+que|quero|irei)\b[^.!?;]{0,45}\b(?:falar|conversar|ver|verificar|consultar|checar|alinhar|combinar|decidir)\b[^.!?;]{0,30}\b(?:marid[oa]|espos[ao]|mulher|companheir[oa]|namorad[oa]|s[óo]ci[oa]|pai|m[ãa]e|fam[íi]lia|filh[oa]s?|contador|banco|gerente|financeiro|chefe|patr[ãa]o|diretoria)\b/i;
+// Vai decidir sozinho: "vou pensar", "vou analisar com calma".
+const CP1160_VAI_PENSAR = /\b(?:vou|vamos|preciso|quero|irei)\b[^.!?;]{0,20}\b(?:pensar|analisar|avaliar|estudar|decidir|pesquisar)\b/i;
+// Desistência clara: não propõe retorno nenhum (seria insistir em quem já disse não).
+const CP1160_DESISTIU = /\b(?:desisti|n[ãa]o\s+(?:vou|quero|tenho\s+interesse|vamos)|sem\s+interesse|j[áa]\s+(?:resolvi|comprei|fechei)|comprei\s+outro|fechei\s+com\s+outr)/i;
+const CP1160_DIAS_SEMANA = { domingo:0, segunda:1, terca:2, "terça":2, quarta:3, quinta:4, sexta:5, sabado:6, "sábado":6 };
+
+function cp1160TemPromessa(texto){
+  const t = String(texto || "");
+  return CP1160_PROMETE_RETORNO.test(t) || CP1160_VAI_CONSULTAR.test(t) || CP1160_VAI_PENSAR.test(t);
+}
+function cp1160SomaDias(iso, n){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||""))) return null;
+  const d = new Date(String(iso).slice(0,10) + "T12:00:00-03:00");
+  if(isNaN(d)) return null;
+  d.setTime(d.getTime() + Number(n||0) * 86400000);
+  try{ return new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo" }).format(d); }
+  catch(_){ return d.toISOString().slice(0,10); }
+}
+// Dia (em Brasília) de uma mensagem: o iso é a fonte boa; sem ele, o "date" do WhatsApp (DD/MM/AAAA).
+function cp1160DiaDaMensagem(m){
+  const iso = String(m?.iso || "");
+  if(iso){
+    const d = new Date(iso);
+    if(!isNaN(d)){
+      try{ return new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo" }).format(d); }
+      catch(_){ return iso.slice(0,10); }
+    }
+  }
+  const br = String(m?.date || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(br){
+    const ano = br[3].length === 2 ? "20" + br[3] : br[3];
+    return `${ano}-${String(br[2]).padStart(2,"0")}-${String(br[1]).padStart(2,"0")}`;
+  }
+  return "";
+}
+// O momento que o cliente citou ("hoje à noite", "amanhã", "segunda", "semana que vem"), contado a
+// partir do dia em que ele escreveu. Sem citação nenhuma, devolve null (aí vale o próprio dia).
+function cp1160MomentoIso(texto, baseIso){
+  const t = String(texto || "").toLowerCase();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(baseIso||""))) return null;
+  // Atenção: nada de "\b" DEPOIS de letra acentuada — "amanhã\b" nunca casa (o ã não é caractere de
+  // palavra, então não existe fronteira ali). Foi o que quebrou o primeiro teste desta versão.
+  if(/\bdepois\s+de\s+amanh[ãa]/.test(t)) return cp1160SomaDias(baseIso, 2);
+  if(/\bamanh[ãa]/.test(t)) return cp1160SomaDias(baseIso, 1);
+  if(/\b(?:semana\s+que\s+vem|pr[óo]xima\s+semana)\b/.test(t)) return cp1160SomaDias(baseIso, 7);
+  if(/\b(?:m[êe]s\s+que\s+vem|pr[óo]ximo\s+m[êe]s)\b/.test(t)) return cp1160SomaDias(baseIso, 30);
+  if(/\bfim\s+de\s+semana\b/.test(t)){
+    const base = new Date(baseIso + "T12:00:00-03:00");
+    for(let i = 1; i <= 7; i++){
+      const d = new Date(base.getTime() + i * 86400000);
+      if(d.getDay() === 6) return cp1160SomaDias(baseIso, i); // sábado
+    }
+  }
+  for(const [nome, alvo] of Object.entries(CP1160_DIAS_SEMANA)){
+    if(!new RegExp(`\\b(?:na|até|ate|pra|para)?\\s*${nome}\\b`).test(t)) continue;
+    const base = new Date(baseIso + "T12:00:00-03:00");
+    for(let i = 1; i <= 7; i++){
+      const d = new Date(base.getTime() + i * 86400000);
+      if(d.getDay() === alvo) return cp1160SomaDias(baseIso, i);
+    }
+  }
+  // Mesmo cuidado com o acento no começo: "\bà" não casa depois de espaço.
+  if(/\bhoje\b|(?:^|\s)(?:à|a)\s+(?:noite|tarde)|de\s+manh[ãa]|\bmais\s+tarde\b|depois\s+do\s+almo[çc]o/.test(t)) return baseIso;
+  return null;
+}
+// A promessa aberta do cliente, se houver: { texto, diaIso, retornoIso, sugestaoIso, diasAtras }.
+function cp1160PromessaDoCliente(l){
+  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
+  const pn = String(l?.name || "").toLowerCase().trim().split(/\s+/)[0] || "";
+  const ultimasDoCliente = [];
+  for(let i = msgs.length - 1; i >= 0 && ultimasDoCliente.length < 3; i--){
+    const m = msgs[i];
+    if(!m || !String(m.text || "").trim()) continue;
+    const source = String(m.source || ""), type = String(m.type || "");
+    if(source === "manual" || source === "crm" || type === "print-whatsapp") continue;
+    if(["atendimento","nota","ligacao","visita","presencial"].includes(type)) continue;
+    if(typeof ehMsgDoCliente === 'function' && !ehMsgDoCliente(m, pn)) continue;
+    ultimasDoCliente.push(m);
+  }
+  for(const m of ultimasDoCliente){
+    const texto = String(m.text || "").trim();
+    if(CP1160_DESISTIU.test(texto)) return null; // disse não: não se propõe retorno
+    if(!cp1160TemPromessa(texto)) continue;
+    const diaIso = cp1160DiaDaMensagem(m);
+    if(!diaIso) continue;
+    const idade = (typeof ui671DiasAte === 'function') ? ui671DiasAte(diaIso) : null;
+    if(idade == null || idade > 0) continue;          // data estranha / no futuro: ignora
+    const diasAtras = Math.abs(idade);
+    if(diasAtras > 45) continue;                       // promessa velha é caso de resgate, não disto
+    const momento = cp1160MomentoIso(texto, diaIso);
+    const retornoIso = cp1160SomaDias(momento || diaIso, 1);
+    if(!retornoIso) continue;
+    const hoje = (typeof ui671HojeIso === 'function') ? ui671HojeIso() : "";
+    const atrasado = (typeof ui671DiasAte === 'function') ? (ui671DiasAte(retornoIso) < 0) : false;
+    return { texto, diaIso, retornoIso, sugestaoIso: atrasado ? hoje : retornoIso, diasAtras };
+  }
+  return null;
+}
+// Quem já passou da hora: a data proposta é hoje (ou já passou), ninguém agendado na frente, e não
+// foi atendido hoje. Ordena pela promessa mais antiga primeiro (quem espera mais tempo).
+function cp1160Pendentes(items){
+  const lista = [];
+  for(const l of (Array.isArray(items) ? items : [])){
+    if(typeof leadEhAtivo === 'function' && !leadEhAtivo(l)) continue;
+    if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) continue;
+    if(typeof cp786TemCompromisso === 'function' && cp786TemCompromisso(l)) continue;
+    const promessa = cp1160PromessaDoCliente(l);
+    if(!promessa) continue;
+    const dias = (typeof ui671DiasAte === 'function') ? ui671DiasAte(promessa.retornoIso) : null;
+    if(dias == null || dias > 0) continue; // ainda não chegou o dia: respeita o prazo dele
+    lista.push({ lead: l, promessa });
+  }
+  lista.sort((x, y) => (y.promessa.diasAtras - x.promessa.diasAtras));
+  return lista;
+}
+function cp1160Trecho(texto, max = 90){
+  const t = String(texto || "").replace(/\s+/g, " ").trim();
+  return t.length > max ? t.slice(0, max - 1) + "…" : t;
+}
+function cp1160Quando(dias){
+  if(dias === 0) return "hoje";
+  if(dias === 1) return "ontem";
+  return `há ${dias} dias`;
+}
+// Faixa na Home, acima da fila do dia. Some sozinha quando não há ninguém nessa situação.
+function cp1160FaixaHomeHTML(items){
+  const lista = cp1160Pendentes(items).slice(0, 6);
+  if(!lista.length) return "";
+  const linhas = lista.map(({ lead, promessa }) => {
+    const idJs = JSON.stringify(String(lead.id || ""));
+    return `<div class="cp1160-row">
+      <button type="button" class="cp1160-abrir" onclick='abrirLead(${idJs})'>
+        <b>${escapeHtml(lead.name || "Sem nome")}</b>
+        <span>“${escapeHtml(cp1160Trecho(promessa.texto))}”</span>
+        <i>disse ${escapeHtml(cp1160Quando(promessa.diasAtras))}</i>
+      </button>
+      <button type="button" class="cp1160-btn" onclick='cp1160Agendar(${idJs},${JSON.stringify(promessa.sugestaoIso)})'>Agendar hoje</button>
+    </div>`;
+  }).join("");
+  return `<div class="cp1160-faixa">
+    <div class="cp1160-tit">Ficaram de te dar uma resposta · ${lista.length}</div>
+    ${linhas}
+    <div class="cp1160-pe">O prazo que eles mesmos deram já passou. Agendar coloca na sua Agenda de hoje.</div>
+  </div>`;
+}
+// Dentro do cliente: a proposta aparece mesmo quando o dia ainda não chegou (aí com a data certa).
+function cp1160BannerLeadHTML(lead){
+  if(typeof cp786TemCompromisso === 'function' && cp786TemCompromisso(lead)) return "";
+  const p = cp1160PromessaDoCliente(lead);
+  if(!p) return "";
+  const dias = (typeof ui671DiasAte === 'function') ? ui671DiasAte(p.retornoIso) : null;
+  const quandoTxt = dias == null ? "hoje" : dias < 0 ? "hoje (o prazo já passou)" : dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`;
+  const idJs = JSON.stringify(String(lead?.id || ""));
+  return `<div class="cp1160-lead">
+    <b>Ficou de te dar uma resposta</b>
+    <span>“${escapeHtml(cp1160Trecho(p.texto, 160))}” — disse ${escapeHtml(cp1160Quando(p.diasAtras))}.</span>
+    <div class="cp1160-lead-acao">
+      <span>Retomar ${escapeHtml(quandoTxt)}?</span>
+      <button type="button" onclick='cp1160Agendar(${idJs},${JSON.stringify(p.sugestaoIso)})'>Agendar ${escapeHtml(dias != null && dias === 1 ? "amanhã" : "hoje")}</button>
+    </div>
+  </div>`;
+}
+// Um toque = agenda pelo mesmo caminho do botão "Agendar" do cliente (que também marca o
+// atendimento, regra da v1148) — o cliente sai da fila automática e entra na Agenda daquele dia.
+async function cp1160Agendar(id, iso){
+  const data = /^\d{4}-\d{2}-\d{2}$/.test(String(iso||"")) ? String(iso) : (typeof ui671HojeIso === 'function' ? ui671HojeIso() : "");
+  if(!data) return;
+  if(typeof reagendarLembrete === 'function') await reagendarLembrete(String(id), data);
+}
+window.cp1160PromessaDoCliente = cp1160PromessaDoCliente;
+window.cp1160Pendentes = cp1160Pendentes;
+window.cp1160FaixaHomeHTML = cp1160FaixaHomeHTML;
+window.cp1160BannerLeadHTML = cp1160BannerLeadHTML;
+window.cp1160Agendar = cp1160Agendar;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
