@@ -77,6 +77,30 @@ if(deferredInstallPrompt){
   mostrarOpcoesInstalar();
   const dicaJa = qs("#instalarDica"); if(dicaJa) dicaJa.style.display = "none";
 }
+
+// v1154 — O CONVITE DO NAVEGADOR NÃO É GARANTIDO, E A OFERTA DE INSTALAR PRECISA SER.
+//
+// Caso real do dono: apagou o app, abriu o link de novo e "não ofereceu pra baixar o app". O
+// Chrome só dispara o convite (beforeinstallprompt) quando QUER — depois de apagar, ele pode
+// levar dias pra oferecer de novo, e em alguns aparelhos/navegadores nunca oferece. Até aqui, sem
+// esse convite, o banner e o botão simplesmente não existiam: o corretor novo não tinha por onde
+// instalar, e sem instalar o app não aparece na lista de compartilhar do WhatsApp — que é o
+// caminho principal do produto.
+//
+// Agora a oferta aparece SEMPRE (menos pra quem já está com o app instalado). Se o convite
+// existir, o toque instala de uma vez; se não existir, o mesmo toque mostra o caminho manual
+// daquele aparelho (é o que dispararInstalacao() já faz).
+if(!ehStandalone){
+  const mostrarDeQualquerJeito = () => {
+    mostrarOpcoesInstalar();
+    // Sem convite do navegador, o rótulo não pode prometer download automático.
+    if(!(deferredInstallPrompt || window.__deferredInstallPrompt)){
+      const bb = qs("#bannerInstalarBtn"); if(bb && !ehIOS()) bb.textContent = "Como instalar";
+    }
+  };
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", mostrarDeQualquerJeito, { once:true });
+  else mostrarDeQualquerJeito();
+}
 // v1153 — o passo a passo "Como enviar sua conversa" precisa oferecer a instalação NA HORA. O dono
 // testou com conta nova e disse: "mas não apareceu onde baixar pra mim". O banner "Baixar app" só
 // existe quando o navegador dispara o convite de instalação — se ele não disparar (ou se o app já
