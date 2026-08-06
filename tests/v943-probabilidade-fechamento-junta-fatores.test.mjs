@@ -22,7 +22,11 @@ const persistence = fs.readFileSync(new URL('../api/_persistence.js', import.met
 const fnSrc = app.match(/function cpProbabilidadeFechamento\(l\)\{[\s\S]*?\n\}/);
 assert.ok(fnSrc, 'cpProbabilidadeFechamento não encontrada em app.js');
 const fn = fnSrc[0];
-assert.match(fn, /mensagensDoCliente\(l\)/, 'usa o engajamento (mensagens do cliente)');
+// v1159 — o volume de mensagens SAIU da nota (pergunta do dono: "+1 por mensagem e +6 por
+// pergunta, isso é a mesma coisa ou não?" — se sobrepunha, e volume não diz se o cliente compra).
+// O pedido original desta v943 ("é uma JUNÇÃO DE FATORES, não é mais mensagem") continua atendido —
+// na verdade fica mais fiel a ele, porque agora volume não entra nem com peso 1.
+assert.doesNotMatch(fn, /mensagensDoCliente\(l\)/, 'volume de mensagens não pode voltar pra nota');
 assert.match(fn, /l\?\.clientMessageDays/, 'usa a recorrência (dias diferentes que o cliente voltou a conversar)');
 assert.match(fn, /l\?\.clientQuestionCount/, 'usa a quantidade de perguntas feitas pelo cliente');
 assert.match(fn, /contextoPrioridadeIA/, 'usa o sinal de negociação avançada (valor/condição/proposta já discutidos)');

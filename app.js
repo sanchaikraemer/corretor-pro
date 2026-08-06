@@ -10185,23 +10185,29 @@ function cpProximoDiaDeAtendimento(){
 // clientMessageDays/clientQuestionCount vêm do servidor (calculados sobre o histórico INTEIRO,
 // como clientMessageCount da v942 — a lista só recebe uma prévia de mensagens).
 function cpProbabilidadeFechamento(l){
-  // Pesos calibrados pra NENHUM fator sozinho dominar: um lead "explosão de mensagens" (ex.: 218
-  // msgs em 2 dias, sem retomada, sem pergunta, sem negociação) não pode vencer um lead com poucas
-  // mensagens mas recorrente + qualificado. Por isso engajamento tem teto BAIXO (30) e peso 1,
-  // enquanto recorrência/perguntas/negociação (os fatores que indicam interesse REAL, não só
-  // volume) têm peso maior.
+  // A nota que ordena o "Fazer agora". Depois das limpezas da v1158/v1159 sobraram três fatores, e
+  // todos são verificáveis na conversa importada (nada de palpite sobre o que o app não vê):
+  //   recorrência (em quantos dias o cliente voltou a escrever) · perguntas que ele fez ·
+  //   sinal de negociação (já falaram de valor/condição; proposta em aberto).
+  // Um lead "explosão de mensagens" (ex.: 218 msgs em 2 dias, sem retomada, sem pergunta, sem
+  // negociação) continua NÃO vencendo um lead com poucas mensagens mas recorrente + qualificado —
+  // agora porque volume simplesmente não entra mais na conta.
   // v1139 — RÉGUA ÚNICA DE 90 DIAS (aprovada pelo dono): a barrinha da Home já contava só os
   // últimos 90 dias (v1017), mas a ORDEM seguia contando a conversa inteira desde sempre — papo
   // de proposta de meses atrás pesava como negociação ativa, e um lead com barra "2" aparecia
   // acima de um com barra "36" (foi exatamente a dúvida que o dono trouxe). Agora os fatores de
-  // conversa (engajamento, recorrência, perguntas, sinal de negociação) valem dentro da MESMA
-  // janela de 90 dias da barrinha — tela e ordem contam a mesma história. Quem esfriou não some:
-  // o resgate diário (cpAplicarResgatesNaFila) é o caminho de volta dele. Os campos *90d vêm do
-  // servidor (mesma varredura do _statsCache); dado antigo em cache, ainda sem os campos novos,
-  // cai nos totais históricos (o comportamento anterior) até a carga seguinte — por isso os
-  // fallbacks "?? l?.clientMessageDays"/"?? l?.clientQuestionCount"/mensagensDoCliente abaixo.
-  const engajamento = Math.min((typeof mensagensDoClienteRecente === 'function' ? mensagensDoClienteRecente(l)
-    : (typeof mensagensDoCliente === 'function' ? mensagensDoCliente(l) : 0)), 30);
+  // conversa (recorrência, perguntas, sinal de negociação) valem dentro da MESMA janela de 90 dias
+  // da barrinha — tela e ordem contam a mesma história. Quem esfriou não some: o resgate diário
+  // (cpAplicarResgatesNaFila) é o caminho de volta dele. Os campos *90d vêm do servidor (mesma
+  // varredura do _statsCache); dado antigo em cache, ainda sem os campos novos, cai nos totais
+  // históricos (o comportamento anterior) até a carga seguinte — por isso os fallbacks
+  // "?? l?.clientMessageDays" / "?? l?.clientQuestionCount" abaixo.
+  // v1159 — SAIU O VOLUME DE MENSAGENS (+1 cada, teto 30). Pergunta do dono: "+1 por mensagem dele
+  // e +6 por pergunta que ele fez — cara, isso é a mesma coisa, ou não?". Não é a mesma coisa, mas
+  // se sobrepõe: toda pergunta já contava duas vezes (+1 de mensagem e +6 de pergunta). E volume
+  // não diz se o cliente compra — quem escreve muito pode estar só curioso. Ficaram os dois
+  // fatores que medem interesse de verdade: em quantos DIAS ele voltou a escrever e quantas
+  // PERGUNTAS fez. (O volume segue vivo na barrinha da Home e como desempate em cpFilaFazerAgora.)
   const recorrencia = Math.min(Number(l?.clientMessageDays90d ?? l?.clientMessageDays) || 0, 20);
   const perguntas = Math.min(Number(l?.clientQuestionCount90d ?? l?.clientQuestionCount) || 0, 20);
   const resp = Number(l?.daysSinceClientReply);
@@ -10223,24 +10229,19 @@ function cpProbabilidadeFechamento(l){
   // achando que a bola estava com ele — e empurrava esse lead pro topo por um palpite. Fatores que
   // sobraram são todos verificáveis no que foi importado: dias em que o cliente escreveu,
   // perguntas, sinal de negociação, volume, e o tempo desde o último atendimento MARCADO por ele.
-  // v1056 — pedido original do dono, do início desta rodada: "fazer o tempo parado pesar contra
-  // a posição na fila" — sem tirar o lead da lista de vez, só derrubar pra trás de quem está
-  // ativo de verdade. Corrigido pra usar SÓ o último atendimento (ultimoAtendimentoTs), nunca
-  // mensagem: "não interessa a contagem de última mensagem, somente de último atendimento, ponto
-  // final" (palavras do dono). v1069 — quem NUNCA foi atendido (ultimoAtendimentoTs cai no ramo
-  // "sem data") fica no teto de 90 dias (o mais frio possível), então não domina o topo da fila
-  // só por entrar sem data — mas continua elegível a aparecer (regra v1069 de cpFilaFazerAgora).
-  // Teto de 90 dias: depois disso a penalidade para de crescer (não precisa ficar infinitamente pior).
-  let diasFrio = 90;
-  try{
-    const atTs = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
-    if(atTs){
-      const dAt = diasCalendarioBR(atTs);
-      if(dAt != null && Number.isFinite(dAt)) diasFrio = dAt;
-    }
-  }catch(_){}
-  diasFrio = Math.min(diasFrio, 90);
-  return engajamento*1 + recorrencia*8 + perguntas*6 + sinalNegociacao*35 - diasFrio*2;
+  // v1159 — SAIU A PENALIDADE POR TEMPO PARADO (−2 por dia desde o último atendimento marcado,
+  // teto 90 → até −180). Ela nasceu de um pedido do dono na v1056 ("fazer o tempo parado pesar
+  // contra a posição na fila") e ele mesmo a revogou agora: "isso é ridículo... se o cliente não me
+  // responde vai baixando por quê? Tem que respeitar o prazo, o cara tem outras coisas pra fazer
+  // também; pensa como humano, negociador, e não como um robô chato". Dois motivos concretos além
+  // do argumento dele:
+  //   1) desde a régua de 90 dias (v1139), cliente frio JÁ pontua perto de zero sozinho — a
+  //      penalidade cobrava a mesma coisa duas vezes;
+  //   2) pior: cliente NOVO, que nunca foi atendido, caía no teto (−180), como se estivesse 90 dias
+  //      parado — quem escreveu hoje começava no fim da fila.
+  // Quem esfriou não fica esquecido: as vagas de resgate do dia (cpAplicarResgatesNaFila) são o
+  // caminho de volta, e elas usam justamente "há mais tempo sem atendimento".
+  return recorrencia*8 + perguntas*6 + sinalNegociacao*35;
 }
 // candidatos ao "Fazer agora": entram só os NÃO atendidos hoje, com engajamento real (cliente já
 // falou) e fora da janela de espera. Ordem = probabilidade de fechamento (cpProbabilidadeFechamento,

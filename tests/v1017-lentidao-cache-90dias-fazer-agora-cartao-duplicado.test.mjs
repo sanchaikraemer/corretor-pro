@@ -292,11 +292,16 @@ function parteBarraFazerAgora() {
   const fimFila = app.indexOf('\n}', iniFila);
   assert.match(app.slice(iniFila, fimFila), /mensagensDoCliente\(l\)/, 'a elegibilidade da fila continua no histórico inteiro (não 90 dias)');
 
+  // v1159 — o ranking não conta MAIS volume de mensagem, nem em 90 dias nem no histórico. Pergunta
+  // do dono: "+1 por mensagem e +6 por pergunta, isso é a mesma coisa ou não?" — se sobrepunha
+  // (toda pergunta contava duas vezes) e volume não diz se o cliente compra. Volume segue vivo
+  // onde faz sentido: a barrinha (90 dias, acima) e o desempate da fila (histórico, acima).
   const iniProb = app.indexOf('function cpProbabilidadeFechamento(l){');
   const fimProb = app.indexOf('\n}', iniProb);
-  assert.match(app.slice(iniProb, fimProb), /mensagensDoCliente\(l\)/, 'o ranking (probabilidade de fechamento) continua no histórico inteiro');
+  assert.doesNotMatch(app.slice(iniProb, fimProb), /mensagensDoCliente(Recente)?\(l\)/,
+    'o ranking não pode voltar a contar volume de mensagens');
 
-  console.log('v1017 (barra Fazer Agora): 90 dias só na exibição, ranking continua no histórico inteiro — ok');
+  console.log('v1017 (barra Fazer Agora): 90 dias na exibição; o ranking não conta mais volume (v1159) — ok');
 }
 
 await parteServidor();
