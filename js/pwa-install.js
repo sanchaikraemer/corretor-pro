@@ -7,13 +7,35 @@ import { state } from './state.js?v=__VERSION__';
 let deferredInstallPrompt = window.__deferredInstallPrompt || null;
 const ehStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const BANNER_INSTALAR_KEY = "direciona_banner_instalar_fechado";
+// v1156 — FECHAR O AVISO NÃO PODE SER PRA SEMPRE.
+//
+// O dono: "tô sem app instalado e ainda não me oferece pra baixar app" — com a v1155 na tela. A
+// causa não era o navegador desta vez: era daqui. Quem tocasse no "✕" (ou em "Continuar na web")
+// UMA vez gravava um "fechado" eterno naquele celular, e a oferta nunca mais voltava. Ou seja: a
+// promessa da v1154 ("a oferta aparece sempre") não valia justamente pra quem já usava o app —
+// inclusive pro dono. Agora o "✕" descansa a oferta por 7 dias e ela volta; e o "fechado" eterno
+// gravado pelas versões antigas é apagado no primeiro carregamento.
+const BANNER_INSTALAR_DIAS = 7;
+function bannerInstalarDispensado(){
+  let valor = "";
+  try{ valor = localStorage.getItem(BANNER_INSTALAR_KEY) || ""; }catch(_){ return false; }
+  if(!valor) return false;
+  const quando = Number(valor);
+  // Data de verdade é um número grande (milissegundos desde 1970). Qualquer coisa menor é o
+  // formato antigo ("1" = pra sempre): some, e a oferta volta agora.
+  if(!Number.isFinite(quando) || quando < 1e12){
+    try{ localStorage.removeItem(BANNER_INSTALAR_KEY); }catch(_){}
+    return false;
+  }
+  return (Date.now() - quando) < BANNER_INSTALAR_DIAS * 24 * 60 * 60 * 1000;
+}
 
 function mostrarOpcoesInstalar(){
   if(ehStandalone) return; // já está rodando como app
-  // Botão no Menu
+  // Botão no Menu — este NUNCA some enquanto o app não estiver instalado.
   const btn = qs("#btnInstalarApp"); if(btn) btn.style.display = "flex";
-  // Banner no topo da Hoje — só se o usuário não fechou antes
-  if(localStorage.getItem(BANNER_INSTALAR_KEY) !== "1"){
+  // Banner no topo da Hoje — descansa 7 dias se a pessoa fechou.
+  if(!bannerInstalarDispensado()){
     const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "block";
   }
   // iPhone/iPad não instala por 1 clique — já mostra o passo a passo no banner e ajusta o
@@ -155,7 +177,8 @@ window.cpAppJaInstaladoNoAparelho = () => appJaInstaladoNoAparelho;
 qs("#btnInstalarApp")?.addEventListener("click", dispararInstalacao);
 qs("#bannerInstalarBtn")?.addEventListener("click", dispararInstalacao);
 function fecharBannerInstalar(){
-  localStorage.setItem(BANNER_INSTALAR_KEY, "1");
+  // Guarda QUANDO foi fechado (não um "pra sempre"): daqui a 7 dias a oferta volta sozinha.
+  try{ localStorage.setItem(BANNER_INSTALAR_KEY, String(Date.now())); }catch(_){}
   const banner = qs("#bannerInstalar"); if(banner) banner.style.display = "none";
 }
 // "✕" e "Continuar na web" dispensam o convite (útil no iPhone, onde não há instalação por
