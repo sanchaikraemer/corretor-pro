@@ -7709,6 +7709,14 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     catch(error){ erroPrep=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
   }
   if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
+  // v1162 — O REAPROVEITAMENTO APARECE DURANTE O PROGRESSO, NÃO SÓ NO FIM. Pedido do dono: o quadro
+  // verde do resultado "aparece tão rápido e muda tão rápido para o lead que não dá nem pra
+  // perceber — por que não vai informando isso no decorrer, de 0% até 100%?". Cada etapa agora diz
+  // o que foi reconhecido e o que foi (ou não) reaproveitado, na hora em que acontece.
+  const infoClienteConhecido = prep?.leadAnterior
+    ? `cliente já conhecido — ${Number(prep.leadAnterior.mensagensSalvas) || 0} mensagens já salvas serão comparadas`
+    : "cliente novo nesta carteira";
+  renderEtapas(2, infoClienteConhecido);
   const transcriptionMap = { ...(prep.cachedTranscriptions || {}) };
   const audiosTodos = Array.isArray(prep.audiosParaTranscrever) ? prep.audiosParaTranscrever : [];
   // v1027 — causa real de "reaproveitados" sempre 0 (mesmo reimportando o MESMO ZIP de
@@ -7747,7 +7755,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} ${pl(audiosReaproveitados, "transcrição reaproveitada", "transcrições reaproveitadas")}` : "sem áudio para transcrever");
   }
 
-  renderEtapas(4, "validando as três mensagens pelo Cérebro");
+  renderEtapas(4, prep?.leadAnterior ? "comparando com a conversa já salva — só a novidade paga análise" : "validando as três mensagens pelo Cérebro");
   // v1024 — mesma rede de segurança da etapa "preparar" acima: "analisar" não grava nada no
   // banco (só devolve o resultado pro navegador — quem grava é "Salvar lead", ação separada e
   // explícita), então repetir aqui não duplica nem gasta 2x à toa em caso de sucesso.
@@ -7811,7 +7819,16 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // depois: era a "tela que aparecia no meio da análise e voltava pro carregamento" que o dono
   // relatou. Quem esconde agora é só o ÚNICO caso que realmente espera uma decisão dele (nome só
   // parecido — ver renderProcessedResult).
-  renderEtapas(5, "preparando pra salvar");
+  // v1162 — a etapa conta NA HORA o que a comparação decidiu (pedido do dono: essa informação
+  // "aparece tão rápido que não dá nem pra perceber" no quadro do fim — agora ela mora aqui, no
+  // decorrer do progresso, e fica na tela enquanto salva).
+  const incEtapa = result?.incrementalMeta || {};
+  const resumoEtapa = incEtapa.reimportacao
+    ? (incEtapa.analiseReutilizada
+        ? "nada novo: análise salva mantida, nada pago"
+        : `${Number(incEtapa.mensagensNovas) || 0} ${pl(Number(incEtapa.mensagensNovas) || 0, "mensagem nova", "mensagens novas")} — análise refeita`)
+    : "";
+  renderEtapas(5, resumoEtapa ? `preparando pra salvar · ${resumoEtapa}` : "preparando pra salvar");
   return result;
 }
 
@@ -8148,7 +8165,17 @@ async function atualizarLeadComEvolucao(){
     // usa rede, e sem ela um ZIP antigo pode ser reprocessado — importação paga de novo.
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
     qs("#pendingActions")?.remove();
-    renderEtapas(6, "lead atualizado e importação confirmada");
+    // v1162 — o resultado da comparação também fica no "Concluído" (o texto persiste na tela da
+    // importação; o quadro verde do fim o dono não conseguia ler porque o lead abre logo depois).
+    const nMsgFim = Number(incrementalMeta?.mensagensNovas) || 0;
+    const resumoFim = incrementalMeta?.reimportacao
+      ? (incrementalMeta.analiseReutilizada
+          ? "nada novo: análise mantida, nada pago"
+          : (nMsgFim === 0
+              ? "sem mensagem nova; análise refeita (a salva estava incompleta)"
+              : `${nMsgFim} ${pl(nMsgFim, "mensagem nova incorporada", "mensagens novas incorporadas")}`))
+      : "";
+    renderEtapas(6, resumoFim ? `lead atualizado · ${resumoFim}` : "lead atualizado e importação confirmada");
     // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
     // aparecer; ver a marcação "concluidaComSucesso" em processFile.
     qs("#importCard")?.classList.remove("cp-import-rodando");
