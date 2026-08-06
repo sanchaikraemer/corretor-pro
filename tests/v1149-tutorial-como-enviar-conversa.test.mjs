@@ -36,9 +36,24 @@ assert.equal((passos.match(/desenho: cp1149Telinha\(/g) || []).length, 6, "os se
 // Pergunta do dono no primeiro teste com conta nova. Acontece de verdade: o Android só oferece na
 // lista de compartilhar quem está INSTALADO — e o jeito 2 precisa funcionar mesmo sem instalar.
 assert.ok(passos.includes("Não apareceu o Corretor Pro na lista?"), "existe o passo do ícone que não aparece");
-assert.match(passos, /não está instalado/, "explica o motivo real");
-assert.match(passos, /“Baixar app”/, "mostra o caminho de instalar");
-assert.match(passos, /“Escolher o arquivo da conversa”/, "e a saída que funciona sem instalar nada");
+// v1153 — o texto desse passo é montado NA HORA (depende do aparelho de quem lê), então mora numa
+// função. Mandar procurar um botão que pode não existir era beco sem saída ("mas não apareceu onde
+// baixar pra mim").
+assert.match(passos, /texto: cp1149TextoInstalar,/, "o texto do passo depende do aparelho");
+const inst = app.slice(app.indexOf("function cp1149TextoInstalar(){"));
+const blocoInst = inst.slice(0, inst.indexOf("\n}"));
+assert.match(blocoInst, /cpAppJaInstalado/, "sabe se o app já está instalado");
+assert.match(blocoInst, /cpTemConviteInstalar/, "sabe se dá pra instalar agora");
+assert.match(blocoInst, /id="cp1149Instalar"/, "quando dá, oferece o botão que instala na hora");
+assert.match(blocoInst, /cpDicaInstalarTexto/, "quando não dá, mostra o caminho manual do aparelho");
+assert.match(blocoInst, /Você já está com o app <b>instalado<\/b>/, "quem já instalou não é mandado instalar de novo");
+assert.match(blocoInst, /“Escolher o arquivo da conversa”/, "e sempre sobra a saída que funciona sem instalar");
+assert.match(app, /card\.querySelector\("#cp1149Instalar"\)\?\.addEventListener\("click", async \(\) => \{/,
+  "o botão de instalar está ligado de verdade");
+const pwa = fs.readFileSync(new URL("../js/pwa-install.js", import.meta.url), "utf8");
+for (const nome of ["cpInstalarApp", "cpDicaInstalarTexto", "cpTemConviteInstalar", "cpAppJaInstalado"]) {
+  assert.ok(pwa.includes(`window.${nome}`), `pwa-install.js precisa expor ${nome} pro tutorial`);
+}
 assert.match(app, /function cp1149Telinha\(conteudo\)\{/, "o desenho do celular é montado em SVG no próprio app (sem imagem externa)");
 
 // ── 3. Sempre à mão no botão da tela de importação ────────────────────────────────────────────
