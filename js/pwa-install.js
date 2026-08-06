@@ -77,6 +77,16 @@ if(deferredInstallPrompt){
   mostrarOpcoesInstalar();
   const dicaJa = qs("#instalarDica"); if(dicaJa) dicaJa.style.display = "none";
 }
+// v1153 — o passo a passo "Como enviar sua conversa" precisa oferecer a instalação NA HORA. O dono
+// testou com conta nova e disse: "mas não apareceu onde baixar pra mim". O banner "Baixar app" só
+// existe quando o navegador dispara o convite de instalação — se ele não disparar (ou se o app já
+// estiver instalado), o conselho "toque em Baixar app" vira um beco sem saída. Estas três coisas
+// ficam disponíveis pro tutorial: instalar, o texto certo do aparelho, e saber se já está instalado.
+window.cpInstalarApp = dispararInstalacao;
+window.cpDicaInstalarTexto = textoDicaInstalar;
+window.cpTemConviteInstalar = () => !!(deferredInstallPrompt || window.__deferredInstallPrompt);
+window.cpAppJaInstalado = () => ehStandalone;
+
 qs("#btnInstalarApp")?.addEventListener("click", dispararInstalacao);
 qs("#bannerInstalarBtn")?.addEventListener("click", dispararInstalacao);
 function fecharBannerInstalar(){

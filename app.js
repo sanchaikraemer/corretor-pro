@@ -8766,6 +8766,26 @@ function cp1149VistoKey(){
   return conta ? `corretor_pro_tutorial_envio_visto:${conta}` : "corretor_pro_tutorial_envio_visto";
 }
 
+// v1153 — o que dizer sobre instalar depende do aparelho de quem está lendo:
+//  • já está com o app instalado → o problema é outro, vai direto pro jeito que sempre funciona;
+//  • o navegador oferece instalar agora → botão que instala NA HORA, sem procurar nada;
+//  • não oferece (iPhone, ou Chrome que não convidou) → o caminho manual daquele aparelho.
+function cp1149TextoInstalar(){
+  const jaInstalado = (typeof window.cpAppJaInstalado === "function") ? window.cpAppJaInstalado() : false;
+  const podeInstalar = (typeof window.cpTemConviteInstalar === "function") ? window.cpTemConviteInstalar() : false;
+  const dica = (typeof window.cpDicaInstalarTexto === "function")
+    ? window.cpDicaInstalarTexto()
+    : 'No celular: toque no menu do navegador (⋮) e em <b>“Adicionar à tela inicial”</b> / <b>“Instalar app”</b>.';
+  const jeito2 = '<b>Jeito que funciona sempre:</b> na lista de compartilhar do WhatsApp, escolha <b>salvar o arquivo</b> no celular. Depois, aqui no Corretor Pro, toque em <b>“Escolher o arquivo da conversa”</b> e selecione o ZIP salvo.';
+  if(jaInstalado){
+    return 'Você já está com o app <b>instalado</b> — então o ícone deve aparecer na lista. Se mesmo assim não aparecer (acontece em alguns celulares), use o caminho abaixo, que nunca falha.<br><br>' + jeito2;
+  }
+  if(podeInstalar){
+    return 'O Android só oferece na lista de compartilhar os apps <b>instalados</b> — e o Corretor Pro ainda não está no seu celular.<br><br><button type="button" id="cp1149Instalar" class="btn" style="width:100%;margin:2px 0 12px">Instalar o Corretor Pro agora</button>' + jeito2;
+  }
+  return 'O Android só oferece na lista de compartilhar os apps <b>instalados</b> — e o Corretor Pro ainda não está no seu celular.<br><br><b>Pra instalar:</b> ' + dica + '<br><br>' + jeito2;
+}
+
 function cp1149Telinha(conteudo){
   return `<svg viewBox="0 0 200 300" width="150" height="225" aria-hidden="true" style="max-width:100%">
     <rect x="6" y="4" width="188" height="292" rx="20" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
@@ -8841,7 +8861,10 @@ const CP1149_PASSOS = [
     // na lista de compartilhar depois que ele está INSTALADO na tela inicial. Este passo é a saída,
     // e a segunda opção funciona mesmo sem instalar nada.
     titulo: "Não apareceu o Corretor Pro na lista?",
-    texto: "Isso quer dizer que o app ainda <b>não está instalado</b> no celular — e o Android só oferece na lista quem está instalado.<br><br><b>Jeito 1 (recomendado):</b> na tela inicial do Corretor Pro toque em <b>“Baixar app”</b> (ou no menu do navegador → <b>“Adicionar à tela inicial”</b>). Depois repita a exportação: o ícone estará lá.<br><br><b>Jeito 2 (funciona sempre):</b> na lista de compartilhar escolha <b>salvar o arquivo</b> no celular. Depois, aqui no Corretor Pro, toque em <b>“Escolher o arquivo da conversa”</b> e selecione o ZIP que você salvou.",
+    // v1153 — o texto é montado na hora porque depende DESTE aparelho: dá pra instalar agora? já
+    // está instalado? é iPhone? O dono testou com conta nova e disse "mas não apareceu onde baixar
+    // pra mim" — mandar procurar um botão que pode não existir é beco sem saída.
+    texto: cp1149TextoInstalar,
     desenho: cp1149Telinha(`
       <rect x="22" y="40" width="156" height="54" rx="12" fill="rgba(255,98,88,.14)" stroke="#FF6258" stroke-width="2"/>
       <circle cx="46" cy="67" r="12" fill="rgba(255,98,88,.35)"/>
@@ -8873,10 +8896,11 @@ window.cp1149ComoEnviar = function(passoInicial){
   const desenhar = () => {
     const p = CP1149_PASSOS[i];
     const ultimo = i === CP1149_PASSOS.length - 1;
+    const textoPasso = (typeof p.texto === "function") ? p.texto() : p.texto;
     card.innerHTML = `
       <div class="small" style="color:var(--muted);font-weight:900;letter-spacing:.04em;text-transform:uppercase">Como enviar sua conversa</div>
       <div style="font-size:19px;font-weight:950;margin:6px 0 6px">${p.titulo}</div>
-      <div class="small" style="color:var(--soft);line-height:1.55;margin-bottom:12px">${p.texto}</div>
+      <div class="small" style="color:var(--soft);line-height:1.55;margin-bottom:12px">${textoPasso}</div>
       <div style="display:flex;justify-content:center;margin-bottom:12px">${p.desenho}</div>
       <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
         ${CP1149_PASSOS.map((_,k)=>`<span style="width:${k===i?18:7}px;height:7px;border-radius:9px;background:${k===i?'var(--lime)':'rgba(255,255,255,.22)'};display:inline-block"></span>`).join("")}
@@ -8885,6 +8909,10 @@ window.cp1149ComoEnviar = function(passoInicial){
         ${i>0?`<button type="button" class="btn secondary" id="cp1149Voltar" style="flex:1">Voltar</button>`:`<button type="button" class="btn secondary" id="cp1149Fechar" style="flex:1">Fechar</button>`}
         <button type="button" class="btn" id="cp1149Proximo" style="flex:1.4">${ultimo?'Entendi, vamos lá':'Próximo'}</button>
       </div>`;
+    card.querySelector("#cp1149Instalar")?.addEventListener("click", async () => {
+      try{ await window.cpInstalarApp?.(); }catch(_){}
+      desenhar(); // depois de instalar (ou recusar), o texto se ajusta ao novo estado do aparelho
+    });
     card.querySelector("#cp1149Voltar")?.addEventListener("click", () => { i--; desenhar(); });
     card.querySelector("#cp1149Fechar")?.addEventListener("click", fechar);
     card.querySelector("#cp1149Proximo")?.addEventListener("click", () => {
