@@ -8363,11 +8363,43 @@ async function atualizarLeadComEvolucao(){
     if(btn){ btn.disabled = false; btn.textContent = "Atualizar"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
     qs("#importCard")?.classList.remove("cp-import-rodando");
-    // v1088 — mesma rede de segurança do salvar: a tela cheia sai pro corretor ver o aviso.
-    try{ cpImportOverlayVisivel(false); }catch(_){}
-    toast("Não foi possível atualizar: " + userFriendlyError(err));
+    // v1175 — mesmo defeito do salvar, aqui também: sem isto a tela ficava presa em
+    // "Salvando — salvando no banco de dados... (94%)" com a rodinha girando pra sempre.
+    cpImportacaoFalhouNaGravacao("Não foi possível atualizar", err);
   }
 }
+
+// v1175 — FIM DE LINHA HONESTO QUANDO A GRAVAÇÃO NÃO TERMINA.
+//
+// Print do dono (07/08/2026, versão 1174): depois da importação inteira, a tela ficou em
+// "Salvando — salvando no banco de dados... (94%)" com a rodinha girando, sem nada acontecer. Não
+// tinha travado: a gravação FALHOU, o aviso saiu num toast — que some sozinho em segundos — e
+// ninguém mais mexeu naquela linha de andamento. Ela ficava congelada no último estado bom que
+// tinha visto, com a rodinha girando e os botões "Nova análise"/"Diagnóstico" ainda travados
+// (quem os libera é o mesmo desenho de etapas que não foi chamado). Do lado de cá parecia
+// exatamente um travamento; do lado de lá já tinha acabado, mal.
+//
+// É a mesma lição do 92% da v1174: todo caminho de erro precisa MEXER na tela que ficou pra trás.
+function cpImportacaoFalhouNaGravacao(titulo, err){
+  const motivo = userFriendlyError(err);
+  // Etapa 7 = "Falha recuperável": para a rodinha, destrava os botões e deixa o motivo escrito na
+  // própria linha de andamento (não só num toast que some).
+  try{ renderEtapas(7, motivo); }catch(_){ try{ cpImportOverlayVisivel(false); }catch(_){} }
+  const pendingBox = qs("#pendingBox");
+  if(pendingBox){
+    pendingBox.style.background = "rgba(255,107,107,.08)";
+    pendingBox.style.borderColor = "rgba(255,107,107,.4)";
+    pendingBox.style.color = "#ffd9d9";
+    pendingBox.innerHTML = `<b>${escapeHtml(titulo)}.</b><br>${escapeHtml(motivo)}<br><br>A análise <b>não foi perdida</b> — os botões abaixo continuam valendo.`;
+  }
+  toast(titulo + ": " + motivo);
+}
+// Expostas pelo mesmo motivo de cpImportOverlaySincronizar: poder dirigir a tela da importação de
+// fora, num navegador de verdade, pra conferir o RESULTADO na tela (e pra diagnóstico). É assim
+// que a v1175 foi conferida: pôr a tela no estado do print (etapa 5, rodinha girando) e mandar a
+// gravação falhar, vendo a rodinha parar e o motivo aparecer escrito.
+window.renderEtapas = renderEtapas;
+window.cpImportacaoFalhouNaGravacao = cpImportacaoFalhouNaGravacao;
 
 async function salvarLeadPendente(){
   if(!state.pendingSave){ toast("Nada pra salvar."); return; }
@@ -8432,19 +8464,29 @@ async function salvarLeadPendente(){
     if(btn){ btn.disabled = false; btn.textContent = "Salvar lead"; }
     const pa = qs("#pendingActions"); if(pa) pa.style.display = "flex"; // mostra botões pra tentar de novo
     qs("#importCard")?.classList.remove("cp-import-rodando");
-    // v1088 — a tela cheia cobre tudo; num erro aqui ela precisa sair pro corretor ver o aviso
-    // e os botões de tentar de novo.
-    try{ cpImportOverlayVisivel(false); }catch(_){}
     // v1096 — o print do dono mostrou "Não foi possível salvar: Sem conexão com a internet ou o
     // servidor caiu" com o celular no wi-fi e sinal cheio. A mensagem estava culpando a internet
     // dele por uma gravação que demorou demais do lado do servidor — e, pior, não dizia a única
     // coisa que importa naquele momento: a análise NÃO se perdeu, é só tocar em salvar de novo
     // (o state.pendingSave continua aqui e os botões acabaram de voltar).
+    // v1175 — esse aviso agora FICA na tela (antes só passava num toast, e a linha de andamento
+    // continuava girando em "Salvando... 94%" como se nada tivesse acontecido).
     const bruto = String(err?.message || err || "");
     const pareceQuedaDeConexao = /Failed to fetch|NetworkError|aborted|AbortError/i.test(bruto);
-    toast(pareceQuedaDeConexao
-      ? "A gravação não terminou a tempo. Sua análise NÃO foi perdida — toque em \"Salvar lead\" pra tentar de novo."
-      : "Não foi possível salvar: " + userFriendlyError(err));
+    if(pareceQuedaDeConexao){
+      const recado = "A gravação não terminou a tempo. Sua análise NÃO foi perdida — toque em \"Salvar lead\" pra tentar de novo.";
+      try{ renderEtapas(7, "a gravação não terminou a tempo"); }catch(_){ try{ cpImportOverlayVisivel(false); }catch(_){} }
+      const pendingBox = qs("#pendingBox");
+      if(pendingBox){
+        pendingBox.style.background = "rgba(255,107,107,.08)";
+        pendingBox.style.borderColor = "rgba(255,107,107,.4)";
+        pendingBox.style.color = "#ffd9d9";
+        pendingBox.innerHTML = `<b>A gravação não terminou a tempo.</b><br>Sua análise <b>não foi perdida</b> — toque em “Salvar lead” pra tentar de novo.`;
+      }
+      toast(recado);
+    }else{
+      cpImportacaoFalhouNaGravacao("Não foi possível salvar", err);
+    }
   }
 }
 
