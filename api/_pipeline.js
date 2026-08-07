@@ -478,22 +478,26 @@ function detectProduct(fullText = "") {
   return "Não identificado";
 }
 
-// v1179 — QUEM FALOU PRIMEIRO NÃO É, NECESSARIAMENTE, O CLIENTE.
+// v1179/v1180 — O CARTÃO É DE QUEM A CONVERSA FOI EXPORTADA. NUNCA DE UM TERCEIRO.
 //
 // Print do dono (07/08/2026, versão 1178): o cartão abriu com o nome de uma pessoa no topo e a
-// análise inteira — inclusive as três mensagens sugeridas — falando de OUTRA. Causa: o nome do
-// cliente era simplesmente o PRIMEIRO autor que aparecia na conversa e que não batesse com o nome
-// do corretor configurado no Cérebro. Numa prospecção ativa quem fala primeiro é justamente o lado
-// da empresa (a abordagem "temos oportunidades, é pra morar ou investir?"), então o cadastro
-// nascia com o nome de quem prospectou e o cliente de verdade — o que respondeu — ficava sem
-// cartão nenhum. Bastava o rótulo do lado da empresa ser diferente do nome do Cérebro (outro
-// corretor da equipe, número do plantão, nome comercial) pra o filtro antigo não pegar.
+// análise inteira — inclusive as três mensagens sugeridas — falando de OUTRA. Pior: esse nome do
+// topo era de um contato que JÁ EXISTIA na carteira, então a conversa nova foi despejada dentro do
+// cadastro dele. Causa: o nome do cliente era simplesmente o PRIMEIRO autor que aparecia na
+// conversa e que não batesse com o nome do corretor configurado no Cérebro. Numa prospecção — ou
+// numa conversa com mais de duas pessoas — quem aparece primeiro pode ser qualquer um.
 //
-// Duas fontes novas, nesta ordem, e sempre conferidas contra os autores REAIS da conversa:
-//   1. quem a análise identificou como cliente (nomeClienteConfirmadoPelaConversa, abaixo);
+// Regra do dono, na fala dele: o nome que ELE configurou no Cérebro é o corretor, ponto final; o
+// nome do cliente é o do contato de quem a conversa foi exportada, ponto final; e o app não tem
+// que inventar um terceiro nome, "que não é nem primeiro nem segundo nem nada".
+// É o que está implementado aqui, nesta ordem:
+//   1. quem a análise identificou como cliente (nomeClienteConfirmadoPelaConversa, abaixo) —
+//      conferido, sempre, contra os autores REAIS da conversa;
 //   2. o nome do arquivo exportado — "Conversa do WhatsApp com Fulano.txt". O WhatsApp SEMPRE
-//      nomeia o arquivo com o contato do outro lado, nunca com quem exportou.
-// Sem nenhuma das duas, continua valendo a regra antiga (primeiro autor que não é a empresa).
+//      nomeia o arquivo com o contato do outro lado, nunca com quem exportou;
+//   3. o único autor que sobra depois de tirar o corretor.
+// Fora disso NÃO se escolhe ninguém: fica "Cliente não identificado" (nome sem identidade, que não
+// gruda em cadastro nenhum) até a análise dizer quem é. Chutar o nome de um terceiro é o defeito.
 export function contatoDoArquivoExportado(nomeArquivo = "") {
   let t = String(nomeArquivo || "").split(/[\\/]/).pop().trim()
     .replace(/\.(zip|txt)$/i, "")
@@ -516,24 +520,38 @@ function _chaveAutor(valor = "") {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+// O rótulo da mensagem, o nome do arquivo e o nome configurado no Cérebro saem todos do mesmo
+// contato — mas escritos com mais ou menos palavras (só o primeiro nome num lado, nome e sobrenome
+// no outro). Uma palavra a mais no fim continua sendo a mesma pessoa; nome diferente, não.
+function _mesmaPessoaTexto(a = "", b = "") {
+  const ka = _chaveAutor(a), kb = _chaveAutor(b);
+  if (!ka || !kb) return false;
+  return ka === kb || ka.startsWith(kb + " ") || kb.startsWith(ka + " ");
+}
+
 function autorCorrespondente(authors = [], nomeProcurado = "") {
-  const alvo = _chaveAutor(nomeProcurado);
-  if (!alvo) return "";
+  if (!_chaveAutor(nomeProcurado)) return "";
   const lista = (Array.isArray(authors) ? authors : []).filter(a => String(a || "").trim());
-  return lista.find(a => _chaveAutor(a) === alvo)
-    // O rótulo da mensagem e o nome do arquivo saem do mesmo contato da agenda, mas o WhatsApp
-    // corta nomes muito longos no nome do arquivo — aceita também um lado contendo o outro.
-    || lista.find(a => { const k = _chaveAutor(a); return k && alvo && (k.startsWith(alvo + " ") || alvo.startsWith(k + " ")); })
+  return lista.find(a => _chaveAutor(a) === _chaveAutor(nomeProcurado))
+    || lista.find(a => _mesmaPessoaTexto(a, nomeProcurado))
     || "";
 }
 
+// v1180 — "se o meu nome é o que está no Cérebro, ponto final": esse nome identifica o corretor
+// mesmo quando o WhatsApp mostra ele com uma palavra a mais ou a menos. Antes só valia igualdade
+// exata ou o rótulo CONTENDO o nome inteiro do Cérebro — quem configurou nome e sobrenome mas
+// aparece só com o primeiro nome nas mensagens não era reconhecido, e podia virar "o cliente".
 function ehLadoDaEmpresa(autor = "", corretorNome = "") {
   const s = String(autor || "").trim();
   if (!s) return false;
   if (/^(?:sistema|atendimento\s*\(corretor\))$/i.test(s)) return true;
-  const corretor = String(corretorNome || "").trim().toLowerCase();
-  const sLower = s.toLowerCase();
-  return !!(corretor && (sLower === corretor || sLower.includes(corretor)));
+  // Rótulo que se apresenta como a empresa/atendimento. São palavras de FUNÇÃO, não nome de
+  // empreendimento nem de gente — a mesma lista que exemplosDoCorretor já usa pra reconhecer as
+  // mensagens do lado do corretor. Nenhuma marca ou pessoa fica cravada no código.
+  if (/(construtora|imobili[áa]ria|corretor|corretora|atendimento|plant[ãa]o|incorporadora)/i.test(s)) return true;
+  const corretor = String(corretorNome || "").trim();
+  if (!corretor) return false;
+  return _mesmaPessoaTexto(s, corretor) || s.toLowerCase().includes(corretor.toLowerCase());
 }
 
 // Confere o nome que a análise apontou como cliente contra os autores REAIS da conversa e devolve
@@ -564,12 +582,15 @@ function pickClientName(authors = [], corretorNome = "", nomeArquivo = "") {
   // Só excluímos autores inequivocamente pertencentes ao lado da empresa; não corrigimos,
   // abreviamos nem retiramos palavras que possam fazer parte do nome salvo no WhatsApp.
   // corretorNome vem do Cérebro configurado por organização — nunca cravado no código.
-  const doArquivo = autorCorrespondente(authors, contatoDoArquivoExportado(nomeArquivo));
-  if (doArquivo && !ehLadoDaEmpresa(doArquivo, corretorNome)) return String(doArquivo).trim();
-  const raw = authors.find(a => String(a || "").trim() && !ehLadoDaEmpresa(a, corretorNome))
-    || authors.find(Boolean)
-    || "Cliente não identificado";
-  return String(raw).trim() || "Cliente não identificado";
+  const candidatos = (Array.isArray(authors) ? authors : [])
+    .filter(a => String(a || "").trim() && !ehLadoDaEmpresa(a, corretorNome));
+  const doArquivo = autorCorrespondente(candidatos, contatoDoArquivoExportado(nomeArquivo));
+  if (doArquivo) return String(doArquivo).trim();
+  if (candidatos.length === 1) return String(candidatos[0]).trim();
+  // v1180 — 2 ou mais candidatos e nenhuma prova de quem é o contato exportado: o app NÃO escolhe.
+  // Chutar aqui foi o que colocou um terceiro no topo do cartão e, pior, fez a conversa entrar no
+  // cadastro de outra pessoa que tinha esse mesmo nome na carteira.
+  return "Cliente não identificado";
 }
 
 export function guessLeadData(timeline, corretorNome = "", nomeArquivo = "") {
