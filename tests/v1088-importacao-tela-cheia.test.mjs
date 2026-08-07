@@ -97,15 +97,25 @@ assert.ok(fechaNoConcluido && Number(fechaNoConcluido[1]) >= 3000,
 // v1096 — entre o fechamento da tela cheia e o aviso passou a existir a escolha da mensagem
 // (queda de conexão x demais erros). O que este teste protege continua igual: a tela cheia sai
 // ANTES do aviso, senão o corretor não enxerga o que aconteceu.
+// v1175 — quem tira a tela cheia nesses ramos passou a ser renderEtapas(7) ("Falha recuperável"),
+// que além de fechá-la também para a rodinha e destrava os botões — antes a linha de andamento
+// ficava girando em "Salvando... 94%" depois do erro (print do dono). A exigência é a mesma.
 {
-  const trecho = app.match(/cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}[\s\S]{0,900}?toast\(/g) || [];
-  const noSalvar = trecho.find(t => /pareceQuedaDeConexao/.test(t));
+  const trecho = app.match(/renderEtapas\(7,[\s\S]{0,900}?toast\(/g) || [];
+  const noSalvar = trecho.find(t => /gravação não terminou a tempo/.test(t));
   assert.ok(noSalvar, 'erro ao salvar precisa liberar a tela pro corretor ver o aviso');
-  assert.ok(noSalvar.indexOf('cpImportOverlayVisivel(false)') < noSalvar.indexOf('toast('),
+  assert.ok(noSalvar.indexOf('renderEtapas(7,') < noSalvar.indexOf('toast('),
     'a tela cheia precisa sair ANTES do aviso aparecer');
 }
-assert.match(app, /cpImportOverlayVisivel\(false\); \}catch\(_\)\{\}\s*\n\s*toast\("Não foi possível atualizar: "/,
+// O erro ao ATUALIZAR um cliente existente passa pelo mesmo fim de linha (v1175), que fecha a
+// tela cheia via renderEtapas(7) antes de qualquer aviso.
+assert.match(app, /cpImportacaoFalhouNaGravacao\("Não foi possível atualizar", err\);/,
   'erro ao atualizar precisa liberar a tela pro corretor ver o aviso');
+{
+  const fim = app.slice(app.indexOf('function cpImportacaoFalhouNaGravacao(titulo, err){')).slice(0, 900);
+  assert.ok(fim.indexOf('renderEtapas(7,') < fim.indexOf('toast('),
+    'no fim de linha compartilhado, a tela cheia também sai antes do aviso');
+}
 
 // ── 4. Os rótulos falam a língua do corretor, não a do sistema ────────────────────────────────
 const passos = app.match(/const CPIO_PASSOS = \[[\s\S]*?\];/);

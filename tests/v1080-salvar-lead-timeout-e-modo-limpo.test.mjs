@@ -64,11 +64,19 @@ for (const [nome, bloco] of [['salvarLeadPendente', salvarBloco], ['atualizarLea
 // v1096 — o salvamento ganhou DOIS caminhos de mensagem: quando a conexão cai (ou a gravação não
 // termina a tempo), o aviso passa a dizer que a análise não se perdeu e que é só tentar de novo —
 // era o que faltava no print do dono. Nos demais erros, continua traduzindo com userFriendlyError.
-assert.match(salvarBloco, /userFriendlyError\(err\)/,
-  'salvarLeadPendente precisa traduzir o erro final com userFriendlyError');
-assert.match(salvarBloco, /N[ÃA]O foi perdida/i,
+// v1175 — a tradução e o toast passaram a morar em cpImportacaoFalhouNaGravacao, que além de
+// traduzir também ENCERRA a linha de andamento (antes ela ficava girando em "Salvando... 94%" pra
+// sempre). A exigência original continua a mesma: erro final traduzido, nunca err.message cru.
+const fimDeLinha = app.slice(app.indexOf('function cpImportacaoFalhouNaGravacao(titulo, err){'));
+assert.match(fimDeLinha.slice(0, 900), /const motivo = userFriendlyError\(err\);/,
+  'o fim de linha da gravação precisa traduzir o erro com userFriendlyError');
+assert.match(fimDeLinha.slice(0, 900), /toast\(titulo \+ ": " \+ motivo\)/,
+  'e continuar avisando por toast, além de deixar escrito na tela');
+assert.ok(/cpImportacaoFalhouNaGravacao\("Não foi possível salvar", err\)/.test(salvarBloco),
+  'salvarLeadPendente precisa usar esse fim de linha');
+assert.match(salvarBloco, /N[ÃA]O foi perdida|não foi perdida/i,
   'e precisa avisar que a análise não se perdeu quando a conexão cai');
-assert.match(atualizarBloco, /toast\("Não foi possível atualizar: "\s*\+\s*userFriendlyError\(err\)\)/,
-  'atualizarLeadComEvolucao precisa traduzir o erro final com userFriendlyError');
+assert.match(atualizarBloco, /cpImportacaoFalhouNaGravacao\("Não foi possível atualizar", err\)/,
+  'atualizarLeadComEvolucao precisa usar o mesmo fim de linha');
 
 console.log('v1080-salvar-lead-timeout-e-modo-limpo: ok');
