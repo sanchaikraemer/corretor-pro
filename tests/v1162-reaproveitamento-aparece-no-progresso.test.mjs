@@ -48,8 +48,12 @@ assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "comparando com a co
   assert.match(trecho, /"nada novo: análise mantida, nada pago"/, "sem novidade: dito no Concluído");
   assert.match(trecho, /sem mensagem nova; análise refeita \(a salva estava incompleta\)/,
     "o caso raro (zero novas mas análise salva incompleta) é dito com honestidade — refez e explica por quê");
-  assert.match(trecho, /renderEtapas\(6, resumoFim \? `lead atualizado · \$\{resumoFim\}` : "lead atualizado e importação confirmada"\);/,
+  // v1178 — a linha do Concluído passou a somar também o aviso de áudio que não virou texto
+  // (teto de áudios do dia / falha de transcrição), que antes não aparecia em lugar nenhum.
+  assert.match(trecho, /renderEtapas\(6, linhaFim \? `lead atualizado · \$\{linhaFim\}` : "lead atualizado e importação confirmada"\);/,
     "e fica na etapa Concluído, que persiste na tela");
+  assert.match(trecho, /const linhaFim = \[resumoFim, audioFim\]\.filter\(Boolean\)\.join\(" · "\);/,
+    "o resumo do reaproveitamento continua sendo a base da linha, agora somado ao aviso de áudio");
 }
 
 // ── O quadro verde do resultado continua existindo (ninguém removeu a prova por print) ────────
