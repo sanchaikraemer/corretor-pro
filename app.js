@@ -2161,6 +2161,14 @@ function ehAtendidoNaSemana(l){
   const cutoff = Date.now() - 7*24*60*60*1000;
   return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando).getTime() >= cutoff);
 }
+// v1171 — mesma régua de ehAtendidoNaSemana, só que 30 dias corridos (não mês civil): pedido do
+// dono foi "atendidos no mês" como 3º número do quadradinho de atendidos, contagem simples de
+// quem foi atendido de verdade — sem vínculo com meta/dose do dia.
+function ehAtendidoNoMes(l){
+  const eventos = l.analysis?.aprendizado?.eventos || [];
+  const cutoff = Date.now() - 30*24*60*60*1000;
+  return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando).getTime() >= cutoff);
+}
 function ehContatadoHoje(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
   const hoje = inicioDoDiaBR();
@@ -3246,18 +3254,13 @@ function renderBotoesHome(){
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
       }
-      /* v1170 — Bloco de notas administrativas. Pedido do dono: tarefa que NÃO é atendimento de
+      /* v1171 — Bloco de notas administrativas. Pedido do dono: tarefa que NÃO é atendimento de
          cliente ("verificar pagamento de entrada", "matrícula no registro de imóveis") precisa
-         de um lugar próprio, fácil de achar, sem se misturar com a fila de clientes. Visual
-         quieto de propósito — é apoio, não o assunto principal da Home — e some sozinho quando
-         fechado, sobrando só a linha do título com a contagem do que falta. */
-      .cp1170-bloco{border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:14px;margin-bottom:12px;overflow:hidden}
-      .cp1170-cab{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;border:0;background:transparent;width:100%;text-align:left;color:var(--text);font:inherit}
-      .cp1170-cab b{font-size:13.5px;font-weight:900;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .cp1170-cab .cp1170-pend{flex:0 0 auto;background:rgba(255,98,88,.14);color:var(--accent);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:950}
-      .cp1170-cab svg{flex:0 0 auto;width:16px;height:16px;color:var(--muted);transition:transform .15s}
-      .cp1170-bloco.aberto .cp1170-cab svg{transform:rotate(180deg)}
-      .cp1170-corpo{padding:0 14px 14px}
+         de um lugar próprio, fácil de achar, sem se misturar com a fila de clientes. Depois de
+         testar 4 modelos de posição, o dono escolheu virar um card dentro da fileira de números
+         da Home (junto de "Fazer agora", "Total de leads" etc.) que abre um painel flutuante —
+         reaproveita o mesmo estilo do painel do sino (.cp687-notify-panel) pra não duplicar CSS. */
+      .cp1170-panel{width:min(420px,calc(100vw - 36px))}
       .cp1170-add{display:flex;gap:8px;margin-bottom:10px}
       .cp1170-add input{flex:1;min-width:0;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--text);font-size:13px}
       .cp1170-add button{flex:0 0 auto;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:900;cursor:pointer}
@@ -3269,11 +3272,26 @@ function renderBotoesHome(){
       .cp1170-item button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;padding:2px 5px}
       .cp1170-item button:hover{color:var(--risco)}
       .cp1170-vazio{color:var(--muted);font-size:12.5px;padding:6px 0}
+      /* v1171 — quadradinho "Atendidos": modelo 4 dos que o dono viu (o do arozinho), mas com 3
+         números em vez de 2 — pedido dele foi hoje / semana / mês, cada um só uma CONTAGEM
+         concluída (não é meta nem dose batida, por isso o arinho é decorativo/fixo, não uma barra
+         de progresso proporcional a nada). #home força font-size:24px!important em QUALQUER <b>
+         dentro de .ui-kpi (v1077) e .ui-kpi svg{width:17px;height:17px} (base, styles.css) — os
+         dois precisam de uma regra mais específica (ID #home + mais classes) pra vencer sem
+         quebrar os outros quadradinhos. Lição da v1077→v1078: checar sempre contra !important já
+         existente antes de assumir que o CSS novo "pegou". */
+      #home .ui-kpi.cp1171-atendidos{position:relative}
+      #home .ui-kpi.cp1171-atendidos .cp1171-aro{position:absolute;top:11px;right:11px;width:11px!important;height:11px!important}
+      #home .ui-kpi.cp1171-atendidos>div.cp1171-trio{display:flex;align-items:stretch;justify-content:space-between;gap:4px;margin-top:8px}
+      #home .ui-kpi.cp1171-atendidos .cp1171-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:1px}
+      #home .ui-kpi.cp1171-atendidos .cp1171-col+.cp1171-col{border-left:1px solid var(--line2);padding-left:4px}
+      #home .ui-kpi.cp1171-atendidos .cp1171-col b{font-size:15px!important;line-height:1.05}
+      #home .ui-kpi.cp1171-atendidos .cp1171-col small{margin-top:0;color:var(--muted);font-size:8.5px;text-transform:uppercase;letter-spacing:.02em;font-weight:800}
+      @media(max-width:620px){#home .ui-kpi.cp1171-atendidos .cp1171-col b{font-size:13px!important}#home .ui-kpi.cp1171-atendidos .cp1171-col small{font-size:7.5px}}
     </style>
     <div class="home-saud">
       <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
     </div>
-    ${typeof cp1170BlocoHTML === 'function' ? cp1170BlocoHTML() : ""}
     ${barraBuscaLeadHTML("home")}
     ${typeof cp1168FaixaHomeHTML === 'function' ? cp1168FaixaHomeHTML(items) : ""}
     ${typeof cp1160FaixaHomeHTML === 'function' ? cp1160FaixaHomeHTML(items) : ""}
@@ -10005,7 +10023,8 @@ function ui631Icon(nome){
     reaquecer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.2 8A7 7 0 0118 6l2 1M18 16a7 7 0 01-12 2l-2-1"/></svg>',
     conversa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg>',
     cerebro:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M9 9h.01M15 9h.01M9 15c2 1 4 1 6 0"/></svg>',
-    resposta:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>'
+    resposta:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+    nota:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 12h7M9 16h5"/></svg>'
   };
   return icons[nome] || icons.ativos;
 }
@@ -10904,22 +10923,27 @@ function cp1168FaixaHomeHTML(items){
 window.cp1168ItensDeHoje = cp1168ItensDeHoje;
 window.cp1168FaixaHomeHTML = cp1168FaixaHomeHTML;
 
-// ===== v1170 — Bloco de notas administrativas =====
+// ===== v1170/v1171 — Bloco de notas administrativas =====
 //
-// Pedido do dono: um lugar fácil de achar, no topo da tela, pra anotar tarefa que NÃO é
-// atendimento de cliente — "verificar pagamento de entrada de tal cliente", "matrículas
-// atualizadas no registro de imóveis". Guardado numa chave PRÓPRIA do banco (ver
-// api/cerebro-config.js, NOTAS_KEY), separada do Cérebro Comercial de propósito: o Cérebro vira
-// contexto pra IA nas sugestões de mensagem, e uma nota administrativa não pode vazar pra dentro
-// de uma sugestão pro cliente.
+// Pedido do dono: um lugar fácil de achar pra anotar tarefa que NÃO é atendimento de cliente —
+// "verificar pagamento de entrada de tal cliente", "matrículas atualizadas no registro de
+// imóveis". Guardado numa chave PRÓPRIA do banco (ver api/cerebro-config.js, NOTAS_KEY),
+// separada do Cérebro Comercial de propósito: o Cérebro vira contexto pra IA nas sugestões de
+// mensagem, e uma nota administrativa não pode vazar pra dentro de uma sugestão pro cliente.
 //
-// Sincroniza pelo servidor (mesmo padrão do Cérebro e da carteira) — abre no celular, edita no
-// PC, continua igual dos dois lados. Fechado por padrão: só a contagem do que falta aparece na
-// tela, o conteúdo em si só carrega quando o corretor abre o bloco (ou de fundo, assim que a
-// Home aparece, pra a contagem já vir pronta sem esperar o toque).
+// v1171 — o dono escolheu, entre 4 modelos de posição (ícone no cabeçalho / dentro dos números /
+// faixa fina / barra fixa embaixo), o modelo "dentro dos números": virou mais uma pílula na
+// mesma fileira de "Fazer agora / Total de leads / Agenda...", do mesmo tamanho que as outras —
+// não é mais uma faixa própria acima da busca. Tocar nela abre um painel flutuante (mesmo padrão
+// já usado pela Central de atenção do sino, .cp687-notify-panel), não mais um bloco que empurra o
+// resto da tela pra baixo.
+//
+// Sincroniza pelo servidor (mesmo padrão do Cérebro e da carteira): abre no celular, edita no
+// computador, continua igual dos dois lados. O carregamento dispara sozinho assim que a Home
+// aparece (renderBotoesHome chama cp1170Carregar), pra a pílula já nascer com o número certo.
 let _cp1170Notas = null;       // cache em memória da sessão (null = ainda não carregou nenhuma vez)
 let _cp1170Carregando = null;
-let _cp1170Aberto = false;
+let _cp1170PainelAberto = false;
 
 async function cp1170Carregar(force){
   if(!force && Array.isArray(_cp1170Notas)) return _cp1170Notas;
@@ -10940,10 +10964,18 @@ async function cp1170Carregar(force){
   return _cp1170Carregando;
 }
 
-// Troca só o próprio bloco no DOM — não redesenha a Home inteira por causa de uma nota.
+function cp1170PendCount(){
+  return Array.isArray(_cp1170Notas) ? _cp1170Notas.filter(n => !n?.feita).length : 0;
+}
+window.cp1170PendCount = cp1170PendCount;
+
+// Atualiza a pílula da fileira de números (só o número, sem redesenhar a fileira inteira) e,
+// se o painel estiver aberto, redesenha o corpo dele também.
 function cp1170Rerender(){
-  const el = qs("#cp1170Bloco");
-  if(el) el.outerHTML = cp1170BlocoHTML();
+  const b = qs("#kpiNotas b");
+  if(b) b.textContent = cp1170PendCount();
+  const painel = qs("#cp1170Panel");
+  if(painel && _cp1170PainelAberto) painel.innerHTML = cp1170PainelConteudoHTML();
 }
 
 function cp1170ItemHTML(n){
@@ -10955,40 +10987,58 @@ function cp1170ItemHTML(n){
   </div>`;
 }
 
-function cp1170BlocoHTML(){
+// Conteúdo de dentro do painel flutuante (cabeçalho + caixa de adicionar + lista).
+function cp1170PainelConteudoHTML(){
   const carregado = Array.isArray(_cp1170Notas);
   const notas = carregado ? _cp1170Notas : [];
   const pendentes = notas.filter(n => !n?.feita);
   const feitas = notas.filter(n => n?.feita);
-  const corpo = _cp1170Aberto ? `
-    <div class="cp1170-corpo">
-      <div class="cp1170-add">
-        <input type="text" id="cp1170Input" placeholder="Ex.: Verificar pagamento de entrada da Maria" maxlength="500" onkeydown='if(event.key==="Enter"){event.preventDefault();cp1170Adicionar();}'>
-        <button type="button" onclick="cp1170Adicionar()">Adicionar</button>
-      </div>
-      ${!carregado ? '<div class="cp1170-vazio">Carregando…</div>' : (!notas.length ? '<div class="cp1170-vazio">Nada anotado ainda.</div>' : '')}
-      ${pendentes.map(cp1170ItemHTML).join("")}
-      ${feitas.map(cp1170ItemHTML).join("")}
-    </div>` : "";
-  return `<div class="cp1170-bloco${_cp1170Aberto ? ' aberto' : ''}" id="cp1170Bloco">
-    <button type="button" class="cp1170-cab" onclick="cp1170Toggle()">
-      <b>📝 Bloco de notas</b>
-      ${pendentes.length ? `<span class="cp1170-pend">${pendentes.length}</span>` : ""}
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-    ${corpo}
-  </div>`;
+  return `
+    <div class="cp687-notify-head">
+      <div><h3>📝 Bloco de notas</h3><small>Tarefa que não é atendimento de cliente.</small></div>
+      <button type="button" class="cp687-notify-close" onclick="cp1170FecharPainel()" aria-label="Fechar">×</button>
+    </div>
+    <div class="cp1170-add">
+      <input type="text" id="cp1170Input" placeholder="Ex.: Verificar pagamento de entrada da Maria" maxlength="500" onkeydown='if(event.key==="Enter"){event.preventDefault();cp1170Adicionar();}'>
+      <button type="button" onclick="cp1170Adicionar()">Adicionar</button>
+    </div>
+    ${!carregado ? '<div class="cp1170-vazio">Carregando…</div>' : (!notas.length ? '<div class="cp1170-vazio">Nada anotado ainda.</div>' : '')}
+    ${pendentes.map(cp1170ItemHTML).join("")}
+    ${feitas.map(cp1170ItemHTML).join("")}
+  `;
 }
 
-function cp1170Toggle(){
-  _cp1170Aberto = !_cp1170Aberto;
-  cp1170Rerender();
-  if(_cp1170Aberto){
-    cp1170Carregar();
-    setTimeout(() => qs("#cp1170Input")?.focus(), 60);
+// Mesmo padrão de openNotifyPanel (Central de atenção do sino): cria o painel uma vez, reaproveita
+// depois; fecha sozinho ao tocar fora ou no ×.
+function cp1170AbrirPainel(){
+  let painel = qs("#cp1170Panel");
+  if(!painel){
+    painel = document.createElement("div");
+    painel.className = "cp687-notify-panel cp1170-panel";
+    painel.id = "cp1170Panel";
+    document.body.appendChild(painel);
   }
+  _cp1170PainelAberto = true;
+  painel.innerHTML = cp1170PainelConteudoHTML();
+  painel.classList.add("open");
+  cp1170Carregar();
+  setTimeout(() => qs("#cp1170Input")?.focus(), 80);
+  setTimeout(() => document.addEventListener("click", cp1170CliqueFora, { once: true }), 0);
 }
-window.cp1170Toggle = cp1170Toggle;
+window.cp1170AbrirPainel = cp1170AbrirPainel;
+
+function cp1170FecharPainel(){
+  _cp1170PainelAberto = false;
+  qs("#cp1170Panel")?.classList.remove("open");
+}
+window.cp1170FecharPainel = cp1170FecharPainel;
+
+function cp1170CliqueFora(ev){
+  const painel = qs("#cp1170Panel");
+  if(!painel) return;
+  if(!painel.contains(ev.target) && !ev.target.closest("#kpiNotas")) cp1170FecharPainel();
+  else if(_cp1170PainelAberto) setTimeout(() => document.addEventListener("click", cp1170CliqueFora, { once: true }), 0);
+}
 
 async function cp1170Adicionar(){
   const input = qs("#cp1170Input");
@@ -11051,7 +11101,6 @@ async function cp1170Remover(id){
   }
 }
 window.cp1170Remover = cp1170Remover;
-window.cp1170BlocoHTML = cp1170BlocoHTML;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
@@ -11338,6 +11387,15 @@ renderResumoDia = function(items){
   // de state.todosLeads, que é a carteira inteira que voltou do servidor. Sem essa lista (ex.: um
   // render adiantado antes do primeiro carregamento) o card mostra 0 em vez de quebrar a tela.
   const arquivados=(state.todosLeads||[]).filter(l=>normalizarEtapa(l.etapa)===ETAPA_ARQUIVADO).length;
+  // v1171 — pedido do dono: um quadradinho só pra "quantos atendi" — hoje, nesta semana e neste
+  // mês, 3 contagens simples (não é meta/dose batida, é só o total concluído em cada período) —,
+  // pra fileira ficar parelha no celular junto do Bloco de notas (7 quadradinhos sobrava um
+  // sozinho numa linha — 8 fecha 2 fileiras de 4 certinhas). "Hoje"/"semana" usam a mesma conta
+  // que a coluna "Seu ritmo de atendimento" já usa (ehAtendidoHoje/ehAtendidoNaSemana); "mês" é
+  // nova (ehAtendidoNoMes, 30 dias corridos, mesma régua da semana só que mais larga).
+  const atendidosHoje=ativos.filter(ehAtendidoHoje).length;
+  const atendidosSemana=ativos.filter(ehAtendidoNaSemana).length;
+  const atendidosMes=ativos.filter(ehAtendidoNoMes).length;
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
@@ -11345,7 +11403,9 @@ renderResumoDia = function(items){
     <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>
-    <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>`;
+    <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>
+    <div class="ui-kpi" id="kpiNotas" onclick="cp1170AbrirPainel()" title="Tarefas administrativas — o que não é atendimento de cliente"><span>Bloco de notas</span><div><b>${(typeof cp1170PendCount==='function')?cp1170PendCount():0}</b><i>${ui631Icon('nota')}</i></div></div>
+    <div class="ui-kpi cp1171-atendidos" onclick="show('relatorio')" title="Atendimentos concluídos — hoje, nesta semana e neste mês"><span>Atendidos</span><svg class="cp1171-aro" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--acao)" stroke-width="3.5" stroke-dasharray="42 14" stroke-linecap="round"/></svg><div class="cp1171-trio"><div class="cp1171-col"><b>${atendidosHoje}</b><small>hoje</small></div><div class="cp1171-col"><b>${atendidosSemana}</b><small>semana</small></div><div class="cp1171-col"><b>${atendidosMes}</b><small>mês</small></div></div></div>`;
 };
 
 function ui631LeadMotivo(l){
@@ -12553,10 +12613,15 @@ window.cp7ObsSalvar = async function(btn){
     }
     if(ta) ta.value="";
     renderLeadFoco(lead);
-    if(status) status.innerHTML = '<span style="color:var(--acao)">Observação salva. Aprendizado em segundo plano; sugestões atuais mantidas.</span>';
-    toast("Observação salva. O sistema vai aprender com ela em segundo plano.");
+    toast("Observação salva. Atualizando a análise agora…");
     invalidarLeadsCache();
     setTimeout(()=>window.iniciarAprendizadoContinuoAutomatico?.({somentePendentes:true}),500);
+    // v1171 — pedido do dono: depois de salvar a observação, reanalisar sozinho — mesma
+    // reanálise de sempre (ui670Reanalisar), só que disparada automaticamente, sem precisar
+    // tocar no botão "Reanalisar". O botão já foi redesenhado por renderLeadFoco() logo acima,
+    // então pega a referência FRESCA dele (a antiga, se existisse, estaria desconectada da
+    // tela) — assim a barra de progresso da reanálise aparece no lugar de sempre.
+    ui670Reanalisar(qs("#btnReanalisarLeadTop")).catch(()=>{});
   }catch(err){
     if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(userFriendlyError(err))+'</span>';
     if(btn){ btn.disabled=false; btn.textContent=original; }
