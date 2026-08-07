@@ -3400,7 +3400,20 @@ function contextoAnteriorEnxuto(analysis) {
 function analiseAnteriorReutilizavel(previousAnalysis) {
   const a = previousAnalysis && typeof previousAnalysis === "object" && !Array.isArray(previousAnalysis) ? previousAnalysis : null;
   if (!a) return null;
-  if (a.mode === "erro_api" || a.mode === "sem_api" || a.sugestoesPendentes === true) return null;
+  // v1177 — "quando eu exporto uma conversa tem que fazer análise e ponto final. Eu não tenho que
+  // exportar um cliente e daí o sistema vai me mandar fazer análise" (dono, 07/08/2026). Ele está
+  // certo, e o defeito era aqui: a economia da v1141 (reimportação sem novidade não paga análise
+  // nova) reaproveitava a análise salva SEM conferir se a tela ainda a aceita. Numa análise salva
+  // por versão antiga, o cadastro mostra "Análise comercial pendente nesta versão. Reanalise…" —
+  // então reimportar aquele cliente reaproveitava justamente o texto que a tela recusa, e a
+  // exportação não mudava nada: continuava pedindo reanálise pra sempre.
+  //
+  // A regra passa a ser a MESMA da tela (analiseAtualValida752 em app.js): análise salva só é
+  // reaproveitada se ela puder ser exibida como está. Não podendo, a IA roda — isso não é
+  // retrabalho, é a única forma de a exportação entregar o que ele espera.
+  if (String(a.arquiteturaMensagens || "") !== ARQUITETURA_MENSAGENS_ATUAL) return null;
+  if (["erro_api", "sem_api", "reconciliacao_local", "reanalise_pendente"].includes(String(a.mode || ""))) return null;
+  if (a.sugestoesPendentes === true) return null;
   const m = a.messages && typeof a.messages === "object" ? a.messages : {};
   if (![m.a, m.b, m.c].every(v => String(v || "").trim().length >= 10)) return null;
   const copia = { ...a, analiseReutilizadaDeImportacaoAnterior: true, analiseReutilizadaEm: new Date().toISOString() };
