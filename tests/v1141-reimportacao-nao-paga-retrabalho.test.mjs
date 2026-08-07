@@ -22,6 +22,11 @@ const MSGS = [
 const ANALISE_SALVA = {
   summary: "Cliente perguntou por unidade disponível.",
   clientName: "Cliente",
+  // v1177 — a análise salva só pode ser reaproveitada se a TELA ainda a aceitar como atual, e o
+  // carimbo de arquitetura é o que ela confere (ver analiseAtualValida752 em app.js). Sem isso, a
+  // reimportação reaproveitava justamente o texto que o cadastro recusa e ficava pedindo
+  // "Reanalise…" pra sempre, mesmo depois de o corretor exportar a conversa de novo.
+  arquiteturaMensagens: "v852-cerebro-unico-obrigatorio",
   messages: {
     a: "Oi! Passando pra confirmar se ainda faz sentido olharmos as opções que te mandei.",
     b: "Oi, tudo bem? Fico à disposição se quiser retomar a conversa das unidades.",
