@@ -26,7 +26,7 @@
     </div>
     <div class="cartao legal">
       <h1>Política de Privacidade</h1>
-      <p class="atualizado">Última atualização: 03/08/2026 — versão 1119</p>
+      <p class="atualizado">Última atualização: 07/08/2026 — versão 1164</p>
 
       <div class="aviso">
         Este texto foi escrito pra refletir com fidelidade o que o sistema realmente faz hoje.
@@ -42,9 +42,12 @@
 
       <h2>1. Quem é o responsável pelos dados</h2>
       <p>
-        O Corretor Pro é operado por <b>Sanchai Kraemer, CPF 004.038.720-81</b>.
+        O Corretor Pro é operado por <b>Sanchai Kraemer</b>, corretor de imóveis, pessoa física.
         Em caso de dúvida sobre esta política ou sobre o tratamento dos seus dados, entre em
-        contato pelo e-mail <b><a href="mailto:sanchaikraemer3@gmail.com">sanchaikraemer3@gmail.com</a></b>.
+        contato pelo e-mail <b><a href="mailto:sanchaikraemer3@gmail.com">sanchaikraemer3@gmail.com</a></b>
+        — é o mesmo canal para exercer qualquer um dos direitos da seção 6. A identificação
+        completa do responsável (documento) é fornecida por esse e-mail a quem tiver interesse
+        legítimo em solicitá-la, inclusive autoridades.
       </p>
 
       <h2>2. Quais dados o sistema coleta</h2>
@@ -53,6 +56,7 @@
         <li>Nome, e-mail e senha de acesso (armazenados pelo Supabase Auth, provedor de autenticação).</li>
         <li>Configurações do Cérebro Comercial: método de venda, tom de voz, diferenciais, regras e objeções que o próprio corretor cadastra.</li>
         <li>Metadados de uso: quando entrou, quantas análises fez, status da conta (teste ou ativa).</li>
+        <li>No momento do cadastro, uma <b>impressão embaralhada da conexão de internet</b> usada (não é o endereço de internet em si, e não dá para desembaralhar de volta). Serve só para impedir que um robô abra centenas de contas de teste, e nada além disso é feito com ela.</li>
       </ul>
       <h3>2.2 Dos leads/clientes do corretor (contidos nas conversas importadas)</h3>
       <ul>
@@ -77,7 +81,7 @@
       <h2>4. Com quem os dados são compartilhados</h2>
       <p>Os dados passam por prestadores de serviço de infraestrutura (nenhum deles pode usar os dados pra fins próprios):</p>
       <ul>
-        <li><b>OpenAI</b> — recebe o texto da conversa (e o áudio, pra transcrição) no momento da análise, processa e devolve o resultado. A OpenAI <b>não recebe o telefone do lead</b> (o número é retirado antes do envio) nem dados de outros corretores.</li>
+        <li><b>OpenAI</b> — recebe o <b>conteúdo integral da conversa importada</b> (o texto das mensagens e os áudios, para transcrição) no momento da análise, processa e devolve o resultado. Nunca recebe dados de outros corretores. <b>Importante, para não haver mal-entendido:</b> a ficha do lead que o sistema monta é enviada sem o campo de telefone, mas o <b>texto da conversa vai como está</b> — se uma mensagem contiver telefone, e-mail, CPF, endereço, dado bancário ou o contato de um terceiro, essa informação vai junto. Exporte para o Corretor Pro apenas conversas que você tem base legal para tratar, e evite importar conversas com dados sensíveis que não sejam necessários ao atendimento.</li>
         <li><b>Supabase</b> — armazena o banco de dados, os logins e os arquivos (ZIPs exportados do WhatsApp, áudios extraídos) de forma isolada por corretor.</li>
         <li><b>Vercel</b> — hospeda o aplicativo e executa o processamento no servidor (a infraestrutura por onde os dados trafegam durante o uso).</li>
       </ul>
@@ -92,6 +96,11 @@
         apagados de forma definitiva e transacional. A remoção dos arquivos guardados (ZIPs e áudios)
         e do login é feita em seguida; nos casos raros em que algum arquivo não puder ser removido na
         hora, o painel mostra um aviso pra que a remoção seja concluída.
+      </p>
+      <p>
+        A impressão embaralhada da conexão usada no cadastro (seção 2.1) é guardada à parte do
+        cadastro do corretor e só é consultada na janela de 24 horas seguinte; hoje ela não é
+        apagada automaticamente depois disso, e pode ser removida a pedido pelo e-mail da seção 1.
       </p>
 
       <h2>6. Seus direitos (Lei Geral de Proteção de Dados — LGPD)</h2>
@@ -116,9 +125,22 @@
 
       <h2>8. Cookies e armazenamento local</h2>
       <p>
-        O Corretor Pro funciona como um aplicativo instalável (PWA) e usa armazenamento local do
-        navegador (localStorage) pra manter você conectado e guardar preferências de tela — não
-        usa cookies de rastreamento nem compartilha esses dados com redes de publicidade.
+        O Corretor Pro funciona como um aplicativo instalável (PWA) e guarda informação no próprio
+        aparelho, em duas formas de armazenamento do navegador. Nada disso é cookie de rastreamento
+        nem é compartilhado com redes de publicidade.
+      </p>
+      <ul>
+        <li><b>localStorage</b> — sessão de acesso, preferências de tela, configuração do Cérebro
+          Comercial em cópia local (para o app abrir rápido e funcionar com internet ruim) e
+          lembretes/avisos já dispensados.</li>
+        <li><b>IndexedDB</b> — quando você compartilha uma conversa do WhatsApp direto para o
+          Corretor Pro, o <b>arquivo ZIP fica guardado no aparelho</b> até a importação terminar; e
+          o nome dos últimos clientes com retorno pendente fica guardado para o app conseguir
+          avisar você mesmo fechado.</li>
+      </ul>
+      <p>
+        Esse conteúdo fica <b>no seu aparelho</b>, não em um servidor de terceiros. Se você usa um
+        aparelho compartilhado, saia da conta e limpe os dados do site pelo navegador ao terminar.
       </p>
 
       <h2>9. Menores de idade</h2>

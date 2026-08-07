@@ -106,7 +106,13 @@ const promptDeUsuario = () => chamadas.at(-1).messages.find(m => m.role === "use
     const html = fs.readFileSync(new URL(`../${arquivo}`, import.meta.url), "utf8");
     assert.ok(!html.includes('class="placeholder">['),
       `${arquivo} não pode ficar no ar com campo por preencher aparecendo pro cliente`);
-    assert.match(html, /004\.038\.720-81/, `${arquivo} precisa identificar o responsável`);
+    // v1164 — a identificação continua obrigatória, mas pelo NOME. O CPF completo estava
+    // publicado nas duas páginas desde a v1084 (a auditoria de 07/08/2026 apontou) — documento de
+    // pessoa física não precisa ficar exposto pra qualquer visitante da internet; quem tem
+    // interesse legítimo pede pelo e-mail de contato.
+    assert.match(html, /Sanchai Kraemer/, `${arquivo} precisa identificar o responsável pelo nome`);
+    assert.ok(!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(html),
+      `${arquivo} não pode publicar CPF — a identificação completa é fornecida pelo e-mail de contato, não exposta na página`);
     assert.match(html, /sanchaikraemer3@gmail\.com/, `${arquivo} precisa ter o e-mail de contato`);
   }
   const index = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");

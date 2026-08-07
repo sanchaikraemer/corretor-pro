@@ -52,7 +52,14 @@ assert.match(storage, /registrarConsumoTranscricaoImport\(organizationId, transc
 
 // ── 4. Política de privacidade alinhada ao código ──────────────────────────────────────────
 const privacidade = ler("privacidade.html");
-assert.match(privacidade, /não recebe o telefone do lead/, "a política precisa dizer que o telefone não vai pra IA");
+// v1164 — esta linha exigia a frase "não recebe o telefone do lead". A auditoria de 07/08/2026
+// mostrou que ela é falsa como promessa geral: o campo de telefone da FICHA do lead realmente sai
+// (v1119, e o teste disso está logo abaixo, no código), mas o TEXTO da conversa vai inteiro pra
+// IA — telefone escrito numa mensagem vai junto. A promessa virou a descrição honesta, guardada
+// agora em tests/v1164-politica-de-privacidade-fiel.test.mjs. O que continua sendo exigido aqui é
+// que a política descreva a ficha sem telefone, sem prometer nada além disso.
+assert.match(privacidade, /ficha do lead[\s\S]{0,120}?sem o campo de telefone/i,
+  "a política precisa dizer que a ficha do lead é enviada sem o campo de telefone");
 assert.match(privacidade, /Vercel/, "a política precisa citar a Vercel como fornecedor de infraestrutura");
 assert.match(privacidade, /Imagens, vídeos e documentos[\s\S]*?não são analisados/, "a política precisa dizer que imagem/vídeo não são analisados");
 assert.doesNotMatch(privacidade, /não fica resquício/, "a política não pode mais prometer 'sem resquício' (remoção de arquivos é best-effort)");
