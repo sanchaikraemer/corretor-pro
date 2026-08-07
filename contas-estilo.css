@@ -219,6 +219,42 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .rodape-lista{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; font-size:12.5px; color:var(--cp-muted); }
 .btn-acoes-toggle{ display:none; }
 
+/* v1168 — pedido do dono ("muito feio e grotesto") olhando o painel de verdade: os 5 botões de
+   ação eram todos do mesmo tamanho/peso visual, e "Pago · Pro"/"Pago · Pro Master" (a cor padrão
+   dos botões, o coral) gritavam mais forte que "Excluir" (cinza neutro) — o oposto do que devia
+   ser. Agora cada ação tem a cor do que ela É: verde pra marcar como pagante (mesma cor da
+   pílula "Ativo"), âmbar pra bloquear (uma pausa, não uma sentença), vermelho só pra excluir
+   (irreversível, com ícone e separado por um traço das demais). "+7 dias teste" continua neutro.
+   Compacto de propósito: aqui, dentro da linha de ações, não no botão .pequeno do resto da tela. */
+.acoes-linha{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.acoes-linha .pequeno{ padding:7px 13px; font-size:12px; }
+.acoes-linha .separador-acao{ width:1px; align-self:stretch; min-height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
+button.pequeno.btn-plano{ background:rgba(95,224,160,.12); color:var(--st-ativo); border:1px solid rgba(95,224,160,.4); }
+button.pequeno.btn-plano:hover{ background:rgba(95,224,160,.22); }
+button.pequeno.btn-atencao{ background:rgba(255,196,90,.12); color:var(--st-teste); border:1px solid rgba(255,196,90,.4); }
+button.pequeno.btn-atencao:hover{ background:rgba(255,196,90,.22); }
+button.pequeno.btn-perigo{ display:inline-flex; align-items:center; gap:5px; background:rgba(255,98,88,.14); color:var(--st-bloq); border:1px solid rgba(255,98,88,.45); }
+button.pequeno.btn-perigo:hover{ background:rgba(255,98,88,.26); }
+button.pequeno.btn-perigo svg{ width:13px; height:13px; flex:0 0 auto; }
+
+/* Selinho de "Dias de teste": normal (cinza), urgente (âmbar, ≤2 dias) e vencido (vermelho,
+   pulsando). O pulso é um anel se acendendo e apagando ao redor do selinho — não é opacidade indo
+   a zero (isso ficaria feio, tipo lâmpada com mau contato); some sozinho pra quem pediu menos
+   movimento na tela (prefers-reduced-motion), deixando só a cor vermelha fixa nesse caso. */
+.chip-teste{ display:inline-flex; align-items:center; gap:4px; font-size:12.5px; font-weight:800; padding:3px 10px; border-radius:999px; color:var(--cp-soft); background:var(--cp-panel-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.chip-teste.urgente{ color:var(--st-teste); background:var(--st-teste-bg); border:1px solid rgba(255,196,90,.4); }
+.chip-teste.vencido{
+  color:var(--st-bloq); background:var(--st-bloq-bg); border:1px solid rgba(255,98,88,.5);
+  animation:cp1168PulsoVencido 1.6s ease-in-out infinite;
+}
+@keyframes cp1168PulsoVencido{
+  0%,100%{ box-shadow:0 0 0 0 rgba(255,98,88,.45); }
+  50%{ box-shadow:0 0 0 6px rgba(255,98,88,0); }
+}
+@media (prefers-reduced-motion: reduce){
+  .chip-teste.vencido{ animation:none; }
+}
+
 /* v1006/v1008 — painel administrativo legível E em escala no celular: cartão COMPACTO por
    corretor (nome + status na 1ª linha, dados numa linha de etiquetas, ações escondidas atrás
    do botão "Ações"), pensado pra lista com centenas/milhares de contas + "Mostrar mais". */
@@ -236,6 +272,9 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
   .tabela-admin td{ border-bottom:none; padding:0; font-size:13px; }
   .tabela-admin td:first-child{ display:block; font-weight:800; font-size:14.5px; margin-bottom:8px; }
   .tabela-admin td[data-rotulo]:not([data-rotulo=""]){ display:inline-flex; align-items:center; gap:6px; background:var(--cp-panel-2); border-radius:8px; padding:3px 9px; margin:0 6px 6px 0; font-size:12.5px; }
+  /* v1168 — "Dias de teste" já vem com seu próprio selinho colorido (.chip-teste); sem isto, o
+     celular desenhava selo dentro de selo (a caixa cinza genérica + o chip por dentro dela). */
+  .tabela-admin td[data-rotulo="Dias de teste"]{ background:none; padding:0; }
   .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .tabela-admin td[data-rotulo=""]::before{ content:none; }
   .tabela-admin td:last-child{ display:block; margin-top:2px; }

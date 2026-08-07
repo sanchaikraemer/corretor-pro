@@ -3216,6 +3216,17 @@ function renderBotoesHome(){
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
       .cp-hoje-done{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);color:var(--soft);font-size:13px;font-weight:700;text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
       .cp-hoje-vazio{padding:18px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;text-align:center;margin-bottom:8px}
+      /* v1168 — "Compromissos de hoje": faixa própria, cor diferente da "Ficaram de te dar uma
+         resposta" (que é coral/accent) pra não parecer a mesma coisa — aqui é hora marcada, ali é
+         prazo do cliente. Usa --acao (o mesmo verde da seção "Compromissos hoje" da tela Agenda). */
+      .cp1168-faixa{border:1px solid rgba(104,255,149,.32);background:rgba(104,255,149,.07);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+      .cp1168-tit{color:var(--acao);text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:11px;margin-bottom:8px}
+      .cp1168-row{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;border-bottom:1px solid rgba(255,255,255,.06);padding:8px 0;font:inherit;color:var(--text);text-align:left;cursor:pointer}
+      .cp1168-row:last-of-type{border-bottom:0}
+      .cp1168-hora{flex:0 0 auto;min-width:40px;font-size:12.5px;font-weight:950;color:var(--acao);font-variant-numeric:tabular-nums}
+      .cp1168-hora.cp1168-sem-hora{min-width:auto;font-size:16px;line-height:1}
+      .cp1168-nome{flex:0 1 auto;font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp1168-motivo{flex:1 1 auto;min-width:0;font-size:12px;color:var(--soft);font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       /* Mobile: 2 linhas — nome + dias em cima (nome ocupa a largura toda), barra + produto embaixo. */
       @media(max-width:560px){
         .cp-hoje-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nm dd" "bar pr";column-gap:10px;row-gap:5px;padding:12px 0}
@@ -3237,6 +3248,7 @@ function renderBotoesHome(){
       <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
     </div>
     ${barraBuscaLeadHTML("home")}
+    ${typeof cp1168FaixaHomeHTML === 'function' ? cp1168FaixaHomeHTML(items) : ""}
     ${typeof cp1160FaixaHomeHTML === 'function' ? cp1160FaixaHomeHTML(items) : ""}
     <div class="home-m1-list">${top3Html}</div>
   `;
@@ -10779,6 +10791,92 @@ window.cp1160FaixaHomeHTML = cp1160FaixaHomeHTML;
 window.cp1160BannerLeadHTML = cp1160BannerLeadHTML;
 window.cp1160Agendar = cp1160Agendar;
 
+// ===== v1168 — "Hoje na agenda" na Home: visível, não só o pontinho do sino =====
+//
+// Print do dono: "o aviso de agendamento para o dia esta muito singelo, apenas um pontinho
+// laranja ao lado do sino, eu nem percebo isso... e tem um agendamento pra hoje que vi por acaso
+// pq o sistema nao me alertou". Com razão: sem atraso, o sino só liga uma classe CSS que pinta um
+// pontinho — sem número, sem texto, do tamanho de uma migalha (ver updateBell). E o card "Agenda"
+// da Home mostra o total de TODOS os compromissos (hoje + futuros), sem separar o que é hoje.
+//
+// Esta faixa mostra, bem no topo da Home, exatamente quem tem lembrete ou compromisso pra HOJE —
+// mesma régua de "hoje" que a tela Agenda já usa (lembreteTs no dia corrente / confirmedAppointments
+// com "hoje" no texto), pra nunca dizer uma coisa aqui e outra lá.
+function cp1168ItensDeHoje(items){
+  if(!Array.isArray(items)) return [];
+  const iniHoje = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const fimHoje = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
+  const lista = [];
+  for(const l of items){
+    if(normalizarEtapa(l.etapa) === ETAPA_ARQUIVADO) continue;
+    // Já tratou este cliente hoje: o compromisso/lembrete de hoje já foi honrado, não precisa
+    // continuar cobrando na faixa (mesma régua de cp1160Pendentes).
+    if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) continue;
+    const lemTs = (typeof lembreteTs === 'function') ? lembreteTs(l) : NaN;
+    if(!isNaN(lemTs) && lemTs >= iniHoje && lemTs <= fimHoje){
+      const motivo = l.analysis?.lembrete?.motivo || "";
+      lista.push({ lead:l, horario: cp1168HoraCurta(lemTs), texto: motivo || "Lembrete marcado pra hoje", ts: lemTs });
+    }
+    const aps = l.analysis?.confirmedAppointments;
+    if(Array.isArray(aps)){
+      for(const ap of aps){
+        const texto = String(ap?.quando || "");
+        if(!/\bhoje\b/i.test(texto)) continue;
+        const horario = cp1168HoraDoTexto(texto);
+        // Com hora reconhecida, ordena por ela de verdade (senão "17h" aparecia ANTES de um
+        // lembrete das 12:30 — tudo compromisso caía no início, sempre, por sortear por
+        // "início do dia"). Sem hora no texto, vai pro fim da lista de hoje: mais vale mostrar
+        // primeiro quem tem hora marcada do que um item vago tipo "hoje, sem hora dita".
+        const ts = cp1168TsDeHojeComHora(horario);
+        lista.push({ lead:l, horario, texto: ap?.oQue || "Compromisso hoje", ts: ts == null ? fimHoje : ts });
+      }
+    }
+  }
+  lista.sort((a, b) => a.ts - b.ts);
+  return lista;
+}
+function cp1168HoraCurta(ts){
+  try{ return new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", hour:"2-digit", minute:"2-digit" }).format(new Date(ts)); }
+  catch(_){ return ""; }
+}
+// "hoje às 15h" → "15h"; "hoje 15:30" → "15:30". Sem hora no texto, devolve vazio (o card mostra
+// só um marcador, sem inventar horário nenhum).
+function cp1168HoraDoTexto(texto){
+  const m = /\b(\d{1,2})(?:[:h](\d{2}))?\s*h?\b/i.exec(String(texto || "").replace(/\bhoje\b/i, ""));
+  if(!m) return "";
+  const hh = String(m[1]).padStart(2, "0");
+  return m[2] ? `${hh}:${m[2]}` : `${hh}h`;
+}
+// "17h" / "12:30" (o formato que cp1168HoraDoTexto devolve) → timestamp de HOJE naquele horário.
+function cp1168TsDeHojeComHora(horaStr){
+  const m = /^(\d{1,2})(?::(\d{2}))?h?$/.exec(String(horaStr || ""));
+  if(!m) return null;
+  const d = new Date();
+  d.setHours(Number(m[1]), Number(m[2] || 0), 0, 0);
+  return d.getTime();
+}
+function cp1168FaixaHomeHTML(items){
+  const lista = cp1168ItensDeHoje(items).slice(0, 8);
+  if(!lista.length) return "";
+  const linhas = lista.map(({ lead, horario, texto }) => {
+    const idJs = JSON.stringify(String(lead.id || ""));
+    const horaHtml = horario
+      ? `<b class="cp1168-hora">${escapeHtml(horario)}</b>`
+      : `<b class="cp1168-hora cp1168-sem-hora">•</b>`;
+    return `<button type="button" class="cp1168-row" onclick='abrirLead(${idJs})'>
+      ${horaHtml}
+      <span class="cp1168-nome">${escapeHtml(lead.name || "Cliente")}</span>
+      <i class="cp1168-motivo">${escapeHtml(cp1160Trecho(texto, 60))}</i>
+    </button>`;
+  }).join("");
+  return `<div class="cp1168-faixa">
+    <div class="cp1168-tit">📅 Hoje na agenda · ${lista.length}</div>
+    ${linhas}
+  </div>`;
+}
+window.cp1168ItensDeHoje = cp1168ItensDeHoje;
+window.cp1168FaixaHomeHTML = cp1168FaixaHomeHTML;
+
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
 //   'programados' (Agenda): tem compromisso/lembrete marcado.
@@ -12842,7 +12940,10 @@ function ui670DetailRows(lead,mc){
     // COM atraso, o sino mostra o NÚMERO de atrasados e ganha a cor de risco.
     const atr = Number(state.agendaAtrasados) || 0;
     badge.hidden = !n;
-    badge.textContent = atr > 0 ? String(atr) : '';
+    // v1168 — antes, sem atraso, o texto ficava vazio (o CSS escondia o número mesmo). Agora que
+    // "hoje, no prazo" também ganhou número visível (ver styles.css #topBell.tem-alerta), precisa
+    // ter o QUE mostrar: a contagem de hoje (n já inclui atrasados, mas quando atr=0, n = agendaN).
+    badge.textContent = atr > 0 ? String(atr) : (n > 0 ? String(n) : '');
     bell.classList.toggle('tem-alerta', n > 0);
     bell.classList.toggle('tem-atraso', atr > 0);
     const label = atr > 0
