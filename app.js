@@ -8281,8 +8281,11 @@ async function acharLeadExistente(nome, idConhecido = ""){
       return { lead:porId, via: semDuvida ? "id-do-servidor" : "nome-parecido" };
     }
   }
-  if(alvo.length < 2) return null;
-  const exato = leads.find(l => l?.id && norm(l.name) === alvo);
+  // v1180 — nome sem identidade ("Cliente não identificado", "Contato", só número) não procura
+  // ninguém: dois cadastros com esse mesmo rótulo não são a mesma pessoa, e a busca exata logo
+  // abaixo os juntaria em silêncio — o mesmo estrago que a v1176 tirou do telefone.
+  if(alvo.length < 2 || nomeSemIdentidadeDeCliente(nome)) return null;
+  const exato = leads.find(l => l?.id && norm(l.name) === alvo && !nomeSemIdentidadeDeCliente(l.name));
   if(exato) return { lead:exato, via:"nome-exato" };
   const parecido = leads.find(l => l?.id && nomesParecemMesmoCliente(nome, l.name));
   return parecido ? { lead:parecido, via:"nome-parecido" } : null;

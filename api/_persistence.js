@@ -647,7 +647,11 @@ export function _nomeRuimIdentity(value = "") {
   const s = String(value || "").trim();
   const d = _digitsIdentity(s);
   const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, "");
-  return !s || /^cliente importad[oa]?$/i.test(s) || (d.length >= 8 && letras.length < 3);
+  // v1180 — "Cliente não identificado" entrou nesta lista: desde que a importação parou de chutar
+  // um nome quando não sabe de quem é a conversa (pickClientName, em _pipeline.js), esse rótulo
+  // pode aparecer em mais de um lead — e um nome sem identidade JAMAIS pode juntar dois cadastros.
+  return !s || /^(?:cliente(?:\s+(?:importad[oa]|n[ãa]o\s+identificad[oa]))?|contato)$/i.test(s)
+    || (d.length >= 8 && letras.length < 3);
 }
 
 // Só nomes tecnicamente iguais são candidatos. Nome parecido, contido ou com palavras
