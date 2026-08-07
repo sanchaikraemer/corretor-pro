@@ -7901,6 +7901,10 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   const normalizarAudio = (v) => String(v || "").split(/[\\/]/).pop().trim();
   const audios = audiosTodos.filter(nome => !transcriptionMap[normalizarAudio(nome)]?.text);
   const audiosReaproveitados = audiosTodos.length - audios.length;
+  // v1178 — quantos áudios ficaram SEM virar texto nesta importação e por quê (ver o bloco de
+  // transcrição logo abaixo). Sem isso o corretor só via o áudio sumir da análise, sem motivo.
+  let transcricaoLimiteDoDia = false;
+  let audiosSemTranscricao = 0;
 
   if(audios.length){
     // v1131 — era 3. A v1122 subiu a capacidade do SERVIDOR de 4 pra 10 áudios ao mesmo tempo pra
@@ -7923,6 +7927,18 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
       }
       if(!resposta) throw ultimoErro || new Error("Falha recuperável ao transcrever os áudios.");
       Object.assign(transcriptionMap, resposta.transcriptions || {});
+      // v1178 — "parou de transcrever os áudios?" (dono, 07/08/2026). O teto diário de transcrição
+      // (v1119) corta os áudios que passam da conta do dia e o servidor SEMPRE avisou isso nesta
+      // resposta — mas o aviso ficou marcado no código como "metadado pra um aviso futuro" e nunca
+      // chegou à tela. Quem importa via os áudios simplesmente não virarem texto, sem motivo
+      // nenhum. O futuro é agora: o motivo aparece durante o progresso e no resultado.
+      if(resposta.transcricaoLimiteAtingido === true) transcricaoLimiteDoDia = true;
+    }
+    audiosSemTranscricao = audios.filter(nome => !transcriptionMap[normalizarAudio(nome)]?.text).length;
+    if(audiosSemTranscricao){
+      renderEtapas(3, transcricaoLimiteDoDia
+        ? `${audiosSemTranscricao} ${pl(audiosSemTranscricao, "áudio ficou", "áudios ficaram")} sem transcrever — teto de áudios do dia atingido`
+        : `${audiosSemTranscricao} ${pl(audiosSemTranscricao, "áudio não pôde ser transcrito", "áudios não puderam ser transcritos")}`);
     }
   }else{
     renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} ${pl(audiosReaproveitados, "transcrição reaproveitada", "transcrições reaproveitadas")}` : "sem áudio para transcrever");
@@ -7986,6 +8002,10 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     throw erro;
   }
   result.importId = importId;
+  // v1178 — vai junto pro resultado: é o que a tela usa pra dizer, em português, por que um áudio
+  // desta conversa não virou texto (ver renderProcessedResult).
+  result.audiosSemTranscricao = audiosSemTranscricao;
+  result.transcricaoLimiteDoDia = transcricaoLimiteDoDia;
   // v1069 — bug real relatado pelo dono: "Análises feitas" (Desempenho) só contava reanálise
   // manual de um lead já existente (ui670Reanalisar); a análise que a IA faz
   // em TODA importação nova (esta etapa "analisar", que roda pra cada ZIP processado) nunca
@@ -8009,6 +8029,17 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     : "";
   renderEtapas(5, resumoEtapa ? `preparando pra salvar · ${resumoEtapa}` : "preparando pra salvar");
   return result;
+}
+
+// v1178 — resumo curto de áudio que não virou texto, pra linha final da tela de importação (a
+// que FICA na tela em "Concluído"). O quadro completo, com o motivo, sai no resultado da
+// importação — mas o corretor quase sempre lê só esta linha antes de o cliente abrir.
+function cpResumoAudioSemTexto(result){
+  const n = Number(result?.audiosSemTranscricao) || 0;
+  if(!n) return "";
+  return result?.transcricaoLimiteDoDia === true
+    ? `${n} ${pl(n, "áudio ficou", "áudios ficaram")} sem transcrever (teto de áudios do dia)`
+    : `${n} ${pl(n, "áudio não virou texto", "áudios não viraram texto")}`;
 }
 
 // ============ RENDERIZAÇÃO + SALVAR/DESCARTAR ============
@@ -8052,6 +8083,26 @@ async function renderProcessedResult(data, meta){
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
+  // v1178 — ÁUDIO QUE NÃO VIROU TEXTO AGORA DIZ POR QUÊ.
+  //
+  // "ta louco cara? parou de transcrever os áudios?" (dono, 07/08/2026). O app tinha três motivos
+  // possíveis pra um áudio não virar texto — teto de áudios do dia (v1119), transcrição indisponível
+  // e erro na transcrição — e NÃO MOSTRAVA NENHUM. O áudio simplesmente não aparecia na análise.
+  // Quem usa não tem como adivinhar: ou o motivo está escrito na tela, ou o app "parou de funcionar".
+  const semTranscricao = Number(data.audiosSemTranscricao) || 0;
+  const audiosComErro = Number(data.audiosComErro) || 0;
+  let motivoAudio = "";
+  if(data.transcricaoLimiteDoDia === true){
+    motivoAudio = `<b>Teto de áudios do dia atingido.</b> ${semTranscricao} ${pl(semTranscricao, "áudio ficou", "áudios ficaram")} sem transcrever hoje — o texto deles não entrou nesta análise. Importe esta conversa de novo amanhã que eles entram (o que já foi transcrito não é cobrado de novo).`;
+  } else if(data.transcriptionEnabled === false){
+    motivoAudio = `<b>Transcrição de áudio indisponível agora.</b> ${semTranscricao || "Os"} ${pl(semTranscricao || 2, "áudio ficou", "áudios ficaram")} sem virar texto e não entraram na análise.`;
+  } else if(semTranscricao > 0 || audiosComErro > 0){
+    const quantos = semTranscricao || audiosComErro;
+    motivoAudio = `<b>${quantos} ${pl(quantos, "áudio não pôde ser transcrito", "áudios não puderam ser transcritos")}.</b> O texto deles não entrou nesta análise.${data.primeiroErroAudio ? ` Motivo do primeiro: ${escapeHtml(String(data.primeiroErroAudio))}` : ""}`;
+  }
+  const audioSemTextoHtml = motivoAudio
+    ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8">⚠️ ${motivoAudio}</div>`
+    : "";
   const inc = data.incrementalMeta || {};
   const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>Nada novo nesta conversa:</b> a análise que já estava salva foi mantida e nenhuma análise nova foi gerada (nada a pagar por retrabalho)." : " Havia novidade, então a análise foi refeita sobre a conversa completa."}</div>` : "";
 
@@ -8093,7 +8144,7 @@ async function renderProcessedResult(data, meta){
     `<b>Áudios no histórico:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
     `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
-    janelaHtml + semMidiaHtml + incrementalHtml +
+    janelaHtml + semMidiaHtml + audioSemTextoHtml + incrementalHtml +
     `</div>` +
     cpPreviaCerebroHTML(analysis) +
     cpUpgradeProHTML(analysis) +
@@ -8389,7 +8440,9 @@ async function atualizarLeadComEvolucao(){
               ? "sem mensagem nova; análise refeita (a salva estava incompleta)"
               : `${nMsgFim} ${pl(nMsgFim, "mensagem nova incorporada", "mensagens novas incorporadas")}`))
       : "";
-    renderEtapas(6, resumoFim ? `lead atualizado · ${resumoFim}` : "lead atualizado e importação confirmada");
+    const audioFim = cpResumoAudioSemTexto(importacaoConcluida?.result);
+    const linhaFim = [resumoFim, audioFim].filter(Boolean).join(" · ");
+    renderEtapas(6, linhaFim ? `lead atualizado · ${linhaFim}` : "lead atualizado e importação confirmada");
     // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
     // aparecer; ver a marcação "concluidaComSucesso" em processFile.
     qs("#importCard")?.classList.remove("cp-import-rodando");
@@ -8489,7 +8542,8 @@ async function salvarLeadPendente(){
     // Local e rápida (IndexedDB/cache): continua esperada, senão um ZIP antigo pode ser
     // reprocessado depois — importação paga de novo.
     if(shareConcluidoId) await finalizarSharePendente(shareConcluidoId);
-    renderEtapas(6, "lead salvo e importação confirmada");
+    const audioFimNovo = cpResumoAudioSemTexto(importacaoConcluida?.result);
+    renderEtapas(6, audioFimNovo ? `lead salvo · ${audioFimNovo}` : "lead salvo e importação confirmada");
     // v1080 — só agora (importação de verdade concluída) o card de instruções volta a
     // aparecer; ver a marcação "concluidaComSucesso" em processFile.
     qs("#importCard")?.classList.remove("cp-import-rodando");
