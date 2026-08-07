@@ -50,6 +50,17 @@ function bancoFalso({ migracaoAplicada, registro }) {
           return {
             eq(coluna) {
               // 1º eq = organization_id. O 2º (se houver) é a coluna indexada.
+              // Exceção (v1163): a releitura dirigida a um lead só filtra por `id` e, desde a
+              // v1163, também por `organization_id` (o backend usa a chave de serviço, que passa
+              // por cima da RLS — toda consulta filtra por empresa). Esse segundo eq não é
+              // coluna de deduplicação nenhuma; é a mesma releitura de sempre.
+              if (coluna === "id") {
+                return {
+                  eq: () => ({ order: () => ({ limit: resolver([linha]) }), limit: resolver([linha]) }),
+                  order: () => ({ limit: resolver([linha]) }),
+                  limit: resolver([linha])
+                };
+              }
               return {
                 eq(colIndexada, valor) {
                   registro.indexadas.push(colIndexada);

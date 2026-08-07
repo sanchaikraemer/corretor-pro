@@ -876,10 +876,15 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     let ultimoErro = null;
     for (let tentativa = 0; tentativa < 3; tentativa++) {
       if (tentativa) await new Promise(r => setTimeout(r, 300 * tentativa));
+      // v1163 — o filtro por empresa vai junto por princípio, não porque falte aqui: o `row.id`
+      // veio de uma busca que já filtrou a empresa. Mas o backend usa a chave de serviço, que
+      // passa por cima da RLS — a parede entre contas depende de TODA consulta filtrar. Uma
+      // consulta sem o filtro, mesmo inofensiva hoje, é o molde que alguém copia amanhã.
       const { data: cheio, error: erroTl } = await supabase
         .from("whatsapp_processamentos")
         .select("id,timeline_json,resultado_analise")
         .eq("id", row.id)
+        .eq("organization_id", organizationId)
         .order("atualizado_em", { ascending: false })
         .limit(1);
       if (erroTl) { ultimoErro = new Error(erroTl.message); continue; }
