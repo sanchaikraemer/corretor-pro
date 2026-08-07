@@ -10,7 +10,7 @@ import { resolveOrganizationId, EMPRESA_PRINCIPAL_ID } from "./_persistence.js";
 import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, mergeStorageRefs, _nomeIdentity, _nomeRuimIdentity, _nomesMesmoLead, _assinaturaTimelineV681, _mesclarTimelinesV681, _mesclarAnaliseV681 } from "./_persistence.js";
 import { randomUUID } from "node:crypto";
 import {
-  getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial,
+  getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial, corrigirNomeDoCliente,
   ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
   upsertConfigComOrganizacao, invalidarConhecimentoCorretorCache
 } from "./_pipeline.js";
@@ -759,7 +759,18 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
   // Reimportar NÃO deve trocar o nome que o corretor já curou na carteira. O nome salvo no
   // contato do WhatsApp costuma vir bagunçado ("Elisandro Altmann Altan"); o nome que já
   // estava no lead manda. Só adota o nome do arquivo quando o do lead estava vazio/ruim.
-  if (!nomeRuim(nomeAnterior)) {
+  // v1179 — exceção única: quando o nome salvo é o rótulo de OUTRO participante desta mesma
+  // conversa, ele não é "nome curado pelo corretor", é o palpite errado de uma importação antiga
+  // (cartão nomeado com quem fez a abordagem em vez de quem respondeu). Aí a leitura nova da
+  // conversa, já conferida contra os autores reais, tem prioridade. Nome digitado na tela "Editar"
+  // não bate com autor nenhum e continua intocado.
+  const autoresDaConversa = [...new Set((Array.isArray(novaTimeline) ? novaTimeline : [])
+    .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
+  const nomeCorrigido = corrigirNomeDoCliente(nomeAnterior, nova?.clienteConfirmado, autoresDaConversa, "");
+  if (nomeCorrigido) {
+    merged.clientName = nomeCorrigido;
+    merged.lead = { ...(merged.lead || {}), clientName: nomeCorrigido };
+  } else if (!nomeRuim(nomeAnterior)) {
     merged.clientName = nomeAnterior;
     merged.lead = { ...(merged.lead || {}), clientName: nomeAnterior };
   }

@@ -478,31 +478,105 @@ function detectProduct(fullText = "") {
   return "Não identificado";
 }
 
-function pickClientName(authors = [], corretorNome = "") {
+// v1179 — QUEM FALOU PRIMEIRO NÃO É, NECESSARIAMENTE, O CLIENTE.
+//
+// Print do dono (07/08/2026, versão 1178): o cartão abriu com o nome de uma pessoa no topo e a
+// análise inteira — inclusive as três mensagens sugeridas — falando de OUTRA. Causa: o nome do
+// cliente era simplesmente o PRIMEIRO autor que aparecia na conversa e que não batesse com o nome
+// do corretor configurado no Cérebro. Numa prospecção ativa quem fala primeiro é justamente o lado
+// da empresa (a abordagem "temos oportunidades, é pra morar ou investir?"), então o cadastro
+// nascia com o nome de quem prospectou e o cliente de verdade — o que respondeu — ficava sem
+// cartão nenhum. Bastava o rótulo do lado da empresa ser diferente do nome do Cérebro (outro
+// corretor da equipe, número do plantão, nome comercial) pra o filtro antigo não pegar.
+//
+// Duas fontes novas, nesta ordem, e sempre conferidas contra os autores REAIS da conversa:
+//   1. quem a análise identificou como cliente (nomeClienteConfirmadoPelaConversa, abaixo);
+//   2. o nome do arquivo exportado — "Conversa do WhatsApp com Fulano.txt". O WhatsApp SEMPRE
+//      nomeia o arquivo com o contato do outro lado, nunca com quem exportou.
+// Sem nenhuma das duas, continua valendo a regra antiga (primeiro autor que não é a empresa).
+export function contatoDoArquivoExportado(nomeArquivo = "") {
+  let t = String(nomeArquivo || "").split(/[\\/]/).pop().trim()
+    .replace(/\.(zip|txt)$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  for (let i = 0; i < 3; i++) t = t.replace(/\s*(?:enxuto|\(\d+\))$/i, "").trim();
+  // Só vale quando a embalagem do WhatsApp estiver realmente lá: um arquivo com nome qualquer
+  // ("leads.txt") não diz nada sobre quem é o contato e não pode virar nome de cliente.
+  const m = t.match(/^(?:conversa\s+d[oe](?:\s+whatsapp)?\s+com|whatsapp\s+chat\s+(?:with|-)|chat\s+de\s+whatsapp\s+con)\s+(.+)$/i);
+  return m ? String(m[1] || "").trim() : "";
+}
+
+function _chaveAutor(valor = "") {
+  const s = String(valor || "").trim();
+  const digitos = s.replace(/\D/g, "");
+  // Contato não salvo na agenda vem como número, e o mesmo número pode estar escrito de jeitos
+  // diferentes no nome do arquivo e no rótulo da mensagem ("+55 54 99913-3331" / "5554999133331").
+  if (digitos.length >= 8 && s.replace(/[^a-zA-ZÀ-ÿ]/g, "").length < 3) return digitos.slice(-8);
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function autorCorrespondente(authors = [], nomeProcurado = "") {
+  const alvo = _chaveAutor(nomeProcurado);
+  if (!alvo) return "";
+  const lista = (Array.isArray(authors) ? authors : []).filter(a => String(a || "").trim());
+  return lista.find(a => _chaveAutor(a) === alvo)
+    // O rótulo da mensagem e o nome do arquivo saem do mesmo contato da agenda, mas o WhatsApp
+    // corta nomes muito longos no nome do arquivo — aceita também um lado contendo o outro.
+    || lista.find(a => { const k = _chaveAutor(a); return k && alvo && (k.startsWith(alvo + " ") || alvo.startsWith(k + " ")); })
+    || "";
+}
+
+function ehLadoDaEmpresa(autor = "", corretorNome = "") {
+  const s = String(autor || "").trim();
+  if (!s) return false;
+  if (/^(?:sistema|atendimento\s*\(corretor\))$/i.test(s)) return true;
+  const corretor = String(corretorNome || "").trim().toLowerCase();
+  const sLower = s.toLowerCase();
+  return !!(corretor && (sLower === corretor || sLower.includes(corretor)));
+}
+
+// Confere o nome que a análise apontou como cliente contra os autores REAIS da conversa e devolve
+// o rótulo exato do autor (nunca um nome inventado, nunca um nome citado só dentro de uma
+// mensagem). "" quando a análise não identificou ou apontou alguém que não fala na conversa.
+export function nomeClienteConfirmadoPelaConversa(nomeApontado = "", authors = [], corretorNome = "") {
+  const autor = autorCorrespondente(authors, nomeApontado);
+  if (!autor) return "";
+  if (ehLadoDaEmpresa(autor, corretorNome)) return "";
+  return String(autor).trim();
+}
+
+// O nome salvo no cartão só é trocado quando o que está lá é, comprovadamente, o rótulo de OUTRO
+// participante da mesma conversa (ou seja: veio do palpite da importação, não da mão do corretor).
+// Nome digitado por ele na tela "Editar" não bate com nenhum autor e nunca é mexido aqui.
+export function corrigirNomeDoCliente(nomeAtual = "", nomeApontado = "", authors = [], corretorNome = "") {
+  const confirmado = nomeClienteConfirmadoPelaConversa(nomeApontado, authors, corretorNome);
+  if (!confirmado) return "";
+  const atual = String(nomeAtual || "").trim();
+  if (_chaveAutor(atual) === _chaveAutor(confirmado)) return "";
+  const atualEhOutroParticipante = !!autorCorrespondente(authors, atual);
+  const atualEhPalpitePerdido = !atual || /^cliente( n[ãa]o identificado| importad[oa])?$/i.test(atual);
+  return (atualEhOutroParticipante || atualEhPalpitePerdido) ? confirmado : "";
+}
+
+function pickClientName(authors = [], corretorNome = "", nomeArquivo = "") {
   // O nome importado é dado de origem: deve permanecer exatamente como aparece no TXT.
   // Só excluímos autores inequivocamente pertencentes ao lado da empresa; não corrigimos,
   // abreviamos nem retiramos palavras que possam fazer parte do nome salvo no WhatsApp.
   // corretorNome vem do Cérebro configurado por organização — nunca cravado no código.
-  const businessHints = /^(?:sistema|atendimento\s*\(corretor\))$/i;
-  const corretor = String(corretorNome || "").trim().toLowerCase();
-  const ehLadoDaEmpresa = (a) => {
-    const s = String(a || "").trim();
-    if (!s) return false;
-    if (businessHints.test(s)) return true;
-    const sLower = s.toLowerCase();
-    return !!(corretor && (sLower === corretor || sLower.includes(corretor)));
-  };
-  const raw = authors.find(a => String(a || "").trim() && !ehLadoDaEmpresa(a))
+  const doArquivo = autorCorrespondente(authors, contatoDoArquivoExportado(nomeArquivo));
+  if (doArquivo && !ehLadoDaEmpresa(doArquivo, corretorNome)) return String(doArquivo).trim();
+  const raw = authors.find(a => String(a || "").trim() && !ehLadoDaEmpresa(a, corretorNome))
     || authors.find(Boolean)
     || "Cliente não identificado";
   return String(raw).trim() || "Cliente não identificado";
 }
 
-export function guessLeadData(timeline, corretorNome = "") {
+export function guessLeadData(timeline, corretorNome = "", nomeArquivo = "") {
   const authors = [...new Set(timeline.map(m => m.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
   const fullText = timeline.map(m => m.text).join(" ");
   const lastInteraction = [...timeline].reverse().find(m => m.type !== "audio_unlinked") || timeline[timeline.length - 1] || null;
-  const clientName = pickClientName(authors, corretorNome);
+  const clientName = pickClientName(authors, corretorNome, nomeArquivo);
   return {
     clientName,
     // v1176 — só o telefone do PRÓPRIO contato exportado (ver telefoneDoContatoExportado).
@@ -2693,8 +2767,19 @@ atual é não mandar nenhuma agora. Quando houver motivo real para contato (perg
 compromisso vencendo, prazo batendo, material a enviar, ou simplesmente nenhum sinal de que o
 cliente pediu espaço), preencha "recomendacaoContato":{"aguardar":false,"motivo":""}.
 
+QUEM É O CLIENTE (identidade — copiar, nunca deduzir nem inventar): o cartão do app é do CLIENTE, e
+numa conversa exportada os dois lados aparecem com o nome com que estão salvos no celular. Quem faz a
+ABORDAGEM (apresenta empreendimento, oferece oportunidade, pergunta se é pra morar ou investir,
+promete enviar material) é o CORRETOR/EMPRESA — mesmo quando é ele quem fala primeiro e mesmo quando o
+nome dele não é o do corretor informado acima (pode ser outro corretor da equipe, o plantão ou um nome
+comercial). Preencha "quemEhOCliente" copiando EXATAMENTE, letra por letra, o rótulo de autor do lado
+CLIENTE como ele aparece na conversa (o texto que vem antes dos dois-pontos na linha da mensagem). Não
+traduza, não abrevie, não corrija e NUNCA use um nome que apareça apenas dentro do texto de uma
+mensagem. Se os dois lados forem ambíguos, use exatamente "Não identificado".
+
 Formato JSON obrigatório:
 {
+  "quemEhOCliente":"texto",
   "summary":"texto",
   "diagnostico":{
     "ultimaPessoaFalar":"contato ou corretor",
@@ -2788,6 +2873,13 @@ ${timelineText}`;
     // "completar" — na ausência, fica "Não identificado" (cautela, não invenção).
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
 
+    // v1179 — o nome que a IA apontou como cliente só sai daqui depois de conferido contra os
+    // autores REAIS desta conversa: precisa ser o rótulo exato de quem fala nela e não pode ser o
+    // lado da empresa. Nome inventado, traduzido ou citado só dentro de uma mensagem morre aqui.
+    const autoresDaConversa = [...new Set(timelineArr
+      .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
+    const clienteConfirmado = nomeClienteConfirmadoPelaConversa(clean(raw.quemEhOCliente, ""), autoresDaConversa, corretorNome);
+
     // Nenhuma sugestão de mensagem é reinterpretada, corrigida ou substituída pelo código.
     // A única validação local é técnica: presença das três sugestões.
     const trioOk = validacaoMensagens.ok;
@@ -2802,6 +2894,9 @@ ${timelineText}`;
       // mostrar no cabeçalho do lead ("Última análise" ficava sempre vazia nesse caso).
       geradoEm: new Date().toISOString(),
       summary: clean(raw.summary),
+      // v1179 — quem a IA reconheceu como CLIENTE nesta conversa, já conferido contra os autores
+      // reais dela ("" quando não deu pra confirmar). É o que conserta cartão com o nome trocado.
+      clienteConfirmado,
       // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
       // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
       ...(modeloFallbackUsado ? { modeloFallback: true } : {}),
@@ -3237,7 +3332,9 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   return {
     txtFile: txtName,
     messages,
-    leadPreliminar: guessLeadData(messages, corretorNomePreliminar),
+    // v1179 — o nome do arquivo exportado entra no palpite: o WhatsApp sempre nomeia o arquivo com
+    // o contato do outro lado, então ele diz quem é o cliente mesmo quando o corretor falou primeiro.
+    leadPreliminar: guessLeadData(messages, corretorNomePreliminar, txtName),
     audioFilesRelevantes: audioFilesRelevantes.map(normalizeName),
     audiosParaTranscrever: audiosParaTranscrever.map(normalizeName),
     audioFilesForaDaJanela: audioFilesForaDaJanela.map(normalizeName),
@@ -3454,7 +3551,7 @@ export async function finalizarAnaliseDaConversa(payload) {
   // Nome do corretor vem do Cérebro da própria organização — nunca cravado no código — pra
   // identificar corretamente quem é "o negócio" ao adivinhar o nome do cliente na conversa.
   const corretorNomeGuess = (await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null))?.corretorNome || "";
-  const lead = guessLeadData(timeline, corretorNomeGuess);
+  const lead = guessLeadData(timeline, corretorNomeGuess, txtFile);
 
   let analysis;
   let analiseReutilizada = false;
@@ -3485,6 +3582,19 @@ export async function finalizarAnaliseDaConversa(payload) {
     analiseReutilizada = true;
   } else {
     analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  }
+
+  // v1179 — a análise leu a conversa inteira e sabe quem prospectou e quem respondeu; o palpite da
+  // importação só olhou a ordem dos autores. Quando os dois discordam E o nome apontado é o rótulo
+  // exato de um autor desta conversa, quem manda é a análise: era exatamente o caso do print do
+  // dono (cartão com o nome de quem abordou, resumo e mensagens falando do cliente que respondeu).
+  const nomeCorrigidoPelaAnalise = corrigirNomeDoCliente(
+    lead.clientName, analysis?.clienteConfirmado, lead.participants, corretorNomeGuess
+  );
+  if (nomeCorrigidoPelaAnalise) {
+    lead.clientName = nomeCorrigidoPelaAnalise;
+    lead.phone = telefoneDoContatoExportado(nomeCorrigidoPelaAnalise);
+    lead.nomeCorrigidoPelaConversa = true;
   }
 
   const audioValues = Object.values(transcriptionMap || {});

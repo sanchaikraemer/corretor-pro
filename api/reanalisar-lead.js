@@ -1,6 +1,6 @@
 import { resolveOrganizationId } from "./_persistence.js";
 import { getSupabaseAdmin } from "./_persistence.js";
-import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, marcarAprendizadoPendente, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
+import { analyzeWithBrain, getOpenAI, resumirAtendimento, atualizarConhecimentoCorretor, finalizarAnaliseComercial, marcarAprendizadoPendente, corrigirNomeDoCliente, ARQUITETURA_MENSAGENS_ATUAL } from "./_pipeline.js";
 import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR, commercialSchemaFrom, stampCommercialSchema } from "../js/commercial-schema.js";
 
 function textoLimpo(v) { return String(v || "").trim(); }
@@ -651,6 +651,22 @@ async function reanalisarLeadHandler702(req, res) {
     aprendizado: freshPrevious.aprendizado || undefined,
     reanalisadoEm: new Date().toISOString()
   };
+  // v1179 — CARTÃO COM O NOME DA PESSOA ERRADA SE CONSERTA NO "REANALISAR".
+  //
+  // A regra de cima (preservar o nome salvo) existe pra reanálise nunca apagar o nome curado pelo
+  // corretor — e continua valendo. Ela só abre exceção quando o nome salvo é o rótulo de OUTRO
+  // participante desta mesma conversa: isso não é nome curado, é o palpite errado da importação
+  // (o print do dono: cartão nomeado com quem fez a abordagem, análise inteira sobre quem
+  // respondeu). Nome digitado na tela "Editar" não bate com autor nenhum e não é tocado aqui.
+  const autoresDaConversa = [...new Set((Array.isArray(timelineFinal) ? timelineFinal : [])
+    .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
+  const nomeCorrigido = corrigirNomeDoCliente(
+    merged.clientName, novoAnalysis?.clienteConfirmado, autoresDaConversa, cerebroConfig?.corretorNome || ""
+  );
+  if (nomeCorrigido) {
+    merged.clientName = nomeCorrigido;
+    merged.lead = { ...(merged.lead || {}), clientName: nomeCorrigido };
+  }
   merged = finalizarAnaliseComercial(merged, leadModelo, timelineFinal);
   merged = garantirMensagensMotorComercialV714(merged, leadModelo);
   // v750: sem enriquecimento/fallback determinístico antigo.
