@@ -101,7 +101,8 @@ Duas coisas:
 
 - **Os campos em branco foram preenchidos.** As páginas estavam **no ar** mostrando literalmente
   `[razão social / CNPJ ou CPF do responsável]` e `[e-mail de contato/DPO]` pra qualquer visitante.
-  Agora identificam **Sanchai Kraemer, CPF 004.038.720-81** e o e-mail de contato
+  Agora identificam **Sanchai Kraemer** (na v1084 o texto trazia também o CPF completo; a v1164
+  tirou o número das páginas e desta nota — ver `NOTAS-v1164.md`) e o e-mail de contato
   **sanchaikraemer3@gmail.com**. O aviso de que um advogado ainda deve revisar o texto continua no
   topo — isso é recomendação, não campo em branco.
 - **Agora dá pra achar as páginas.** O único link pra elas ficava no rodapé da tela de *criar
