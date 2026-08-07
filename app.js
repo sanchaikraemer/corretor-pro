@@ -2,6 +2,7 @@ import { state } from './js/state.js?v=__VERSION__';
 import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commercial-schema.js?v=__VERSION__';
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
 import { configurarEscolhaTema } from './js/tema.js?v=__VERSION__';
+import { garantirDonoDosDadosLocais, aoSairDaConta } from './js/dados-locais.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
 import './js/pwa-install.js?v=__VERSION__';
 
@@ -60,6 +61,12 @@ import './js/pwa-install.js?v=__VERSION__';
       : confirm("Sair desta conta neste aparelho?");
     if (!ok) return;
     try { await window.__cpSupabaseClient?.auth?.signOut(); } catch(_) {}
+    // v1165 — sair da conta apaga também o que ficou GUARDADO NESTE APARELHO: o Cérebro em cópia
+    // local, a importação pendente, o ZIP compartilhado que ainda não foi processado e o retrato
+    // do lembrete diário (que guarda nome de cliente). Antes disso, tudo continuava aqui e podia
+    // aparecer pra próxima pessoa que entrasse neste celular. Nunca pode impedir a saída: se algo
+    // falhar, o redirecionamento acontece do mesmo jeito.
+    try { await aoSairDaConta(); } catch(_) {}
     window.location.href = "/entrar.html";
   };
   (async function cpCarregarContaLogada(){
@@ -68,6 +75,11 @@ import './js/pwa-install.js?v=__VERSION__';
       if (!cliente) return;
       const { data } = await cliente.auth.getSession();
       if (!data?.session) return;
+      // v1165 — rede de segurança: se este aparelho estava carimbado com OUTRA conta (uma sessão
+      // que trocou sem passar por entrar.html/cadastro.html), o que era da conta anterior é
+      // apagado aqui, antes de o app usar qualquer cópia local. O caminho normal já limpa na
+      // própria tela de entrada; isto cobre o resto.
+      try { await garantirDonoDosDadosLocais(data.session.user?.id); } catch(_) {}
       const btn = document.getElementById("btnSairConta");
       if (btn) btn.style.display = "";
       // O cartão "Conta" da tela Menu (Mais) só existe pra quem está logado — foi lá que o

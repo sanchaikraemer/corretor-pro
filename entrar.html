@@ -127,6 +127,15 @@ async function entrar() {
     // pode ocorrer em bases antigas/migradas), busca todos e usa o mais recente — nunca "o
     // primeiro que o banco devolver" (ordem não é garantida sem order()).
     const meuId = loginData.user.id;
+
+    // v1165 — se este aparelho estava com os dados de OUTRA conta guardados (Cérebro em cópia
+    // local, importação pendente, ZIP compartilhado, nomes de clientes do lembrete), eles são
+    // apagados AGORA, antes de o app abrir. É esta a passagem em que o aparelho troca de dono.
+    // Nunca pode impedir o login: se falhar, o acesso continua.
+    try {
+      const dadosLocais = await import('./js/dados-locais.js?v=__VERSION__');
+      await dadosLocais.garantirDonoDosDadosLocais(meuId);
+    } catch (_) {}
     const buscarVinculo = () => supabaseClient
       .from('memberships')
       .select('papel, criado_em, organizations(id, nome, status, trial_expira_em)')

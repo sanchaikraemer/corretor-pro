@@ -8,7 +8,7 @@ const CORE_ASSETS = [
   // v1107 — faltavam no pacote offline: tema.js e commercial-schema.js são imports estáticos do
   // app.js (sem eles o módulo inteiro não executa), supabase.js e contas-config.js são <script>
   // do index.html. Sem os 4, o app instalado abria offline mas travava em "Carregando os leads...".
-  '/js/tema.js?v=__VERSION__', '/js/commercial-schema.js?v=__VERSION__',
+  '/js/tema.js?v=__VERSION__', '/js/commercial-schema.js?v=__VERSION__', '/js/dados-locais.js?v=__VERSION__',
   '/vendor/supabase.js?v=__VERSION__', '/contas-config.js?v=__VERSION__',
   '/share.html', '/manifest.json', '/service-worker.js', '/icon-192.png?v=__VERSION__', '/logo-cp.png?v=__VERSION__',
   '/icon-512.png?v=__VERSION__', '/favicon.png?v=__VERSION__'
