@@ -10,10 +10,18 @@ const admin = fs.readFileSync(new URL('../admin-plataforma.html', import.meta.ur
 const css = fs.readFileSync(new URL('../contas-estilo.css', import.meta.url), 'utf8');
 
 // 1. celulaUsoIA existe e cobre os 3 estados: ainda não carregou / sem uso hoje / com uso.
+// v1173 — o título passou a listar a categoria (análise pedida x aprendizado automático x
+// outros), via resumoCategorias/NOME_CATEGORIA_USO_IA — extrai as três junto, na ordem certa
+// (resumoCategorias depende de NOME_CATEGORIA_USO_IA já existir no escopo).
 const fnMatch = admin.match(/function celulaUsoIA\(e\) \{[\s\S]*?\n\}/);
+const nomeCatMatch = admin.match(/const NOME_CATEGORIA_USO_IA[^\n]*\n/);
+const resumoFnMatch = admin.match(/function resumoCategorias\(categorias\) \{[\s\S]*?\n\}/);
 assert.ok(fnMatch, 'celulaUsoIA não encontrada em admin-plataforma.html');
+assert.ok(nomeCatMatch && resumoFnMatch, 'resumoCategorias/NOME_CATEGORIA_USO_IA não encontrados (usados pelo título de celulaUsoIA)');
 
 const sandbox = new Function('escapeHtml', 'formatarReais', 'usoIaPorConta', `
+  ${nomeCatMatch[0]}
+  ${resumoFnMatch[0]}
   ${fnMatch[0]}
   return celulaUsoIA;
 `);
@@ -31,10 +39,17 @@ const formatarReais = (v) => 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',')
   assert.match(html, /Sem uso hoje/, 'zero chamadas precisa dizer isso claramente, não mostrar "R$ 0,00" (que parece bug)');
 }
 {
-  const celulaUsoIA = sandbox(escapeHtml, formatarReais, { x: { hoje: { chamadas: 8, custoEstimadoBRL: 1.9 } } });
+  const categoriasHoje = {
+    analise: { chamadas: 2, custoEstimadoBRL: 0.4 },
+    aprendizado: { chamadas: 6, custoEstimadoBRL: 1.5 },
+    transcricao: { chamadas: 0, custoEstimadoBRL: 0 },
+    outros: { chamadas: 0, custoEstimadoBRL: 0 }
+  };
+  const celulaUsoIA = sandbox(escapeHtml, formatarReais, { x: { hoje: { chamadas: 8, custoEstimadoBRL: 1.9 }, categoriasHoje } });
   const html = celulaUsoIA({ id: 'x' });
-  assert.match(html, /R\$ 1,90/, 'com uso, o custo estimado de hoje precisa aparecer');
-  assert.match(html, /8 chamadas de IA hoje/, 'o título precisa dar o detalhe (nº de chamadas) pra quem passar o mouse/tocar e segurar');
+  assert.match(html, /R\$ 1,90/, 'com uso, o custo estimado TOTAL de hoje precisa aparecer no texto visível');
+  assert.match(html, /2 análise pedida/, 'o título precisa separar quanto foi análise pedida de propósito');
+  assert.match(html, /6 aprendizado automático/, 'o título precisa separar quanto foi aprendizado automático (rodou sozinho)');
 }
 
 // 2. A célula entra na lista principal (renderizarPainel), não só na tabela separada.

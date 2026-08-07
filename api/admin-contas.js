@@ -60,6 +60,20 @@ function formatarAcumuladorUsoIA(acc) {
   };
 }
 
+// v1173 — pedido do dono, depois de ver o custo total por conta e desconfiar: "cada análise
+// custava centavos, como agora passa de 1 real cada?". A resposta era que "chamadas" somava
+// análise pedida de propósito (rota "analise") JUNTO com o aprendizado automático que roda sozinho
+// lendo o histórico inteiro (rota "inteligencia-observada", ver extrairInteligenciaObservada em
+// _pipeline.js) — sem separar isso, dividir custo-total-da-conta por "análises que eu lembro de
+// ter pedido" dá um número muito maior que o custo real de uma análise. Esta função classifica
+// CADA evento numa categoria, pra separar o que a pessoa pediu do que rodou sozinho.
+function categoriaDoEvento(evento) {
+  if (evento.kind === "whisper") return "transcricao";
+  if (evento.rota === "analise") return "analise";
+  if (evento.rota === "inteligencia-observada") return "aprendizado";
+  return "outros"; // conhecimento-corretor, resumir-atendimento, diagnostico-testar-ia
+}
+
 // Lê a tabela em páginas de 1000 (mesmo padrão de api/leads-recentes.js) — os últimos N dias de
 // telemetria de uma plataforma nova não devem passar disso tão cedo, mas não é seguro assumir.
 async function lerEventosUsoIA(supabase, desdeISO) {
@@ -94,23 +108,39 @@ async function relatorioUsoIA(req, res, supabase) {
   if (!eventos.ok) return json(res, 500, { ok: false, error: eventos.error });
 
   const nomesPorOrg = new Map((organizacoes || []).map(o => [String(o.id), o.nome]));
-  const porEmpresa = new Map(); // organization_id -> { hoje, periodo }
+  const CATEGORIAS = ["analise", "aprendizado", "transcricao", "outros"];
+  const novaEntradaEmpresa = () => ({
+    hoje: novoAcumuladorUsoIA(), periodo: novoAcumuladorUsoIA(),
+    categoriasHoje: Object.fromEntries(CATEGORIAS.map(c => [c, novoAcumuladorUsoIA()])),
+    categoriasPeriodo: Object.fromEntries(CATEGORIAS.map(c => [c, novoAcumuladorUsoIA()]))
+  });
+  const porEmpresa = new Map(); // organization_id -> { hoje, periodo, categoriasHoje, categoriasPeriodo }
 
   for (const evento of eventos.rows) {
     const orgId = String(evento.organization_id || "");
     if (!orgId) continue;
-    if (!porEmpresa.has(orgId)) porEmpresa.set(orgId, { hoje: novoAcumuladorUsoIA(), periodo: novoAcumuladorUsoIA() });
+    if (!porEmpresa.has(orgId)) porEmpresa.set(orgId, novaEntradaEmpresa());
     const entrada = porEmpresa.get(orgId);
+    const categoria = categoriaDoEvento(evento);
+    const ehHoje = new Date(evento.criado_em) >= inicioHoje;
     somarUsoIA(entrada.periodo, evento);
-    if (new Date(evento.criado_em) >= inicioHoje) somarUsoIA(entrada.hoje, evento);
+    somarUsoIA(entrada.categoriasPeriodo[categoria], evento);
+    if (ehHoje) {
+      somarUsoIA(entrada.hoje, evento);
+      somarUsoIA(entrada.categoriasHoje[categoria], evento);
+    }
   }
+
+  const formatarCategorias = (categorias) => Object.fromEntries(CATEGORIAS.map(c => [c, formatarAcumuladorUsoIA(categorias[c])]));
 
   const empresas = [...porEmpresa.entries()]
     .map(([organizationId, acc]) => ({
       organizationId,
       nome: nomesPorOrg.get(organizationId) || "(empresa não encontrada)",
       hoje: formatarAcumuladorUsoIA(acc.hoje),
-      periodo: formatarAcumuladorUsoIA(acc.periodo)
+      periodo: formatarAcumuladorUsoIA(acc.periodo),
+      categoriasHoje: formatarCategorias(acc.categoriasHoje),
+      categoriasPeriodo: formatarCategorias(acc.categoriasPeriodo)
     }))
     .sort((a, b) => b.periodo.custoEstimadoBRL - a.periodo.custoEstimadoBRL);
 
