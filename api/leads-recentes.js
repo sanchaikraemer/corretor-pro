@@ -193,6 +193,48 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+// v1166 — a assinatura da carteira: total de leads + marca da última alteração. Duas consultas
+// minúsculas (o total nem traz linha nenhuma; a marca traz UMA coluna de UMA linha), sempre
+// filtradas pela empresa. Se qualquer uma falhar, devolve `indefinida` — e o app, sem assinatura
+// confiável, faz a busca completa como sempre fez. Nunca pode ser motivo pra esconder novidade.
+export async function calcularAssinaturaDaCarteira(supabase, organizationId) {
+  const tabela = () => supabase.from("whatsapp_processamentos");
+
+  let total = null;
+  try {
+    const r = await tabela().select("id", { count: "exact", head: true }).eq("organization_id", organizationId);
+    if (!r?.error && Number.isFinite(Number(r?.count))) total = Number(r.count);
+  } catch (_) {}
+
+  let ultimaAlteracao = null;
+  for (const coluna of ["atualizado_em", "updated_at", "criado_em", "created_at"]) {
+    try {
+      const r = await tabela()
+        .select(coluna)
+        .eq("organization_id", organizationId)
+        .order(coluna, { ascending: false })
+        .limit(1);
+      if (r?.error) continue;
+      const linha = Array.isArray(r?.data) ? r.data[0] : null;
+      // Carteira vazia é resposta VÁLIDA (total 0): a marca fica nula e o total responde por ela.
+      ultimaAlteracao = linha ? String(linha[coluna] || "") : "";
+      break;
+    } catch (_) {}
+  }
+
+  if (total === null || ultimaAlteracao === null) {
+    return { ok: true, indefinida: true, total: null, ultimaAlteracao: null };
+  }
+  return { ok: true, indefinida: false, total, ultimaAlteracao };
+}
+
+async function assinaturaDaCarteira(res, organizationId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return json(res, 200, { ok: true, indefinida: true, total: null, ultimaAlteracao: null });
+  const assinatura = await calcularAssinaturaDaCarteira(supabase, organizationId);
+  return json(res, 200, assinatura);
+}
+
 export default async function handler(req, res) {
   const organizationId = await resolveOrganizationId(req, res);
   if (!organizationId) return;
@@ -208,6 +250,23 @@ export default async function handler(req, res) {
   if (String(req.query?.export || "") === "full") {
     return exportarTudo(req, res, organizationId);
   }
+  // v1166 — "mudou alguma coisa?" em poucos bytes, em vez de baixar a carteira inteira.
+  //
+  // O painel do Supabase acusou a cota de tráfego estourada (7,11 GB de 5 GB no plano grátis). A
+  // v1121 e a v1136 já cortaram o grosso, mas o que sobrou ainda era grande: a cada 2 minutos com
+  // a tela aberta, o app baixa até 2000 leads COM a análise comercial de cada um — e na esmagadora
+  // maioria dos tiques NADA mudou desde o anterior.
+  //
+  // Esta rota responde com duas coisinhas: quantos leads a empresa tem e qual foi a última
+  // alteração. Se os dois forem iguais aos da carga anterior, o app pula a busca pesada inteira.
+  // Qualquer mudança real mexe num dos dois: importar/criar sobe o total E a última alteração;
+  // editar/mudar etapa/reanalisar sobe a última alteração; apagar baixa o total.
+  //
+  // Custo: algumas dezenas de bytes por tique, no lugar de megabytes.
+  if (String(req.query?.assinatura || "") === "1") {
+    return assinaturaDaCarteira(res, organizationId);
+  }
+
   const limit = Math.min(2000, Math.max(1, Number(req.query?.limit || 8)));
   const fresh = String(req.query?.fresh || "") === "1";
   const cacheKey = `${organizationId}:${limit}`;

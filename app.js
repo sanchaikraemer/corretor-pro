@@ -539,7 +539,39 @@ function cpCarteiraEstaEmDia(){
     && Number(state.carteiraRevisao) === (Number(state.dataRevision) || 0);
 }
 
+// ===== v1166 — "mudou alguma coisa?" antes de baixar a carteira inteira =====
+//
+// O painel do Supabase acusou a cota de tráfego estourada (7,11 GB de 5 GB). A v1121 (atualização
+// de 30s pra 2min) e a v1136 (conversa fora da lista) cortaram o grosso; o que sobrou é que, a cada
+// 2 minutos com a tela aberta, o app baixa até 2000 leads COM a análise de cada um — e na esmagadora
+// maioria dos tiques NADA mudou. Agora a atualização DE FUNDO pergunta primeiro, em poucos bytes,
+// quantos leads existem e qual foi a última alteração. Iguais aos da carga anterior = não faz nada.
+//
+// Vale SÓ pra atualização automática de fundo. Toda ação do corretor (importar, salvar, mudar etapa,
+// puxar pra atualizar) continua forçando a busca completa na hora — a assinatura nunca entra no
+// caminho de quem está esperando ver o resultado do que acabou de fazer.
+let _assinaturaCarteira = null;
+async function cpCarteiraMudouDesdeAUltimaCarga(){
+  try{
+    const res = await fetchComTimeout("./api/leads-recentes?assinatura=1", { cache:"no-store" }, 12000);
+    if(!res.ok) return true;                       // sem resposta boa: age como antes (busca tudo)
+    const a = await res.json().catch(() => null);
+    if(!a || a.ok === false || a.indefinida) return true;  // servidor não soube dizer: busca tudo
+    const atual = `${a.total}|${a.ultimaAlteracao}`;
+    const anterior = _assinaturaCarteira;
+    _assinaturaCarteira = atual;
+    if(anterior === null) return true;             // primeira vez: não há com o que comparar
+    return anterior !== atual;
+  }catch(_){
+    return true;                                   // qualquer tropeço: busca tudo, como sempre fez
+  }
+}
+// Depois de uma mutação a assinatura guardada não vale mais: a próxima verificação precisa
+// obrigatoriamente baixar de novo, senão o app compararia com um retrato já vencido.
+function cpEsquecerAssinaturaCarteira(){ _assinaturaCarteira = null; }
+
 function invalidarLeadsCache(){
+  cpEsquecerAssinaturaCarteira();
   _leadsCache = { ts: 0, data: null, inflight: null };
   _leadsForceFresh = true; // a próxima busca ignora o cache de 30s do servidor
   invalidarLeadDetail();
@@ -3959,7 +3991,13 @@ async function carregarDashboard(force){
       if(focoSkel) focoSkel.innerHTML = `<div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>`;
     }
 
-    const data = await getLeadsData(force);
+    // v1166 — `force` aqui sempre quis dizer DUAS coisas ao mesmo tempo: "não use o retrato que
+    // já está na memória" e "vá na rede de novo". Nas duas sincronizações (tique de fundo e volta
+    // pra aba) isso fazia a carteira ser baixada DUAS VEZES seguidas — uma pra lista, outra pro
+    // painel, com segundos de diferença e o mesmo conteúdo. Era metade do tráfego que sobrou.
+    // Agora essas duas passam `"reaproveitar"`: refazem as contas com o dado recém-baixado, sem
+    // uma segunda ida ao banco. `true` continua significando as duas coisas, pra todo o resto.
+    const data = await getLeadsData(force === true);
     if(data && data.ok === false){
       const foco = qs("#leadFocoArea");
       if(foco && !state.itemsAtivos?.length && !state.grupoAtivo){
@@ -11264,15 +11302,24 @@ requestAnimationFrame(iniciarDireciona);
 // corta ~75% desse tráfego. Qualquer ação real (importar, salvar, mudar etapa, trocar de aba) já
 // força uma leitura nova na hora, então nada fica "velho" durante o uso ativo.
 const CP_SYNC_FUNDO_MS = 120 * 1000;
-setInterval(() => {
+setInterval(async () => {
   // v818: não atualizar a Home enquanto um lead está aberto. O detalhe do lead é
   // renderizado DENTRO da Home (#leadFocoArea), então state.active continua "home".
   // Sem esta trava, o refresh reescrevia a área e jogava o corretor de volta pra lista.
   if(state.active === "home" && document.visibilityState === "visible" && !state.focoLeadId && !state.lead?.id){
+    // v1166 — pergunta primeiro, em poucos bytes, se mudou alguma coisa. Sem mudança, não baixa
+    // nada: é o que tira do ar a maior parte do tráfego do plano grátis do Supabase. Qualquer
+    // dúvida (erro, tempo esgotado, servidor sem resposta clara) responde "mudou" e o tique segue
+    // igual a antes — nunca esconde novidade pra economizar.
+    if(!(await cpCarteiraMudouDesdeAUltimaCarga())) return;
     invalidarLeadsCache();
-    loadRecentLeads(true);
-    carregarDashboard(true);
+    await loadRecentLeads(true);
+    carregarDashboard("reaproveitar"); // refaz as contas com o que acabou de chegar, sem baixar de novo
     carregarAgendaTopo();
+    // Recarimba DEPOIS da busca: se algo mudou em outro aparelho enquanto ela acontecia, o
+    // próximo tique enxerga — em vez de comparar com um retrato anterior à carga.
+    cpEsquecerAssinaturaCarteira();
+    await cpCarteiraMudouDesdeAUltimaCarga();
   }
 }, CP_SYNC_FUNDO_MS);
 // Refresh quando a aba volta a ficar visível (depois de mudar pra outra aba)
@@ -11283,11 +11330,16 @@ document.addEventListener("visibilitychange", () => {
     const agora = Date.now();
     if(agora - __lastVisibleRefresh < 5000) return;
     __lastVisibleRefresh = agora;
-    setTimeout(() => {
+    setTimeout(async () => {
+      // v1166 — mesma pergunta barata do tique de fundo: voltar pra aba não precisa rebaixar a
+      // carteira inteira quando nada mudou. Qualquer dúvida faz a busca completa, como antes.
+      if(!(await cpCarteiraMudouDesdeAUltimaCarga())) return;
       invalidarLeadsCache();
-      loadRecentLeads(true);
-      carregarDashboard(true);
+      await loadRecentLeads(true);
+      carregarDashboard("reaproveitar"); // idem: sem segunda ida ao banco pelo mesmo dado
       carregarAgendaTopo();
+      cpEsquecerAssinaturaCarteira();
+      await cpCarteiraMudouDesdeAUltimaCarga();
     }, 250);
   }
 });

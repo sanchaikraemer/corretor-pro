@@ -46,7 +46,14 @@ for (const m of app.matchAll(/cpCarteiraSincronizada\(\);/g)) {
 }
 
 // O atalho de memória do dashboard NÃO pode carimbar: ele reusa a própria memória.
-const atalhoHome = app.slice(app.indexOf('const cached = !force && state.itemsAtivos'), app.indexOf('const data = await getLeadsData(force);'));
+// v1166 — o fim do trecho é localizado sem depender do argumento exato de getLeadsData (que
+// passou a ser `force === true`, pra a sincronização de fundo reaproveitar o dado recém-baixado em
+// vez de baixar tudo de novo). Procurar o texto antigo fazia o indexOf devolver -1 e o "trecho"
+// virar o arquivo inteiro — o teste passaria a acusar qualquer carimbo em qualquer lugar.
+const inicioAtalho = app.indexOf('const cached = !force && state.itemsAtivos');
+const fimAtalho = app.indexOf('const data = await getLeadsData(', inicioAtalho);
+assert.ok(inicioAtalho > 0 && fimAtalho > inicioAtalho, 'não achei o atalho de memória da Home');
+const atalhoHome = app.slice(inicioAtalho, fimAtalho);
 assert.ok(!/cpCarteiraSincronizada/.test(atalhoHome),
   'o atalho de memória da Home não pode carimbar a carteira como fresca — ele não foi ao servidor');
 
