@@ -260,6 +260,12 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
   .chip-teste.vencido{ animation:none; }
 }
 
+/* v1172 — pedido do dono (2ª vez): custo de IA de hoje direto no card da conta, sem precisar
+   rolar até a tabela "Uso de IA por empresa" mais abaixo (existia, só que ele não achou). Mesmo
+   desenho neutro do chip-teste — cor só entra se houver algo a destacar, e aqui é só informação. */
+.chip-uso-ia{ display:inline-flex; align-items:center; gap:4px; font-size:12.5px; font-weight:800; padding:3px 10px; border-radius:999px; color:var(--cp-soft); background:var(--cp-panel-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.chip-uso-ia.carregando{ color:var(--cp-muted); font-weight:600; }
+
 /* v1006/v1008 — painel administrativo legível E em escala no celular: cartão COMPACTO por
    corretor (nome + status na 1ª linha, dados numa linha de etiquetas, ações escondidas atrás
    do botão "Ações"), pensado pra lista com centenas/milhares de contas + "Mostrar mais". */
@@ -278,8 +284,10 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
   .tabela-admin td:first-child{ display:block; font-weight:800; font-size:14.5px; margin-bottom:8px; }
   .tabela-admin td[data-rotulo]:not([data-rotulo=""]){ display:inline-flex; align-items:center; gap:6px; background:var(--cp-panel-2); border-radius:8px; padding:3px 9px; margin:0 6px 6px 0; font-size:12.5px; }
   /* v1168 — "Dias de teste" já vem com seu próprio selinho colorido (.chip-teste); sem isto, o
-     celular desenhava selo dentro de selo (a caixa cinza genérica + o chip por dentro dela). */
-  .tabela-admin td[data-rotulo="Dias de teste"]{ background:none; padding:0; }
+     celular desenhava selo dentro de selo (a caixa cinza genérica + o chip por dentro dela).
+     v1172 — mesma coisa pro selinho novo de "Uso de IA hoje" (.chip-uso-ia). */
+  .tabela-admin td[data-rotulo="Dias de teste"],
+  .tabela-admin td[data-rotulo="Uso de IA hoje"]{ background:none; padding:0; }
   .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .tabela-admin td[data-rotulo=""]::before{ content:none; }
   .tabela-admin td:last-child{ display:block; margin-top:2px; }
