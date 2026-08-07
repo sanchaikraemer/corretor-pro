@@ -28,9 +28,16 @@ const obsStart = app.indexOf('window.cp7ObsSalvar = async function(btn)');
 const obsEnd = app.indexOf('window.ui670Reanalisar=', obsStart);
 const obsBlock = app.slice(obsStart, obsEnd);
 assert.match(obsBlock, /action:"observacao-adicionar"/);
-assert.doesNotMatch(obsBlock, /api\/reanalisar-lead/);
-assert.match(obsBlock, /sugestões atuais mantidas/i);
 assert.match(obsBlock, /renderLeadFoco\(lead\)/, 'observação deve aparecer imediatamente');
+// v1171 — pedido do dono: depois de salvar a observação, reanalisar SOZINHO (sem precisar
+// clicar em "Reanalisar" à parte). cp7ObsSalvar chama a mesma reanálise de 1 lead que o botão
+// já usa (ui670Reanalisar) — não a rota crua nem o "Reanalisar todos" (removido na v1114, esse
+// sim queimava crédito de API varrendo a carteira inteira; aqui é só o lead que acabou de
+// receber a observação, 1 chamada, igual já acontecia manualmente).
+assert.match(obsBlock, /ui670Reanalisar\(qs\("#btnReanalisarLeadTop"\)\)/,
+  'salvar observação precisa disparar a reanálise sozinha, usando a referência FRESCA do botão (pós renderLeadFoco)');
+assert.match(obsBlock, /renderLeadFoco\(lead\);[\s\S]*ui670Reanalisar\(/,
+  'a reanálise automática só pode disparar DEPOIS da observação já estar visível na tela (renderLeadFoco)');
 
 assert.match(leadUpdate, /case "observacao-adicionar"/);
 assert.match(leadUpdate, /motivo:"observacao-manual-adicionada"/);

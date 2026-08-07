@@ -210,24 +210,25 @@ function extrairFn(nome, assinatura) {
   return app.slice(ini, i + 1);
 }
 
-// ── 9. O bloco precisa estar no TOPO da Home — antes da busca e das outras faixas ──────────────
+// ── 9. v1171 — o bloco virou um card na fileira de números (não mais a faixa acima da busca) ────
 {
-  const posNotas = app.indexOf("cp1170BlocoHTML()");
-  const posBusca = app.indexOf('barraBuscaLeadHTML("home")');
-  const posAgendaHoje = app.indexOf("cp1168FaixaHomeHTML(items)");
-  assert.ok(posNotas > 0 && posNotas < posBusca && posBusca < posAgendaHoje,
-    'o bloco de notas precisa vir ANTES da busca e das faixas de agenda — é "fácil acesso no topo", como pedido');
+  assert.doesNotMatch(app, /cp1170BlocoHTML/, "a função antiga (bloco fixo no topo) foi substituída pelo painel — não pode sobrar referência a ela");
+  assert.match(app, /id="kpiNotas"[^>]*onclick="cp1170AbrirPainel\(\)"/,
+    'precisa existir um card "Bloco de notas" na fileira de números que abre o painel flutuante ao tocar');
+  const posKpiNotas = app.indexOf('id="kpiNotas"');
+  const posArquivados = app.indexOf("show('arquivados')");
+  assert.ok(posKpiNotas > 0 && posArquivados > 0 && posArquivados < posKpiNotas,
+    "o card de notas fica na mesma fileira dos outros números, depois de Arquivados");
   assert.match(app, /if\(typeof cp1170Carregar === 'function'\) cp1170Carregar\(\);/,
-    "a Home precisa disparar o carregamento das notas sozinha (sem esperar o corretor abrir o bloco) pra a contagem já vir pronta");
+    "a Home precisa disparar o carregamento das notas sozinha (sem esperar o corretor abrir o painel) pra a contagem já vir pronta");
 }
 
-// ── 10-13. Funções puras, num sandbox mínimo ────────────────────────────────────────────────────
+// ── 10-14. Funções puras, num sandbox mínimo ────────────────────────────────────────────────────
 {
   const chamadasFetch = [];
   const escapeHtml = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const toasts = [];
   const inputFake = { value: "", disabled: false, focus() {} };
-  const rerenders = { n: 0 };
   const qs = (sel) => sel === "#cp1170Input" ? inputFake : null;
   const fetchComTimeout = async (url, opts) => {
     chamadasFetch.push({ url, body: opts?.body ? JSON.parse(opts.body) : null });
@@ -240,9 +241,9 @@ function extrairFn(nome, assinatura) {
   const toast = (msg) => toasts.push(msg);
 
   const corpo = [
+    extrairFn("cp1170PendCount"),
     extrairFn("cp1170ItemHTML"),
-    extrairFn("cp1170BlocoHTML"),
-    extrairFn("cp1170Toggle"),
+    extrairFn("cp1170PainelConteudoHTML"),
     extrairFn("cp1170Adicionar"),
     extrairFn("cp1170Concluir"),
     extrairFn("cp1170Remover")
@@ -250,41 +251,38 @@ function extrairFn(nome, assinatura) {
 
   const sandbox = new Function("escapeHtml", "qs", "fetchComTimeout", "toast", `
     let _cp1170Notas = null;
-    let _cp1170Carregando = null;
-    let _cp1170Aberto = false;
     let _rerenders = 0;
     function cp1170Rerender(){ _rerenders++; }
-    function cp1170Carregar(){ return Promise.resolve(_cp1170Notas || []); }
     ${corpo}
     return {
-      estado: () => ({ notas: _cp1170Notas, aberto: _cp1170Aberto, rerenders: _rerenders }),
-      set: (n, aberto) => { _cp1170Notas = n; if(aberto !== undefined) _cp1170Aberto = aberto; },
-      cp1170BlocoHTML, cp1170Toggle, cp1170Adicionar, cp1170Concluir, cp1170Remover
+      estado: () => ({ notas: _cp1170Notas, rerenders: _rerenders }),
+      set: (n) => { _cp1170Notas = n; },
+      cp1170PendCount, cp1170ItemHTML, cp1170PainelConteudoHTML, cp1170Adicionar, cp1170Concluir, cp1170Remover
     };
   `)(escapeHtml, qs, fetchComTimeout, toast);
 
-  // 10. Fechado por padrão: sem input de texto na tela, só a contagem.
-  sandbox.set([{ id: "1", texto: "Pendente", feita: false }, { id: "2", texto: "Feita", feita: true }], false);
-  let html = sandbox.cp1170BlocoHTML();
-  assert.match(html, />📝 Bloco de notas</);
-  assert.match(html, /cp1170-pend">1</, "só a nota PENDENTE conta no selo — a feita não");
-  assert.doesNotMatch(html, /id="cp1170Input"/, "fechado, a caixa de adicionar não aparece");
+  // 10. Contagem só considera pendente — a feita não entra no selo do card.
+  sandbox.set([{ id: "1", texto: "Pendente", feita: false }, { id: "2", texto: "Feita", feita: true }]);
+  assert.equal(sandbox.cp1170PendCount(), 1, "só a nota PENDENTE conta — a feita não");
 
-  // 11. Aberto: escapa HTML do texto da nota (segurança — texto veio do próprio corretor, mas
-  //     precisa ser tratado como qualquer entrada de usuário).
-  sandbox.set([{ id: "3", texto: '<img src=x onerror=alert(1)>', feita: false }], true);
-  html = sandbox.cp1170BlocoHTML();
-  assert.match(html, /id="cp1170Input"/, "aberto, a caixa de adicionar aparece");
+  // 11. Painel ainda não carregou: mostra "Carregando…", não "Nada anotado ainda." (evita o
+  //     corretor achar que está tudo em dia quando na verdade a lista nem chegou do servidor).
+  sandbox.set(null);
+  let html = sandbox.cp1170PainelConteudoHTML();
+  assert.match(html, />📝 Bloco de notas</);
+  assert.match(html, /Carregando…/);
+  assert.match(html, /id="cp1170Input"/, "a caixa de adicionar sempre aparece dentro do painel");
+
+  // 12. Lista vazia (carregou e não tem nada) x com notas — e escapa HTML do texto (segurança:
+  //     texto veio do próprio corretor, mas precisa ser tratado como qualquer entrada de usuário).
+  sandbox.set([]);
+  html = sandbox.cp1170PainelConteudoHTML();
+  assert.match(html, /Nada anotado ainda\./);
+
+  sandbox.set([{ id: "3", texto: '<img src=x onerror=alert(1)>', feita: false }]);
+  html = sandbox.cp1170PainelConteudoHTML();
   assert.doesNotMatch(html, /<img src=x/, "texto da nota precisa ser escapado, nunca virar HTML de verdade");
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
-
-  // 12. Toggle abre/fecha e dispara o carregamento ao abrir.
-  sandbox.set([], false);
-  sandbox.cp1170Toggle();
-  assert.equal(sandbox.estado().aberto, true);
-  assert.equal(sandbox.estado().rerenders, 1);
-  sandbox.cp1170Toggle();
-  assert.equal(sandbox.estado().aberto, false);
 
   // 13. Adicionar chama a ação certa e absorve a lista que o servidor devolveu.
   inputFake.value = "  Conferir contrato assinado  ";
