@@ -1,7 +1,18 @@
+import { randomUUID } from "node:crypto";
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
 import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
+
+// v1170 — bloco de notas administrativas ("verificar pagamento de entrada, matrícula no
+// registro..." — pedido do dono: tarefa que não é atendimento de cliente, então não pode morar
+// dentro de um lead nem dentro do Cérebro Comercial). Chave PRÓPRIA, separada de CONFIG_KEY de
+// propósito: o Cérebro é o que vira contexto pra IA nas sugestões de mensagem — uma nota
+// administrativa ("checar pagamento do fulano") jamais pode ser lida pela IA e vazar pra dentro
+// de uma sugestão de mensagem pro cliente. É por isso que isto não vive dentro de "direciona-cerebro".
+const NOTAS_KEY = "notas-rapidas";
+const MAX_NOTAS = 200;
+const MAX_NOTA_TEXTO = 500;
 
 const DEFAULTS = {
   corretorNome: "",
@@ -140,6 +151,37 @@ async function readJsonBody(req) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
+function sanitizeNota(n) {
+  return {
+    id: String(n?.id || "").slice(0, 60),
+    texto: String(n?.texto || "").trim().slice(0, MAX_NOTA_TEXTO),
+    feita: n?.feita === true,
+    criadoEm: String(n?.criadoEm || new Date().toISOString()),
+    concluidaEm: n?.concluidaEm ? String(n.concluidaEm) : null
+  };
+}
+
+async function loadNotas(supabase, organizationId) {
+  const { data, error } = await supabase
+    .from("direciona_config")
+    .select("valor")
+    .eq("chave", NOTAS_KEY)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error) return { itens: [], error: error.message };
+  const itens = Array.isArray(data?.valor?.itens) ? data.valor.itens.map(sanitizeNota) : [];
+  return { itens };
+}
+
+async function saveNotas(supabase, organizationId, itens) {
+  const { error } = await upsertConfigComOrganizacao(supabase, organizationId, {
+    chave: NOTAS_KEY,
+    valor: { itens },
+    atualizado_em: new Date().toISOString()
+  }) || {};
+  return { error };
+}
+
 async function loadConfig(supabase, organizationId) {
   // Tenta ler da tabela direciona_config (chave/valor) se existir.
   const { data, error } = await supabase
@@ -170,13 +212,55 @@ export default async function handler(req, res) {
       return json(res, 500, { ok: false, error: r.error });
     }
     const aprendizadoAutomatico = await obterStatusAprendizadoAutomatico(organizationId).catch(() => ({ ativo: true, versao: 2, totalCasos: 0, historicosProcessados: 0 }));
-    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico });
+    // v1170 — o bloco de notas vai junto da MESMA leitura que a tela já faz ao abrir (evita uma
+    // ida a mais ao servidor só pra isso). Falha ao ler notas nunca derruba a tela inteira do
+    // Cérebro — devolve lista vazia e segue.
+    const notasR = await loadNotas(supabase, organizationId).catch(() => ({ itens: [] }));
+    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico, notas: notasR.itens });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
     const body = await readJsonBody(req).catch(() => null);
     if (body === null) {
       return json(res, 400, { ok: false, error: "Corpo da requisição inválido — não foi possível interpretar o JSON. Nada foi alterado no Cérebro." });
+    }
+
+    // v1170 — bloco de notas administrativas. Três ações simples, sem IA, sem custo — é uma
+    // lista de tarefas, não análise de conversa. Cada ação relê a lista antes de gravar (a mesma
+    // exposição a duas gravações quase simultâneas que o resto do Cérebro já tem — celular e PC
+    // salvando ao mesmo tempo — é aceitável aqui: pior caso, a nota mais recente perde uma
+    // atualização isolada, nunca perde a lista inteira).
+    if (body.action === "nota-adicionar") {
+      const texto = String(body.texto || "").trim().slice(0, MAX_NOTA_TEXTO);
+      if (!texto) return json(res, 400, { ok: false, error: "Escreva o que precisa fazer antes de salvar." });
+      const atual = await loadNotas(supabase, organizationId);
+      if (atual.itens.length >= MAX_NOTAS) {
+        return json(res, 400, { ok: false, error: `Limite de ${MAX_NOTAS} notas atingido — apague alguma concluída antes de acrescentar outra.` });
+      }
+      const nova = sanitizeNota({ id: randomUUID(), texto, feita: false, criadoEm: new Date().toISOString() });
+      const itens = [nova, ...atual.itens];
+      const { error } = await saveNotas(supabase, organizationId, itens);
+      if (error) return json(res, 500, { ok: false, error: error.message });
+      return json(res, 200, { ok: true, notas: itens });
+    }
+    if (body.action === "nota-concluir") {
+      const id = String(body.id || "");
+      if (!id) return json(res, 400, { ok: false, error: "Nota não identificada." });
+      const atual = await loadNotas(supabase, organizationId);
+      const feita = body.feita !== false;
+      const itens = atual.itens.map(n => n.id === id ? sanitizeNota({ ...n, feita, concluidaEm: feita ? new Date().toISOString() : null }) : n);
+      const { error } = await saveNotas(supabase, organizationId, itens);
+      if (error) return json(res, 500, { ok: false, error: error.message });
+      return json(res, 200, { ok: true, notas: itens });
+    }
+    if (body.action === "nota-remover") {
+      const id = String(body.id || "");
+      if (!id) return json(res, 400, { ok: false, error: "Nota não identificada." });
+      const atual = await loadNotas(supabase, organizationId);
+      const itens = atual.itens.filter(n => n.id !== id);
+      const { error } = await saveNotas(supabase, organizationId, itens);
+      if (error) return json(res, 500, { ok: false, error: error.message });
+      return json(res, 200, { ok: true, notas: itens });
     }
 
     // Exporta os casos e observações aprendidos para um Excel gerado no navegador.

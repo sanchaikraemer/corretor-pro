@@ -3081,6 +3081,9 @@ function renderBotoesHome(){
   if(saud && saud.innerHTML.trim()) saud.style.display = "";
   const grupos = state.gruposHome || { "acao-hoje": [], "pode-aguardar": [], "tratado-hoje": [] };
   const items = state.itemsAtivos || [];
+  // v1170 — dispara a busca do bloco de notas em segundo plano (não trava a Home esperando).
+  // Idempotente: se já carregou ou já está carregando, cp1170Carregar não repete a chamada.
+  if(typeof cp1170Carregar === 'function') cp1170Carregar();
 
   // Chip de triagem (clica → abre a lista do grupo).
   const chip = (grupo, destaque) => {
@@ -3243,10 +3246,34 @@ function renderBotoesHome(){
         .cp-hoje-row .chr-pr{justify-self:end;text-align:right;max-width:42vw}
         .cp-hoje-row .chr-dd{align-self:center}
       }
+      /* v1170 — Bloco de notas administrativas. Pedido do dono: tarefa que NÃO é atendimento de
+         cliente ("verificar pagamento de entrada", "matrícula no registro de imóveis") precisa
+         de um lugar próprio, fácil de achar, sem se misturar com a fila de clientes. Visual
+         quieto de propósito — é apoio, não o assunto principal da Home — e some sozinho quando
+         fechado, sobrando só a linha do título com a contagem do que falta. */
+      .cp1170-bloco{border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:14px;margin-bottom:12px;overflow:hidden}
+      .cp1170-cab{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;border:0;background:transparent;width:100%;text-align:left;color:var(--text);font:inherit}
+      .cp1170-cab b{font-size:13.5px;font-weight:900;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .cp1170-cab .cp1170-pend{flex:0 0 auto;background:rgba(255,98,88,.14);color:var(--accent);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:950}
+      .cp1170-cab svg{flex:0 0 auto;width:16px;height:16px;color:var(--muted);transition:transform .15s}
+      .cp1170-bloco.aberto .cp1170-cab svg{transform:rotate(180deg)}
+      .cp1170-corpo{padding:0 14px 14px}
+      .cp1170-add{display:flex;gap:8px;margin-bottom:10px}
+      .cp1170-add input{flex:1;min-width:0;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--text);font-size:13px}
+      .cp1170-add button{flex:0 0 auto;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:900;cursor:pointer}
+      .cp1170-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+      .cp1170-item:last-child{border-bottom:0}
+      .cp1170-item input[type=checkbox]{margin-top:3px;flex:0 0 auto;width:16px;height:16px;cursor:pointer;accent-color:var(--acao)}
+      .cp1170-item span{flex:1;min-width:0;font-size:13px;line-height:1.4;word-break:break-word}
+      .cp1170-item.feita span{color:var(--muted);text-decoration:line-through}
+      .cp1170-item button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;padding:2px 5px}
+      .cp1170-item button:hover{color:var(--risco)}
+      .cp1170-vazio{color:var(--muted);font-size:12.5px;padding:6px 0}
     </style>
     <div class="home-saud">
       <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
     </div>
+    ${typeof cp1170BlocoHTML === 'function' ? cp1170BlocoHTML() : ""}
     ${barraBuscaLeadHTML("home")}
     ${typeof cp1168FaixaHomeHTML === 'function' ? cp1168FaixaHomeHTML(items) : ""}
     ${typeof cp1160FaixaHomeHTML === 'function' ? cp1160FaixaHomeHTML(items) : ""}
@@ -10876,6 +10903,155 @@ function cp1168FaixaHomeHTML(items){
 }
 window.cp1168ItensDeHoje = cp1168ItensDeHoje;
 window.cp1168FaixaHomeHTML = cp1168FaixaHomeHTML;
+
+// ===== v1170 — Bloco de notas administrativas =====
+//
+// Pedido do dono: um lugar fácil de achar, no topo da tela, pra anotar tarefa que NÃO é
+// atendimento de cliente — "verificar pagamento de entrada de tal cliente", "matrículas
+// atualizadas no registro de imóveis". Guardado numa chave PRÓPRIA do banco (ver
+// api/cerebro-config.js, NOTAS_KEY), separada do Cérebro Comercial de propósito: o Cérebro vira
+// contexto pra IA nas sugestões de mensagem, e uma nota administrativa não pode vazar pra dentro
+// de uma sugestão pro cliente.
+//
+// Sincroniza pelo servidor (mesmo padrão do Cérebro e da carteira) — abre no celular, edita no
+// PC, continua igual dos dois lados. Fechado por padrão: só a contagem do que falta aparece na
+// tela, o conteúdo em si só carrega quando o corretor abre o bloco (ou de fundo, assim que a
+// Home aparece, pra a contagem já vir pronta sem esperar o toque).
+let _cp1170Notas = null;       // cache em memória da sessão (null = ainda não carregou nenhuma vez)
+let _cp1170Carregando = null;
+let _cp1170Aberto = false;
+
+async function cp1170Carregar(force){
+  if(!force && Array.isArray(_cp1170Notas)) return _cp1170Notas;
+  if(_cp1170Carregando) return _cp1170Carregando;
+  _cp1170Carregando = (async () => {
+    try{
+      const res = await fetchComTimeout("./api/cerebro-config", { cache:"no-store" }, 15000);
+      const data = await res.json().catch(() => null);
+      if(Array.isArray(data?.notas)) _cp1170Notas = data.notas;
+      else if(!Array.isArray(_cp1170Notas)) _cp1170Notas = [];
+    }catch(_){
+      if(!Array.isArray(_cp1170Notas)) _cp1170Notas = [];
+    }
+    _cp1170Carregando = null;
+    cp1170Rerender();
+    return _cp1170Notas;
+  })();
+  return _cp1170Carregando;
+}
+
+// Troca só o próprio bloco no DOM — não redesenha a Home inteira por causa de uma nota.
+function cp1170Rerender(){
+  const el = qs("#cp1170Bloco");
+  if(el) el.outerHTML = cp1170BlocoHTML();
+}
+
+function cp1170ItemHTML(n){
+  const idJs = JSON.stringify(String(n?.id || ""));
+  return `<div class="cp1170-item${n?.feita ? ' feita' : ''}">
+    <input type="checkbox" ${n?.feita ? 'checked' : ''} onchange='cp1170Concluir(${idJs}, this.checked)'>
+    <span>${escapeHtml(n?.texto || "")}</span>
+    <button type="button" title="Apagar" onclick='cp1170Remover(${idJs})'>×</button>
+  </div>`;
+}
+
+function cp1170BlocoHTML(){
+  const carregado = Array.isArray(_cp1170Notas);
+  const notas = carregado ? _cp1170Notas : [];
+  const pendentes = notas.filter(n => !n?.feita);
+  const feitas = notas.filter(n => n?.feita);
+  const corpo = _cp1170Aberto ? `
+    <div class="cp1170-corpo">
+      <div class="cp1170-add">
+        <input type="text" id="cp1170Input" placeholder="Ex.: Verificar pagamento de entrada da Maria" maxlength="500" onkeydown='if(event.key==="Enter"){event.preventDefault();cp1170Adicionar();}'>
+        <button type="button" onclick="cp1170Adicionar()">Adicionar</button>
+      </div>
+      ${!carregado ? '<div class="cp1170-vazio">Carregando…</div>' : (!notas.length ? '<div class="cp1170-vazio">Nada anotado ainda.</div>' : '')}
+      ${pendentes.map(cp1170ItemHTML).join("")}
+      ${feitas.map(cp1170ItemHTML).join("")}
+    </div>` : "";
+  return `<div class="cp1170-bloco${_cp1170Aberto ? ' aberto' : ''}" id="cp1170Bloco">
+    <button type="button" class="cp1170-cab" onclick="cp1170Toggle()">
+      <b>📝 Bloco de notas</b>
+      ${pendentes.length ? `<span class="cp1170-pend">${pendentes.length}</span>` : ""}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    ${corpo}
+  </div>`;
+}
+
+function cp1170Toggle(){
+  _cp1170Aberto = !_cp1170Aberto;
+  cp1170Rerender();
+  if(_cp1170Aberto){
+    cp1170Carregar();
+    setTimeout(() => qs("#cp1170Input")?.focus(), 60);
+  }
+}
+window.cp1170Toggle = cp1170Toggle;
+
+async function cp1170Adicionar(){
+  const input = qs("#cp1170Input");
+  const texto = (input?.value || "").trim();
+  if(!texto){ toast("Escreva o que precisa fazer."); return; }
+  if(input) input.disabled = true;
+  try{
+    const res = await fetchComTimeout("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ action:"nota-adicionar", texto })
+    }, 15000);
+    const data = await res.json().catch(() => ({ ok:false }));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Não foi possível salvar a nota.");
+    _cp1170Notas = Array.isArray(data.notas) ? data.notas : _cp1170Notas;
+    cp1170Rerender();
+    setTimeout(() => qs("#cp1170Input")?.focus(), 60);
+  }catch(err){
+    toast("Não foi possível salvar: " + (err?.message || err));
+    if(input) input.disabled = false;
+  }
+}
+window.cp1170Adicionar = cp1170Adicionar;
+
+// Patch otimista: marca/desmarca na hora, sem esperar o servidor — é uma lista de tarefas, não
+// dado comercial. Se o servidor discordar (rede caiu, etc.), a próxima sincronização corrige.
+async function cp1170Concluir(id, feita){
+  if(Array.isArray(_cp1170Notas)){
+    const n = _cp1170Notas.find(x => String(x?.id) === String(id));
+    if(n) n.feita = !!feita;
+  }
+  cp1170Rerender();
+  try{
+    const res = await fetchComTimeout("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ action:"nota-concluir", id, feita:!!feita })
+    }, 15000);
+    const data = await res.json().catch(() => ({ ok:false }));
+    if(res.ok && data?.ok && Array.isArray(data.notas)){ _cp1170Notas = data.notas; cp1170Rerender(); }
+  }catch(_){ /* fica como está na tela; a próxima abertura do bloco sincroniza de novo */ }
+}
+window.cp1170Concluir = cp1170Concluir;
+
+async function cp1170Remover(id){
+  const anterior = _cp1170Notas;
+  if(Array.isArray(_cp1170Notas)) _cp1170Notas = _cp1170Notas.filter(n => String(n?.id) !== String(id));
+  cp1170Rerender();
+  try{
+    const res = await fetchComTimeout("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ action:"nota-remover", id })
+    }, 15000);
+    const data = await res.json().catch(() => ({ ok:false }));
+    if(!res.ok || !data?.ok) throw new Error(data?.error || "Falha ao apagar.");
+    if(Array.isArray(data.notas)) _cp1170Notas = data.notas;
+    cp1170Rerender();
+  }catch(err){
+    _cp1170Notas = anterior; // desfaz o otimista se o servidor não confirmou
+    cp1170Rerender();
+    toast("Não foi possível apagar: " + (err?.message || err));
+  }
+}
+window.cp1170Remover = cp1170Remover;
+window.cp1170BlocoHTML = cp1170BlocoHTML;
 
 // v885 — RAIZ: classifica pela SITUAÇÃO REAL, não pelo campo de status da IA (que vinha vazio
 // e jogava quase tudo em "aguardando", inclusive retomadas vencidas). Três estados:
