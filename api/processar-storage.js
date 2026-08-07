@@ -544,6 +544,10 @@ export default async function handler(req, res) {
         .filter(nome => !manifest.transcriptions?.[nome]?.text);
       const zipPequeno = Number(manifest.prep?.metricsBase?.totalMensagensOriginais || 0) <= ANALISE_JUNTA_MAX_MENSAGENS;
       let analiseIncluida = null;
+      // v1174 — quando a análise já roda aqui e é RECUSADA pelo teto do dia, o app precisa saber
+      // agora: sem isso ele seguia pra etapa "analisar", esperava a recusa de novo e só então
+      // mostrava o aviso — tempo de tela parada à toa, pelo mesmo motivo já conhecido.
+      let limiteAtingido = null;
       if (body?.analisarDireto === true && !audiosPendentes.length && zipPequeno) {
         try {
           const timelineAnterior = Array.isArray(matchAnterior?.row?.timeline_json) ? matchAnterior.row.timeline_json : [];
@@ -577,6 +581,11 @@ export default async function handler(req, res) {
             manifest.updatedAt = manifest.analysisReadyAt;
             await salvarManifesto(storage, manifestPath, manifest);
             analiseIncluida = { ok: true, bucket, path: storagePath, importId, autoSaved: false, ...resultado };
+          } else if (resultado?.analysis?.mode === "limite_diario_excedido") {
+            limiteAtingido = {
+              error: resultado.analysis.error || "Limite de análises de IA atingido para esta conta.",
+              upgrade: resultado.analysis.upgrade || null
+            };
           }
         } catch (_) {
           // Cai no caminho de sempre: o app chama "analisar" e trata erro/retentativa como já fazia.
@@ -590,7 +599,8 @@ export default async function handler(req, res) {
         leadAnterior,
         audioStorage: manifest.audioStorage,
         cachedTranscriptions: manifest.transcriptions || {},
-        analiseIncluida
+        analiseIncluida,
+        ...(limiteAtingido ? { limiteAtingido } : {})
       });
     }
 
@@ -704,6 +714,20 @@ export default async function handler(req, res) {
       const mensagens = analysis?.messages || {};
       const temTrio = [mensagens.a, mensagens.b, mensagens.c].every(v => String(v || "").trim().length >= 10);
       const falhou = !analysis || analysis.mode === "erro_api" || analysis.mode === "sem_api" || analysis.sugestoesPendentes === true || !temTrio;
+      // v1174 — bater no teto de análises do dia NÃO é falha passageira: repetir não vai dar
+      // certo daqui a 1,2 segundo e ainda faz o corretor esperar o dobro olhando a tela parada em
+      // 92%. Vem marcado como NÃO recuperável, com o motivo verdadeiro, pra o app parar na hora e
+      // mostrar o aviso (e o convite de plano, quando houver) em vez de tentar de novo.
+      if (analysis?.mode === "limite_diario_excedido") {
+        return json(res, 429, {
+          ok: false,
+          error: analysis.error || "Limite de análises de IA atingido para esta conta.",
+          recoverable: false,
+          limiteAtingido: true,
+          upgrade: analysis.upgrade || null,
+          bucket, path: storagePath, importId
+        });
+      }
       if (falhou) return json(res, 502, { ok: false, error: "A conversa foi lida, mas a análise comercial não foi concluída.", details: analysis?.error || (analysis?.validacaoSugestoes || []).join("; ") || "A IA não devolveu as 3 mensagens.", recoverable: true, bucket, path: storagePath, importId });
       if (importId && manifest) {
         if (manifest) {

@@ -7294,6 +7294,7 @@ function cpImportOverlayVisivel(mostrar){
   }else{
     if(!el.hidden){ el.hidden = true; document.body.classList.remove("cpio-aberto"); }
     cpioPararAnimacao();
+    cpioPararRelogioEtapa();
     clearTimeout(_cpioVigia); _cpioVigia = null;
   }
 }
@@ -7334,6 +7335,42 @@ function cpioPararAnimacao(){
   if(_cpioTimer){ clearInterval(_cpioTimer); _cpioTimer = null; }
 }
 
+// v1174 — RELÓGIO DA ETAPA LONGA ("chega em 92% e trava", print do dono em 06/08/2026).
+//
+// O anel nunca passa do percentual da etapa SEGUINTE menos 2 — e a etapa "Analisando pelo seu
+// Cérebro" começa em 86% e a seguinte em 94%, ou seja, o número sobe até 92% e para ali. Enquanto
+// a IA escreve (dezenas de segundos numa conversa grande), a tela fica idêntica de um minuto pro
+// outro: 92%, mesmo texto, nada se mexendo. Quem olha conclui que travou — e não travou, está
+// esperando. Faltava o app dizer isso.
+//
+// Agora, nas duas etapas que realmente demoram (ouvir os áudios e analisar), o detalhe embaixo do
+// título conta os segundos ("… · 38s"). É a prova de vida que o percentual sozinho não dá.
+// Enquanto o relógio corre, o vigia que fecha a tela por inatividade é rearmado — antes ele podia
+// fechar tudo aos 2 minutos com o servidor ainda trabalhando, e aí o corretor via a tela sumir sem
+// resposta nenhuma. Passados 4 minutos o rearme para, e o vigia volta a poder encerrar (ninguém
+// pode ficar preso pra sempre numa tela).
+const CPIO_RELOGIO_ETAPAS = [3, 4];
+const CPIO_RELOGIO_LIMITE_S = 240;
+let _cpioRelogio = null, _cpioRelogioBase = "", _cpioRelogioInicio = 0;
+
+function cpioPararRelogioEtapa(){
+  if(_cpioRelogio){ clearInterval(_cpioRelogio); _cpioRelogio = null; }
+}
+
+function cpioIniciarRelogioEtapa(textoBase){
+  cpioPararRelogioEtapa();
+  _cpioRelogioBase = String(textoBase || "");
+  _cpioRelogioInicio = Date.now();
+  _cpioRelogio = setInterval(() => {
+    const seg = Math.round((Date.now() - _cpioRelogioInicio) / 1000);
+    const det = qs("#cpioSub");
+    // Só a partir de 5s: numa conversa pequena a etapa passa voando e um contador piscando
+    // "1s… 2s…" seria ruído, não informação.
+    if(det) det.textContent = seg >= 5 ? `${_cpioRelogioBase} · ${seg}s` : _cpioRelogioBase;
+    if(seg <= CPIO_RELOGIO_LIMITE_S) cpioRearmarVigia();
+  }, 1000);
+}
+
 function cpioAnimarAte(destino, teto){
   // Nunca volta atrás: se a tela já mostra mais do que o destino, mantém o que está escrito.
   _cpioAlvo = Math.max(_cpioMostrado, destino);
@@ -7359,6 +7396,8 @@ function cpioZerar(){
 function cpImportOverlayAtualizar(idx, sub){
   const passo = CPIO_PASSOS[idx];
   if(!passo) return;
+  // Etapa nova: o relógio da anterior para aqui, senão ele continuaria reescrevendo o detalhe.
+  cpioPararRelogioEtapa();
   const pct = CPIO_PCT[idx] ?? 0;
   if(idx === 6){
     // Concluído: vai direto e para de se mexer.
@@ -7374,7 +7413,9 @@ function cpImportOverlayAtualizar(idx, sub){
   const tit = qs("#cpioTitulo"); if(tit) tit.textContent = passo.rot;
   // O detalhe vindo do fluxo (ex.: "3/14 novos · 2 reaproveitados") é mais informativo que o
   // texto padrão — quando existe, ele manda.
-  const det = qs("#cpioSub"); if(det) det.textContent = String(sub || passo.sub || "");
+  const textoDetalhe = String(sub || passo.sub || "");
+  const det = qs("#cpioSub"); if(det) det.textContent = textoDetalhe;
+  if(CPIO_RELOGIO_ETAPAS.includes(idx)) cpioIniciarRelogioEtapa(textoDetalhe);
   const ol = qs("#cpioPassos");
   if(ol){
     ol.innerHTML = CPIO_PASSOS.slice(0, 6).map((p, i) => {
@@ -7497,6 +7538,10 @@ function cpAcaoAnalisePendente(analysis){
 
 function userFriendlyError(err,file){
   const raw=String(err?.message||err||"");
+  // v1174 — o servidor já explicou em português que o teto de análises do dia foi atingido (e,
+  // quando é conta de plano, já veio o convite pra falar no WhatsApp). Esse texto passa inteiro,
+  // sem virar "não foi possível analisar" genérico: é a única mensagem que diz o que fazer.
+  if(err?.limiteAtingido) return raw;
   if(raw.includes("Supabase") && raw.includes("configurado")){
     return `O servidor ainda não está pronto pra guardar conversas grandes. Tente novamente em alguns minutos.
 
@@ -7693,6 +7738,14 @@ async function uploadLargeZipToSupabase(file, options = {}){
   try{
     analysisData = await processarStorageEmEtapas(meta.bucket, meta.path, file.name, { audioWindowDays: options.audioWindowDays || state.ultimaJanelaAudio || "90", importId });
   }catch(err){
+    // v1174 — A TELA CHEIA FICAVA POR CIMA DO ERRO. Esta é a causa do "chega em 92% e trava"
+    // (print do dono, 06/08/2026): quando a análise falha, este ramo desenha o erro e os botões
+    // na tela de baixo — mas NÃO passa por renderEtapas, que é o único lugar que fecha a tela
+    // cheia da importação. Resultado: a tela de "Analisando pelo seu Cérebro" continuava de pé,
+    // parada no teto do anel daquela etapa (92%), escondendo a explicação e os botões que já
+    // estavam prontos atrás dela. Só o vigia de inatividade a derrubava, até 2 minutos depois —
+    // e nesses 2 minutos não havia nada a fazer além de olhar. Fechar aqui é a primeira coisa.
+    try{ cpImportOverlayVisivel(false); }catch(_){ }
     // Falha terminal desta etapa: libera de novo "Nova análise" e "Diagnóstico"
     // pra o corretor poder recomeçar ou diagnosticar (este ramo não passa por
     // renderEtapas, então precisa reabilitar os botões explicitamente).
@@ -7786,6 +7839,11 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
         const partes = [data.error, data.details, data.hint].filter(Boolean);
         const erro = new Error(partes.length ? partes.join("\n") : ("Erro HTTP "+res.status));
         erro.recoverable = data.recoverable === true;
+        // v1174 — teto de análises do dia atingido: tentar de novo NUNCA vai dar certo, e cada
+        // repetição só deixa o corretor mais tempo olhando a tela parada. Este sinal faz o fluxo
+        // desistir na primeira resposta e mostrar logo o motivo verdadeiro.
+        erro.limiteAtingido = data.limiteAtingido === true;
+        if(data.upgrade) erro.upgrade = data.upgrade;
         throw erro;
       }
       return data;
@@ -7813,9 +7871,17 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     // servidor, a análise pode ter sido feita (e paga) sem a resposta chegar. Repetir só a
     // preparação — que é idempotente — e depois analisar separado nunca paga duas vezes à toa.
     try{ prep = await chamar({ action:"preparar", audioWindowDays:options.audioWindowDays || "90", analisarDireto: tentativa === 1 }, 90000); }
-    catch(error){ erroPrep=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
+    catch(error){ erroPrep=error; if(error?.limiteAtingido) break; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
   }
   if(!prep) throw erroPrep || new Error("Falha recuperável ao preparar a importação.");
+  // v1174 — o servidor já tentou analisar aqui dentro e o teto do dia recusou. Não adianta seguir
+  // pra etapa "analisar": para agora, com o motivo real na tela.
+  if(prep.limiteAtingido){
+    const erroLimite = new Error(prep.limiteAtingido.error || "Limite de análises de IA atingido para esta conta.");
+    erroLimite.limiteAtingido = true;
+    if(prep.limiteAtingido.upgrade) erroLimite.upgrade = prep.limiteAtingido.upgrade;
+    throw erroLimite;
+  }
   // v1162 — O REAPROVEITAMENTO APARECE DURANTE O PROGRESSO, NÃO SÓ NO FIM. Pedido do dono: o quadro
   // verde do resultado "aparece tão rápido e muda tão rápido para o lead que não dá nem pra
   // perceber — por que não vai informando isso no decorrer, de 0% até 100%?". Cada etapa agora diz
@@ -7895,8 +7961,14 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
         audiosReaproveitados,
         audiosNovosSolicitados:audios.length
       }, 150000);
-    }catch(error){ erroAnalise=error; if(tentativa<2) await new Promise(r=>setTimeout(r,1200)); }
+    }catch(error){
+      erroAnalise=error;
+      // v1174 — teto do dia atingido: não repete (repetir só dobra a espera com a mesma recusa).
+      if(error?.limiteAtingido) break;
+      if(tentativa<2) await new Promise(r=>setTimeout(r,1200));
+    }
   }
+  cpioPararRelogioEtapa();
   if(!result) throw erroAnalise || new Error("Falha recuperável ao analisar a conversa.");
   // v1131 — este ponto jogava a importação inteira no lixo e mostrava "Não foi possível analisar",
   // sem dizer por quê. Era o que acontecia com TODA conta nova: quem acabou de se cadastrar ainda

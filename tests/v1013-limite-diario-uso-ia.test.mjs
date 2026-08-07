@@ -105,11 +105,11 @@ await comServidor(null, async ({ chamadas }) => {
 // dono do produto sem precisar mudar código) e cai num padrão seguro se ausente/inválido.
 {
   delete process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA;
-  assert.equal(limiteAnalisesIADoDia(), 50, "padrão sem env var configurada (v1112 — era 200, dono baixou pra 50)");
+  assert.equal(limiteAnalisesIADoDia(), 150, "padrão sem env var configurada (v1112 baixou 200→50; v1174 subiu pra 150 a pedido do dono, que usa a conta original como bancada de teste)");
   process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA = "80";
   assert.equal(limiteAnalisesIADoDia(), 80, "env var configurada precisa valer");
   process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA = "-5";
-  assert.equal(limiteAnalisesIADoDia(), 50, "valor inválido (negativo) cai no padrão seguro");
+  assert.equal(limiteAnalisesIADoDia(), 150, "valor inválido (negativo) cai no padrão seguro");
   delete process.env.CORRETOR_PRO_LIMITE_ANALISES_DIA;
 }
 

@@ -265,6 +265,11 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
    desenho neutro do chip-teste — cor só entra se houver algo a destacar, e aqui é só informação. */
 .chip-uso-ia{ display:inline-flex; align-items:center; gap:4px; font-size:12.5px; font-weight:800; padding:3px 10px; border-radius:999px; color:var(--cp-soft); background:var(--cp-panel-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .chip-uso-ia.carregando{ color:var(--cp-muted); font-weight:600; }
+/* v1174 — o mesmo selinho conta quantas análises de IA a conta já usou HOJE contra o teto dela.
+   Aqui a cor tem função: âmbar avisa que está chegando perto, vermelho diz que já travou — os dois
+   avisos que não existiam antes (o dono só descobria o teto quando o corretor esbarrava nele). */
+.chip-uso-ia.atencao{ color:var(--st-teste, #e0a44a); }
+.chip-uso-ia.estourado{ color:var(--st-bloq, #e5484d); }
 
 /* v1006/v1008 — painel administrativo legível E em escala no celular: cartão COMPACTO por
    corretor (nome + status na 1ª linha, dados numa linha de etiquetas, ações escondidas atrás
@@ -287,6 +292,7 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
      celular desenhava selo dentro de selo (a caixa cinza genérica + o chip por dentro dela).
      v1172 — mesma coisa pro selinho novo de "Uso de IA hoje" (.chip-uso-ia). */
   .tabela-admin td[data-rotulo="Dias de teste"],
+  .tabela-admin td[data-rotulo="Análises hoje"],
   .tabela-admin td[data-rotulo="Uso de IA hoje"]{ background:none; padding:0; }
   .tabela-admin td::before{ content:attr(data-rotulo); color:var(--cp-muted); font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .tabela-admin td[data-rotulo=""]::before{ content:none; }
