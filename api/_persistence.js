@@ -658,6 +658,64 @@ export function _nomesMesmoLead(aId = "", bId = "") {
   return !!a && !!b && a === b;
 }
 
+// v1176 — NOME DE ARQUIVO QUE NÃO IDENTIFICA NINGUÉM.
+//
+// O nome do ZIP é uma das três chaves de identidade do cliente. Só que nem todo ZIP chega com o
+// nome do contato: quando o aparelho compartilha o arquivo sem nome (ou com o nome padrão da
+// exportação), o app cai no nome genérico "conversa-whatsapp.zip". Duas importações genéricas
+// dessas tinham exatamente a MESMA chave — e viravam o mesmo cliente. Embalagem não é identidade.
+const _IDENTIDADES_SEM_DONO = new Set([
+  "conversa whatsapp", "conversa de whatsapp", "conversa do whatsapp", "conversa",
+  "whatsapp chat", "chat whatsapp", "whatsapp", "chat", "arquivo", "documento",
+  "cliente", "cliente importado", "cliente importada", "cliente nao identificado"
+]);
+
+// Últimos 8 dígitos de um telefone (a chave usada pra reconhecer o mesmo número), ou null.
+export function _chaveFone8(valor = "") {
+  const d = _digitsIdentity(valor);
+  return d.length >= 8 ? d.slice(-8) : null;
+}
+
+// Chave de identidade utilizável (ou "" quando o texto não identifica ninguém).
+export function _chaveIdentidadeUtil(valor = "") {
+  const chave = _nomeIdentity(valor);
+  if (!chave || chave.length < 3) return "";
+  return _IDENTIDADES_SEM_DONO.has(chave) ? "" : chave;
+}
+
+// v1176 — A TRAVA QUE FALTAVA: nenhuma chave sozinha funde duas PESSOAS DIFERENTES.
+//
+// Telefone e nome de arquivo são atalhos para reconhecer o mesmo cliente entre uma importação e
+// outra — não provas. Quando os dois lados têm nome de gente e são nomes de pessoas claramente
+// diferentes, a fusão automática está proibida: cria-se um cadastro separado (que o corretor pode
+// juntar depois, na mão, com "Juntar clientes") em vez de despejar a conversa de um cliente dentro
+// do histórico de outro, o que ninguém consegue desfazer.
+//
+// Continua liberado o caso real que os atalhos existem para atender: contato renomeado no celular
+// entre duas exportações ("Fulana" → "Fulana Sobrenome", "Fulano" → "Fulano Torre 2"), ou
+// seja, o mesmo nome com palavras a mais no meio/fim.
+export function _nomesPodemSerOMesmoCliente(nomeA = "", nomeB = "") {
+  const a = String(nomeA || "").trim();
+  const b = String(nomeB || "").trim();
+  // Sem nome utilizável de um dos lados, quem decide é a outra chave (comportamento de sempre).
+  if (!a || !b || _nomeRuimIdentity(a) || _nomeRuimIdentity(b)) return true;
+  const ia = _chaveIdentidadeUtil(a), ib = _chaveIdentidadeUtil(b);
+  if (!ia || !ib) return true;
+  if (_nomesMesmoLead(ia, ib)) return true;
+  const pa = ia.split(" ").filter(Boolean);
+  const pb = ib.split(" ").filter(Boolean);
+  if (!pa.length || !pb.length) return true;
+  const [menor, maior] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
+  // Nome que só ganhou palavras no fim ("fulana" ⊂ "fulana sobrenome").
+  if (menor.every((palavra, i) => maior[i] === palavra)) return true;
+  // Nome + sobrenome idênticos e só acréscimos no meio/fim (mesma regra que a tela usa pra
+  // perguntar "é o mesmo cliente?" — ver nomesParecemMesmoCliente em app.js).
+  if (menor.length < 2 || pa[0] !== pb[0] || pa[1] !== pb[1]) return false;
+  let i = 0;
+  for (const palavra of maior) if (i < menor.length && palavra === menor[i]) i++;
+  return i >= menor.length;
+}
+
 export function _assinaturaTimelineV681(m) {
   if (!m || typeof m !== "object") return "";
   if (m.mediaFile) return "audio|" + String(m.mediaFile).split(/[\\/]/).pop().toLowerCase().trim();
@@ -724,11 +782,21 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   const analysis = result?.analysis || {};
   const lead = result?.lead || analysis?.lead || {};
   const nomeArquivoNovo = _cleanArquivoIdentity(fileName || result?.txtFile || path?.split("/").pop() || "");
-  const arquivoKey = _nomeIdentity(nomeArquivoNovo);
-  const nomeNovo = _nomeIdentity(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || nomeArquivoNovo);
+  // v1176 — nome de arquivo genérico ("conversa-whatsapp.zip") não identifica cliente nenhum.
+  const arquivoKey = _chaveIdentidadeUtil(nomeArquivoNovo);
+  const nomeNovo = _chaveIdentidadeUtil(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || nomeArquivoNovo);
   const phone = _digitsIdentity(lead?.phone || analysis?.lead?.phone || result?.phone || "");
   const phoneKey = phone.length >= 8 ? phone.slice(-8) : "";
   if (!phoneKey && arquivoKey.length < 3 && nomeNovo.length < 3) return null;
+  // v1176 — nome do cliente desta importação, como ele vai aparecer na tela. É com ele que a
+  // trava contra fusão de pessoas diferentes compara (ver _nomesPodemSerOMesmoCliente).
+  const nomeVisivelNovo = String(lead?.clientName || analysis?.clientName || analysis?.lead?.clientName || nomeArquivoNovo || "").trim();
+  const nomeVisivelDaLinha = (linha) => {
+    const ra = linha?.resultado_analise || {};
+    return String(linha?.nome_analise || linha?.nome_analise_lead || ra?.clientName || ra?.lead?.clientName
+      || _cleanArquivoIdentity(linha?.nome_arquivo || linha?.arquivo_nome || "") || "").trim();
+  };
+  const podeFundirCom = (linha) => _nomesPodemSerOMesmoCliente(nomeVisivelNovo, nomeVisivelDaLinha(linha));
 
   // v1144 — "por que 2x em cada importação? não tem nem coerência isso" (dono). Ele está certo.
   //
@@ -761,8 +829,10 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
         const foneLinha = _digitsIdentity(ra?.lead?.phone || linha.telefone || "");
         const arquivoLinha = _nomeIdentity(linha.nome_arquivo || linha.arquivo_nome || "");
         const nomeLinha = _nomeIdentity(ra?.clientName || ra?.lead?.clientName || linha.nome_arquivo || linha.arquivo_nome || "");
-        const bateFone = !!phoneKey && foneLinha.length >= 8 && foneLinha.slice(-8) === phoneKey;
-        const bateArquivo = arquivoKey.length >= 3 && !!arquivoLinha && arquivoLinha === arquivoKey;
+        // v1176 — telefone e nome de arquivo só valem quando os nomes podem ser a mesma pessoa.
+        const mesmaPessoaPossivel = podeFundirCom(linha);
+        const bateFone = mesmaPessoaPossivel && !!phoneKey && foneLinha.length >= 8 && foneLinha.slice(-8) === phoneKey;
+        const bateArquivo = mesmaPessoaPossivel && arquivoKey.length >= 3 && !!arquivoLinha && arquivoLinha === arquivoKey;
         const bateNome = nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo) && !!nomeLinha
           && !_nomeRuimIdentity(nomeLinha) && _nomesMesmoLead(nomeLinha, nomeNovo);
         if (bateFone || bateArquivo || bateNome) {
@@ -825,7 +895,10 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
       }
       _dedupeIndexadoDisponivel = true;
       const achado = Array.isArray(achados) && achados[0];
-      if (achado) return { row: achado, via: t.via };
+      // v1176 — telefone e nome de arquivo não fundem duas pessoas de nomes diferentes. Quando a
+      // chave bate mas os nomes são de gente diferente, segue pras próximas chaves (e, se nenhuma
+      // servir, o cliente é salvo como cadastro novo, sem misturar conversa com a de ninguém).
+      if (achado && (t.via === "nome" || podeFundirCom(achado))) return { row: achado, via: t.via };
     }
   }
 
@@ -905,14 +978,16 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     // histórico do lead e a importação re-transcreveria todos os áudios sem ninguém perceber.
     throw new Error(`Não consegui ler a conversa já salva deste cliente (${row.id}): ${ultimoErro?.message || "motivo desconhecido"}`);
   };
+  // v1176 — as duas varreduras por atalho (telefone e nome do arquivo) passam pela mesma trava do
+  // caminho rápido: elas reconhecem o MESMO cliente, nunca fundem pessoas de nomes diferentes.
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(row.fone_analise || ra?.lead?.phone || row.telefone || "");
-    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey) return comTimeline(row, "telefone");
+    if (phoneKey && rowPhone.length >= 8 && rowPhone.slice(-8) === phoneKey && podeFundirCom(row)) return comTimeline(row, "telefone");
   }
   for (const row of data) {
-    const rowFile = _nomeIdentity(row.nome_arquivo || row.arquivo_nome || "");
-    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return comTimeline(row, "arquivo");
+    const rowFile = _chaveIdentidadeUtil(row.nome_arquivo || row.arquivo_nome || "");
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey && podeFundirCom(row)) return comTimeline(row, "arquivo");
   }
   // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
   // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
@@ -989,6 +1064,14 @@ export function _mesclarAnaliseV681(anterior = {}, nova = {}) {
     merged.clientName = nomeAnt;
     merged.lead = { ...(merged.lead || {}), clientName: nomeAnt, phone: merged?.lead?.phone || anterior?.lead?.phone || "" };
   }
+  // v1176 — TELEFONE DIGITADO PELO CORRETOR NUNCA É APAGADO POR UMA REIMPORTAÇÃO.
+  // Desde que o número achado no meio da conversa deixou de virar "telefone do cliente" (ver
+  // telefoneDoContatoExportado em _pipeline.js), a importação chega quase sempre SEM telefone —
+  // e o spread {...anterior, ...nova} trocaria o objeto `lead` inteiro, levando junto o número
+  // que o corretor tinha cadastrado na mão. O que vale é: telefone novo só substitui se existir.
+  const fonteAnt = String(anterior?.lead?.phone || "").trim();
+  const fonteNovo = String(nova?.lead?.phone || "").trim();
+  if (!fonteNovo && fonteAnt) merged.lead = { ...(merged.lead || {}), phone: fonteAnt };
   const prodAnt = anterior?.produtoInteresse || anterior?.lead?.product || "";
   const prodNovo = nova?.produtoInteresse || nova?.lead?.product || "";
   if ((!prodNovo || /não identificado|nao identificado/i.test(prodNovo)) && prodAnt) {
@@ -1054,8 +1137,10 @@ export async function persistProcessingResult({
     nome_arquivo: nomeArquivo,
     arquivo_nome: nomeArquivo,
     dedupe_fone8: _foneDedupe.length >= 8 ? _foneDedupe.slice(-8) : null,
-    dedupe_arquivo: _nomeIdentity(nomeArquivo) || null,
-    dedupe_nome: _nomeIdentity(analysis?.clientName || analysis?.lead?.clientName || lead?.clientName || nomeArquivo) || null,
+    // v1176 — chave genérica ("conversa-whatsapp.zip") não é identidade de ninguém: fica em branco
+    // pra não colar duas importações sem nome no mesmo cliente (ver _chaveIdentidadeUtil).
+    dedupe_arquivo: _chaveIdentidadeUtil(nomeArquivo) || null,
+    dedupe_nome: _chaveIdentidadeUtil(analysis?.clientName || analysis?.lead?.clientName || lead?.clientName || nomeArquivo) || null,
     status: "pronto",
     // v1082 — a etapa é decisão DO CORRETOR, não da IA. Só existem dois valores desde a v1069
     // ("Ativo" e "Geladeira", ver ETAPAS_VALIDAS em api/lead-update.js). Antes entrava aqui o
@@ -1090,6 +1175,10 @@ export async function persistProcessingResult({
       // cliente que o corretor tinha arquivado voltava sozinho pra fila do dia (a Home considera
       // ativo tudo que não é "Geladeira"). A etapa que vale é sempre a que já estava salva.
       etapa: normalizarEtapaBanco(anterior.etapa), // v1105 — não perpetua texto gravado no lugar da etapa
+      // v1176 — reimportação sem telefone (o caso normal, ver telefoneDoContatoExportado) não pode
+      // apagar a chave de telefone que o cadastro já tinha; senão o cliente que o corretor
+      // identificou pelo número perderia esse reconhecimento na importação seguinte.
+      dedupe_fone8: canonicalPayload.dedupe_fone8 || _chaveFone8(anterior.telefone || anterior.resultado_analise?.lead?.phone || ""),
       resultado_analise: mergedAnalysis,
       timeline_json: mergeTimeline.timeline,
       texto_extraido: mergeTimeline.timeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author || ""}: ${m.text || ""}`).join("\n"),
@@ -1157,7 +1246,9 @@ export async function persistProcessingResult({
     const leadBase = {
       id: leadId,
       nome: lead?.clientName || "Cliente importado",
-      telefone: lead?.phone || null,
+      // v1176 — mesma regra da análise mesclada: importação sem telefone não apaga o número que
+      // já estava cadastrado (quase sempre digitado à mão pelo corretor).
+      telefone: lead?.phone || existenteV681?.row?.telefone || existenteV681?.row?.resultado_analise?.lead?.phone || null,
       empreendimento_interesse: lead?.product || "Não identificado",
       produto: lead?.product || "Não identificado",
       etapa: "NOVO / INICIAL",

@@ -8171,6 +8171,33 @@ function nomesParecemMesmoCliente(nomeA, nomeB){
   return i >= menor.length;
 }
 
+// v1176 — texto que não identifica cliente nenhum: vazio, rótulo genérico da importação ou um
+// nome que na verdade é um número. Quando o nome é assim, ele não serve nem pra autorizar nem
+// pra proibir uma fusão — quem decide é a outra pista (id do servidor, telefone, arquivo).
+function nomeSemIdentidadeDeCliente(valor){
+  const s = String(valor || "").trim();
+  if(!s) return true;
+  if(/^cliente( importad[oa])?$/i.test(s)) return true;
+  if(/^cliente n[ãa]o identificad[oa]$/i.test(s)) return true;
+  const digitos = s.replace(/\D/g, "");
+  const letras = s.replace(/[^a-zA-ZÀ-ÿ]/g, "");
+  return digitos.length >= 8 && letras.length < 3;
+}
+
+// v1176 — "pode ser a mesma pessoa?" (mesma pergunta que a gravação faz do lado do servidor, em
+// _nomesPodemSerOMesmoCliente). Vale pra nome idêntico, pra nome que só ganhou palavras
+// ("Fulana" → "Fulana Sobrenome") e pra contato renomeado com o empreendimento no fim. Dois nomes
+// de pessoas diferentes respondem NÃO — e aí nenhuma conversa entra no cadastro da outra.
+function nomesPodemSerOMesmoCliente(nomeA, nomeB){
+  if(nomeSemIdentidadeDeCliente(nomeA) || nomeSemIdentidadeDeCliente(nomeB)) return true;
+  const a = _palavrasNome(nomeA), b = _palavrasNome(nomeB);
+  if(!a.length || !b.length) return true;
+  if(a.join(" ") === b.join(" ")) return true;
+  const [menor, maior] = a.length <= b.length ? [a, b] : [b, a];
+  if(menor.every((palavra, i) => maior[i] === palavra)) return true;
+  return nomesParecemMesmoCliente(nomeA, nomeB);
+}
+
 // Procura na base inteira um lead com o mesmo nome técnico (maiúsculas, espaços e acentos ignorados)
 // e, na ausência desse, um lead com nome só PARECIDO (ver nomesParecemMesmoCliente acima).
 // Nomes apenas parecidos e telefone nunca decidem uma fusão automática — só levantam a pergunta.
@@ -8191,9 +8218,17 @@ async function acharLeadExistente(nome, idConhecido = ""){
   // a rean\u00e1lise paga e o retrabalho de transcri\u00e7\u00e3o. Sem isso, um nome escrito diferente entre as
   // duas importa\u00e7\u00f5es fazia a tela seguir pelo caminho de "cliente novo" logo depois de o servidor
   // ter tratado tudo como reimporta\u00e7\u00e3o do mesmo cliente.
+  // v1176 — ...mas essa identificação NÃO passa por cima do nome que está na tela. Print do dono
+  // (07/08/2026): exportou a conversa de uma cliente e o app abriu o cadastro de OUTRA — o servidor
+  // tinha reconhecido "o mesmo cliente" por um número de telefone escrito no meio da conversa, e
+  // aqui o id era aceito de olhos fechados, atualizando o cadastro de outra pessoa sem perguntar
+  // nada. Agora: nomes de gente diferente → o id não vale; nomes só parecidos → ele pergunta.
   if(idAlvo){
     const porId = leads.find(l => String(l?.id || "") === idAlvo);
-    if(porId) return { lead:porId, via:"id-do-servidor" };
+    if(porId && nomesPodemSerOMesmoCliente(nome, porId.name)){
+      const semDuvida = norm(porId.name) === alvo || nomeSemIdentidadeDeCliente(nome) || nomeSemIdentidadeDeCliente(porId.name);
+      return { lead:porId, via: semDuvida ? "id-do-servidor" : "nome-parecido" };
+    }
   }
   if(alvo.length < 2) return null;
   const exato = leads.find(l => l?.id && norm(l.name) === alvo);

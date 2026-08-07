@@ -444,9 +444,32 @@ async function transcribeAudioOnce({ zip, audioName, openai, cache }) {
 // v1092 — buildTimeline removida: era a montagem antiga da conversa a partir do .zip, exportada
 // mas sem nenhum importador. Quem faz esse trabalho hoje é montarTimelineComTranscricoes().
 
+// v1176 — UM NÚMERO ESCRITO NO MEIO DA CONVERSA NÃO É O TELEFONE DO CLIENTE.
+//
+// Print do dono (07/08/2026, versão 1175): ele exportou a conversa de uma cliente e o app abriu o
+// cadastro de OUTRA. Causa: esta função varria o TEXTO INTEIRO da conversa (os dois lados, mais
+// os áudios transcritos) e o PRIMEIRO número com jeito de telefone virava "o telefone do cliente".
+// Só que o número mais comum de aparecer escrito numa conversa de corretor é o DELE mesmo ("me
+// chama no (54) 9xxxx-xxxx"), repetido em conversa após conversa. Esse número era gravado como
+// chave de identidade do lead (dedupe_fone8) — e a busca por cliente já existente confere o
+// telefone ANTES do nome. Resultado: duas pessoas diferentes que receberam o mesmo número escrito
+// viravam o mesmo cadastro, e a conversa importada era despejada no cliente errado.
+//
+// Continua existindo só como informação (telefoneCitadoNaConversa), nunca como identidade.
 function detectPhone(text = "") {
   const matches = String(text).match(/(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}/g) || [];
   return matches.map(v => v.replace(/\D/g, "")).find(v => v.length >= 10) || "";
+}
+
+// O ÚNICO telefone confiável dentro de um export do WhatsApp é o do próprio contato — e ele só
+// aparece quando o contato NÃO está salvo na agenda: aí o WhatsApp escreve o número no lugar do
+// nome ("+55 54 99913-3331: bom dia"). Se o rótulo tem letra, é nome salvo na agenda e o número
+// do cliente simplesmente não está no arquivo (quem digita ele é o corretor, na edição do lead).
+function telefoneDoContatoExportado(nomeContato = "") {
+  const s = String(nomeContato || "").trim();
+  if (!s || /[a-zà-ÿ]/i.test(s)) return "";
+  const digitos = s.replace(/\D/g, "");
+  return digitos.length >= 10 && digitos.length <= 13 ? digitos : "";
 }
 
 function detectProduct(fullText = "") {
@@ -479,9 +502,14 @@ export function guessLeadData(timeline, corretorNome = "") {
   const authors = [...new Set(timeline.map(m => m.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
   const fullText = timeline.map(m => m.text).join(" ");
   const lastInteraction = [...timeline].reverse().find(m => m.type !== "audio_unlinked") || timeline[timeline.length - 1] || null;
+  const clientName = pickClientName(authors, corretorNome);
   return {
-    clientName: pickClientName(authors, corretorNome),
-    phone: detectPhone(fullText),
+    clientName,
+    // v1176 — só o telefone do PRÓPRIO contato exportado (ver telefoneDoContatoExportado).
+    phone: telefoneDoContatoExportado(clientName),
+    // Informação, nunca identidade: o número que apareceu escrito na conversa (pode ser o do
+    // corretor, o de um parceiro, o de um anúncio). Não decide de quem é o cadastro.
+    telefoneCitadoNaConversa: detectPhone(fullText),
     participants: authors,
     product: detectProduct(fullText),
     totalTimelineItems: timeline.length,

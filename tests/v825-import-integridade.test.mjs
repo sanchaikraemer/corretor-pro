@@ -9,12 +9,18 @@ const lead = guessLeadData([
 ]);
 assert.equal(lead.clientName, 'Maria Prime', 'o nome exportado não pode perder palavras');
 assert.equal(lead.phone, '', 'telefone não é obrigatório para importar');
+// v1176 — o número escrito NO TEXTO da conversa deixou de virar "telefone do cliente": ele podia
+// ser o do próprio corretor (que ele manda pra todo mundo) e, como o telefone é chave de
+// identidade do cadastro, dois clientes diferentes acabavam no mesmo cadastro — foi o bug do
+// "exportei a conversa de uma cliente e abriu o cadastro de outra". Ele continua guardado como
+// informação, e o telefone de verdade vem do contato exportado ou da edição manual do lead.
 const leadComTelefone = guessLeadData([
   { author:'Maria Prime', text:'Meu contato é (54) 99999-0000.', type:'text' },
   { author:'Construtora Senger', text:'Recebi.', type:'text' }
 ]);
 assert.equal(leadComTelefone.clientName, 'Maria Prime');
-assert.equal(leadComTelefone.phone, '54999990000');
+assert.equal(leadComTelefone.phone, '', 'número citado na conversa não é identidade do cliente');
+assert.equal(leadComTelefone.telefoneCitadoNaConversa, '54999990000', 'mas segue registrado como informação');
 assert.equal(_nomesMesmoLead('maria prime', 'maria prime'), true);
 assert.equal(_nomesMesmoLead('maria prime', 'maria'), false);
 assert.equal(_nomesMesmoLead('maria souza', 'maria clara souza'), false);
