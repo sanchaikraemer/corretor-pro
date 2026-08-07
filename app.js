@@ -10612,6 +10612,40 @@ function cp1160MomentoIso(texto, baseIso){
   if(/\bhoje\b|(?:^|\s)(?:à|a)\s+(?:noite|tarde)|de\s+manh[ãa]|\bmais\s+tarde\b|depois\s+do\s+almo[çc]o/.test(t)) return baseIso;
   return null;
 }
+// ===== v1167 — o app NUNCA sugere sábado nem domingo =====
+//
+// Reclamação do dono, olhando a faixa "Ficou de te dar uma resposta": o app propôs retomar num
+// DOMINGO. "Nunca faça isso... nem no sábado."
+//
+// Está certo: uma data que o app escolhe sozinho e joga na Agenda é um compromisso de trabalho.
+// Mandar mensagem de venda no domingo não é só inútil — é o tipo de coisa que queima o corretor
+// com o cliente. Fim de semana vira segunda-feira.
+//
+// O que esta regra NÃO toca:
+//   • a data que o corretor escolhe à mão no calendário — é a agenda dele, e tem corretor que
+//     atende sábado de propósito (plantão de vendas);
+//   • "hoje" — se ele está com o app aberto num sábado, ele está trabalhando agora.
+// 0 = domingo, 6 = sábado. Meio-dia UTC pra o dia da semana ser o do CALENDÁRIO, sem depender do
+// fuso do aparelho.
+function cpDiaDaSemanaDoIso(iso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||""))) return null;
+  const d = new Date(String(iso).slice(0,10) + "T12:00:00Z");
+  return isNaN(d) ? null : d.getUTCDay();
+}
+function cpEhFimDeSemana(iso){
+  const dow = cpDiaDaSemanaDoIso(iso);
+  return dow === 0 || dow === 6;
+}
+// Sábado → segunda (+2). Domingo → segunda (+1). Dia útil → não mexe.
+function cpEmpurraPraDiaUtil(iso){
+  const dow = cpDiaDaSemanaDoIso(iso);
+  if(dow === 6) return cp1160SomaDias(iso, 2) || iso;
+  if(dow === 0) return cp1160SomaDias(iso, 1) || iso;
+  return iso;
+}
+window.cpEhFimDeSemana = cpEhFimDeSemana;
+window.cpEmpurraPraDiaUtil = cpEmpurraPraDiaUtil;
+
 // A promessa aberta do cliente, se houver: { texto, diaIso, retornoIso, sugestaoIso, diasAtras }.
 function cp1160PromessaDoCliente(l){
   const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
@@ -10637,11 +10671,14 @@ function cp1160PromessaDoCliente(l){
     const diasAtras = Math.abs(idade);
     if(diasAtras > 45) continue;                       // promessa velha é caso de resgate, não disto
     const momento = cp1160MomentoIso(texto, diaIso);
-    const retornoIso = cp1160SomaDias(cp1160BaseDoRespiro(l, momento || diaIso), cp1160RespiroDias());
-    if(!retornoIso) continue;
+    const retornoBruto = cp1160SomaDias(cp1160BaseDoRespiro(l, momento || diaIso), cp1160RespiroDias());
+    if(!retornoBruto) continue;
+    // v1167 — a conta pode cair no fim de semana; aí a proposta anda pra segunda.
+    const retornoIso = cpEmpurraPraDiaUtil(retornoBruto);
+    const adiadoDoFimDeSemana = retornoIso !== retornoBruto;
     const hoje = (typeof ui671HojeIso === 'function') ? ui671HojeIso() : "";
     const atrasado = (typeof ui671DiasAte === 'function') ? (ui671DiasAte(retornoIso) < 0) : false;
-    return { texto, diaIso, retornoIso, sugestaoIso: atrasado ? hoje : retornoIso, diasAtras };
+    return { texto, diaIso, retornoIso, retornoBruto, adiadoDoFimDeSemana, sugestaoIso: atrasado ? hoje : retornoIso, diasAtras };
   }
   return null;
 }
@@ -10711,9 +10748,14 @@ function cp1160BannerLeadHTML(lead){
   const venceu = dias != null && dias <= 0;
   // Plano, não cobrança (v1161): a data proposta é o prazo que o cliente deu + o respiro do Cérebro,
   // e aparece por extenso. Só quando esse dia já chegou é que a sugestão vira "hoje".
+  // v1167 — quando a conta cai num fim de semana, a data já vem empurrada pra segunda
+  // (cp1160PromessaDoCliente); aqui só explica o motivo, pra não parecer que o app errou a conta.
+  const notaFimDeSemana = p.adiadoDoFimDeSemana
+    ? ` (caía num fim de semana — o app não sugere contato de sábado ou domingo, foi pra segunda)`
+    : "";
   const plano = venceu
     ? `O respiro de ${respiro} ${respiro === 1 ? "dia" : "dias"} já passou (era ${escapeHtml(cp1160DataCurta(p.retornoIso))}).`
-    : `Sugiro retomar <b>${escapeHtml(cp1160DataCurta(p.retornoIso))}</b> — o respiro de ${respiro} ${respiro === 1 ? "dia" : "dias"} que você configurou, contado do prazo que o cliente deu.`;
+    : `Sugiro retomar <b>${escapeHtml(cp1160DataCurta(p.retornoIso))}</b>${notaFimDeSemana} — o respiro de ${respiro} ${respiro === 1 ? "dia" : "dias"} que você configurou, contado do prazo que o cliente deu.`;
   const idJs = JSON.stringify(String(lead?.id || ""));
   return `<div class="cp1160-lead">
     <b>Ficou de te dar uma resposta</b>
