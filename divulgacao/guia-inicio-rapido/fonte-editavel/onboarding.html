@@ -55,10 +55,8 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
 /* trama sutil de pontos — matéria fosca, quase invisível */
 .page::before{
   content:"";position:absolute;inset:0;pointer-events:none;
-  background-image:radial-gradient(rgba(247,250,251,.05) 0.45mm, transparent 0.45mm);
+  background-image:radial-gradient(rgba(247,250,251,.022) 0.45mm, transparent 0.45mm);
   background-size:5.6mm 5.6mm;
-  mask-image:linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.12) 40%, rgba(0,0,0,.4));
-  -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.12) 40%, rgba(0,0,0,.4));
 }
 .inner{position:absolute;inset:0;padding:13mm 13mm 11mm}
 
@@ -102,11 +100,11 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
 .devices{position:relative;height:84mm}
 .laptop{
   position:absolute;right:-3mm;top:2mm;width:101mm;
-  filter:drop-shadow(0 7mm 9mm rgba(0,0,0,.42));
 }
 .laptop .lid{
   background:#0A2830;border:1.1mm solid #143a45;border-bottom-width:0;
   border-radius:3.2mm 3.2mm 0 0;padding:1.2mm 1.2mm 0;
+  box-shadow:0 7mm 9mm rgba(0,0,0,.42);
 }
 .laptop .lid img{display:block;width:100%;border-radius:2mm 2mm 0 0}
 .laptop .base{
@@ -120,7 +118,7 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
 .phone{
   position:absolute;left:4mm;bottom:-1mm;width:24.5mm;z-index:2;
   background:#0A2830;border:1mm solid #143a45;border-radius:4.6mm;padding:1mm;
-  filter:drop-shadow(0 5mm 7mm rgba(0,0,0,.5));
+  box-shadow:0 5mm 7mm rgba(0,0,0,.5);
 }
 .phone img{display:block;width:100%;border-radius:3.4mm}
 
@@ -206,7 +204,7 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
 .dia-grid{margin-top:7mm;display:grid;grid-template-columns:44mm 1fr;gap:6mm;align-items:start}
 .phone3{
   background:#0A2830;border:1mm solid #143a45;border-radius:5mm;padding:1mm;
-  filter:drop-shadow(0 5mm 8mm rgba(0,0,0,.45));
+  box-shadow:0 5mm 8mm rgba(0,0,0,.45);
 }
 .phone3 img{display:block;width:100%;border-radius:4mm}
 .dia-telas{padding:5.5mm 6mm}
@@ -283,10 +281,10 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
       </div>
       <div class="devices">
         <div class="laptop">
-          <div class="lid"><img src="shots/final-desktop.png" alt=""></div>
+          <div class="lid"><img src="shots-opt/final-desktop.jpg" alt=""></div>
           <div class="base"></div>
         </div>
-        <div class="phone"><img src="shots/final-mobile.png" alt=""></div>
+        <div class="phone"><img src="shots-opt/final-mobile.jpg" alt=""></div>
       </div>
     </div>
 
@@ -436,7 +434,7 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
           sugeridas</b> já saem prontas, no seu tom.</p>
         </div>
         <div class="svis">
-          <img src="shots/final-passo3.png" alt="">
+          <img src="shots-opt/final-passo3.jpg" alt="">
           <svg class="anota" viewBox="0 0 1090 610" preserveAspectRatio="none">
             <rect x="12" y="176" width="620" height="90" rx="24" fill="none" stroke="#FF6258" stroke-width="5" opacity=".9"/>
           </svg>
@@ -454,7 +452,7 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
           o app lembra por você no dia certo.</p>
         </div>
         <div class="svis">
-          <img src="shots/final-passo4.png" alt="">
+          <img src="shots-opt/final-passo4.jpg" alt="">
           <svg class="anota" viewBox="0 0 1040 680" preserveAspectRatio="none">
             <ellipse cx="835" cy="588" rx="135" ry="62" fill="none" stroke="#FF6258" stroke-width="6"/>
             <path d="M700 588 C 560 588 520 520 520 470" fill="none" stroke="#FF6258" stroke-width="4" stroke-dasharray="2 10" stroke-linecap="round"/>
@@ -529,7 +527,7 @@ body{font-family:var(--font-display);color:var(--text);-webkit-font-smoothing:an
 
     <div class="dia-grid">
       <div class="dia-phone">
-        <div class="phone3"><img src="shots/home-mobile.png" alt=""></div>
+        <div class="phone3"><img src="shots-opt/home-mobile.jpg" alt=""></div>
       </div>
       <div class="dia-telas card">
         <div class="eyebrow" style="margin-bottom:3mm">As telas do app</div>
