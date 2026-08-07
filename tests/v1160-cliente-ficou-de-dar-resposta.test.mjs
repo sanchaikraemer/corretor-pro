@@ -33,6 +33,10 @@ const pedacos = [
   /function cp1160SomaDias\(iso, n\)\{[\s\S]*?\n\}/,
   /function cp1160DiaDaMensagem\(m\)\{[\s\S]*?\n\}/,
   /function cp1160MomentoIso\(texto, baseIso\)\{[\s\S]*?\n\}/,
+  // v1167 — cp1160PromessaDoCliente passou a empurrar a data pra fora do fim de semana.
+  /function cpDiaDaSemanaDoIso\(iso\)\{[\s\S]*?\n\}/,
+  /function cpEhFimDeSemana\(iso\)\{[\s\S]*?\n\}/,
+  /function cpEmpurraPraDiaUtil\(iso\)\{[\s\S]*?\n\}/,
   /function cp1160PromessaDoCliente\(l\)\{[\s\S]*?\n\}/,
   /function cp1160Pendentes\(items\)\{[\s\S]*?\n\}/
 ].map(re => {
@@ -66,8 +70,12 @@ const ONTEM = "2026-08-05T22:10:00-03:00";
 const HOJE = "2026-08-06T09:00:00-03:00";
 
 // ── 1. O RESPIRO É A REGRA: nunca no dia seguinte ─────────────────────────────────────────────
+// v1167 — a soma bruta (prazo do cliente OU último atendimento, + RESPIRO) continua sendo a
+// conta-base; o que mudou é o NOME da variável (retornoBruto, não mais retornoIso) porque agora
+// ela ainda passa por cpEmpurraPraDiaUtil antes de virar a data proposta de verdade — a conta em
+// si (não cravar +1, respeitar o respiro) é exatamente a mesma.
 assert.match(app,
-  /const retornoIso = cp1160SomaDias\(cp1160BaseDoRespiro\(l, momento \|\| diaIso\), cp1160RespiroDias\(\)\);/,
+  /const retornoBruto = cp1160SomaDias\(cp1160BaseDoRespiro\(l, momento \|\| diaIso\), cp1160RespiroDias\(\)\);/,
   "a data proposta = (o que aconteceu por último: prazo do cliente OU seu último atendimento) + RESPIRO — nunca um '+1' cravado (v1161)");
 // UM número só: o respiro É o "Descanso após atender" do Cérebro (ele recusou um campo separado).
 {
@@ -91,7 +99,10 @@ assert.equal(api.cp1160RespiroDias(), 3, "no teste, o descanso configurado é 3"
   const p = api.cp1160PromessaDoCliente(lead);
   assert.ok(p, "a promessa é reconhecida");
   assert.equal(p.diaIso, "2026-08-05", "o dia da fala dela");
-  assert.equal(p.retornoIso, "2026-08-08", "prazo dela (05/08, à noite) + 3 dias de respiro");
+  // v1167 — 08/08/2026 é sábado; a conta bruta cai nele, mas a proposta de verdade empurra pra
+  // segunda (10/08) — é a regra "nunca sugere fim de semana".
+  assert.equal(p.retornoIso, "2026-08-10", "prazo dela (05/08, à noite) + 3 dias de respiro = sábado, empurrado pra segunda");
+  assert.equal(p.adiadoDoFimDeSemana, true, "precisa vir marcado que a data foi adiada do fim de semana");
   assert.equal(api.cp1160Pendentes([lead]).length, 0, "hoje ela NÃO é cobrada — o respiro está correndo");
 
   // Com descanso de 1 dia (escolha dele), aí sim seria hoje — mas é escolha DELE, não padrão nosso.
@@ -193,7 +204,8 @@ assert.equal(api.cp1160MomentoIso("vou pensar", "2026-08-06"), null, "sem prazo 
   const atendidoOntem = Date.parse("2026-08-05T16:00:00-03:00");
   const lead = { id: 10, name: "Cliente Exemplo", recentMessages: promessaVelha, __atendidoTs: atendidoOntem };
   const p = api.cp1160PromessaDoCliente(lead);
-  assert.equal(p.retornoIso, "2026-08-08", "conta do atendimento de ontem (05/08) + 3 dias, não da promessa antiga");
+  // v1167 — mesma conta do caso acima: 08/08/2026 é sábado, empurra pra segunda (10/08).
+  assert.equal(p.retornoIso, "2026-08-10", "conta do atendimento de ontem (05/08) + 3 dias = sábado, empurrado pra segunda; não da promessa antiga");
   assert.equal(api.cp1160Pendentes([lead]).length, 0, "quem ele acabou de atender não é cobrado");
   // Sem atendimento nenhum, o mesmo cliente já estaria vencido.
   assert.equal(api.cp1160Pendentes([{ ...lead, __atendidoTs: 0 }]).length, 1, "sem atendimento, vale o prazo da promessa");
