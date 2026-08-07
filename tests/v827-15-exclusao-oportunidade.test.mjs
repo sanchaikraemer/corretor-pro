@@ -12,11 +12,25 @@ import { _buscarProcessamentoExistenteV681, _nomeIdentity, _nomeRuimIdentity, _n
 // trava fragmentava um único cliente em vários cadastros. Corrigido: reimportar pelo
 // mesmo nome SEMPRE atualiza o mesmo registro, não importa qual produto a IA
 // identificar naquela rodada.
-const supabaseFake = (rows) => ({
-  from() {
-    return { select() { return { eq() { return { order() { return { limit() { return Promise.resolve({ data: rows, error: null }); } }; } }; } }; } };
-  }
-});
+// O banco de mentira aceita quantos `.eq(...)` encadeados a consulta usar: a varredura filtra só
+// por empresa, e a releitura dirigida a um lead filtra por `id` E por empresa (v1163 — o backend
+// usa a chave de serviço, que passa por cima da RLS, então toda consulta filtra por empresa).
+const supabaseFake = (rows) => {
+  const responder = () => Promise.resolve({ data: rows, error: null });
+  const final = () => ({ order: () => ({ limit: responder }), limit: responder });
+  return {
+    from: () => ({
+      select: () => ({
+        // Só a releitura dirigida a um lead (`.eq("id")`) aceita um segundo filtro — desde a
+        // v1163 ela também filtra por empresa, porque o backend usa a chave de serviço e passa
+        // por cima da RLS. O caminho rápido de deduplicação (`.eq(empresa).eq(dedupe_*)`)
+        // continua sem suporte de propósito: é assim que este banco de mentira representa a
+        // migração 0010 não aplicada, e o código desliga esse caminho sozinho ao ver que falhou.
+        eq: (coluna) => (coluna === "id" ? { ...final(), eq: final } : final())
+      })
+    })
+  };
+};
 const rowJoao = { id: "row-joao", telefone: "", resultado_analise: { produtoInteresse: "Personalité", clientName: "João Pedro" } };
 
 const mesmoProduto = await _buscarProcessamentoExistenteV681(supabaseFake([rowJoao]), {
