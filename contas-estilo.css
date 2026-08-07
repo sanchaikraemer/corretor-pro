@@ -219,23 +219,28 @@ th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:upper
 .rodape-lista{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; font-size:12.5px; color:var(--cp-muted); }
 .btn-acoes-toggle{ display:none; }
 
-/* v1168 — pedido do dono ("muito feio e grotesto") olhando o painel de verdade: os 5 botões de
-   ação eram todos do mesmo tamanho/peso visual, e "Pago · Pro"/"Pago · Pro Master" (a cor padrão
-   dos botões, o coral) gritavam mais forte que "Excluir" (cinza neutro) — o oposto do que devia
-   ser. Agora cada ação tem a cor do que ela É: verde pra marcar como pagante (mesma cor da
-   pílula "Ativo"), âmbar pra bloquear (uma pausa, não uma sentença), vermelho só pra excluir
-   (irreversível, com ícone e separado por um traço das demais). "+7 dias teste" continua neutro.
-   Compacto de propósito: aqui, dentro da linha de ações, não no botão .pequeno do resto da tela. */
-.acoes-linha{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.acoes-linha .pequeno{ padding:7px 13px; font-size:12px; }
-.acoes-linha .separador-acao{ width:1px; align-self:stretch; min-height:22px; background:rgba(255,255,255,.14); margin:0 2px; }
-button.pequeno.btn-plano{ background:rgba(95,224,160,.12); color:var(--st-ativo); border:1px solid rgba(95,224,160,.4); }
-button.pequeno.btn-plano:hover{ background:rgba(95,224,160,.22); }
-button.pequeno.btn-atencao{ background:rgba(255,196,90,.12); color:var(--st-teste); border:1px solid rgba(255,196,90,.4); }
-button.pequeno.btn-atencao:hover{ background:rgba(255,196,90,.22); }
-button.pequeno.btn-perigo{ display:inline-flex; align-items:center; gap:5px; background:rgba(255,98,88,.14); color:var(--st-bloq); border:1px solid rgba(255,98,88,.45); }
-button.pequeno.btn-perigo:hover{ background:rgba(255,98,88,.26); }
-button.pequeno.btn-perigo svg{ width:13px; height:13px; flex:0 0 auto; }
+/* v1168 — os 5 botões de ação eram todos do mesmo peso visual, e "Pago · Pro"/"Pago · Pro Master"
+   (a cor padrão dos botões, o coral) gritavam mais forte que "Excluir" (cinza neutro) — o oposto
+   do que devia ser. Cada ação ganhou a cor do que ela É.
+   v1169 — o dono viu no ar e achou "ainda muito colorido e gritante": o preenchimento tingido +
+   texto na cor cheia, repetido em toda ação de toda linha, pesava demais numa lista de várias
+   contas. Reduzido ao mínimo que ainda separa uma ação da outra: fundo neutro igual ao resto do
+   painel (mesmo cinza do "+7 dias teste"), e só uma BOLINHA colorida antes do texto — a mesma
+   linguagem que a pílula de status já usa (.pill::before). Excluir é a exceção: continua com o
+   texto e o ícone vermelhos (é a única ação irreversível; essa precisa continuar pulando aos
+   olhos), mas sem preenchimento tingido. Botões menores também (padding e fonte reduzidos). */
+.acoes-linha{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.acoes-linha .pequeno{ padding:5px 10px; font-size:11px; background:var(--cp-panel-2); color:var(--cp-text); border:1px solid var(--cp-border); }
+.acoes-linha .separador-acao{ width:1px; align-self:stretch; min-height:18px; background:rgba(255,255,255,.14); margin:0 1px; }
+button.pequeno.btn-plano::before,
+button.pequeno.btn-atencao::before{ content:""; display:inline-block; width:5px; height:5px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+button.pequeno.btn-plano::before{ background:var(--st-ativo); }
+button.pequeno.btn-atencao::before{ background:var(--st-teste); }
+button.pequeno.btn-plano:hover,
+button.pequeno.btn-atencao:hover{ background:rgba(255,255,255,.06); }
+button.pequeno.btn-perigo{ display:inline-flex; align-items:center; gap:4px; color:var(--st-bloq); }
+button.pequeno.btn-perigo:hover{ background:rgba(255,98,88,.1); border-color:rgba(255,98,88,.4); }
+button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
 
 /* Selinho de "Dias de teste": normal (cinza), urgente (âmbar, ≤2 dias) e vencido (vermelho,
    pulsando). O pulso é um anel se acendendo e apagando ao redor do selinho — não é opacidade indo

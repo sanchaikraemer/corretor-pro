@@ -38,15 +38,17 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
   assert.match(admin, /class="separador-acao"/, 'Excluir precisa estar visualmente separado das demais ações (é a única irreversível)');
   assert.match(admin, /SVG_LIXEIRA/, 'Excluir precisa de um ícone que deixe claro que é destrutivo');
 
+  // v1169 — o dono viu no ar e achou "ainda muito colorido e gritante": o preenchimento tingido +
+  // texto na cor cheia em toda ação de toda linha pesava demais. O MECANISMO de diferenciação
+  // mudou (era fundo tingido + texto colorido; virou fundo neutro + uma bolinha colorida, com
+  // "Excluir" como única exceção que mantém texto/ícone vermelhos por ser irreversível) — mas as
+  // três classes continuam precisando existir E continuar visualmente distinguíveis uma da outra.
   for (const classe of ['btn-plano', 'btn-atencao', 'btn-perigo']) {
-    assert.match(css, new RegExp(`button\\.pequeno\\.${classe}\\{`), `contas-estilo.css precisa estilizar .${classe}`);
+    assert.match(css, new RegExp(`button\\.pequeno\\.${classe}`), `contas-estilo.css precisa estilizar .${classe}`);
   }
-
-  // As três cores precisam ser DIFERENTES entre si (a causa raiz do "feio": tudo do mesmo jeito).
-  const corDe = (classe) => (css.match(new RegExp(`button\\.pequeno\\.${classe}\\{[^}]*color:([^;]+);`)) || [])[1];
-  const cores = ['btn-plano', 'btn-atencao', 'btn-perigo'].map(corDe);
-  assert.ok(cores.every(Boolean), 'as três classes precisam declarar uma cor de texto');
-  assert.equal(new Set(cores).size, 3, `as três ações precisam de cores DIFERENTES entre si (achei: ${cores.join(', ')})`);
+  assert.match(css, /button\.pequeno\.btn-plano::before\{[^}]*background:var\(--st-ativo\)/, 'Pago · Pro/Pro Master precisam de um sinal verde (mesma cor da pílula "Ativo")');
+  assert.match(css, /button\.pequeno\.btn-atencao::before\{[^}]*background:var\(--st-teste\)/, 'Bloquear precisa de um sinal âmbar — reversível, não é a mesma gravidade de excluir');
+  assert.match(css, /button\.pequeno\.btn-perigo\{[^}]*color:var\(--st-bloq\)/, 'Excluir precisa continuar com o texto vermelho — é a única ação irreversível, essa não pode ficar neutra');
 
   // Status + plano viraram UMA pílula só (não duas verdes lado a lado).
   assert.match(admin, /class="pill \$\{e\.status\}"/, 'a pílula de status continua existindo (v996)');
