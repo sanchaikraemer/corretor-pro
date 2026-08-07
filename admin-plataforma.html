@@ -51,7 +51,7 @@
 
       <div class="tabela-admin">
         <table>
-          <thead><tr><th>Corretor</th><th>Contato</th><th>Cidade/UF</th><th>Dias de teste</th><th>Usuários</th><th>Uso de IA hoje</th><th>Criado em</th><th>Ação</th></tr></thead>
+          <thead><tr><th>Corretor</th><th>Contato</th><th>Cidade/UF</th><th>Dias de teste</th><th>Usuários</th><th>Uso de IA hoje</th><th>Análises hoje</th><th>Criado em</th><th>Ação</th></tr></thead>
           <tbody id="linhas"></tbody>
         </table>
       </div>
@@ -155,6 +155,9 @@ let planosPorConta = {};
 // ele não achou, com a lista de corretores logo acima competindo pela atenção. Agora o custo de
 // HOJE de cada conta aparece direto no card dela, na lista principal, sem precisar rolar até lá.
 let usoIaPorConta = {};
+// v1174 — quanto do teto de análises do dia cada conta já consumiu. Antes isso era invisível: o
+// dono só descobria o contador quando ele estourava na cara do corretor, e não tinha como zerar.
+let limitesPorConta = {};
 let ultimosDados = [];
 let filtroStatus = 'todos';
 let filtroBusca = '';
@@ -247,7 +250,21 @@ function resumoCategorias(categorias) {
   return partes.length ? partes.join(' · ') : 'sem uso';
 }
 
-const SVG_LIXEIRA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+// v1174 — selo "análises de hoje" no card. Fica âmbar quando passa de 80% do teto e vermelho
+// quando estoura — é o aviso que faltava ANTES de a conta travar.
+function celulaLimiteAnalises(e) {
+  const lim = limitesPorConta[e.id];
+  if (!lim) return '<span class="chip-uso-ia carregando">—</span>';
+  const usado = Number(lim.usadoDia) || 0;
+  const teto = Number(lim.limiteDia) || 0;
+  if (!teto) return '<span class="chip-uso-ia">sem teto</span>';
+  const proporcao = usado / teto;
+  const classe = usado >= teto ? ' estourado' : (proporcao >= 0.8 ? ' atencao' : '');
+  const mes = lim.limiteMes ? ` · mês: ${Number(lim.usadoMes) || 0}/${lim.limiteMes}` : '';
+  return `<span class="chip-uso-ia${classe}" title="Análises de IA usadas hoje${mes}">${usado}/${teto} hoje</span>`;
+}
+
+const SVG_LIXEIRA ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
 // v1008 — o painel precisa aguentar MILHARES de corretores: a lista carrega em lotes de 50
 // ("Mostrar mais"), e busca/filtros/contadores são feitos pelo BANCO, não varrendo a tela.
@@ -292,6 +309,7 @@ async function carregarEmpresas({ manter = false } = {}) {
   renderizarPainel();
   carregarResumo();
   carregarPlanos();
+  carregarLimites();
 }
 
 function carregarMaisContas() { carregarEmpresas({ manter: true }); }
@@ -307,6 +325,39 @@ async function carregarPlanos() {
   } catch (_) {}
 }
 
+async function carregarLimites() {
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return;
+    const resp = await fetch('/api/admin-contas?relatorio=limites', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await resp.json().catch(() => ({}));
+    if (r?.ok) { limitesPorConta = r.limites || {}; renderizarPainel(); }
+  } catch (_) {}
+}
+
+// Zera a contagem de análises de HOJE de uma conta. É o destravamento manual pra quando o contador
+// subiu por falha (tentativa que não virou análise) e não por uso real.
+async function zerarLimiteAnalises(id) {
+  if (!confirm('Zerar a contagem de análises de IA de HOJE desta conta?')) return;
+  const msg = document.getElementById('msgPainel');
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    const token = data?.session?.access_token;
+    const resp = await fetch('/api/admin-contas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ action: 'zerar-limite-analises', organizationId: id })
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (!r?.ok) throw new Error(r?.error || 'Não consegui zerar a contagem.');
+    msg.className = 'ok'; msg.textContent = 'Contagem de análises de hoje zerada.';
+    carregarLimites();
+  } catch (e) {
+    msg.className = 'erro'; msg.textContent = e.message;
+  }
+}
+
 function renderizarPainel() {
   const linhas = document.getElementById('linhas');
   linhas.innerHTML = ultimosDados.map(e => `
@@ -317,6 +368,7 @@ function renderizarPainel() {
       <td data-rotulo="Dias de teste">${celulaDiasTeste(e)}</td>
       <td data-rotulo="Usuários">${e.qtd_usuarios}</td>
       <td data-rotulo="Uso de IA hoje">${celulaUsoIA(e)}</td>
+      <td data-rotulo="Análises hoje">${celulaLimiteAnalises(e)}</td>
       <td data-rotulo="Criado em">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</td>
       <td data-rotulo="">
         <button class="pequeno secundario btn-acoes-toggle" style="width:auto" onclick="toggleAcoes(this)">Ações ⌄</button>
@@ -324,6 +376,7 @@ function renderizarPainel() {
           <button class="pequeno btn-plano" onclick="definirPlano('${e.id}','pro')">Pago · Pro</button>
           <button class="pequeno btn-plano" onclick="definirPlano('${e.id}','pro-master')">Pago · Pro Master</button>
           <button class="pequeno secundario" onclick="estenderTeste('${e.id}')">+7 dias teste</button>
+          <button class="pequeno secundario" onclick="zerarLimiteAnalises('${e.id}')">Zerar análises de hoje</button>
           <button class="pequeno btn-atencao" onclick="bloquear('${e.id}')">Bloquear</button>
           ${String(e.id) === String(window.CORRETOR_PRO_EMPRESA_PRINCIPAL_ID || '') ? '' : `<span class="separador-acao" aria-hidden="true"></span><button class="pequeno btn-perigo" onclick="excluirConta('${e.id}')">${SVG_LIXEIRA}Excluir</button>`}
         </div>

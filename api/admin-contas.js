@@ -6,7 +6,7 @@
 // separado — ver NOTAS-v1039.md: o plano Hobby da Vercel só permite 12 Serverless Functions).
 // GET ?relatorio=uso-ia devolve o relatório; POST {action:"excluir-conta"} continua igual.
 import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin, emptyBucket } from "./_persistence.js";
-import { invalidarMemoriaComercialCache, upsertConfigComOrganizacao, PLANO_CONTRATADO_KEY } from "./_pipeline.js";
+import { invalidarMemoriaComercialCache, upsertConfigComOrganizacao, PLANO_CONTRATADO_KEY, resumoLimiteAnalises, zerarContagemAnalises, limiteAnalisesIADoDia, limiteAnalisesIADoDiaTeste, planoComercial } from "./_pipeline.js";
 import { estimarCustoUsd, cotacaoUsdBrl } from "./_iaCusto.js";
 
 function json(res, status, payload) {
@@ -179,6 +179,45 @@ async function relatorioPlanos(res, supabase) {
   return json(res, 200, { ok: true, planos });
 }
 
+// v1174 — TETO DE ANÁLISES VISÍVEL (e destravável) NO PAINEL.
+//
+// Até aqui o contador de análises do dia só aparecia pro corretor no momento em que ele estourava
+// ("Limite diário de N análises de IA foi atingido") — o dono não tinha NENHUM jeito de ver quanto
+// cada conta já tinha consumido, nem de zerar sem abrir o banco na mão. Foi assim que a conta dele
+// passou uma tarde inteira travada por um contador que tinha subido por FALHA, não por uso (ver
+// devolverReservaAnalise em _pipeline.js). Agora o painel mostra "usadas/teto" de cada conta e tem
+// o botão de zerar a contagem do dia.
+async function relatorioLimites(res, supabase) {
+  const { data: orgs, error } = await supabase.from("organizations").select("id,status");
+  if (error) return json(res, 500, { ok: false, error: error.message });
+  const { data: planosRows } = await supabase.from("direciona_config").select("organization_id,valor").eq("chave", PLANO_CONTRATADO_KEY);
+  const planoPorOrg = new Map((planosRows || []).map(r => [String(r.organization_id), String(r?.valor?.tipo || "")]));
+  const limites = {};
+  await Promise.all((orgs || []).map(async (org) => {
+    const id = String(org.id);
+    const uso = await resumoLimiteAnalises(id);
+    let limiteDia, limiteMes = null;
+    if (id === String(EMPRESA_PRINCIPAL_ID)) {
+      limiteDia = limiteAnalisesIADoDia();
+    } else if (org.status === "teste") {
+      limiteDia = limiteAnalisesIADoDiaTeste();
+    } else {
+      const plano = planoComercial(planoPorOrg.get(id));
+      limiteDia = plano.dia; limiteMes = plano.mes;
+    }
+    limites[id] = { usadoDia: uso.usadoDia, usadoMes: uso.usadoMes, limiteDia, limiteMes };
+  }));
+  return json(res, 200, { ok: true, limites });
+}
+
+async function zerarLimiteAnalises(body, res) {
+  const alvo = String(body?.organizationId || "").trim();
+  if (!alvo) return json(res, 400, { ok: false, error: "Informe a conta." });
+  const r = await zerarContagemAnalises(alvo, { mes: body?.zerarMes === true });
+  if (!r.ok) return json(res, 500, { ok: false, error: r.error || "Não consegui zerar a contagem." });
+  return json(res, 200, { ok: true, organizationId: alvo, zerouMes: r.zerouMes });
+}
+
 async function definirPlano(body, res, supabase) {
   const alvo = String(body?.organizationId || "").trim();
   const tipo = String(body?.plano || "").trim();
@@ -213,6 +252,12 @@ export default async function handler(req, res) {
     if (!(await requirePlatformAdmin(req, res, supabasePlanos))) return;
     return relatorioPlanos(res, supabasePlanos);
   }
+  if (req.method === "GET" && String(req.query?.relatorio || "") === "limites") {
+    const supabaseLimites = getSupabaseAdmin();
+    if (!supabaseLimites) return json(res, 500, { ok: false, error: "Supabase não configurado." });
+    if (!(await requirePlatformAdmin(req, res, supabaseLimites))) return;
+    return relatorioLimites(res, supabaseLimites);
+  }
 
   // Valida o login de quem chama (e a conta dele estar em dia). O id resolvido aqui NÃO é o
   // alvo da exclusão — o alvo vem do corpo, e só depois da checagem de administrador abaixo.
@@ -229,7 +274,8 @@ export default async function handler(req, res) {
 
   const body = await readJsonBody(req).catch(() => ({}));
   if (body?.action === "definir-plano") return definirPlano(body, res, supabase);
-  if (body?.action !== "excluir-conta") return json(res, 400, { ok: false, error: "Informe action excluir-conta ou definir-plano." });
+  if (body?.action === "zerar-limite-analises") return zerarLimiteAnalises(body, res);
+  if (body?.action !== "excluir-conta") return json(res, 400, { ok: false, error: "Informe action excluir-conta, definir-plano ou zerar-limite-analises." });
   const alvo = String(body?.organizationId || "").trim();
   if (!alvo) return json(res, 400, { ok: false, error: "Informe qual conta excluir." });
   if (alvo === EMPRESA_PRINCIPAL_ID) {

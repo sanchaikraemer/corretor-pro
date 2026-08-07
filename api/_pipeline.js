@@ -763,7 +763,11 @@ async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZ
 // alcança a conta original (as pagas usam os planos, o teste usa os 5/dia). Se um dia precisar
 // rodar "Reanalisar todos" na carteira inteira de uma vez, sobe temporariamente via
 // CORRETOR_PRO_LIMITE_ANALISES_DIA na Vercel, sem publicar nada.
-const LIMITE_ANALISES_IA_DIA_PADRAO = 50;
+// v1174 — dono pediu 150/dia ("empresa 1 sou eu, aumenta o limite pra 150 dia") depois de a
+// própria conta dele travar em "limite atingido" num dia de testes, com a OpenAI acusando gasto
+// de US$ 4,40 no mês inteiro. Ele testa o produto o dia todo e é a única conta com este fusível —
+// 50 estava apertado demais pra quem usa o app como bancada de teste.
+const LIMITE_ANALISES_IA_DIA_PADRAO = 150;
 // v1041 — auditoria item 6.3 ("Abuso do período de teste"): uma conta em teste grátis custava
 // exatamente o mesmo que uma conta paga, em análises por dia. Isso torna criar várias contas de
 // teste (mesmo sem confirmação de e-mail robusta ainda) um jeito barato de consumir IA de graça.
@@ -871,7 +875,10 @@ async function reservarAnaliseViaRPC(supabase, organizationId, hojeStr, mesStr, 
 // "analises-ia" (os outros contadores — voz, diagnóstico — continuam no genérico).
 // Mesma regra de sempre: falha de leitura/gravação NUNCA bloqueia análise real (fail-open).
 export async function verificarLimiteAnalises(organizationId) {
-  const aberto = { permitido: true, usado: 0, limite: limiteAnalisesIADoDia(), limiteMes: null, usadoMes: 0, emTeste: false, plano: null, motivo: null };
+  // `reservou` (v1174): diz se esta chamada REALMENTE somou 1 no contador. Só quem somou pode
+  // devolver depois (ver devolverReservaAnalise) — sem isso, uma falha na análise de uma conta
+  // sem Supabase configurado (fail-open, nada somado) devolveria uma unidade que nunca existiu.
+  const aberto = { permitido: true, reservou: false, usado: 0, limite: limiteAnalisesIADoDia(), limiteMes: null, usadoMes: 0, emTeste: false, plano: null, motivo: null };
   try {
     const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
     const supabase = getSupabaseAdmin();
@@ -905,7 +912,7 @@ export async function verificarLimiteAnalises(organizationId) {
     // 2) Reserva atômica (0012). Se a função não existir/der erro, cai no jeito antigo abaixo.
     const rpc = await reservarAnaliseViaRPC(supabase, organizationId, hojeStr, mesStr, limiteDia, limiteMes);
     if (rpc) {
-      return { ...meta, permitido: rpc.permitido, usado: Number(rpc.usado_dia) || 0, usadoMes: Number(rpc.usado_mes) || 0, motivo: rpc.permitido ? null : rpc.motivo };
+      return { ...meta, permitido: rpc.permitido, reservou: rpc.permitido === true, usado: Number(rpc.usado_dia) || 0, usadoMes: Number(rpc.usado_mes) || 0, motivo: rpc.permitido ? null : rpc.motivo };
     }
 
     // 3) Jeito antigo (lê, decide, grava) — rede de segurança quando a 0012 não está no banco.
@@ -914,7 +921,7 @@ export async function verificarLimiteAnalises(organizationId) {
     if (limiteMes == null) {
       if (usadoDia >= limiteDia) return { ...meta, permitido: false, usado: usadoDia, motivo: "dia" };
       await gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 });
-      return { ...meta, usado: usadoDia + 1 };
+      return { ...meta, reservou: true, usado: usadoDia + 1 };
     }
     const mensal = await lerValor("limite-mensal:analises-ia");
     const usadoMes = mensal.mes === mesStr ? (Number(mensal.contagem) || 0) : 0;
@@ -925,8 +932,89 @@ export async function verificarLimiteAnalises(organizationId) {
       gravar("limite-diario:analises-ia", { dia: hojeStr, contagem: usadoDia + 1 }),
       gravar("limite-mensal:analises-ia", { mes: mesStr, contagem: usadoMes + 1 })
     ]);
-    return { ...base, usado: usadoDia + 1, usadoMes: usadoMes + 1 };
+    return { ...base, reservou: true, usado: usadoDia + 1, usadoMes: usadoMes + 1 };
   } catch (_) { return aberto; }
+}
+
+// v1174 — DEVOLVE A RESERVA QUANDO A ANÁLISE NÃO ACONTECEU.
+//
+// Bug real (prints do dono em 06/08/2026, conta original travada em "Limite diário de 50 análises
+// de IA foi atingido" com a OpenAI mostrando 114 chamadas no MÊS INTEIRO e US$ 4,40 de gasto): o
+// contador era somado ANTES da chamada à IA e nunca era desfeito. Toda tentativa que falhava —
+// tempo esgotado, erro da OpenAI, análise sem as 3 mensagens — gastava uma unidade do teto do dia
+// do mesmo jeito que uma análise entregue. Pior: o app repete a etapa "analisar" 2x sozinho e
+// ainda repete a ação inteira, então UMA importação que falhava podia queimar 4 a 6 unidades das
+// 50. Em pouco tempo a conta ficava trancada sem ter recebido praticamente nenhuma análise.
+//
+// A reserva ANTES continua certa (é o que impede um laço descontrolado de gastar dinheiro real na
+// OpenAI). O que faltava era o outro lado: devolver quando não saiu análise nenhuma.
+export async function devolverReservaAnalise(organizationId) {
+  try {
+    if (!organizationId) return false;
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return false;
+    const hojeStr = diaCalendarioSP();
+    const mesStr = mesCalendarioSP();
+    // Caminho atômico (migração 0016), igual ao da reserva — mesma trava por empresa.
+    try {
+      const { data, error } = await supabase.rpc("devolver_analise_ia", { p_org: organizationId, p_dia: hojeStr, p_mes: mesStr });
+      if (!error && data && typeof data === "object") return true;
+    } catch (_) {}
+    // Rede de segurança quando a 0016 ainda não está no banco: lê, subtrai, grava (nunca abaixo
+    // de zero). Sem atomicidade — no pior caso devolve uma unidade a mais sob concorrência, o que
+    // é o lado seguro do erro num contador que é rede de proteção, não cobrança.
+    const baixar = async (chave, campo, valorEsperado) => {
+      const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chave).eq("organization_id", organizationId).maybeSingle();
+      const atual = data?.valor && typeof data.valor === "object" ? data.valor : null;
+      if (!atual || atual[campo] !== valorEsperado) return;
+      const contagem = Math.max(0, (Number(atual.contagem) || 0) - 1);
+      await upsertConfigComOrganizacao(supabase, organizationId, { chave, valor: { [campo]: valorEsperado, contagem }, atualizado_em: new Date().toISOString() }).catch(() => ({}));
+    };
+    await baixar("limite-diario:analises-ia", "dia", hojeStr);
+    await baixar("limite-mensal:analises-ia", "mes", mesStr);
+    return true;
+  } catch (_) { return false; }
+}
+
+// v1174 — leitura SEM reservar, pro painel administrativo mostrar quanto do teto do dia já foi
+// usado por cada conta (antes não havia nenhum jeito de enxergar isso: o dono só descobria o
+// contador existindo quando ele estourava, e não tinha como zerar sem mexer no banco na mão).
+export async function resumoLimiteAnalises(organizationId) {
+  const vazio = { usadoDia: 0, usadoMes: 0, dia: diaCalendarioSP(), mes: mesCalendarioSP() };
+  try {
+    if (!organizationId) return vazio;
+    const { getSupabaseAdmin } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return vazio;
+    const ler = async (chave) => {
+      const { data } = await supabase.from("direciona_config").select("valor").eq("chave", chave).eq("organization_id", organizationId).maybeSingle();
+      return data?.valor && typeof data.valor === "object" ? data.valor : {};
+    };
+    const [diario, mensal] = await Promise.all([ler("limite-diario:analises-ia"), ler("limite-mensal:analises-ia")]);
+    return {
+      ...vazio,
+      usadoDia: diario.dia === vazio.dia ? (Number(diario.contagem) || 0) : 0,
+      usadoMes: mensal.mes === vazio.mes ? (Number(mensal.contagem) || 0) : 0
+    };
+  } catch (_) { return vazio; }
+}
+
+// v1174 — zera a contagem do dia (e, opcionalmente, a do mês) de uma conta. Usado só pelo painel
+// administrativo do dono. É o botão de destravar quando o contador ficou alto por falha e não por
+// uso real — sem precisar esperar a virada do dia nem abrir o banco.
+export async function zerarContagemAnalises(organizationId, { mes = false } = {}) {
+  const { getSupabaseAdmin } = await import("./_persistence.js");
+  const supabase = getSupabaseAdmin();
+  if (!supabase || !organizationId) return { ok: false, error: "Supabase não configurado." };
+  const agora = new Date().toISOString();
+  const r1 = await upsertConfigComOrganizacao(supabase, organizationId, { chave: "limite-diario:analises-ia", valor: { dia: diaCalendarioSP(), contagem: 0 }, atualizado_em: agora }) || {};
+  if (r1.error) return { ok: false, error: r1.error.message };
+  if (mes) {
+    const r2 = await upsertConfigComOrganizacao(supabase, organizationId, { chave: "limite-mensal:analises-ia", valor: { mes: mesCalendarioSP(), contagem: 0 }, atualizado_em: agora }) || {};
+    if (r2.error) return { ok: false, error: r2.error.message };
+  }
+  return { ok: true, zerouMes: !!mes };
 }
 
 // v1069 — extrair-print/detectar-rosto/ler-prints-conversa (e os tetos de visão criados pra elas
@@ -2381,6 +2469,15 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // checa DEPOIS de confirmar que o Cérebro existe (não gasta a checagem à toa numa conta que
   // nem chegaria a analisar por falta de configuração) e ANTES de qualquer chamada real à OpenAI.
   const limiteDiario = await verificarLimiteAnalises(organizationId);
+  // v1174 — a unidade só fica gasta se sair análise de verdade. Enquanto esta análise não
+  // terminar bem, a reserva feita acima continua "em aberto" e é devolvida em qualquer saída que
+  // não entregue as três mensagens (ver devolverReservaAnalise).
+  let reservaEmAberto = limiteDiario.reservou === true;
+  const devolverReservaSeAberta = async () => {
+    if (!reservaEmAberto) return;
+    reservaEmAberto = false;
+    await devolverReservaAnalise(organizationId);
+  };
   if (!limiteDiario.permitido) {
     // v1108 — decisão do dono: bater no limite vira momento de venda, com botão direto pro
     // WhatsApp comercial (o app monta o botão a partir de `upgrade`). v1110 — cada plano tem o
@@ -2666,6 +2763,9 @@ ${timelineText}`;
     // Nenhuma sugestão de mensagem é reinterpretada, corrigida ou substituída pelo código.
     // A única validação local é técnica: presença das três sugestões.
     const trioOk = validacaoMensagens.ok;
+    // v1174 — sem as três mensagens, a rota devolve erro e o app joga a análise fora: pro corretor
+    // isso NÃO foi uma análise, então não pode consumir uma unidade do teto do dia dele.
+    if (!trioOk) await devolverReservaSeAberta();
 
     return {
       mode: "openai",
@@ -2777,6 +2877,10 @@ ${timelineText}`;
     };
   } catch (error) {
     const detail = describeOpenAIError(error);
+    // v1174 — tempo esgotado, erro da OpenAI, JSON inválido: nada foi entregue ao corretor, então
+    // a unidade reservada lá em cima volta pro teto do dia. Era exatamente daqui que vinha o
+    // sumiço das 50 análises da conta do dono num único dia de testes.
+    await devolverReservaSeAberta();
     return {
       mode: "erro_api",
       error: detail,

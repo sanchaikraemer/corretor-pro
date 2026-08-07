@@ -606,6 +606,9 @@ async function reanalisarLeadHandler702(req, res) {
       error: "A reanálise não foi concluída e nenhuma sugestão foi salva.",
       detail: avisoReanalise,
       mode: novoAnalysis?.mode || "erro_api",
+      // v1174 — marca explícita de "bateu no teto do dia" (a mesma que a importação usa), pra
+      // nenhuma tela tratar isso como falha passageira e sair repetindo.
+      ...(novoAnalysis?.mode === "limite_diario_excedido" ? { limiteAtingido: true } : {}),
       // v1108 — limite do teste grátis: o app usa isto pra mostrar o botão do WhatsApp comercial.
       ...(novoAnalysis?.upgrade ? { upgrade: novoAnalysis.upgrade } : {})
     });
