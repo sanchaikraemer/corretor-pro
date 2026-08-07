@@ -1945,6 +1945,27 @@ html[data-theme="light"] [style*="color: #ffc"]{
   background:rgba(255,59,48,.20)!important;
 }
 
+/* v1168 — mesma correção do bloco #1093 acima, agora pra quem tem agenda HOJE mas AINDA não
+   atrasou. Print do dono: "só um pontinho laranja, eu nem percebo isso... tem um agendamento pra
+   hoje que vi por acaso". O pontinho cego de 9px do bloco #787 (font-size:0, color:transparent)
+   valia pra QUALQUER alerta — só o atraso (acima) ganhava número visível. Agora "hoje, no prazo"
+   também mostra o número, com a cor de ação (--acao) que a própria tela Agenda já usa nas seções
+   "Lembretes de hoje"/"Compromissos hoje" — o vermelho fica exclusivo de atraso de verdade. */
+#topBell.tem-alerta:not(.tem-atraso) .bell-badge:not([hidden]){
+  width:auto!important;
+  min-width:18px!important;
+  height:18px!important;
+  padding:0 5px!important;
+  border-radius:999px!important;
+  background:var(--acao, #68FF95)!important;
+  color:#04371F!important;
+  font-size:11px!important;
+  font-weight:950!important;
+  line-height:14px!important;
+  text-align:center!important;
+  box-shadow:0 0 0 4px rgba(104,255,149,.24)!important;
+}
+
 /* Atualização #788 — Atendimentos reais, em ordem cronológica */
 .cp788-att-page{max-width:760px;margin:0 auto;padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))}
 .cp788-att-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
