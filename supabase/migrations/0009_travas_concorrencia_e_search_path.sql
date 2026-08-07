@@ -1,6 +1,18 @@
 -- Migração 0009 — trava real contra empresa duplicada, organization_id obrigatório, e
 -- search_path fixo nas funções SECURITY DEFINER.
 --
+-- ⚠️ NÃO RODE ESTE ARQUIVO HOJE — RODE A `0015` NO LUGAR DELE ⚠️
+--
+-- A conferência do banco de produção (07/08/2026) mostrou que esta migração nunca chegou a ser
+-- aplicada, embora da 0010 à 0014 estejam. Só que aplicá-la AGORA, fora de ordem, reabriria um
+-- buraco: a linha `grant execute on function criar_empresa_e_dono(text) to authenticated`, lá no
+-- passo 1, é exatamente o que a migração `0013` revogou de propósito (é a trava contra cadastro
+-- falso em massa). Rodar esta aqui depois da `0013` desfaria a `0013` em silêncio.
+--
+-- A migração `0015_travas_da_0009_fora_de_ordem.sql` faz os três pedaços abaixo sem tocar em
+-- permissão nenhuma, e ainda reafirma os fechamentos da `0013` e da `0014`. O arquivo continua
+-- aqui como histórico — e porque uma base criada do zero aplica tudo na ordem, onde ele está certo.
+--
 -- A auditoria técnica/comercial de 27/07/2026 apontou três riscos que ainda não tinham sido
 -- corrigidos:
 --

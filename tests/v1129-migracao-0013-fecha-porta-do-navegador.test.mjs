@@ -51,12 +51,18 @@ assert.ok(!/create\s+policy[^;]*on\s+cadastros_por_conexao/i.test(sql0013),
 
 // 4. Nenhuma migração pode reconceder criar_empresa_e_dono a anon/authenticated DEPOIS da 0013
 //    (seria desfazer a trava sem ninguém perceber).
+//
+// v1165 — o que decide é PRA QUEM o GRANT é dado, não se a palavra "authenticated" aparece perto.
+// A verificação antiga olhava o trecho inteiro e acusou a migração 0015, que no mesmo bloco
+// REVOGA de public/anon/authenticated e concede ao service_role — o oposto de reabrir a porta.
+// Agora a checagem lê o alvo depois do `to`, e comentário citando um GRANT não conta como GRANT.
 for (const arq of arquivos.filter(f => f > nome0013)) {
-  const sql = fs.readFileSync(new URL(arq, dir), 'utf8');
-  const reconcessao = sql.split(/;\s*\n/).find(t =>
-    /grant\s+execute/i.test(t) && /criar_empresa_e_dono\s*\(/i.test(t) && /(anon|authenticated|public)/i.test(t));
-  assert.equal(reconcessao, undefined,
-    `${arq} devolve pro navegador o direito de criar empresa, desfazendo a trava da 0013`);
+  const sql = fs.readFileSync(new URL(arq, dir), 'utf8')
+    .split('\n').filter(l => !/^\s*--/.test(l)).join('\n');
+  for (const m of sql.matchAll(/grant\s+execute\s+on\s+function\s+criar_empresa_e_dono[^;]*?\bto\s+([^;]+)/gi)) {
+    assert.ok(!/\b(anon|authenticated|public)\b/i.test(m[1]),
+      `${arq} devolve pro navegador o direito de criar empresa (grant ... to ${m[1].trim()}), desfazendo a trava da 0013`);
+  }
 }
 
 console.log('v1129-migracao-0013-fecha-porta-do-navegador: ok');

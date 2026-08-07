@@ -176,6 +176,14 @@ async function cadastrar() {
       return;
     }
 
+    // v1165 — conta nova neste aparelho: o que estava guardado aqui é de outra pessoa (Cérebro em
+    // cópia local, importação pendente, ZIP compartilhado, nomes de clientes do lembrete) e vai
+    // embora antes de a conta nova começar. Nunca pode impedir o cadastro.
+    try {
+      const dadosLocais = await import('./js/dados-locais.js?v=__VERSION__');
+      await dadosLocais.garantirDonoDosDadosLocais(signUpData.user?.id);
+    } catch (_) {}
+
     const { error: rpcError } = await criarEmpresaComContato({ nome: nomeEmpresa, telefone, cidade, estado, email });
     if (rpcError) throw rpcError;
 
