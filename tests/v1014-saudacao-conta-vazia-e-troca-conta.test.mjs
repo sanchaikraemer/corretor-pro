@@ -53,7 +53,10 @@ assert.ok(idxTitle < idxEmptyReturn,
   'o título tem que ser aplicado ANTES do return por items vazio — conta nova (0 leads) precisa mostrar o nome certo, não só "corretor" genérico');
 
 // 3. O texto que popula o título usa a mesma prioridade de sempre: Cérebro > nome da conta > genérico.
-assert.match(saud, /const corretorNome = \(state\.cerebroCfg\?\.corretorNome \|\| window\.__cpContaNome \|\| ""\)\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| "";/,
+// v1183 — a prioridade é a mesma; o que mudou é DE ONDE sai o nome do Cérebro. Era
+// state.cerebroCfg, campo que nunca é preenchido em lugar nenhum do app, então a primeira opção
+// nunca valia e o corretor era cumprimentado pelo nome da empresa mesmo com "Seu nome" salvo.
+assert.match(saud, /const corretorNome = \(cpNomeCorretorCerebro\(\) \|\| window\.__cpContaNome \|\| ""\)\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| "";/,
   'a prioridade do nome (Cérebro > conta logada > genérico) não pode mudar');
 
 // 4. 🔴 cpCarregarContaLogada precisa filtrar pelo PRÓPRIO user_id ao buscar o nome da conta —

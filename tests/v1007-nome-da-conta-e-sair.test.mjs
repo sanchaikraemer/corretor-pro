@@ -21,6 +21,9 @@ assert.match(app, /cpSairDaConta/, 'app.js precisa da função de sair da conta'
 assert.match(app, /auth\?\.signOut\(\)/, 'sair da conta precisa encerrar a sessão de verdade (signOut)');
 assert.match(app, /window\.location\.href = "\/entrar\.html"/, 'depois de sair, volta pra tela de entrar');
 assert.match(app, /organizations\(nome\)/, 'o nome mostrado vem da conta logada (organizations.nome do cadastro)');
-assert.match(app, /corretorNome \|\| window\.__cpContaNome/, 'saudação: nome do Cérebro > nome da conta > genérico');
+// v1183 — a ordem continua a mesma (Cérebro > conta > genérico), mas o nome do Cérebro deixou de
+// ser lido de state.cerebroCfg, um campo que nunca era preenchido: a primeira opção NUNCA valia e
+// todo mundo era cumprimentado pelo nome da empresa. Agora vem de cpNomeCorretorCerebro().
+assert.match(app, /cpNomeCorretorCerebro\(\) \|\| window\.__cpContaNome/, 'saudação: nome do Cérebro > nome da conta > genérico');
 
 console.log('v1007-nome-da-conta-e-sair: ok');
