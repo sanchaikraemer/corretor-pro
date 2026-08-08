@@ -12034,6 +12034,19 @@ function cpDesempenhoMetricas(items, all, periodo){
   let mensagensTrocadas = 0, mensagensCopiadas = 0;
   const leadsAtendidosIds = new Set();
   const propostas = [];
+  // v1182 — "Análises feitas" e "Importações" vinham SÓ do registro de uso deste aparelho
+  // (localStorage, ver cpRegistrarAtividade), que não sincroniza entre celular e PC e ainda é
+  // podado em 90 dias. Trocar de aparelho, reinstalar o app ou limpar os dados do navegador
+  // zerava as duas linhas mesmo com a carteira cheia — foi exatamente o que o dono viu em julho
+  // (159 leads atendidos, 696 mensagens trocadas e "Análises feitas 0 / Importações 0", com
+  // "Tempo no app: menos de 1min" denunciando que aquele aparelho não tinha histórico local).
+  // Agora as duas também são deduzidas da CARTEIRA, que é sincronizada na conta: cada lead criado
+  // dentro do período é uma importação, e cada carimbo de análise/reanálise dentro do período é
+  // uma análise. Vale o MAIOR entre o registro do aparelho e o deduzido — quem sempre usou o mesmo
+  // aparelho não perde nada (o registro local também conta reanálise de lead já existente e
+  // reimportação que não cria cadastro novo), e quem trocou de aparelho para de ver zero.
+  const CP_MESMA_ANALISE_MS = 10 * 60 * 1000; // carimbos a menos de 10min = a MESMA análise
+  let importacoesCarteira = 0, analisesCarteira = 0;
   for(const l of todos){
     const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
     for(const m of msgs){
@@ -12050,6 +12063,18 @@ function cpDesempenhoMetricas(items, all, periodo){
       if(e.evento === "mensagem_copiada") mensagensCopiadas++;
     }
     if(atendeuNaJanela) leadsAtendidosIds.add(String(l.id));
+
+    if(dentro(Date.parse(l?.createdAt || ""))) importacoesCarteira++;
+    const an = l?.analysis || {};
+    // Uma análise nova carimba geradoEm E reanalisadoEm quase no mesmo instante (ver
+    // api/lead-update.js) — sem agrupar, cada importação contaria como duas análises.
+    const carimbos = [an.geradoEm, an.analisadoEm, an.reanalisadoEm, an.iaComercialV2?.geradoEm, l?.analysisReadyAt]
+      .map(c => Date.parse(c || "")).filter(t => dentro(t)).sort((x,y) => x - y);
+    let ultimoContado = -Infinity;
+    for(const t of carimbos){
+      if(t - ultimoContado < CP_MESMA_ANALISE_MS) continue;
+      analisesCarteira++; ultimoContado = t;
+    }
   }
 
   // Empreendimentos negociados: agrupa a carteira ATIVA pelo mesmo rótulo de produto que já
@@ -12069,8 +12094,8 @@ function cpDesempenhoMetricas(items, all, periodo){
     empreendimentos,
     leadsAtendidos: leadsAtendidosIds.size,
     mensagensCopiadas,
-    analisesFeitas: typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo, fimPeriodo) : 0,
-    importacoes: typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo, fimPeriodo) : 0,
+    analisesFeitas: Math.max(typeof cpContarAtividade === "function" ? cpContarAtividade("analise", cutoffPeriodo, fimPeriodo) : 0, analisesCarteira),
+    importacoes: Math.max(typeof cpContarAtividade === "function" ? cpContarAtividade("importacao", cutoffPeriodo, fimPeriodo) : 0, importacoesCarteira),
     propostas: propostas.sort((a,b)=>b.ts-a.ts),
   };
 }
