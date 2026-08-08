@@ -47,7 +47,7 @@ import './js/pwa-install.js?v=__VERSION__';
   // "Sair da conta", pedido repetido do dono); só sobra o nome dentro da tela Menu.
   window.cpAtualizarIdentidadeVisivel = function(){
     try {
-      const nome = String(state?.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim();
+      const nome = String(cpNomeCorretorCerebro() || window.__cpContaNome || "").trim();
       const bm = document.getElementById("cpNomeUserMenu");
       if (bm) bm.textContent = nome || "Corretor";
     } catch(_) {}
@@ -100,6 +100,21 @@ import './js/pwa-install.js?v=__VERSION__';
       // conta já tenha visto (é exatamente o caso do teste com corretores).
       try{ window.__cpContaId = String(data.session.user.id || ""); }catch(_){}
       window.cpAtualizarIdentidadeVisivel();
+      // v1183 — o "Seu nome" do Cérebro só chegava neste aparelho quando a TELA do Cérebro era
+      // aberta (é lá que carregarCerebro grava a cópia local). Quem entrava e ia direto pra Home
+      // continuava sendo cumprimentado pelo nome da empresa, com o nome salvo lá no servidor o
+      // tempo todo. Aqui a configuração é buscada uma vez, logo depois do login, e guardada no
+      // mesmo lugar que o resto do app já lê — sem tela nenhuma precisar ser aberta. É o melhor
+      // esforço: falhou (sem rede, servidor fora), a Home segue com o que já tinha.
+      try{
+        const resp = await fetch("./api/cerebro-config", { cache:"no-store" });
+        const cfgSrv = await resp.json();
+        if(cfgSrv?.ok && cfgSrv.config){
+          localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(sanitizeCerebroConfigV762(cfgSrv.config)));
+          window.cpAtualizarIdentidadeVisivel();
+          if(typeof renderSaudacao === "function" && Array.isArray(state?.itemsAtivos)) renderSaudacao(state.itemsAtivos);
+        }
+      }catch(_){}
     } catch(_) {}
   })();
   // v1013 — em aparelho compartilhado entre contas, o navegador pode restaurar a página "congelada"
@@ -1799,7 +1814,12 @@ function horarioContatoLead(l){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return "";
   const nome = String(l.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
-  const corretorNome = String(state?.cerebroCfg?.corretorNome || "").trim().toLowerCase();
+  // v1183 — este nome vinha de state.cerebroCfg, que nunca é preenchido: a comparação com o nome
+  // do corretor NUNCA rodou aqui, só sobrava o filtro de palavras genéricas abaixo. Agora vale o
+  // "Seu nome" do Cérebro de verdade, no mesmo formato do resto do app (primeiro nome, e só o
+  // sentido seguro da comparação — autor CONTÉM o nome; o inverso transformava qualquer autor de
+  // nome curto em "corretor").
+  const corretorNome = cpNomeCorretorCerebro().toLowerCase().split(/\s+/)[0] || "";
   const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
   const cont = new Array(24).fill(0);
   let achou = false;
@@ -1807,7 +1827,7 @@ function horarioContatoLead(l){
     const autor = String(m.author||"").trim();
     if(!autor) continue;
     const autorLower = autor.toLowerCase();
-    const ehCorretor = (corretorNome && (autorLower.includes(corretorNome) || corretorNome.includes(autorLower))) || business.test(autor);
+    const ehCorretor = (corretorNome && autorLower.includes(corretorNome)) || business.test(autor);
     const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
     if(!ehCliente) continue;
     const t = String(m.time||"").match(/^(\d{1,2}):/);
@@ -1829,7 +1849,12 @@ function _diasDesdeMsg(l, somenteCliente){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   if(!msgs.length) return null;
   const nome = String(l.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
-  const corretorNome = String(state?.cerebroCfg?.corretorNome || "").trim().toLowerCase();
+  // v1183 — este nome vinha de state.cerebroCfg, que nunca é preenchido: a comparação com o nome
+  // do corretor NUNCA rodou aqui, só sobrava o filtro de palavras genéricas abaixo. Agora vale o
+  // "Seu nome" do Cérebro de verdade, no mesmo formato do resto do app (primeiro nome, e só o
+  // sentido seguro da comparação — autor CONTÉM o nome; o inverso transformava qualquer autor de
+  // nome curto em "corretor").
+  const corretorNome = cpNomeCorretorCerebro().toLowerCase().split(/\s+/)[0] || "";
   const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
   let maxTs = 0;
   for(const m of msgs){
@@ -1837,7 +1862,7 @@ function _diasDesdeMsg(l, somenteCliente){
       const autor = String(m.author||"").trim();
       if(!autor) continue;
       const autorLower = autor.toLowerCase();
-      const ehCorretor = (corretorNome && (autorLower.includes(corretorNome) || corretorNome.includes(autorLower))) || business.test(autor);
+      const ehCorretor = (corretorNome && autorLower.includes(corretorNome)) || business.test(autor);
       const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
       if(!ehCliente) continue;
       const tp = String(m.type||""); const src = String(m.source||"");
@@ -2156,17 +2181,28 @@ function ehAtendidoHoje(l){
   const hoje = inicioDoDiaBR();
   return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando) >= hoje);
 }
+// v1183 — "semana" e "mês" passaram a ser SEMANA E MÊS DE CALENDÁRIO (pedido do dono, olhando a
+// Home: "quero o mês vigente e não últimos 7 ou 30"). Antes eram janelas corridas de 7 e 30 dias,
+// então no dia 8 de agosto o quadradinho dizia "183 no mês" contando desde 9 de julho — e a tela
+// Desempenho, que sempre usou mês de calendário, mostrava outro número com a mesma palavra. Agora
+// as duas telas falam a mesma língua. A semana começa na SEGUNDA (é a semana de trabalho: a fila
+// do app também "volta segunda").
+function cpInicioSemanaMs(){
+  // inicioDoDiaBR() devolve a meia-noite de HOJE em Brasília como 03:00 UTC do mesmo dia do
+  // calendário — então getUTCDay() já é o dia da semana certo, sem depender do fuso do aparelho.
+  const hoje = inicioDoDiaBR();
+  const desdeSegunda = (hoje.getUTCDay() + 6) % 7; // 0=segunda … 6=domingo (domingo fecha a semana)
+  return hoje.getTime() - desdeSegunda*24*60*60*1000;
+}
+window.cpInicioSemanaMs = cpInicioSemanaMs;
 function ehAtendidoNaSemana(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
-  const cutoff = Date.now() - 7*24*60*60*1000;
+  const cutoff = cpInicioSemanaMs();
   return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando).getTime() >= cutoff);
 }
-// v1171 — mesma régua de ehAtendidoNaSemana, só que 30 dias corridos (não mês civil): pedido do
-// dono foi "atendidos no mês" como 3º número do quadradinho de atendidos, contagem simples de
-// quem foi atendido de verdade — sem vínculo com meta/dose do dia.
 function ehAtendidoNoMes(l){
   const eventos = l.analysis?.aprendizado?.eventos || [];
-  const cutoff = Date.now() - 30*24*60*60*1000;
+  const cutoff = cpInicioMesMs();
   return eventos.some(e => e?.evento === "contato_manual" && e?.quando && new Date(e.quando).getTime() >= cutoff);
 }
 function ehContatadoHoje(l){
@@ -3274,14 +3310,18 @@ function renderBotoesHome(){
       .cp1170-vazio{color:var(--muted);font-size:12.5px;padding:6px 0}
       /* v1171 — quadradinho "Atendidos": modelo 4 dos que o dono viu (o do arozinho), mas com 3
          números em vez de 2 — pedido dele foi hoje / semana / mês, cada um só uma CONTAGEM
-         concluída (não é meta nem dose batida, por isso o arinho é decorativo/fixo, não uma barra
-         de progresso proporcional a nada). #home força font-size:24px!important em QUALQUER <b>
-         dentro de .ui-kpi (v1077) e .ui-kpi svg{width:17px;height:17px} (base, styles.css) — os
-         dois precisam de uma regra mais específica (ID #home + mais classes) pra vencer sem
+         concluída (não é meta nem dose batida). #home força font-size:24px!important em QUALQUER
+         <b> dentro de .ui-kpi (v1077) e .ui-kpi svg{width:17px;height:17px} (base, styles.css) —
+         os dois precisam de uma regra mais específica (ID #home + mais classes) pra vencer sem
          quebrar os outros quadradinhos. Lição da v1077→v1078: checar sempre contra !important já
-         existente antes de assumir que o CSS novo "pegou". */
+         existente antes de assumir que o CSS novo "pegou".
+         v1183 — o arinho decorativo saiu: era um círculo INCOMPLETO verde no canto e todo mundo
+         lia como rodinha de "carregando" (o dono pediu pra tirar). No lugar entrou o mesmo ícone
+         de concluído dos outros quadradinhos, sem a bolinha de fundo (que aqui, no topo, brigava
+         com o rótulo) — o !important é pra vencer .ui-kpi i{background;border-radius} da base. */
       #home .ui-kpi.cp1171-atendidos{position:relative}
-      #home .ui-kpi.cp1171-atendidos .cp1171-aro{position:absolute;top:11px;right:11px;width:11px!important;height:11px!important}
+      #home .ui-kpi.cp1171-atendidos .cp1171-ic{position:absolute;top:9px;right:11px;width:16px!important;height:16px!important;background:none!important;border-radius:0!important}
+      #home .ui-kpi.cp1171-atendidos .cp1171-ic svg{width:16px;height:16px}
       #home .ui-kpi.cp1171-atendidos>div.cp1171-trio{display:flex;align-items:stretch;justify-content:space-between;gap:4px;margin-top:8px}
       #home .ui-kpi.cp1171-atendidos .cp1171-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:1px}
       #home .ui-kpi.cp1171-atendidos .cp1171-col+.cp1171-col{border-left:1px solid var(--line2);padding-left:4px}
@@ -3844,7 +3884,7 @@ function renderSaudacao(items){
   else saud = "Boa noite";
   // v1007 — prioridade do nome: o que o corretor escreveu no Cérebro > o nome da conta
   // logada (preenchido no cadastro) > "corretor" genérico.
-  const corretorNome = (state.cerebroCfg?.corretorNome || window.__cpContaNome || "").trim().split(/\s+/)[0] || "";
+  const corretorNome = (cpNomeCorretorCerebro() || window.__cpContaNome || "").trim().split(/\s+/)[0] || "";
   if (typeof window.cpAtualizarIdentidadeVisivel === "function") window.cpAtualizarIdentidadeVisivel();
   const head = corretorNome ? `${saud}, ${escapeHtml(corretorNome)}!` : `${saud}, corretor!`;
   // v1014 — o título (#homePageTitle) precisa levar o nome de verdade mesmo quando a conta ainda
@@ -6215,6 +6255,19 @@ function sanitizeCerebroConfigV762(cfg) {
     regras: Array.isArray(c.regras) ? c.regras : [],
     objecoes: Array.isArray(c.objecoes) ? c.objecoes : []
   };
+}
+// v1183 — o dono mostrou o Cérebro com o campo "Seu nome" preenchido e a Home ainda dizendo
+// "Bom dia, Empresa!". A causa: quatro lugares liam `state.cerebroCfg`, um campo que NUNCA é
+// preenchido em lugar nenhum do app — o comentário de cpMetaAtendimentosDia já registrava isso
+// desde a v1012, mas só aquela função tinha sido consertada. Com o nome sempre vazio, a saudação
+// caía no nome da ORGANIZAÇÃO (o que a pessoa digitou no cadastro) e tratava o corretor pelo nome
+// da firma. Esta é a fonte válida, a mesma que a análise já usa: lê o formulário do Cérebro quando
+// ele está montado e, quando não está, o que ficou salvo no aparelho.
+function cpNomeCorretorCerebro(){
+  try{
+    const cfg = (typeof obterCerebroConfigParaAnalise === "function") ? obterCerebroConfigParaAnalise() : null;
+    return String(cfg?.corretorNome || "").trim();
+  }catch(_){ return ""; }
 }
 function obterCerebroConfigParaAnalise() {
   let cfg = null;
@@ -11596,12 +11649,16 @@ renderResumoDia = function(items){
   // v1171 — pedido do dono: um quadradinho só pra "quantos atendi" — hoje, nesta semana e neste
   // mês, 3 contagens simples (não é meta/dose batida, é só o total concluído em cada período) —,
   // pra fileira ficar parelha no celular junto do Bloco de notas (7 quadradinhos sobrava um
-  // sozinho numa linha — 8 fecha 2 fileiras de 4 certinhas). "Hoje"/"semana" usam a mesma conta
-  // que a coluna "Seu ritmo de atendimento" já usa (ehAtendidoHoje/ehAtendidoNaSemana); "mês" é
-  // nova (ehAtendidoNoMes, 30 dias corridos, mesma régua da semana só que mais larga).
-  const atendidosHoje=ativos.filter(ehAtendidoHoje).length;
-  const atendidosSemana=ativos.filter(ehAtendidoNaSemana).length;
-  const atendidosMes=ativos.filter(ehAtendidoNoMes).length;
+  // sozinho numa linha — 8 fecha 2 fileiras de 4 certinhas).
+  // v1183 — as três contagens saem da carteira INTEIRA, não só da ativa ("arquivado também é
+  // atendimento", palavras do dono). Atender um cliente e arquivar em seguida derrubava o número
+  // aqui, enquanto a frase da saudação logo acima continuava contando (ela usa
+  // cpAtendidosHojeTotal, que nunca filtrou arquivado — é o mesmo defeito que a v980 já tinha
+  // corrigido lá e que nasceu de novo neste quadradinho). Mesma base das duas, sem divergir.
+  const baseAtendidos=(Array.isArray(state.todosLeads) && state.todosLeads.length) ? state.todosLeads : items;
+  const atendidosHoje=baseAtendidos.filter(ehAtendidoHoje).length;
+  const atendidosSemana=baseAtendidos.filter(ehAtendidoNaSemana).length;
+  const atendidosMes=baseAtendidos.filter(ehAtendidoNoMes).length;
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
@@ -11611,7 +11668,7 @@ renderResumoDia = function(items){
     <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>
     <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>
     <div class="ui-kpi" id="kpiNotas" onclick="cp1170AbrirPainel()" title="Tarefas administrativas — o que não é atendimento de cliente"><span>Bloco de notas</span><div><b>${(typeof cp1170PendCount==='function')?cp1170PendCount():0}</b><i>${ui631Icon('nota')}</i></div></div>
-    <div class="ui-kpi cp1171-atendidos" onclick="show('relatorio')" title="Atendimentos concluídos — hoje, nesta semana e neste mês"><span>Atendidos</span><svg class="cp1171-aro" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--acao)" stroke-width="3.5" stroke-dasharray="42 14" stroke-linecap="round"/></svg><div class="cp1171-trio"><div class="cp1171-col"><b>${atendidosHoje}</b><small>hoje</small></div><div class="cp1171-col"><b>${atendidosSemana}</b><small>semana</small></div><div class="cp1171-col"><b>${atendidosMes}</b><small>mês</small></div></div></div>`;
+    <div class="ui-kpi cp1171-atendidos" onclick="show('relatorio')" title="Atendimentos concluídos — hoje, nesta semana e neste mês (inclusive quem você arquivou depois)"><span>Atendidos</span><i class="cp1171-ic">${ui631Icon('compromisso')}</i><div class="cp1171-trio"><div class="cp1171-col"><b>${atendidosHoje}</b><small>hoje</small></div><div class="cp1171-col"><b>${atendidosSemana}</b><small>semana</small></div><div class="cp1171-col"><b>${atendidosMes}</b><small>mês</small></div></div></div>`;
 };
 
 function ui631LeadMotivo(l){

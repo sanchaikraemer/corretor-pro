@@ -20,28 +20,33 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
     'salvar observação precisa mostrar a observação (renderLeadFoco) e DEPOIS reanalisar sozinha, usando a referência fresca do botão Reanalisar');
 }
 
-// ---------- 2a. ehAtendidoNoMes — mesma régua de ehAtendidoNaSemana, só que 30 dias ----------
+// ---------- 2a. ehAtendidoNaSemana / ehAtendidoNoMes — SEMANA e MÊS DE CALENDÁRIO ----------
+// v1183 — este bloco cobrava janelas corridas de 7 e 30 dias. O dono olhou a Home no dia 8 de
+// agosto, viu "183 no mês" (que na verdade contava desde 9 de julho) e pediu: "quero o mês vigente
+// e não últimos 7 ou 30". As réguas passaram a ser calendário — a prova detalhada das duas está em
+// tests/v1183-atendidos-mes-vigente.test.mjs. Aqui fica só o que continua valendo pra este
+// quadradinho: as duas existem, são independentes uma da outra e ignoram lead sem evento.
 {
   const fnSemana = app.match(/function ehAtendidoNaSemana\(l\)\{[\s\S]*?\n\}/)?.[0];
   const fnMes = app.match(/function ehAtendidoNoMes\(l\)\{[\s\S]*?\n\}/)?.[0];
   assert.ok(fnSemana && fnMes, 'ehAtendidoNaSemana/ehAtendidoNoMes não encontradas em app.js');
+  assert.doesNotMatch(fnSemana, /7\s*\*\s*24/, 'a semana não pode voltar a ser janela corrida de 7 dias');
+  assert.doesNotMatch(fnMes, /30\s*\*\s*24/, 'o mês não pode voltar a ser janela corrida de 30 dias');
 
   const sandbox = new Function(`
+    const cpInicioSemanaMs = () => 1000;
+    const cpInicioMesMs = () => 500;
     ${fnSemana}
     ${fnMes}
     return { ehAtendidoNaSemana, ehAtendidoNoMes };
   `)();
+  const leadCom = (ms) => ({ analysis: { aprendizado: { eventos: [{ evento: 'contato_manual', quando: new Date(ms).toISOString() }] } } });
 
-  const diasAtras = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
-  const leadCom = (quando) => ({ analysis: { aprendizado: { eventos: [{ evento: 'contato_manual', quando }] } } });
-
-  assert.equal(sandbox.ehAtendidoNoMes(leadCom(diasAtras(2))), true, 'atendido há 2 dias conta no mês');
-  assert.equal(sandbox.ehAtendidoNoMes(leadCom(diasAtras(15))), true, 'atendido há 15 dias conta no mês');
-  assert.equal(sandbox.ehAtendidoNoMes(leadCom(diasAtras(45))), false, 'atendido há 45 dias NÃO conta no mês (fora dos 30 dias)');
+  assert.equal(sandbox.ehAtendidoNaSemana(leadCom(2000)), true, 'atendimento depois do começo da semana conta');
+  assert.equal(sandbox.ehAtendidoNaSemana(leadCom(700)), false, 'atendimento anterior ao começo da semana não conta');
+  assert.equal(sandbox.ehAtendidoNoMes(leadCom(700)), true, 'mas esse mesmo atendimento conta no mês — réguas independentes');
+  assert.equal(sandbox.ehAtendidoNoMes(leadCom(100)), false, 'atendimento do mês passado não conta');
   assert.equal(sandbox.ehAtendidoNoMes({ analysis: {} }), false, 'lead sem nenhum evento não conta');
-  // dentro do mês mas fora da semana — prova que são réguas independentes, não uma reaproveitando a outra por acidente
-  assert.equal(sandbox.ehAtendidoNaSemana(leadCom(diasAtras(15))), false, 'atendido há 15 dias NÃO conta na semana (fora dos 7 dias)');
-  assert.equal(sandbox.ehAtendidoNoMes(leadCom(diasAtras(15))), true, 'mas continua contando no mês');
 }
 
 // ---------- 2b. renderResumoDia — o quadradinho "Atendidos" existe, com os 3 números, depois do Bloco de notas ----------
@@ -51,9 +56,11 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.ok(iniRBH >= 0, 'renderResumoDia não encontrada em app.js');
   const rbh = app.slice(iniRBH, fimRBH);
 
-  assert.match(rbh, /const atendidosHoje ?= ?ativos\.filter\(ehAtendidoHoje\)\.length/);
-  assert.match(rbh, /const atendidosSemana ?= ?ativos\.filter\(ehAtendidoNaSemana\)\.length/);
-  assert.match(rbh, /const atendidosMes ?= ?ativos\.filter\(ehAtendidoNoMes\)\.length/);
+  // v1183 — a base deixou de ser `ativos`: "arquivado também é atendimento" (dono). Ver
+  // tests/v1183-atendidos-mes-vigente.test.mjs.
+  assert.match(rbh, /const atendidosHoje ?= ?baseAtendidos\.filter\(ehAtendidoHoje\)\.length/);
+  assert.match(rbh, /const atendidosSemana ?= ?baseAtendidos\.filter\(ehAtendidoNaSemana\)\.length/);
+  assert.match(rbh, /const atendidosMes ?= ?baseAtendidos\.filter\(ehAtendidoNoMes\)\.length/);
 
   assert.match(rbh, /class="ui-kpi cp1171-atendidos"/, 'precisa existir o quadradinho de Atendidos');
   assert.match(rbh, /class="cp1171-col"><b>\$\{atendidosHoje\}<\/b><small>hoje<\/small>/);
@@ -61,9 +68,9 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(rbh, /class="cp1171-col"><b>\$\{atendidosMes\}<\/b><small>mês<\/small>/);
 
   // não pode virar barra/aro proporcional (dose batida) — o dono foi explícito: "concluídos e não
-  // dentro de uma meta". O aro decorativo usa um stroke-dasharray FIXO, nunca calculado a partir
-  // de atendidosHoje/atendidosSemana/atendidosMes.
-  assert.doesNotMatch(rbh, /stroke-dasharray="\$\{/, 'o arinho do quadradinho de Atendidos precisa ser decorativo (fixo), não uma barra de progresso calculada');
+  // dentro de uma meta". v1183: o arinho decorativo saiu de vez (parecia rodinha de carregando),
+  // então agora a regra é mais simples — nenhum aro, proporcional ou não.
+  assert.doesNotMatch(rbh, /stroke-dasharray/, 'o quadradinho de Atendidos não pode ter aro nenhum (v1183: parecia carregando)');
 
   // fica depois do Bloco de notas, os dois juntos fecham 8 quadradinhos (7 sobrava 1 sozinho no celular)
   const posNotas = rbh.indexOf('id="kpiNotas"');
