@@ -839,7 +839,9 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
         // cadastro depois (v1061) — exigir que os dois batam quebraria a atualização do MESMO
         // cliente, que é o caso comum.
         const bateFone = !!phoneKey && foneLinha.length >= 8 && foneLinha.slice(-8) === phoneKey && podeFundirCom(linha);
-        const bateArquivo = arquivoKey.length >= 3 && !!arquivoLinha && arquivoLinha === arquivoKey;
+        // v1181 — o id conferido segue as MESMAS regras da busca: arquivo igual também precisa
+        // passar pela trava de pessoas diferentes (ver o comentário no caminho rápido).
+        const bateArquivo = arquivoKey.length >= 3 && !!arquivoLinha && arquivoLinha === arquivoKey && podeFundirCom(linha);
         const bateNome = nomeNovo.length >= 3 && !_nomeRuimIdentity(nomeNovo) && !!nomeLinha
           && !_nomeRuimIdentity(nomeLinha) && _nomesMesmoLead(nomeLinha, nomeNovo);
         if (bateFone || bateArquivo || bateNome) {
@@ -902,11 +904,17 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
       }
       _dedupeIndexadoDisponivel = true;
       const achado = Array.isArray(achados) && achados[0];
-      // v1176/v1177 — só o TELEFONE precisa da trava: era ele que cruzava clientes sem relação
-      // nenhuma (o número do corretor escrito na conversa). Arquivo e nome já são o nome do
-      // contato em si — travá-los também quebraria a atualização do mesmo cliente depois de o
-      // corretor editar o nome do cadastro à mão (v1061).
-      if (achado && (t.via !== "telefone" || podeFundirCom(achado))) return { row: achado, via: t.via };
+      // v1181 — TODAS as chaves passam pela trava, inclusive o nome do arquivo.
+      //
+      // A v1176/v1177 deixou o arquivo de fora com o argumento de que "o nome do arquivo já é o
+      // nome do contato". Deixou de ser verdade no instante em que uma importação entra no
+      // cadastro errado: a gravação sobrescreve `nome_arquivo`/`dedupe_arquivo` do cadastro
+      // invadido com o arquivo da OUTRA pessoa (ver updatePayload em persistProcessingResult).
+      // A partir daí, toda reexportação daquela conversa volta pro cadastro errado por esta
+      // chave — foi o que o dono viu: nome do cliente já corrigido na v1180 e a conversa caindo
+      // no mesmo lead de novo. A trava não exige nomes iguais (nome editado à mão e nome sem
+      // identidade continuam passando, v1061); ela só proíbe juntar duas pessoas diferentes.
+      if (achado && podeFundirCom(achado)) return { row: achado, via: t.via };
     }
   }
 
@@ -986,10 +994,9 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
     // histórico do lead e a importação re-transcreveria todos os áudios sem ninguém perceber.
     throw new Error(`Não consegui ler a conversa já salva deste cliente (${row.id}): ${ultimoErro?.message || "motivo desconhecido"}`);
   };
-  // v1176/v1177 — a varredura por TELEFONE passa pela mesma trava do caminho rápido (era ela que
-  // cruzava clientes sem relação nenhuma). A varredura por nome de arquivo não precisa: o nome do
-  // arquivo já é o nome do contato exportado, e travá-la quebraria a atualização do mesmo cliente
-  // quando o corretor edita o nome do cadastro à mão depois (v1061).
+  // v1176/v1177/v1181 — telefone E nome de arquivo passam pela trava de pessoas diferentes. Nome
+  // editado à mão pelo corretor continua reconhecendo o mesmo cliente (a trava aceita nome contido
+  // e nome sem identidade); o que ela proíbe é uma conversa entrar no cadastro de outra pessoa.
   for (const row of data) {
     const ra = row.resultado_analise || {};
     const rowPhone = _digitsIdentity(row.fone_analise || ra?.lead?.phone || row.telefone || "");
@@ -997,7 +1004,8 @@ export async function _buscarProcessamentoExistenteV681(supabase, { result, file
   }
   for (const row of data) {
     const rowFile = _chaveIdentidadeUtil(row.nome_arquivo || row.arquivo_nome || "");
-    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey) return comTimeline(row, "arquivo");
+    // v1181 — mesma trava do caminho rápido acima: nome de arquivo igual não junta duas pessoas.
+    if (arquivoKey.length >= 3 && rowFile && rowFile === arquivoKey && podeFundirCom(row)) return comTimeline(row, "arquivo");
   }
   // v827-16: reimportar a conversa do MESMO cliente sempre atualiza o MESMO registro,
   // não importa qual produto a IA identificar naquela rodada — uma conversa real muda de
