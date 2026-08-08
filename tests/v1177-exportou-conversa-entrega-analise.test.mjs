@@ -19,6 +19,9 @@ import { _buscarProcessamentoExistenteV681, _dedupeIndexadoResetar } from "../ap
 //    cadastro à mão (v1061), o mesmo cliente deixaria de ser reconhecido e a exportação criaria um
 //    cadastro repetido em vez de atualizar. A trava agora vale só onde o problema existia: no
 //    telefone.
+//    (v1181 — este segundo ponto foi REVERTIDO: a trava voltou a valer pro nome do arquivo também.
+//     Ela nunca exigiu nomes IGUAIS — nome editado à mão e cadastro sem nome continuam passando,
+//     como os casos 3 e 5/6 do teste da v1181 provam —, só proíbe juntar pessoas diferentes.)
 
 const MSGS = [
   { date: "2026-07-01", time: "09:10", author: "Cliente", text: "bom dia, ainda tem unidade?", iso: "2026-07-01T09:10:00.000Z", order: 1 },
@@ -109,11 +112,18 @@ for (const caso of RECUSADAS_PELA_TELA) {
   assert.equal(achado?.row?.id, "lead-1", "o mesmo arquivo do mesmo contato continua atualizando o cadastro que já existe");
 }
 
-// ── 4. A trava por telefone (v1176) continua valendo onde o problema era ───────────────────────
+// ── 4. A trava contra misturar clientes continua valendo — e desde a v1181 vale pra TODAS as
+//      chaves, não só pro telefone (o caso 3 acima prova que o mesmo cliente continua reconhecido).
+//
+//      Por que a decisão da v1177 (soltar o nome do arquivo) foi revertida: quando uma importação
+//      entra no cadastro errado, a gravação carimba o nome do arquivo da outra pessoa naquele
+//      cadastro — e aí a conversa voltava pra ele em toda reexportação, mesmo com o nome do cliente
+//      já correto. Foi o que o dono viu depois da v1180.
 {
   const persistence = fs.readFileSync(new URL("../api/_persistence.js", import.meta.url), "utf8");
   assert.match(persistence, /rowPhone\.slice\(-8\) === phoneKey && podeFundirCom\(row\)/, "a varredura por telefone continua travada");
-  assert.match(persistence, /t\.via !== "telefone" \|\| podeFundirCom\(achado\)/, "o caminho rápido continua travado no telefone");
+  assert.match(persistence, /rowFile === arquivoKey && podeFundirCom\(row\)/, "a varredura por nome de arquivo também");
+  assert.match(persistence, /if \(achado && podeFundirCom\(achado\)\)/, "e o caminho rápido trava todas as chaves");
 }
 
 console.log("v1177-exportou-conversa-entrega-analise: ok");
