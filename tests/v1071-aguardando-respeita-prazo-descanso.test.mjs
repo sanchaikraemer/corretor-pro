@@ -17,9 +17,9 @@ assert.match(catSrc, /if\(cpAguardandoResposta\(l\) && emJanelaDeEspera\(l\)\) r
   'cp786Categoria precisa exigir emJanelaDeEspera(l) além de cpAguardandoResposta(l) pra classificar como aguardando');
 
 // Teste funcional isolado, com stubs simples pros helpers que não são o foco aqui.
-// v1188 — a categoria 'respondeu' passou a ser produzida (cp786ClienteRespondeu + guarda de
-// "pede resposta"); os dois entram como stubs injetáveis pra cobrir a árvore nova também.
-function rodarCategoria({ compromisso, aguardandoResposta, dentroDaJanela, msgsCliente, retomada, clienteRespondeu, pedeResposta = true }) {
+// (v1189 — os stubs de "cliente respondeu" que a v1188 tinha posto aqui saíram junto com a
+// categoria: ver tests/v1189-cliente-respondeu-nao-existe.test.mjs.)
+function rodarCategoria({ compromisso, aguardandoResposta, dentroDaJanela, msgsCliente, retomada }) {
   const cp786TemCompromisso = () => !!compromisso;
   const cpAguardandoResposta = () => !!aguardandoResposta;
   const emJanelaDeEspera = () => !!dentroDaJanela;
@@ -27,15 +27,13 @@ function rodarCategoria({ compromisso, aguardandoResposta, dentroDaJanela, msgsC
   const CP_MIN_MSGS_PRIORIDADE = 3;
   const entraEmRetomada = () => !!retomada;
   const leadEhAtivo = () => true;
-  const cp786ClienteRespondeu = () => !!clienteRespondeu;
-  const ultimaMsgClientePedeResposta = () => !!pedeResposta;
   const fn = new Function(
     'cp786TemCompromisso', 'cpAguardandoResposta', 'emJanelaDeEspera', 'mensagensDoCliente',
-    'CP_MIN_MSGS_PRIORIDADE', 'entraEmRetomada', 'leadEhAtivo', 'cp786ClienteRespondeu', 'ultimaMsgClientePedeResposta',
+    'CP_MIN_MSGS_PRIORIDADE', 'entraEmRetomada', 'leadEhAtivo',
     `${catSrc}\nreturn cp786Categoria;`
   );
   return fn(cp786TemCompromisso, cpAguardandoResposta, emJanelaDeEspera, mensagensDoCliente,
-    CP_MIN_MSGS_PRIORIDADE, entraEmRetomada, leadEhAtivo, cp786ClienteRespondeu, ultimaMsgClientePedeResposta)({});
+    CP_MIN_MSGS_PRIORIDADE, entraEmRetomada, leadEhAtivo)({});
 }
 
 // Atendido, cliente não respondeu, AINDA dentro do prazo → aguardando (comportamento de sempre).
