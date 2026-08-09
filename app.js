@@ -4328,6 +4328,10 @@ function abrirEditarLead(id, nome, telefone){
           <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Escolha da lista ou digite. Deixe em branco se ainda não souber.</div>
         </div>
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
+        <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px">
+          <button type="button" id="editLeadJuntar" style="width:100%;padding:10px;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">Juntar com outro cadastro</button>
+          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Só para o caso raro em que a mesma pessoa ficou com dois cadastros de nomes bem diferentes — na importação o app já reconhece e pergunta sozinho.</div>
+        </div>
         <div style="border-top:1px solid var(--line);padding-top:12px">
           <div style="color:var(--risco);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:6px">Zona perigosa</div>
           <button type="button" id="editLeadExcluir" style="width:100%;padding:10px;background:transparent;color:var(--risco);border:1px solid var(--risco);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">Excluir este lead</button>
@@ -4339,6 +4343,13 @@ function abrirEditarLead(id, nome, telefone){
   qs("#editLeadFechar")?.addEventListener("click", fecharEditarLead);
   qs("#editLeadSalvar")?.addEventListener("click", () => salvarEditarLead(String(id)));
   qs("#editLeadExcluir")?.addEventListener("click", () => excluirLeadDoModal(String(id), nome || ""));
+  // v1187 — a fusão manual da v1148 ficou sem porta de entrada desde que foi feita (o painel onde
+  // o botão morava não era desenhado). Ela NÃO ganha um botão na tela do cliente: lá o corretor
+  // não tem como saber que existe repetido — quem sabe é o app, e ele já avisa na importação
+  // ("Pode ser o mesmo cliente que já existe: 'Fulano'. É o mesmo cliente?"). Isto aqui é só a
+  // saída manual pro caso que aquela pergunta não pega: dois cadastros da mesma pessoa com nomes
+  // bem diferentes. Fica em Editar, junto do resto que administra o cadastro.
+  qs("#editLeadJuntar")?.addEventListener("click", () => { fecharEditarLead(); cp1148JuntarCliente(String(id), nome || ""); });
   setTimeout(() => qs(parecePhone(nomeIni) ? "#editLeadTelefone" : "#editLeadNome")?.focus(), 100);
 }
 function fecharEditarLead(){ qs("#editarLeadModal")?.remove(); }
@@ -5298,33 +5309,33 @@ function cp704Css(){
     if(typeof abrirEditarLead === 'function') abrirEditarLead(String(id), String(lead?.name||''), String(lead?.phone||lead?.telefone||''));
     else toast('Editor de lead indisponível nesta versão.');
   };
-  // v1186 — DOIS BOTÕES QUE NUNCA APARECERAM NA TELA.
+  // v1186/v1187 — aqui existia `cp704QuickActions`, um painel com três grupos (Comerciais /
+  // Gestão / Perigo) que a v908 parou de desenhar quando as ações principais subiram pra barra de
+  // ícones do topo. Ele ficou no arquivo sem tela, e a v1148 acrescentou "Juntar cliente
+  // duplicado" dentro dele — por isso esse botão nunca apareceu.
   //
-  // Aqui existia `cp704QuickActions`, um painel com três grupos (Comerciais / Gestão / Perigo).
-  // A v908 subiu as ações principais pra barra de ícones do topo e parou de chamar este painel —
-  // mas o painel continuou no arquivo, e ninguém percebeu que ele tinha deixado de ser desenhado.
-  // A partir daí:
+  // A v1186 tentou consertar devolvendo o painel. O dono derrubou na hora, com razão:
   //
-  //   • "Excluir definitivamente" ficou sem porta de entrada (a barra do topo só tem Arquivar);
-  //   • a v1148 acrescentou "Juntar cliente duplicado" DENTRO deste painel morto — ou seja, o
-  //     recurso que o dono pediu pra juntar dois cadastros do mesmo cliente NUNCA apareceu no app,
-  //     desde o dia em que foi feito. O código funciona, a rota do servidor funciona, a janela de
-  //     escolha funciona: faltava só o botão que abre.
+  //   "Como é que eu vou saber, dentro do lead, se ele é duplicado ou não? Isso só funcionaria se
+  //    ele me mostrasse: nome tal e tal, é a mesma pessoa? Daí eu clico sim ou não e unifica.
+  //    (...) Pra que mais um botão excluir definitivamente se ele já tem lá em cima em editar?"
   //
-  // O teste da v1148 não pegou porque conferia o TEXTO do arquivo ("o botão está escrito ali?"),
-  // e o botão realmente estava escrito — dentro de código que não roda. Achado da auditoria de
-  // 09/08/2026, junto com mais duas telas guardando código morto do mesmo jeito.
+  // Os dois estavam certos, e o segundo motivo é ainda mais forte que o primeiro: O APP JÁ FAZ
+  // ISSO, em três camadas, e nenhuma delas passa por um botão na tela do cliente —
   //
-  // Este bloco devolve o acesso aos DOIS que faltavam, e só a eles: Proposta, Editar, Arquivar,
-  // Mensagens, Reanalisar, Agendar e Marcar já estão na barra do topo e não podem aparecer
-  // duplicados. Fica num "Mais opções" recolhido, ao lado de "Detalhes comerciais" — perto de
-  // quem procura, longe de quem não procura (excluir para sempre não é botão de tocar sem querer).
-  function cp1186MaisOpcoes(lead){
-    const id=JSON.stringify(String(lead?.id||''));
-    const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||''));
-    return `<div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp1148JuntarCliente(${id},${name})'>Juntar cliente duplicado</button></div></div>
-    <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
-  }
+  //   1. o SERVIDOR junta na importação (api/_persistence.js, _buscarProcessamentoExistenteV681):
+  //      reconhece o mesmo cliente por telefone, nome do arquivo e nome, e reaproveita o cadastro;
+  //   2. quando o nome é só PARECIDO, a importação PERGUNTA na tela, com os dois nomes: "Pode ser
+  //      o mesmo cliente que já existe: 'Fulano'. É o mesmo cliente?" (ver acharLeadExistente e o
+  //      #pendingBox mais abaixo neste arquivo) — exatamente o fluxo de sim/não que faz sentido,
+  //      no único momento em que o corretor tem os dois cadastros na frente;
+  //   3. a LISTA agrupa cópias num card só (dupeIds, montado em listRecentProcessings).
+  //
+  // E "Excluir definitivamente" já existe em Editar lead → Zona perigosa → "Excluir este lead".
+  //
+  // Ou seja: o painel não tinha o que devolver. Foi removido de vez. Lição registrada: código
+  // órfão não é automaticamente uma feature perdida — antes de religar, conferir se o produto já
+  // resolve aquilo por outro caminho.
   // v908: as ações (Proposta/Arquivar/Mensagens) subiram pra barra de ícones do topo.
   // O histórico ("Últimas mensagens") abre num card recolhível, alternado pelo ícone "Mensagens".
   window.cp704ToggleHistorico=function(){
@@ -5489,7 +5500,6 @@ function renderLeadFoco(lead){
         <aside class="cp704-secondary">
           <div class="cp704-accordions">
             <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
-            <details class="cp704-details"><summary>Mais opções</summary><div class="cp704-body">${cp1186MaisOpcoes(lead)}</div></details>
           </div>
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
           ${typeof renderHistoricoContatos==='function'?renderHistoricoContatos(lead):''}
