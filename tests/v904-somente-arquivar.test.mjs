@@ -14,7 +14,8 @@ assert.doesNotMatch(html, />Vendido</, 'sem botão Vendido no index.html');
 assert.doesNotMatch(html, />Perdido</, 'sem botão Perdido no index.html');
 
 // 2. v1187 — este item mirava `cp704QuickActions`, o painel de ações do lead. Ele parou de ser
-//    desenhado na v908 (as ações subiram pra barra de ícones do topo) e ficou anos no arquivo sem
+//    desenhado na v908 (as ações subiram pra barra de ícones do topo) e ficou centenas de
+//    versões no arquivo sem
 //    tela; a v1186 tentou devolvê-lo e o dono derrubou, porque o que ele oferecia já existe em
 //    outro lugar (juntar cadastro repetido é resolvido na importação; excluir está em Editar).
 //    O painel saiu de vez. A regra da v904 continua valendo onde as ações realmente moram.
