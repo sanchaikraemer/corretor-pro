@@ -18,6 +18,13 @@ import { impressaoDaConexao, limiteCadastrosPorConexaoDia } from '../api/_persis
 //   5. migração 0013 ainda não aplicada -> responde 501 com migracaoPendente, que é o sinal pro
 //      navegador cair no caminho antigo em vez de deixar alguém sem conseguir se cadastrar;
 //   6. o endereço de internet NUNCA vai pro banco em texto puro — só uma impressão embaralhada.
+//
+// v1186 — a trava virou UMA OPERAÇÃO SÓ no banco (migração 0018,
+// `criar_empresa_com_limite_de_conexao`). Antes eram quatro passos separados e, entre o "conta" e
+// o "registra", cinco pedidos simultâneos da mesma conexão liam "4" e todos passavam. Num
+// Postgres 16 de verdade, com limite 5: o caminho antigo criou OITO contas, o novo criou CINCO.
+// Estes testes cobrem os dois caminhos — o novo e o antigo, que continua valendo enquanto a 0018
+// não for aplicada (a trava segue no servidor, só perde a exatidão sob simultaneidade).
 
 function fakeRes() {
   return {
@@ -38,8 +45,10 @@ function fakeReq({ ip = '203.0.113.9', token = 'token-valido', corpo = {} } = {}
 }
 
 // Supabase de mentira: memberships (o login já tem empresa?), cadastros_por_conexao (o contador)
-// e a função criar_empresa_e_dono_para. Anota tudo que foi chamado pra os testes conferirem.
-function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoExiste = true, usuario = 'user-1' } = {}) {
+// e as funções de criar empresa. Anota tudo que foi chamado pra os testes conferirem.
+//   temAtomica  = a migração 0018 está aplicada (função criar_empresa_com_limite_de_conexao)
+//   funcaoExiste = a migração 0013 está aplicada (função criar_empresa_e_dono_para)
+function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoExiste = true, temAtomica = true, usuario = 'user-1' } = {}) {
   const registro = { inserts: [], rpcs: [] };
   const cliente = {
     registro,
@@ -68,6 +77,16 @@ function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoE
     },
     async rpc(nome, args) {
       registro.rpcs.push({ nome, args });
+      if (nome === 'limpar_cadastros_por_conexao_antigos') return { data: 0, error: null };
+      if (nome === 'criar_empresa_com_limite_de_conexao') {
+        if (!temAtomica) return { data: null, error: { message: 'Could not find the function public.criar_empresa_com_limite_de_conexao in the schema cache' } };
+        // A trava mora DENTRO da função: contar e recusar é trabalho do banco, na mesma transação.
+        if (Number(cadastrosNaConexao) >= Number(args.p_limite)) {
+          return { data: null, error: { code: 'CP429', message: 'Já foram abertas ' + args.p_limite + ' contas novas desta conexão de internet hoje.' } };
+        }
+        registro.inserts.push({ conexao_hash: args.p_conexao_hash, organization_id: 'org-nova-1' });
+        return { data: 'org-nova-1', error: null };
+      }
       if (!funcaoExiste) return { data: null, error: { message: 'Could not find the function public.criar_empresa_e_dono_para in the schema cache' } };
       return { data: 'org-nova-1', error: null };
     }
@@ -102,8 +121,11 @@ function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoE
   assert.equal(res.statusCode, 200, 'cadastro normal precisa passar');
   assert.equal(res.payload?.ok, true);
   assert.equal(res.payload?.organizationId, 'org-nova-1');
-  assert.equal(supabase.registro.rpcs.length, 1, 'precisa criar a empresa uma única vez');
-  assert.equal(supabase.registro.rpcs[0].nome, 'criar_empresa_e_dono_para');
+  const criacoes = supabase.registro.rpcs.filter(r => r.nome !== 'limpar_cadastros_por_conexao_antigos');
+  assert.equal(criacoes.length, 1, 'precisa criar a empresa uma única vez');
+  assert.equal(criacoes[0].nome, 'criar_empresa_com_limite_de_conexao', 'o caminho normal é a operação única da 0018');
+  assert.equal(criacoes[0].args.p_conexao_hash?.length >= 16, true, 'a trava precisa receber a impressão da conexão');
+  supabase.registro.rpcs = criacoes;
   assert.equal(supabase.registro.rpcs[0].args.p_user_id, 'user-1', 'o dono da empresa vem do token conferido, nunca do que o navegador mandou');
   assert.equal(supabase.registro.rpcs[0].args.p_nome, 'Imobiliária Sanchai');
   assert.equal(supabase.registro.rpcs[0].args.p_telefone, '(51) 99999-9999');
@@ -119,8 +141,9 @@ function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoE
   assert.equal(res.statusCode, 429, 'passando do limite da conexão, a rota precisa recusar');
   assert.equal(res.payload?.limiteConexao, true);
   assert.match(String(res.payload?.error || ''), /WhatsApp/i, 'a recusa precisa dizer como falar com a gente, não só barrar');
-  assert.deepEqual(supabase.registro.rpcs, [], 'no limite, NENHUMA empresa pode ser criada');
   assert.deepEqual(supabase.registro.inserts, [], 'tentativa recusada não entra no contador');
+  assert.ok(supabase.registro.rpcs.every(r => r.nome !== 'criar_empresa_e_dono_para'),
+    'no limite, NENHUMA empresa pode ser criada');
 }
 
 // ---------- 3b. um cadastro abaixo do limite ainda passa ----------
@@ -145,11 +168,35 @@ function fakeSupabase({ vinculoExistente = null, cadastrosNaConexao = 0, funcaoE
 
 // ---------- 5. migração 0013 ainda não aplicada -> 501 com migracaoPendente ----------
 {
-  const supabase = fakeSupabase({ funcaoExiste: false });
+  const supabase = fakeSupabase({ funcaoExiste: false, temAtomica: false });
   const res = fakeRes();
   await handler(fakeReq(), res, { supabase });
   assert.equal(res.statusCode, 501, 'sem a migração, a rota precisa avisar em vez de dar erro genérico');
   assert.equal(res.payload?.migracaoPendente, true, 'é esse sinal que faz o navegador usar o caminho antigo e ninguém ficar sem se cadastrar');
+}
+
+// ---------- 5b. v1186: sem a migração 0018, cai no modo antigo — mas a trava continua valendo --
+// A 0018 é o que torna a trava exata sob pedidos simultâneos. Faltando ela, o cadastro NÃO pode
+// parar (recusar todo mundo por causa de uma migração seria pior que o problema): volta pros
+// quatro passos da v1128, que continuam recusando quem passou do limite. O que não pode é ficar
+// silencioso — por isso a rota avisa no log e a 0018 aparece como "faltando" no diagnóstico.
+{
+  const supabase = fakeSupabase({ temAtomica: false, cadastrosNaConexao: 0 });
+  const res = fakeRes();
+  await handler(fakeReq({ corpo: { nome: 'Imobiliária Sem 0018' } }), res, { supabase });
+  assert.equal(res.statusCode, 200, 'sem a 0018 o cadastro precisa continuar funcionando');
+  assert.equal(res.payload?.travaAtomica, false, 'a resposta precisa dizer que a trava está no modo antigo');
+  const tentativas = supabase.registro.rpcs.map(r => r.nome);
+  assert.ok(tentativas.includes('criar_empresa_com_limite_de_conexao'), 'a operação única precisa ser tentada primeiro');
+  assert.ok(tentativas.includes('criar_empresa_e_dono_para'), 'e só então o caminho antigo entra');
+}
+{
+  const supabase = fakeSupabase({ temAtomica: false, cadastrosNaConexao: limiteCadastrosPorConexaoDia() });
+  const res = fakeRes();
+  await handler(fakeReq(), res, { supabase });
+  assert.equal(res.statusCode, 429, 'no modo antigo a trava continua recusando quem passou do limite');
+  assert.ok(supabase.registro.rpcs.every(r => r.nome !== 'criar_empresa_e_dono_para'),
+    'recusado no modo antigo também não cria empresa nenhuma');
 }
 
 // ---------- 6. privacidade: o endereço de internet nunca é gravado em texto puro ----------

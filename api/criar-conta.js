@@ -71,22 +71,64 @@ export default async function handler(req, res, { supabase: supabaseInjetado } =
 
   const conexao = impressaoDaConexao(req);
   const limite = limiteCadastrosPorConexaoDia();
-  const contagem = await contarCadastrosRecentesDaConexao(supabase, conexao);
-  if (contagem.disponivel && contagem.total >= limite) {
-    return json(res, 429, {
-      ok: false,
-      limiteConexao: true,
-      error: `Já foram abertas ${limite} contas novas desta conexão de internet hoje. Se você precisa de mais contas, fale com a gente pelo WhatsApp que liberamos na hora.`
-    });
-  }
-
-  const { data: novoId, error } = await supabase.rpc("criar_empresa_e_dono_para", {
-    p_user_id: login.userId,
+  const recusaPorLimite = () => json(res, 429, {
+    ok: false,
+    limiteConexao: true,
+    error: `Já foram abertas ${limite} contas novas desta conexão de internet hoje. Se você precisa de mais contas, fale com a gente pelo WhatsApp que liberamos na hora.`
+  });
+  const dadosDaEmpresa = {
     p_nome: nome,
     p_telefone: String(corpo.telefone || meta.telefone || "").trim(),
     p_cidade: String(corpo.cidade || meta.cidade || "").trim(),
     p_estado: String(corpo.estado || meta.estado || "").trim(),
     p_email: String(corpo.email || login.email || "").trim()
+  };
+
+  // ── v1186 — CONTAR, DECIDIR, CRIAR E REGISTRAR NUMA TRANSAÇÃO SÓ ──────────────────────────
+  //
+  // Até aqui isso eram quatro passos separados, e entre o "conta" e o "registra" havia uma janela:
+  // cinco pedidos simultâneos da mesma conexão liam "4", os cinco passavam, os cinco criavam.
+  // Reproduzido num Postgres 16 de verdade: com limite 5, oito pedidos ao mesmo tempo criaram
+  // OITO contas pelo caminho antigo e exatamente CINCO pela função nova (as outras três recusadas).
+  // A trava é por conexão, então dois corretores diferentes não esperam um pelo outro.
+  const atomico = await supabase.rpc("criar_empresa_com_limite_de_conexao", {
+    p_user_id: login.userId,
+    p_conexao_hash: conexao || null,
+    p_limite: limite,
+    ...dadosDaEmpresa
+  });
+
+  const semFuncaoAtomica = !!atomico.error && /function .* does not exist|could not find the function|schema cache|PGRST202/i
+    .test(`${atomico.error.message || ""} ${atomico.error.code || ""}`);
+
+  if (!atomico.error) {
+    limparImpressoesAntigasDeVezEmQuando(supabase);
+    return json(res, 200, { ok: true, organizationId: atomico.data || null });
+  }
+  // Limite estourado: a própria função para com o código CP429.
+  if (String(atomico.error.code || "") === "CP429" || /contas novas desta conexão/i.test(atomico.error.message || "")) {
+    return recusaPorLimite();
+  }
+  if (!semFuncaoAtomica) {
+    return json(res, 500, { ok: false, error: atomico.error.message || "Não foi possível criar a empresa." });
+  }
+
+  // ── Migração 0018 ainda não aplicada ──────────────────────────────────────────────────────
+  //
+  // Cai no caminho de quatro passos da v1128. Isto NÃO é o tipo de reserva que a v1185 tirou (lá
+  // eram caminhos que contornavam uma trava de SEGURANÇA — criar empresa pelo navegador, gravar
+  // Cérebro na chave global). Aqui a trava continua existindo e continua no servidor; o que se
+  // perde é a exatidão dela sob pedidos simultâneos. Recusar todo cadastro novo porque uma
+  // migração não foi rodada seria pior do que o problema. Mas não é silencioso: fica registrado
+  // no log do servidor e a 0018 aparece como "faltando" em /api/diagnostico?mode=banco.
+  console.warn("[criar-conta] migração 0018 não aplicada: a trava de cadastro por conexão está no modo antigo (não atômico). Rode supabase/migrations/0018_cadastro_atomico_e_limpeza.sql.");
+
+  const contagem = await contarCadastrosRecentesDaConexao(supabase, conexao);
+  if (contagem.disponivel && contagem.total >= limite) return recusaPorLimite();
+
+  const { data: novoId, error } = await supabase.rpc("criar_empresa_e_dono_para", {
+    p_user_id: login.userId,
+    ...dadosDaEmpresa
   });
 
   if (error) {
@@ -104,5 +146,17 @@ export default async function handler(req, res, { supabase: supabaseInjetado } =
   }
 
   await registrarCadastroDaConexao(supabase, conexao, novoId);
-  return json(res, 200, { ok: true, organizationId: novoId || null });
+  return json(res, 200, { ok: true, organizationId: novoId || null, travaAtomica: false });
+}
+
+// v1186 — a impressão da conexão só serve pras últimas 24h, mas nada nunca apagava o resto: a
+// tabela crescia pra sempre. A limpeza roda no máximo uma vez por dia por instância do servidor,
+// depois de um cadastro dar certo, e NUNCA atrasa a resposta de quem está se cadastrando (não tem
+// await): se falhar, o próximo cadastro tenta de novo.
+let _ultimaLimpezaDeImpressoes = 0;
+function limparImpressoesAntigasDeVezEmQuando(supabase) {
+  const UM_DIA = 24 * 60 * 60 * 1000;
+  if (Date.now() - _ultimaLimpezaDeImpressoes < UM_DIA) return;
+  _ultimaLimpezaDeImpressoes = Date.now();
+  Promise.resolve(supabase.rpc("limpar_cadastros_por_conexao_antigos", { p_dias: 7 })).catch(() => {});
 }

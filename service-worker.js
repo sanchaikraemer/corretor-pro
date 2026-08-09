@@ -3,7 +3,11 @@ const STATIC_CACHE = 'corretor-pro-static-v__VERSION__-' + BUILD_ID;
 const SHARE_CACHE = 'direciona-sharetarget-stable';
 const ZIP_KEYS = ['/__direciona_shared_zip__','./__direciona_shared_zip__','__direciona_shared_zip__'];
 const CORE_ASSETS = [
-  '/', '/index.html', '/styles.css?v=__VERSION__', '/app.js?v=__VERSION__', '/vendor/jszip.min.js?v=__VERSION__',
+  // v1186 — o jszip saiu do pacote que é baixado na instalação: ele só entra em cena na
+  // importação de ZIP e na planilha de exportação, e as duas precisam de internet de qualquer
+  // jeito (upload, IA). Guardar 96 KB por versão em todo aparelho, pra um uso que nunca acontece
+  // offline, era desperdício. Continua sendo guardado pelo staleWhileRevalidate no primeiro uso.
+  '/', '/index.html', '/styles.css?v=__VERSION__', '/app.js?v=__VERSION__',
   '/js/state.js?v=__VERSION__', '/js/dom.js?v=__VERSION__', '/js/proposta.js?v=__VERSION__', '/js/pwa-install.js?v=__VERSION__',
   // v1107 — faltavam no pacote offline: tema.js e commercial-schema.js são imports estáticos do
   // app.js (sem eles o módulo inteiro não executa), supabase.js e contas-config.js são <script>

@@ -21,8 +21,11 @@ assert.match(
 
 // --- 2) Teste comportamental: extrai setBotoesImportacao + renderEtapas e roda
 //        contra um DOM falso, conferindo o estado dos botões em cada etapa. ---
+// v1186 — o fim do trecho era marcado por `function startProgresso(`, que a auditoria de
+// 09/08/2026 removeu por estar morta (ninguém a chamava). O marcador passa a ser a primeira
+// função DEPOIS de renderEtapas que continua viva.
 const ini = app.indexOf('function setBotoesImportacao(');
-const fim = app.indexOf('function startProgresso(');
+const fim = app.indexOf('function cpMotivoAnalisePendente(');
 assert.ok(ini !== -1 && fim !== -1 && fim > ini, 'não localizei o trecho das funções de etapa');
 const fonteFuncoes = app.slice(ini, fim);
 

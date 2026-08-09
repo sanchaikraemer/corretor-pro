@@ -4,100 +4,42 @@ import assert from 'node:assert/strict';
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
-// v864: o chip fixo de etapa do lead (pill com bolinha cinza + "Nome da etapa · passo X de 6")
-// virou uma barra de progresso em gradiente no mesmo pill. Preenchimento proporcional (X/6),
-// gradiente único frio→coral→verde de comprimento fixo revelado por fatia (clip-path),
-// pontinho branco pulsando nos passos 1..5 e parado no passo 6.
+// v864: o chip de etapa do lead ("Negociando · passo 5 de 6") virou uma barra de progresso em
+// gradiente, com pontinho pulsando e preenchimento proporcional.
+//
+// v1186 — ESTE TESTE VIROU UM FANTASMA E FOI REESCRITO.
+//
+// Poucas versões depois da v864, a **v889** registrou uma decisão do dono: tirar o funil de 6
+// etapas do cabeçalho do lead — "muitos leads 'avançados' estão longe de fechar; o funil não mede
+// qualificação" — e trocá-lo pela **barra de interesse do cliente** (mensagens que o CLIENTE
+// mandou), que é a que aparece hoje. A chamada do chip saiu do cabeçalho naquela versão.
+//
+// Só que o resto ficou: a função que montava o chip, a tabela das 6 etapas e ~20 linhas de CSS
+// continuaram no projeto, sem ninguém desenhar nada disso. E este teste continuou VERDE por três
+// meses — ele lia o texto do arquivo e executava a função direto, então media com precisão o
+// comportamento de um pedaço de tela que não existe mais. Era um teste que dava a impressão de
+// cobrir uma feature enquanto cobria um fantasma.
+//
+// A auditoria de 09/08/2026 removeu o código e o CSS. O que este arquivo guarda agora é a decisão
+// do dono: o funil não volta, e o cabeçalho do lead continua com a barra de interesse.
 
-// --- 1) Os 6 nomes de etapa precisam continuar batendo com o que já existia. ---
-const nomesEsperados = [
-  [1, 'Conhecendo'],
-  [2, 'Interessado'],
-  [3, 'Comparando opções'],
-  [4, 'Vendo se cabe no bolso'],
-  [5, 'Negociando'],
-  [6, 'Decidindo'],
-];
-for(const [passo, label] of nomesEsperados){
-  const re = new RegExp(`label:'${label.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}',\\s*passo:${passo}`);
-  assert.match(app, re, `etapa passo ${passo} precisa continuar sendo "${label}"`);
-}
+// ── 1. O funil não pode voltar — nem o desenho, nem o CSS, nem os rótulos das 6 etapas ────────
+assert.doesNotMatch(app, /cp704JornadaBadge|cp704Jornada\b/,
+  'o chip do funil foi retirado a pedido do dono na v889 — não pode voltar');
+assert.doesNotMatch(app, /passo \$\{j\.passo\} de 6|· passo \$\{/,
+  'nada de rótulo "passo X de 6" na tela do lead');
+assert.doesNotMatch(css, /cp704-etapa-prog|cp704-etapa-fill|cp704-etapa-edge|cp704EtapaPulse/,
+  'o CSS da barra de etapa sai junto — nenhuma tela o usa');
 
-// --- 2) Teste comportamental: roda cp704Jornada + cp704JornadaBadge contra stubs e
-//        confere o preenchimento (--cp-etapa-pct) no passo 1, num passo do meio e no 6. ---
-const ini = app.indexOf('function cp704Jornada(lead, mc){');
-const fim = app.indexOf('function cp704Impedimento(');
-assert.ok(ini !== -1 && fim !== -1 && fim > ini, 'não localizei as funções da jornada');
-const fonte = app.slice(ini, fim);
+// ── 2. O que ficou no lugar: a barra de INTERESSE do cliente, viva no cabeçalho do lead ───────
+assert.match(app, /function cp704BarraInteresse\(/, 'a barra de interesse precisa existir');
+assert.match(app, /cp704-situation">\$\{cp704BarraInteresse\(lead\)\}/,
+  'o cabeçalho do lead precisa desenhar a barra de interesse (é o que substituiu o funil)');
+assert.match(app, /cp704-interesse/, 'a marcação da barra de interesse precisa continuar');
 
-// eslint-disable-next-line no-new-func
-// v1094 — ETAPA_ARQUIVADO é a constante que guarda o valor gravado no banco ("Geladeira").
-// Como aqui a função roda isolada, ela precisa ser injetada junto.
-const carregar = new Function(
-  'normalizarEtapa', 'escapeHtml', 'ETAPA_ARQUIVADO',
-  fonte + '\nreturn { cp704Jornada, cp704JornadaBadge };'
-);
-const { cp704JornadaBadge } = carregar(
-  () => '',            // normalizarEtapa: string vazia → não cai em Vendido/Perdido/Arquivado
-  (s) => String(s ?? ''), // escapeHtml: identidade
-  'Geladeira'
-);
+// ── 3. E ela mede o que a v889 decidiu: mensagem DO CLIENTE, não a do corretor ────────────────
+assert.match(app, /function mensagensDoCliente\(/,
+  'a barra precisa continuar contando as mensagens do cliente');
+assert.match(app, /CP_TETO_BARRA_INTERESSE/, 'o teto da barra precisa continuar sendo uma constante');
 
-const badge = (status) => cp704JornadaBadge({ etapa: status }, { oportunidade: { status } });
-
-function pctDe(html){
-  const m = html.match(/--cp-etapa-pct:([\d.]+)%/);
-  return m ? Number(m[1]) : null;
-}
-
-// Passo 1 (Conhecendo) → 1/6 ≈ 16.67%, pulsando (sem is-completo).
-const p1 = badge('descoberta');
-assert.equal(pctDe(p1), 16.67, 'passo 1 deveria preencher 16.67%');
-assert.match(p1, /cp704-etapa-prog/, 'passo 1 deveria usar a barra de progresso');
-assert.doesNotMatch(p1, /is-completo/, 'passo 1 não pode estar marcado como completo (deve pulsar)');
-assert.match(p1, /Conhecendo · passo 1 de 6/, 'passo 1 deveria rotular "Conhecendo · passo 1 de 6"');
-assert.match(p1, /cp704-etapa-fill/, 'a barra precisa ter a camada de gradiente');
-assert.match(p1, /cp704-etapa-edge/, 'a barra precisa ter o pontinho branco de avanço');
-
-// Passo do meio (Comparando opções) → 3/6 = 50%.
-const p3 = badge('comparando');
-assert.equal(pctDe(p3), 50, 'passo 3 deveria preencher 50%');
-assert.doesNotMatch(p3, /is-completo/, 'passo 3 ainda não é completo');
-assert.match(p3, /Comparando opções · passo 3 de 6/, 'passo 3 deveria rotular corretamente');
-
-// Passo 6 (Decidindo) → 100%, completo (pontinho parado, sem pulsar).
-const p6 = badge('decisao');
-assert.equal(pctDe(p6), 100, 'passo 6 deveria preencher 100%');
-assert.match(p6, /is-completo/, 'passo 6 precisa estar marcado como completo (sem pulsar)');
-assert.match(p6, /Decidindo · passo 6 de 6/, 'passo 6 deveria rotular "Decidindo · passo 6 de 6"');
-
-// --- 3) O CSS precisa: gradiente frio→coral→verde reaproveitando cores existentes,
-//        revelar por clip-path, pontinho pulsando e parado no passo 6. ---
-const regraFill = css.match(/\.cp704-etapa-prog \.cp704-etapa-fill\{[^}]*\}/);
-assert.ok(regraFill, 'a camada de gradiente precisa existir no CSS');
-assert.match(regraFill[0], /linear-gradient/, 'o preenchimento precisa ser um gradiente');
-// v865: a barra usa o MESMO gradiente da barra de progresso da reanálise
-// (.ui682ProgressBar): var(--morno) (âmbar) → var(--lime) (coral). Nada de verde nem ciano.
-assert.match(regraFill[0], /var\(--morno\)/, 'o início precisa reusar var(--morno) (âmbar, igual à barra de cima)');
-assert.match(regraFill[0], /var\(--lime\)/, 'o fim precisa reusar var(--lime) (coral, igual à barra de cima)');
-assert.doesNotMatch(regraFill[0], /#68ff95/i, 'o verde não pode mais estar na barra de etapa');
-assert.doesNotMatch(regraFill[0], /var\(--cyan\)/, 'não usa mais ciano — segue a paleta quente da barra de cima');
-// v865: o preenchimento agora usa width=X/6 (igual à .progress-bar), não clip-path — assim
-// cada passo mostra um ciano→coral limpo, sem tom lavado no meio.
-assert.match(regraFill[0], /width:var\(--cp-etapa-pct/, 'a fatia precisa ser preenchida por width (igual à barra de importação)');
-assert.doesNotMatch(regraFill[0], /clip-path/, 'não usa mais clip-path (que lavava as cores do meio)');
-
-// O texto da barra fica em peso normal (não negrito): sobre o gradiente o negritão
-// pesado ficava com aparência borrada.
-const regraLabel = css.match(/\.cp704-etapa-prog \.cp704-etapa-label\{[^}]*\}/);
-assert.ok(regraLabel, 'a regra do texto da barra precisa existir');
-assert.match(regraLabel[0], /font-weight:400/, 'o texto da barra precisa ficar em peso normal (400)');
-
-assert.match(css, /@keyframes cp704EtapaPulse/, 'o pulso do pontinho precisa existir');
-assert.match(
-  css,
-  /\.cp704-etapa-prog\.is-completo \.cp704-etapa-edge\{animation:none\}/,
-  'no passo 6 (is-completo) o pontinho não pode pulsar'
-);
-
-console.log('v864-barra-progresso-etapa: ok');
+console.log('v864-barra-progresso-etapa: ok (funil retirado na v889; guarda agora é a barra de interesse)');

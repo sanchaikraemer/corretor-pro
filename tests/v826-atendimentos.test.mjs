@@ -63,7 +63,15 @@ assert.equal(ultimoAtendimentoTs({}), 0);
 // v1102 — a régua da lista virou o último CONTATO REAL do corretor (atendimento marcado OU
 // última mensagem dele na conversa) — caso Jamil: atendido pelo WhatsApp, mas nunca "marcado".
 assert.match(app, /comData\.sort\(\(a,b\) => cpUltimoContatoCorretorTs\(a\) - cpUltimoContatoCorretorTs\(b\)\)/, 'ordenação pelo contato real continua viva');
-// Rótulo de tempo relativo existe (§6.5): agora/hoje/ontem/há X dias.
-assert.match(app, /function rotuloTempoAtendimento\(ts\)\{[\s\S]*?"ontem"[\s\S]*?há \$\{dias\} dias/);
+// Rótulo de tempo relativo (§6.5): "hoje" / "ontem" / "há X dias".
+// v1186 — este item mirava `rotuloTempoAtendimento`, uma função que a v1101 aposentou e ninguém
+// removeu ("CONTAGEM DE DIAS SAIU. VIRAM DATAS" — o dono leu "14 dias" ao lado da Silvana,
+// atendida ontem, e entendeu 14 dias parada). A lista passou a mostrar a DATA de volta, com o
+// tempo relativo só como legenda embaixo. A auditoria de 09/08/2026 removeu a função morta e
+// trouxe a guarda pro texto que o corretor realmente lê hoje.
+assert.match(app, /desde === 0 \? "atendido hoje" : desde === 1 \? "atendido ontem" : `atendido há \$\{desde\} dias`/,
+  'a legenda de tempo relativo do atendimento precisa continuar (hoje / ontem / há X dias)');
+assert.match(app, /<small class="lgt-rot">volta dia<\/small><b>\$\{volta\}<\/b>/,
+  'a coluna precisa continuar mostrando a DATA de volta, não uma contagem solta de dias');
 
 console.log('v826-atendimentos: ok');

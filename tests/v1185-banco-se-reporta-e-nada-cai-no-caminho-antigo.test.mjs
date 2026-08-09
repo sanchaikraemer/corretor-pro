@@ -29,6 +29,15 @@ const semComentariosJs = (js) => js.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)
   assert.ok(nome, 'a migração 0017 (registro de migrações) precisa existir');
   const sql = fs.readFileSync(new URL(nome, dir), 'utf8');
 
+  // v1186 — a conferência pode ser REESCRITA por uma migração posterior (foi o que a 0018 fez, pra
+  // se incluir na lista sem depender de editar um arquivo que já pode estar aplicado no banco).
+  // A checagem de cobertura vale sempre pela versão MAIS NOVA da função, não pela original.
+  const donaDaConferencia = arquivos
+    .filter(f => /create\s+or\s+replace\s+function\s+public\.conferir_migracoes\(\)/i
+      .test(fs.readFileSync(new URL(f, dir), 'utf8')))
+    .sort().pop();
+  const sqlConferencia = fs.readFileSync(new URL(donaDaConferencia, dir), 'utf8');
+
   assert.match(sql, /create\s+table\s+if\s+not\s+exists\s+public\.cp_migracoes_aplicadas/i,
     'a 0017 precisa criar a tabela onde o estado fica guardado');
   assert.match(sql, /create\s+or\s+replace\s+function\s+public\.conferir_migracoes\(\)/i,
@@ -44,17 +53,17 @@ const semComentariosJs = (js) => js.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)
   // Toda migração da lista precisa estar coberta, senão uma some do relatório sem ninguém notar.
   const numerosNoDisco = arquivos.map(f => Number(f.slice(0, 4))).filter(Number.isFinite);
   for (const n of numerosNoDisco) {
-    assert.match(sql, new RegExp(`'${String(n).padStart(4, '0')}_`),
-      `a conferência da 0017 precisa citar a migração ${n} — senão ela some do relatório`);
+    assert.match(sqlConferencia, new RegExp(`'${String(n).padStart(4, '0')}_`),
+      `a conferência (hoje em ${donaDaConferencia}) precisa citar a migração ${n} — senão ela some do relatório`);
   }
 
   // A 0015 refaz as travas que faltaram da 0009: as duas têm que ser conferidas pelo mesmo efeito.
-  assert.match(sql, /when\s+9\s*,\s*15\s+then/i,
+  assert.match(sqlConferencia, /when\s+9\s*,\s*15\s+then/i,
     'a 0009 e a 0015 deixam o mesmo efeito — a conferência precisa tratá-las juntas');
 
   // Detectar a 0013 só pela existência da função seria mentira: a trava contra cadastro falso em
   // massa só vale com o revoke que tira a criação de empresa do alcance do navegador.
-  assert.match(sql, /cp_navegador_pode_executar\s*\(\s*'public\.criar_empresa_e_dono/i,
+  assert.match(sqlConferencia, /cp_navegador_pode_executar\s*\(\s*'public\.criar_empresa_e_dono/i,
     'a conferência da 0013 precisa checar que o navegador NÃO consegue criar empresa direto');
   assert.match(sql, /has_function_privilege\s*\(\s*'anon'[\s\S]{0,160}?has_function_privilege\s*\(\s*'authenticated'/i,
     'a checagem de alcance do navegador precisa olhar anon E authenticated');
