@@ -9,6 +9,7 @@ import { normalizarEtapaBanco } from '../api/_persistence.js';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const sw = fs.readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const leadUpdate = fs.readFileSync(new URL('../api/lead-update.js', import.meta.url), 'utf8');
 const persistence = fs.readFileSync(new URL('../api/_persistence.js', import.meta.url), 'utf8');
@@ -84,9 +85,23 @@ const civilSP = (iso) =>
   for (const arq of importsEstaticos) {
     assert.ok(core.includes(`'${arq}?v=__VERSION__'`), `import estático do app.js fora do precache: ${arq}`);
   }
-  for (const arq of ['/vendor/supabase.js', '/contas-config.js', '/vendor/jszip.min.js']) {
+  // v1186 — a lista era escrita à mão aqui ('/vendor/supabase.js', '/contas-config.js',
+  // '/vendor/jszip.min.js'). Agora sai do próprio index.html: qualquer <script src> que o boot
+  // carregar precisa estar no pacote offline, e nada além disso. Assim o teste acompanha sozinho
+  // quando um script entra ou sai do boot — foi o caso do jszip, que saiu do carregamento fixo
+  // (passou a ser baixado só na hora de importar um ZIP) e antes obrigava este teste a mentir.
+  const scriptsDoBoot = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)]
+    .map(m => m[1].replace(/\?v=__VERSION__$/, ''))
+    .filter(src => src.startsWith('/'));
+  assert.ok(scriptsDoBoot.length >= 2, 'sanidade: o index.html carrega scripts externos no boot');
+  for (const arq of scriptsDoBoot) {
     assert.ok(core.includes(`'${arq}?v=__VERSION__'`), `script do index.html fora do precache: ${arq}`);
   }
+  // E o jszip NÃO pode voltar pro boot: são 96 KB em toda abertura pra um uso que só acontece
+  // na importação de ZIP e na planilha de exportação.
+  assert.ok(!scriptsDoBoot.some(s => s.includes('jszip')),
+    'o jszip não pode voltar a ser carregado em toda abertura do app — use ensureJSZip()');
+  assert.match(app, /function ensureJSZip\(\)/, 'o carregador sob demanda do jszip precisa existir');
 }
 
 // ── 6. A limpeza de versão nova só apaga caches estáticas — nunca a do compartilhamento ───────

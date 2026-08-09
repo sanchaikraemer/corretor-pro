@@ -22,7 +22,11 @@ for (const id of ["cerebroCorretorNome", "cerebroMetodo", "cerebroTom", "cerebro
 // componente já usado em "Evolução do atendimento" — não é um padrão visual novo.
 assert.match(html, /<details class="bloco-recolhe cerebro-campo"[^>]*>\s*<summary>Regras comerciais</, "Regras comerciais precisa virar um bloco-recolhe");
 assert.match(html, /<details class="bloco-recolhe cerebro-campo"[^>]*>\s*<summary>Sinais de obje/, "Sinais de objeção precisa virar um bloco-recolhe");
-assert.match(css, /details\.ficha-cliente,details\.bloco-recolhe\{margin-top:8px\}/, "bloco-recolhe é o componente já existente — não pode ter sido duplicado com outro nome");
+// v1186 — a regra era `details.ficha-cliente,details.bloco-recolhe{...}`. A auditoria de
+// 09/08/2026 tirou do CSS as 167 classes que nenhuma tela citava, e `ficha-cliente` era uma
+// delas (sobra de uma geração antiga da tela do lead). O componente em si não mudou.
+assert.match(css, /details\.bloco-recolhe\{margin-top:8px\}/, "bloco-recolhe é o componente já existente — não pode ter sido duplicado com outro nome");
+assert.doesNotMatch(css, /ficha-cliente/, "ficha-cliente saiu do CSS na faxina da v1186 — nenhuma tela usava");
 
 // O ACHADO ORIGINAL: Regras comerciais e Sinais de objeção precisam vir ANTES do botão Salvar e
 // antes dos números técnicos — nunca mais depois.

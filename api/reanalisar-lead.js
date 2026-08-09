@@ -9,10 +9,6 @@ function textoLimpo(v) { return String(v || "").trim(); }
 function nomeSemTagImportacao(nome) {
   return textoLimpo(nome).replace(/\s*\[(?:SISTEMA|CSV)\s+[A-Za-z0-9]{1,8}\]\s*$/i, "").trim();
 }
-function primeiroNomeLeadLocal(lead) { return textoLimpo(lead?.name).split(/\s+/)[0] || ""; }
-function produtoLeadLocal(lead, analysis) {
-  return textoLimpo(analysis?.modeloComercial?.oportunidade?.produto || lead?.product || analysis?.product || "o imóvel") || "o imóvel";
-}
 function garantirMensagensMotorComercialV714(analysis, lead) {
   const out = (analysis && typeof analysis === "object") ? analysis : {};
   const m = (out.messages && typeof out.messages === "object") ? out.messages : {};
@@ -125,26 +121,6 @@ function analiseEstaUtil6863(a) {
     a.arquiteturaMensagens === ARQUITETURA_MENSAGENS_ATUAL
   );
 }
-function compactarTimelineParaIA6863(timeline, previous, novoAtendimento) {
-  const arr = Array.isArray(timeline) ? timeline : [];
-  const limite = 140;
-  if (arr.length <= limite) return arr;
-  const resumo = String(previous?.summary || previous?.diagnostico?.resumo || previous?.memoria?.observacoes || "").trim();
-  const eventos = Array.isArray(previous?.aprendizado?.eventos) ? previous.aprendizado.eventos.slice(-12) : [];
-  const venda = previous?.venda ? `Venda registrada: ${JSON.stringify(previous.venda).slice(0, 700)}` : "";
-  const perda = previous?.perda ? `Perda registrada: ${JSON.stringify(previous.perda).slice(0, 700)}` : "";
-  const sintese = [
-    resumo ? `Resumo comercial anterior: ${resumo.slice(0, 1800)}` : "Resumo comercial anterior indisponível.",
-    previous?.clientProfile ? `Perfil já identificado: ${String(previous.clientProfile).slice(0, 700)}` : "",
-    previous?.nextAction ? `Próxima ação anterior: ${String(previous.nextAction).slice(0, 500)}` : "",
-    venda,
-    perda,
-    eventos.length ? `Últimos eventos internos: ${eventos.map(e => `${e.evento || "evento"} em ${e.quando || ""}`).join("; ").slice(0, 900)}` : ""
-  ].filter(Boolean).join("\n");
-  const head = [{ id: "resumo-incremental-6863", author: "Resumo anterior do sistema", text: sintese, type: "resumo", source: "incremental", iso: new Date().toISOString() }];
-  const tail = arr.slice(-(novoAtendimento ? 100 : 120));
-  return head.concat(tail);
-}
 
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -172,12 +148,6 @@ async function readJsonBody(req) {
 
 function normalizarTextoV684(v) {
   return String(v || "").trim();
-}
-function textoTimelineV684(timeline) {
-  return (Array.isArray(timeline) ? timeline : [])
-    .map(m => `${m?.author || ""}: ${m?.text || m?.body || ""}`)
-    .join("\n")
-    .toLowerCase();
 }
 function enriquecerIAComercialV684(analysis, lead, timeline) {
   const out = (analysis && typeof analysis === "object") ? analysis : {};
@@ -374,45 +344,12 @@ async function reanalisarLeadHandler702(req, res) {
     return json(res, 200, { ok: true, removido: true });
   }
 
-  // Corrige a observação/nota do corretor e CONSERTA A FONTE: troca as notas manuais
-  // (source:"manual") por uma única nota consolidada com o texto editado, PRESERVA as
-  // mensagens reais do cliente, e reanalisa. Usado quando o corretor edita a observação
-  // (ex.: tirar info errada de um lead criado por print/manual). Assim a análise
-  // ("Por quê este lead") deixa de repetir o texto antigo.
-  if (body?.action === "corrigir-observacao") {
-    const texto = String(body?.texto || "").trim().slice(0, 4000);
-    const openaiC = getOpenAI();
-    if (!openaiC) return json(res, 500, { ok: false, error: "Análise não configurada no servidor." });
-    const prev = row.resultado_analise || {};
-    const br = agoraBR();
-    const semNotas = timeline.filter(m => m && m.source !== "manual"); // mantém mensagens do cliente
-    const novaTl = semNotas.slice();
-    if (texto) {
-      novaTl.push({
-        id: novaTl.length + 1, date: br.dataBR, time: br.horaBR, iso: new Date().toISOString(),
-        author: "Atendimento (corretor)", text: texto, type: "atendimento", source: "manual", order: novaTl.length + 1
-      });
-    }
-    if (!novaTl.length) return json(res, 400, { ok: false, error: "Sem conteúdo pra analisar (deixe ao menos uma observação)." });
-    const leadC = prev.lead || {};
-    const novoC = await analyzeWithBrain({ lead: leadC, timeline: novaTl, openai: openaiC, leadId: id, forcarVariacao: true, cerebroConfig, organizationId });
-    const mergedC = {
-      ...prev, ...novoC,
-      venda: prev.venda || undefined,
-      memoria: { ...(prev.memoria || {}), observacoes: texto },
-      aprendizado: prev.aprendizado || undefined,
-      // v1023 — ver comentário completo perto de aplicarLembrete: agendamento só nasce de clique
-      // explícito em Agenda, nunca de texto (mesmo princípio da v988, agora também aqui).
-      confirmedAppointments: []
-    };
-    if (prev.lembrete && prev.lembrete.auto !== true) mergedC.lembrete = prev.lembrete; // preserva lembrete manual
-    const updC = { resultado_analise: mergedC, timeline_json: novaTl, atualizado_em: new Date().toISOString() };
-    // v1082 — a reanálise NÃO mexe mais na etapa (ver comentário completo no outro ponto deste
-    // arquivo, na reanálise completa): etapa é decisão do corretor, não palpite da IA.
-    const { error: errC } = await supabase.from("whatsapp_processamentos").update(updC).eq("id", id).eq("organization_id", organizationId);
-    if (errC) return json(res, 500, { ok: false, error: errC.message });
-    return json(res, 200, { ok: true, analysis: mergedC });
-  }
+  // v1186 — aqui existia a ação "corrigir-observacao": ela trocava as notas manuais do lead por
+  // uma nota consolidada com o texto editado e reanalisava. Nunca foi chamada por nenhuma tela —
+  // conferido em todo o histórico do app.js. Removida na auditoria de 09/08/2026. Editar a
+  // observação hoje passa por "observacao-adicionar" (api/lead-update.js) e pela reanálise
+  // completa, que é o caminho que o corretor realmente usa.
+
 
   const novoAtendimento = String(body?.novoAtendimento || "").trim();
   const apenasSalvar = body?.apenasSalvar === true;

@@ -751,7 +751,11 @@
   </div>
 </div>
 
-<script src="/vendor/jszip.min.js?v=__VERSION__"></script>
+<!-- v1186 — a biblioteca de ZIP (96 KB) NÃO é mais baixada aqui. Ela só serve pra enxugar o ZIP
+     do WhatsApp na importação e pra montar a planilha do aprendizado; quem abre o app pra ver a
+     fila do dia nunca usava, e mesmo assim baixava. Agora quem precisa dela pede na hora, por
+     ensureJSZip() no app.js (que já existia e nunca chegava a ser usado, justamente porque esta
+     tag deixava a biblioteca sempre pronta). Auditoria de 09/08/2026. -->
 <!-- v1004 — login por conta (Supabase): o app passa a reconhecer a sessão de quem entrou por
      entrar.html e a usar nas chamadas. Sem sessão, tudo segue como antes (chave compartilhada). -->
 <script src="/vendor/supabase.js?v=__VERSION__"></script>

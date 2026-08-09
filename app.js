@@ -806,15 +806,32 @@ const MSG_STYLE_HINTS = {
   retomada: "Retomada: reabre uma conversa parada sem soar genérico."
 };
 
+// v1186 — A BIBLIOTECA DE ZIP SÓ É BAIXADA QUANDO O CORRETOR VAI MEXER COM ZIP.
+//
+// Esta função já existia e já fazia o certo: baixar o jszip na hora em que ele é preciso. Só que
+// ela nunca chegava a baixar nada — o `index.html` carregava o arquivo com um <script> fixo em
+// TODA abertura do app, então `window.JSZip` já estava lá e esta função saía na primeira linha.
+//
+// Eram 96 KB baixados em toda abertura, por todo corretor, só pra ficar parado: o jszip serve
+// pra (a) enxugar o ZIP do WhatsApp antes de mandar pro servidor e (b) montar a planilha de
+// exportação do aprendizado. Quem abre o app pra ver a fila do dia — o uso normal — não toca em
+// nenhuma das duas. Achado da auditoria de 09/08/2026.
+//
+// Agora a tag saiu do index.html e do pacote offline, e quem precisa chama esta função. O
+// carregamento é guardado numa promessa só: dois pedidos ao mesmo tempo não baixam duas vezes.
+let _jsZipCarregando = null;
 async function ensureJSZip(){
   if(window.JSZip) return window.JSZip;
-  await new Promise((resolve,reject)=>{
-    const s=document.createElement("script");
-    s.src="/vendor/jszip.min.js";
-    s.onload=resolve;
-    s.onerror=()=>reject(new Error("Não foi possível baixar a biblioteca pra enxugar o ZIP. Verifique sua internet."));
-    document.head.appendChild(s);
-  });
+  if(!_jsZipCarregando){
+    _jsZipCarregando = new Promise((resolve,reject)=>{
+      const s=document.createElement("script");
+      s.src="/vendor/jszip.min.js?v=__VERSION__";
+      s.onload=resolve;
+      s.onerror=()=>{ _jsZipCarregando=null; reject(new Error("Não foi possível baixar a biblioteca pra ler o arquivo. Verifique sua internet e tente de novo.")); };
+      document.head.appendChild(s);
+    });
+  }
+  await _jsZipCarregando;
   return window.JSZip;
 }
 
@@ -1249,8 +1266,6 @@ function diagnosticoClienteHTML(a){
 // Ele criava uma segunda camada paralela de sugestões estilo sistema antigo. Agora a tela trabalha
 // somente com as 3 respostas principais geradas pela IA.
 const OBJETIVOS_MSG_LABELS = [];
-function normalizarObjetivosMensagens(_obj){ return []; }
-function renderSugestoesObjetivoFoco(_lista){ return ""; }
 
 function renderAnalysis(analysis, lead){
   state.analysis = analysis || null;
@@ -1670,13 +1685,6 @@ function prioridadeTituloCurto(l){
   const pa = prioridadeAtendimento(l) || {};
   return pa.titulo || "Prioridade";
 }
-function prioridadeClasse(l){
-  const g = String((prioridadeAtendimento(l) || {}).grupo || "");
-  if(g === "acao-hoje") return "hot";
-  if(g === "retomar-cuidado") return "warm";
-  if(g === "pode-aguardar" || g === "tratado-hoje" || g === "boa-sem-urgencia") return "wait";
-  return "cold";
-}
 function compararPrioridadeAtendimento(a,b){
   const ra = scoreRankingHoje(a);
   const rb = scoreRankingHoje(b);
@@ -1805,42 +1813,6 @@ function scoreRankingHoje(l){
 }
 
 
-// Melhor horário pro cabeçalho. Usa o que a IA calculou (padrão de resposta do cliente).
-// Quando a conversa é curta demais pra ter padrão (ex.: cliente só mandou o formulário),
-// cai num fallback: usa o horário em que a PRÓPRIA cliente mandou mensagem — melhor que esconder.
-function horarioContatoLead(l){
-  const a = l.analysis || {};
-  if(a.melhorHorarioContato) return a.melhorHorarioContato;
-  const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
-  if(!msgs.length) return "";
-  const nome = String(l.name||"").trim().toLowerCase().split(/\s+/)[0] || "";
-  // v1183 — este nome vinha de state.cerebroCfg, que nunca é preenchido: a comparação com o nome
-  // do corretor NUNCA rodou aqui, só sobrava o filtro de palavras genéricas abaixo. Agora vale o
-  // "Seu nome" do Cérebro de verdade, no mesmo formato do resto do app (primeiro nome, e só o
-  // sentido seguro da comparação — autor CONTÉM o nome; o inverso transformava qualquer autor de
-  // nome curto em "corretor").
-  const corretorNome = cpNomeCorretorCerebro().toLowerCase().split(/\s+/)[0] || "";
-  const business = /(construtora|corretor|imobili|direciona|atendimento|sistema)/i;
-  const cont = new Array(24).fill(0);
-  let achou = false;
-  for(const m of msgs){
-    const autor = String(m.author||"").trim();
-    if(!autor) continue;
-    const autorLower = autor.toLowerCase();
-    const ehCorretor = (corretorNome && autorLower.includes(corretorNome)) || business.test(autor);
-    const ehCliente = nome ? autorLower.includes(nome) : !ehCorretor;
-    if(!ehCliente) continue;
-    const t = String(m.time||"").match(/^(\d{1,2}):/);
-    if(!t) continue;
-    const h = Number(t[1]);
-    if(h>=0 && h<=23){ cont[h]++; achou = true; }
-  }
-  if(!achou) return "";
-  let pico = 0;
-  for(let h=0;h<24;h++) if(cont[h] > cont[pico]) pico = h;
-  const fmt = h => String(h).padStart(2,"0")+"h";
-  return `${fmt(pico)}-${fmt(Math.min(23,pico+1))}`;
-}
 
 // Dias desde a última mensagem da timeline. somenteCliente=true conta só mensagens da
 // PRÓPRIA cliente (ignora corretor/empresa e anotação manual). Calcula client-side a partir
@@ -2049,7 +2021,6 @@ function motivoCurto(l){
   return "Aguardando próximo passo";
 }
 
-function classePct(){ return ""; }
 
 function ehEsfriando(l){
   if(!isNaN(lembreteTs(l))) return false;
@@ -2256,14 +2227,6 @@ function diasParado(l){
     if(dAt != null && Number.isFinite(dAt)) dias = Math.min(dias, dAt);
   }
   return dias;
-}
-// Rótulo humano do atendimento: "agora", "hoje", "ontem" ou "há X dias" (§6.5).
-function rotuloTempoAtendimento(ts){
-  if(!ts) return "";
-  const dias = diasCalendarioBR(ts);
-  if(dias === 0) return ((Date.now() - ts) / 60000) < 60 ? "agora" : "hoje";
-  if(dias === 1) return "ontem";
-  return `há ${dias} dias`;
 }
 
 // ─── v1113 — CADÊNCIA DO CLIENTE QUE NUNCA RESPONDEU (10 retomadas em 6 meses) ────────────────
@@ -3402,14 +3365,6 @@ function mostrarTratadosHoje(){
 }
 window.mostrarTratadosHoje = mostrarTratadosHoje;
 
-// ===== Coluna direita da Resumo: "Seu desempenho" + "Insights" (layout-alvo) =====
-// No celular some da tela e abre pelo menu/Insights (cascata). Números REAIS — sem inventar.
-function _clienteFalouPorUltimo(l){
-  const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
-  const pn = String(l.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
-  for(let i=msgs.length-1;i>=0;i--){ const m=msgs[i]; if(!m||!String(m.text||"").trim()) continue; return ehMsgDoCliente(m, pn); }
-  return false;
-}
 function buildDesempenhoInsightsHTML(items){
   items=items||state.itemsAtivos||[];
   const ativos=items.filter(leadEhAtivo);
@@ -3797,41 +3752,6 @@ function verListaHoje(){
 }
 window.verListaHoje = verListaHoje;
 
-// v1114 — "Reanalisar todos" (reanalisarTudo/executarReanaliseTudo/reanalisarFalhas, v905→v971)
-// foi REMOVIDO por decisão do dono: com os planos por limite de análises (v1110+), um toque
-// reanalisava a carteira inteira e queimava o crédito do mês sem ganho real. A reanálise de
-// 1 lead por vez (ui670Reanalisar) e a reanálise automática na importação continuam.
-
-// Fila por prioridade: lista numerada dos próximos leads a atender (do 4º em diante),
-// ordenada por prioridade real de atendimento. Os 3 primeiros já estão nos cards do Top 3.
-function renderFilaPrioridade(ordenados){
-  const box = qs("#filaPrioridade");
-  if(!box) return;
-  const resto = (ordenados || []).slice(3, 12); // 4º ao 12º
-  if(!resto.length){ box.style.display = "none"; box.innerHTML = ""; return; }
-  const selId = state.lead?.id ? String(state.lead.id) : null;
-  box.style.display = "block";
-  box.innerHTML =
-    `<div class="fila-head"><h3>Fila inteligente</h3><span>Ordenada por prioridade</span></div>` +
-    resto.map((l, i) => {
-      const pos = i + 4;
-      const idJs = JSON.stringify(String(l.id||""));
-      const ehSel = selId && String(l.id) === selId;
-      const prioridade = prioridadeAtendimento(l) || {};
-      const dias = l.daysSinceLastInteraction != null ? `${l.daysSinceLastInteraction} dias<br>sem resposta` : "";
-      const etapa = normalizarEtapa(l.etapa);
-      return `<div class="fila-row ${ehSel?"sel":""}" onclick='abrirLead(${idJs})'>
-        <div class="fila-rank">${pos}</div>
-        <div class="fila-info">
-          <div class="fila-nm">${escapeHtml(l.name||"Cliente")}</div>
-          <div class="fila-un">${escapeHtml(produtosLabel(l))}</div>
-        </div>
-        <div class="fila-days">${dias}</div>
-        <div class="fila-pc" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</div>
-        <div class="fila-wa" title="Abrir lead">💬</div>
-      </div>`;
-    }).join("");
-}
 
 function renderTop3(top3){
   const area = qs("#top3Area");
@@ -4784,22 +4704,6 @@ const TIPO_CONTATO_LABEL = {
   "outro": { txt:"Tipo indefinido", cor:"var(--muted)", bg:"rgba(255,255,255,.06)" }
 };
 
-function tipoContatoTextoMeta(t){
-  // Texto inline puro. Antes retornava <span> e o topo escapava HTML, aparecendo tag na tela.
-  const map = { "corretora-parceira":"Corretor(a) parceiro", "indicacao":"Indicação" };
-  const txt = map[t];
-  if(txt) return txt;
-  if(!t || t==="outro") return "definir tipo";
-  return "";
-}
-function tipoContatoEfetivoLead(lead, analysis){
-  const raw = String(analysis?.tipoContato || lead?.tipoContato || "").trim();
-  const nome = String(lead?.name || analysis?.clientName || "");
-  const produto = String(lead?.product || analysis?.produtoInteresse || "");
-  const txt = [raw, nome, produto].join(" ").toLowerCase();
-  if(/corretor|corretora|imobili[áa]ria|im[oó]veis|creci|rede\s+moi|parceir/.test(txt)) return "corretora-parceira";
-  return raw || "outro";
-}
 function badgeTipoContato(t){
   const cfg = TIPO_CONTATO_LABEL[t];
   if(!cfg){
@@ -4826,11 +4730,6 @@ const MATERIAL_LABEL = {
   "material-valorizacao":"Valorização","material-wellness":"Lazer/wellness"
 };
 
-function badgeTipoRetomada(t){
-  const cfg = TIPO_RETOMADA_LABEL[t];
-  if(!cfg) return "";
-  return `<span title="Tipo de abordagem sugerida" style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:950;color:${cfg.cor};background:${cfg.bg};border:1px solid ${cfg.cor};letter-spacing:.02em">${cfg.txt}</span>`;
-}
 
 const EVENTO_LABEL = {
   "whatsapp_aberto": { icone:"", txt:"Abriu WhatsApp", cor:"var(--acao)" },
@@ -4867,29 +4766,6 @@ const FUNCIONOU_LABEL = {
   "sem-dados": { txt:"sem dados", cor:"var(--muted)" }
 };
 
-function renderEvolucao(lead){
-  const ev = lead.analysis?.evolucao;
-  if(!Array.isArray(ev) || !ev.length) return "";
-  // Mostra os últimos 4, mais recente primeiro
-  const itens = [...ev].slice(-4).reverse().map(e => {
-    const rumo = EVOLUIU_LABEL[e.evoluiu];
-    const func = FUNCIONOU_LABEL[e.abordagemFuncionou];
-    const quando = e.comparadoEm ? formatarTempoRelativo(e.comparadoEm) : "";
-    const badges = [
-      rumo ? `<span style="color:${rumo.cor};font-weight:950">${rumo.txt}</span>` : "",
-      func ? `<span style="color:${func.cor};font-weight:600">${func.txt}</span>` : ""
-    ].filter(Boolean).join(" · ");
-    return `<div style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;line-height:1.5">
-      <div style="display:flex;justify-content:space-between;gap:8px">${badges}<span class="small" style="color:var(--muted);font-size:10px">${escapeHtml(quando)}</span></div>
-      ${e.comoReagiu && e.comoReagiu !== "sem resposta" ? `<div style="color:var(--soft);margin-top:2px">Cliente: ${escapeHtml(e.comoReagiu)}</div>` : ""}
-      ${e.oQueMudou ? `<div style="color:var(--text);margin-top:2px">${escapeHtml(e.oQueMudou)}</div>` : ""}
-      ${e.licao && e.licao !== "sem lição clara ainda" ? `<div style="color:var(--soft);margin-top:2px;font-size:11px">${escapeHtml(e.licao)}</div>` : ""}
-    </div>`;
-  }).join("");
-  return `<details class="bloco-recolhe"><summary>Evolução do atendimento (${ev.length})</summary>
-    <div style="margin-top:8px">${itens}</div>
-  </details>`;
-}
 
 function renderHistoricoContatos(lead){
   const eventos = lead.analysis?.aprendizado?.eventos || [];
@@ -4925,40 +4801,7 @@ const MATERIAL_TEMPLATE = {
   "material-wellness": "Vou te mandar um material sobre a área de lazer do condomínio."
 };
 
-function renderMateriais(materiais, lead){
-  if(!Array.isArray(materiais) || !materiais.length) return "";
-  const phone = lead?.phone || "";
-  const cards = materiais.slice(0,3).map((m, i) => {
-    const lab = MATERIAL_LABEL[m.tipo] || ("" + (m.tipo||"Material"));
-    const motivo = m.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(m.motivo)}</div>` : "";
-    const quando = m.quando ? `<div class="small" style="margin-top:2px;color:var(--muted);font-size:10px;letter-spacing:.05em;text-transform:uppercase">${escapeHtml(m.quando)}</div>` : "";
-    const template = MATERIAL_TEMPLATE[m.tipo];
-    const waLink = template ? whatsappLink(phone, template) : "";
-    const btnEnviar = template ? `<a href="${escapeHtml(waLink)}" target="_blank" onclick="event.stopPropagation();registrarAprendizado('material_sugerido_enviado',null,{tipo:'${escapeHtml(m.tipo)}'})" style="display:inline-block;margin-top:6px;padding:4px 10px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:999px;font-size:10px;font-weight:950;text-decoration:none;letter-spacing:.04em">Mandar agora</a>` : "";
-    return `<div style="padding:8px 10px;background:rgba(196,92,255,.06);border:1px solid rgba(196,92,255,.18);border-radius:10px"><div style="font-weight:950;font-size:13px;color:var(--text)">${escapeHtml(lab)}</div>${motivo}${quando}${btnEnviar}</div>`;
-  }).join("");
-  return `<div style="padding:11px 13px;background:var(--card);border:1px solid var(--line);border-radius:10px">
-    <div class="small" style="color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-weight:950;font-size:10px;margin-bottom:6px">Materiais sugeridos</div>
-    <div style="display:flex;flex-direction:column;gap:6px">${cards}</div>
-  </div>`;
-}
 
-// Barra de progresso indeterminada (mostra que está processando, não travou). Retorna função pra remover.
-function iniciarBarraProgresso(btn, texto){
-  if(!btn || !btn.parentElement) return () => {};
-  const bar = document.createElement("div");
-  bar.className = "barra-reanalise";
-  btn.parentElement.insertAdjacentElement("afterend", bar);
-  let label = null;
-  if(texto){
-    label = document.createElement("div");
-    label.className = "small";
-    label.style.cssText = "color:var(--muted);text-align:center;margin-top:5px;font-size:11px";
-    label.textContent = texto;
-    bar.insertAdjacentElement("afterend", label);
-  }
-  return () => { try{ bar.remove(); if(label) label.remove(); }catch(_){} };
-}
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 // v1026 — o botão "Voltar" usava history.back(), que pode levar pra QUALQUER coisa que
@@ -5170,40 +5013,7 @@ function cp704Css(){
       .replace(/\bopções soltas\b/gi, 'sugestões desalinhadas ao teu objetivo');
     return out.replace(/\s{2,}/g,' ').replace(/\s+([,.])/g,'$1').trim();
   }
-  function cp705Short(v, n=150){
-    const t=cp705PlainText(v);
-    return t.length>n ? t.slice(0,n-3).trim()+'...' : t;
-  }
 
-  function cp707ObservationFacts(lead){
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-    const textos=[mem.observacoes,a.summary,a.nextAction,a.risk,a.clientProfile]
-      .concat(msgs.slice(-20).map(m=>m?.text||m?.body||m?.message||''))
-      .map(cp705PlainText).filter(Boolean);
-    const joined=textos.join(' \n ');
-    const norm=joined.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const mulher=/\b(mulher|esposa)\b/.test(norm);
-    const negou=/(nao|não|sem)\s.{0,28}\b(quis|quer|aprovou|aprova|aprovacao|aceitou|aceita|gostou|autorizou|topou)\b|\b(nao quis|nao aprovou|nao gostou|nao topou)\b/.test(norm);
-    if(mulher && negou){
-      const pessoa=/\besposa\b/.test(norm)?'esposa':'mulher';
-      const produto=cp704Text(lead?.product || a?.modeloComercial?.oportunidade?.produto || lead?.product || 'o imóvel');
-      const primeiro=cp704Text(lead?.name,'').split(/\s+/)[0]||'';
-      return {
-        tipo:'decisor_negou',
-        situacao:'Em decisão',
-        motivo:`A ${pessoa} não aprovou a compra neste momento.`,
-        insight1:`Fato: a decisão depende da ${pessoa}.`,
-        insight2:`Inferência: ainda não é perda confirmada.`,
-        insight3:`Ação: retomada leve e objetiva.`,
-        next:`Retomar com leveza para confirmar se houve mudança na decisão da ${pessoa}, sem criar nova objeção.`,
-        msgA:`${primeiro}, entendi o ponto sobre a decisão de vocês. Como ficou em aberto, queria saber se houve alguma mudança nesse cenário ou se prefere que eu deixe o ${produto} em acompanhamento por enquanto.`.trim(),
-        msgB:`${primeiro}, obrigado por me atualizar. Vou respeitar esse momento e deixar a oportunidade em aberto. Se ajudar, depois posso organizar uma comparação simples com opções do mesmo perfil.`.trim(),
-        msgC:`${primeiro}, para eu conduzir do jeito certo: quer que eu mantenha contato mais adiante sobre o ${produto} ou prefere que eu aguarde você me chamar quando tiver uma posição melhor?`.trim()
-      };
-    }
-    return null;
-  }
 
   function cp705MessagesReady(msgs){
     const vals=[msgs?.a,msgs?.b,msgs?.c].map(cp705PlainText);
@@ -5213,57 +5023,6 @@ function cp704Css(){
 
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
   function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
-  function cp704Situacao(mc, lead){
-    const obsFact=cp707ObservationFacts(lead);
-    if(obsFact?.situacao) return obsFact.situacao;
-    const st=cp704Text(mc?.oportunidade?.status || lead?.etapa || 'em análise').toLowerCase();
-    if(/decis/.test(st)) return 'Em decisão';
-    if(/negocia/.test(st)) return 'Em negociação';
-    if(/analise|finance/.test(st)) return 'Análise financeira';
-    if(/compar/.test(st)) return 'Em comparação';
-    if(/interesse/.test(st)) return 'Com interesse';
-    // v904: só existe "Arquivado" como desfecho — Vendido/Perdido/Geladeira viram Arquivado.
-    if(/perdid|encerr|ganh|vend|geladeira/.test(st)) return 'Arquivado';
-    return cp704Text(mc?.oportunidade?.status || lead?.etapa || 'Em descoberta');
-  }
-  // v818: etapa da jornada em linguagem simples, com passo (1..6) e cor que esquenta pro
-  // verde conforme aproxima o fechamento. Fonte: status da oportunidade / etapa do lead.
-  function cp704Jornada(lead, mc){
-    const normal = (typeof normalizarEtapa==='function') ? normalizarEtapa(lead?.etapa) : String(lead?.etapa||'');
-    // v904: Vendido/Perdido/Geladeira não existem mais como desfecho separado — todos "Arquivado".
-    if(normal===ETAPA_ARQUIVADO)
-      return { label:'Arquivado', passo:0, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' };
-    const st = String(mc?.oportunidade?.status || lead?.etapa || 'descoberta').toLowerCase();
-    const etapas = [
-      { re:/decis|fecha|ganho|vend/, label:'Decidindo',              passo:6, cor:'#2fe27a', bg:'rgba(47,226,122,.14)',  br:'rgba(47,226,122,.50)' },
-      { re:/negocia/,                label:'Negociando',             passo:5, cor:'#54c98a', bg:'rgba(84,201,138,.15)',  br:'rgba(84,201,138,.50)' },
-      { re:/analise|finance/,        label:'Vendo se cabe no bolso', passo:4, cor:'#54c9a0', bg:'rgba(84,201,160,.14)',  br:'rgba(84,201,160,.45)' },
-      { re:/compar/,                 label:'Comparando opções',      passo:3, cor:'#33c2cc', bg:'rgba(51,194,204,.13)',  br:'rgba(51,194,204,.45)' },
-      { re:/interess/,               label:'Interessado',            passo:2, cor:'#5aa9e6', bg:'rgba(90,169,230,.13)',  br:'rgba(90,169,230,.45)' },
-      { re:/descob|novo/,            label:'Conhecendo',             passo:1, cor:'#9fb1bd', bg:'rgba(159,177,189,.12)', br:'rgba(159,177,189,.40)' }
-    ];
-    return etapas.find(e => e.re.test(st)) || etapas[etapas.length-1];
-  }
-  function cp704JornadaBadge(lead, mc){
-    const j = cp704Jornada(lead, mc);
-    const temPasso = j.passo>=1 && j.passo<=6;
-    const rotulo = j.label + (temPasso ? ` · passo ${j.passo} de 6` : '');
-    // Perdido / Arquivado (passo 0) não é um passo da jornada: pill simples, sem barra.
-    if(!temPasso){
-      return `<span class="cp704-pill cp704-etapa cp704-etapa-plain" style="background:${j.bg}!important;border-color:${j.br}!important;color:var(--text)!important">${escapeHtml(rotulo)}</span>`;
-    }
-    // Barra de progresso em gradiente no mesmo pill: um único gradiente frio→coral→verde
-    // (cores já usadas no app) com comprimento fixo; cada card revela só a fatia X/6 via
-    // clip-path. O pontinho branco marca a borda do avanço — pulsa nos passos 1..5 e fica
-    // parado no passo 6 (venda concluída).
-    const pct = (j.passo/6*100).toFixed(2) + '%';
-    const completo = j.passo===6;
-    return `<span class="cp704-pill cp704-etapa cp704-etapa-prog${completo?' is-completo':''}" style="--cp-etapa-pct:${pct}">`
-      + `<span class="cp704-etapa-fill"></span>`
-      + `<span class="cp704-etapa-edge"></span>`
-      + `<span class="cp704-etapa-label">${escapeHtml(rotulo)}</span>`
-      + `</span>`;
-  }
   // v889 — no lugar do "passo X de 6" (funil que o dono mandou tirar): barra de INTERESSE do
   // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=100
   // cheia). Mede engajamento real, não etapa. Largura total.
@@ -5298,10 +5057,6 @@ function cp704Css(){
   }
   function cp704DataHora(m){
     return cp705FormatDateTime([m?.date,m?.time].filter(Boolean).join(' ') || cp704Text(m?.displayTime || m?.createdAt || m?.iso || ''));
-  }
-  function cp704RecentMessages(lead, max=4){
-    const msgs=Array.isArray(lead?.recentMessages)?lead.recentMessages:[];
-    return msgs.filter(m=>cp704Text(m?.text)).slice(-max).reverse();
   }
   // Chave cronológica a partir do HORÁRIO EXIBIDO (date+time BR) — consistente entre mensagens
   // importadas e manuais/copiadas. Antes a ordem vinha do `iso`, que nas manuais é UTC e não
@@ -5403,28 +5158,6 @@ function cp704Css(){
       ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
-  }
-  function cp704Insights(lead,mc){
-    const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
-    if(!analiseAtualValida752(a)) return [
-      'Análise comercial precisa ser atualizada nesta versão.',
-      'As mensagens antigas foram bloqueadas para evitar mistura de contexto.',
-      'Use Reanalisar agora para gerar leitura nova somente pela conversa.'
-    ];
-    const arr=[];
-    const obsFact=null;
-    if(obsFact) return [obsFact.insight1,obsFact.insight2,obsFact.insight3].filter(Boolean);
-    const facts=Array.isArray(a.fatosConfirmados)?a.fatosConfirmados.filter(Boolean).slice(0,2):[];
-    const infs=Array.isArray(a.inferenciasIA)?a.inferenciasIA.filter(Boolean).slice(0,1):[];
-    if(facts.length || infs.length) return facts.concat(infs).map(x=>cp705Short(cp705SanitizeFactText(x,lead),96)).slice(0,3);
-    const imp=cp704Impedimento(lead,mc);
-    if(imp && !/não identificado/i.test(imp)) arr.push(imp.length>90 ? imp.slice(0,87)+'...' : imp);
-    const rel=cp704Text(mc?.relacionamento?.motivo || mem.pessoasDecisao);
-    if(rel) arr.push(rel.length>90 ? rel.slice(0,87)+'...' : rel);
-    const next=cp704Next(lead,mc);
-    if(next) arr.push(next.length>96 ? next.slice(0,93)+'...' : next);
-    const fallback=['A IA ainda precisa consolidar os sinais deste lead.','Atualize a análise quando houver novas mensagens.','Mantenha a próxima ação ligada ao último compromisso.'];
-    return [...arr, ...fallback].filter(Boolean).slice(0,3);
   }
   function cp704Msgs(lead){
     const a=lead?.analysis||{};
@@ -5565,14 +5298,34 @@ function cp704Css(){
     if(typeof abrirEditarLead === 'function') abrirEditarLead(String(id), String(lead?.name||''), String(lead?.phone||lead?.telefone||''));
     else toast('Editor de lead indisponível nesta versão.');
   };
-  function cp704QuickActions(lead,mc){
-    const id=JSON.stringify(String(lead?.id||'')); const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||'')); const prod=(typeof safeJson==='function')? safeJson(cp704Produto(lead,mc)) : JSON.stringify(cp704Produto(lead,mc));
-    // Só "Arquivar" como desfecho (v904): sem Vendido/Perdido/Geladeira. "Excluir" fica no Perigo.
-    return `<div class="cp704-actions-group"><h3>Comerciais</h3><div class="cp704-actions-grid"><button type="button" onclick='abrirPropostaComLead(${name},${prod},${id})'>Gerar proposta</button></div></div>
-    <div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp715EditarLead(${id})'>Editar lead</button><button type="button" onclick='arquivarLead(${id},${name})'>Arquivar</button><button type="button" onclick='cp1148JuntarCliente(${id},${name})'>Juntar cliente duplicado</button></div></div>
+  // v1186 — DOIS BOTÕES QUE NUNCA APARECERAM NA TELA.
+  //
+  // Aqui existia `cp704QuickActions`, um painel com três grupos (Comerciais / Gestão / Perigo).
+  // A v908 subiu as ações principais pra barra de ícones do topo e parou de chamar este painel —
+  // mas o painel continuou no arquivo, e ninguém percebeu que ele tinha deixado de ser desenhado.
+  // A partir daí:
+  //
+  //   • "Excluir definitivamente" ficou sem porta de entrada (a barra do topo só tem Arquivar);
+  //   • a v1148 acrescentou "Juntar cliente duplicado" DENTRO deste painel morto — ou seja, o
+  //     recurso que o dono pediu pra juntar dois cadastros do mesmo cliente NUNCA apareceu no app,
+  //     desde o dia em que foi feito. O código funciona, a rota do servidor funciona, a janela de
+  //     escolha funciona: faltava só o botão que abre.
+  //
+  // O teste da v1148 não pegou porque conferia o TEXTO do arquivo ("o botão está escrito ali?"),
+  // e o botão realmente estava escrito — dentro de código que não roda. Achado da auditoria de
+  // 09/08/2026, junto com mais duas telas guardando código morto do mesmo jeito.
+  //
+  // Este bloco devolve o acesso aos DOIS que faltavam, e só a eles: Proposta, Editar, Arquivar,
+  // Mensagens, Reanalisar, Agendar e Marcar já estão na barra do topo e não podem aparecer
+  // duplicados. Fica num "Mais opções" recolhido, ao lado de "Detalhes comerciais" — perto de
+  // quem procura, longe de quem não procura (excluir para sempre não é botão de tocar sem querer).
+  function cp1186MaisOpcoes(lead){
+    const id=JSON.stringify(String(lead?.id||''));
+    const name=(typeof safeJson==='function')? safeJson(lead?.name||'') : JSON.stringify(String(lead?.name||''));
+    return `<div class="cp704-actions-group"><h3>Gestão</h3><div class="cp704-actions-grid"><button type="button" onclick='cp1148JuntarCliente(${id},${name})'>Juntar cliente duplicado</button></div></div>
     <div class="cp704-actions-group"><h3>Perigo</h3><div class="cp704-actions-grid"><button type="button" class="cp704-danger" onclick='excluirLeadDefinitivo(${id},${name})'>Excluir definitivamente</button></div></div>`;
   }
-  // v908: as ações (Proposta/Arquivar/Excluir/Mensagens) subiram pra barra de ícones do topo.
+  // v908: as ações (Proposta/Arquivar/Mensagens) subiram pra barra de ícones do topo.
   // O histórico ("Últimas mensagens") abre num card recolhível, alternado pelo ícone "Mensagens".
   window.cp704ToggleHistorico=function(){
     const s=document.querySelector('#cp704HistCard'); if(!s) return;
@@ -5622,21 +5375,6 @@ function cpPreviaCerebroHTML(a){
     `</div>`;
 }
 
-function cp718LeituraComercialHtml(a,lead){
-  const lc=(a&&a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
-  const itens=[
-    ['Interpretação', lc.interpretacao],
-    ['Por que importa', lc.porQueImporta],
-    ['O que destravar', lc.oQueDestravar],
-    ['Movimento recomendado', lc.movimentoRecomendado],
-    ['Erro a evitar', lc.erroEvitar],
-    ['Mensagem com mais chance', lc.mensagemCurtaChance]
-  ].filter(([,v])=>String(v||'').trim());
-  if(!itens.length){
-    return escapeHtml(cp705SanitizeFactText(cp704Text((a.memoria||a.memoriaSugerida||{}).observacoes || a.summary || 'Sem leitura comercial consolidada.'),lead));
-  }
-  return `<div class="cp718-lc">${itens.map(([lab,val])=>`<div class="cp718-lc-row"><b>${escapeHtml(lab)}</b><span>${escapeHtml(cp705SanitizeFactText(cp704Text(val),lead))}</span></div>`).join('')}</div>`;
-}
 
 function cp717MudancasHtml(a){
   const arr=Array.isArray(a?.mudancas)?a.mudancas.filter(m=>m&&String(m.antes||'').trim()&&String(m.agora||'').trim()).slice(0,3):[];
@@ -5751,6 +5489,7 @@ function renderLeadFoco(lead){
         <aside class="cp704-secondary">
           <div class="cp704-accordions">
             <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
+            <details class="cp704-details"><summary>Mais opções</summary><div class="cp704-body">${cp1186MaisOpcoes(lead)}</div></details>
           </div>
           ${typeof ui670ScheduleHtml==='function'?ui670ScheduleHtml(lead):''}
           ${typeof renderHistoricoContatos==='function'?renderHistoricoContatos(lead):''}
@@ -5788,14 +5527,6 @@ function renderLeadFoco(lead){
 window.renderLeadFoco = renderLeadFoco;
 
 
-// ============ AGENDA / RETOMADAS ============
-function urgenciaDeDias(d){
-  if(d == null) return null;
-  if(d >= 7) return { nivel: "alto", label: d+" dias parado" };
-  if(d >= 3) return { nivel: "medio", label: d+" dias parado" };
-  if(d >= 1) return { nivel: "baixo", label: d+"d sem retorno" };
-  return null;
-}
 
 function tipoDeCompromisso(oQue){
   const s = String(oQue||"").toLowerCase();
@@ -6555,8 +6286,11 @@ function cpLimparNomeAba(nome, usados){
   usados.add(atual); return atual;
 }
 async function cpGerarXlsx(abas){
-  if(!window.JSZip) throw new Error("Gerador de arquivos indisponível. Atualize a página e tente novamente.");
-  const zip = new window.JSZip();
+  // v1186 — a biblioteca de ZIP deixou de vir carregada em toda abertura do app (ver ensureJSZip):
+  // aqui era só uma checagem que mandava "atualize a página"; agora pede a biblioteca de fato.
+  const JSZipLib = await ensureJSZip();
+  if(!JSZipLib) throw new Error("Gerador de arquivos indisponível. Verifique sua internet e tente de novo.");
+  const zip = new JSZipLib();
   const usados = new Set();
   const sheets = (abas || []).map(a => ({...a, nome:cpLimparNomeAba(a.nome, usados)}));
   const contentSheets = sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
@@ -7545,17 +7279,6 @@ function renderEtapas(idxAtual, sub, opts){
   if(txt) txt.innerHTML = (idxAtual === 7 ? "" : '<span class="spinner"></span>') + escapeHtml(ETAPAS_PROCESSAMENTO[idxAtual]) + (sub ? ` — ${escapeHtml(sub)}` : "") + ` <span style="opacity:.7">(${pct}%)</span>`;
 }
 
-function startProgresso(){
-  const bar = qs("#progressBar");
-  bar?.classList.add("busy");
-  renderEtapas(0);
-  return {
-    avancarPara: (idx, sub) => renderEtapas(idx, sub),
-    atualizarSub: (sub) => renderEtapas(0, sub),
-    finalizar: () => { renderEtapas(6); bar?.classList.remove("busy"); },
-    parar: () => bar?.classList.remove("busy")
-  };
-}
 
 // v1131 — traduz o motivo REAL de uma análise que voltou sem as três mensagens. O servidor já manda
 // a razão em `validacaoSugestoes` (ver api/_pipeline.js: Cérebro sem instruções, limite diário
@@ -10433,9 +10156,6 @@ function leadEhQuente(l){
   const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
   return tipo === "quente-fechar" || interesse === "alto";
 }
-function leadEhReaquecer(l){
-  return leadEhAtivo(l) && (Number(l?.daysSinceLastInteraction)||0) >= 14 && !ehContatadoHoje(l) && !lembreteFuturo(l);
-}
 function abrirAtendimentosFiltro(filtro="todos"){
   state.carteiraFiltro=filtro;
   state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE;
@@ -11674,10 +11394,6 @@ function ui631LeadMotivo(l){
   if(d>=7) return [`Último contato há ${d} dias`,'Bom momento para retomar'];
   return ['Próxima ação pendente','Abrir diagnóstico antes de responder'];
 }
-function ui631LeadStatus(l){
-  const c=cp786Categoria(l);
-  return [cp786CategoriaLabel(c),c==='agora'||c==='respondeu'?'hot':c==='programados'?'warm':'neutral'];
-}
 
 function ui631LeadRow(l, actionLabel, tone){
   const id=JSON.stringify(String(l.id||''));
@@ -11734,12 +11450,6 @@ renderListasHome = function(ordenados){
 };
 
 
-function ui631UltimoFalante(lead){
-  const msgs=Array.isArray(lead.recentMessages)?lead.recentMessages:[];
-  const pn=String(lead.name||"").toLowerCase().split(/\s+/)[0]||"";
-  for(let i=msgs.length-1;i>=0;i--){if(!msgs[i]||!String(msgs[i].text||"").trim())continue;return ehMsgDoCliente(msgs[i],pn)?"cliente":"você";}
-  return "—";
-}
 
 // Atualização #724-2: o cabeçalho e os indicadores pertencem à tela Hoje, não ao detalhe do lead.
 // O uso de estilo inline com prioridade evita que um refresh do dashboard os faça reaparecer.
@@ -11991,10 +11701,6 @@ function cpPriorityMeta(lead){
   if(categoria==='programados') return {label:'Agenda',cls:'warm',cor:'var(--cp-blue)'};
   if(categoria==='aguardando') return {label:'Aguardar',cls:'cold',cor:'var(--cp-slate)'};
   return {label:'Sem ação',cls:'cold',cor:'var(--cp-slate)'};
-}
-function cpHasAppointment(lead){
-  const aps=lead?.analysis?.confirmedAppointments;
-  return (Array.isArray(aps)&&aps.length>0) || !!lead?.analysis?.lembrete?.quando;
 }
 function cpAppointmentData(lead){
   const apps=Array.isArray(lead?.analysis?.confirmedAppointments)?lead.analysis.confirmedAppointments:[];
@@ -12538,27 +12244,6 @@ prioridadeAtendimento=function(l){
 };
 window.prioridadeAtendimento=prioridadeAtendimento;
 
-function ui670Badge(tuple){const [txt,cls]=tuple||["Não identificado","neutral"];return `<span class="ui670-badge ${cls}">${escapeHtml(txt)}</span>`;}
-function ui670TipoContatoLabel(tipo){return UI670_CONTACT_LABEL[tipo]||UI670_CONTACT_LABEL.outro;}
-function ui670FalanteLabel(lead,mc){
-  const f=mc?.contexto?.ultimaPessoaFalar;
-  if(f==="contato") return String(lead?.name||"Contato").split(/\s+/)[0];
-  if(f==="corretor") return "Você";
-  return "Não identificado";
-}
-function ui670Messages(analysis){
-  const m=analysis?.messages||{};
-  const base=mensagensDaAnalise(analysis||{});
-  return {
-    a:mensagemAprovadaSemAlteracao(base.a)||"",
-    b:mensagemAprovadaSemAlteracao(base.b)||mensagemAprovadaSemAlteracao(base.a)||"",
-    c:mensagemAprovadaSemAlteracao(base.c)||mensagemAprovadaSemAlteracao(base.a)||"",
-    aLabel:String(m.aLabel||"Melhor resposta"),
-    bLabel:String(m.bLabel||"Alternativa leve"),
-    cLabel:String(m.cLabel||"Alternativa firme"),
-    recomendada:["a","b","c"].includes(String(m.recomendada||base.recomendada||""))?String(m.recomendada||base.recomendada):"a"
-  };
-}
 function ui682PrimeiroNomeLead(lead){
   const fontes = [lead?.clientName, lead?.nomeCliente, lead?.contactName, lead?.name, lead?.title]
     .filter(Boolean)
@@ -12572,38 +12257,6 @@ function ui682PrimeiroNomeLead(lead){
     .trim();
   const primeiro = (limpo.split(/\s+/)[0] || "").trim();
   return /^(conversa|whatsapp|cliente|lead|contato|arquivo|zip)$/i.test(primeiro) ? "" : primeiro;
-}
-function ui682ProdutoCurto(valor, fallback='o imóvel'){
-  const s=String(valor||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-  if(!s) return fallback;
-  // v827 §7.1: sem lista fixa de empreendimentos; devolve o produto como veio da conversa.
-  return s;
-}
-function ui682ProdutoLead(lead, mc){
-  return ui682ProdutoCurto(mc?.oportunidade?.produto || lead?.product || produtosLabel?.(lead) || "o imóvel", "o imóvel");
-}
-function ui682FallbackMessages(lead, mc){
-  // v748: sem fallback comercial local. A interface não inventa mensagem.
-  return { a:"", b:"", c:"", aLabel:"Recomendada", bLabel:"Alternativa", cLabel:"Direta ao ponto", recomendada:"a", fallback:false };
-}
-function ui682MesclarMensagens(msgs, lead, mc){
-  const fb = ui682FallbackMessages(lead, mc);
-  return {
-    ...(msgs||{}),
-    a:String(msgs?.a||fb.a||"").trim(),
-    b:String(msgs?.b||fb.b||"").trim(),
-    c:String(msgs?.c||fb.c||"").trim(),
-    aLabel:String(msgs?.aLabel||"Recomendada"),
-    bLabel:String(msgs?.bLabel||"Facilitar decisão"),
-    cLabel:String(msgs?.cLabel||"Direta ao ponto"),
-    recomendada:["a","b","c"].includes(String(msgs?.recomendada||"")) ? String(msgs.recomendada) : "a"
-  };
-}
-function ui682FormatarDataHora(iso){
-  if(!iso) return "";
-  const d = new Date(iso);
-  if(isNaN(d.getTime())) return "";
-  return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
 }
 function ui682ProgressReanalise(btn){
   if(!btn) return { set(){}, done(){}, fail(){} };
@@ -12631,21 +12284,6 @@ function ui682ProgressReanalise(btn){
     done(txt){ set(100, txt||"Análise concluída e salva."); setTimeout(()=>{ try{ box.remove(); }catch(_){} }, 1800); },
     fail(txt){ set(100, txt||"Falha ao concluir."); box.style.borderColor = "rgba(255,91,122,.5)"; box.style.background = "rgba(255,91,122,.08)"; }
   };
-}
-function ui675AnaliseDeterministica(lead, baseAnalysis){
-  // v756: fallback comercial local DESATIVADO.
-  // Se a IA/API falhar ou vier incompleta, a tela deve pedir reanálise, não inventar produto, unidade, simulação ou mensagem.
-  const out=(baseAnalysis&&typeof baseAnalysis==="object")?JSON.parse(JSON.stringify(baseAnalysis)):{};
-  out.mode=out.mode||"reanalise_pendente";
-  out.summary=out.summary||"Análise pendente. Reanalise para gerar leitura nova pela conversa.";
-  out.nextAction="Atualize a análise comercial para gerar a próxima ação.";
-  out.arquiteturaMensagens=ARQUITETURA_MENSAGENS_ATUAL;
-  out.sugestoesPendentes=true;
-  out.aprovada=false;
-  out.messages={a:"",b:"",c:"",aLabel:"Reanalisar",bLabel:"Reanalisar",cLabel:"Reanalisar",recomendada:"a"};
-  out.validacaoSugestoes=["v756: fallback comercial local desativado."];
-  out._schemaComercial=COMMERCIAL_SCHEMA_VERSION;
-  return out;
 }
 async function ui675BuscarDetalhe(id){
   const r=await fetch(`./api/lead-update?action=detalhe&id=${encodeURIComponent(id)}&_=${Date.now()}`,{cache:"no-store",headers:{"Cache-Control":"no-cache"}});
@@ -12936,7 +12574,13 @@ window.ui670Reanalisar=async function(btn){
     try{ leadBaseAtualizado = (await ui675BuscarDetalhe(lead.id)) || lead; }catch(_){}
     const res=await fetch("./api/reanalisar-lead",{
       method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
-      body:JSON.stringify(payloadComCerebro({id:lead.id,action:"atualizar-analise-comercial",versaoCliente:(window.CORRETOR_PRO_VERSION||709)})),signal:ctrl.signal,cache:"no-store"
+      // v1186 — aqui ia `action:"atualizar-analise-comercial"`, um nome que NENHUMA rota atende.
+      // Funcionava por acaso: `api/reanalisar-lead` só reconhece algumas ações pontuais (remover
+      // item, marcar/desmarcar atendido, mexer em lembrete) e manda todo o resto pro caminho
+      // padrão, que é justamente a reanálise completa — o que este botão quer. Nome fantasma
+      // engana quem lê o código depois; sem ele, a intenção fica explícita (auditoria de
+      // 09/08/2026).
+      body:JSON.stringify(payloadComCerebro({id:lead.id,versaoCliente:(window.CORRETOR_PRO_VERSION||709)})),signal:ctrl.signal,cache:"no-store"
     });
     clearTimeout(timeout);
     const textoResposta = await res.text();
@@ -13046,23 +12690,6 @@ function ui670ScheduleHtml(lead){
   if(!lead?.id)return "";
   const id=JSON.stringify(String(lead.id));
   return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b><div class="ui670-quick-dates"><button onclick='reagendarDias(${id},0)'>Hoje</button><button onclick='reagendarDias(${id},1)'>Amanhã</button><button onclick='reagendarDias(${id},7)'>+7 dias</button><button onclick='reagendarDias(${id},15)'>+15 dias</button><button onclick='reagendarDias(${id},30)'>+30 dias</button></div><input type="date" onchange='reagendarLembrete(${id},this.value)'></div>`;
-}
-function ui670DetailRows(lead,mc){
-  const a=lead?.analysis||{},mem=a.memoria||a.memoriaSugerida||{};
-  const rows=[
-    ["Papel do contato",mc?.contato?.papel],
-    ["Comprador final",mc?.oportunidade?.compradorFinal||mc?.contato?.compradorFinal],
-    ["Produto",mc?.oportunidade?.produto],
-    ["Identificador da oportunidade",mc?.oportunidade?.id],
-    ["Resultado",UI670_RESULT_LABEL[mc?.oportunidade?.resultado]||mc?.oportunidade?.resultado],
-    ["Motivo da oportunidade",mc?.oportunidade?.motivo],
-    ["Último compromisso",mc?.contexto?.ultimoCompromisso],
-    ["Impedimento principal",mc?.contexto?.impedimentoPrincipal],
-    ["Preferências",mem.preferencias],
-    ["Pessoas na decisão",mem.pessoasDecisao],
-    ["Observações",mem.observacoes]
-  ].filter(([,v])=>String(v||"").trim()&&!/^não identificado\.?$/i.test(String(v).trim()));
-  return rows.map(([k,v])=>`<div class="ui670-detail-row"><b>${escapeHtml(k)}</b><span>${escapeHtml(String(v))}</span></div>`).join("")||'<div class="empty">Sem detalhes adicionais registrados.</div>';
 }
 
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.

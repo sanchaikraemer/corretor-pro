@@ -65,44 +65,8 @@ export function modeloOrquestrador() {
 }
 
 
-function leadSeguroParaAnalise(lead = {}) {
-  // v747: a conversa é a fonte da verdade. O objeto do lead pode trazer análises,
-  // sugestões, nextAction, produto e unidade salvos por versões antigas. Enviar isso
-  // inteiro para a IA contaminava uma conversa com pendências de outra.
-  const src = lead && typeof lead === "object" ? lead : {};
-  const chavesSeguras = [
-    "id", "name", "title", "clientName", "nomeCliente", "contactName", "phone", "telefone",
-    "source", "origin", "createdAt", "updatedAt", "lastInteractionAt"
-  ];
-  const out = {};
-  for (const k of chavesSeguras) {
-    const v = src[k];
-    if (v == null) continue;
-    if (["string", "number", "boolean"].includes(typeof v)) {
-      out[k] = String(v).slice(0, 240);
-    }
-  }
-  return out;
-}
 
-// v1092 — contatoPareceParceiro/normalizarParceiroB2B (classificavam o contato como
-// "corretor parceiro") foram removidas: estavam sem nenhum chamador e a lista de expressões
-// carregava até nome de pessoa cravado no código, o que o projeto proíbe (ver CLAUDE.md).
 
-function normalizarTextoComparacao(txt) {
-  return String(txt || "")
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/^[a-z][a-z .'-]{0,40},\s*/, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\b(oi|ola|bom|boa|dia|tarde|noite|tudo|bem)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function mensagemSoSaudacao(txt) {
-  return /^(?:[a-záàâãéèêíïóôõöúçñ .'-]+,?\s*)?(?:oi|ol[aá]|bom dia|boa tarde|boa noite),?\s*(?:tudo bem|td bem|tudo certo|como vai)\??$/i.test(String(txt || "").trim());
-}
 
 // corretorNome vem SEMPRE do Cérebro configurado por organização (nunca cravado no código —
 // ver CLAUDE.md). As palavras genéricas do regex (construtora/corretor/imobiliária/atendimento)
@@ -121,52 +85,8 @@ function autorPareceClientePipeline(author = "", lead = {}, corretorNome = "") {
   if (primeiro && a.includes(primeiro)) return true;
   return !/\b(construtora|atendimento)\b/i.test(a);
 }
-function textoPedeMaterialOuInfo(texto = "") {
-  const t = String(texto || "").toLowerCase();
-  return /(foto|fotos|imagem|imagens|vídeo|video|material|apresenta[cç][aã]o|folder|pdf|planta|plantas|mapa|localiza[cç][aã]o|valor|pre[cç]o|condi[cç][aã]o|pode(r)?\s+nos\s+enviar|me\s+manda|me\s+envia|podes?\s+enviar)/i.test(t);
-}
-function textoEntregaMaterialOuInfo(texto = "") {
-  const t = String(texto || "").toLowerCase();
-  return /(mídia|midia|arquivo anexado|segue|seguem|enviei|encaminhei|te encaminhei|vou te apresentar|apresentar esse|claro,?\s+fico|http|\.pdf|\.mp4|\.jpg|\.jpeg|\.png|vídeo|video|folder|mapa|plantas?|valores?|localiza[cç][aã]o|fotos?)/i.test(t);
-}
-function extrairCompromissoMaterial(texto = "") {
-  const l = String(texto || "").replace(/\s+/g, " ").trim().toLowerCase();
-  if (/(esposo|marido)/.test(l) && /(noite|retorno|retornar|ver|avaliar)/.test(l)) return "ver com seu esposo e me retornar";
-  if (/(esposa|mulher)/.test(l) && /(noite|retorno|retornar|ver|avaliar)/.test(l)) return "ver com sua esposa e me retornar";
-  if (/(retorno|retornar|me dar um retorno|dou retorno)/.test(l)) return "me dar um retorno depois de avaliar";
-  return "avaliar o material enviado";
-}
-function detectarOrdemMaterialTimeline(timeline = [], lead = {}, corretorNome = "") {
-  let ultimoPedido = null, entregaDepois = null;
-  for (let i = 0; i < (Array.isArray(timeline) ? timeline.length : 0); i++) {
-    const m = timeline[i] || {};
-    const texto = String(m.text || "").replace(/\s+/g, " ").trim();
-    const author = String(m.author || "");
-    if (!texto) continue;
-    if (autorPareceClientePipeline(author, lead, corretorNome) && textoPedeMaterialOuInfo(texto)) {
-      ultimoPedido = { index: i, texto, author, compromisso: extrairCompromissoMaterial(texto), data: m.date || "", hora: m.time || "" };
-      entregaDepois = null;
-      continue;
-    }
-    if (ultimoPedido && i > ultimoPedido.index && autorPareceNegocioPipeline(author, corretorNome) && textoEntregaMaterialOuInfo(texto)) {
-      entregaDepois = { index: i, texto, author, data: m.date || "", hora: m.time || "" };
-    }
-  }
-  return {
-    materialPedidoPeloCliente: !!ultimoPedido,
-    materialJaEnviadoDepois: !!(ultimoPedido && entregaDepois),
-    pedidoCliente: ultimoPedido?.texto || "",
-    entregaCorretor: entregaDepois?.texto || "",
-    compromissoClienteAposMaterial: ultimoPedido?.compromisso || "",
-    regra: ultimoPedido && entregaDepois ? "Cliente pediu material/informação e o corretor já enviou depois; retome a avaliação do material já encaminhado." : "Não foi detectado pedido de material com envio posterior pelo corretor."
-  };
-}
 
 
-function textoCurto(valor, fallback = "") {
-  const s = String(valor || "").replace(/\s+/g, " ").trim();
-  return s || fallback;
-}
 
 // v724-2: bloco antigo de análise/mensagem removido.
 
@@ -348,11 +268,6 @@ export function findReferencedAudio(messageText, audioNames) {
   return null;
 }
 
-function dateFromAudioName(name) {
-  const match = normalizeName(name).match(/(20\d{2})(\d{2})(\d{2})/);
-  if (!match) return null;
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
 
 export function describeOpenAIError(error) {
   if (!error) return "Erro desconhecido no provedor de análise.";
@@ -422,24 +337,6 @@ export async function transcribeAudio({ zip, audioName, openai }) {
   }
 }
 
-async function transcribeAudioOnce({ zip, audioName, openai, cache }) {
-  const base = normalizeName(audioName);
-  if (cache[base]) return cache[base];
-  let status = "api_nao_configurada";
-  let text = "";
-  if (openai) {
-    try {
-      text = await transcribeAudio({ zip, audioName, openai });
-      status = text ? "transcrito" : "audio_grande_ou_vazio";
-    } catch (error) {
-      status = "erro_transcricao";
-      cache[base] = { status, text: "", error: describeOpenAIError(error) };
-      return cache[base];
-    }
-  }
-  cache[base] = { status, text };
-  return cache[base];
-}
 
 // v1092 — buildTimeline removida: era a montagem antiga da conversa a partir do .zip, exportada
 // mas sem nenhum importador. Quem faz esse trabalho hoje é montarTimelineComTranscricoes().
@@ -821,9 +718,6 @@ export function calcularContextoTemporalMensagens(timeline, _cfg = {}, agora = n
   return { dias, ultimaData: ultima?.texto || "Não identificada" };
 }
 
-function normalizarBusca(v) {
-  return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
 
 
 // Validação exclusivamente técnica: confirma apenas o formato mínimo esperado pelo aplicativo.
@@ -2350,35 +2244,6 @@ export async function transcreverBuffer(buffer, ext, openai, organizationId = OR
   }
 }
 
-function montarMemoriaEAprendizado(memoria, aprendizado, evolucao) {
-  const partes = [];
-  if (memoria) {
-    const m = [];
-    if (memoria.preferencias) m.push("Preferências: " + memoria.preferencias);
-    if (memoria.pessoasDecisao) m.push("Pessoas na decisão: " + memoria.pessoasDecisao);
-    if (memoria.pontosSensiveis) m.push("Pontos sensíveis: " + memoria.pontosSensiveis);
-    if (memoria.observacoes) m.push("Observações do corretor: " + memoria.observacoes);
-    if (m.length) partes.push("MEMÓRIA DESTE CLIENTE (do histórico, considere antes de propor abordagem):\n" + m.join("\n"));
-  }
-  if (aprendizado && Array.isArray(aprendizado.eventos) && aprendizado.eventos.length) {
-    const last10 = aprendizado.eventos.slice(-10);
-    const linhas = last10.map(e => `- ${e.quando?.slice(0, 16) || "?"} ${e.evento}${e.estilo ? " ("+e.estilo+")" : ""}`).join("\n");
-    partes.push("HISTÓRICO DE AÇÕES JÁ TOMADAS COM ESTE CLIENTE (não repita exatamente as mesmas abordagens):\n" + linhas);
-  }
-  if (evolucao && Array.isArray(evolucao) && evolucao.length) {
-    const last5 = evolucao.slice(-5);
-    const linhas = last5.map(e => {
-      const partes2 = [];
-      if (e.comoReagiu) partes2.push("reação: " + e.comoReagiu);
-      if (e.abordagemFuncionou) partes2.push("abordagem anterior funcionou: " + e.abordagemFuncionou);
-      if (e.evoluiu) partes2.push("rumo: " + e.evoluiu);
-      if (e.licao && e.licao !== "sem lição clara ainda") partes2.push("lição: " + e.licao);
-      return "- " + partes2.join(" · ");
-    }).filter(l => l.length > 2).join("\n");
-    if (linhas) partes.push("APRENDIZADO REAL DESTE LEAD (de atendimentos anteriores reimportados — use pra calibrar a abordagem):\n" + linhas);
-  }
-  return partes.length ? "\n\n" + partes.join("\n\n") + "\n" : "";
-}
 
 // Calcula a faixa de horário em que o CLIENTE costuma responder/interagir,
 // a partir dos horários reais das mensagens dele na timeline. Retorna "" se
@@ -2439,18 +2304,6 @@ export async function resumirAtendimento(texto, openai, organizationId = ORGANIZ
   }
 }
 
-// A análise e as três mensagens são geradas na mesma chamada, já com o Cérebro completo.
-
-function textoDaRespostaResponses(resp) {
-  if (resp && typeof resp.output_text === "string" && resp.output_text.trim()) return resp.output_text.trim();
-  const partes = [];
-  for (const item of (resp?.output || [])) {
-    for (const bloco of (item?.content || [])) {
-      if (bloco?.type === "output_text" && bloco?.text) partes.push(bloco.text);
-    }
-  }
-  return partes.join("\n").trim();
-}
 
 async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputTokens = 4096, timeout = 25000, model: modeloOverride = null }) {
   const model = modeloOverride || modeloAnalise();
@@ -3504,26 +3357,6 @@ function mesclarTimelineIncremental(antiga, nova) {
   return out;
 }
 
-function contextoAnteriorEnxuto(analysis) {
-  const a = analysis && typeof analysis === "object" ? analysis : {};
-  return {
-    summary: a.summary || null,
-    clientProfile: a.clientProfile || null,
-    tipoContato: a.tipoContato || null,
-    produtoInteresse: a.produtoInteresse || a?.lead?.product || null,
-    produtosInteresse: Array.isArray(a.produtosInteresse) ? a.produtosInteresse : [],
-    etapaSugerida: a.etapaSugerida || a?.lead?.etapa || null,
-    diagnostico: a.diagnostico || null,
-    memoria: a.memoria || a.memoriaSugerida || null,
-    objections: Array.isArray(a.objections) ? a.objections : [],
-    risk: a.risk || null,
-    confirmedAppointments: Array.isArray(a.confirmedAppointments) ? a.confirmedAppointments : [],
-    nextAction: a.nextAction || null,
-    permuta: !!a.permuta,
-    permutaResumo: a.permutaResumo || null,
-    concorrencia: a.concorrencia || null
-  };
-}
 
 // v1141 — a análise já salva deste cliente só pode ser reaproveitada se estiver COMPLETA: as três
 // mensagens de verdade (a regra que o resto do sistema exige em toda gravação) e sem marca de
@@ -3553,11 +3386,6 @@ function analiseAnteriorReutilizavel(previousAnalysis) {
   return copia;
 }
 
-function ehAnotacaoManualIncremental(m) {
-  const source = String(m?.source || "");
-  const type = String(m?.type || "");
-  return source === "manual" || source === "crm" || type === "print-whatsapp" || ["atendimento", "nota", "ligacao", "visita", "presencial"].includes(type);
-}
 
 // ETAPA 3 — Analisa: recebe mensagens + transcrições prontas, monta a timeline e,
 // quando é reimportação, usa só as novidades + contexto consolidado anterior.

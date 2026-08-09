@@ -103,11 +103,16 @@ console.log('v1023 (_pipeline.js): extração/validação por texto de compromis
 const handlerSrc = extrairFn(reanalisarSrc, 'reanalisarLeadHandler702', 'reanalisar-lead.js');
 assert.match(handlerSrc, /function aplicarCompromisso\(obj\)\s*\{\s*obj\.confirmedAppointments\s*=\s*\[\];?\s*\}/,
   'aplicarCompromisso (zera confirmedAppointments) precisa existir em reanalisar-lead.js');
-// 3 lugares que gravam resultado_analise dentro do handler: corrigir-observacao (mergedC),
-// apenasSalvar, e a reanálise completa — todos precisam neutralizar confirmedAppointments.
+// Lugares que gravam resultado_analise dentro do handler: apenasSalvar e a reanálise completa —
+// todos precisam neutralizar confirmedAppointments.
+// v1186 — eram três: "corrigir-observacao" (mergedC) saiu na auditoria de 09/08/2026 por nunca ter
+// sido chamada por tela nenhuma em toda a história do app. A regra vale igual pros que ficaram, e
+// a guarda logo abaixo impede que ela volte sem passar por aqui.
 const ocorrenciasNeutralizacao = (handlerSrc.match(/confirmedAppointments:\s*\[\]|aplicarCompromisso\(/g) || []).length;
-assert.ok(ocorrenciasNeutralizacao >= 4,
-  `esperava pelo menos 4 neutralizações de confirmedAppointments (1 na função + mergedC + apenasSalvar + reanálise), achei ${ocorrenciasNeutralizacao}`);
+assert.ok(ocorrenciasNeutralizacao >= 3,
+  `esperava pelo menos 3 neutralizações de confirmedAppointments (1 na função + apenasSalvar + reanálise), achei ${ocorrenciasNeutralizacao}`);
+assert.doesNotMatch(reanalisarSrc, /action\s*===\s*"corrigir-observacao"/,
+  'corrigir-observacao foi removida na v1186; se voltar, precisa zerar confirmedAppointments antes de gravar');
 
 console.log('v1023 (reanalisar-lead.js): todo caminho de gravação zera confirmedAppointments — ok');
 
@@ -119,13 +124,16 @@ console.log('v1023 (reanalisar-lead.js): todo caminho de gravação zera confirm
 // v1092 — acaoLembreteSet/acaoLembreteClear saíram da lista porque as duas ações foram
 // removidas do lead-update.js: nenhuma tela do app as chamou em nenhum momento da história do
 // projeto, e lembrete automático é justamente o que esta regra proíbe.
+// v1186 — acaoAnaliseComercialSet e acaoNovaOportunidadeParceiro saíram da lista: as duas ações
+// pararam de ser chamadas por qualquer tela na v1073 e ficaram como cauda de compatibilidade do
+// PWA; a auditoria de 09/08/2026 confirmou que a cauda expirou (13 versões publicadas desde
+// então) e removeu as duas. Se voltarem, entram de novo nesta lista — a guarda logo abaixo cobra.
 const acoesQueGravamLead = [
-  'acaoAnaliseComercialSet', 'acaoNovaOportunidadeParceiro',
   'acaoAtualizarComEvolucao', 'acaoEtapa', 'acaoMemoriaSet', 'acaoObservacaoAdicionar',
   'acaoAprendizado', 'acaoEditarDados', 'removerVinculosComLeadsApagados'
 ];
 // E o que foi removido não pode voltar sem passar pela regra acima.
-for (const sumiu of ['acaoLembreteSet', 'acaoLembreteClear']) {
+for (const sumiu of ['acaoLembreteSet', 'acaoLembreteClear', 'acaoAnaliseComercialSet', 'acaoNovaOportunidadeParceiro']) {
   assert.doesNotMatch(leadUpdateSrc, new RegExp(`function\\s+${sumiu}\\b`),
     `${sumiu} foi removida na v1092; se voltar, precisa entrar na lista que zera confirmedAppointments`);
 }

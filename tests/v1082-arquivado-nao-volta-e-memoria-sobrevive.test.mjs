@@ -52,9 +52,12 @@ const leadUpdate = fs.readFileSync(new URL('../api/lead-update.js', import.meta.
     'a reanálise não pode substituir a memória inteira do lead');
   assert.match(reanalise, /memoria: \{ \.\.\.\(freshPrevious\.memoria \|\| \{\}\), observacoes: observacoesFinais \}/,
     'a reanálise precisa preservar a memória anterior e só trocar as observações');
-  // O caminho irmão (corrigir-observacao) sempre fez certo — continua assim.
-  assert.match(reanalise, /memoria: \{ \.\.\.\(prev\.memoria \|\| \{\}\), observacoes: texto \}/,
-    'o caminho de corrigir observação precisa continuar preservando a memória');
+  // v1186 — havia aqui um segundo caminho de gravação, "corrigir-observacao", que preservava a
+  // memória do mesmo jeito. Ele foi removido na auditoria de 09/08/2026: nenhuma tela do app o
+  // chamou em nenhum momento da história do projeto. A regra continua valendo pro caminho vivo
+  // (acima), e esta guarda impede que ele volte sem respeitá-la.
+  assert.doesNotMatch(reanalise, /action\s*===\s*"corrigir-observacao"/,
+    'se corrigir-observacao voltar, precisa preservar a memória anterior como a reanálise faz');
 }
 
 // ── 3. O refresh da Home não desfaz o que foi feito enquanto ele rodava ────────────────────────

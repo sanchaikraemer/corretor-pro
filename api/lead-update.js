@@ -83,12 +83,14 @@ export default async function handler(req, res) {
   // salvar-novo / criar-manual não precisam de id (o banco gera ao salvar)
   if (action === "salvar-novo") return await acaoSalvarNovo(body, res, organizationId);
   if (action === "criar-manual") return await acaoCriarManual(body, res, organizationId);
-  // v1092 — "nova-oportunidade-parceiro" e "analise-comercial-set" (mais abaixo) já não são
-  // chamadas por nenhuma tela: as chamadas saíram do app na v1073 (29/07/2026). Ficam de
-  // propósito como CAUDA DE COMPATIBILIDADE — o app é instalável (PWA) e um celular que não
-  // abriu o app desde então ainda roda a versão antiga em cache, que chamaria estas rotas.
-  // Podem ser removidas com segurança numa faxina futura, depois que essa cauda expirar.
-  if (action === "nova-oportunidade-parceiro") return await acaoNovaOportunidadeParceiro(body, res, organizationId);
+  // v1092 — "nova-oportunidade-parceiro" e "analise-comercial-set" pararam de ser chamadas por
+  // qualquer tela na v1073 (29/07/2026) e ficaram como CAUDA DE COMPATIBILIDADE: o app é
+  // instalável (PWA), e um celular que não abrisse o app desde então ainda rodaria a versão antiga
+  // em cache, que chamaria estas rotas.
+  // v1186 — A CAUDA EXPIROU e as duas foram removidas (auditoria de 09/08/2026). São 12 dias e 13
+  // versões publicadas desde a v1073; cada versão troca a URL dos arquivos (?v=NNN), o service
+  // worker apaga o cache da versão anterior ao ativar, e o HTML vem sempre da rede. Um aparelho
+  // que não abriu o app nesse período não tem sessão válida pra chamar rota nenhuma.
   if (action === "atualizar-com-evolucao") return await acaoAtualizarComEvolucao(body, res, organizationId);
   if (action === "aprender-carteira") {
     const { aprenderRespostasDaCarteira } = await import("./_pipeline.js");
@@ -108,65 +110,11 @@ export default async function handler(req, res) {
     case "apagar":        return await acaoApagar(id, res, body?.ids, organizationId);
     case "juntar-clientes": return await acaoJuntarClientes(id, body?.idDuplicado, res, organizationId);
     case "editar-dados":  return await acaoEditarDados(id, body, res, organizationId);
-    case "analise-comercial-set": return await acaoAnaliseComercialSet(id, body.analysis, res, organizationId);
     default:              return json(res, 400, { ok: false, error: "Action inválida." });
   }
 }
 
 
-// ============ FALLBACK SEGURO DA ANÁLISE COMERCIAL ============
-// Usado quando a reanálise principal foi gravada mas uma função antiga não devolveu
-// o objeto completo, ou quando o front precisa consolidar fatos determinísticos.
-// O servidor relê o lead, reconcilia novamente e só então persiste.
-async function acaoAnaliseComercialSet(id, analysis, res, organizationId) {
-  if (!analysis || typeof analysis !== "object" || Array.isArray(analysis)) {
-    return json(res, 400, { ok: false, error: "Informe a análise comercial." });
-  }
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-
-  const { data: current, error: getErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
-  if (!current) return json(res, 404, { ok: false, error: "Lead não encontrado." });
-
-  const anterior = current.resultado_analise || {};
-  const timeline = Array.isArray(current.timeline_json) ? current.timeline_json : [];
-  const lead = {
-    ...(anterior.lead || {}),
-    name: anterior?.lead?.name || anterior?.nome || String(current.nome_arquivo || current.arquivo_nome || "").replace(/\.(txt|zip)$/i, ""),
-    product: anterior?.produtoInteresse || anterior?.lead?.product || ""
-  };
-  let merged = {
-    ...anterior,
-    ...analysis,
-    memoria: { ...(anterior.memoria || {}), ...(analysis.memoria || {}) },
-    aprendizado: anterior.aprendizado || analysis.aprendizado,
-    venda: anterior.venda || analysis.venda,
-    reanalisadoEm: new Date().toISOString(),
-    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto (mesmo
-    // princípio da v988 pro lembrete). confirmedAppointments nunca sobrevive a uma gravação.
-    confirmedAppointments: []
-  };
-  merged = stampCommercialSchema(finalizarAnaliseComercial(merged, lead, timeline));
-
-  const { data: saved, error: putErr } = await supabase
-    .from("whatsapp_processamentos")
-    .update({ resultado_analise: merged, atualizado_em: new Date().toISOString() })
-    .eq("id", id)
-    .eq("organization_id", organizationId)
-    .select("resultado_analise");
-  if (putErr) return json(res, 500, { ok: false, error: putErr.message });
-  if (!saved || saved.length === 0) return json(res, 409, { ok: false, error: "A análise não foi gravada. Tente novamente." });
-  const persisted = saved[0]?.resultado_analise || merged;
-  const schema = commercialSchemaFrom(persisted);
-  if (schema < COMMERCIAL_SCHEMA_VERSION) return json(res, 500, { ok: false, error: `A análise foi gerada, mas o banco não confirmou a gravação no schema ${COMMERCIAL_SCHEMA_VERSION}.` });
-  return json(res, 200, { ok: true, analysis: persisted, schemaComercial: COMMERCIAL_SCHEMA_VERSION });
-}
 
 // v1092 — as ações "lembrete-set" e "lembrete-clear" foram removidas. Eram duas rotas de API
 // que NENHUMA tela do app chamou em nenhum momento da história do projeto (conferido no
@@ -312,173 +260,6 @@ async function acaoCriarManual(body, res, organizationId) {
 }
 
 
-// ============ NOVA OPORTUNIDADE VINCULADA A CORRETOR PARCEIRO ============
-// Cria um registro comercial independente para um novo comprador, preservando o
-// contato/parceiro original. Não exige alteração de schema no Supabase: o vínculo
-// fica dentro de resultado_analise.modeloComercial e oportunidadesVinculadas.
-async function acaoNovaOportunidadeParceiro(body, res, organizationId) {
-  const idOrigem = String(body?.id || "").trim();
-  const compradorFinal = String(body?.compradorFinal || "").trim().slice(0, 120);
-  const produto = String(body?.produto || "").trim().slice(0, 100);
-  const observacao = String(body?.observacao || "").trim().slice(0, 2000);
-  if (!idOrigem) return json(res, 400, { ok: false, error: "Informe o contato parceiro de origem." });
-  if (!compradorFinal) return json(res, 400, { ok: false, error: "Informe o nome ou identificação do novo comprador." });
-  if (!produto) return json(res, 400, { ok: false, error: "Informe o empreendimento ou produto da nova oportunidade." });
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return json(res, 500, { ok: false, error: "Supabase não configurado." });
-  const { data: origem, error: getErr } = await supabase
-    .from("whatsapp_processamentos")
-    .select("id,resultado_analise,timeline_json,nome_arquivo,arquivo_nome")
-    .eq("id", idOrigem)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (getErr) return json(res, 500, { ok: false, error: getErr.message });
-  if (!origem) return json(res, 404, { ok: false, error: "Contato parceiro não encontrado." });
-
-  const aOrigem = origem.resultado_analise || {};
-  const mcOrigem = aOrigem.modeloComercial || {};
-  const nomeParceiro = String(aOrigem.clientName || aOrigem?.lead?.clientName || origem.nome_arquivo || origem.arquivo_nome || "Corretor parceiro").trim();
-  const telefone = String(aOrigem?.lead?.phone || "").trim();
-  const pareceParceiro = /parceir|corretor|corretora|imobili[áa]ria|creci/i.test([
-    aOrigem.tipoContato, mcOrigem?.contato?.tipo, mcOrigem?.contato?.papel, nomeParceiro
-  ].filter(Boolean).join(" "));
-  if (!pareceParceiro) return json(res, 400, { ok: false, error: "Este contato não está classificado como corretor parceiro." });
-
-  const now = new Date();
-  // Fuso de Brasília, não o do servidor (UTC) — ver dataHoraSaoPaulo.
-  const { dataBR, horaBR } = dataHoraSaoPaulo(now);
-  const oportunidadeId = `opp-${randomUUID()}`;
-  const contatoId = String(mcOrigem?.contato?.id || mcOrigem?.oportunidade?.contatoId || idOrigem);
-  const obsLinha = observacao ? ` Observação: ${observacao}` : "";
-  const motivo = `Nova oportunidade indicada por ${nomeParceiro} para ${compradorFinal}, com interesse em ${produto}.`;
-
-  const result = {
-    lead: { clientName: nomeParceiro, phone: telefone, product: produto, etapa: "Novo" },
-    analysis: {
-      clientName: nomeParceiro,
-      origem: "oportunidade-parceiro",
-      contatoId,
-      oportunidadeId,
-      origemOportunidadeId: String(mcOrigem?.oportunidade?.id || idOrigem),
-      lead: { clientName: nomeParceiro, phone: telefone, etapa: "Novo" },
-      clientProfile: `${nomeParceiro} atua como corretor parceiro. O comprador desta oportunidade é ${compradorFinal}.`,
-      produtoInteresse: produto,
-      produtosInteresse: [produto],
-      etapaSugerida: "Novo",
-      tipoRetomada: "primeiro-contato",
-      tipoContato: "corretor-parceiro",
-      _schemaComercial: COMMERCIAL_SCHEMA_VERSION,
-      modeloComercial: {
-        versao: COMMERCIAL_SCHEMA_VERSION,
-        contato: {
-          id: contatoId,
-          tipo: "corretor-parceiro",
-          papel: "Corretor parceiro que intermedeia compradores",
-          compradorFinal
-        },
-        oportunidade: {
-          id: oportunidadeId,
-          contatoId,
-          origemOportunidadeId: String(mcOrigem?.oportunidade?.id || idOrigem),
-          compradorFinal,
-          status: "descoberta",
-          resultado: "em-andamento",
-          produto,
-          motivo
-        },
-        relacionamento: {
-          status: "ativo",
-          potencial: String(mcOrigem?.relacionamento?.potencial || "médio"),
-          motivo: "Parceria ativa com uma nova oportunidade registrada."
-        },
-        acao: {
-          status: "responder-agora",
-          responsavel: "corretor",
-          urgencia: "alta",
-          descricao: "Qualificar o novo comprador com o parceiro e definir o próximo passo comercial."
-        },
-        contexto: {
-          ultimaPessoaFalar: "desconhecido",
-          ultimaMensagem: "",
-          ultimoCompromisso: "Nenhum compromisso identificado.",
-          impedimentoPrincipal: "Ainda não identificado."
-        }
-      },
-      nextAction: "Qualificar o novo comprador com o parceiro e definir o próximo passo comercial.",
-      summary: motivo,
-      risk: "O perfil e a capacidade de compra do novo comprador ainda precisam ser confirmados.",
-      memoria: {
-        observacoes: `[${dataBR} ${horaBR}] Nova oportunidade vinculada ao parceiro. Comprador: ${compradorFinal}. Produto: ${produto}.${obsLinha}`
-      },
-      memoriaSugerida: {},
-      objections: [],
-      confirmedAppointments: [],
-      arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
-      sugestoesPendentes: true,
-      aprovada: false,
-      messages: {
-        a: "", b: "", c: "",
-        aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a"
-      }
-    },
-    timeline: [{
-      id: 1, order: 1, date: dataBR, time: horaBR, iso: now.toISOString(),
-      author: "Atendimento (corretor)",
-      text: `Nova oportunidade registrada. Comprador: ${compradorFinal}. Produto: ${produto}.${obsLinha}`,
-      type: "nota", source: "manual"
-    }],
-    audiosEncontrados: 0,
-    audiosTranscritos: 0,
-    txtFile: `Oportunidade ${nomeParceiro} ${compradorFinal} ${oportunidadeId}`
-  };
-
-  const persistence = await persistProcessingResult({
-    result,
-    source: "oportunidade-parceiro",
-    bucket: null,
-    path: null,
-    fileName: result.txtFile,
-    fileSize: null,
-    organizationId
-  });
-  const novoId = persistence?.processing?.id;
-  if (!novoId) return json(res, 500, { ok: false, error: "Não foi possível criar a nova oportunidade.", details: persistence?.warnings || [] });
-
-  // Registra o vínculo também no contato/oportunidade de origem para auditoria.
-  const vinculadas = Array.isArray(aOrigem.oportunidadesVinculadas) ? aOrigem.oportunidadesVinculadas.slice(-49) : [];
-  vinculadas.push({ id: oportunidadeId, leadId: novoId, compradorFinal, produto, criadoEm: now.toISOString() });
-  const origemAtualizada = {
-    ...aOrigem,
-    oportunidadesVinculadas: vinculadas,
-    // v1023 — agendamento só nasce de clique explícito em Agenda, nunca sobrevive a uma gravação.
-    confirmedAppointments: [],
-    modeloComercial: {
-      ...(mcOrigem || {}),
-      versao: Math.max(676, Number(mcOrigem?.versao || 0)),
-      contato: { ...(mcOrigem?.contato || {}), id: contatoId, tipo: "corretor-parceiro" },
-      relacionamento: {
-        ...(mcOrigem?.relacionamento || {}),
-        status: "ativo",
-        motivo: `Parceria ativa. Nova oportunidade registrada para ${compradorFinal}.`
-      }
-    }
-  };
-  await supabase
-    .from("whatsapp_processamentos")
-    .update({ resultado_analise: origemAtualizada, atualizado_em: now.toISOString(), updated_at: now.toISOString() })
-    .eq("id", idOrigem)
-    .eq("organization_id", organizationId);
-
-  return json(res, 200, {
-    ok: true,
-    id: novoId,
-    oportunidadeId,
-    contatoId,
-    compradorFinal,
-    produto
-  });
-}
 
 // ============ ATUALIZAR LEAD EXISTENTE COM EVOLUÇÃO (reimportação) ============
 // O corretor reimporta a conversa ao fim de um novo atendimento. Em vez de criar

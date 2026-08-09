@@ -20,8 +20,11 @@ const checa = (sel, min) => {
   assert.ok(mm, `o bloco precisa ajustar ${sel}`);
   assert.ok(Number(mm[1]) >= min, `${sel} deveria ser >= ${min}px (ficou ${mm[1]}px)`);
 };
-checa('.cp-metric small', 11);
-checa('.cp-metric em', 10);
+// v1186 — `.cp-metric` (os antigos "tiles" de métrica do painel) saiu do CSS na faxina da
+// auditoria de 09/08/2026: nenhuma tela do app cita essa classe. O painel de Desempenho de hoje é
+// montado com `.cp-card-head` / `.cp-table-head` / `.cp-running-row`, que continuam conferidos
+// abaixo. A regra da v866 — fonte legível no desktop — segue valendo pro que existe.
+assert.doesNotMatch(css, /\.cp-metric\b/, 'os tiles antigos de métrica não voltam (ninguém os desenha)');
 checa('.cp-table-head', 10);
 checa('.cp-running-row', 11);
 checa('.cp-card-head h3', 13);

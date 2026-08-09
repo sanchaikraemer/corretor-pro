@@ -13,13 +13,20 @@ assert.doesNotMatch(app, />Perdido</, 'sem botão Perdido no app.js');
 assert.doesNotMatch(html, />Vendido</, 'sem botão Vendido no index.html');
 assert.doesNotMatch(html, />Perdido</, 'sem botão Perdido no index.html');
 
-// 2. A barra de ações do lead (cp704QuickActions) perdeu o grupo "Encerramento" (Vendido),
-//    mas manteve Arquivar e Excluir definitivamente.
-const quick = app.match(/function cp704QuickActions\(lead,mc\)\{[\s\S]*?\n  \}/)[0];
+// 2. v1186 — este item mirava `cp704QuickActions`, o painel de ações do lead. A auditoria de
+//    09/08/2026 descobriu que esse painel PAROU DE SER DESENHADO na v908 (as ações principais
+//    subiram pra barra de ícones do topo) e ninguém percebeu: ele continuou no arquivo, e este
+//    teste continuou passando porque conferia o texto do arquivo, não a tela. O painel virou
+//    `cp1186MaisOpcoes`, agora de fato desenhado, com os dois botões que tinham ficado sem porta
+//    de entrada — e a checagem passa a exigir que ele seja CHAMADO, não só que exista.
+const quick = app.match(/function cp1186MaisOpcoes\(lead\)\{[\s\S]*?\n  \}/)[0];
 assert.doesNotMatch(quick, /Encerramento/, 'sem grupo Encerramento');
 assert.doesNotMatch(quick, /marcarVendido/, 'sem ação de vender');
-assert.match(quick, /arquivarLead\(/, 'mantém Arquivar');
 assert.match(quick, /excluirLeadDefinitivo\(/, 'mantém Excluir definitivamente');
+assert.match(app, /\$\{cp1186MaisOpcoes\(lead\)\}/,
+  'o bloco de mais opções precisa ser DESENHADO na tela do lead — foi por não ser que dois botões sumiram');
+// Arquivar continua existindo, agora na barra do topo (não pode ser duplicado aqui).
+assert.doesNotMatch(quick, /arquivarLead\(/, 'Arquivar já está na barra do topo — não pode aparecer duas vezes');
 
 // 3. As ações do lead (viraram ícones no topo na v908) e a barra rápida ui683 não têm Vendido.
 const toolbar904 = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/)[0];
@@ -27,13 +34,14 @@ assert.doesNotMatch(toolbar904, /marcarVendido|abrirVenda|>Vendido</, 'ações d
 assert.doesNotMatch(app, /abrirVenda\(\$\{id\},\$\{nome\}\)/, 'barra rápida sem Vendido');
 
 // 4. Leads já marcados Vendido/Perdido/Geladeira (dados legados) aparecem como "Arquivado" (sem
-// esses rótulos) — v1069: normalizarEtapa já colapsa tudo isso em "Geladeira" na origem.
-const jornada = app.match(/function cp704Jornada\(lead, mc\)\{[\s\S]*?\n  \}/)[0];
-assert.doesNotMatch(jornada, /label:'Vendido'/, 'jornada não rotula Vendido');
-assert.doesNotMatch(jornada, /label:'Perdido'/, 'jornada não rotula Perdido');
-// v1094 — a comparação passou a usar a constante ETAPA_ARQUIVADO em vez do texto solto
-// "Geladeira" (que agora aparece uma vez só, onde se explica que é o valor gravado no banco).
-assert.match(jornada, /normal===ETAPA_ARQUIVADO/, 'Vendido/Perdido/Arquivado legados viram Arquivado');
+// esses rótulos). v1186 — este item mirava a função do funil de 6 etapas, que a v889 tirou do
+// cabeçalho do lead a pedido do dono e a auditoria de 09/08/2026 removeu do arquivo. A regra em si
+// não mudou de lugar: quem colapsa Vendido/Perdido/Geladeira num rótulo só é `normalizarEtapa`,
+// na origem (v1069) — conferido no item 6 logo abaixo. Aqui fica a garantia de que os rótulos
+// antigos não voltam a aparecer como etiqueta em lugar nenhum.
+assert.doesNotMatch(app, /label:'Vendido'/, 'nenhuma tela pode rotular Vendido');
+assert.doesNotMatch(app, /label:'Perdido'/, 'nenhuma tela pode rotular Perdido');
+assert.match(app, /const ETAPA_ARQUIVADO\s*=/, 'a constante do valor gravado no banco precisa continuar');
 
 // 5. As telas/cards de venda saíram do app.
 assert.doesNotMatch(html, /Vendas registradas/, 'sem menu/tela "Vendas registradas"');
