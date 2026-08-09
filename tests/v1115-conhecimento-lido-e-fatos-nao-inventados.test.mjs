@@ -59,7 +59,9 @@ const leadUpdate = fs.readFileSync(new URL("../api/lead-update.js", import.meta.
 
 // ── 3. A regra anti-invenção cobre dados de fato (endereço, cidade, localização) ──────────────
 {
-  assert.match(pipeline, /DADOS DE FATO do empreendimento — endereço, rua, bairro, CIDADE/,
+  // v1184: "do empreendimento" virou "do imóvel ou empreendimento" — a regra passou a valer
+  // também para quem trabalha carteira de imóveis de terceiros, não só lançamento.
+  assert.match(pipeline, /DADOS DE FATO do imóvel ou empreendimento — endereço, rua, bairro, CIDADE/,
     "o piso comercial precisa proibir afirmar endereço/cidade sem fonte");
   assert.match(pipeline, /PROIBIDO afirmar uma localização, cidade ou característica que não conste nas fontes/,
     "sem fonte, a mensagem se oferece pra confirmar — nunca afirma");

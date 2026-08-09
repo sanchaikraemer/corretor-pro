@@ -4912,17 +4912,17 @@ function renderHistoricoContatos(lead){
 }
 
 const MATERIAL_TEMPLATE = {
-  "planta": "Posso te mandar a planta do apartamento, fica mais fácil pra você visualizar.",
+  "planta": "Posso te mandar a planta do imóvel, fica mais fácil pra você visualizar.",
   "tabela": "Te mando a tabela com os valores atualizados e condições de pagamento.",
-  "video": "Tenho um vídeo curto do empreendimento, dá pra ter uma noção bem boa. Te envio?",
+  "video": "Tenho um vídeo curto do imóvel, dá pra ter uma noção bem boa. Te envio?",
   "folder": "Te mando o folder digital com todas as informações principais.",
   "localizacao": "Vou te enviar a localização exata, dá uma olhada na região.",
   "memorial": "Posso te mandar o memorial descritivo com os detalhes técnicos.",
   "simulacao": "Faço uma simulação personalizada de pagamento pra você?",
   "comparativo": "Te mando um comparativo entre as opções pra você decidir melhor.",
-  "convite-visita": "Que tal marcarmos uma visita ao decorado? Tenho horários essa semana.",
+  "convite-visita": "Que tal marcarmos uma visita? Tenho horários essa semana.",
   "material-valorizacao": "Te mando um material mostrando a valorização da região nos últimos anos.",
-  "material-wellness": "Vou te mandar um material sobre a área de lazer e wellness do empreendimento."
+  "material-wellness": "Vou te mandar um material sobre a área de lazer do condomínio."
 };
 
 function renderMateriais(materiais, lead){
