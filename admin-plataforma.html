@@ -85,6 +85,24 @@
       </div>
       <div id="msgUsoIA"></div>
     </div>
+
+    <!-- v1191 — SAÚDE DO BANCO, com tela.
+         A conferência existe desde a v1185 (/api/diagnostico?mode=banco) e responde a pergunta
+         mais importante da operação: "o banco que está no ar tem TODAS as travas que o código
+         supõe que existem?". Só que ela nunca ganhou porta de entrada: a rota exige o login de
+         administrador no cabeçalho, então abrir o endereço na barra do navegador devolve 403 —
+         na prática, o dono não tinha COMO ver isso. Descoberto quando ele foi conferir a
+         migração 0018 que a v1190 passou a exigir. Mesmo tipo de achado da v1186 (recurso feito,
+         testado, publicado e sem botão). -->
+    <div class="cartao painel-largo" id="areaBanco" style="display:none">
+      <div class="rodape-conta">
+        <div><b>Saúde do banco de dados</b><div class="tag-empresa">As travas de segurança que o código espera encontrar já estão aplicadas?</div></div>
+        <button class="secundario pequeno" onclick="carregarBanco()">Conferir agora</button>
+      </div>
+      <div id="bancoResumo" class="banco-resumo">Conferindo…</div>
+      <div id="bancoDetalhe"></div>
+      <div id="msgBanco"></div>
+    </div>
   </div>
 
 <script>
@@ -128,8 +146,10 @@ async function entrarAdmin() {
     document.getElementById('areaLogin').style.display = 'none';
     document.getElementById('areaPainel').style.display = '';
     document.getElementById('areaUsoIA').style.display = '';
+    document.getElementById('areaBanco').style.display = '';
     carregarEmpresas();
     carregarUsoIA();
+    carregarBanco();
   } catch (e) {
     msg.className = 'erro';
     msg.textContent = 'Erro ao entrar: ' + (e.message || e);
@@ -478,6 +498,78 @@ async function estenderTeste(id) {
 // preço por modelo, cotação do dólar) mora no servidor, não faz sentido duplicar aqui.
 function formatarReais(valor) {
   return 'R$ ' + Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// v1191 — a tela da conferência de migrações (/api/diagnostico?mode=banco, v1185). O texto é
+// escrito pra quem NÃO é programador: diz se está tudo certo, e quando não está, diz o que fazer
+// passo a passo — sem jargão e sem obrigar ninguém a abrir o Supabase pra descobrir sozinho.
+async function carregarBanco() {
+  const resumo = document.getElementById('bancoResumo');
+  const detalhe = document.getElementById('bancoDetalhe');
+  const msg = document.getElementById('msgBanco');
+  if (!resumo) return;
+  msg.className = ''; msg.textContent = '';
+  detalhe.innerHTML = '';
+  resumo.className = 'banco-resumo';
+  resumo.textContent = 'Conferindo…';
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) {
+    // Sem isto, a sessão vencida deixava o cartão preso em "Conferindo…" pra sempre, sem dizer
+    // nada — pego na conferência visual da v1191.
+    resumo.className = 'banco-resumo falta-banco';
+    resumo.textContent = 'Sua sessão de administrador venceu. Entre de novo pra conferir o banco.';
+    return;
+  }
+  try {
+    const resp = await fetch('/api/diagnostico?mode=banco', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      resumo.className = 'banco-resumo falta-banco';
+      resumo.textContent = 'Não foi possível conferir o banco agora.';
+      msg.className = 'erro';
+      msg.textContent = r.error || `Código ${resp.status}.`;
+      return;
+    }
+    // O banco ainda não sabe se reportar (falta a migração que cria a própria conferência).
+    if (r.conferenciaDisponivel === false) {
+      resumo.className = 'banco-resumo falta-banco';
+      resumo.textContent = 'O banco ainda não consegue se conferir sozinho.';
+      detalhe.innerHTML = `<div class="banco-passo">${escapeHtml(r.resumo || '')}
+        ${r.proximoPasso ? `<div style="margin-top:10px"><b>O que fazer:</b> ${escapeHtml(r.proximoPasso)}</div>` : ''}</div>`;
+      return;
+    }
+    const faltando = r.faltando || [];
+    if (!faltando.length) {
+      resumo.className = 'banco-resumo ok-banco';
+      resumo.textContent = '✓ Banco em dia — todas as travas de segurança que o sistema espera já estão aplicadas.';
+      detalhe.innerHTML = `<div class="banco-passo">Nada a fazer. Cadastro de conta nova, limites e travas de segurança estão funcionando com o banco atual.</div>`;
+      return;
+    }
+    resumo.className = 'banco-resumo falta-banco';
+    const uma = faltando.length === 1;
+    resumo.textContent = uma
+      ? '⚠ Falta 1 atualização no banco — enquanto isso, as travas dela NÃO existem no sistema no ar.'
+      : `⚠ Faltam ${faltando.length} atualizações no banco — enquanto isso, as travas delas NÃO existem no sistema no ar.`;
+    const lista = faltando.map(f => `<li><span class="banco-arquivo">${escapeHtml(f.arquivo || ('migração ' + f.numero))}</span></li>`).join('');
+    const bloqueiaCadastro = faltando.some(f => Number(f.numero) === 18);
+    detalhe.innerHTML = `<div class="banco-passo">
+      ${bloqueiaCadastro ? '<b>Atenção:</b> enquanto a atualização 0018 não for aplicada, <b>o cadastro de cliente novo fica recusando</b>. O resto do app funciona normalmente.<br><br>' : ''}
+      <b>Como resolver (leva uns 2 minutos):</b>
+      <ol>
+        <li>Entre no <b>Supabase</b>, no projeto do Corretor Pro.</li>
+        <li>No menu da esquerda, clique em <b>SQL Editor</b> e depois em <b>New query</b>.</li>
+        <li>Abra o arquivo abaixo (pasta <span class="banco-arquivo">supabase/migrations</span> do projeto), copie o conteúdo inteiro, cole ali e clique em <b>Run</b>:</li>
+      </ol>
+      <ul style="margin:8px 0 0;padding-left:20px">${lista}</ul>
+      <div style="margin-top:10px">Depois, volte aqui e clique em <b>Conferir agora</b> — a conferência é refeita na hora.</div>
+    </div>`;
+  } catch (e) {
+    resumo.className = 'banco-resumo falta-banco';
+    resumo.textContent = 'Não foi possível conferir o banco agora.';
+    msg.className = 'erro';
+    msg.textContent = e.message || String(e);
+  }
 }
 
 async function carregarUsoIA() {
