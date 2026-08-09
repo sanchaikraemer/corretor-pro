@@ -82,13 +82,39 @@ assert.deepEqual(mortas, [],
   '"Juntar cliente duplicado" ficou invisível por um mês), ou devem ser apagadas:\n  - ' +
   mortas.join('\n  - '));
 
-// ── As três telas que a auditoria devolveu precisam continuar ligadas ────────────────────────
+// ── v1187: o que cuida de cadastro repetido precisa continuar ligado ─────────────────────────
+//
+// A v1186 encontrou código órfão e concluiu, errado, que dois recursos tinham se perdido —
+// devolveu um painel com "Juntar cliente duplicado" e "Excluir definitivamente" na tela do
+// cliente. O dono derrubou: um botão de juntar dentro de UM cadastro cobra dele saber que existe
+// um repetido e qual é, que é justamente o que o app tem que dizer; e excluir já existe em Editar.
+//
+// E o app JÁ resolve cadastro repetido, em três camadas — é isso que precisa continuar de pé.
 {
   const app = ler('app.js');
-  assert.match(app, /\$\{cp1186MaisOpcoes\(lead\)\}/,
-    '"Juntar cliente duplicado" e "Excluir definitivamente" precisam continuar sendo DESENHADOS na tela do lead');
-  assert.match(app, /cp1148JuntarCliente\(\$\{id\},\$\{name\}\)/, 'o botão de juntar cadastros precisa continuar existindo');
-  assert.match(app, /excluirLeadDefinitivo\(\$\{id\},\$\{name\}\)/, 'o botão de excluir definitivamente precisa continuar existindo');
+  const persistencia = ler('api/_persistence.js');
+
+  // 1) o servidor reconhece o mesmo cliente na importação (telefone, arquivo, nome)
+  assert.match(persistencia, /export async function _buscarProcessamentoExistenteV681/,
+    'o servidor precisa continuar reconhecendo o cliente que já existe na importação');
+  // 2) nome só parecido: a importação PERGUNTA, com os dois nomes na tela
+  assert.match(app, /async function acharLeadExistente/,
+    'a importação precisa continuar procurando o cadastro que já existe');
+  assert.match(app, /Pode ser o mesmo cliente que já existe/,
+    'a pergunta "é o mesmo cliente?" da importação precisa continuar — é ela que mostra os dois nomes');
+  assert.match(app, /É o mesmo cliente\?/, 'a pergunta precisa continuar sendo sim/não pro corretor');
+  // 3) a lista agrupa cópias num card só
+  assert.match(persistencia, /clean\.dupeIds = dupeIds/, 'a lista precisa continuar agrupando cópias num card só');
+  assert.match(app, /function coletarDupeIds/, 'apagar precisa continuar levando todas as cópias junto');
+
+  // E excluir continua onde sempre esteve: Editar lead → Zona perigosa.
+  assert.match(app, /id="editLeadExcluir"/, 'excluir o lead precisa continuar no modal de editar');
+  assert.match(app, /Zona perigosa/, 'a zona perigosa do modal de editar precisa continuar');
+
+  // O painel órfão não pode voltar.
+  const appSemComentario = app.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  assert.doesNotMatch(appSemComentario, /cp704QuickActions|cp1186MaisOpcoes/,
+    'o painel de ações do lead foi removido de vez (v1187) — o que ele oferecia já existe em outro lugar');
 }
 
 // ── E nenhuma rota do servidor pode ficar com ação que ninguém chama ─────────────────────────

@@ -13,20 +13,16 @@ assert.doesNotMatch(app, />Perdido</, 'sem botão Perdido no app.js');
 assert.doesNotMatch(html, />Vendido</, 'sem botão Vendido no index.html');
 assert.doesNotMatch(html, />Perdido</, 'sem botão Perdido no index.html');
 
-// 2. v1186 — este item mirava `cp704QuickActions`, o painel de ações do lead. A auditoria de
-//    09/08/2026 descobriu que esse painel PAROU DE SER DESENHADO na v908 (as ações principais
-//    subiram pra barra de ícones do topo) e ninguém percebeu: ele continuou no arquivo, e este
-//    teste continuou passando porque conferia o texto do arquivo, não a tela. O painel virou
-//    `cp1186MaisOpcoes`, agora de fato desenhado, com os dois botões que tinham ficado sem porta
-//    de entrada — e a checagem passa a exigir que ele seja CHAMADO, não só que exista.
-const quick = app.match(/function cp1186MaisOpcoes\(lead\)\{[\s\S]*?\n  \}/)[0];
-assert.doesNotMatch(quick, /Encerramento/, 'sem grupo Encerramento');
-assert.doesNotMatch(quick, /marcarVendido/, 'sem ação de vender');
-assert.match(quick, /excluirLeadDefinitivo\(/, 'mantém Excluir definitivamente');
-assert.match(app, /\$\{cp1186MaisOpcoes\(lead\)\}/,
-  'o bloco de mais opções precisa ser DESENHADO na tela do lead — foi por não ser que dois botões sumiram');
-// Arquivar continua existindo, agora na barra do topo (não pode ser duplicado aqui).
-assert.doesNotMatch(quick, /arquivarLead\(/, 'Arquivar já está na barra do topo — não pode aparecer duas vezes');
+// 2. v1187 — este item mirava `cp704QuickActions`, o painel de ações do lead. Ele parou de ser
+//    desenhado na v908 (as ações subiram pra barra de ícones do topo) e ficou anos no arquivo sem
+//    tela; a v1186 tentou devolvê-lo e o dono derrubou, porque o que ele oferecia já existe em
+//    outro lugar (juntar cadastro repetido é resolvido na importação; excluir está em Editar).
+//    O painel saiu de vez. A regra da v904 continua valendo onde as ações realmente moram.
+const toolbar = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/)[0];
+assert.doesNotMatch(toolbar, /Encerramento/, 'sem grupo Encerramento');
+assert.doesNotMatch(toolbar, /marcarVendido/, 'sem ação de vender');
+assert.match(toolbar, /arquivarLead\(/, 'Arquivar continua na barra do topo');
+assert.match(app, /id="editLeadExcluir"/, 'Excluir continua em Editar lead → Zona perigosa');
 
 // 3. As ações do lead (viraram ícones no topo na v908) e a barra rápida ui683 não têm Vendido.
 const toolbar904 = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/)[0];

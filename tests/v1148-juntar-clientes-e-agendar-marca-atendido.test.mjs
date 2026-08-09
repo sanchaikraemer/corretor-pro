@@ -51,8 +51,13 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
 // ── 2. A tela: botão no cliente, escolha com busca e confirmação antes de juntar ───────────────
 {
-  assert.match(app, /onclick='cp1148JuntarCliente\(\$\{id\},\$\{name\}\)'>Juntar cliente duplicado</,
-    "o botão fica no grupo Gestão do cliente");
+  // v1187 — o botão morava num painel da tela do cliente que não era desenhado desde a v908; por
+  // isso esta fusão nunca esteve ao alcance de ninguém. Ele NÃO volta pra tela do cliente: lá o
+  // corretor não tem como saber que existe um cadastro repetido. Quem sabe é o app, e ele já
+  // pergunta na importação. Aqui fica só a saída manual, dentro de Editar lead.
+  assert.match(app, /id="editLeadJuntar"/, "a fusão manual precisa ter porta de entrada em Editar lead");
+  assert.match(app, /editLeadJuntar"\)\?\.addEventListener\("click"[^\n]*cp1148JuntarCliente/,
+    "o botão de Editar precisa realmente abrir a escolha do cadastro duplicado");
   const ini = app.indexOf("window.cp1148JuntarCliente = async function(idFica, nomeFica){");
   assert.ok(ini > -1, "a função da tela existe");
   const fn = app.slice(ini, ini + 5200);
