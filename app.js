@@ -1508,18 +1508,28 @@ function scoreLead(l){
   return scorePrioridadeAtendimento(l);
 }
 // v826 §6.6 — PRECEDÊNCIA DETERMINÍSTICA DA FILA (função pura, sem estado).
-// Recebe só FATOS (booleanos) e devolve o nível (1..7), o grupo e o título. Não há
+// Recebe só FATOS (booleanos) e devolve o nível (2..7), o grupo e o título. Não há
 // pesos nem notas subjetivas: a posição é decidida pela ordem dos fatos. Isolada
 // assim para poder ser testada diretamente (tests/v826-fila-fatos.test.mjs).
-// Níveis: 1 cliente respondeu e não recebeu resposta · 2 compromisso vencido ·
-// 3 retorno para hoje · 4 negociação real aguardando você · 5 atendimento programado ·
-// 6 retomada por tempo sem contato · 7 aguardando resposta do cliente.
+// Níveis: 2 compromisso vencido · 3 retorno para hoje · 4 negociação real aguardando você ·
+// 5 atendimento programado · 6 retomada por tempo sem contato · 7 aguardando resposta do cliente.
+//
+// v1190 — O NÍVEL 1 NÃO EXISTE MAIS, e não pode voltar a existir com nenhum nome.
+// Era "cliente respondeu e ainda não recebeu sua resposta" (clienteAguardandoVoce): disparava só
+// porque a última fala IMPORTADA era do cliente, entrava com prioridade MÁXIMA e ainda furava as
+// duas proteções logo abaixo — atendimento recente e lembrete futuro. O app não é integrado ao
+// WhatsApp: ele lê o retrato que o corretor exporta, e o corretor SEMPRE responde o cliente na
+// hora, no WhatsApp. "A última fala é do cliente" aqui dentro só significa "essa conversa ainda
+// não foi reimportada" — nunca "cliente sem resposta". A v1158 tirou esse mesmo raciocínio da
+// ordem da fila e a v1189 tirou a categoria da Home, mas ele sobreviveu AQUI, no motor que
+// desenha os cards (cardLeadHTML/motivoCurto/classificarGrupoHome) e o title da linha da Home.
+// O número 1 fica vago de propósito: os níveis são simbólicos e renumerar mexeria no score de
+// todo mundo sem necessidade nenhuma.
 function filaPorFatos(f = {}){
-  if(f.atendidoRecente && !f.clienteAguardandoVoce && !f.lembreteAtrasado && !f.retornoParaHoje && !f.negociacaoAguardando)
+  if(f.atendidoRecente && !f.lembreteAtrasado && !f.retornoParaHoje && !f.negociacaoAguardando)
     return { nivel:0, grupo:"tratado-hoje", titulo: f.contatadoHoje ? "Tratado hoje" : "Atendido recentemente" };
-  if(f.lembreteFuturo && !f.clienteAguardandoVoce && !f.retornoParaHoje && !f.negociacaoAguardando)
+  if(f.lembreteFuturo && !f.retornoParaHoje && !f.negociacaoAguardando)
     return { nivel:0, grupo:"pode-aguardar", titulo:"Tem lembrete futuro" };
-  if(f.clienteAguardandoVoce) return { nivel:1, grupo:"acao-hoje", titulo:"Cliente aguardando" };
   if(f.lembreteAtrasado)      return { nivel:2, grupo:"acao-hoje", titulo:"Compromisso vencido" };
   if(f.retornoParaHoje)       return { nivel:3, grupo:"acao-hoje", titulo:"Retorno para hoje" };
   if(f.compromissoProgramado) return { nivel:5, grupo:"acao-hoje", titulo:"Atendimento programado" };
@@ -1576,14 +1586,6 @@ function _prioridadeAtendimentoCalcular(l){
   const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
   const primeiroNome = String(l.name || "").toLowerCase().trim().split(/\s+/)[0] || "";
   const msgsCli = msgs.filter(m => ehMsgDoCliente(m, primeiroNome));
-  const ultimoCliente = (() => {
-    for(let i = msgs.length - 1; i >= 0; i--){
-      const m = msgs[i];
-      if(!m || !String(m.text||"").trim()) continue;
-      return ehMsgDoCliente(m, primeiroNome);
-    }
-    return false;
-  })();
 
   const pendenciaCorretor = /promet|ficou de (te |lhe )?(enviar|mandar|passar|retornar)|enviar (a |uma )?simula|preparar (a |uma )?(proposta|simula)|montar (a |uma )?(proposta|simula)|mandar (o |os |as )?(material|plantas?|tabela)|retornar com|aguard(a|ando) (o |um |meu |nosso )?retorno|cliente (aguarda|espera|esperando)|devo (enviar|mandar|retornar)|combin(ei|amos) de/.test(txt);
   const sinalCompra = /entrada|parcela|financi|banco|caixa|valor|pre[çc]o|condi[çc][ãa]o|proposta|simula|contrato|escritura|reserva|unidade|visita|decorado|planta|metragem|vaga|box|fechar|negociar|tabela/.test(txt);
@@ -1622,23 +1624,17 @@ function _prioridadeAtendimentoCalcular(l){
   // só o próprio temAgenda.
   const compromissoProgramado = temAgenda;
   const retomadaPorTempo = Number.isFinite(diasContato) && diasContato >= limiarRetomada(l);
-  // "Cliente respondeu e ainda não recebeu resposta": o cliente falou por último.
-  // v1019 — este sinal furava a proteção de atendimento recente (linha do filaPorFatos que checa
-  // "!clienteAguardandoVoce") e o ponto vermelho "Cliente aguardando" (nivel 1, cpHomeLeadRow)
-  // disparava só por o cliente ter falado por último — mesmo (a) eu tendo atendido recentemente,
-  // ou (b) a fala dele sendo só uma despedida sem pedir nada. Mesmo bug já corrigido em
-  // emJanelaDeEspera/cpProbabilidadeFechamento, agora também aqui: exige não estar protegido por
-  // atendimento recente (protegidoPosAtendimento, a mesma checagem que atendidoRecente já usa
-  // logo abaixo) E que a fala realmente peça uma resposta.
-  const clienteAguardandoVoce = ultimoCliente && !protegidoPosAtendimento(l)
-    && (typeof ultimaMsgClientePedeResposta !== 'function' || ultimaMsgClientePedeResposta(l));
+  // v1190 — aqui morava "clienteAguardandoVoce" (o cliente falou por último → prioridade máxima,
+  // furando atendimento recente e lembrete futuro). Removido de vez: ver o comentário grande em
+  // filaPorFatos. A v1019 tinha tentado consertar o sinal (exigindo que a fala pedisse resposta);
+  // o problema nunca foi a afinação do detector, e sim a premissa — o app não tem como saber se
+  // o corretor já respondeu no WhatsApp depois da exportação.
   const fmtDias = n => n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`;
 
   const { nivel, grupo, titulo } = filaPorFatos({
     atendidoRecente: protegidoPosAtendimento(l),
     contatadoHoje: !!ehContatadoHoje(l),
     lembreteFuturo: lembreteFuturo(l),
-    clienteAguardandoVoce,
     lembreteAtrasado,
     retornoParaHoje,
     negociacaoAguardando: negociacaoAguardandoRetorno,
@@ -1652,8 +1648,10 @@ function _prioridadeAtendimentoCalcular(l){
 
   // Motivo factual visível em cada card (§6.6), montado a partir do nível/grupo.
   let motivo;
-  if(nivel === 1) motivo = `cliente respondeu e ainda não recebeu sua resposta${Number.isFinite(diasResposta) ? ` (respondeu ${fmtDias(diasResposta)})` : ""}`;
-  else if(nivel === 2) motivo = `compromisso combinado está vencido${diasLembrete != null ? ` (${fmtDias(Math.abs(diasLembrete))})` : ""}`;
+  // v1190 — o motivo do nível 1 ("cliente respondeu e ainda não recebeu sua resposta") saiu junto
+  // com o nível. Era o texto que aparecia no card em Hoje/Todos/Pipeline afirmando uma pendência
+  // que o app não tem como provar.
+  if(nivel === 2) motivo = `compromisso combinado está vencido${diasLembrete != null ? ` (${fmtDias(Math.abs(diasLembrete))})` : ""}`;
   else if(nivel === 3) motivo = "retorno combinado para hoje";
   else if(nivel === 4) motivo = ctxIA.contatoParceiro ? "contraproposta aguardando retorno do cliente final" : "proposta/condição em aberto aguardando você";
   else if(nivel === 5) motivo = "há atendimento ou visita programado";
@@ -2667,21 +2665,12 @@ function cpDiasDescansoPosAtendimento(){
   }catch(_){}
   return 5;
 }
-// v1017 — bug relatado várias vezes pelo dono ("o lead volta pra Fazer agora antes do prazo de
-// espera") e nunca resolvido de vez: quem falou por último (emJanelaDeEspera/entraEmRetomada,
-// abaixo) nunca checava O QUE o cliente disse — um simples "Ok"/"Obrigada"/"Perfeito", sem pedir
-// nada, já encerrava a espera na hora, igual a uma pergunta de verdade. Esse MESMO problema já
-// tinha sido identificado e corrigido na v944 — só que só dentro de cpProbabilidadeFechamento (a
-// função que ORDENA a fila), nunca aqui (as funções que decidem QUEM ENTRA na fila). Extraído pra
-// as duas pararem de divergir de novo no futuro.
-function ultimaMsgClientePedeResposta(l){
-  try{
-    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
-    if(!last || last.falante !== "contato") return true; // sem como checar: não trava a espera à toa
-    const t = String(last.m?.text || "");
-    return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
-  }catch(_){ return true; }
-}
+// v1017 criou aqui ultimaMsgClientePedeResposta: uma peneira pra decidir se a última fala do
+// cliente "pedia resposta" (pergunta, "me manda", "quanto custa") ou era só um "Ok/Obrigada" —
+// ela existia pra afinar a liberação antecipada da espera e a prioridade máxima do nível 1.
+// v1190 — removida junto com as duas: sem nenhuma decisão baseada em "quem falou por último",
+// ela não tinha mais o que peneirar. Fica registrado pra ninguém achar que foi esquecimento —
+// se essa função voltar, é sinal de que a inferência proibida voltou junto.
 function limiarRetomada(l){
   return cpDiasDescansoPosAtendimento();
 }
@@ -2714,8 +2703,11 @@ function emJanelaDeEspera(l){
 // Um lead com contato MUITO recente (< 7 dias) ainda não deve entrar em "retomada" —
 // não demos tempo do cliente responder. Exceções (entram mesmo recente):
 //  - tem lembrete vencido/pra hoje, ou compromisso hoje/amanhã (motivo agendado);
-//  - está quente pra fechar (não faz sentido esperar);
-//  - o CLIENTE falou por último (a bola está com a gente, precisa responder).
+//  - está quente pra fechar (não faz sentido esperar).
+// v1190 — havia uma terceira exceção: "o CLIENTE falou por último (a bola está com a gente)".
+// Saiu pelo mesmo motivo do nível 1 de filaPorFatos (ver o comentário lá): a última fala
+// importada não prova que o corretor deve resposta. Sem ela, um lead contatado há poucos dias
+// simplesmente espera o prazo normal e volta pela retomada por tempo, como qualquer outro.
 function entraEmRetomada(l){
   if(emJanelaDeEspera(l)) return false; // contatei há <5 dias e ela não respondeu: esperar
   if(lembreteVencido(l)) return true;
@@ -2725,20 +2717,12 @@ function entraEmRetomada(l){
   if(String(l.analysis?.tipoRetomada||"").toLowerCase() === "quente-fechar") return true;
   const dias = Number(l.daysSinceLastInteraction);
   const limiar = limiarRetomada(l);
-  if(Number.isFinite(dias) && dias < limiar){
-    // contato recente (< limiar dias: 3 p/ lead novo, 5 p/ estabelecido): só entra se o CLIENTE
-    // falou por último E de fato PEDIU uma resposta (v1017 — mesma checagem usada em
-    // emJanelaDeEspera/ultimaMsgClientePedeResposta; antes, um "Ok"/"Obrigada" do cliente já
-    // bastava pra liberar o lead antes da hora).
-    const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
-    const primeiroNome = String(l.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
-    for(let i = msgs.length - 1; i >= 0; i--){
-      const m = msgs[i];
-      if(!m || !String(m.text||"").trim()) continue;
-      return ehMsgDoCliente(m, primeiroNome) && ultimaMsgClientePedeResposta(l);
-    }
-    return false; // recém-criado, sem conversa → espera
-  }
+  // contato recente (< limiar dias: 3 p/ lead novo, 5 p/ estabelecido) → espera o prazo.
+  // v1190 — aqui ficava a liberação antecipada por "o cliente falou por último e pediu resposta"
+  // (v1017). Removida: era a mesma inferência proibida, entrando na fila oficial pelo caminho de
+  // cp786Categoria (que termina em entraEmRetomada). Um fato com data — lembrete vencido,
+  // compromisso hoje/amanhã — continua liberando logo acima, como sempre.
+  if(Number.isFinite(dias) && dias < limiar) return false;
   return true; // 5+ dias (ou sem info) → pode retomar
 }
 
@@ -2841,10 +2825,11 @@ function cpBarraMensagensMini(l, maxMsgs){
 // barra + produto vão embaixo) — via grid-template-areas, sem quebra lateral.
 function cpHomeLeadRow(l, maxMsgs){
   const idJs = JSON.stringify(String(l.id||""));
-  // v1050 — pedido do dono: tirou a "bolinha" (indicador colorido de status) da linha; nivel
-  // continua existindo só pra decidir o texto do title de "dias" logo abaixo.
-  let nivel = 0;
-  try{ nivel = (typeof prioridadeAtendimento === 'function') ? (prioridadeAtendimento(l).nivel || 0) : 0; }catch(_){}
+  // v1050 — pedido do dono: tirou a "bolinha" (indicador colorido de status) da linha; o nível
+  // sobreviveu só pra decidir o texto do title de "dias" logo abaixo.
+  // v1190 — e agora o nível saiu daqui também: o único texto que ele escolhia era "Cliente
+  // esperando sua resposta há N dias" (nível 1), a mesma afirmação sem lastro que a v1189 baniu.
+  // Sem ele, a linha ainda ganha de brinde uma conta a menos por lead no desenho da Home.
   // v1018 — pedido do dono (caso real: "Adão — marquei atendimento quarta dia 22, ainda sim
   // apresenta 26 dias"): daysSinceLastInteraction só olha mensagem (nunca soube de atendimento
   // marcado), então esse número podia ficar bem maior do que o esperado logo depois de atender —
@@ -2873,13 +2858,11 @@ function cpHomeLeadRow(l, maxMsgs){
   // QUALQUER lado (nem sempre é a mesma coisa). Rótulo "há" + title explicam o que é de fato,
   // sem mudar o cálculo do dado (daysSinceLastInteraction continua vindo de onde sempre veio).
   // v1053 — o título passa a bater sempre com o número visível: quando há atendimento marcado,
-  // o texto é sempre sobre o atendimento (mesmo em nível 1) — só cai pro texto de "cliente
-  // esperando"/"última interação" quando não existe atendimento nenhum pra mostrar.
+  // o texto é sempre sobre o atendimento — só cai pro texto de "última interação" quando não
+  // existe atendimento nenhum pra mostrar.
   const diasTitle = diasNum == null ? '' : (diasEhAtendimento
     ? `${diasNum} dia${diasNum===1?'':'s'} desde o último atendimento marcado`
-    : nivel === 1
-      ? `Cliente esperando sua resposta há ${diasNum} dia${diasNum===1?'':'s'}`
-      : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
+    : `${diasNum} dia${diasNum===1?'':'s'} desde a última interação (sua ou do cliente)`);
   // v1054 tentou diferenciar "atendido há" de "há" pra dar pra ver, sem abrir o lead, se o app
   // reconhecia atendimento pra aquele lead. v1055 — pedido do dono: "tenque ficar tudo padrão".
   // Texto visível volta a ser sempre "há Xd" pra todo mundo, igual — o NÚMERO continua vindo do
@@ -4059,8 +4042,9 @@ async function _processarDashboard(data){
     state.itemsAtivos = items;
     state.todosLeads = all;
     try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
-    // v1138 — atualiza o retrato que o lembrete diário lê (total de clientes esperando resposta).
-    try{ cpAtualizarRetratoCobranca(all); }catch(_){}
+    // v1138 — atualiza o retrato que o lembrete diário lê. v1190: são ações com data registrada
+    // (compromisso atrasado + dose de "Fazer agora"), nunca "clientes esperando resposta".
+    try{ cpAtualizarRetratoAcoes(all); }catch(_){}
     // Contagem da Agenda permanece separada da Central de atenção.
     // agora no helper atualizarSinoAgenda (reusado ao excluir/reagendar lembrete, pra refletir sem F5).
     atualizarSinoAgenda(all);
@@ -10022,40 +10006,41 @@ function leadEhAtivo(l){
   return normalizarEtapa(l?.etapa) !== ETAPA_ARQUIVADO;
 }
 
-// ============ v1138 — LEMBRETE DIÁRIO DE CLIENTES SEM RESPOSTA ============
+// ============ v1138 — LEMBRETE DIÁRIO ============
 // Item 4 do plano aprovado pelo dono. A pesquisa da auditoria: a maioria das vendas sai depois do
 // 5º contato e quase metade dos corretores para no 1º — e os concorrentes ganham exatamente aqui,
-// no lembrete automático. O app já sabe QUEM espera resposta; agora ele COBRA: uma notificação por
-// dia, com o app fechado (Android com o app instalado — Periodic Background Sync), lida de um
-// retrato local que o próprio app grava. Nenhum servidor novo, nenhuma rota nova, nada sai do
-// aparelho.
+// no lembrete automático. Uma notificação por dia, com o app fechado (Android com o app instalado
+// — Periodic Background Sync), lida de um retrato local que o próprio app grava. Nenhum servidor
+// novo, nenhuma rota nova, nada sai do aparelho.
+//
+// v1190 — A FONTE DO LEMBRETE MUDOU. Ele nascia de cpLeadsAguardandoResposta: "clientes esperando
+// resposta há mais de 24h", contado por lastInteractionAt/daysSinceClientReply/lastCorretorMsgIso
+// — ou seja, por quem falou por último no retrato importado. É a MESMA inferência que a v1158 e a
+// v1189 baniram da fila: o app não é integrado ao WhatsApp, o corretor já respondeu lá, e o que
+// chegava era uma cobrança por conversa resolvida. Agora o lembrete conta só o que o próprio
+// sistema registrou com data: compromisso atrasado + a dose de "Fazer agora" do dia — exatamente
+// os mesmos números que o sino do topo (Central de atenção) mostra dentro do app.
 const CP_LEMBRETE_DIARIO_KEY = "cp-lembrete-diario";
 
-// Quem está esperando resposta há mais de 24h. Regras (todas sobre dados que o app JÁ tem):
-//   - lead ativo (arquivado não cobra);
-//   - o cliente tem mensagem real no histórico (daysSinceClientReply existe — sem isso, um lead
-//     só de anotações manuais entraria na lista por causa do fallback de lastInteractionAt);
-//   - a última mensagem real da conversa NÃO é do corretor (ele não respondeu depois);
-//   - não há atendimento registrado (botão/cópia/observação) depois dela;
-//   - e ela tem mais de 24 horas.
-function cpLeadsAguardandoResposta(items){
-  const DIA = 24 * 60 * 60 * 1000;
-  const agora = Date.now();
-  const lista = [];
-  for(const l of (items || [])){
-    if(!leadEhAtivo(l)) continue;
-    // Cuidado com Number(null) === 0: sem mensagem do cliente o servidor manda null, e null
-    // "virando zero" colocaria na cobrança um lead que só tem anotações manuais.
-    if(l?.daysSinceClientReply == null || !Number.isFinite(Number(l.daysSinceClientReply))) continue;
-    const ultima = Date.parse(l?.lastInteractionAt || "");
-    if(!Number.isFinite(ultima) || (agora - ultima) < DIA) continue;
-    const corretorMsg = Date.parse(l?.lastCorretorMsgIso || "");
-    if(Number.isFinite(corretorMsg) && corretorMsg >= ultima) continue;
-    if(ultimoAtendimentoTs(l) >= ultima) continue;
-    lista.push({ nome: String(l?.name || "Cliente"), desde: ultima });
+// Ações com lastro pra cobrar hoje. Só fato registrado no sistema entra:
+//   - compromisso/lembrete ATRASADO (data marcada que já passou — cp786CompromissoAtrasado);
+//   - a dose de "Fazer agora" do dia, pela fila OFICIAL (cpFilaFazerAgora limitada pela meta que
+//     ainda falta — a mesma conta do sino, que já desconta quem foi atendido hoje e devolve zero
+//     no fim de semana).
+// Nada aqui olha "quem falou por último".
+function cpAcoesFactuaisDeHoje(items){
+  const ativos = (Array.isArray(items) ? items : []).filter(leadEhAtivo);
+  let atrasados = 0;
+  for(const l of ativos){
+    try{ if(typeof cp786CompromissoAtrasado === 'function' && cp786CompromissoAtrasado(l)) atrasados++; }catch(_){}
   }
-  lista.sort((a,b) => a.desde - b.desde); // quem espera há mais tempo primeiro
-  return lista;
+  let fazerAgora = 0;
+  try{
+    const fila = (typeof cpFilaFazerAgora === 'function') ? cpFilaFazerAgora(ativos) : [];
+    const dose = (typeof cpFazerAgoraDose === 'function') ? cpFazerAgoraDose(ativos) : 0;
+    fazerAgora = Math.max(0, Math.min(fila.length, dose));
+  }catch(_){}
+  return { atrasados, fazerAgora, total: atrasados + fazerAgora };
 }
 
 function cpNotifDB(){
@@ -10078,15 +10063,23 @@ async function cpNotifGravar(chave, valor){
   }catch(_){ /* sem IndexedDB, sem retrato — o lembrete simplesmente não dispara */ }
 }
 
-// Grava o retrato compacto que o service worker lê de madrugada: total + até 3 nomes. Roda em
-// segundo plano a cada carga de leads — barato (só conta o que já está em memória) e sempre
-// atualizado enquanto o app for usado.
-function cpAtualizarRetratoCobranca(items){
+// Grava o retrato compacto que o service worker lê de madrugada. Roda em segundo plano a cada
+// carga de leads — barato (só conta o que já está em memória) e sempre atualizado enquanto o app
+// for usado.
+//
+// v1190 — PRIVACIDADE: o retrato guardava até 3 NOMES DE CLIENTES, e o service worker os
+// imprimia na tela bloqueada do celular ("3 clientes estão esperando — João, Maria, Carlos").
+// Quem pega o telefone na mesa lê nome de cliente sem desbloquear nada. Agora só vão números e a
+// hora do cálculo — nome de cliente não é mais gravado nesse retrato. A chave antiga é
+// sobrescrita na primeira carga de leads depois desta atualização, então os nomes que já estavam
+// no aparelho somem sozinhos.
+function cpAtualizarRetratoAcoes(items){
   try{
-    const lista = cpLeadsAguardandoResposta(items);
+    const acoes = cpAcoesFactuaisDeHoje(items);
     cpNotifGravar("retrato", {
-      total: lista.length,
-      nomes: lista.slice(0, 3).map(x => x.nome),
+      total: acoes.total,
+      atrasados: acoes.atrasados,
+      fazerAgora: acoes.fazerAgora,
       calculadoEm: Date.now()
     });
   }catch(_){ }
@@ -10150,11 +10143,11 @@ async function cpLembreteDiario(){
   }
   try{ localStorage.setItem(CP_LEMBRETE_DIARIO_KEY, "on"); }catch(_){ }
   // Atualiza o retrato agora, com o que estiver em memória — pra primeira notificação não sair velha.
-  cpAtualizarRetratoCobranca(state.todosLeads || state.itemsAtivos || []);
+  cpAtualizarRetratoAcoes(state.todosLeads || state.itemsAtivos || []);
   const fundo = await cpLembreteDiarioRegistrarSync();
   cpLembreteDiarioStatus(fundo
     ? "Ativado. O aviso chega uma vez por dia, mesmo com o app fechado."
-    : "Ativado. Neste navegador o aviso em segundo plano não é suportado — no Android, com o app instalado, ele chega mesmo fechado. Aqui, o sino do topo segue mostrando quem espera.",
+    : "Ativado. Neste navegador o aviso em segundo plano não é suportado — no Android, com o app instalado, ele chega mesmo fechado. Aqui, o sino do topo segue mostrando o que pede ação hoje.",
     "var(--acao)");
   cpLembreteDiarioRender();
 }

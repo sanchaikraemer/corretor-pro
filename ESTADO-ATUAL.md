@@ -18,6 +18,13 @@ nova `criar-conta.js` (seção 2), a trava de cadastro por conexão e a migraç�
 lista (decisão do dono: quem se cadastra entra na hora e a venda é fechada por telefone depois), e
 a cobrança manual deixou de ser pendência pelo mesmo motivo. Ver `NOTAS-v1128.md`._
 
+_Atualizado na v1190, depois da auditoria do sistema pedida pelo dono (com uma ordem de correção
+externa em PDF, conferida item por item contra o código antes de qualquer mudança). Nesta rodada:
+a inferência de "cliente esperando resposta" saiu dos últimos lugares onde ainda vivia (seção 7),
+o acesso antigo por chave compartilhada passou a nascer desligado em produção e o cadastro passou
+a falhar fechado sem a migração 0018 (seções 3, 4 e 7), e o aprendizado automático da IA ganhou
+fronteiras (seção 7). Ver `NOTAS-v1190.md`._
+
 _Retoque na v1141: a importação **não pergunta mais o período dos áudios** (usa o "Período padrão
 dos áudios" do Cérebro) e a reimportação passou a reaproveitar o que já está salvo — a seção 2
 descreve como isso funciona em `processar-storage.js`. Ver `NOTAS-v1141.md`._
@@ -88,10 +95,20 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 - `ALLOW_UNPROTECTED_API` — **não vale mais em produção (v1092).** Ela liberava a API sem chave e
   sem login; como toda chamada sem login é tratada como sendo da conta original, isso deixava os
   dados dela abertos pra qualquer um. Fora de produção (desenvolvimento/teste) continua valendo.
-- `CORRETOR_PRO_LEGADO_DESLIGADO` — defina como `sim` pra **desligar definitivamente** o acesso
-  antigo por chave compartilhada. A partir daí só entra quem tem login de verdade. Vem desligado
-  por padrão porque o Atalho do iPhone e aparelhos antigos da conta original podem depender do
-  caminho antigo; quem usa o app com login não perde nada ao ligar isto.
+- `CORRETOR_PRO_LEGADO_ATIVO` — **(v1190)** desde esta versão, em **produção** o acesso antigo por
+  chave compartilhada nasce **DESLIGADO**: só entra quem tem login de verdade. Defina como `sim`
+  apenas se algum fluxo legítimo ainda depender daquela chave. Antes o padrão era o contrário (a
+  porta ficava aberta até alguém lembrar de fechar), e como toda chamada por esse caminho é
+  tratada como sendo da conta original, o que estava em jogo eram os dados do próprio dono. O
+  Atalho do iPhone **não** depende disso desde a v1035 (usa chave pessoal assinada por empresa) e
+  o app manda o login do Supabase em toda chamada; aparelho antigo que ainda guarde a chave
+  recebe 401 e o próprio app o leva pra tela de entrar. Fora de produção nada muda.
+- `CORRETOR_PRO_LEGADO_DESLIGADO` — o interruptor da v1092, mantido: `sim` desliga o acesso antigo
+  em qualquer ambiente e **vence** o `CORRETOR_PRO_LEGADO_ATIVO`.
+- `CORRETOR_PRO_CADASTRO_SEM_0018` — **(v1190)** válvula de escape do cadastro. Em produção, se a
+  migração `0018` não estiver aplicada, `api/criar-conta.js` **recusa contas novas** (HTTP 503) em
+  vez de cair calado no caminho antigo, que tem janela de concorrência. Definir como `sim` libera
+  o caminho antigo na hora, sem publicar nada — use só enquanto a migração não é aplicada.
 
 ### Custo e limites de IA
 - `CORRETOR_PRO_LIMITE_ANALISES_DIA` — teto de segurança de análises por dia (padrão 50 desde a v1112; era 200) — hoje só alcança a conta original, as demais usam os planos.
@@ -164,7 +181,7 @@ Supabase — nenhuma ferramenta de migração automática está configurada). Li
 
 | `0017_registro_de_migracoes.sql` | **Aditiva (v1185).** Cria `cp_migracoes_aplicadas` e a função `conferir_migracoes()`, que **olha o catálogo do Postgres** (tabela, função, índice, trava e permissão) e diz o que cada migração deixou de fato — não confia em anotação. É a resposta das quatro auditorias de 08/2026 ao maior risco restante: código e banco em versões diferentes sem ninguém saber (a `0009` faltando enquanto da `0010` à `0014` estavam). Detalhes importantes: a `0009` e a `0015` são conferidas **pelo mesmo efeito** (a `0015` refaz o que faltou da `0009`); a `0013` só conta como aplicada se o navegador **não** conseguir chamar `criar_empresa_e_dono*` (função existir não basta — a trava é o revoke); a `0014` só conta se os dois contadores estiverem fora do alcance de `anon`/`authenticated`. Por isso a conferência também serve de **alarme**: reabrir uma dessas portas faz a migração virar "faltando" na hora. Tabela e funções fechadas pro navegador (RLS ligada, `revoke` incluindo `public`, `grant` só ao `service_role`). Validada num Postgres 16 de verdade em três cenários (banco de 07/08 sem a `0009`; banco completo; portas reabertas). Lida por `conferirMigracoesDoBanco` (`api/_persistence.js`) e exposta em `api/diagnostico.js?mode=banco`. Protegida por `tests/v1185-banco-se-reporta-e-nada-cai-no-caminho-antigo.test.mjs`, que exige que **toda** migração do disco esteja na conferência. |
 
-| `0018_cadastro_atomico_e_limpeza.sql` | **Correção de concorrência + retenção (v1186).** Duas coisas. (a) `criar_empresa_com_limite_de_conexao(...)` faz **contar, decidir, criar e registrar na MESMA transação**, com `pg_advisory_xact_lock` derivado da impressão da conexão (trava só quem vem da mesma conexão; corretores diferentes não esperam um pelo outro). Antes eram quatro passos separados em `api/criar-conta.js`, e entre o "conta" e o "registra" havia uma janela: pedidos simultâneos liam o mesmo número e todos passavam. **Medido num Postgres 16 de verdade, limite 5, oito pedidos ao mesmo tempo: o caminho antigo criou 8 contas; a função nova criou 5 e recusou 3.** O estouro do limite para com o código `CP429`, que a rota reconhece e traduz. (b) `limpar_cadastros_por_conexao_antigos(dias)` + índice `cadastros_por_conexao_idade` — a impressão da conexão só serve pras últimas 24h e nunca era apagada; agora sai depois de 7 dias, disparado por `api/criar-conta.js` no máximo uma vez por dia por instância, sem segurar a resposta de quem se cadastra. Também **reescreve `conferir_migracoes()`** pra se incluir na lista (a `0017` pode já estar aplicada). Enquanto não for rodada, o cadastro continua funcionando pelo caminho antigo — a trava segue no servidor, só perde a exatidão sob simultaneidade — e a rota **avisa no log**, além de a `0018` aparecer como "faltando" no diagnóstico. Protegida por `tests/v1186-migracao-0018-cadastro-atomico.test.mjs`. |
+| `0018_cadastro_atomico_e_limpeza.sql` | **Correção de concorrência + retenção (v1186).** Duas coisas. (a) `criar_empresa_com_limite_de_conexao(...)` faz **contar, decidir, criar e registrar na MESMA transação**, com `pg_advisory_xact_lock` derivado da impressão da conexão (trava só quem vem da mesma conexão; corretores diferentes não esperam um pelo outro). Antes eram quatro passos separados em `api/criar-conta.js`, e entre o "conta" e o "registra" havia uma janela: pedidos simultâneos liam o mesmo número e todos passavam. **Medido num Postgres 16 de verdade, limite 5, oito pedidos ao mesmo tempo: o caminho antigo criou 8 contas; a função nova criou 5 e recusou 3.** O estouro do limite para com o código `CP429`, que a rota reconhece e traduz. (b) `limpar_cadastros_por_conexao_antigos(dias)` + índice `cadastros_por_conexao_idade` — a impressão da conexão só serve pras últimas 24h e nunca era apagada; agora sai depois de 7 dias, disparado por `api/criar-conta.js` no máximo uma vez por dia por instância, sem segurar a resposta de quem se cadastra. Também **reescreve `conferir_migracoes()`** pra se incluir na lista (a `0017` pode já estar aplicada). **v1190 — deixou de ser opcional:** em produção, sem ela, o cadastro de conta nova **recusa** (HTTP 503, com a mensagem dizendo o que fazer) em vez de cair calado no caminho antigo; `MIGRACAO_MINIMA_EXIGIDA` subiu pra 18, então ela aparece como pendência de verdade no diagnóstico. A válvula de escape é `CORRETOR_PRO_CADASTRO_SEM_0018=sim` (seção 3). Fora de produção o caminho antigo continua valendo, com aviso no log. Protegida por `tests/v1186-migracao-0018-cadastro-atomico.test.mjs`. |
 
 **Como saber o que está aplicado em produção (v1185)**: pergunte ao banco, não a um documento —
 `/api/diagnostico?mode=banco` (logado como administrador da plataforma) devolve a lista do que está
@@ -288,6 +305,17 @@ montar isso:
   (`NOTAS-v1040.md`).
 - Teto de uso de IA bem menor durante o teste grátis (`NOTAS-v1041.md`).
 - Telemetria de custo de IA por empresa, visível no painel administrativo (`NOTAS-v1038.md`).
+- **(v1190)** Acesso antigo por chave compartilhada **desligado por padrão em produção** — a
+  segurança deixou de depender de alguém lembrar de marcar uma variável (`NOTAS-v1190.md`).
+- **(v1190)** Cadastro **falha fechado** sem a migração `0018`: código novo sobre banco velho não
+  parece mais saudável (`NOTAS-v1190.md`).
+- **(v1190)** Aprendizado automático da IA (`corretor-conhecimento`) endurecido: aprende **só das
+  mensagens do corretor**, trata a conversa como **dado não confiável** (instrução embutida pelo
+  cliente não altera nada), **barra condição comercial volátil** (preço, desconto, prazo, FGTS,
+  financiamento) e **valida o JSON** antes de gravar — saída inválida não grava nada, e o
+  conhecimento existente nunca é sobrescrito (`NOTAS-v1190.md`).
+- **(v1190)** Notificação do lembrete diário **não leva mais nome de cliente** pra tela bloqueada
+  do celular (`NOTAS-v1190.md`).
 
 ## 8. Pendências conhecidas
 

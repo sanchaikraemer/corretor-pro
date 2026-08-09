@@ -6,9 +6,13 @@ import assert from "node:assert/strict";
 // claro que não bastava esconder na tela: queria o código junto ("não adianta só omitir a
 // bolinha na tela... não quero isso, é desnecessário esse negócio de bolinha"). Removido o
 // elemento (chr-dot), o cálculo da cor (dotCor) e as regras de CSS/grid que reservavam espaço
-// pra ele — sem tocar no sinal de prioridade em si (nivel/clienteAguardandoVoce), que continua
-// decidindo a ORDEM da fila e o texto do title de "dias" (isso é um pedido diferente, não foi o
-// que o dono pediu aqui).
+// pra ele — sem tocar, na época, no sinal de prioridade em si (nivel/clienteAguardandoVoce), que
+// continuava decidindo a ORDEM da fila e o texto do title de "dias".
+//
+// v1190 — esse sinal foi removido de vez (ver NOTAS-v1190.md): a bolinha tinha saído da tela em
+// 1050, mas a coisa que ela desenhava — "cliente está esperando sua resposta", deduzido de quem
+// falou por último no retrato importado — continuou mandando na prioridade por 140 versões. Agora
+// não existe mais nem o sinal, nem o nível 1, nem o title que ele escolhia.
 
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
@@ -25,9 +29,10 @@ assert.match(app, /grid-template-columns:minmax\(0,1\.05fr\) minmax\(0,\.7fr\) 2
 assert.match(app, /grid-template-columns:minmax\(0,1fr\) auto;grid-template-areas:"nm dd" "bar pr"/,
   "grid mobile não reserva mais espaço pra bolinha");
 
-// O sinal de prioridade em si (usado pra ORDENAR a fila e pro title de "dias") continua intacto —
-// só o indicador visual saiu. Não é escopo desta mudança mexer nisso.
-assert.match(app, /clienteAguardandoVoce/, "o sinal de prioridade clienteAguardandoVoce continua existindo (não foi pedido remover)");
-assert.match(app, /nivel === 1/, "a lógica de nivel (usada no title de dias) continua existindo");
+// v1190 — a linha da Home não calcula mais nível nenhum: o único uso que restava era escolher o
+// title "Cliente esperando sua resposta há N dias".
+assert.doesNotMatch(rowSrc, /prioridadeAtendimento/, "a linha da Home não depende mais do motor de prioridade (v1190)");
+assert.doesNotMatch(rowSrc, /nivel/, "não sobrou cálculo de nível na linha da Home");
+assert.doesNotMatch(app.replace(/\/\/[^\n]*/g, ""), /nivel === 1/, "o nível 1 não existe mais em código (só em comentário histórico)");
 
 console.log("v1050-sem-bolinha-status-fila-hoje: ok");

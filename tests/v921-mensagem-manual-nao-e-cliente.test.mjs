@@ -12,8 +12,13 @@ import assert from 'node:assert/strict';
 // nem como o cliente pelo nome — e o código caía no padrão "em conversa individual, qualquer
 // outro autor é o contato", tratando SUA PRÓPRIA mensagem copiada como se fosse resposta do
 // cliente. Isso alimentava clienteAguardandoVoce=true (prioridadeAtendimento) e
-// filaPorFatos() explicitamente pula a proteção de 5 dias quando clienteAguardandoVoce é true
-// (linha "if(f.atendidoRecente && !f.clienteAguardandoVoce && ...)").
+// filaPorFatos() explicitamente pulava a proteção de 5 dias quando clienteAguardandoVoce era true.
+//
+// v1190 — a segunda metade dessa causa deixou de existir: NÃO HÁ MAIS prioridade nenhuma baseada
+// em "quem falou por último" (ver NOTAS-v1190.md). O que este teste protege continua valendo e
+// importa mais do que nunca: um registro manual seu (cópia de mensagem, nota, ligação, visita)
+// NUNCA pode ser lido como fala do cliente — quem faz essa leitura errada é a contagem de
+// mensagens do cliente, o "Aguardando cliente" e o texto da conversa que vai pra IA.
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
@@ -46,18 +51,18 @@ for(const type of ['nota', 'ligacao', 'visita', 'atendimento', 'observacao_manua
 const msgReal = { author: 'Mauricio Berlando', type: 'texto', text: 'Hoje e amanha estou fora da cidade' };
 assert.equal(ehMsgDoCliente(msgReal, 'mauricio'), true, 'mensagem real do cliente continua batendo pelo nome');
 
-// 4. Efeito em filaPorFatos: com clienteAguardandoVoce correto (false) e atendimento recente
-// (você copiou a mensagem ontem, dentro dos 5 dias), o lead fica protegido — não vira
-// prioridade máxima "Cliente aguardando" como no bug.
-const comFix = fpf({ atendidoRecente: true, clienteAguardandoVoce: false });
+// 4. Efeito em filaPorFatos: com atendimento recente (você copiou a mensagem ontem, dentro dos
+// 5 dias), o lead fica protegido — não vira prioridade máxima como no bug.
+const comFix = fpf({ atendidoRecente: true });
 assert.equal(comFix.nivel, 0, 'com o autor correto reconhecido, a proteção de 5 dias funciona (nível 0)');
 assert.equal(comFix.grupo, 'tratado-hoje', 'lead recém-retomado entra em "tratado-hoje", não em prioridade máxima');
-assert.notEqual(comFix.titulo, 'Cliente aguardando', 'não pode aparecer como "Cliente aguardando" quando foi você quem falou por último');
 
-// 5. Prova do bug (documentação): se clienteAguardandoVoce fosse (erradamente) true, a mesma
-// proteção de 5 dias furava — é exatamente o que o autor não reconhecido causava antes do fix.
-const semFix = fpf({ atendidoRecente: true, clienteAguardandoVoce: true });
-assert.equal(semFix.nivel, 1, 'demonstração do bug: clienteAguardandoVoce=true fura a proteção de 5 dias');
-assert.equal(semFix.titulo, 'Cliente aguardando');
+// 5. v1190 — a rota de fuga do bug foi fechada na raiz: mesmo que alguém volte a marcar
+// "o cliente falou por último", a proteção de 5 dias NÃO fura mais. Antes isto devolvia nível 1
+// com o título "Cliente aguardando".
+const aindaProtegido = fpf({ atendidoRecente: true, clienteAguardandoVoce: true });
+assert.equal(aindaProtegido.nivel, 0, 'nem marcando o sinal antigo o descanso pós-atendimento pode ser furado');
+assert.equal(aindaProtegido.grupo, 'tratado-hoje');
+assert.notEqual(aindaProtegido.titulo, 'Cliente aguardando', 'o título "Cliente aguardando" não existe mais em lugar nenhum');
 
 console.log('v921-mensagem-manual-nao-e-cliente: ok');

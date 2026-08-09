@@ -14,18 +14,24 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // o cliente depois de exportar, o app continuava achando que a bola estava com ele e empurrava
 // esse lead pro topo por palpite.
 //
-// A checagem da despedida NÃO foi removida: ela continua valendo onde tem lastro — nas regras de
-// QUEM ENTRA na fila (emJanelaDeEspera / entraEmRetomada) e na etiqueta "Cliente aguardando" do
-// cartão. Este teste agora trava as duas coisas: o bônus fora da ordem, a checagem viva no resto.
+// v1190 — E AGORA A PREMISSA SAIU DE TODO O RESTO. A v1158 tinha deixado a checagem viva "onde
+// tem lastro": nas regras de QUEM ENTRA na fila (entraEmRetomada) e na etiqueta do cartão
+// (nível 1 / "Cliente aguardando"). A auditoria mostrou que esses dois lugares não tinham lastro
+// nenhum — era a MESMA inferência, decidindo prioridade máxima e furando o descanso
+// pós-atendimento. Os dois foram removidos, e com eles a peneira ultimaMsgClientePedeResposta:
+// sem nenhuma decisão baseada em "quem falou por último", não sobrou o que peneirar.
+//
+// Este teste virou a trava dessa regra: nem a ORDEM nem a ENTRADA da fila podem consultar quem
+// falou por último.
 
 const fnSrc = app.match(/function cpProbabilidadeFechamento\(l\)\{[\s\S]*?\n\}/);
 assert.ok(fnSrc, 'cpProbabilidadeFechamento não encontrada em app.js');
 const fn = fnSrc[0];
 
-// ── 1. A ordem da fila não pode mais palpitar sobre "quem falou por último" ────────────────────
+// ── 1. A ordem da fila não pode palpitar sobre "quem falou por último" ─────────────────────────
 assert.doesNotMatch(fn, /clienteEsperaVoce/, 'o bônus não pode voltar pra ordem da fila');
 assert.doesNotMatch(fn, /ultimaMsgClientePedeResposta/,
-  'a ordem da fila não consulta mais quem falou por último (v1158 — o app não vê o WhatsApp ao vivo)');
+  'a ordem da fila não consulta quem falou por último (v1158 — o app não vê o WhatsApp ao vivo)');
 assert.doesNotMatch(fn, /daysSinceLastTouch/,
   'nem a data da última mensagem trocada — era usada só por esse bônus');
 
@@ -42,46 +48,55 @@ const base = { daysSinceClientReply: 3, __msgs: 4, clientMessageDays: 2, clientQ
 assert.equal(
   cpProbabilidadeFechamento({ ...base, daysSinceLastTouch: 0 }),
   cpProbabilidadeFechamento({ ...base, daysSinceLastTouch: 999 }),
-  'quem falou por último não move mais a fila'
+  'quem falou por último não move a fila'
 );
 assert.equal(
   cpProbabilidadeFechamento({ ...base, __last: { falante: 'contato', m: { text: 'Consegue me mandar a planta?' } } }),
   cpProbabilidadeFechamento({ ...base, __last: { falante: 'contato', m: { text: 'Obrigado pela atenção' } } }),
-  'pergunta ou despedida por último: mesma nota — a fila não adivinha mais isso'
+  'pergunta ou despedida por último: mesma nota — a fila não adivinha isso'
 );
 
-// ── 2. A checagem da despedida continua viva onde tem lastro ───────────────────────────────────
-const helperSrc = app.match(/function ultimaMsgClientePedeResposta\(l\)\{[\s\S]*?\n\}/);
-assert.ok(helperSrc, 'ultimaMsgClientePedeResposta não pode ser removida — as regras de entrada usam');
-const helperFn = helperSrc[0];
-assert.match(helperFn, /ui670UltimaMensagemReal/, 'usa a última mensagem real do cliente pra decidir se pede resposta');
-assert.match(helperFn, /falante !== "contato"/, 'só avalia a despedida quando quem falou por último foi o contato');
+// ── 2. v1190: a peneira saiu, e nenhuma regra de ENTRADA pode consultá-la ──────────────────────
+assert.doesNotMatch(app, /function ultimaMsgClientePedeResposta\s*\(/,
+  'ultimaMsgClientePedeResposta foi removida na v1190 — se voltou, a inferência proibida voltou junto');
 
-const ultimaPedeResposta = eval(`
-  const ui670UltimaMensagemReal = (l) => l.__last || null;
-  ${helperFn}
-  ultimaMsgClientePedeResposta;
-`);
-assert.equal(ultimaPedeResposta({ __last: { falante: 'contato', m: { text: 'Obrigado pela atenção' } } }), false,
-  'despedida não é pedido de resposta');
-assert.equal(ultimaPedeResposta({ __last: { falante: 'contato', m: { text: 'Claro' } } }), false,
-  'um "Claro" isolado também não');
-assert.equal(ultimaPedeResposta({ __last: { falante: 'contato', m: { text: 'Consegue me mandar a planta?' } } }), true,
-  'pergunta de verdade, sim');
-assert.equal(ultimaPedeResposta({ __last: { falante: 'contato', m: { text: 'Me manda o valor atualizado' } } }), true,
-  'pedido explícito, sim');
-assert.equal(ultimaPedeResposta({ __last: null }), true,
-  'sem como checar, não trava nada (comportamento anterior)');
-
-// Os três lugares que continuam usando a checagem (regras de entrada e etiqueta do cartão).
 for (const [nome, re] of [
   ['entraEmRetomada', /function entraEmRetomada\(l\)\{[\s\S]*?\n\}/],
-  ['_prioridadeAtendimentoCalcular', /function _prioridadeAtendimentoCalcular\(l\)\{[\s\S]*?\n\}/]
+  ['_prioridadeAtendimentoCalcular', /function _prioridadeAtendimentoCalcular\(l\)\{[\s\S]*?\n\}/],
+  ['filaPorFatos', /function filaPorFatos\(f = \{\}\)\{[\s\S]*?\n\}/]
 ]) {
   const bloco = app.match(re);
   assert.ok(bloco, `${nome} não encontrada`);
-  assert.match(bloco[0], /ultimaMsgClientePedeResposta/,
-    `${nome} continua checando se a última fala do cliente pede resposta`);
+  const semComentarios = bloco[0].replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(semComentarios, /ultimaMsgClientePedeResposta|clienteAguardandoVoce/,
+    `${nome} não pode decidir nada a partir de quem falou por último (v1190)`);
 }
 
-console.log('v944-despedida-nao-conta-como-cliente-esperando: ok (atualizado pela v1158 — o bônus saiu da ordem da fila)');
+// ── 3. Comportamento, não só texto: lead contatado ontem, cliente perguntou depois → ESPERA ────
+const entraSrc = app.match(/function entraEmRetomada\(l\)\{[\s\S]*?\n\}/);
+const entraEmRetomada = eval(`
+  const emJanelaDeEspera = (l) => !!l.__janela;
+  const lembreteVencido = (l) => !!l.__lembreteVencido;
+  const lembreteFuturo = (l) => !!l.__lembreteFuturo;
+  const limiarRetomada = () => 5;
+  ${entraSrc[0]}
+  entraEmRetomada;
+`);
+const perguntouOntem = {
+  daysSinceLastInteraction: 1,
+  name: 'Maria',
+  recentMessages: [{ author: 'Maria', text: 'Consegue me mandar a planta?', iso: new Date().toISOString() }],
+  analysis: {}
+};
+assert.equal(entraEmRetomada(perguntouOntem), false,
+  'contato de ontem: a pergunta do cliente no retrato importado não antecipa a retomada (v1190)');
+// O que antecipa continua sendo fato com data.
+assert.equal(entraEmRetomada({ ...perguntouOntem, __lembreteVencido: true }), true,
+  'lembrete vencido continua liberando na hora');
+assert.equal(entraEmRetomada({ ...perguntouOntem, analysis: { confirmedAppointments: [{ quando: 'hoje às 15h' }] } }), true,
+  'compromisso pra hoje continua liberando na hora');
+// Passado o prazo normal, ele volta sozinho — ninguém fica preso.
+assert.equal(entraEmRetomada({ ...perguntouOntem, daysSinceLastInteraction: 9 }), true,
+  'passado o prazo de descanso, o lead volta pela retomada por tempo');
+
+console.log('v944-despedida-nao-conta-como-cliente-esperando: ok (v1190 — a premissa saiu de toda a fila)');
