@@ -1379,15 +1379,27 @@ export const APRENDIZADO_PENDENTE_V2_PREFIX = "corretor-aprendizado-pendente-v2:
 // exatamente o comportamento de hoje, tudo da conta original.
 export const ORGANIZACAO_PADRAO_LEGADA = "00000000-0000-0000-0000-000000000001";
 
-// v1002 — grava em direciona_config já com dono (organization_id). Enquanto a migração 0004
-// não tiver sido aplicada no banco, a regra de unicidade nova ("por corretor + chave") ainda
-// não existe — nesse caso cai na regra antiga (chave global), continuando a funcionar igual
-// hoje, mas já carimbando o dono na linha.
+// v1002 — grava em direciona_config já com dono (organization_id), pela regra "um Cérebro por
+// corretor + chave" (migrações 0004/0005).
+//
+// v1185 — AQUI EXISTIA UMA RESERVA QUE NÃO PODE MAIS EXISTIR. Se a regra por corretor não fosse
+// encontrada, a gravação caía na regra antiga (`onConflict: "chave"`), da época em que a
+// configuração era global: uma chave só pro sistema inteiro. Num app multiempresa isso significa
+// uma conta gravar POR CIMA da configuração de outra — as três auditorias de 08/2026 apontaram
+// exatamente este trecho. Agora, se a regra por corretor faltar no banco, o gravar FALHA com um
+// aviso claro em vez de escrever no lugar errado: perder um salvamento é chateação, misturar o
+// Cérebro de dois corretores é estrago que ninguém desfaz.
 export async function upsertConfigComOrganizacao(supabase, organizationId, payload) {
   const comOrg = { ...payload, organization_id: organizationId || ORGANIZACAO_PADRAO_LEGADA };
   const tentativa = await supabase.from("direciona_config").upsert(comOrg, { onConflict: "organization_id,chave" });
   if (tentativa?.error && /no unique or exclusion constraint|42P10/i.test(tentativa.error.message || "")) {
-    return supabase.from("direciona_config").upsert(comOrg, { onConflict: "chave" });
+    return {
+      ...tentativa,
+      error: {
+        ...tentativa.error,
+        message: "Banco desatualizado: falta a regra que separa a configuração de cada corretor (migrações 0004/0005). Nada foi salvo — salvar assim gravaria por cima da configuração de outra conta. Rode as migrações pendentes (veja /api/diagnostico?mode=banco) e tente de novo."
+      }
+    };
   }
   return tentativa;
 }

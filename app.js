@@ -7141,15 +7141,10 @@ async function cp7SincronizarCerebroConfigInicial(){
 }
 cp7SincronizarCerebroConfigInicial();
 
-let ultimoSqlCerebro = "";
-function copiarSqlCerebro(){
-  if(!ultimoSqlCerebro){ toast("Nada para copiar."); return; }
-  navigator.clipboard?.writeText(ultimoSqlCerebro).then(
-    ()=>toast("SQL copiado! Cole no SQL Editor do Supabase e clique em Run."),
-    ()=>toast("Não consegui copiar. Copie manualmente.")
-  );
-}
-window.copiarSqlCerebro = copiarSqlCerebro;
+// v1185 — aqui existia um botão "Copiar SQL" que copiava um comando de criar tabela vindo do
+// servidor. O comando era do desenho antigo (um Cérebro só pro sistema inteiro, sem separação por
+// corretor); rodá-lo hoje juntaria a configuração de contas diferentes na mesma linha. As três
+// auditorias de 08/2026 pediram a retirada. O aviso agora só diz o que houve.
 
 async function salvarCerebro(){
   const diasRaw = qs("#cerebroDiasImportacao")?.value;
@@ -7185,9 +7180,8 @@ async function salvarCerebro(){
     const res = await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(configSanitizado) });
     const data = await res.json();
     if(data?.warning){
-      ultimoSqlCerebro = data.sqlNecessario || "";
-      status.innerHTML = '<span style="color:var(--morno)">Salvo neste aparelho. Para sincronizar entre celular e computador, crie a tabela do Cérebro no banco (uma vez só).'
-        + (ultimoSqlCerebro ? ' <button type="button" onclick="copiarSqlCerebro()" style="background:transparent;border:1px solid var(--line);color:var(--morno);border-radius:999px;padding:2px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-left:2px">Copiar SQL</button>' : '')
+      status.innerHTML = '<span style="color:var(--morno)">Salvo neste aparelho, mas ainda não no servidor — então não sincroniza entre celular e computador. '
+        + escapeHtml(String(data.proximoPasso || "Fale com o suporte para acertar o banco."))
         + '</span>';
     } else if(data?.ok){
       status.textContent = "Salvo no banco.";

@@ -1,8 +1,9 @@
-import { resolveOrganizationId, getSupabaseAdmin, getPlatformAdminUserId } from "./_persistence.js";
-// Endpoint de bastidor consolidado. Faz 3 trabalhos via ?mode=:
+import { resolveOrganizationId, getSupabaseAdmin, getPlatformAdminUserId, conferirMigracoesDoBanco, MIGRACAO_MINIMA_EXIGIDA } from "./_persistence.js";
+// Endpoint de bastidor consolidado. Faz 4 trabalhos via ?mode=:
 //   ?mode=status (padrão) → checa variáveis de ambiente (OpenAI + Supabase)
 //   ?mode=openai          → testa a chave OpenAI de verdade (models.list + chat)
 //   ?mode=bucket          → configura o bucket do Supabase Storage p/ ZIPs grandes
+//   ?mode=banco           → diz quais migrações estão MESMO aplicadas no banco (v1185)
 // Unifica os antigos api/status.js, api/diagnostico-openai.js e api/configurar-bucket.js
 // (economiza vagas de Serverless Function no plano Hobby da Vercel).
 import { createClient } from "@supabase/supabase-js";
@@ -32,6 +33,13 @@ export default async function handler(req, res) {
     const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
     if (!admin) return json(res, 403, { ok: false, error: "Ajustar o armazenamento é uma ação exclusiva do administrador da plataforma." });
     return modoBucket(res);
+  }
+  // mode=banco lista o estado das migrações — infraestrutura da plataforma inteira, e a lista
+  // conta onde estão as travas de segurança. Mesma porta do mode=bucket: só o administrador.
+  if (mode === "banco") {
+    const admin = await getPlatformAdminUserId(req, getSupabaseAdmin());
+    if (!admin) return json(res, 403, { ok: false, error: "Conferir o banco é uma ação exclusiva do administrador da plataforma." });
+    return modoBanco(res);
   }
   // mode=status/openai continuam abertos a qualquer corretor autenticado (telas reais do app
   // usam pra checar se a IA está respondendo) — mas sem revelar prefixo/final da chave OpenAI
@@ -185,6 +193,45 @@ function dicaPorErro(teste) {
     return "Região do servidor não suportada pela OpenAI. Use OPENAI_BASE_URL com proxy em região aceita.";
   }
   return "Verifique o erro exato acima na documentação da OpenAI.";
+}
+
+// ---------- mode=banco (v1185) ----------
+// Responde a pergunta que até agora só dava pra responder abrindo o Supabase e olhando função por
+// função: "o banco que está no ar tem TODAS as travas que este código supõe que existem?".
+async function modoBanco(res) {
+  const supabase = getSupabaseAdmin();
+  const conferencia = await conferirMigracoesDoBanco(supabase);
+
+  if (!conferencia.disponivel) {
+    return json(res, 200, {
+      ok: false,
+      conferenciaDisponivel: false,
+      minimaExigida: MIGRACAO_MINIMA_EXIGIDA,
+      resumo: conferencia.motivo,
+      proximoPasso: conferencia.registroAusente
+        ? "Abra o Supabase → SQL Editor → New query, cole supabase/migrations/0017_registro_de_migracoes.sql inteiro e clique em Run."
+        : null
+    });
+  }
+
+  const faltando = conferencia.faltando || [];
+  const resumo = faltando.length
+    ? `O banco está atrás do código: ${faltando.length} migração(ões) sem aplicar (${faltando.map(f => f.numero).join(", ")}). Enquanto isso, as travas dessas migrações NÃO existem no banco que está no ar.`
+    : "Banco em dia: todas as migrações que este código supõe estão aplicadas de verdade.";
+
+  return json(res, 200, {
+    ok: faltando.length === 0,
+    conferenciaDisponivel: true,
+    emDia: !!conferencia.emDia,
+    minimaExigida: conferencia.minimaExigida,
+    versaoSeguida: conferencia.versaoSeguida,
+    aplicadas: conferencia.aplicadas,
+    faltando,
+    resumo,
+    proximoPasso: faltando.length
+      ? `Abra o Supabase → SQL Editor → New query e rode, na ordem: ${faltando.map(f => f.arquivo).join(", ")}. Depois recarregue esta página — a conferência é refeita a cada chamada.`
+      : null
+  });
 }
 
 // ---------- mode=bucket (antigo api/configurar-bucket.js) ----------

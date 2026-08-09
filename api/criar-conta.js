@@ -8,9 +8,13 @@
 // 24h e recusa a partir de um limite folgado (ver limiteCadastrosPorConexaoDia).
 //
 // A trava só é inviolável com a migração 0013 aplicada — é ela que tira do navegador o direito de
-// chamar criar_empresa_e_dono direto (a chave "anon" do Supabase é pública). Sem a migração, esta
-// rota funciona igual, mas o caminho antigo continua aberto por fora; cadastro.html/entrar.html
-// mantêm o caminho antigo como reserva justamente pra nada quebrar antes de a migração ser rodada.
+// chamar criar_empresa_e_dono direto (a chave "anon" do Supabase é pública).
+//
+// v1185 — cadastro.html e entrar.html NÃO têm mais caminho de reserva pelo navegador. Ele existia
+// pra ninguém ficar sem se cadastrar antes de a 0013 ser aplicada, mas virou o contrário do que
+// devia: "se a trava de segurança estiver faltando, volte a usar o caminho sem trava" (apontado
+// pelas três auditorias de 08/2026). A 0013 está aplicada; quem quiser conferir de verdade,
+// /api/diagnostico?mode=banco pergunta ao banco em vez de acreditar em documentação.
 import {
   getSupabaseAdmin,
   requireLoginSemEmpresa,
@@ -86,14 +90,15 @@ export default async function handler(req, res, { supabase: supabaseInjetado } =
   });
 
   if (error) {
-    // Migração 0013 ainda não rodada: a função não existe. Devolvemos um aviso claro pro
-    // navegador cair no caminho antigo (que continua funcionando até a migração ser aplicada).
+    // Migração 0013 ainda não rodada: a função não existe. v1185 — isso agora é um diagnóstico,
+    // não um convite pro navegador criar a empresa por fora: banco incompleto tem que aparecer,
+    // não ser contornado em silêncio. O texto vai em português porque quem lê é o corretor.
     const semFuncao = /function .* does not exist|could not find the function|schema cache/i.test(error.message || "");
     return json(res, semFuncao ? 501 : 500, {
       ok: false,
       migracaoPendente: semFuncao || undefined,
       error: semFuncao
-        ? "A criação de conta pelo servidor ainda não foi ligada neste banco (rode supabase/migrations/0013_limite_cadastro_por_conexao.sql)."
+        ? "O sistema de contas ainda não foi ligado neste banco. Fale com o suporte: falta rodar a migração 0013 (confira em /api/diagnostico?mode=banco)."
         : (error.message || "Não foi possível criar a empresa.")
     });
   }

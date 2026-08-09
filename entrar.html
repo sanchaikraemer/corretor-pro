@@ -158,10 +158,11 @@ async function entrar() {
       // Cria com os dados de contato salvos no cadastro (options.data). Se a migração 0011 ainda
       // não tiver sido aplicada, a função é a versão antiga (só nome) e a chamada completa falha —
       // aí tentamos de novo só com o nome, pra o primeiro login nunca travar por isso.
-      // v1128 — primeiro tenta pelo servidor (api/criar-conta.js), igual ao cadastro: é lá que
+      // v1128 — a empresa é criada pelo servidor (api/criar-conta.js), igual ao cadastro: é lá que
       // fica a trava contra cadastro falso em massa. Quem já tem empresa recebe a que existe, sem
-      // gastar nenhuma tentativa da conexão. Só cai no caminho antigo (criar direto daqui) se a
-      // migração 0013 ainda não tiver sido aplicada — assim ninguém fica trancado fora do app.
+      // gastar nenhuma tentativa da conexão.
+      // v1185 — e é o ÚNICO caminho: se o servidor recusar, a pessoa vê o motivo em vez de a conta
+      // nascer por fora da trava (ver o bloco comentado logo abaixo).
       const criarPeloServidor = async () => {
         try {
           const token = loginData.session?.access_token;
@@ -180,28 +181,24 @@ async function entrar() {
           const corpo = await resposta.json().catch(() => ({}));
           if (resposta.ok && corpo.ok) return { feito: true };
           if (resposta.status === 429) return { feito: false, erroFinal: new Error(corpo.error || 'Limite de contas novas atingido nesta conexão.') };
-          return { feito: false };
+          // v1185 — recusa do servidor agora aparece com o motivo. Antes ela era engolida e o
+          // navegador criava a empresa por fora da trava; sem isso, o silêncio viraria a tela
+          // genérica de "não encontrei conta vinculada", sem dizer o que houve.
+          return { feito: false, erroFinal: new Error(corpo.error || 'Não foi possível criar sua empresa agora. Tente de novo em instantes ou fale com o suporte.') };
         } catch (_) { return { feito: false }; }
       };
 
-      const criar = async (comContato) => comContato
-        ? supabaseClient.rpc('criar_empresa_e_dono', {
-            p_nome: nomeParaEmpresa,
-            p_telefone: String(meta.telefone || '').trim(),
-            p_cidade: String(meta.cidade || '').trim(),
-            p_estado: String(meta.estado || '').trim(),
-            p_email: email
-          })
-        : supabaseClient.rpc('criar_empresa_e_dono', { p_nome: nomeParaEmpresa });
-
+      // v1185 — AQUI EXISTIA UM CAMINHO DE RESERVA QUE ANULAVA A PRÓPRIA TRAVA. Se o servidor
+      // avisasse que a migração 0013 não estava aplicada, o navegador criava a empresa sozinho,
+      // chamando o banco direto. Só que a 0013 existe justamente pra tirar esse poder do navegador
+      // (a chave pública do Supabase está no código, à vista de qualquer um) — ou seja, a regra
+      // era: "se a trava de segurança estiver faltando, volte a usar o caminho sem trava". As três
+      // auditorias de 08/2026 apontaram isso. A 0013 está aplicada no banco desde então (o próprio
+      // banco confirma em /api/diagnostico?mode=banco), e o caminho antigo já nem funcionava mais:
+      // a permissão foi revogada, então ele só devolvia um erro cru em inglês.
       const peloServidor = await criarPeloServidor();
       if (peloServidor.erroFinal) throw peloServidor.erroFinal;
-      let rpcError = null;
-      if (!peloServidor.feito) {
-        ({ error: rpcError } = await criar(true));
-        if (rpcError) ({ error: rpcError } = await criar(false));
-      }
-      if (!rpcError) {
+      if (peloServidor.feito) {
         const retry = await buscarVinculo();
         vinculo = retry.data;
       }

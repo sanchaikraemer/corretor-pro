@@ -5,8 +5,13 @@ import { ORGANIZACAO_PADRAO_LEGADA, upsertConfigComOrganizacao } from "../api/_p
 
 // v1002 — o Cérebro (e todo o aprendizado da IA guardado em direciona_config) passa a ser
 // separado por corretor: toda leitura filtra por organization_id e toda gravação carimba o
-// dono e usa a unicidade nova "por corretor + chave" (migração 0004), com fallback pra regra
-// antiga enquanto a migração não tiver sido aplicada no banco.
+// dono e usa a unicidade nova "por corretor + chave" (migrações 0004/0005).
+//
+// v1185 — o fallback pra regra antiga (gravar por `chave`, do tempo em que a configuração era uma
+// só pro sistema inteiro) FOI RETIRADO e este teste virou o contrário: com a unicidade por
+// corretor ausente, o gravar precisa FALHAR com aviso claro. As três auditorias de 08/2026
+// apontaram o trecho — na prática, faltar a separação por conta fazia o app desligar a separação
+// por conta, e uma conta gravava por cima da configuração de outra.
 
 // 1. A constante padrão do pipeline precisa ser a MESMA conta original de _persistence.js
 // (são definidas em arquivos separados só pra evitar import circular).
@@ -23,8 +28,9 @@ assert.equal(ORGANIZACAO_PADRAO_LEGADA, EMPRESA_PRINCIPAL_ID,
   assert.equal(chamadas[0].payload.organization_id, "org-teste", "gravação precisa carimbar o dono na linha");
 }
 
-// …e, se a migração 0004 ainda não rodou no banco (a unicidade nova não existe), cai na regra
-// antiga sem quebrar — continuando a carimbar o dono.
+// …e, se a unicidade por corretor não existir no banco (migrações 0004/0005 não aplicadas), a
+// gravação PARA. Nada de tentar de novo pela chave global: aquilo escreveria na linha de outra
+// conta. Perder um salvamento é chateação; misturar o Cérebro de dois corretores não tem volta.
 {
   const chamadas = [];
   const fake = { from() { return { upsert(payload, opts) {
@@ -35,10 +41,10 @@ assert.equal(ORGANIZACAO_PADRAO_LEGADA, EMPRESA_PRINCIPAL_ID,
     return Promise.resolve({ error: null });
   } }; } };
   const r = await upsertConfigComOrganizacao(fake, "org-teste", { chave: "direciona-cerebro", valor: {} });
-  assert.equal(chamadas.length, 2, "com a unicidade nova ausente, precisa tentar de novo com a regra antiga");
-  assert.equal(chamadas[1].opts.onConflict, "chave");
-  assert.equal(chamadas[1].payload.organization_id, "org-teste", "mesmo no fallback, o dono precisa ser carimbado");
-  assert.equal(r.error, null);
+  assert.equal(chamadas.length, 1, "sem a unicidade por corretor, NÃO pode existir segunda tentativa pela chave global");
+  assert.ok(r.error, "a gravação precisa falhar em vez de escrever no lugar errado");
+  assert.match(String(r.error.message), /Banco desatualizado/i,
+    "o erro precisa dizer, em português, que o banco está atrás — e que nada foi salvo");
 }
 
 // 3. Ponta a ponta na rota do Cérebro (api/cerebro-config.js) contra um servidor falso:
