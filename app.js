@@ -10440,7 +10440,14 @@ function cpFilaFazerAgora(items){
     }
     const nuncaAtendido = !(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l));
     const passouPrazo = !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l));
-    return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (nuncaAtendido || passouPrazo);
+    // v1188 — o descanso pós-atendimento existe pra "EU falei e ele ainda não respondeu" — nunca
+    // pro contrário. Se o cliente respondeu DEPOIS do meu atendimento pedindo algo, a bola voltou
+    // pra mim AGORA: ele fura o descanso e entra na fila do dia (auditoria comercial de
+    // 09/08/2026 — o caso "atendi ontem, ele respondeu hoje perguntando da entrada" ficava
+    // invisível por até 5 dias).
+    const clienteRespondeu = (typeof cp786ClienteRespondeu==='function' && cp786ClienteRespondeu(l))
+      && (typeof ultimaMsgClientePedeResposta!=='function' || ultimaMsgClientePedeResposta(l));
+    return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (clienteRespondeu || nuncaAtendido || passouPrazo);
   });
   // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
   // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
@@ -11115,6 +11122,20 @@ function cpAguardandoResposta(l){
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
   if(cp786TemCompromisso(l)) return 'programados';
+  // v1188 — A CATEGORIA "CLIENTE RESPONDEU" NUNCA TINHA SIDO LIGADA. Auditoria comercial de
+  // 09/08/2026, rodando o app de verdade no navegador com uma carteira de teste: um cliente que
+  // respondeu HÁ 3 HORAS pedindo condição de entrada ficou invisível em TODAS as superfícies da
+  // Home — fora do "Fazer agora" (o descanso pós-atendimento bloqueava), fora de "Aguardando
+  // cliente" (essa exige que EU tenha falado por último) e a fatia "Cliente respondeu" do
+  // gráfico permanentemente em 0%. O detector (cp786ClienteRespondeu) existia, a ordenação já
+  // colocava 'respondeu' em primeiro lugar, o badge "Responder" existia — só ninguém PRODUZIA a
+  // categoria. É a regra número 1 do próprio produto ("cliente respondeu e não recebeu resposta"
+  // vem antes de tudo, decisão do dono na v826), perdida na troca de geração da Home.
+  //
+  // A guarda de "pede resposta" é a mesma da v1017: um "Obrigada!" de despedida não vira
+  // prioridade — só fala que realmente espera retorno (pergunta ou pedido).
+  if(cp786ClienteRespondeu(l,modelo,ultimaReal)
+     && (typeof ultimaMsgClientePedeResposta!=='function' || ultimaMsgClientePedeResposta(l))) return 'respondeu';
   // v1071 — "aguardando" só vale ENQUANTO ainda está dentro do prazo de descanso configurado
   // (emJanelaDeEspera): sem esse limite, o mesmo cliente ficava "aguardando" pra sempre mesmo
   // depois de já ter passado do prazo (quando ele já reaparece em "Fazer agora") — os dois
@@ -11742,7 +11763,25 @@ function cpAppointmentData(lead){
     time=`${prefixo} · ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
     text=[lead?.analysis?.lembrete?.motivo||'Lembrete',produtosLabel(lead)||''].filter(Boolean).join(' · ');
   }
-  return {time,text:text||'Compromisso',sortTs:escolhido?.ts||lembreteTs||Number.MAX_SAFE_INTEGER};
+  // v1188 — COMPROMISSO VENCIDO NÃO PODE SE APRESENTAR COMO "Hoje". Auditoria comercial de
+  // 09/08/2026: um retorno combinado que venceu ANTEONTEM aparecia no box "Próximos compromissos"
+  // com o rótulo "Hoje" (era só o valor padrão da variável, não uma data de verdade) e o chip
+  // azul "Agenda" — ou seja, o esquecimento se vestia de coisa em dia. A regra do produto sempre
+  // foi a oposta: compromisso vencido fica em Programados COM DESTAQUE DE ATRASADO até o corretor
+  // marcar atendimento (comentário da própria cp786TemCompromisso). O destaque agora existe:
+  // rótulo "Venceu há N dias" e a flag `atrasado`, que o card usa pra pintar o chip de vermelho.
+  // Vencido também ordena PRIMEIRO (o timestamp fica no passado, antes de qualquer futuro).
+  let atrasado=false;
+  if(!escolhido && !usarLembrete){
+    const venc=(typeof cp786CompromissoAtrasado==='function')?cp786CompromissoAtrasado(lead):null;
+    if(venc){
+      atrasado=true;
+      time=venc.dias===0?'Venceu hoje':venc.dias===1?'Venceu ontem':`Venceu há ${venc.dias} dias`;
+      text=[lead?.analysis?.lembrete?.motivo||'Compromisso combinado',produtosLabel(lead)||''].filter(Boolean).join(' · ');
+      return {time,text:text||'Compromisso',sortTs:Date.now()-venc.dias*86400000,atrasado};
+    }
+  }
+  return {time,text:text||'Compromisso',sortTs:escolhido?.ts||lembreteTs||Number.MAX_SAFE_INTEGER,atrasado};
 }
 function cpDaysText(lead){ const d=Number(lead?.daysSinceLastInteraction); if(Number.isFinite(d)) return d<=0?"Hoje":d===1?"Há 1 dia":`Há ${d} dias`; return "—"; }
 function cpNextAction(lead){
@@ -11972,11 +12011,13 @@ function renderCorretorProDashboard(items, all){
   if(apBox){
     apBox.innerHTML=withAppointment.length?withAppointment.slice(0,4).map(l=>{
       const meta=cpPriorityMeta(l), ap=appointmentMeta.get(l), id=String(l.id||"");
+      // v1188 — compromisso vencido: horário em vermelho e chip "Vencido" (hot), em vez do azul
+      // "Agenda" que fazia atraso parecer coisa em dia (auditoria comercial de 09/08/2026).
       return `<button type="button" class="cp-appointment" onclick='cpOpenLead(${JSON.stringify(id)})'>
-        <span class="cp-time">${cpEscape(ap.time)}</span>
+        <span class="cp-time"${ap.atrasado?' style="color:var(--cp-coral);font-weight:950"':''}>${cpEscape(ap.time)}</span>
         <span class="cp-lead-avatar" style="${cpAvatarStyle(l.name)}">${cpInitials(l.name)}</span>
         <span class="cp-appointment-copy"><strong>${cpEscape(l.name||"Cliente")}</strong><small>${cpEscape(ap.text)}</small></span>
-        <span class="cp-status ${meta.cls}">${meta.label}</span>
+        <span class="cp-status ${ap.atrasado?'hot':meta.cls}">${ap.atrasado?'Vencido':meta.label}</span>
       </button>`;
     }).join(""):`<div class="cp-empty cp-empty-compact"><strong>Nenhum compromisso registrado</strong><span>Visitas, reuniões e lembretes aparecerão aqui.</span></div>`;
   }
@@ -11997,7 +12038,11 @@ function renderCorretorProDashboard(items, all){
   if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+pp)}%,var(--cp-slate) ${Math.min(100,hp+rp+pp)}% ${Math.min(100,hp+rp+pp+ap)}%,var(--cp-muted) ${Math.min(100,hp+rp+pp+ap)}% 100%)`;
   cpSetText("cpTotalAtendimentos", items.length);
   const legend=qs("#cpTempLegend");
+  // v1188 — "Cliente respondeu" entrou na legenda: a fatia laranja sempre existiu no gráfico,
+  // mas sem linha na legenda o número ficava invisível (e até esta versão a categoria nunca era
+  // produzida — ver cp786Categoria).
   if(legend) legend.innerHTML=[
+    ["Cliente respondeu",counts.respondeu,cpPct(counts.respondeu,total),"var(--cp-orange)"],
     ["Fazer agora",counts.agora,cpPct(counts.agora,total),"var(--cp-coral)"],
     ["Agenda",counts.programados,cpPct(counts.programados,total),"var(--cp-blue)"],
     ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"],
