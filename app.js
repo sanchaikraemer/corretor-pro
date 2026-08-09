@@ -10224,35 +10224,23 @@ function cp786UltimaMensagemReal(l){
   }
   return {m:null,i:-1,ts:0,falante:'desconhecido'};
 }
-function cp786UltimoFoiCliente(l,modelo=null,ultima=null){
-  const real=ultima||cp786UltimaMensagemReal(l);
-  if(real?.falante&&real.falante!=='desconhecido') return real.falante==='contato';
-  const mc=modelo||cp786Modelo(l), a=l?.analysis||{}, d=a?.diagnostico||{};
-  const canonico=String(mc?.contexto?.ultimaPessoaFalar||'').toLowerCase();
-  if(canonico) return /contato|cliente|lead|comprador|interessad/.test(canonico);
-  const autor=String(d.ultimaPessoa||d.ultimoAutor||a.ultimaPessoa||l?.lastMessageSender||l?.lastSender||'').toLowerCase();
-  return /cliente|contato|lead|comprador|interessad/.test(autor);
-}
-function cp786UltimaMensagemTs(l,ultima=null){
-  const real=ultima||cp786UltimaMensagemReal(l);
-  if(real?.m) return Number(real.ts)||0;
-  return cp786DataTs(l?.lastMessageAt||l?.lastInteractionAt);
-}
-function cp786UltimoAtendimentoTs(l){
-  const eventos=Array.isArray(l?.analysis?.aprendizado?.eventos)?l.analysis.aprendizado.eventos:[];
-  return eventos.reduce((max,e)=>e?.evento==='contato_manual'?Math.max(max,cp786DataTs(e.quando)):max,0);
-}
-function cp786ClienteRespondeu(l,modelo=null,ultima=null){
-  if(!leadEhAtivo(l)) return false;
-  const mc=modelo||cp786Modelo(l), real=ultima||cp786UltimaMensagemReal(l);
-  if(!cp786UltimoFoiCliente(l,mc,real)) return false;
-  const acao=mc?.acao||{}, status=String(acao.status||''), responsavel=String(acao.responsavel||'');
-  if(['sem-acao-urgente','aguardando-resposta','compromisso-agendado'].includes(status)||responsavel==='ninguem') return false;
-  const msgTs=cp786UltimaMensagemTs(l,real), atendimentoTs=cp786UltimoAtendimentoTs(l);
-  if(msgTs) return !atendimentoTs||msgTs>atendimentoTs;
-  // Sem horário confiável, mostra uma vez até o primeiro atendimento; depois não reaparece sozinho.
-  return !atendimentoTs;
-}
+// v1189 — AQUI MORAVA O DETECTOR "CLIENTE RESPONDEU" (e três ajudantes que só serviam a ele).
+// Saiu DE VEZ, por ordem do dono — e a v1188 é a prova de por que não bastava deixá-lo dormindo.
+//
+// A regra do produto (a mesma que tirou o bônus da fila na v1158, palavras do dono: "retire isso
+// e do código também, já te falei ontem que você não tem como saber, pois não é integrado com o
+// WhatsApp"): o app lê um RETRATO da conversa — o arquivo que o corretor exporta — não o
+// WhatsApp ao vivo. O corretor SEMPRE responde o cliente no WhatsApp, na hora. Uma mensagem do
+// cliente só entra no app quando ele mesmo a importa, e nesse momento o app já analisa e gera a
+// resposta — esse é o fluxo. Depois disso, "a última fala é do cliente" no retrato NÃO significa
+// cliente sem resposta: significa só que o corretor ainda não reimportou. Uma categoria fixa
+// "Cliente respondeu" construída em cima disso cobra o corretor por conversas que ele já
+// respondeu — o ruído exato que as v938/v1019/v1052 mataram (só o atendimento MARCADO decide).
+//
+// A v1188 achou esse detector órfão e o religou achando que era "feature perdida" — mesmo erro
+// da v1186 com o painel de duplicados (ver NOTAS-v1187: órfão não é feature perdida). Se você
+// está lendo isto com vontade de recriar um aviso de "cliente respondeu e você não viu": não dá
+// pra saber isso sem integração com o WhatsApp. Não invente.
 function cp786TemCompromisso(l){
   if(!leadEhAtivo(l)) return false;
   if(lembreteHojeOuFuturo(l)) return true;
@@ -10440,14 +10428,15 @@ function cpFilaFazerAgora(items){
     }
     const nuncaAtendido = !(typeof ultimoAtendimentoTs==='function' && ultimoAtendimentoTs(l));
     const passouPrazo = !(typeof emJanelaDeEspera==='function' && emJanelaDeEspera(l));
-    // v1188 — o descanso pós-atendimento existe pra "EU falei e ele ainda não respondeu" — nunca
-    // pro contrário. Se o cliente respondeu DEPOIS do meu atendimento pedindo algo, a bola voltou
-    // pra mim AGORA: ele fura o descanso e entra na fila do dia (auditoria comercial de
-    // 09/08/2026 — o caso "atendi ontem, ele respondeu hoje perguntando da entrada" ficava
-    // invisível por até 5 dias).
-    const clienteRespondeu = (typeof cp786ClienteRespondeu==='function' && cp786ClienteRespondeu(l))
-      && (typeof ultimaMsgClientePedeResposta!=='function' || ultimaMsgClientePedeResposta(l));
-    return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (clienteRespondeu || nuncaAtendido || passouPrazo);
+    // v1189 — a v1188 tinha posto aqui um furo no descanso pra "cliente que respondeu depois do
+    // atendimento". REVOGADO pelo dono, pela mesma razão da v1158: o app vê o retrato exportado,
+    // não o WhatsApp ao vivo — ele SEMPRE responde o cliente no WhatsApp, e a mensagem do cliente
+    // só chega aqui quando ele importa (momento em que o app já analisa e gera resposta). "Última
+    // fala é do cliente" dias depois só quer dizer "ainda não reimportou", nunca "cliente sem
+    // resposta". O furo trazia de volta pra fila lead já respondido — a regra v1069/v1052 fica
+    // como sempre foi: só NUNCA atendido ou prazo de descanso vencido, contado do atendimento
+    // MARCADO.
+    return !ehContatadoHoje(l) && !cp786TemCompromisso(l) && (nuncaAtendido || passouPrazo);
   });
   // v1024 — calcula a probabilidade de fechamento UMA VEZ por lead antes de ordenar, em vez de
   // dentro do comparador do .sort() (que chamava cpProbabilidadeFechamento de novo, do zero, a
@@ -11122,20 +11111,13 @@ function cpAguardandoResposta(l){
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
   if(cp786TemCompromisso(l)) return 'programados';
-  // v1188 — A CATEGORIA "CLIENTE RESPONDEU" NUNCA TINHA SIDO LIGADA. Auditoria comercial de
-  // 09/08/2026, rodando o app de verdade no navegador com uma carteira de teste: um cliente que
-  // respondeu HÁ 3 HORAS pedindo condição de entrada ficou invisível em TODAS as superfícies da
-  // Home — fora do "Fazer agora" (o descanso pós-atendimento bloqueava), fora de "Aguardando
-  // cliente" (essa exige que EU tenha falado por último) e a fatia "Cliente respondeu" do
-  // gráfico permanentemente em 0%. O detector (cp786ClienteRespondeu) existia, a ordenação já
-  // colocava 'respondeu' em primeiro lugar, o badge "Responder" existia — só ninguém PRODUZIA a
-  // categoria. É a regra número 1 do próprio produto ("cliente respondeu e não recebeu resposta"
-  // vem antes de tudo, decisão do dono na v826), perdida na troca de geração da Home.
-  //
-  // A guarda de "pede resposta" é a mesma da v1017: um "Obrigada!" de despedida não vira
-  // prioridade — só fala que realmente espera retorno (pergunta ou pedido).
-  if(cp786ClienteRespondeu(l,modelo,ultimaReal)
-     && (typeof ultimaMsgClientePedeResposta!=='function' || ultimaMsgClientePedeResposta(l))) return 'respondeu';
+  // v1189 — NÃO EXISTE (e não pode voltar a existir) uma categoria "cliente respondeu". A v1188
+  // produziu uma aqui por um dia e o dono revogou: o app não é integrado ao WhatsApp — ele lê o
+  // retrato que o corretor exporta, e o corretor SEMPRE responde o cliente no WhatsApp. Quando a
+  // resposta do cliente entra no app (na importação), o app já analisa e gera a resposta na hora;
+  // fora desse momento, "o cliente falou por último" no retrato só significa "ainda não
+  // reimportou". Uma categoria fixa disso cobra o corretor por conversa já respondida (mesma
+  // razão da v1158, que tirou o bônus equivalente da ordem da fila).
   // v1071 — "aguardando" só vale ENQUANTO ainda está dentro do prazo de descanso configurado
   // (emJanelaDeEspera): sem esse limite, o mesmo cliente ficava "aguardando" pra sempre mesmo
   // depois de já ter passado do prazo (quando ele já reaparece em "Fazer agora") — os dois
@@ -11146,7 +11128,7 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   return entraEmRetomada(l) ? 'agora' : 'sem-acao';                    // vale um toque? Fazer agora; senão, só em "Total de leads"
 }
 function cp786CategoriaLabel(c){
-  return ({agora:'Fazer agora',respondeu:'Cliente respondeu',programados:'Agenda',aguardando:'Aguardando cliente','sem-acao':'Sem ação agora'})[c]||'Sem ação agora';
+  return ({agora:'Fazer agora',programados:'Agenda',aguardando:'Aguardando cliente','sem-acao':'Sem ação agora'})[c]||'Sem ação agora';
 }
 function cp786CompromissoOrdemTs(l){
   let menor=Number.MAX_SAFE_INTEGER;
@@ -11219,7 +11201,7 @@ function cpCompromissosVencidosDoLead(l){
 }
 window.cpCompromissosVencidosDoLead=cpCompromissosVencidosDoLead;
 function cp786CompararConducao(a,b){
-  const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
+  const ordem={agora:0,programados:1,aguardando:2,'sem-acao':3};
   const ca=cp786Categoria(a),cb=cp786Categoria(b);
   const oa=ordem[ca]??9,ob=ordem[cb]??9;
   if(oa!==ob) return oa-ob;
@@ -11235,7 +11217,7 @@ function cp786CompararConducao(a,b){
 }
 function cp786OrdenarConducao(lista,metaPronto=null){
   const arr=Array.isArray(lista)?lista.slice():[];
-  const ordem={respondeu:0,agora:1,programados:2,aguardando:3,'sem-acao':4};
+  const ordem={agora:0,programados:1,aguardando:2,'sem-acao':3};
   const meta=new Map();
   for(const l of arr){
     let score=Number(l?._score);
@@ -11277,11 +11259,11 @@ function cp786ResumoAcao(l,modelo=null){
 }
 function cp786Badge(l,categoria=null){
   const c=categoria||cp786Categoria(l);
-  return ({agora:'Fazer agora',respondeu:'Responder',programados:'Agenda',aguardando:'Aguardar','sem-acao':'Sem ação'})[c]||'Abrir';
+  return ({agora:'Fazer agora',programados:'Agenda',aguardando:'Aguardar','sem-acao':'Sem ação'})[c]||'Abrir';
 }
 function cp786Classe(l,categoria=null){
   const c=categoria||cp786Categoria(l);
-  if(c==='agora'||c==='respondeu') return 'hot';
+  if(c==='agora') return 'hot';
   if(c==='programados') return 'warm';
   if(c==='aguardando'||c==='sem-acao') return 'low';
   return 'normal';
@@ -11294,8 +11276,6 @@ function cp786MetaConducao(l){
 function cp786PrecisaAcao(l){return cp786Categoria(l)==='agora';}
 function cp786AguardandoCliente(l){return cp786Categoria(l)==='aguardando';}
 window.cp786PrecisaAcao=cp786PrecisaAcao;
-window.cp786ClienteRespondeu=cp786ClienteRespondeu;
-window.cp786UltimoFoiCliente=cp786UltimoFoiCliente;
 window.cp786TemCompromisso=cp786TemCompromisso;
 window.cp786AguardandoCliente=cp786AguardandoCliente;
 window.cp786Categoria=cp786Categoria;
@@ -11446,20 +11426,19 @@ renderListasHome = function(ordenados){
   const ativos=(ordenados||[]).filter(leadEhAtivo);
   const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
   const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
-  const respondeu=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='respondeu'));
   const agora=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='agora'));
   const programados=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='programados'));
   const aguardando=cp786OrdenarConducao(ativos.filter(l=>categoriaDe(l)==='aguardando'));
-  const prioritarios=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i).slice(0,4);
+  const prioritarios=agora.slice(0,4);
   // Hotfix #807: este renderer intermediário também pode ser chamado durante a carga inicial.
   // Sem esta variável, a interpolação do botão "Ver todos" lançava ReferenceError e deixava
   // a Home presa no skeleton, embora os contadores já tivessem sido carregados.
   const filtroPrincipal=agora.length?'agora':programados.length?'programados':'aguardando';
   // As novas visões orientadas à ação são a fonte principal. Mantemos aliases internos
   // usados por rotinas antigas (voltar, histórico e atalhos) para não quebrar navegação.
-  const acaoHoje=[...respondeu,...agora].filter((x,i,a)=>a.findIndex(y=>String(y.id)===String(x.id))===i);
+  const acaoHoje=agora;
   state.gruposHome={
-    respondeu,agora,programados,aguardando,todos:ativos,
+    agora,programados,aguardando,todos:ativos,
     hoje:acaoHoje,
     retomada:agora,
     "acao-hoje":acaoHoje,
@@ -11727,7 +11706,6 @@ function cpEscape(v){ return escapeHtml(String(v == null ? "" : v)); }
 function cpInitials(name){ return String(name||"C").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "C"; }
 function cpPriorityMeta(lead){
   const categoria=typeof cp786Categoria==='function'?cp786Categoria(lead):'';
-  if(categoria==='respondeu') return {label:'Responder',cls:'hot',cor:'var(--cp-coral)'};
   if(categoria==='agora') return {label:'Fazer agora',cls:'hot',cor:'var(--cp-coral)'};
   if(categoria==='programados') return {label:'Agenda',cls:'warm',cor:'var(--cp-blue)'};
   if(categoria==='aguardando') return {label:'Aguardar',cls:'cold',cor:'var(--cp-slate)'};
@@ -12026,23 +12004,22 @@ function renderCorretorProDashboard(items, all){
   // a carteira inteira (ex.: 241) logo acima — números que não batem confundem mais do que
   // ajudam. Agora entra também "Prospecção" (sem-acao: conversa ainda rasa, <5 msgs do cliente),
   // e o total do gráfico passa a fechar com items.length (a carteira toda).
-  const counts={agora:0,respondeu:0,programados:0,aguardando:0,semAcao:0};
+  const counts={agora:0,programados:0,aguardando:0,semAcao:0};
   for(const l of items){
     const c=categoriaDe(l);
     if(c==='sem-acao') counts.semAcao++;
     else if(counts[c]!==undefined) counts[c]++;
   }
   const total=Math.max(1, items.length);
-  const hp=cpPct(counts.agora,total), rp=cpPct(counts.respondeu,total), pp=cpPct(counts.programados,total), ap=cpPct(counts.aguardando,total);
+  const hp=cpPct(counts.agora,total), pp=cpPct(counts.programados,total), ap=cpPct(counts.aguardando,total);
   const donut=qs("#cpTempDonut");
-  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-orange) ${hp}% ${hp+rp}%,var(--cp-blue) ${hp+rp}% ${Math.min(100,hp+rp+pp)}%,var(--cp-slate) ${Math.min(100,hp+rp+pp)}% ${Math.min(100,hp+rp+pp+ap)}%,var(--cp-muted) ${Math.min(100,hp+rp+pp+ap)}% 100%)`;
+  if(donut) donut.style.background=`conic-gradient(var(--cp-coral) 0 ${hp}%,var(--cp-blue) ${hp}% ${Math.min(100,hp+pp)}%,var(--cp-slate) ${Math.min(100,hp+pp)}% ${Math.min(100,hp+pp+ap)}%,var(--cp-muted) ${Math.min(100,hp+pp+ap)}% 100%)`;
   cpSetText("cpTotalAtendimentos", items.length);
   const legend=qs("#cpTempLegend");
-  // v1188 — "Cliente respondeu" entrou na legenda: a fatia laranja sempre existiu no gráfico,
-  // mas sem linha na legenda o número ficava invisível (e até esta versão a categoria nunca era
-  // produzida — ver cp786Categoria).
+  // v1189 — a linha "Cliente respondeu" saiu junto com a categoria (ver cp786Categoria): o app
+  // não tem como saber isso sem integração com o WhatsApp, e uma fatia fixa em 0% (ou pior, com
+  // número errado) só confunde. O gráfico fecha com as quatro fatias que têm lastro.
   if(legend) legend.innerHTML=[
-    ["Cliente respondeu",counts.respondeu,cpPct(counts.respondeu,total),"var(--cp-orange)"],
     ["Fazer agora",counts.agora,cpPct(counts.agora,total),"var(--cp-coral)"],
     ["Agenda",counts.programados,cpPct(counts.programados,total),"var(--cp-blue)"],
     ["Aguardando cliente",counts.aguardando,cpPct(counts.aguardando,total),"var(--cp-slate)"],
@@ -13091,7 +13068,7 @@ function ui670ScheduleHtml(lead){
 
   function notifyData(){
     const leads=(state?.todosLeads||state?.itemsAtivos||state?.leads||[]).filter(leadEhAtivo);
-    const counts={agora:0,respondeu:0,programados:0,aguardando:0};
+    const counts={agora:0,programados:0,aguardando:0};
     for(const l of leads){const c=cp786Categoria(l);if(counts[c]!==undefined)counts[c]++;}
     const atrasados=leads.filter(l=>typeof cp786CompromissoAtrasado==='function'&&cp786CompromissoAtrasado(l)).length;
     return {total:leads.length,...counts,acao:counts.agora,atrasados};
@@ -13534,14 +13511,14 @@ function ui670ScheduleHtml(lead){
   };
 
   function cp788Grupos(leads){
-    const grupos={agora:[],respondeu:[],programados:[],aguardando:[],todos:[]};
+    const grupos={agora:[],programados:[],aguardando:[],todos:[]};
     for(const l of (Array.isArray(leads)?leads:[])){
       if(typeof leadEhAtivo==='function'&&!leadEhAtivo(l)) continue;
       grupos.todos.push(l);
       const c=typeof cp786Categoria==='function'?cp786Categoria(l):'aguardando';
       if(grupos[c]) grupos[c].push(l);
     }
-    for(const k of ['agora','respondeu','programados','aguardando']) grupos[k]=typeof cp786OrdenarConducao==='function'?cp786OrdenarConducao(grupos[k]):grupos[k];
+    for(const k of ['agora','programados','aguardando']) grupos[k]=typeof cp786OrdenarConducao==='function'?cp786OrdenarConducao(grupos[k]):grupos[k];
     grupos.todos=typeof cp786OrdenarConducao==='function'?cp786OrdenarConducao(grupos.todos):grupos.todos;
     return grupos;
   }
@@ -13556,8 +13533,8 @@ function ui670ScheduleHtml(lead){
     const prioritarios=fontePrioridades.slice(0,4);
     const filtroPrincipal=grupos.agora.length?'agora':grupos.programados.length?'programados':'aguardando';
     state.gruposHome={
-      respondeu:grupos.respondeu,agora:grupos.agora,programados:grupos.programados,aguardando:grupos.aguardando,todos:ativos,
-      hoje:[...grupos.respondeu,...grupos.agora],retomada:grupos.agora,'acao-hoje':[...grupos.respondeu,...grupos.agora],
+      agora:grupos.agora,programados:grupos.programados,aguardando:grupos.aguardando,todos:ativos,
+      hoje:grupos.agora,retomada:grupos.agora,'acao-hoje':grupos.agora,
       'retomar-cuidado':[],'boa-sem-urgencia':[],'pode-aguardar':grupos.aguardando,'baixa-prioridade':[],
       'tratado-hoje':ativos.filter(l=>typeof ehContatadoHoje==='function'&&ehContatadoHoje(l))
     };

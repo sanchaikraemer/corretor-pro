@@ -26,8 +26,11 @@ assert.match(fn, /counts\.semAcao\+\+/, 'quem é "sem-acao" deve ser contado (co
 assert.match(fn, /\["Prospecção",counts\.semAcao,cpPct\(counts\.semAcao,total\),"var\(--cp-muted\)"\]/,
   'a legenda deve ter a 4ª linha "Prospecção" com a cor --cp-muted');
 
-// 3. O gráfico (conic-gradient) tem os 5 stops, terminando em --cp-muted até 100%.
-assert.match(fn, /var\(--cp-muted\) \$\{Math\.min\(100,hp\+rp\+pp\+ap\)\}% 100%/,
+// 3. O gráfico (conic-gradient) fecha a última fatia (--cp-muted) em 100%.
+// v1189 — a fatia "respondeu" (rp) saiu do gradiente junto com a categoria (o app não tem como
+// saber "cliente respondeu" sem integração com o WhatsApp — ver v1189-cliente-respondeu-nao-existe);
+// a regra deste teste continua a mesma: o donut fecha em 100% com a fatia de Prospecção.
+assert.match(fn, /var\(--cp-muted\) \$\{Math\.min\(100,hp\+pp\+ap\)\}% 100%/,
   'o conic-gradient deve fechar a última fatia (--cp-muted) em 100%');
 
 // 4. O rótulo embaixo do número no HTML não pode mais dizer só "atendimentos" (o número agora é
