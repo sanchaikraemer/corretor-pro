@@ -53,20 +53,54 @@ try {
     }
   }
 
-  // ── 2. Em produção, sem chave configurada, a API fica fechada ────────────────────────────────
+  // ── 2. v1190 — EM PRODUÇÃO O CAMINHO ANTIGO NASCE DESLIGADO ─────────────────────────────────
+  // Até a v1189 a segurança dependia de alguém LEMBRAR de marcar CORRETOR_PRO_LEGADO_DESLIGADO=sim
+  // na Vercel. Quem esquecesse ficava com a porta antiga aberta — e toda chamada por ela é tratada
+  // como sendo da conta original (os dados do próprio dono). O padrão se inverteu: em produção só
+  // entra com login, a menos que CORRETOR_PRO_LEGADO_ATIVO=sim seja definido de propósito.
   {
-    comoProducao({ CORRETOR_PRO_API_KEY: undefined, API_SECRET: undefined, CP_API_SECRET: undefined, ALLOW_UNPROTECTED_API: undefined });
+    comoProducao({ CORRETOR_PRO_API_KEY: "chave-secreta-de-verdade", CORRETOR_PRO_LEGADO_ATIVO: undefined, CORRETOR_PRO_LEGADO_DESLIGADO: undefined });
+    const res = respostaFalsa();
+    assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-secreta-de-verdade" } }, res), false,
+      "em produção, sem opt-in explícito, nem a chave certa entra");
+    assert.equal(res.statusCode, 401);
+    assert.match(res.corpo.error, /Entre com sua conta/i, "o aviso precisa dizer o que fazer");
+  }
+
+  // ── 3. Sem nenhuma variável ligada, requisição sem credencial nenhuma também é recusada ──────
+  {
+    comoProducao({ CORRETOR_PRO_API_KEY: undefined, API_SECRET: undefined, CP_API_SECRET: undefined, ALLOW_UNPROTECTED_API: "true", CORRETOR_PRO_LEGADO_ATIVO: undefined });
+    const res = respostaFalsa();
+    assert.equal(requireApiKey({ headers: {} }, res), false,
+      "em produção, sem login, a API recusa — nem ALLOW_UNPROTECTED_API abre");
+    assert.equal(res.statusCode, 401);
+  }
+
+  // ── 4. Com o opt-in explícito, o caminho antigo volta a funcionar (pra não travar ninguém) ────
+  {
+    comoProducao({ CORRETOR_PRO_API_KEY: "chave-secreta-de-verdade", CORRETOR_PRO_LEGADO_ATIVO: "sim", CORRETOR_PRO_LEGADO_DESLIGADO: undefined });
+    const errada = respostaFalsa();
+    assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-chutada" } }, errada), false, "chave errada continua recusada");
+    assert.equal(errada.statusCode, 401);
+    const certa = respostaFalsa();
+    assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-secreta-de-verdade" } }, certa), true,
+      "com CORRETOR_PRO_LEGADO_ATIVO=sim, a chave certa passa");
+  }
+
+  // ── 5. Com o opt-in ligado mas SEM chave configurada, a API não abre sozinha ──────────────────
+  {
+    comoProducao({ CORRETOR_PRO_API_KEY: undefined, API_SECRET: undefined, CP_API_SECRET: undefined, ALLOW_UNPROTECTED_API: undefined, CORRETOR_PRO_LEGADO_ATIVO: "sim" });
     const res = respostaFalsa();
     assert.equal(requireApiKey({ headers: {} }, res), false, "sem chave em produção, a API precisa recusar");
     assert.equal(res.statusCode, 500);
     assert.match(res.corpo.error, /configure CORRETOR_PRO_API_KEY/i);
   }
 
-  // ── 3. ALLOW_UNPROTECTED_API não vale em produção ────────────────────────────────────────────
-  // Era o buraco: sem chave e com essa variável ligada, qualquer pessoa na internet agia como a
-  // conta original — porque toda chamada sem login é tratada como sendo dela.
+  // ── 6. ALLOW_UNPROTECTED_API continua sem valer em produção, mesmo com o opt-in ───────────────
+  // Era o buraco original: sem chave e com essa variável ligada, qualquer pessoa na internet agia
+  // como a conta original — porque toda chamada sem login é tratada como sendo dela.
   {
-    comoProducao({ CORRETOR_PRO_API_KEY: undefined, ALLOW_UNPROTECTED_API: "true" });
+    comoProducao({ CORRETOR_PRO_API_KEY: undefined, ALLOW_UNPROTECTED_API: "true", CORRETOR_PRO_LEGADO_ATIVO: "sim" });
     const res = respostaFalsa();
     assert.equal(requireApiKey({ headers: {} }, res), false,
       "ALLOW_UNPROTECTED_API não pode abrir a API em produção");
@@ -74,28 +108,18 @@ try {
     assert.match(res.corpo.error, /sem login/i, "o erro precisa explicar o risco");
   }
 
-  // ── 4. Fora de produção ela continua valendo (é onde ela serve) ──────────────────────────────
+  // ── 7. Fora de produção o caminho antigo continua valendo sem opt-in (é onde ele serve) ──────
   {
-    comoProducao({ CORRETOR_PRO_API_KEY: undefined, ALLOW_UNPROTECTED_API: "true" });
+    comoProducao({ CORRETOR_PRO_API_KEY: undefined, ALLOW_UNPROTECTED_API: "true", CORRETOR_PRO_LEGADO_ATIVO: undefined });
     delete process.env.VERCEL_ENV;
     const res = respostaFalsa();
     assert.equal(requireApiKey({ headers: {} }, res), true,
       "em desenvolvimento a API pode rodar sem chave");
   }
 
-  // ── 5. Chave errada é recusada; chave certa passa ────────────────────────────────────────────
+  // ── 8. O interruptor da v1092 continua valendo, e vence até o opt-in novo ────────────────────
   {
-    comoProducao({ CORRETOR_PRO_API_KEY: "chave-secreta-de-verdade", ALLOW_UNPROTECTED_API: undefined });
-    const errada = respostaFalsa();
-    assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-chutada" } }, errada), false);
-    assert.equal(errada.statusCode, 401);
-    const certa = respostaFalsa();
-    assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-secreta-de-verdade" } }, certa), true);
-  }
-
-  // ── 6. O interruptor que desliga o caminho antigo de vez ─────────────────────────────────────
-  {
-    comoProducao({ CORRETOR_PRO_API_KEY: "chave-secreta-de-verdade", CORRETOR_PRO_LEGADO_DESLIGADO: "sim" });
+    comoProducao({ CORRETOR_PRO_API_KEY: "chave-secreta-de-verdade", CORRETOR_PRO_LEGADO_ATIVO: "sim", CORRETOR_PRO_LEGADO_DESLIGADO: "sim" });
     const res = respostaFalsa();
     assert.equal(requireApiKey({ headers: { "x-corretor-pro-key": "chave-secreta-de-verdade" } }, res), false,
       "com o interruptor ligado, nem a chave certa entra");

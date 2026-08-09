@@ -65,8 +65,11 @@ const leadUpdate = fs.readFileSync(new URL("../api/lead-update.js", import.meta.
     "o piso comercial precisa proibir afirmar endereço/cidade sem fonte");
   assert.match(pipeline, /PROIBIDO afirmar uma localização, cidade ou característica que não conste nas fontes/,
     "sem fonte, a mensagem se oferece pra confirmar — nunca afirma");
-  assert.match(pipeline, /ENDEREÇOS e localização de empreendimentos \(rua, bairro, cidade, pontos de referência\)/,
-    "a extração do aprendizado agora captura endereços explicitamente");
+  // v1190 — o extrator do aprendizado foi reescrito (fonte só do corretor, JSON validado,
+  // condição comercial volátil barrada). O que ele continua capturando de propósito é endereço /
+  // localização — o fato durável que originou este teste (caso Carmen/Personalité).
+  assert.match(pipeline, /endereço e localização de empreendimento \(rua, bairro, cidade, pontos de referência\)/,
+    "a extração do aprendizado continua capturando endereços explicitamente");
 }
 
 // ── 4. Apagar o conhecimento (limpeza) também derruba o cache ─────────────────────────────────

@@ -555,8 +555,14 @@ async function reanalisarLeadHandler702(req, res) {
   // v750: sem enriquecimento/fallback determinístico antigo.
   novoAnalysis = stampCommercialSchema(novoAnalysis);
   // Atualiza o conhecimento geral do corretor com o que foi ensinado nessa conversa.
-  const tlTextPraAprendizado = timelineFinal.map(m => `[${m.author || ""}]: ${m.text || ""}`).join("\n");
-  if (openai && novoAnalysis.mode !== "reconciliacao_local") atualizarConhecimentoCorretor(tlTextPraAprendizado, openai, organizationId).catch(() => {});
+  // v1190 — passa a timeline ESTRUTURADA (e o nome do cliente), não mais um texto corrido com as
+  // falas dos dois lados coladas. Do outro lado, atualizarConhecimentoCorretor só aprende do que
+  // o CORRETOR escreveu: o que o cliente afirma nunca vira fato do negócio (ver o comentário
+  // grande em api/_pipeline.js). Continua fire-and-forget: falha aqui não derruba a reanálise.
+  const nomeClientePraAprendizado = novoAnalysis?.clientName || novoAnalysis?.lead?.clientName || leadModelo?.clientName || "";
+  if (openai && novoAnalysis.mode !== "reconciliacao_local") {
+    atualizarConhecimentoCorretor({ timeline: timelineFinal, clientName: nomeClientePraAprendizado }, openai, organizationId).catch(() => {});
+  }
 
   // Re-lê o estado ATUAL do banco antes de salvar. Armazena updated_at para
   // o optimistic lock no UPDATE: se outra reanálise gravou antes, essa não sobrescreve.

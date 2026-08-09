@@ -115,12 +115,29 @@ export default async function handler(req, res, { supabase: supabaseInjetado } =
 
   // ── Migração 0018 ainda não aplicada ──────────────────────────────────────────────────────
   //
-  // Cai no caminho de quatro passos da v1128. Isto NÃO é o tipo de reserva que a v1185 tirou (lá
-  // eram caminhos que contornavam uma trava de SEGURANÇA — criar empresa pelo navegador, gravar
-  // Cérebro na chave global). Aqui a trava continua existindo e continua no servidor; o que se
-  // perde é a exatidão dela sob pedidos simultâneos. Recusar todo cadastro novo porque uma
-  // migração não foi rodada seria pior do que o problema. Mas não é silencioso: fica registrado
-  // no log do servidor e a 0018 aparece como "faltando" em /api/diagnostico?mode=banco.
+  // v1190 — EM PRODUÇÃO ISTO AGORA PARA AQUI (falha fechada).
+  //
+  // Até a v1189, quando a função atômica não existia, o cadastro caía calado no caminho de quatro
+  // passos da v1128 — aquele com a janela de concorrência que a 0018 veio fechar (oito pedidos
+  // simultâneos criaram OITO contas onde o limite era cinco). Código novo rodando sobre banco
+  // velho parecia saudável, e ninguém tinha como perceber pela tela.
+  //
+  // A escolha é entre duas dores: recusar cadastro novo enquanto a migração não roda, ou reabrir
+  // em silêncio a porta de cadastro em massa. Fica a primeira — mas com duas saídas: a mensagem
+  // diz exatamente o que fazer, e existe um destravamento por variável de ambiente
+  // (CORRETOR_PRO_CADASTRO_SEM_0018=sim na Vercel), que libera o caminho antigo na hora, sem
+  // publicar nada, se o dono precisar vender antes de aplicar a migração.
+  // Fora de produção (desenvolvimento e testes) o caminho antigo continua valendo sozinho.
+  const emProducao = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+  const destravado = String(process.env.CORRETOR_PRO_CADASTRO_SEM_0018 || "").toLowerCase() === "sim";
+  if (emProducao && !destravado) {
+    console.error("[criar-conta] BLOQUEADO: a migração 0018 não está aplicada neste banco. O cadastro novo fica recusado até rodar supabase/migrations/0018_cadastro_atomico_e_limpeza.sql (confira em /api/diagnostico?mode=banco). Pra liberar o caminho antigo temporariamente, defina CORRETOR_PRO_CADASTRO_SEM_0018=sim.");
+    return json(res, 503, {
+      ok: false,
+      migracaoPendente: true,
+      error: "O cadastro está temporariamente indisponível: o banco de dados precisa de uma atualização (migração 0018) antes de aceitar contas novas. Fale com o suporte pelo WhatsApp — é rápido."
+    });
+  }
   console.warn("[criar-conta] migração 0018 não aplicada: a trava de cadastro por conexão está no modo antigo (não atômico). Rode supabase/migrations/0018_cadastro_atomico_e_limpeza.sql.");
 
   const contagem = await contarCadastrosRecentesDaConexao(supabase, conexao);

@@ -102,12 +102,16 @@ const produtoLongo = 'Apartamento Personalité, Apartamento Prime, Apartamento Q
 const htmlProdutoLongo = cpHomeLeadRow({ __msgs: 5, product: produtoLongo }, 218);
 assert.ok(htmlProdutoLongo.includes(`title="${produtoLongo}"`), 'title do produto tem o texto completo, sem truncar');
 
-// 6e. Dias com rótulo: "há Xd" no texto visível, title muda conforme nível (cliente esperando x
-// só parado).
+// 6e. Dias com rótulo: "há Xd" no texto visível e um title que explica de onde vem o número.
+// v1190 — o title deixou de variar por nível. O único texto alternativo era "Cliente esperando
+// sua resposta há N dias" (nível 1), a afirmação sem lastro que a v1189 baniu: o app lê o retrato
+// exportado do WhatsApp, não sabe se o corretor já respondeu. Agora o title é sempre factual —
+// desde o atendimento marcado, quando existe; senão, desde a última interação.
 const semNivel = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78 }, 218);
 assert.match(semNivel, />há 78d</, 'texto visível vem com o prefixo "há"');
-assert.match(semNivel, /desde a última intera[çc][ãa]o \(sua ou do cliente\)/, 'title genérico explica que é desde a última interação de qualquer lado, quando não é "cliente espera você"');
+assert.match(semNivel, /desde a última intera[çc][ãa]o \(sua ou do cliente\)/, 'title explica que é desde a última interação de qualquer lado');
 const comNivel1 = cpHomeLeadRow({ __msgs: 5, daysSinceLastInteraction: 78, __nivel: 1 }, 218);
-assert.match(comNivel1, /Cliente esperando sua resposta há 78 dias/, 'title específico quando o dot indica "cliente aguardando você" (nivel 1)');
+assert.doesNotMatch(comNivel1, /esperando sua resposta/, 'nenhum lead ganha mais o title de "cliente esperando resposta" (v1190)');
+assert.match(comNivel1, /desde a última intera[çc][ãa]o \(sua ou do cliente\)/, 'o title continua sendo o factual, para qualquer lead');
 
 console.log('v972-clareza-fila-hoje: ok');

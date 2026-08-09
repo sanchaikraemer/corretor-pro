@@ -17,12 +17,24 @@ function safeEqualSecret(a, b) {
 
 export function requireApiKey(req, res) {
   if (process.env.NODE_ENV === "test" || process.env.npm_lifecycle_event === "test") return true;
-  // v1092 — interruptor pra desligar DEFINITIVAMENTE o caminho antigo (chave compartilhada, sem
-  // login). Basta definir CORRETOR_PRO_LEGADO_DESLIGADO=sim nas variáveis de ambiente. A partir
-  // daí só entra quem tem login de verdade. Está desligado por padrão porque o Atalho do iPhone e
-  // eventuais aparelhos antigos da conta original ainda podem depender dele — mas quem usa o app
-  // com login não perde nada ao ligar isto.
-  if (String(process.env.CORRETOR_PRO_LEGADO_DESLIGADO || "").toLowerCase() === "sim") {
+  // v1092 criou aqui um interruptor pra desligar o caminho antigo (chave compartilhada, sem
+  // login): CORRETOR_PRO_LEGADO_DESLIGADO=sim. Ele continua valendo.
+  //
+  // v1190 — MAS O PADRÃO SE INVERTEU EM PRODUÇÃO. Segurança que depende de alguém lembrar de
+  // marcar "DESLIGADO=sim" numa tela de configuração não é segurança: quem esquece fica com a
+  // porta antiga aberta e não recebe aviso nenhum. Como toda chamada por esse caminho é tratada
+  // como sendo da conta original (ver resolveOrganizationId logo abaixo), o que está em jogo são
+  // os dados do próprio dono.
+  //
+  // Hoje: em produção o caminho antigo vem DESLIGADO, e só liga com CORRETOR_PRO_LEGADO_ATIVO=sim.
+  // O Atalho do iPhone não depende disso desde a v1035 (usa a chave pessoal assinada por empresa,
+  // resolveOrganizationIdByAtalhoToken) e o app manda o login do Supabase em toda chamada; um
+  // aparelho antigo que ainda guardava a chave compartilhada recebe 401 e o próprio app o leva
+  // pra tela de entrar (ver o tratamento de 401 em app.js) — ele não fica preso.
+  const legadoDesligadoExplicitamente = String(process.env.CORRETOR_PRO_LEGADO_DESLIGADO || "").toLowerCase() === "sim";
+  const legadoLigadoExplicitamente = String(process.env.CORRETOR_PRO_LEGADO_ATIVO || "").toLowerCase() === "sim";
+  const producao = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+  if (legadoDesligadoExplicitamente || (producao && !legadoLigadoExplicitamente)) {
     authJson(res, 401, { ok: false, error: "O acesso por chave de segurança foi desligado nesta instalação. Entre com sua conta." });
     return false;
   }
@@ -366,7 +378,10 @@ export async function registrarCadastroDaConexao(supabase, conexaoHash, organiza
 // Esta leitura NÃO derruba o app quando o banco está atrás — derrubar por conta própria tiraria do
 // ar corretor que está trabalhando. Ela alimenta o diagnóstico (`api/diagnostico.js?mode=banco`),
 // que é onde o dono vê a lista pronta e sabe o que colar no SQL Editor.
-export const MIGRACAO_MINIMA_EXIGIDA = 16;
+// v1190 — subiu de 16 pra 18: a 0018 deixou de ser opcional. Desde esta versão, o cadastro de
+// conta nova em produção RECUSA em vez de cair no caminho antigo quando ela não está aplicada
+// (ver api/criar-conta.js), então o diagnóstico precisa apontá-la como pendência de verdade.
+export const MIGRACAO_MINIMA_EXIGIDA = 18;
 
 export async function conferirMigracoesDoBanco(supabase) {
   if (!supabase) return { disponivel: false, motivo: "Supabase não configurado." };

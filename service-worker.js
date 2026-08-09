@@ -252,16 +252,23 @@ async function handleShare(request) {
   return redirect();
 }
 
-// ============ v1138 — LEMBRETE DIÁRIO DE CLIENTES SEM RESPOSTA ============
+// ============ v1138 — LEMBRETE DIÁRIO ============
 // A pesquisa de mercado da auditoria (05/08/2026): a maioria das vendas sai depois do 5º contato,
-// e quase metade dos corretores para no 1º. O app sabe QUEM está esperando resposta — mas só
-// avisava dentro do app (sino). Isto aqui é o aviso de fora: uma notificação por dia, com o app
-// FECHADO, quando há cliente esperando há mais de 24h.
+// e quase metade dos corretores para no 1º. O app avisa dentro dele (sino); isto aqui é o aviso
+// de fora: uma notificação por dia, com o app FECHADO.
 //
-// Sem servidor nenhum: o app (quando aberto) grava um retrato compacto no IndexedDB — total de
-// clientes esperando + até 3 nomes (ver cpAtualizarRetratoCobranca em app.js) — e o navegador
-// acorda este worker periodicamente (Periodic Background Sync; Android com o app instalado).
-// O worker NÃO tem sessão nem token: ele só lê esse retrato local. Nenhum dado sai do aparelho.
+// Sem servidor nenhum: o app (quando aberto) grava um retrato compacto no IndexedDB (ver
+// cpAtualizarRetratoAcoes em app.js) e o navegador acorda este worker periodicamente (Periodic
+// Background Sync; Android com o app instalado). O worker NÃO tem sessão nem token: ele só lê
+// esse retrato local. Nenhum dado sai do aparelho.
+//
+// v1190 — DUAS MUDANÇAS AQUI:
+// 1) O texto não afirma mais que "há clientes esperando sua resposta". O app lê o retrato que o
+//    corretor exporta do WhatsApp, não a conversa ao vivo — ele não tem como saber se alguém está
+//    sem resposta (regra do dono, v1158/v1189). O retrato agora traz ações com data registrada
+//    (compromisso atrasado + a dose de "Fazer agora" do dia) e o texto fala só disso.
+// 2) NENHUM NOME DE CLIENTE aparece na notificação. Antes iam até três, direto na tela bloqueada
+//    do celular — qualquer um que pegasse o telefone lia nome de cliente sem desbloquear.
 const NOTIF_DB = 'corretor-pro-notif';
 function swNotifDB() {
   return new Promise((resolve, reject) => {
@@ -302,13 +309,11 @@ self.addEventListener('periodicsync', event => {
     const idade = Date.now() - Number(retrato.calculadoEm || 0);
     if (idade > 30 * 24 * 60 * 60 * 1000) return;
     const total = Number(retrato.total);
-    const nomes = Array.isArray(retrato.nomes) && retrato.nomes.length
-      ? ` — ${retrato.nomes.slice(0, 3).join(', ')}${total > 3 ? '…' : ''}` : '';
     const corpo = idade > 48 * 60 * 60 * 1000
-      ? 'Há clientes esperando sua resposta no Corretor Pro. Abra pra ver quem.'
+      ? 'Há ações comerciais para revisar no Corretor Pro. Abra o app para atualizar.'
       : (total === 1
-        ? `1 cliente está esperando sua resposta há mais de 24 horas${nomes}.`
-        : `${total} clientes estão esperando sua resposta há mais de 24 horas${nomes}.`);
+        ? 'Você tem 1 ação comercial para revisar hoje no Corretor Pro.'
+        : `Você tem ${total} ações comerciais para revisar hoje no Corretor Pro.`);
     await self.registration.showNotification('Corretor Pro', {
       body: corpo,
       tag: 'cp-cobranca-diaria',
