@@ -33,18 +33,19 @@ assert.match(cadastro, /replace\(\/\\D\/g, ''\)\)\.length < 10/, "cadastro.html 
 // os dados vão nos metadados do login (sobrevivem à confirmação de e-mail)
 assert.match(cadastro, /data:\s*\{\s*nome_empresa:[^}]*telefone[^}]*cidade[^}]*estado/s,
   "cadastro.html precisa guardar telefone/cidade/estado nos metadados (options.data)");
-// e vão pra função do banco — com fallback pra versão antiga (migração ainda não aplicada)
+// e vão pro banco pelo SERVIDOR. v1185 — as chamadas diretas ao banco (`rpc('criar_empresa_e_dono')`,
+// com e sem contato) foram retiradas das duas telas: elas eram a reserva que anulava a trava contra
+// cadastro falso em massa. Os campos de contato continuam viajando, agora no corpo da requisição.
 assert.match(cadastro, /criarEmpresaComContato/, "cadastro.html precisa chamar criarEmpresaComContato");
-assert.match(cadastro, /p_telefone:[^,]*,\s*p_cidade:[^,]*,\s*\n?\s*p_estado:[^,]*,\s*p_email/s,
-  "cadastro.html precisa passar os campos novos pra criar_empresa_e_dono");
-assert.match(cadastro, /rpc\('criar_empresa_e_dono',\s*\{\s*p_nome:\s*dados\.nome\s*\}\)/,
-  "cadastro.html precisa do fallback só-com-nome pra quando a migração 0011 ainda não rodou");
+assert.match(cadastro, /criarEmpresaComContato\(\{\s*nome:[^}]*telefone[^}]*cidade[^}]*estado[^}]*email/s,
+  "cadastro.html precisa mandar nome/telefone/cidade/estado/e-mail pro servidor");
+assert.match(cadastro, /\/api\/criar-conta/, "cadastro.html cria a empresa pelo servidor");
 
 // --- entrar.html: o primeiro login (com confirmação de e-mail) também grava o contato ---
-assert.match(entrar, /p_telefone:\s*String\(meta\.telefone/, "entrar.html precisa passar telefone no primeiro login");
-assert.match(entrar, /p_cidade:\s*String\(meta\.cidade/, "entrar.html precisa passar cidade no primeiro login");
-assert.match(entrar, /p_estado:\s*String\(meta\.estado/, "entrar.html precisa passar estado no primeiro login");
-assert.match(entrar, /criar\(true\)[\s\S]*criar\(false\)/, "entrar.html precisa do fallback só-com-nome");
+assert.match(entrar, /telefone:\s*String\(meta\.telefone/, "entrar.html precisa passar telefone no primeiro login");
+assert.match(entrar, /cidade:\s*String\(meta\.cidade/, "entrar.html precisa passar cidade no primeiro login");
+assert.match(entrar, /estado:\s*String\(meta\.estado/, "entrar.html precisa passar estado no primeiro login");
+assert.match(entrar, /\/api\/criar-conta/, "entrar.html cria a empresa pelo servidor");
 
 // --- admin-plataforma.html: contato aparece na lista, com link de WhatsApp ---
 assert.match(admin, /<th>Contato<\/th>/, "painel precisa da coluna Contato");

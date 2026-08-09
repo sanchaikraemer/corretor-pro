@@ -33,7 +33,10 @@ assert.match(cadastro, /data:\s*\{\s*nome_empresa:\s*nomeEmpresa/,
 // 2. entrar.html cria a empresa que faltou (lazy) quando não acha vínculo nenhum, usando o
 // nome salvo — e SÓ nesse caso (não mexe em quem já tem empresa).
 assert.match(entrar, /if \(!vinculo \|\| !vinculo\.organizations\)/, 'entrar.html detecta ausência de vínculo antes de tentar criar a empresa');
-assert.match(entrar, /criar_empresa_e_dono/, 'entrar.html chama o mesmo RPC de criação de empresa como fallback');
+// v1185 — a criação da empresa que faltou continua acontecendo aqui, mas PELO SERVIDOR
+// (/api/criar-conta), nunca mais chamando o banco direto: o caminho direto era o que anulava a
+// trava contra cadastro falso em massa (ver tests/v1185-banco-se-reporta-*).
+assert.match(entrar, /\/api\/criar-conta/, 'entrar.html cria a empresa que faltou pelo servidor');
 assert.match(entrar, /user_metadata \|\| \{\}[\s\S]*meta\.nome_empresa/, 'entrar.html usa o nome salvo no cadastro pra criar a empresa que faltou');
 
 // 3. Seleção de empresa é determinística (order por criado_em desc) em entrar.html, no backend

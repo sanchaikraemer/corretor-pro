@@ -353,6 +353,53 @@ export async function registrarCadastroDaConexao(supabase, conexaoHash, organiza
   } catch (_) { /* contador é acessório — nunca atrapalha quem está entrando */ }
 }
 
+// ── v1185 — o código sabe de que versão do banco ele precisa ─────────────────────────────────
+//
+// As auditorias de 08/2026 apontaram o mesmo problema, cada uma com suas palavras: código e banco
+// podem estar em versões diferentes e NADA avisa. Não é teórico — a conferência de 07/08/2026
+// mostrou a `0009` faltando enquanto a `0010` até a `0014` já estavam.
+//
+// A migração `0017` põe no banco a função `conferir_migracoes()`, que olha o catálogo do Postgres
+// e diz o que existe DE FATO (não o que alguém marcou como feito). Aqui é o outro lado: a lista do
+// que o código de hoje precisa, e a leitura da conferência.
+//
+// Esta leitura NÃO derruba o app quando o banco está atrás — derrubar por conta própria tiraria do
+// ar corretor que está trabalhando. Ela alimenta o diagnóstico (`api/diagnostico.js?mode=banco`),
+// que é onde o dono vê a lista pronta e sabe o que colar no SQL Editor.
+export const MIGRACAO_MINIMA_EXIGIDA = 16;
+
+export async function conferirMigracoesDoBanco(supabase) {
+  if (!supabase) return { disponivel: false, motivo: "Supabase não configurado." };
+  const { data, error } = await supabase.rpc("conferir_migracoes");
+  if (error) {
+    // A própria 0017 ainda não foi aplicada: é a resposta esperada até o dono rodar o arquivo.
+    const semFuncao = /function .* does not exist|could not find the function|schema cache|PGRST202/i
+      .test(`${error.message || ""} ${error.code || ""}`);
+    return {
+      disponivel: false,
+      registroAusente: semFuncao || undefined,
+      motivo: semFuncao
+        ? "O banco ainda não sabe se reportar. Rode supabase/migrations/0017_registro_de_migracoes.sql no SQL Editor do Supabase — depois disso esta tela mostra, sozinha, o que falta."
+        : (error.message || "Não foi possível conferir as migrações.")
+    };
+  }
+  const linhas = Array.isArray(data) ? data : [];
+  const faltando = linhas.filter(l => l?.situacao !== "aplicada");
+  const aplicadas = linhas.filter(l => l?.situacao === "aplicada").map(l => Number(l.numero));
+  const maiorSeguida = aplicadas.length
+    ? aplicadas.sort((a, b) => a - b).reduce((acc, n) => (n === acc + 1 ? n : acc), 0)
+    : 0;
+  return {
+    disponivel: true,
+    total: linhas.length,
+    aplicadas,
+    faltando: faltando.map(l => ({ numero: Number(l.numero), arquivo: l.arquivo, detalhe: l.detalhe })),
+    versaoSeguida: maiorSeguida,
+    minimaExigida: MIGRACAO_MINIMA_EXIGIDA,
+    emDia: !faltando.some(l => Number(l.numero) <= MIGRACAO_MINIMA_EXIGIDA)
+  };
+}
+
 // Dias de CALENDÁRIO entre uma data e agora, no fuso de Brasília (NÃO "períodos de 24h" — senão
 // uma mensagem de ontem à noite conta como "hoje" de manhã, porque passaram <24h). 0 = hoje, 1 = ontem.
 function diasCalendarioBR(iso) {

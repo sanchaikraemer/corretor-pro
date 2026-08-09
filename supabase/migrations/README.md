@@ -1,41 +1,44 @@
-# Migrações — contas individuais + parede de dados entre empresas
+# Migrações do banco
 
-Isso aqui é o "script de construção" do banco de dados pra ligar de vez o sistema de contas
-que você viu no protótipo. **Ainda não foi aplicado no seu banco real** — só foi testado à
-exaustão num banco de mentira, igual ao seu, criado só pra essa prova.
+## Antes de tudo: este arquivo NÃO diz o que está aplicado em produção
 
-## O que foi testado (de verdade, rodando, não só lido)
+Nenhum documento diz. Documento envelhece e ninguém percebe — foi exatamente o que aconteceu:
+em 07/08/2026 descobrimos que a migração `0009` **nunca tinha sido aplicada**, embora da `0010`
+à `0014` já estivessem. O código estava numa versão e o banco em outra, e a única forma de
+descobrir foi conferir função por função, à mão.
 
-- Criei um banco Postgres local igual ao Supabase, com as mesmas duas tabelas que o Corretor
-  Pro já usa hoje (`whatsapp_processamentos` e `direciona_config`).
-- Rodei a migração `0001` nele — criou as tabelas novas (`organizations`, `memberships`), a
-  coluna nova de empresa, e a cerca automática (RLS).
-- Simulei duas empresas com clientes de mentira e "entrei" como cada uma:
-  - Cada uma só enxergou os próprios clientes.
-  - Tentei **forçar** a leitura direta dos clientes da outra empresa (não pela tela, direto na
-    consulta) — o banco recusou.
-  - Tentei **plantar** um cliente dentro da empresa errada — o banco recusou com erro.
-  - Sem login nenhum, zero clientes aparecem.
-- Rodei a migração `0002` — confirmei que um cliente "antigo", de antes dessa mudança, foi
-  automaticamente encaixado dentro da "Empresa 1" (a sua), sem perder nada.
-- Rodei as duas migrações **de novo, por cima**, de propósito — pra garantir que rodar duas
-  vezes sem querer não quebra nada. Não quebrou.
-- Depois disso, apaguei o banco de teste — nada disso tocou em dado real seu.
+**Para saber o estado real, pergunte ao banco:**
 
-## Como aplicar de verdade (quando você quiser seguir)
+```
+/api/diagnostico?mode=banco
+```
 
-1. Abra o painel do Supabase do projeto do Corretor Pro → **SQL Editor** → **New query**.
-2. Cole o conteúdo de `0001_contas_e_empresas.sql` inteiro e clique em **Run**.
-3. Cole o conteúdo de `0002_migrar_dados_existentes.sql` e clique em **Run**.
-4. Pronto — nada do site que está no ar quebra com isso. Essas duas migrações só
-   **acrescentam** coisas novas (tabelas, coluna, regra de acesso); não apagam nem alteram
-   nenhum dado ou tela existente.
+(precisa estar logado como administrador da plataforma)
 
-## O que ainda falta depois disso (não depende só de mim)
+Ele responde a lista completa — o que está aplicado, o que falta e qual arquivo rodar — porque a
+migração `0017` ensinou o banco a se conferir sozinho, olhando o catálogo do Postgres. Ela não
+acredita em "alguém marcou que rodou": ela procura a tabela, a função, o índice, a trava e a
+permissão que cada migração deveria ter deixado.
 
-A cerca do banco está pronta, mas hoje o sistema ainda fala com o banco usando a "chave de
-administrador" (que ignora essa cerca de propósito, pra tudo funcionar com uma senha só). O
-próximo passo é trocar essa parte — fazer o sistema consultar o banco "logado como você",
-em vez de sempre como administrador — pra essa cerca passar a valer de verdade em produção.
-Essa parte eu não testo às cegas: preciso ou de acesso ao seu projeto Supabase, ou de fazer
-isso com você olhando, testando com uma conta de verdade antes de publicar.
+Se o diagnóstico responder que o banco ainda não sabe se reportar, é porque falta rodar a própria
+`0017` — é o único caso em que você precisa aplicar algo às cegas.
+
+## Como aplicar uma migração
+
+1. Supabase → **SQL Editor** → **New query**.
+2. Cole o arquivo **inteiro** e clique em **Run**.
+3. Rode `/api/diagnostico?mode=banco` de novo e confirme que ela saiu da lista de faltando.
+
+Regras que valem pra todas:
+
+- **Na ordem.** Migração fora de ordem pode desfazer o que outra fechou — a `0009` rodada hoje,
+  depois da `0013`, reabriria a criação de empresa pelo navegador. Foi por isso que a `0015` foi
+  escrita: ela faz o que faltava da `0009` sem tocar em permissão nenhuma.
+- **Rodar duas vezes não quebra.** Todas são escritas pra suportar isso.
+- **Se uma parar com mensagem em português, leia a mensagem.** Ela para de propósito, e o texto
+  diz o que decidir (ex.: a `0015` para se algum login estiver vinculado a duas empresas).
+
+## O que cada uma faz
+
+A descrição de cada migração, com o motivo e o histórico, está em **`ESTADO-ATUAL.md`, seção 4**.
+É lá que a lista é mantida — aqui ficaria uma segunda cópia pra envelhecer.

@@ -510,11 +510,16 @@ export default async function handler(req, res) {
     if (r.error) {
       const missing = /relation .* does not exist|not find the table|schema cache/i.test(r.error.message || "");
       if (missing) {
+        // v1185 — aqui a resposta vinha com um `sqlNecessario` mandando criar a tabela com
+        // `chave text primary key`: o desenho de ANTES das contas separadas, sem organization_id.
+        // Seguir aquela sugestão criaria uma tabela em que o Cérebro é um só pro sistema inteiro —
+        // ou seja, a configuração de um corretor por cima da do outro. Apontado pelas auditorias
+        // de 08/2026. A resposta agora manda pro lugar certo: as migrações oficiais.
         return json(res, 200, {
           ok: false,
-          warning: "Tabela direciona_config não existe. Configuração não foi persistida no banco — o app vai usar localStorage do navegador como fallback.",
+          warning: "Banco incompleto: a tabela direciona_config não existe. Nada foi salvo no servidor — o app segue com a cópia deste aparelho até o banco ser acertado.",
           config: valor,
-          sqlNecessario: "create table if not exists public.direciona_config (chave text primary key, valor jsonb, atualizado_em timestamptz default now());"
+          proximoPasso: "Aplique as migrações oficiais de supabase/migrations/ no SQL Editor do Supabase (comece pela 0001). Para ver o que falta: /api/diagnostico?mode=banco."
         });
       }
       return json(res, 500, { ok: false, error: r.error.message });

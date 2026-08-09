@@ -151,7 +151,10 @@ const semearContaA = (ls) => {
   assert.deepEqual(bancos['direciona-share'], undefined, 'o ZIP compartilhado não pode ficar');
   assert.deepEqual(bancos['corretor-pro-notif'], undefined, 'os nomes de cliente do lembrete não podem ficar');
   assert.deepEqual(nomesDeCache, ['direciona-static-v1'], 'o cache do app continua; os de compartilhamento não');
-  assert.equal(ls.getItem(DONO_KEY), null, 'o carimbo some — o próximo login recarimba');
+  // v1185 — o carimbo FICA. Ele é o que permite reconhecer, no próximo login, se quem entrou é a
+  // mesma pessoa (mantém o Desempenho) ou outra (apaga os contadores da anterior). Apagá-lo aqui
+  // era o bug do item 5 da auditoria de 08/2026 — ver o teste v1185.
+  assert.equal(ls.getItem(DONO_KEY), 'usuario-A', 'o carimbo precisa sobreviver à saída da conta');
 
   // Sair e voltar na MESMA conta não pode tomar do corretor o histórico que só existe aqui.
   assert.equal(ls.getItem('cpAtividade_analises'), '["2026-08-01T10:00:00Z"]',

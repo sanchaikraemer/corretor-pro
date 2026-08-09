@@ -161,8 +161,23 @@ export async function garantirDonoDosDadosLocais(donoAtual) {
   return { limpou: trocou, motivo: trocou ? "dono-mudou" : "primeiro-carimbo" };
 }
 
-// Ao sair da conta: o dado comercial vai embora e o carimbo some (o próximo login recarimba).
+// Ao sair da conta: o dado comercial vai embora, mas O CARIMBO FICA.
+//
+// v1185 — aqui estava um bug que a auditoria de 08/2026 pegou fazendo a simulação na mão. O carimbo
+// era apagado junto ao sair. Consequência, na ordem em que acontece num celular emprestado:
+//
+//   1. corretor A usa o app — fica com 600 minutos de uso e a atividade dos dias dele;
+//   2. A sai da conta → o comercial some (certo), mas o carimbo some junto e os contadores de uso
+//      ficam, porque sair e voltar NA MESMA conta não pode zerar o Desempenho de quem já usava;
+//   3. corretor B entra → sem carimbo, o módulo conclui "primeiro carimbo, este aparelho é seu" e
+//      não limpa nada;
+//   4. B abre a tela Desempenho e vê o tempo de app e a atividade DO CORRETOR A como se fossem
+//      dele. Nada de conversa, Cérebro, ZIP ou nome de cliente vaza (isso já era apagado no passo
+//      2) — mas os números que ele usa pra se avaliar estão errados.
+//
+// Guardar o carimbo depois da saída resolve os dois casos de uma vez, sem escolher entre eles:
+// mesma conta volta → "mesmo-dono", o Desempenho continua; outra conta entra → "dono-mudou", os
+// contadores da anterior são apagados antes de qualquer tela ler.
 export async function aoSairDaConta() {
   await limparDadosComerciaisLocais();
-  try { localStorage.removeItem(DONO_KEY); } catch (_) {}
 }

@@ -87,35 +87,36 @@ if (campoEstado) {
 // mesma conexão de internet hoje) — trava que não pede nada de quem se cadastra: sem confirmar
 // e-mail, sem captcha, entra na hora, do jeito que o dono pediu.
 //
-// Enquanto a migração 0013 não for aplicada no banco, o servidor devolve "migração pendente" e a
-// gente cai no caminho antigo (criar a empresa direto daqui), pra NINGUÉM ficar sem se cadastrar
-// nesse meio-tempo. Dentro do caminho antigo, a mesma reserva de sempre: se a migração 0011 também
-// não tiver rodado, a chamada com os campos de contato falha e repetimos só com o nome.
+// A empresa é criada PELO SERVIDOR (api/criar-conta.js) — é lá que fica a trava contra cadastro
+// falso em massa, que segura o gasto de IA de conta inventada.
+//
+// v1185 — AQUI EXISTIA UM CAMINHO DE RESERVA QUE ANULAVA A PRÓPRIA TRAVA: se o servidor avisasse
+// que a migração 0013 não estava aplicada (ou se a chamada falhasse), o navegador criava a empresa
+// sozinho, chamando o banco direto. Só que a 0013 existe exatamente pra tirar esse poder do
+// navegador — a chave pública do Supabase está no código, à vista de qualquer um. A regra, na
+// prática, era: "se a trava de segurança estiver faltando, volte a usar o caminho sem trava". As
+// três auditorias de 08/2026 apontaram este trecho. A 0013 está aplicada no banco desde então (o
+// próprio banco confirma em /api/diagnostico?mode=banco) e o caminho antigo já nem funcionava
+// mais: a permissão foi revogada, então ele só devolvia erro cru em inglês.
 async function criarEmpresaComContato(dados) {
   try {
     const { data: sessao } = await supabaseClient.auth.getSession();
     const token = sessao?.session?.access_token;
-    if (token) {
-      const resposta = await fetch('/api/criar-conta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify(dados)
-      });
-      const corpo = await resposta.json().catch(() => ({}));
-      if (resposta.ok && corpo.ok) return { data: corpo.organizationId, error: null };
-      // Limite de contas por conexão: é uma recusa de propósito, com texto pronto pra tela —
-      // NUNCA cair no caminho antigo aqui, senão a trava não valeria de nada.
-      if (resposta.status === 429) return { data: null, error: new Error(corpo.error || 'Limite de contas novas atingido nesta conexão.') };
-      if (!corpo.migracaoPendente) return { data: null, error: new Error(corpo.error || 'Não foi possível criar a empresa.') };
-    }
-  } catch (_) { /* servidor fora do ar ou sem rede — cai no caminho antigo abaixo */ }
-
-  const completo = await supabaseClient.rpc('criar_empresa_e_dono', {
-    p_nome: dados.nome, p_telefone: dados.telefone, p_cidade: dados.cidade,
-    p_estado: dados.estado, p_email: dados.email
-  });
-  if (!completo.error) return completo;
-  return await supabaseClient.rpc('criar_empresa_e_dono', { p_nome: dados.nome });
+    if (!token) return { data: null, error: new Error('Sua sessão não ficou pronta a tempo. Clique em "Entrar" com o mesmo e-mail e senha — sua empresa é criada no primeiro acesso.') };
+    const resposta = await fetch('/api/criar-conta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(dados)
+    });
+    const corpo = await resposta.json().catch(() => ({}));
+    if (resposta.ok && corpo.ok) return { data: corpo.organizationId, error: null };
+    // Limite de contas por conexão: é uma recusa de propósito, com texto pronto pra tela.
+    if (resposta.status === 429) return { data: null, error: new Error(corpo.error || 'Limite de contas novas atingido nesta conexão.') };
+    return { data: null, error: new Error(corpo.error || 'Não foi possível criar a empresa.') };
+  } catch (_) {
+    // Servidor fora do ar ou sem rede: o login já existe, então a empresa nasce no primeiro acesso.
+    return { data: null, error: new Error('Não consegui falar com o servidor agora. Sua conta de acesso já foi criada — clique em "Entrar" com o mesmo e-mail e senha para terminar.') };
+  }
 }
 
 async function cadastrar() {
