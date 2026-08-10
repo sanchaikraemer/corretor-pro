@@ -281,13 +281,28 @@ async function uploadLargeZipToSupabase(file, options = {}){
     xhr.open('PUT', signedUrl, true);
     xhr.setRequestHeader('Content-Type', file.type || 'application/zip');
     xhr.setRequestHeader('x-upsert', 'true');
+    // v1199 — pedido do dono: quando o envio demora, ele não tinha como saber se estava
+    // progredindo devagar ou se o app tinha travado (aconteceu com um ZIP pequeno, de só 5
+    // mensagens — nada a ver com tamanho de arquivo). Agora mostra quantos MB já foram enviados
+    // de verdade, e avisa se passar um tempo sem nenhum byte novo — sem cancelar nada sozinho,
+    // só deixando claro que ainda está tentando.
+    const totalMb = file.size / 1024 / 1024;
+    let ultimoLoaded = 0, ultimoProgressoEm = Date.now();
     xhr.upload.onprogress = function(evt){
-      if(evt.lengthComputable){
-        const pct = Math.round((evt.loaded/evt.total)*60) + 20; // map progress into 20-80%
-        qs("#progressBar").style.width = Math.min(95, pct) + "%";
-      }
+      if(!evt.lengthComputable) return;
+      const pct = Math.round((evt.loaded/evt.total)*60) + 20; // map progress into 20-80%
+      qs("#progressBar").style.width = Math.min(95, pct) + "%";
+      if(evt.loaded !== ultimoLoaded){ ultimoLoaded = evt.loaded; ultimoProgressoEm = Date.now(); }
+      const enviadoMb = (evt.loaded/1024/1024).toFixed(1);
+      renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB`);
     };
+    const vigiaLentidao = setInterval(() => {
+      if(Date.now() - ultimoProgressoEm < 12000) return;
+      const enviadoMb = (ultimoLoaded/1024/1024).toFixed(1);
+      renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB, está lento, aguarde ou tente de novo em instantes`);
+    }, 4000);
     xhr.onload = function(){
+      clearInterval(vigiaLentidao);
       if(xhr.status>=200 && xhr.status<300){ resolve(); return; }
       let detail = (xhr.responseText || '').slice(0, 400);
       try{
@@ -297,7 +312,7 @@ async function uploadLargeZipToSupabase(file, options = {}){
       const sizeMb = (file.size/1024/1024).toFixed(1);
       reject(new Error('O envio da conversa não foi aceito (o arquivo pode estar grande demais — ' + sizeMb + ' MB). Tente uma conversa menor ou tente de novo em instantes.'));
     };
-    xhr.onerror = function(){ reject(new Error('Falha de conexão durante o envio. Verifique a internet e tente novamente.')); };
+    xhr.onerror = function(){ clearInterval(vigiaLentidao); reject(new Error('Falha de conexão durante o envio. Verifique a internet e tente novamente.')); };
     xhr.send(file);
   });
 

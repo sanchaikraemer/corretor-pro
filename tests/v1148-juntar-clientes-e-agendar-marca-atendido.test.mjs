@@ -82,8 +82,9 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
     "a resposta diz que registrou e quando — a tela usa isso pra marcar na hora");
 
   // A tela reflete na hora, sem esperar a carteira recarregar (mesma marcação da cópia).
-  const iniApp = app.indexOf("async function reagendarLembrete(id, dateStr){");
-  const fnApp = app.slice(iniApp, iniApp + 2600);
+  const iniApp = app.indexOf("async function reagendarLembrete(id, dateStr, horaStr){");
+  assert.ok(iniApp > -1, "reagendarLembrete precisa existir (agora com horaStr opcional, v1199)");
+  const fnApp = app.slice(iniApp, iniApp + 3200);
   assert.match(fnApp, /if\(d\?\.atendimentoRegistrado\)\{/, "a tela usa a confirmação do servidor");
   assert.match(fnApp, /ui667AplicarAtendidoLocal\(state\.lead, quando, [^)]*detalhes\)/, "marca o cliente aberto");
   assert.match(fnApp, /for\(const lista of \[state\.itemsAtivos, state\.todosLeads, state\.leads\]\)/, "e todas as cópias em memória (fila da Home)");

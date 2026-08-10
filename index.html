@@ -111,6 +111,7 @@
       <button type="button" class="sb-item go" data-target="cerebro" data-nav-key="cerebro"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span>Inteligência Comercial</button>
       <button type="button" class="sb-item go" data-target="relatorio" data-nav-key="relatorios"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span>Desempenho</button>
       <button type="button" class="sb-item go" data-target="arquivados" data-nav-key="arquivo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v3H3z"/><path d="M5 10v10h14V10M9 13h6"/></svg></span>Arquivados <span id="arquivadosRevisitarBadge" style="display:none;background:var(--cp-coral);color:#fff;border-radius:999px;padding:0 8px;font-size:11px;font-weight:800;margin-left:4px"></span></button>
+      <button type="button" class="sb-item go" data-target="planos" data-nav-key="planos"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>Planos</button>
       <button type="button" class="sb-item go" data-target="menu" data-nav-key="config"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 7 2.6a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>Configurações</button>
     </nav>
     <button type="button" class="sb-item" id="btnSairConta" style="display:none" onclick="cpSairDaConta()"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg></span>Sair da conta</button>
@@ -596,6 +597,31 @@
         </div>
       </div>
       <div style="margin-top:14px"><button type="button" id="propVoltarRodape" onclick="voltarDaProposta()" style="width:100%;background:transparent;border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:var(--soft);font-size:13px;font-weight:950;cursor:pointer">‹ Voltar</button></div>
+    </section>
+
+    <!-- v1199 — "Planos": mostra o plano atual da conta e explica valores/limites dos dois
+         planos comerciais. Conteúdo é montado por carregarPlanos() (app.js), a partir da mesma
+         leitura que a tela do Cérebro já faz (api/cerebro-config) — sem rota nova. -->
+    <section id="planos" class="screen">
+      <style>
+        .plano-cards{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
+        @media(min-width:760px){.plano-cards{grid-template-columns:1fr 1fr}}
+        .plano-card{border:1px solid var(--line);border-radius:16px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}
+        .plano-card.atual{border-color:rgba(104,255,149,.5);box-shadow:0 0 0 1px rgba(104,255,149,.18)}
+        .plano-card h3{margin:0 0 4px;font-size:16px}
+        .plano-card .plano-preco{font-size:24px;font-weight:950;color:var(--lime);margin:6px 0 2px}
+        .plano-card .plano-preco small{font-size:12px;color:var(--muted);font-weight:700}
+        .plano-card ul{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+        .plano-card li{font-size:13px;color:var(--soft);display:flex;gap:8px;align-items:flex-start}
+        .plano-card li:before{content:"✓";color:var(--lime);font-weight:950;flex:0 0 auto}
+        .plano-selo-atual{display:inline-block;margin-bottom:8px;font-size:10.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:var(--lime);background:rgba(104,255,149,.12);border:1px solid rgba(104,255,149,.4);border-radius:999px;padding:4px 10px}
+      </style>
+      <div class="card">
+        <button type="button" class="go" data-target="home" style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--soft);font-size:12px;font-weight:950;cursor:pointer;margin-bottom:10px">‹ Voltar pra Hoje</button>
+        <div class="label">Sua assinatura</div>
+        <h2 class="title">Planos</h2>
+        <div id="planosConteudo" class="small" style="color:var(--muted);margin-top:12px">Carregando...</div>
+      </div>
     </section>
 
     <section id="menu" class="screen">

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -216,7 +216,15 @@ export default async function handler(req, res) {
     // ida a mais ao servidor só pra isso). Falha ao ler notas nunca derruba a tela inteira do
     // Cérebro — devolve lista vazia e segue.
     const notasR = await loadNotas(supabase, organizationId).catch(() => ({ itens: [] }));
-    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico, notas: notasR.itens });
+    // v1199 — tela "Planos": plano atual da conta (só leitura, nunca gasta análise) + o catálogo
+    // dos dois planos comerciais (limites e preço), pra nunca precisar cravar esses números de
+    // novo numa quarta cópia — server, entrar.html e agora esta tela leem da mesma fonte.
+    const planoAtual = await obterPlanoAtual(organizationId).catch(() => ({ principal: false, emTeste: false, plano: null }));
+    const catalogoPlanos = {
+      pro: { ...planoComercial("pro"), preco: precoPlano("pro") },
+      "pro-master": { ...planoComercial("pro-master"), preco: precoPlano("pro-master") }
+    };
+    return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico, notas: notasR.itens, planoAtual, catalogoPlanos });
   }
 
   if (req.method === "POST" || req.method === "PUT") {
