@@ -3914,7 +3914,7 @@ async function atualizarSinoAgenda(leadsAll){
   state.agendaAtrasados = atrasadosN;
   state.agendaCount = agendaN + atrasadosN;
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
-  // v787: o sino pertence exclusivamente à Central de atenção.
+  // v787/v1205: o sino mostra só o aviso da agenda de hoje (e o número de atrasados).
   // A agenda mantém sua contagem própria, sem disputar o mesmo badge visual.
   try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
   return agendaN;
@@ -4037,7 +4037,7 @@ async function _processarDashboard(data){
     // v1138 — atualiza o retrato que o lembrete diário lê. v1190: são ações com data registrada
     // (compromisso atrasado + dose de "Fazer agora"), nunca "clientes esperando resposta".
     try{ cpAtualizarRetratoAcoes(all); }catch(_){}
-    // Contagem da Agenda permanece separada da Central de atenção.
+    // Contagem da Agenda permanece separada do aviso do sino.
     // agora no helper atualizarSinoAgenda (reusado ao excluir/reagendar lembrete, pra refletir sem F5).
     atualizarSinoAgenda(all);
     // Radar da Geladeira: badge do Menu desativado (dono não quer aviso).
@@ -9049,7 +9049,7 @@ function leadEhAtivo(l){
 // v1189 baniram da fila: o app não é integrado ao WhatsApp, o corretor já respondeu lá, e o que
 // chegava era uma cobrança por conversa resolvida. Agora o lembrete conta só o que o próprio
 // sistema registrou com data: compromisso atrasado + a dose de "Fazer agora" do dia — exatamente
-// os mesmos números que o sino do topo (Central de atenção) mostra dentro do app.
+// os mesmos números que o app mostra na Home (card "Fazer agora") e no aviso do sino.
 const CP_LEMBRETE_DIARIO_KEY = "cp-lembrete-diario";
 
 // Ações com lastro pra cobrar hoje. Só fato registrado no sistema entra:
@@ -9675,9 +9675,8 @@ window.cp1168FaixaHomeHTML = cp1168FaixaHomeHTML;
 // v1171 — o dono escolheu, entre 4 modelos de posição (ícone no cabeçalho / dentro dos números /
 // faixa fina / barra fixa embaixo), o modelo "dentro dos números": virou mais uma pílula na
 // mesma fileira de "Fazer agora / Total de leads / Agenda...", do mesmo tamanho que as outras —
-// não é mais uma faixa própria acima da busca. Tocar nela abre um painel flutuante (mesmo padrão
-// já usado pela Central de atenção do sino, .cp687-notify-panel), não mais um bloco que empurra o
-// resto da tela pra baixo.
+// não é mais uma faixa própria acima da busca. Tocar nela abre um painel flutuante (estilo
+// .cp687-notify-panel), não mais um bloco que empurra o resto da tela pra baixo.
 //
 // Sincroniza pelo servidor (mesmo padrão do Cérebro e da carteira): abre no celular, edita no
 // computador, continua igual dos dois lados. O carregamento dispara sozinho assim que a Home
@@ -9749,8 +9748,7 @@ function cp1170PainelConteudoHTML(){
   `;
 }
 
-// Mesmo padrão de openNotifyPanel (Central de atenção do sino): cria o painel uma vez, reaproveita
-// depois; fecha sozinho ao tocar fora ou no ×.
+// Cria o painel uma vez e reaproveita depois; fecha sozinho ao tocar fora ou no ×.
 function cp1170AbrirPainel(){
   let painel = qs("#cp1170Panel");
   if(!painel){
@@ -11786,49 +11784,11 @@ function ui670ScheduleHtml(lead){
     setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(8px)'; setTimeout(()=>el.remove(),220); }, 3400);
   };
 
-  function notifyData(){
-    const leads=(state?.todosLeads||state?.itemsAtivos||state?.leads||[]).filter(leadEhAtivo);
-    const counts={agora:0,programados:0,aguardando:0};
-    for(const l of leads){const c=cp786Categoria(l);if(counts[c]!==undefined)counts[c]++;}
-    const atrasados=leads.filter(l=>typeof cp786CompromissoAtrasado==='function'&&cp786CompromissoAtrasado(l)).length;
-    return {total:leads.length,...counts,acao:counts.agora,atrasados};
-  }
-  function openNotifyPanel(){
-    let panel=$('.cp687-notify-panel');
-    if(!panel){panel=document.createElement('div');panel.className='cp687-notify-panel';document.body.appendChild(panel);}
-    const d=notifyData();
-    // v1010 — a fila do "Fazer agora" pausa no fim de semana (regra do dono, v914/v937); a
-    // Central de atenção precisa contar a MESMA história da Condução, senão promete "31 pedem
-    // ação", o dono abre a tela e encontra "nenhum" (aconteceu de verdade num sábado à noite).
-    const fds = (typeof cpFimDeSemana==='function') && cpFimDeSemana();
-    // v1012 — o sino nunca promete mais que a DOSE do dia (meta configurável no Cérebro).
-    // Num sábado apareceu "34 atendimentos esperam por você na segunda" — 34 era o backlog
-    // inteiro, mas na segunda a tela só entrega a dose (ex.: 10). O número do aviso agora é
-    // min(meta, fila), a mesma conta do card "Fazer agora".
-    // v1084 — o sino prometia um número que a lista não entregava. metaDia é a meta CRUA (nunca
-    // desconta quem já foi atendido hoje) e d.agora é o backlog inteiro; já a lista que este
-    // aviso abre mostra min(fila, meta − atendidos hoje). Depois de bater a meta o sino dizia
-    // "10 atendimentos pedem ação" e o toque seguinte abria "Você já bateu a meta de hoje".
-    // Agora o aviso é calculado exatamente com as mesmas funções da lista.
-    const ativosSino = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
-    const filaSino = (typeof cpFilaFazerAgora==='function') ? cpFilaFazerAgora(ativosSino) : [];
-    const doseSino = (typeof cpFazerAgoraDose==='function') ? cpFazerAgoraDose(ativosSino) : 0;
-    const doseAviso = Math.max(0, Math.min(filaSino.length, doseSino));
-    const itemAcao = fds
-      ? `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>✓</i><div><b>Hoje você não atende</b><span>${doseAviso?`${doseAviso} atendimento${doseAviso===1?' espera':'s esperam'} por você ${cpProximoDiaDeAtendimento()}.`:`O "Fazer agora" volta ${cpProximoDiaDeAtendimento()}.`}</span></div></div>`
-      : `<div class="cp687-notify-item" data-go="home" data-filter="agora"><i>!</i><div><b>${doseAviso} atendimento${doseAviso===1?' pede':'s pedem'} ação</b><span>Abra a Condução para priorizar de cima para baixo.</span></div></div>`;
-    panel.innerHTML=`
-      <div class="cp687-notify-head"><div><h3>Central de atenção</h3><small>O que merece sua ação agora.</small></div><button class="cp687-notify-close" type="button" aria-label="Fechar">×</button></div>
-      ${d.atrasados?`<div class="cp687-notify-item" data-go="agenda"><i>!</i><div><b>${d.atrasados} compromisso${d.atrasados===1?'':'s'} atrasado${d.atrasados===1?'':'s'}</b><span>Veja a lista na Agenda — retome ou descarte um a um.</span></div></div>`:''}
-      ${itemAcao}
-      <div class="cp687-notify-item" data-go="agenda"><i>⌁</i><div><b>${Math.max(0,(d.programados||0)-(d.atrasados||0))} na agenda</b><span>Compromissos com data marcada — hoje e próximos.</span></div></div>
-      <div class="cp687-notify-item" data-go="relatorio"><i>▣</i><div><b>${d.total} clientes ativos</b><span>Acompanhe ritmo de atendimento e resultados.</span></div></div>`;
-    panel.classList.add('open');
-    panel.querySelector('.cp687-notify-close')?.addEventListener('click',()=>panel.classList.remove('open'));
-    panel.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{panel.classList.remove('open');const filtro=el.dataset.filter;if(filtro==='agora'&&typeof abrirFazerAgora==='function')abrirFazerAgora();else if(typeof window.show==='function')window.show(el.dataset.go);}));
-    setTimeout(()=>document.addEventListener('click',outside,{once:true}),0);
-    function outside(ev){if(!panel.contains(ev.target)&&!ev.target.closest('#topBell'))panel.classList.remove('open');}
-  }
+  // v1205 — a Central de atenção (painel que abria ao tocar no sino, listando N atendimentos
+  // pedem ação / N na agenda / N clientes ativos) foi REMOVIDA a pedido do dono: era uma camada a mais
+  // repetindo números que a Home já mostra em cima e que a Agenda mostra por dentro, e ainda
+  // tapava a tela inteira ao abrir o app. O sino continua existindo só como AVISO da agenda de
+  // hoje (o número no cantinho, regras v787/v1093/v1168) e agora leva direto para a Agenda.
   function updateBell(){
     const badge = $('#bellBadge');
     const bell = $('#topBell');
@@ -11849,10 +11809,10 @@ function ui670ScheduleHtml(lead){
     bell.classList.toggle('tem-alerta', n > 0);
     bell.classList.toggle('tem-atraso', atr > 0);
     const label = atr > 0
-      ? `Central de atenção — ${atr} compromisso${atr===1?'':'s'} ATRASADO${atr===1?'':'S'}`
+      ? `Agenda — ${atr} compromisso${atr===1?'':'s'} ATRASADO${atr===1?'':'S'}`
       : n > 0
-      ? `Central de atenção — ${n} compromisso${n===1?'':'s'} na agenda de hoje`
-      : 'Central de atenção';
+      ? `Agenda — ${n} compromisso${n===1?'':'s'} hoje`
+      : 'Abrir a Agenda';
     bell.setAttribute('title', label);
     bell.setAttribute('aria-label', label);
   }
@@ -11902,11 +11862,12 @@ function ui670ScheduleHtml(lead){
     // linha, chamadas internas tipo show("home") pulariam o polimento/sininho desta camada.
     try{ show = window.show; }catch(_){ }
   }
+  // v1205 — o sino não abre mais painel nenhum: um toque leva direto pra Agenda, que é onde o
+  // compromisso de verdade está. (O onclick do index.html já faz isso; aqui só garantimos que
+  // nenhum handler antigo de painel sobreviva.)
   const bell = $('#topBell');
   if(bell){
-    bell.onclick = null;
-    bell.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); openNotifyPanel(); }, true);
-    bell.setAttribute('aria-label','Abrir central de atenção');
+    bell.setAttribute('aria-label','Abrir a Agenda');
   }
 
   document.addEventListener('click', function(ev){

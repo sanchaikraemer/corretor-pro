@@ -17,8 +17,12 @@ assert.match(app, /&& !atrasados\.length\)\{\s*\n\s*box\.innerHTML = '<div class
 assert.match(app, /function cpCompromissosVencidosDoLead/, 'precisa listar os compromissos vencidos de cada lead');
 assert.match(app, /dispensarCompromisso\(\$\{keyJs\}\);carregarAgenda\(\)/, 'o × de descartar precisa atualizar a Agenda na hora');
 
-// 3. O aviso do sino agora leva pra Agenda (onde a lista mora), não mais pra Condução.
-assert.match(app, /atrasado\$\{d\.atrasados===1\?'':'s'\}<\/b><span>Veja a lista na Agenda/, 'o aviso do sino precisa levar pra lista na Agenda');
+// 3. O sino leva pra Agenda (onde a lista mora), não mais pra Condução.
+// v1205 — o painel intermediário (Central de atenção) foi removido: agora o sino abre a Agenda
+// direto num toque, o que atende ainda melhor a intenção deste teste.
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+assert.match(html, /id="topBell"[^>]*onclick="show\('agenda'\)"/, 'o sino precisa levar pra lista na Agenda');
+assert.match(app, /Agenda — \$\{atr\} compromisso\$\{atr===1\?'':'s'\} ATRASADO/, 'o rótulo do sino precisa anunciar os atrasados');
 assert.ok(!/Venceram e ainda não foram tratados/.test(app), 'o texto antigo (que levava pra Condução) precisa sair');
 
 console.log('v1011-atrasados-tem-lista-na-agenda: ok');
