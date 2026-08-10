@@ -7,6 +7,10 @@ import assert from "node:assert/strict";
 // hover) nunca ia descobrir sozinho. Ele mesmo disse: "eu sei q o grafico é de mensagens... acho
 // q é, nem tenho mais certeza" — e sobre os dias, "nem eu sei mais". Este teste garante que existe
 // uma legenda sempre visível (não só um title) acima da lista, com as duas explicações.
+// v1204 — a primeira versão da legenda ("Barra e número = mensagens do cliente nos últimos 90
+// dias. \"há Xd\" = dias desde o último contato...") virava 3 linhas inteiras no celular,
+// empurrando a lista pra baixo — reclamação direta do dono ("q bosta no mobile"). Encurtada pro
+// essencial; o teste trava um tamanho máximo pra isso não voltar a acontecer.
 
 const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
@@ -15,9 +19,16 @@ assert.match(appSrc, /class="cp-hoje-legenda"/, 'precisa existir a legenda "cp-h
 assert.match(appSrc, /cp-hoje-legenda\{[^}]*\}/, "a legenda precisa ter estilo próprio (não pode ficar sem CSS)");
 
 const iniLeg = appSrc.indexOf('class="cp-hoje-legenda"');
-const textoLegenda = appSrc.slice(iniLeg, iniLeg + 300);
-assert.match(textoLegenda, /mensagens do cliente nos últimos 90 dias/, "a legenda precisa explicar a barra/número (mensagens do cliente, 90 dias)");
-assert.match(textoLegenda, /há Xd.*dias desde o último contato/, 'a legenda precisa explicar o "há Xd"');
+const fimLeg = appSrc.indexOf("</div>", iniLeg);
+const textoLegenda = appSrc.slice(iniLeg, fimLeg);
+assert.match(textoLegenda, /mensagens do cliente.*90 dias/, "a legenda precisa explicar a barra/número (mensagens do cliente, 90 dias)");
+assert.match(textoLegenda, /há Xd.*dias sem contato/, 'a legenda precisa explicar o "há Xd"');
+
+// v1204 — trava o tamanho: a legenda existe pra ajudar, não pra virar um parágrafo que empurra a
+// lista pra baixo no celular (era exatamente esse o problema da v1203). Só o TEXTO visível conta
+// (sem a tag), pra não confundir tamanho de marcação com tamanho de frase.
+const soTexto = textoLegenda.replace(/^[^>]*>/, "");
+assert.ok(soTexto.length <= 90, `legenda passou de 90 caracteres (tem ${soTexto.length}) — vira 3 linhas no celular: "${soTexto}"`);
 
 // 1. A legenda de verdade aparece ANTES da lista no HTML gerado (não só existe solta em algum
 // lugar do arquivo) — extrai o trecho real que monta top3Html e roda com dados falsos.
