@@ -221,6 +221,64 @@ async function reanalisarLeadHandler702(req, res) {
     return json(res, 200, { ok: true, removido: true });
   }
 
+  // v1197 — DESFAZER UMA MENSAGEM QUE FOI COPIADA MAS NÃO ENVIADA.
+  //
+  // Relato do dono (10/08/2026): copiou a sugestão sem querer, não mandou pro cliente, e ficou
+  // com ela registrada no histórico — e, pior, com o cliente marcado como ATENDIDO, o que o tira
+  // da fila do dia por vários dias. Copiar registra TRÊS coisas ao mesmo tempo (ver o bloco
+  // `apenasSalvar` mais abaixo e cp704CopyMsg no app.js):
+  //   1. o item da conversa (timeline, type "mensagem_enviada");
+  //   2. o atendimento (evento contato_manual, detalhes.de = "copiar_msg");
+  //   3. a marca de uso "Copiou mensagem" (evento mensagem_copiada, que alimenta o Desempenho).
+  // Desfazer só o item deixaria o cliente atendido sem motivo. Esta ação desfaz as três.
+  //
+  // Regra do atendimento: ele só é desfeito se, DEPOIS de tirar este item, não sobrar nenhuma
+  // outra mensagem copiada no MESMO DIA. Se o corretor copiou duas e quer apagar só uma, o
+  // atendimento daquele dia continua valendo — porque a outra ainda vale.
+  if (body?.action === "desfazer-mensagem-enviada") {
+    const isoAlvo = String(body?.iso || "");
+    if (!isoAlvo) return json(res, 400, { ok: false, error: "Informe a mensagem a desfazer." });
+    const alvo = timeline.find(m => String(m?.iso || "") === isoAlvo);
+    if (!alvo) return json(res, 404, { ok: false, error: "Essa mensagem não está mais no histórico." });
+    // Trava importante: só o que o PRÓPRIO APP registrou pode ser desfeito por aqui. Mensagem
+    // que veio da conversa exportada do WhatsApp é registro do que aconteceu de verdade e não
+    // pode ser apagada por este caminho.
+    if (String(alvo.type || "") !== "mensagem_enviada") {
+      return json(res, 400, { ok: false, error: "Só dá pra desfazer uma mensagem que o app registrou quando você copiou." });
+    }
+    const novaTimeline = timeline.filter(m => String(m?.iso || "") !== isoAlvo);
+    const diaAlvo = agoraBR(new Date(alvo.iso)).dataBR;
+    const aindaTemCopiaNoDia = novaTimeline.some(m => {
+      if (String(m?.type || "") !== "mensagem_enviada" || !m?.iso) return false;
+      const d = new Date(m.iso);
+      return !isNaN(d.getTime()) && agoraBR(d).dataBR === diaAlvo;
+    });
+
+    const prev = row.resultado_analise || {};
+    const aprendizado = { ...(prev.aprendizado || {}) };
+    const eventos = Array.isArray(aprendizado.eventos) ? [...aprendizado.eventos] : [];
+    let atendimentoDesfeito = false;
+    if (!aindaTemCopiaNoDia) {
+      const restantes = eventos.filter((e) => {
+        if (!e?.quando) return true;
+        const d = new Date(e.quando);
+        if (isNaN(d.getTime()) || agoraBR(d).dataBR !== diaAlvo) return true;
+        const ehAtendimentoDaCopia = e.evento === "contato_manual" && e?.detalhes?.de === "copiar_msg";
+        const ehMarcaDeUso = e.evento === "mensagem_copiada";
+        return !(ehAtendimentoDaCopia || ehMarcaDeUso);
+      });
+      atendimentoDesfeito = restantes.length !== eventos.length;
+      aprendizado.eventos = restantes;
+    }
+    const merged = { ...prev, aprendizado };
+    const { error: desErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ timeline_json: novaTimeline, resultado_analise: merged, atualizado_em: new Date().toISOString() })
+      .eq("id", id).eq("organization_id", organizationId);
+    if (desErr) return json(res, 500, { ok: false, error: desErr.message });
+    return json(res, 200, { ok: true, removido: true, atendimentoDesfeito, aindaTemCopiaNoDia });
+  }
+
   // Marcação rápida de atendimento: um clique, sem texto obrigatório, sem IA e sem timer.
   // Guarda apenas um evento interno com a data/hora mais recente para o lead aparecer
   // como atendido. Não cria observação, mensagem na timeline nem lembrete automático.
