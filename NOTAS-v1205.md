@@ -1,84 +1,56 @@
-# v1205 — as três sugestões podem convergir para o mesmo próximo passo (fim da briga com o Cérebro)
+# v1205 — Central de atenção removida (o sino agora leva direto pra Agenda)
 
-## O que aconteceu
+## O pedido
 
-O dono trouxe o documento novo do Cérebro Comercial (Corretor Pro | Cérebro Comercial V3 —
-Revisado, 10/08/2026), com os 6 blocos prontos pra colar nas 6 caixas da Inteligência Comercial,
-e pediu uma avaliação antes de usar. Na leitura comparada com o que o sistema já manda pra IA
-apareceu uma contradição direta — a única do documento inteiro.
+Print do celular com o painel aberto cobrindo a Home inteira: *"nada a ver essa central de ação,
+tire isso"*.
 
-O documento diz, em dois lugares (Método, item 11; Regras comerciais, item 21):
+No print dá pra ver exatamente o problema: o painel **Central de atenção** ("O que merece sua
+ação agora") tapava a tela e listava três coisas —
 
-> As três devem nascer da mesma verdade factual e ter ângulos comerciais diferentes. Não invente
-> um próximo passo pior apenas para diferenciá-las. Se existir objetivamente um único próximo
-> passo adequado, as três podem convergir para ele por caminhos diferentes.
+- "10 atendimentos pedem ação"
+- "12 na agenda"
+- "192 clientes ativos"
 
-E o pedido fixo da análise (`api/_pipeline.js`, o texto que vai em TODA execução, fora do Cérebro,
-e que o corretor não vê nem edita) dizia o contrário, com todas as letras:
+— sendo que **os mesmos três números já estavam nos cards logo atrás**, na própria Home
+(10 em "Fazer agora", 12 na "Agenda", 192 em "Total de leads"). Era uma parada a mais entre ele e
+a tela que ele queria abrir, repetindo informação que já estava na frente dele.
 
-> AS TRÊS MENSAGENS PRECISAM SER TRÊS CAMINHOS DIFERENTES (...) Cada uma segue uma estratégia
-> distinta, com um próximo passo diferente (...) Se as três acabarem propondo a MESMA ação,
-> reescreva até virarem três caminhos realmente distintos.
+## O que mudou
 
-As duas instruções chegavam juntas, na mesma chamada, e se contradiziam. O prompt de sistema diz
-que o Cérebro é "a única autoridade sobre análise, estratégia e criação das mensagens", mas a
-ordem contrária estava escrita de forma muito mais insistente no pedido — resultado imprevisível
-de análise pra análise. E, no pior caso, o efeito era exatamente o que a regra 21 proíbe: quando
-só existia um próximo passo honesto (ex.: o cliente acabou de autorizar o envio da simulação),
-a IA era obrigada a inventar um terceiro passo pior, prematuro ou artificial só pra diferenciar
-a mensagem.
+**O painel acabou.** Tocar no sino lá em cima agora abre a **Agenda** direto, num toque só, sem
+nenhuma tela intermediária.
 
-Havia ainda uma segunda contradição, menor, na mesma família: a regra 20 do documento diz que a
-DIRETA "conduz para avanço concreto **somente quando a maturidade real da conversa permitir**",
-enquanto o pedido fixo exigia sempre "UM próximo passo concreto e um convite claro" (visita,
-ligação, proposta) — ou seja, empurrava avanço mesmo em conversa que ainda não amadureceu.
+**O sino continua** — e continua avisando exatamente como antes:
 
-## Correção (só no pedido fixo — o Cérebro do corretor não foi tocado)
+- número **verde** no cantinho = compromisso marcado pra hoje;
+- número **vermelho** e o sino inteiro em vermelho = compromisso **atrasado** (o destaque que ele
+  pediu na v1093 e que foi reforçado na v1168);
+- sem nada marcado, o sino fica limpo.
 
-Em `api/_pipeline.js`, no pedido da análise:
+Ou seja: o aviso ficou, o desvio saiu.
 
-- A exigência passou de "três **caminhos** diferentes" para "três **ângulos comerciais**
-  diferentes". Continua proibido devolver a mesma ideia reescrita 3 vezes.
-- Próximos passos diferentes continuam sendo **o padrão**, e a ordem de reescrever continua
-  valendo quando as três repetem a mesma pergunta de sempre ("quer que eu te mande as
-  propostas?").
-- **Exceção nova, explícita**: quando existir objetivamente um único próximo passo adequado
-  naquele momento, as três podem convergir para ele, cada uma chegando lá por um caminho e um
-  enquadramento diferentes.
-- **Proibição nova**: nunca inventar um próximo passo pior, prematuro ou artificial só pra
-  diferenciar as mensagens — diferença forçada que não serve ao cliente é pior que convergência
-  honesta.
-- "maisDireta" deixou de exigir avanço concreto em conversa imatura: quando não houver maturidade
-  pra visita/proposta/decisão, ela vira a versão mais objetiva e direta do passo que É adequado
-  agora.
+## Por que nada se perdeu
 
-Nada foi mexido no conteúdo do Cérebro, nas caixas da tela, no banco, nas rotas ou em qualquer
-tela do app. Nenhuma informação comercial foi cravada no código.
+Tudo que o painel dizia continua na tela, e mais perto:
 
-## Testes
+| O que o painel dizia | Onde está agora |
+| --- | --- |
+| "N atendimentos pedem ação" | card **Fazer agora** da Home (mesmo número, mesma conta) |
+| "N na agenda" | card **Agenda** da Home + a própria tela Agenda |
+| "N clientes ativos" | card **Total de leads** da Home |
+| "N compromissos atrasados" | número vermelho no sino + a tela **Agenda** |
 
-- Novo: `tests/v1205-tres-mensagens-podem-convergir.test.mjs` — roda uma análise com a IA
-  simulada, captura o pedido que realmente foi enviado e confere que a ordem antiga e absoluta
-  ("reescreva até virarem três caminhos realmente distintos") sumiu, que a exceção de convergência
-  está escrita, que a proibição de inventar passo pior está escrita, que ângulos diferentes
-  continuam sendo o padrão e que a "maisDireta" respeita a maturidade da conversa.
-- Atualizado: `tests/v865-mensagens-distintas.test.mjs` — o guard que travava a redação antiga
-  passou a travar a redação nova. A intenção original da v865 (impedir a mesma ideia reescrita 3
-  vezes) continua sendo verificada, agora sem exigir três próximos passos diferentes em qualquer
-  situação.
-- `npm test`: 24 arquivos checados + 372 testes, todos verdes.
+## Detalhe técnico (pra quem for mexer depois)
 
-Sem verificação visual em navegador nesta atualização: a mudança é só no texto que o sistema manda
-pra IA — nenhum arquivo de tela (`index.html`, `styles.css`, layout) foi tocado.
-
-Não há criação de tabela, coluna ou função nova no Supabase nesta atualização.
-
-## O que ficou pro dono fazer
-
-Colar os 6 blocos do documento V3 nas 6 caixas do Cérebro. Sugestões de ajuste no texto dele que
-foram passadas junto (não dependem de código): deixar claro no item 8 do Método que "ignore
-avisos automáticos e eventos operacionais" vale pra contagem do tempo e não anula as observações
-que ele registra à mão no lead; prever no Tom de voz o caso de a mensagem ser enviada horas depois
-da análise (saudação de período); enxugar as repetições entre "O que evitar", "Método" e "Regras
-comerciais"; e acrescentar duas linhas que faltam — transcrição de áudio pode ter erro (não tratar
-palavra estranha como fato) e um limite concreto de tamanho de mensagem.
+- `app.js` — saíram a função que montava o painel e a conta que só ela usava; o sino perdeu o
+  atalho que interceptava o toque, então o `onclick` do `index.html` (`show('agenda')`) volta a
+  valer. O aviso (número/cor) segue sendo calculado no mesmo lugar de sempre.
+- `index.html` / `styles.css` — o sino trocou o rótulo pra "Abrir a Agenda"; o estilo
+  `.cp687-notify-panel` **continua no CSS de propósito**: o painel do **Bloco de notas** (v1171)
+  reaproveita esse mesmo estilo.
+- Testes: `tests/v1205-central-atencao-removida.test.mjs` trava o painel do lado de fora (e
+  garante que o aviso do sino e o estilo do Bloco de notas continuam de pé). Os testes
+  `v885`, `v1010` e `v1012` foram reancorados nas telas que sobreviveram — a intenção original de
+  cada um (o sino não pode prometer fila em dia sem atendimento; nenhum número pode prometer mais
+  que a dose do dia) continua sendo checada, só que na Home.

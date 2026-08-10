@@ -1,4 +1,4 @@
-// v1205 — as três sugestões podem convergir para o MESMO próximo passo quando só existe um
+// v1206 — as três sugestões podem convergir para o MESMO próximo passo quando só existe um
 // passo adequado.
 //
 // Por que este teste existe: o pedido fixo da análise (que vai junto em TODA execução, fora do
@@ -75,4 +75,4 @@ assert.match(pedido, /NÃO a mesma ideia reescrita/i);
 assert.match(pedido, /Quando a conversa ainda NÃO tiver maturidade/i);
 assert.match(pedido, /não\s+força esse avanço/i);
 
-console.log("v1205-tres-mensagens-podem-convergir: ok");
+console.log("v1206-tres-mensagens-podem-convergir: ok");

@@ -50,6 +50,9 @@ assert.match(app, /titulo:'Carteira ativa'/, 'vir por "Total de leads" abre a li
 assert.equal((app.match(/Top conversão de hoje/g) || []).length, 0, '"Top conversão de hoje" foi removido');
 assert.doesNotMatch(html, /title="Atendimentos"/, 'ícone duplicado "Atendimentos" saiu do topo');
 assert.doesNotMatch(html, /cp-icon-btn desktop-only/, 'ícones desktop duplicados (Atendimentos/Agenda) saíram do topo');
-assert.match(html, /id="topBell" title="Central de atenção"/, 'o sino deixou de se dizer "Notificações" (abre a Central de atenção)');
+// v1205 — a Central de atenção foi removida; o sino agora leva direto pra Agenda (o rótulo
+// acompanhou). A intenção original deste teste segue igual: o sino não pode voltar a se dizer
+// "Notificações" genérico.
+assert.match(html, /id="topBell" title="Abrir a Agenda"/, 'o sino precisa dizer pra onde leva (a Agenda)');
 
 console.log('v885-prioridade-por-fatos: ok');
