@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { processZipBuffer, transcribeAudio } from '../api/_pipeline.js';
+import { processZipBuffer, transcreverBuffer } from '../api/_pipeline.js';
 
 // v979 (achado durante o pedido do dono pra travar "arquivo bomba") — api/analisar.js
 // importava `processZipBuffer` de api/_pipeline.js, mas essa função nunca existia lá.
@@ -15,37 +15,30 @@ assert.equal(typeof processZipBuffer, 'function', 'processZipBuffer precisa exis
 // de que processZipBuffer existe continua acima: api/receber-zip-atalho.js (Atalho do iPhone)
 // ainda depende dela.
 
-// v979 (arquivo "bomba") — transcribeAudio descompactava o áudio inteiro (.async) e só
-// DEPOIS conferia o tamanho. Um ZIP que declara um áudio gigante (pequeno fechado, imenso
-// quando aberto) já tinha sido lido inteiro pra memória antes da rejeição. Agora o tamanho
-// DECLARADO pelo ZIP é checado antes de descompactar — igual já era feito para o .txt.
-const zipComAudioGigante = {
-  files: {
-    'audio-gigante.opus': {
-      _data: { uncompressedSize: 30 * 1024 * 1024 }, // acima do teto de 24 MB do Whisper
-      async() { throw new Error('não deveria descompactar um áudio acima do limite declarado'); }
-    }
-  }
-};
-const textoRecusado = await transcribeAudio({ zip: zipComAudioGigante, audioName: 'audio-gigante.opus', openai: null });
-assert.equal(textoRecusado, '', 'áudio acima do tamanho declarado deve ser recusado sem tentar descompactar');
-console.log('v979-zip-bomba: áudio acima do limite declarado é recusado antes de descompactar');
+// v979 (arquivo "bomba") — a proteção original vivia em transcribeAudio: checar o tamanho
+// DECLARADO pelo ZIP antes de descompactar, pra um áudio "pequeno fechado, imenso quando
+// aberto" não ser lido inteiro pra memória. v1194 — transcribeAudio foi removida (não tinha
+// chamador em produção desde que a importação passou a usar transcreverArquivosExtraidos +
+// transcreverBuffer). As mesmas duas camadas de proteção continuam, e é isso que se trava aqui:
+//
+// 1) ANTES de descompactar: processZipBuffer soma o tamanho declarado (zipEntrySize) dos áudios
+//    selecionados e recusa acima de MAX_SELECTED_AUDIO_BYTES — a extração (.async) só acontece
+//    depois dessa soma.
+const pipelineSrc = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
+const extracaoInicio = pipelineSrc.indexOf('includeExtractedFiles === true');
+assert.ok(extracaoInicio > 0, 'o bloco de extração de áudios precisa existir em processZipBuffer');
+const blocoExtracao = pipelineSrc.slice(extracaoInicio, pipelineSrc.indexOf('async("nodebuffer")', extracaoInicio));
+assert.match(blocoExtracao, /zipEntrySize/, 'o tamanho DECLARADO (zipEntrySize) precisa ser conferido antes de qualquer .async — proteção v979 contra arquivo bomba');
+assert.match(blocoExtracao, /MAX_SELECTED_AUDIO_BYTES/, 'o teto de áudio selecionado precisa ser aplicado antes da descompactação');
 
-// Áudio dentro do limite continua chegando até a chamada da OpenAI normalmente (aqui só
-// confirmamos que NÃO é recusado pelo novo guard cedo — sem OpenAI configurada, a função
-// segue até tentar usar `openai` e falha ali, não no guard de tamanho).
-const zipComAudioPequeno = {
-  files: {
-    'audio-pequeno.opus': {
-      _data: { uncompressedSize: 1024 },
-      async: async () => Buffer.from('conteudo-pequeno')
-    }
-  }
-};
+// 2) DEPOIS de extraído: transcreverBuffer recusa buffer acima de 24 MB (teto do Whisper),
+//    mesmo que o ZIP tenha declarado tamanho menor do que o real.
 await assert.rejects(
-  () => transcribeAudio({ zip: zipComAudioPequeno, audioName: 'audio-pequeno.opus', openai: null }),
-  'áudio dentro do limite não deve ser recusado pelo guard de tamanho (deve tentar seguir para a transcrição)'
+  () => transcreverBuffer(Buffer.alloc(25 * 1024 * 1024), '.opus', {}, 'org-teste'),
+  /grande demais/i,
+  'áudio acima de 24 MB reais deve ser recusado pela transcrição'
 );
+console.log('v979-zip-bomba: tamanho declarado conferido antes de descompactar e teto de 24 MB mantido na transcrição');
 
 // v979 (lentidão/travamento reportado pelo dono) — fixVersionText rodava a cada 2s, para
 // sempre, varrendo todo texto do documento inteiro. Reduzido para 30s (mesmo ritmo já

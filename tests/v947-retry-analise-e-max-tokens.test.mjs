@@ -31,7 +31,9 @@ assert.match(chamarGPT4JsonSrc, /err\.code = "ETIMEDOUT"/, 'o timeout da chamada
 // sobrou do orçamento. A intenção original deste teste continua travada: erro passageiro não
 // descarta a análise (sempre existe uma segunda chance) e o envelope cabe no maxDuration.
 const inicio = pipeline.indexOf('export async function analyzeWithBrain');
-const fim = pipeline.indexOf('export async function compararEvolucao', inicio);
+// v1194 — o marcador de fim era compararEvolucao, removida por não ter chamador; o vizinho
+// seguinte de analyzeWithBrain agora é getOpenAIRaw.
+const fim = pipeline.indexOf('export function getOpenAIRaw', inicio);
 const analyzeSrc = pipeline.slice(inicio, fim);
 assert.match(analyzeSrc, /model: modeloAnalise\(\),[\s\S]*?timeout: janelaPrincipalMs/,
   '1ª tentativa: modelo principal com a janela grande');

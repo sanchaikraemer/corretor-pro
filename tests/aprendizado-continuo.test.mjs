@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { prepararTimelineParaAprendizado, ranquearCasosAprendidos, extrairInteligenciaObservada, jeitoAprendidoCompacto } from "../api/_pipeline.js";
+import { prepararTimelineParaAprendizado, extrairInteligenciaObservada, jeitoAprendidoCompacto } from "../api/_pipeline.js";
 
 const timelineLorena = [
   { date:"09/06/2026", time:"15:51", author:"Construtora Senger", text:"No momento não estamos adquirindo novas áreas. Vou levar a informação do terreno para conhecimento da direção." },
@@ -17,30 +17,8 @@ assert.match(material, /já vendeu seu terreno/i, "a condução real mais recent
 assert.doesNotMatch(material, /algum retorno da direção/i, "sugestão da própria IA nunca pode virar aprendizado");
 assert.match(material, /CORRETOR \(Construtora Senger\)/, "o autor comercial precisa ser reconhecido como corretor");
 
-const casos = [
-  {
-    id:"permuta",
-    situacao:"Cliente condicionou a compra de apartamento à venda de terreno próprio após a permuta não avançar",
-    sinalCliente:"Disse que dependia do terreno",
-    impedimento:"Precisa vender o terreno antes de comprar",
-    regra:"Quando a permuta não avançou e a compra depende do bem próprio, perguntar se o bem já foi vendido e conectar à retomada da compra",
-    produto:"Boulevard",
-    etapa:"retomada",
-    resultado:"observada"
-  },
-  {
-    id:"consultorio",
-    situacao:"Pai avalia sala comercial para consultório do filho médico",
-    sinalCliente:"Filho fará especialização em urologia",
-    impedimento:"Ainda avaliando metragem",
-    regra:"Retomar pelo uso futuro do consultório e confirmar a metragem necessária",
-    produto:"Premium Office",
-    etapa:"qualificação",
-    resultado:"validada"
-  }
-];
-const ranking = ranquearCasosAprendidos(casos, "A cliente do Boulevard precisava vender o terreno e agora quero saber se já vendeu para continuar a compra", 2);
-assert.equal(ranking[0].id, "permuta", "o caso comercial semanticamente semelhante deve vir primeiro");
+// (v1194 — o teste de ranquearCasosAprendidos saiu junto com a função: ela não tinha nenhum
+// chamador fora deste teste desde que o prompt passou a usar jeitoAprendidoCompacto.)
 
 let promptRecebido = "";
 const openaiMock = {

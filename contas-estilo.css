@@ -53,17 +53,6 @@ body > *{ margin-top:auto; margin-bottom:auto; }
   box-shadow:0 14px 36px rgba(0,10,16,.25);
 }
 .cartao.larga{ max-width:640px; }
-.selo-proto{
-  display:inline-block;
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:.03em;
-  color:var(--cp-muted);
-  border:1px solid var(--cp-border);
-  border-radius:999px;
-  padding:3px 10px;
-  margin-bottom:14px;
-}
 h1{ font-size:19px; margin:0 0 4px; font-weight:800; }
 p.sub{ color:var(--cp-soft); font-size:13.5px; margin-top:0; line-height:1.5; }
 label{ display:block; font-size:13px; font-weight:700; color:var(--cp-soft); margin:16px 0 6px; }
@@ -186,10 +175,6 @@ a{ color:var(--cp-coral); text-decoration:none; font-weight:700; }
 table{ width:100%; border-collapse:collapse; margin-top:12px; }
 th,td{ text-align:left; padding:9px 6px; font-size:13.5px; border-bottom:1px solid var(--cp-border); }
 th{ color:var(--cp-muted); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-.bloco-teste{ margin-top:28px; padding-top:20px; border-top:1px dashed var(--cp-border); }
-.bloco-teste h2{ font-size:14.5px; margin-bottom:4px; }
-.linha-teste{ display:flex; gap:8px; margin-top:12px; }
-.linha-teste input{ flex:1; }
 /* v996 — painel administrativo ganha resumo, busca/filtro e mais espaço na tela (modelo 1
    escolhido entre as 4 propostas de layout). */
 .painel-largo{ max-width:1200px; }
@@ -302,16 +287,6 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
   .tabela-admin tr.acoes-abertas .acoes-linha{ display:flex; margin-top:8px; }
 }
 
-.demo-contas{
-  background:var(--cp-sidebar);
-  border:1px solid var(--cp-border);
-  border-radius:10px;
-  padding:12px 14px;
-  font-size:12px;
-  margin-top:18px;
-  color:var(--cp-soft);
-  line-height:1.6;
-}
 
 /* v1117 — contato do corretor na lista do painel (WhatsApp + e-mail). */
 .tabela-admin .link-zap{ color:#12a150; font-weight:700; text-decoration:none; white-space:nowrap; }

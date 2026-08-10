@@ -1262,11 +1262,6 @@ function diagnosticoClienteHTML(a){
 }
 
 
-// Módulo antigo de "mensagens por objetivo" desativado.
-// Ele criava uma segunda camada paralela de sugestões estilo sistema antigo. Agora a tela trabalha
-// somente com as 3 respostas principais geradas pela IA.
-const OBJETIVOS_MSG_LABELS = [];
-
 function renderAnalysis(analysis, lead){
   state.analysis = analysis || null;
   showCard("analysisCard", !!analysis);
@@ -4733,24 +4728,6 @@ function badgeTipoContato(t){
   return `<span title="Tipo de contato — clique pra mudar" id="badgeTipoContato" style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:950;color:${cfg.cor};background:${cfg.bg};border:1px solid ${cfg.cor};letter-spacing:.02em;cursor:pointer">${cfg.txt}</span>`;
 }
 
-const TIPO_RETOMADA_LABEL = {
-  "quente-fechar": { txt:"Pronto pra fechar", cor:"var(--acao)", bg:"rgba(104,255,149,.14)" },
-  "morno-confirmar": { txt:"Confirmar próximo passo", cor:"var(--timing)", bg:"rgba(255,45,155,.14)" },
-  "frio-reaquecer": { txt:"Reativar", cor:"var(--dados)", bg:"rgba(55,232,255,.12)" },
-  "objecao-tratar": { txt:"Tratar objeção", cor:"var(--morno)", bg:"rgba(184,194,201,.14)" },
-  "informacao-enviar": { txt:"Enviar material", cor:"var(--cerebro)", bg:"rgba(196,92,255,.14)" },
-  "primeiro-contato": { txt:"Primeiro contato", cor:"var(--lime)", bg:"rgba(255,98,88,.12)" },
-  "stand-by": { txt:"Stand-by", cor:"var(--muted)", bg:"rgba(255,255,255,.06)" }
-};
-
-const MATERIAL_LABEL = {
-  "planta":"Planta","tabela":"Tabela","video":"Vídeo","folder":"Folder",
-  "localizacao":"Localização","memorial":"Memorial descritivo","simulacao":"Simulação",
-  "comparativo":"Comparativo","convite-visita":"Convite pra visita",
-  "material-valorizacao":"Valorização","material-wellness":"Lazer/wellness"
-};
-
-
 const EVENTO_LABEL = {
   "whatsapp_aberto": { icone:"", txt:"Abriu WhatsApp", cor:"var(--acao)" },
   "mensagem_copiada": { icone:"", txt:"Copiou mensagem", cor:"var(--dados)" },
@@ -4772,21 +4749,6 @@ function formatarTempoRelativo(iso){
   }catch(_){ return iso.slice(0,10); }
 }
 
-const EVOLUIU_LABEL = {
-  "avancou": { txt:"Avançou", cor:"var(--acao)" },
-  "estagnou": { txt:"➖ Estagnou", cor:"var(--muted)" },
-  "esfriou": { txt:"Parou", cor:"var(--risco)" },
-  "fechou": { txt:"Fechou", cor:"var(--acao)" },
-  "perdeu": { txt:"Perdeu", cor:"var(--risco)" }
-};
-const FUNCIONOU_LABEL = {
-  "sim": { txt:"✓ funcionou", cor:"var(--acao)" },
-  "parcial": { txt:"~ parcial", cor:"var(--morno)" },
-  "nao": { txt:"✗ não funcionou", cor:"var(--risco)" },
-  "sem-dados": { txt:"sem dados", cor:"var(--muted)" }
-};
-
-
 function renderHistoricoContatos(lead){
   const eventos = lead.analysis?.aprendizado?.eventos || [];
   if(!eventos.length) return "";
@@ -4806,22 +4768,6 @@ function renderHistoricoContatos(lead){
     ${itens}
   </div>`;
 }
-
-const MATERIAL_TEMPLATE = {
-  "planta": "Posso te mandar a planta do imóvel, fica mais fácil pra você visualizar.",
-  "tabela": "Te mando a tabela com os valores atualizados e condições de pagamento.",
-  "video": "Tenho um vídeo curto do imóvel, dá pra ter uma noção bem boa. Te envio?",
-  "folder": "Te mando o folder digital com todas as informações principais.",
-  "localizacao": "Vou te enviar a localização exata, dá uma olhada na região.",
-  "memorial": "Posso te mandar o memorial descritivo com os detalhes técnicos.",
-  "simulacao": "Faço uma simulação personalizada de pagamento pra você?",
-  "comparativo": "Te mando um comparativo entre as opções pra você decidir melhor.",
-  "convite-visita": "Que tal marcarmos uma visita? Tenho horários essa semana.",
-  "material-valorizacao": "Te mando um material mostrando a valorização da região nos últimos anos.",
-  "material-wellness": "Vou te mandar um material sobre a área de lazer do condomínio."
-};
-
-
 
 // Volta da tela do lead: se veio de um grupo, retorna pro grupo; senão, pra home dos botões.
 // v1026 — o botão "Voltar" usava history.back(), que pode levar pra QUALQUER coisa que
@@ -10372,7 +10318,6 @@ const CP_TETO_ABANDONO = 90;       // satura o abandono (lead de 300 dias não v
 const CP_DOSE_DIA = 10;            // "Fazer agora" mostra no máx. 10 por dia (dose executável)
 const CP_MIN_MSGS_PRIORIDADE = 5;  // <5 mensagens DO CLIENTE = prospecção rasa, não entra na fila
 const CP_TETO_BARRA_INTERESSE = 100;// barra "Interesse do cliente" cheia em 100 mensagens do cliente
-const CP_JANELA_INTERESSE_DIAS = 90;// só conta mensagens do cliente dos últimos 90 dias (interesse atual)
 // v889: engajamento passa a contar só as mensagens DO CLIENTE (não as minhas explicando) —
 // mesma régua da barra de interesse (decisão do dono).
 function cpNotaPrioridade(l){
@@ -12199,51 +12144,6 @@ try{ renderCorretorProDashboard(state.itemsAtivos||[],state.todosLeads||[]); }ca
    - remove diagnósticos/mensagens duplicados do detalhe
    - corrige prioridades incompatíveis com oportunidade encerrada
    ============================================================ */
-
-const UI670_OPP_LABEL = {
-  "descoberta":["Em descoberta","neutral"],
-  "interesse":["Interesse identificado","info"],
-  "comparacao":["Em comparação","info"],
-  "analise-financeira":["Análise financeira","warn"],
-  "negociacao":["Em negociação","warn"],
-  "decisao":["Em decisão","warn"],
-  "ganha":["Venda concluída","success"],
-  "perdida":["Oportunidade encerrada","danger"],
-  "encerrada-sem-decisao":["Oportunidade encerrada","neutral"]
-};
-const UI670_REL_LABEL = {
-  "ativo":["Relacionamento ativo","success"],
-  "aguardando-nova-oportunidade":["Parceria ativa","success"],
-  "contato-periodico":["Contato periódico","info"],
-  "pausado":["Relacionamento pausado","neutral"],
-  "encerrado":["Relacionamento encerrado","danger"]
-};
-const UI670_ACTION_LABEL = {
-  "responder-agora":["Responder agora","danger"],
-  "aguardando-resposta":["Aguardando resposta","warn"],
-  "compromisso-agendado":["Compromisso agendado","info"],
-  "retomar":["Retomar contato","warn"],
-  "sem-acao-urgente":["Sem ação urgente","success"]
-};
-const UI670_CONTACT_LABEL = {
-  "comprador-direto":"Comprador direto",
-  "corretor-parceiro":"Corretor parceiro",
-  "intermediario":"Intermediário",
-  "familiar":"Familiar/intermediário",
-  "investidor":"Investidor",
-  "empresa":"Empresa",
-  "outro":"Contato"
-};
-const UI670_RESULT_LABEL = {
-  "em-andamento":"Em andamento",
-  "venda-conosco":"Venda conosco",
-  "comprou-outra-opcao":"Comprou outra opção",
-  "condicoes-incompativeis":"Condições incompatíveis",
-  "desistiu":"Desistiu desta oportunidade",
-  "sem-resposta":"Sem resposta",
-  "oportunidade-futura":"Oportunidade futura",
-  "outro":"Outro resultado"
-};
 
 function ui670TextoAnalise(lead){
   const a=lead?.analysis||{},mc=a?.modeloComercial||{};

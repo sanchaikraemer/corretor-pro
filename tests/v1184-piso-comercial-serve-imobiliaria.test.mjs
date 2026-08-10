@@ -50,11 +50,17 @@ assert.match(
 );
 
 // ---------------------------------------------------------------------------
-// 5) Os textos prontos de material, que aparecem na tela do lead, também não podem
-//    presumir lançamento (o corretor de revenda não tem decorado pra convidar).
+// 5) Os textos prontos de material também não podem presumir lançamento (o corretor de
+//    revenda não tem decorado pra convidar).
+//
+// v1194 — a tabela MATERIAL_TEMPLATE inteira saiu do app.js: era código morto (nenhuma tela
+// desenhava aquelas frases — só a declaração existia, sem nenhum uso; o mesmo padrão de
+// "teste guardando fantasma" descrito nas NOTAS-v1186). O assert positivo que cobrava o
+// convite de visita "neutro" cobrava texto que nunca chegava à tela. Os asserts negativos
+// continuam: se alguém recriar textos prontos de material, eles não podem nascer presumindo
+// lançamento.
 // ---------------------------------------------------------------------------
 assert.doesNotMatch(app, /visita ao decorado\? Tenho horários/i, "o convite de visita não pode presumir decorado");
 assert.doesNotMatch(app, /planta do apartamento, fica mais fácil/i, "a planta é do imóvel, não necessariamente de apartamento");
 assert.doesNotMatch(app, /vídeo curto do empreendimento/i, "o vídeo é do imóvel, não necessariamente de um empreendimento");
 assert.doesNotMatch(app, /lazer e wellness do empreendimento/i, "área de lazer não pode presumir empreendimento em lançamento");
-assert.match(app, /"convite-visita": "Que tal marcarmos uma visita\?/, "o convite de visita continua existindo, só neutro");
