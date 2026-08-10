@@ -1070,12 +1070,28 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .lead-ui670{display:flex;flex-direction:column;gap:14px;width:100%;padding-bottom:12px}
 .ui670-action-card h3{font-family:var(--font-display);font-size:18px;line-height:1.35;margin:0;color:#fff;max-width:920px}
 .ui670-inline-panel{margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--input)}.ui670-inline-panel>b{display:block;font-size:11px;color:var(--text);margin-bottom:8px}.ui670-quick-dates{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.ui670-quick-dates button{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;cursor:pointer}.ui670-inline-panel input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
-/* v1207 — data + hora + Confirmar numa linha só (quebra sozinha no celular). A hora é opcional;
-   o painel do lead antes só tinha data e o dono não achava onde marcar o horário combinado. */
-.ui670-schedule-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.ui670-schedule-row input{flex:1 1 118px;min-width:0}
-.ui670-schedule-ok{flex:0 0 auto;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:950;cursor:pointer}
-.ui670-schedule-dica{display:block;margin-top:6px;color:var(--muted);font-size:10px;line-height:1.35}
+/* ===== v1208 — Painel de agendamento (o mesmo no lead e na Agenda) =====
+   Print do dono: duas caixas pretas vazias com uma setinha, impossíveis de ler, e o painel
+   fechando quando ele ia escolher a hora. O fechar era o salvamento automático (corrigido no
+   app.js); o "vazio" era o campo nativo do Android herdando esquema de cor CLARO — o texto guia
+   ("dd/mm/aaaa") e os ícones saíam escuros sobre fundo escuro. `color-scheme:dark` conserta isso
+   no campo E no calendário/relógio que ele abre. 16px de fonte evita o zoom automático do
+   celular ao tocar no campo; 48px de altura é alvo de dedo. Especificidade em dois níveis
+   (.cp1208-agendar .cp1208-campo) porque `.ui670-inline-panel input` já pintava esses campos. */
+.cp1208-agendar{display:flex;flex-direction:column;gap:11px;margin-top:10px}
+.cp1208-agendar .cp1208-bloco{display:flex;flex-direction:column;gap:7px}
+.cp1208-agendar .cp1208-rot{font-size:10px;font-weight:950;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.cp1208-agendar .cp1208-rot i{font-style:normal;font-weight:800;letter-spacing:0;text-transform:none}
+.cp1208-agendar .cp1208-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cp1208-agendar .cp1208-chip{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--soft);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;line-height:1;cursor:pointer;min-height:36px}
+.cp1208-agendar .cp1208-chip:hover{border-color:rgba(255,255,255,.28)}
+.cp1208-agendar .cp1208-chip.ativo{border-color:var(--acao,#68FF95);background:rgba(104,255,149,.15);color:var(--acao,#68FF95)}
+.cp1208-agendar .cp1208-campo{color-scheme:dark;width:100%;box-sizing:border-box;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:11px;padding:12px 13px;font-size:16px;font-family:inherit;min-height:48px}
+.cp1208-agendar .cp1208-campo:focus{outline:none;border-color:var(--acao,#68FF95)}
+.cp1208-agendar .cp1208-ok{width:100%;background:var(--acao,#68FF95);color:#04371F;border:1px solid var(--acao,#68FF95);border-radius:12px;padding:14px;font-size:14px;font-weight:950;cursor:pointer;min-height:50px}
+.cp1208-agendar .cp1208-resumo{font-size:12px;color:var(--muted);line-height:1.4;text-align:center}
+/* A caixa do "Reagendar" no cartão da Agenda (o painel é o mesmo, só muda a moldura). */
+.cp1208-caixa{margin-top:6px;background:var(--input);border:1px solid var(--line);border-radius:12px;padding:11px;flex-direction:column;min-width:min(280px,100%);flex:1 1 100%}
 
 @media(max-width:700px){
   .lead-ui670{gap:11px}.ui670-action-card h3{font-size:16px}

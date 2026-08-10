@@ -7,7 +7,11 @@ const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 // 0. A tela: campo de hora opcional no painel de reagendar, e os três lugares que mostram a
 // data do lembrete na Agenda também mostram a hora quando ela existir.
 {
-  assert.match(appSrc, /<input type="time" id="reagHora_\$\{id\}"/, 'precisa existir o campo de hora (opcional) no painel de reagendar');
+  // v1208 — o painel de reagendar da Agenda passou a ser o MESMO painel do lead
+  // (cpAgendarPainelHTML), então o campo de hora mudou de id. A intenção da v1199 continua: tem
+  // que existir campo de hora, opcional, no painel de reagendar.
+  assert.match(appSrc, /<input type="time" class="cp1208-campo" id="\$\{pref\}Hora"/, 'precisa existir o campo de hora (opcional) no painel de reagendar');
+  assert.match(appSrc, /cpAgendarPainelHTML\(id, "reag_"\+id, atual\)/, 'o painel de reagendar da Agenda precisa usar o painel único');
   assert.match(appSrc, /async function reagendarLembrete\(id, dateStr, horaStr\)\{/, 'reagendarLembrete precisa aceitar a hora, opcional');
   assert.match(appSrc, /body: JSON\.stringify\(payloadComCerebro\(\{ id, action:"reagendar-lembrete", data: dateStr, hora: horaValida \? horaStr : undefined \}\)\)/, 'a hora precisa ser enviada pro servidor quando válida');
   const ocorrencias = (appSrc.match(/\$\{lem\.hora \? ` às \$\{escapeHtml\(lem\.hora\)\}` : ""\}/g) || []).length;
