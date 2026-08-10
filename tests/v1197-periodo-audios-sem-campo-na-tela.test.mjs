@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// v1196 — O CAMPO "Período padrão dos áudios" SAIU DA TELA DO CÉREBRO, MAS A PROTEÇÃO FICOU.
+// v1197 — O CAMPO "Período padrão dos áudios" SAIU DA TELA DO CÉREBRO, MAS A PROTEÇÃO FICOU.
 //
 // Contexto (conversa com o dono, 10/08/2026): depois que a v1141 fez a reimportação reaproveitar
 // transcrição e análise, o dono propôs apagar o período dos áudios de vez. A resposta combinada
@@ -34,7 +34,7 @@ assert.match(importacao, /function janelaAudioPadrao\(\)\{[\s\S]*?diasImportacao
 assert.match(importacao, /const audioWindowDays = janelaAudioDaImportacao\(\);/, "a importação segue resolvendo o período sem perguntar");
 
 // ── 3. Salvar ou zerar o Cérebro NÃO rebaixa um valor salvo pra 90 ─────────────────────────────
-// Quem tinha um valor próprio (ex.: 180) salvo antes da v1196 continua com ele: o save preserva
+// Quem tinha um valor próprio (ex.: 180) salvo antes da v1197 continua com ele: o save preserva
 // o que está salvo em vez de ler um formulário que não existe mais (ler qs(...) de um campo
 // ausente viraria NaN e cravaria 90 por cima do valor da pessoa, silenciosamente).
 assert.match(app, /function cpDiasImportacaoSalvo\(\)\{[\s\S]*?diasImportacao[\s\S]*?return 90;/, "existe o leitor do valor salvo com padrão 90");
@@ -45,4 +45,4 @@ assert.match(app, /function cpDiasImportacaoSalvo\(\)\{[\s\S]*?diasImportacao[\s
   assert.match(zerar, /diasImportacao: cpDiasImportacaoSalvo\(\)/, "zerar o Cérebro também preserva o período");
 }
 
-console.log("v1196-periodo-audios-sem-campo-na-tela: ok");
+console.log("v1197-periodo-audios-sem-campo-na-tela: ok");

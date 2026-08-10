@@ -45,9 +45,9 @@ assert.match(
 }
 
 // ── 3. O período segue aplicado e informado — sem campo na tela ───────────────────────────────
-// v1196 — o campo "Período padrão dos áudios" saiu também do Cérebro (decisão do dono): virou
+// v1197 — o campo "Período padrão dos áudios" saiu também do Cérebro (decisão do dono): virou
 // proteção fixa interna. Este bloco guardava o campo; agora guarda a ausência dele — os detalhes
-// do comportamento interno estão em v1196-periodo-audios-sem-campo-na-tela.
+// do comportamento interno estão em v1197-periodo-audios-sem-campo-na-tela.
 assert.doesNotMatch(html, /id="cerebroDiasImportacao"/, "o campo do período não pode voltar pra tela do Cérebro");
 assert.match(app, /Período dos áudios:<\/b>/, "o resultado da importação continua dizendo qual período foi aplicado");
 assert.doesNotMatch(app, /ajustar padrão/, "sem atalho pra um campo que não existe mais na tela");

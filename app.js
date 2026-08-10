@@ -5931,7 +5931,7 @@ export function obterCerebroConfigParaAnalise() {
       tom: qs("#cerebroTom")?.value ?? cfg?.tom ?? "",
       diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
-      // v1196 — o campo do período dos áudios saiu da tela: vale o que está salvo (90 por padrão).
+      // v1197 — o campo do período dos áudios saiu da tela: vale o que está salvo (90 por padrão).
       diasImportacao: cfg?.diasImportacao || 90,
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
       // v1139 — não dá pra usar "||" aqui: 0 (resgate desligado) é escolha válida e "||" jogaria
@@ -6795,7 +6795,7 @@ cp7SincronizarCerebroConfigInicial();
 // corretor); rodá-lo hoje juntaria a configuração de contas diferentes na mesma linha. As três
 // auditorias de 08/2026 pediram a retirada. O aviso agora só diz o que houve.
 
-// v1196 — o campo "Período padrão dos áudios" saiu da tela do Cérebro. O período continua
+// v1197 — o campo "Período padrão dos áudios" saiu da tela do Cérebro. O período continua
 // existindo por dentro (limita só a transcrição de áudio na importação — proteção de custo),
 // mas agora vale o que já está salvo, sem formulário: quem tinha um valor próprio mantém,
 // todo o resto fica no padrão 90. Salvar o Cérebro NÃO pode rebaixar um valor salvo pra 90.
