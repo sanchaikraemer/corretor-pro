@@ -195,7 +195,7 @@ function janelaAudioPadrao(){
 // antes da decisão — foi a v1116 tentando esconder o anel, mas o card de progresso continuava lá.
 //
 // O período continua existindo por dentro: vem do que está salvo no Cérebro (90 dias por
-// padrão). Desde a v1197 o campo saiu também da tela do Cérebro (decisão do dono) — é uma
+// padrão). Desde a v1198 o campo saiu também da tela do Cérebro (decisão do dono) — é uma
 // proteção de custo fixa, não uma escolha; o resultado da importação segue mostrando qual
 // período foi aplicado. O que acabou foi o pedágio a cada importação.
 function janelaAudioDaImportacao(){

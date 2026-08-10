@@ -1,57 +1,73 @@
-# v1197 — o "Período padrão dos áudios" sai da tela do Cérebro (a proteção fica por dentro)
+# v1197 — "copiei sem querer e não mandei": agora dá pra desfazer
 
-Conversa com o dono (10/08/2026), na sequência da v1141: depois que a reimportação passou a
-reaproveitar transcrição e análise já pagas, ele propôs apagar de vez o período dos áudios
-("creio que seja melhor até deletarmos isso, e também limpar as linhas no código dessa função").
+## O relato
 
-A resposta foi um caminho do meio, e ele topou ("vamos seguir conforme sua orientação, ou seja,
-mantenha mas omita da tela"):
+Palavras do dono (10/08/2026, com print da tela do cliente Bocorni): *"quero que veja como podemos
+fazer pra deletar essa resposta que acabei copiando mas não mandei, foi sem querer"*.
 
-- **Apagar de vez sairia caro.** O período nunca fez diferença na reimportação (o que já foi
-  transcrito volta de graça desde a v1141), mas na PRIMEIRA importação ele é a única proteção de
-  custo: um cliente antigo com anos de conversa e centenas de áudios seria transcrito inteiro —
-  e cada transcrição é paga. Importar uma carteira inteira sem esse recorte multiplicaria o custo
-  de entrada sem ninguém pedir.
-- **Mas ninguém precisava ver esse número.** O campo no Cérebro só gerava dúvida ("Dias de
-  conversa considerados na importação: 90 — como assim?") e, na prática, ninguém ajustava.
+No print, a mensagem sugerida aparecia em **Últimas mensagens** como se tivesse sido enviada, e o
+painel do lado registrava *"Copiou mensagem"* e *"Contato manual — Mensagem enviada"*.
 
-## O que mudou
+## O que estava acontecendo (e o que doía de verdade)
 
-1. **O campo "Período padrão dos áudios" saiu da tela do Cérebro** (`index.html`). A seção
-   "Configurações técnicas" agora começa em "Atendimentos por dia".
-2. **A proteção continua idêntica por dentro**: toda importação segue transcrevendo só os áudios
-   dos últimos 90 dias da conversa (mensagens escritas entram completas sempre), e o servidor
-   segue com o mesmo recorte de sempre (`api/_pipeline.js`, intocado).
-3. **Salvar ou zerar o Cérebro não rebaixa valor de ninguém.** Este era o risco escondido da
-   remoção: `salvarCerebro`/`zerarCerebroTudo` liam o campo do formulário — com o campo ausente,
-   a leitura viraria vazio e o save gravaria 90 por cima de quem tinha um valor próprio (ex.: 180),
-   silenciosamente. Agora os dois usam `cpDiasImportacaoSalvo()`, que preserva o que já está salvo
-   no aparelho (padrão 90 se não houver nada válido).
-4. **O resultado da importação continua dizendo qual período foi aplicado** — honestidade mantida —
-   mas sem o atalho "ajustar padrão", que levaria a um campo que não existe mais
-   (`js/importacao.js`).
+Copiar uma sugestão registra **três** coisas de uma vez:
 
-Nota de numeração: esta atualização foi preparada como 1196, mas a 1196 saiu no mesmo dia com a
-biblioteca do login enxuta (outra frente de trabalho) — por isso esta virou 1197.
+1. a mensagem no histórico do cliente;
+2. o **atendimento do dia** — e é esta a mais cara: cliente atendido sai da fila "Fazer agora" pelo
+   período de descanso configurado (padrão 5 dias);
+3. a marca de uso que alimenta o Desempenho ("Copiou mensagem").
 
-## Validação
+Ou seja: uma cópia sem querer não sujava só o histórico — **tirava o cliente da fila do dia**, sem
+que ninguém tivesse falado com ele. E não havia como voltar atrás.
 
-| Verificação | Resultado |
-|---|---|
-| Suíte completa | 366 testes verdes |
-| Teste de comportamento novo | `v1197-periodo-audios-sem-campo-na-tela` (campo ausente da tela; janela de 90 dias viva no servidor e no app; salvar/zerar preserva o valor salvo em vez de cravar 90) |
-| Testes ajustados | `v1060-cerebro-regras-objecoes-em-acordeao` (campo saiu da lista de IDs), `v1141-importacao-sem-pergunta-de-periodo` (o bloco que guardava o campo agora guarda a ausência dele) |
-| `npm run build` | ok, versão 1197 |
-| Navegador de verdade | app publicado aberto em Chromium headless (390×844 e desktop): tela do Cérebro sem o campo, sem erro de JavaScript, seção "Configurações técnicas" íntegra começando em "Atendimentos por dia" |
+## O que mudou na tela
 
-## Arquivos alterados
+No **Últimas mensagens**, a mensagem que o app registrou quando você copiou agora tem um **✕** do
+lado direito. Tocar nele pergunta:
 
-**Código:** `index.html`, `app.js`, `js/importacao.js`
+> **Não enviei essa mensagem**
+> Ela sai do histórico deste cliente. Se foi a única que você copiou hoje, o atendimento de hoje
+> também é desfeito e o cliente volta pra fila.
 
-**Documentação:** `NOTAS-v1197.md` (novo)
+Confirmando, as três coisas são desfeitas de uma vez.
 
-**Versão:** `package.json`, `package-lock.json`
+**O ✕ só aparece na mensagem que o app registrou.** Fala que veio da conversa exportada do
+WhatsApp — sua ou do cliente — não tem o botão: aquilo é registro do que aconteceu de verdade, e o
+servidor também recusa apagar por esse caminho, mesmo que alguém tente por fora.
 
-**Testes:** `tests/v1197-periodo-audios-sem-campo-na-tela.test.mjs` (novo),
-`tests/v1060-cerebro-regras-objecoes-em-acordeao.test.mjs`,
-`tests/v1141-importacao-sem-pergunta-de-periodo.test.mjs`
+## A regra do atendimento (pensada pro dia a dia)
+
+O atendimento do dia só é desfeito se, depois de tirar aquela mensagem, **não sobrar nenhuma outra
+mensagem copiada no mesmo dia** para aquele cliente. Se você copiou duas e quer apagar só uma, o
+atendimento continua valendo — porque a outra ainda vale.
+
+Atendimento de **outros dias** nunca é tocado. **Observação** feita no mesmo dia também não: ela é
+trabalho de verdade, não efeito da cópia.
+
+## Como foi conferido
+
+- **A rota rodou de verdade** contra um banco simulado, em 5 situações: a única cópia do dia (some
+  do histórico e o atendimento é desfeito), duas cópias no mesmo dia (apaga uma e o atendimento
+  continua), tentativa de apagar fala do cliente (recusada, e nada é gravado), mensagem que não
+  existe mais (recusada) e chamada sem identificar a mensagem (recusada).
+- **No navegador de verdade**, com um cliente montado com os três tipos de linha (fala do cliente,
+  mensagem copiada e observação): o ✕ apareceu **só** na mensagem copiada, a pergunta apareceu com
+  o texto certo, e o app mandou pro servidor a ação certa, com a mensagem e o cliente certos.
+  Nenhum erro.
+- **Nos dois temas.** No tema claro o ✕ tinha nascido quase invisível (borda e fundo em branco
+  transparente sobre fundo branco) — flagrado em print **antes** de publicar e corrigido. É a
+  mesma armadilha da v1078 e da v1186; agora há um teste que impede a regra de sumir numa faxina
+  futura.
+
+## Testes
+
+`npm test` — **366 testes, todos verdes**. Novo: `tests/v1197-desfazer-mensagem-copiada.test.mjs`,
+que trava a rota (as 5 situações acima), a tela (o ✕ só na mensagem certa, a pergunta antes, o
+redesenho depois) e a aparência nos dois temas.
+
+## O que NÃO entrou
+
+- **Desfazer uma observação** pelo mesmo ✕: parece o mesmo problema, mas não é. A observação também
+  é gravada no campo de Observações do cliente (texto corrido, que a IA lê nas próximas análises);
+  tirar só a linha do histórico deixaria o texto lá, e o corretor acharia que apagou. Fica anotado
+  como pedido separado, se você quiser.
