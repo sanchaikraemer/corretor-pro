@@ -813,14 +813,15 @@ export function planoComercial(tipo) {
   return { tipo: base.tipo, nome: base.nome, dia: env(base.envDia, base.dia), mes: env(base.envMes, base.mes) };
 }
 
-// ─── PREÇO DA ASSINATURA (v1118) ──────────────────────────────────────────────
+// ─── PREÇO DA ASSINATURA (v1118, recalibrado na v1199) ────────────────────────
 // Atenção: isto é o preço da PRÓPRIA plataforma (a mensalidade que o corretor paga pra usar o
 // Corretor Pro) — NÃO é preço de imóvel. A regra do CLAUDE.md que proíbe cravar preço no código
 // é sobre informação comercial do LEAD (empreendimento, condição), que tem que vir do Cérebro.
 // O preço da assinatura é decisão do dono e pode viver aqui, com override por variável de ambiente.
-// Decisão do dono (03/08/2026): Pro R$ 67/mês; Pro Master R$ 97/mês. Aparece no convite quando o
-// corretor bate no limite e na tela de "teste acabou" (entrar.html usa os mesmos valores).
-const PRECOS_PLANOS = { "pro": 67, "pro-master": 97 };
+// Decisão do dono (07/08/2026): Pro R$ 49,90/mês; Pro Master R$ 99,90/mês — substitui a decisão
+// anterior (03/08/2026: R$ 67/R$ 97). Aparece no convite quando o corretor bate no limite e na
+// tela de "teste acabou" (entrar.html usa os mesmos valores).
+const PRECOS_PLANOS = { "pro": 49.9, "pro-master": 99.9 };
 export function precoPlano(tipo) {
   const chave = String(tipo || "").trim() === "pro-master" ? "CORRETOR_PRO_PRECO_PROMASTER" : "CORRETOR_PRO_PRECO_PRO";
   const env = Number(process.env[chave]);
@@ -828,7 +829,7 @@ export function precoPlano(tipo) {
   return PRECOS_PLANOS[String(tipo || "").trim()] ?? PRECOS_PLANOS["pro"];
 }
 export function precoPlanoBR(tipo) {
-  return "R$ " + Number(precoPlano(tipo)).toLocaleString("pt-BR");
+  return "R$ " + Number(precoPlano(tipo)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function mesCalendarioSP() {
