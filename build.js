@@ -51,14 +51,14 @@ const files = [
   "index.html", "share.html", "styles.css", "app.js", "manifest.json",
   "service-worker.js", "favicon.png", "icon-192.png", "icon-512.png", "logo-cp.png",
   "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/tema.js", "js/proposta.js", "js/pwa-install.js",
-  "js/dados-locais.js",
+  "js/dados-locais.js", "js/importacao.js",
   "cadastro.html", "entrar.html", "admin-plataforma.html", "contas-estilo.css", "contas-config.js",
   "recuperar-senha.html", "redefinir-senha.html", "privacidade.html", "termos.html"
 ];
 const textFiles = new Set([
   "index.html", "share.html", "styles.css", "app.js", "manifest.json", "service-worker.js",
   "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/tema.js", "js/proposta.js", "js/pwa-install.js",
-  "js/dados-locais.js",
+  "js/dados-locais.js", "js/importacao.js",
   "cadastro.html", "entrar.html", "admin-plataforma.html", "contas-estilo.css", "contas-config.js",
   "recuperar-senha.html", "redefinir-senha.html", "privacidade.html", "termos.html"
 ]);

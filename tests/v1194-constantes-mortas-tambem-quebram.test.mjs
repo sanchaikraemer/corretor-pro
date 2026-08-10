@@ -17,9 +17,11 @@ import { parse } from 'acorn';
 const raiz = new URL('../', import.meta.url);
 const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
 
+// v1195 — js/importacao.js entrou na lista pelo mesmo motivo da guarda da v1186: constantes do
+// app.js (CP_IMPORT_PENDENTE_KEY, KEEP_RE…) passaram a ser lidas só de lá.
 const acompanhantes = ['index.html','share.html','admin-plataforma.html','cadastro.html','entrar.html',
   'js/proposta.js','js/pwa-install.js','js/dados-locais.js','js/state.js','js/dom.js','js/tema.js',
-  'js/commercial-schema.js','build.js','contas-config.js']
+  'js/commercial-schema.js','js/importacao.js','build.js','contas-config.js']
   .map(f => { try { return ler(f); } catch { return ''; } }).join('\n');
 
 // Uso é contado no TEXTO (não só no AST): constante citada dentro de string/template com

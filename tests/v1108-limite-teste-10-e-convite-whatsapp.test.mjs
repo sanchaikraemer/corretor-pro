@@ -12,7 +12,11 @@ const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo"
 // e bater no limite vira momento de venda — aviso com botão direto pro WhatsApp comercial.
 // Conta paga que bater no teto de segurança (200) segue vendo o aviso neutro, sem convite.
 
-const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 const reanalisar = fs.readFileSync(new URL("../api/reanalisar-lead.js", import.meta.url), "utf8");
 

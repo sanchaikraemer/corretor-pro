@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const leadUpdateSrc = fs.readFileSync(new URL('../api/lead-update.js', import.meta.url), 'utf8');
 
 // v1024 — lista de 7 pontos que o dono mandou de uma vez, testando o site de verdade:

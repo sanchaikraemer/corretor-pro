@@ -15,7 +15,11 @@ import assert from 'node:assert/strict';
 // avisa o corretor e pergunta se é o mesmo cliente — nunca funde sozinho, só evita salvar uma
 // duplicata em silêncio sem dar chance de o corretor perceber.
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 const palavrasSrc = app.match(/function _palavrasNome\(valor\)\{[\s\S]*?\n\}/);
 const parecemSrc = app.match(/function nomesParecemMesmoCliente\(nomeA, nomeB\)\{[\s\S]*?\n\}/);

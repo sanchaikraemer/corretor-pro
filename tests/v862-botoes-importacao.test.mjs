@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // v862: na tela de importar conversa, os botões "Nova análise" (#clearAnalysis) e
 // "Diagnóstico" (#diagnoseOpenAI) ficam DESABILITADOS durante todo o processamento
@@ -24,10 +28,16 @@ assert.match(
 // v1186 — o fim do trecho era marcado por `function startProgresso(`, que a auditoria de
 // 09/08/2026 removeu por estar morta (ninguém a chamava). O marcador passa a ser a primeira
 // função DEPOIS de renderEtapas que continua viva.
+// v1195 — o marcador de fim era cpMotivoAnalisePendente, que foi pro pedaço js/importacao.js.
+// setBotoesImportacao e renderEtapas ficaram no app.js (a barra de etapas é da tela, não do
+// processamento), e a primeira função viva depois delas passou a ser userFriendlyError.
 const ini = app.indexOf('function setBotoesImportacao(');
-const fim = app.indexOf('function cpMotivoAnalisePendente(');
+const fim = app.indexOf('export function userFriendlyError(');
 assert.ok(ini !== -1 && fim !== -1 && fim > ini, 'não localizei o trecho das funções de etapa');
-const fonteFuncoes = app.slice(ini, fim);
+// v1195 — as duas funções passaram a ser exportadas (o pedaço js/importacao.js as importa). Este
+// teste as executa de verdade dentro de um `new Function`, que não entende `export`; a palavra é
+// retirada só aqui, na cópia usada pelo teste. O comportamento medido é o mesmo.
+const fonteFuncoes = app.slice(ini, fim).replace(/^export\s+/gm, '');
 
 function criarBotao(){
   return {

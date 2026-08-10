@@ -23,9 +23,11 @@ const raiz = new URL('../', import.meta.url);
 const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
 
 // Onde uma função pode ser "usada": outros arquivos do app, o HTML (onclick=) e os testes.
+// v1195 — js/importacao.js entrou na lista: é o pedaço da importação, e ele IMPORTA do app.js
+// várias funções que agora só têm uso lá. Sem contá-lo, essas funções pareceriam mortas.
 const acompanhantes = ['index.html','share.html','admin-plataforma.html','cadastro.html','entrar.html',
   'js/proposta.js','js/pwa-install.js','js/dados-locais.js','js/state.js','js/dom.js','js/tema.js',
-  'js/commercial-schema.js','service-worker.js','build.js']
+  'js/commercial-schema.js','js/importacao.js','service-worker.js','build.js']
   .map(f => { try { return ler(f); } catch { return ''; } }).join('\n');
 
 const arquivosApi = fs.readdirSync(new URL('api/', raiz)).filter(f => f.endsWith('.js'));
@@ -91,7 +93,10 @@ assert.deepEqual(mortas, [],
 //
 // E o app JÁ resolve cadastro repetido, em três camadas — é isso que precisa continuar de pé.
 {
-  const app = ler('app.js');
+  // v1195 — o processamento da conversa importada (acharLeadExistente, a pergunta "é o mesmo
+  // cliente?") mudou de endereço: foi pro pedaço js/importacao.js, baixado só na hora da
+  // importação. As três camadas continuam de pé; o que muda aqui é só onde o texto mora.
+  const app = ler('app.js') + '\n' + ler('js/importacao.js');
   const persistencia = ler('api/_persistence.js');
 
   // 1) o servidor reconhece o mesmo cliente na importação (telefone, arquivo, nome)
@@ -119,7 +124,9 @@ assert.deepEqual(mortas, [],
 
 // ── E nenhuma rota do servidor pode ficar com ação que ninguém chama ─────────────────────────
 {
-  const frontes = ['app.js','js/proposta.js','js/pwa-install.js','index.html','share.html','admin-plataforma.html']
+  // v1195 — js/importacao.js entrou na lista: as ações preparar/transcrever/analisar/finalizar
+  // são pedidas por processarStorageEmEtapas, que mora nesse pedaço desde a divisão do app.js.
+  const frontes = ['app.js','js/proposta.js','js/pwa-install.js','js/importacao.js','index.html','share.html','admin-plataforma.html']
     .map(f => { try { return ler(f); } catch { return ''; } }).join('\n');
   const acoesDoServidor = new Set();
   for (const arq of arquivosApi) {

@@ -6,6 +6,11 @@ const CORE_ASSETS = [
   // importação de ZIP e na planilha de exportação, e as duas precisam de internet de qualquer
   // jeito (upload, IA). Guardar 96 KB por versão em todo aparelho, pra um uso que nunca acontece
   // offline, era desperdício. Continua sendo guardado pelo staleWhileRevalidate no primeiro uso.
+  //
+  // v1195 — js/importacao.js segue a MESMA regra e por isso também não está nesta lista: ele é o
+  // pedaço do app que processa a conversa importada, e importar exige internet (upload + IA). Cair
+  // no staleWhileRevalidate significa que ele é buscado na primeira importação e fica guardado
+  // dali em diante. Colocá-lo aqui desfaria justamente a economia da divisão.
   '/', '/index.html', '/styles.css?v=__VERSION__', '/app.js?v=__VERSION__',
   '/js/state.js?v=__VERSION__', '/js/dom.js?v=__VERSION__', '/js/proposta.js?v=__VERSION__', '/js/pwa-install.js?v=__VERSION__',
   // v1107 — faltavam no pacote offline: tema.js e commercial-schema.js são imports estáticos do

@@ -133,7 +133,11 @@ assert.equal(_nomeIdentity("Conversa do WhatsApp com Nasser (1).zip"), "nasser",
 assert.equal(_nomeIdentity("Conversa-do-WhatsApp-com-Nasser-enxuto-(2).zip"), "nasser", "sufixos técnicos em qualquer ordem");
 
 // ── 6. Contrato no código: o id do cliente já salvo circula entre as etapas ────────────────────
-const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const storage = fs.readFileSync(new URL("../api/processar-storage.js", import.meta.url), "utf8");
 assert.match(app, /existingLeadId: prep\?\.leadAnterior\?\.id \|\| ""/, "o app manda pra análise o cliente que o servidor já identificou");
 assert.match(storage, /leadAnterior/, "a etapa preparar devolve o cliente já identificado");
