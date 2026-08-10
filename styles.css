@@ -1601,7 +1601,7 @@ html[data-theme="light"] [style*="color: #ffc"]{
 
 /* v785 — bloco "Preparação da carteira" removido da Home */
 
-/* ===== v787 — Sino da Central de atenção =====
+/* ===== v787 — Aviso do sino (v1205: leva direto pra Agenda) =====
    Um único indicador, preso ao sino e sem contador ambíguo. */
 #topBell{
   position:relative!important;

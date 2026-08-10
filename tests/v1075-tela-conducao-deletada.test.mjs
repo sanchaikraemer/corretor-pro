@@ -45,8 +45,11 @@ assert.match(carteira, /imprimirCarteiraAtiva\(\)/, 'o Imprimir lista continua v
 assert.match(carteira, /exportarLeadsCSV\(this\)/, 'o Excel continua vivo');
 assert.match(app, /options\.acoesHtml/, 'abrirGrupoHome aceita botões de ação no cabeçalho');
 
-// 5. Sininho aponta pro "Fazer agora" da Home.
-assert.match(app, /data-go="home" data-filter="agora"/, 'avisos do sininho apontam pra Home');
-assert.match(app, /abrirFazerAgora\(\);else if\(typeof window\.show/, 'clique do aviso abre a lista Fazer agora');
+// 5. Sininho não pode levar pra tela deletada.
+// v1205 — o painel do sino (Central de atenção) foi removido; ele abre a Agenda direto. O que
+// este teste garante segue igual: nada aponta pra Condução, e a fila do dia continua sendo a
+// lista "Fazer agora" da Home.
+assert.match(html, /id="topBell"[^>]*onclick="show\('agenda'\)"/, 'o sino aponta pra Agenda, nunca pra Condução');
+assert.match(app, /function abrirFazerAgora\(/, 'a lista "Fazer agora" da Home continua sendo a fila do dia');
 
 console.log('v1075-tela-conducao-deletada: ok');
