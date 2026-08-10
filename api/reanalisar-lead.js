@@ -356,9 +356,17 @@ async function reanalisarLeadHandler702(req, res) {
     if (y < anoAtual || y > anoAtual + 5 || mo < 1 || mo > 12 || d < 1 || d > 31) {
       return json(res, 400, { ok: false, error: "Data fora do intervalo válido." });
     }
-    const q = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0)); // meio-dia UTC = mesma data no Brasil
+    // v1199 — horário do compromisso, OPCIONAL (pedido do dono: "minha reunião com Mateus é às
+    // 14h, mas tive que ir procurar no WhatsApp pra lembrar"). Sem hora, mantém o comportamento de
+    // sempre (meio-dia UTC só pra garantir a mesma data no Brasil, sem significar hora nenhuma).
+    // Com hora, o horário digitado é o que vale de verdade, já no fuso de Brasília.
+    const horaStr = String(body?.hora || "");
+    const horaValida = /^([01]\d|2[0-3]):([0-5]\d)$/.test(horaStr);
+    const q = horaValida
+      ? new Date(`${dataStr}T${horaStr}:00-03:00`)
+      : new Date(Date.UTC(y, mo - 1, d, 12, 0, 0)); // meio-dia UTC = mesma data no Brasil
     const prev = row.resultado_analise || {};
-    const lembrete = { ...(prev.lembrete || {}), quando: q.toISOString(), auto: false };
+    const lembrete = { ...(prev.lembrete || {}), quando: q.toISOString(), auto: false, hora: horaValida ? horaStr : null };
     if (!lembrete.motivo) lembrete.motivo = "Retomar contato";
     const merged = { ...prev, lembrete };
     // v1148 — pedido do dono: "se for feito agendamento, tem que marcar como atendido também,
@@ -386,7 +394,7 @@ async function reanalisarLeadHandler702(req, res) {
     if (rgErr) return json(res, 500, { ok: false, error: rgErr.message });
     // atendimentoQuando: o horário que ficou gravado como atendimento (o app usa pra marcar na
     // tela na hora, sem esperar a carteira recarregar).
-    return json(res, 200, { ok: true, reagendado: true, quando: q.toISOString(), atendimentoRegistrado: true, atendimentoQuando: merged.aprendizado.eventos[merged.aprendizado.eventos.length - 1]?.quando || null });
+    return json(res, 200, { ok: true, reagendado: true, quando: q.toISOString(), hora: lembrete.hora, atendimentoRegistrado: true, atendimentoQuando: merged.aprendizado.eventos[merged.aprendizado.eventos.length - 1]?.quando || null });
   }
 
   // Excluir o lembrete da agenda (rápido, sem reanalisar). Marca lembreteRemovido pra NÃO

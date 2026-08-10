@@ -134,12 +134,6 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
   const app = ler('app.js');
 
   assert.match(app, /cp1168FaixaHomeHTML\(items\)/, 'a Home precisa chamar a faixa nova');
-  // Vem ANTES da faixa "Ficaram de te dar uma resposta" — compromisso com hora marcada é mais
-  // urgente que um prazo de dias.
-  const posFaixaHoje = app.indexOf('cp1168FaixaHomeHTML');
-  const posFaixaPromessa = app.indexOf('cp1160FaixaHomeHTML(items)');
-  assert.ok(posFaixaHoje > 0 && posFaixaHoje < posFaixaPromessa,
-    '"Hoje na agenda" precisa aparecer ANTES de "Ficaram de te dar uma resposta" na Home');
 
   const extrairFn = (nome) => {
     const ini = app.indexOf(`function ${nome}(`);

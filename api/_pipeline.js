@@ -832,6 +832,26 @@ export function precoPlanoBR(tipo) {
   return "R$ " + Number(precoPlano(tipo)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// ─── PLANO ATUAL DA CONTA — SÓ LEITURA (v1199) ─────────────────────────────────
+// Mesma lógica de descoberta de plano que verificarLimiteAnalises usa (conta principal / teste /
+// plano contratado) — mas sem reservar nem gastar nenhuma análise. Existe só pra MOSTRAR ao
+// corretor qual é o plano dele (tela "Planos"); a decisão de limite de verdade continua sendo
+// feita por verificarLimiteAnalises, na hora da análise.
+export async function obterPlanoAtual(organizationId) {
+  const aberto = { principal: false, emTeste: false, plano: null };
+  try {
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return aberto;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return { principal: true, emTeste: false, plano: null };
+    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+    if (org?.status === "teste") return { principal: false, emTeste: true, plano: null };
+    const { data } = await supabase.from("direciona_config").select("valor").eq("chave", PLANO_CONTRATADO_KEY).eq("organization_id", organizationId).maybeSingle();
+    const tipo = data?.valor && typeof data.valor === "object" ? data.valor.tipo : null;
+    return { principal: false, emTeste: false, plano: planoComercial(tipo) };
+  } catch (_) { return aberto; }
+}
+
 function mesCalendarioSP() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
 }

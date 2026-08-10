@@ -72,7 +72,7 @@ assert.match(remover, /cpAtualizarLembreteLocal\(id, null\)/,
 assert.match(remover, /if\(state\.active === "agenda"\) carregarAgenda\(\)/,
   'e precisa continuar mandando a Agenda se redesenhar');
 
-const reagendar = app.match(/async function reagendarLembrete\(id, dateStr\)\{[\s\S]*?\n\}/)[0];
+const reagendar = app.match(/async function reagendarLembrete\(id, dateStr, horaStr\)\{[\s\S]*?\n\}/)[0];
 assert.match(reagendar, /cpAtualizarLembreteLocal\(id,/,
   'remarcar tem o mesmo problema: sem atualizar a memória, a data nova não aparece até sair da tela');
 

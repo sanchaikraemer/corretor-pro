@@ -212,8 +212,8 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
   .analysis-grid .analysis-row b{min-width:170px}
   .analysis-grid .analysis-row span{text-align:right;flex:1}
   /* H2 layout: a home fica focada. Tudo o mais aparece só quando o usuário clicar no menu. */
-  #home.screen,#cerebro.screen,#menu.screen,#agenda.screen,#relatorio.screen,#zip.screen,#linhaTempo.screen,#arquivados.screen,#aprendizado.screen,#propostas.screen,#carteira.screen{display:none}
-  #home.screen.active,#cerebro.screen.active,#menu.screen.active,#agenda.screen.active,#relatorio.screen.active,#zip.screen.active,#linhaTempo.screen.active,#arquivados.screen.active,#aprendizado.screen.active,#propostas.screen.active,#carteira.screen.active{display:block}
+  #home.screen,#cerebro.screen,#menu.screen,#agenda.screen,#relatorio.screen,#zip.screen,#linhaTempo.screen,#arquivados.screen,#aprendizado.screen,#propostas.screen,#carteira.screen,#planos.screen{display:none}
+  #home.screen.active,#cerebro.screen.active,#menu.screen.active,#agenda.screen.active,#relatorio.screen.active,#zip.screen.active,#linhaTempo.screen.active,#arquivados.screen.active,#aprendizado.screen.active,#propostas.screen.active,#carteira.screen.active,#planos.screen.active{display:block}
   .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
   .lead-foco{display:flex;flex-direction:column;gap:14px}
   textarea,input{max-width:100%}
