@@ -74,4 +74,51 @@ const sw = fs.readFileSync(new URL("../service-worker.js", import.meta.url), "ut
     "o diagnóstico gravado pelo worker também identifica o vazio (aparelho que já tinha o registro)");
 }
 
-console.log("v1192-share-falho-nao-prende-o-app: ok");
+// ── 5. v1193 — o arranque do app NÃO pode parar por causa de um compartilhamento falho ───────
+// Faltava isto na v1192: o tratamento devolvia handled:true e iniciarDireciona parava ali, então
+// a carteira nunca era carregada. Quem saísse do aviso encontrava uma Home vazia — parte do
+// "cadê meus leads?" que o dono relatou. Agora o aviso fica na tela e o app carrega por trás.
+{
+  const bloco = app.slice(app.indexOf("if(cameFromShare){"), app.indexOf("async function checkShared()"));
+  assert.match(bloco, /falhou:true/, "o tratamento precisa marcar que o compartilhamento falhou");
+
+  const boot = app.match(/async function iniciarDireciona\(\)\{[\s\S]*?\n\}/);
+  assert.ok(boot, "iniciarDireciona não encontrada");
+  assert.match(boot[0], /compartilhado\?\.handled && !compartilhado\?\.falhou/,
+    "só uma importação DE VERDADE em andamento pode segurar o arranque");
+  assert.match(boot[0], /carregarDashboard\(\)/, "o arranque continua carregando a Home");
+}
+
+// ── 6. v1193 — marca VELHA no endereço nem chega a abrir a tela de importação ────────────────
+// Depois da v1192 o dono voltou a relatar: "eu não to importando nada, somente atualizei passando
+// o dedo na tela, e muda pra essa tela de merda". O app instalado reabre na última URL, e o
+// "?shared=1&shareId=..." de um compartilhamento antigo continuava ali — cada puxão de tela
+// reentrava no modo importação e ainda esperava 15 segundos antes de dizer que não achou nada.
+{
+  const fn = app.match(/async function _checkSharedImpl\(\)\{[\s\S]*?\n\}/);
+  assert.ok(fn, "_checkSharedImpl não encontrada");
+  const corpo = fn[0];
+  assert.match(corpo, /10\*60\*1000|10 \* 60 \* 1000/,
+    "compartilhamento com mais de 10 minutos é marca velha, não importação nova");
+  assert.match(corpo, /staleShare:true/, "marca velha devolve staleShare e deixa o app abrir normal");
+
+  // A checagem precisa vir ANTES de mostrar a tela de importação e antes da espera de 15s —
+  // é isso que faz o dono nem ver a tela.
+  const posVelho = corpo.indexOf("readShareDebug");
+  const posTela = corpo.indexOf("mostrarRecebimentoShare()");
+  const posEspera = corpo.indexOf("Date.now()+15000");
+  assert.ok(posVelho > 0 && posTela > 0 && posVelho < posTela,
+    "a checagem de marca velha precisa vir ANTES de mostrar a tela de importação");
+  assert.ok(posEspera > 0 && posVelho < posEspera,
+    "e antes da espera de 15 segundos");
+
+  // Marca velha limpa o endereço na hora — senão o próximo refresh cai aqui de novo.
+  const trecho = corpo.slice(posVelho, posTela);
+  assert.match(trecho, /history\.replaceState\(null,'',location\.pathname\)/,
+    "marca velha precisa limpar o endereço");
+  // E não pode desligar um compartilhamento DE VERDADE: só vale quando não há ZIP com conteúdo.
+  assert.match(trecho, /pendente\?\.blob\?\.size/,
+    "se existe ZIP com conteúdo esperando, a importação de verdade continua acontecendo");
+}
+
+console.log("v1192-share-falho-nao-prende-o-app: ok (itens 5 e 6 acrescentados na v1193)");
