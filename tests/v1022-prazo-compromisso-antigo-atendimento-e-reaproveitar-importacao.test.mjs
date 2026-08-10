@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — a parte de reaproveitar a importação (cpSalvarImportPendente e companhia) mudou de
+// endereço: foi pro pedaço js/importacao.js, baixado só quando o corretor importa uma conversa.
+// A parte do prazo de compromisso continua no app.js. Este teste cobre os dois assuntos, então lê
+// os dois arquivos — os asserts abaixo são exatamente os mesmos de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // v1022 — dois relatos do dono no mesmo print/mensagem:
 //
@@ -141,7 +146,9 @@ const limparSrc = extrai(/function cpLimparImportPendente\(\)\{[\s\S]*?\n\}/, 'c
 
 // processFile precisa: (a) tentar o importId salvo no aparelho quando não há um na memória, e
 // (b) salvar o importId decidido assim que ele existe — pra uma futura tentativa se beneficiar.
-const processFileSrc = app.slice(app.indexOf('async function processFile(file, options = {}){'), app.indexOf('async function readShareDebug()'));
+// v1195 — processFile agora é a última função de js/importacao.js; o fim do bloco é a linha de
+// exportação. (Antes o marcador de fim era readShareDebug, que ficou no app.js.)
+const processFileSrc = app.slice(app.indexOf('async function processFile(file, options = {}){'), app.indexOf('export { processFile }'));
 assert.match(processFileSrc, /state\.activeImportId \|\| cpImportIdParaArquivo\(file\) \|\| criarImportId\(\)/,
   'processFile precisa tentar o importId salvo no aparelho antes de gerar um novo');
 assert.match(processFileSrc, /cpSalvarImportPendente\(importId, file\)/,

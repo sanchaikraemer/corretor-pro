@@ -33,7 +33,9 @@ descreve como isso funciona em `processar-storage.js`. Ver `NOTAS-v1141.md`._
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
   `manifest.json`, instalável no celular). Tela principal em `index.html` + `app.js` (arquivo
-  grande — ver seção 8, "Pendências conhecidas"). Painel administrativo separado
+  grande — ver seção 8, "Pendências conhecidas") mais os módulos de `js/` (`state.js`, `dom.js`,
+  `tema.js`, `proposta.js`, `pwa-install.js`, `dados-locais.js`, `commercial-schema.js` e o
+  `importacao.js`, este último baixado sob demanda). Painel administrativo separado
   (`admin-plataforma.html`), telas de conta (`cadastro.html`, `entrar.html`,
   `recuperar-senha.html`, `redefinir-senha.html`).
 - **Backend**: funções serverless na Vercel, uma por arquivo em `api/*.js` com
@@ -343,8 +345,15 @@ montar isso:
   mesma conexão de internet em 24h e recusa acima do limite (`CORRETOR_PRO_LIMITE_CADASTROS_
   CONEXAO_DIA`, padrão 5). Não pede nada de quem se cadastra. **Só vale de verdade com a migração
   `0013` aplicada** — sem ela, o navegador ainda consegue criar empresa por fora.
-- **`app.js` é um arquivo só, com ~11,3 mil linhas** — funciona, mas dificulta manutenção. Ainda
-  não foi dividido em módulos. Detalhe importante pra quem for mexer: `app.js` é um **módulo ES**
+- **`app.js` é quase um arquivo só, com ~13,2 mil linhas** — funciona, mas dificulta manutenção.
+  A v1195 tirou dele o primeiro pedaço de verdade: as 29 funções do **processamento da conversa
+  importada** foram pra `js/importacao.js`, buscado com `import()` dinâmico só quando o corretor
+  importa (a ponte é a função `processFile`, a única porta de entrada; ver `NOTAS-v1195.md` e a
+  guarda `tests/v1195-pedaco-importacao-fechado.test.mjs`). A parte do **compartilhamento** (o ZIP
+  que chega do WhatsApp) continua no `app.js` de propósito: ela roda em toda abertura, então
+  movê-la anularia a economia. O grafo de chamadas mostrou que as demais telas (Agenda, Cérebro,
+  Carteira, cliente) **não** rendem divisão — compartilham quase todo o código de desenho.
+  Detalhe importante pra quem for mexer: `app.js` é um **módulo ES**
   (`<script type="module">` no `index.html`), então uma `function` declarada no topo do arquivo
   **não** fica acessível pros `onclick="funcao()"` do HTML — só as linhas `window.funcao = funcao`
   fazem essa ponte. É por isso que uma "função duplicada" quase sempre é, na verdade, uma ponte

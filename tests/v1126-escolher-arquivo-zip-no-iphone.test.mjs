@@ -13,7 +13,11 @@ import assert from 'node:assert/strict';
 // Correção: um seletor de arquivo comum na tela de importar, que reusa o MESMO processFile do
 // compartilhamento, e instruções que mudam conforme o aparelho.
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 // 1) A tela de importar tem o seletor e o botão que o abre.

@@ -2,7 +2,15 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const sw = fs.readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const appCore = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada (processFile, salvarLeadPendente,
+// atualizarLeadComEvolucao e companhia) saiu do app.js pro pedaço js/importacao.js, baixado só na
+// hora da importação. Quem trata o COMPARTILHAMENTO em si (checkShared, o IndexedDB do share,
+// finalizarSharePendente) continua no app.js, porque roda no arranque. Este teste cobre a
+// travessia inteira, então lê os dois arquivos — o `app` abaixo é a soma, e cada assert continua
+// valendo exatamente sobre o mesmo código de antes.
+const importacao = fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
+const app = appCore + '\n' + importacao;
 
 assert.match(sw, /const shareId = createShareId\(\)/, 'cada compartilhamento deve receber ID próprio');
 assert.match(sw, /status: 'pending'/, 'ZIP deve ficar pendente até confirmação do app');

@@ -12,7 +12,11 @@ import assert from 'node:assert/strict';
 //
 // É a mesma lição do 92% da v1174: todo caminho de erro precisa MEXER na tela que ficou pra trás.
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // A função que fecha o assunto na tela precisa existir e chamar a etapa 7 ("Falha recuperável"),
 // que é o único ponto que para a rodinha, destrava os botões e fecha a tela cheia.

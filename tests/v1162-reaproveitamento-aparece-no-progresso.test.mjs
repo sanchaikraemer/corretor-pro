@@ -13,7 +13,11 @@ import assert from "node:assert/strict";
 //   etapa 6 (concluído) → o mesmo resumo, persistindo na tela ("lead atualizado · …")
 // O quadro verde do resultado continua existindo — mas ninguém mais depende de ler algo que some.
 
-const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // ── Etapa 2: o cliente reconhecido aparece assim que a preparação volta ───────────────────────
 assert.match(app, /const infoClienteConhecido = prep\?\.leadAnterior\n\s*\? `cliente já conhecido — \$\{Number\(prep\.leadAnterior\.mensagensSalvas\) \|\| 0\} mensagens já salvas serão comparadas`\n\s*: "cliente novo nesta carteira";/,

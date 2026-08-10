@@ -178,7 +178,11 @@ const CADASTRO_ANTIGO = {
 
 // ── 5. A tela também não aceita mais o cliente apontado pelo servidor sem conferir o nome ──────
 {
-  const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  // v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
   assert.match(app, /function nomesPodemSerOMesmoCliente\(/, "a tela tem a mesma pergunta 'pode ser a mesma pessoa?'");
   assert.match(app, /porId && nomesPodemSerOMesmoCliente\(nome, porId\.name\)/, "o id do servidor só vale se o nome permitir");
   const trecho = app.slice(app.indexOf("async function acharLeadExistente"), app.indexOf("async function finalizarImportacaoStorage"));

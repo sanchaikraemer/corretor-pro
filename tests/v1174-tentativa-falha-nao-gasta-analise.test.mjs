@@ -17,7 +17,11 @@ import assert from 'node:assert/strict';
 //    atrás dela, até o vigia de inatividade derrubar tudo até 2 minutos depois.
 
 const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const rotaImport = fs.readFileSync(new URL('../api/processar-storage.js', import.meta.url), 'utf8');
 
 // ─── 1. A reserva volta quando não sai análise ────────────────────────────────

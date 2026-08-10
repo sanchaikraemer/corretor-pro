@@ -15,7 +15,11 @@ import assert from 'node:assert/strict';
 // código morto (nunca roda: todo call site chama via window.<nome>, que resolve pra última
 // atribuição). Ver REVISAO-COMPLETA.md pro rastreamento completo.
 
-const src = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const src = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 const FUNCOES_COM_CONFIRM_EM_APP = [
   'importarTelefonesCSV',

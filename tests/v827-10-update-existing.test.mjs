@@ -24,7 +24,11 @@ assert.ok(!bloco.includes("compararEvolucao("), "Atualizar não pode chamar IA p
 assert.ok(bloco.includes("obterAnaliseValidadaDaImportacao(result)"));
 assert.ok(api.includes("forceNew: false"), "Servidor deve impedir duplicata");
 
-const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 assert.ok(!app.includes("Criar um novo cliente"), "Mesmo nome não pode oferecer criação duplicada");
 assert.ok(app.includes("sem criar duplicata"));
 console.log("v827-10 update-existing: ok");

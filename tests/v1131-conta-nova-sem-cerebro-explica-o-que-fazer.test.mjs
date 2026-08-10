@@ -16,7 +16,11 @@ import assert from 'node:assert/strict';
 // conversa NUNCA pode ser descartada inteira só porque as 3 sugestões de mensagem não passaram nas
 // regras do Cérebro."
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // 1. O tradutor de motivo existe e cobre os três casos que o servidor sabe informar.
 const fnSrc = app.match(/function cpMotivoAnalisePendente\(analysis\)\{[\s\S]*?\n\}/);

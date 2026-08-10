@@ -19,7 +19,11 @@ import assert from "node:assert/strict";
 //      retentativa, e o vigia da Home aos 9s trocava a tela por um beco sem saída com a busca
 //      ainda viva.
 
-const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8")
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const vercelConfig = JSON.parse(fs.readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 
 // ── 1. A rota da carteira tem o mesmo teto de 60s das outras rotas pesadas ────────────────────

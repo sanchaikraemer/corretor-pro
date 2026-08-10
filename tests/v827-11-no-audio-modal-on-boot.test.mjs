@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 const checkStart = app.indexOf('async function _checkSharedImpl()');
 const checkEnd = app.indexOf('async function checkShared()', checkStart);
@@ -18,7 +22,9 @@ assert.match(check, /staleShare:true/, 'share antigo deve ser ignorado explicita
 assert.doesNotMatch(app, /periodoAudioModal/, 'a janela do período não existe mais em nenhum lugar');
 
 const processStart = app.indexOf('async function processFile(file, options = {})');
-const processEnd = app.indexOf('async function readShareDebug()', processStart);
+// v1195 — readShareDebug ficou no app.js e processFile foi pro pedaço js/importacao.js, onde é a
+// última função; o fim do bloco passa a ser a linha de exportação.
+const processEnd = app.indexOf('export { processFile }', processStart);
 const process = app.slice(processStart, processEnd);
 assert.match(process, /if\(pendingShareId\)[\s\S]*history\.replaceState\(null,'',location\.pathname\)/, 'falha de importação deve limpar a URL do Share Target');
 

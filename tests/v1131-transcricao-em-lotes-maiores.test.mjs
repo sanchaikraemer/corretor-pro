@@ -13,7 +13,11 @@ import assert from 'node:assert/strict';
 // Guarda de regressão: o tamanho do lote que o app manda não pode voltar a ser menor que a
 // capacidade do servidor — senão o teto do servidor vira enfeite de novo.
 
-const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+// v1195 — o processamento da conversa importada saiu do app.js para o pedaço js/importacao.js,
+// baixado só na hora em que o corretor importa. Este teste confere esse código como texto, então
+// lê os dois arquivos juntos: os asserts abaixo valem exatamente sobre o mesmo código de antes.
+const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8')
+  + '\n' + fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
 const rota = fs.readFileSync(new URL('../api/processar-storage.js', import.meta.url), 'utf8');
 
