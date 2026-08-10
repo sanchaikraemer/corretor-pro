@@ -2812,7 +2812,7 @@ function cpBarraMensagensMini(l, maxMsgs){
   const BRANCO_GRADIENTE = '#F7FAFB';
   const teto = Math.max(1, Number(maxMsgs) || 1);
   const pct = n <= 0 ? 0 : Math.max(8, Math.min(100, Math.round(n / teto * 100)));
-  return `<span class="chr-bar" title="${n} mensagem${n===1?'':'s'} do cliente nos últimos 90 dias"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
+  return `<span class="chr-bar" title="${n} ${n===1?'mensagem':'mensagens'} do cliente nos últimos 90 dias"><span class="chr-track"><i style="width:${pct}%;background:linear-gradient(90deg,${BRANCO_GRADIENTE},${cor})"></i></span><b style="color:${cor}">${n}</b></span>`;
 }
 // Linha compacta de lead da Home (opção 1 + lista densa, escolha do dono): nome, produto, barra
 // de mensagens e dias parado. Desktop: 1 linha. Mobile: 2 linhas (nome ganha a largura toda;
@@ -3124,7 +3124,12 @@ function renderBotoesHome(){
     // "maior da lista" ser calculado com a MESMA régua exibida (senão a barra nunca chegaria a
     // 100%, ou o menor lead pareceria proporcionalmente maior/menor do que realmente é).
     const maxMsgsDose = dose.reduce((m,l)=>Math.max(m, (typeof mensagensDoClienteRecente==='function'?mensagensDoClienteRecente(l):0)), 1);
-    top3Html = `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
+    // v1203 — o dono viu a barra e o "há Xd" na lista e não lembrava mais o que significavam
+    // ("nem eu sei mais"): a explicação só existia como title (dica ao passar o mouse), que
+    // ninguém acha sozinho — principalmente no celular, onde não existe hover. Uma legenda fixa,
+    // sempre visível, tira a dúvida sem precisar abrir nada.
+    top3Html = `<div class="cp-hoje-legenda">Barra e número = mensagens do cliente nos últimos 90 dias. "há Xd" = dias desde o último contato (ou o atendimento marcado, quando já existir um).</div>`
+      + `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
           : "");
@@ -3163,6 +3168,9 @@ function renderBotoesHome(){
       .home-m1-semana-kpis .kpi b{display:block;font-size:18px;font-weight:950;margin-bottom:2px}
       .home-m1-semana-kpis .kpi span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:950}
       @media(max-width:760px){.home-m1-grid{grid-template-columns:1fr}}
+      /* v1203 — legenda fixa acima da lista, explicando a barra de mensagens e o "há Xd" (antes só
+         existia como title, invisível sem passar o mouse — e nem existe hover no celular). */
+      .cp-hoje-legenda{font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.4}
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
       /* Desktop: 1 linha (nome · produto · barra · dias) via grid-areas. */
