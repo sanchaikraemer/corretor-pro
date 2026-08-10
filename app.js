@@ -5600,43 +5600,133 @@ function agendaCardHTML(l, extra){
       </div>
       <div class="agenda-acoes">
         <button type="button" onclick='abrirLead(${idJs})' style="padding:7px 13px;font-size:11px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Ver análise</button>
-        ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id) : ""}
+        ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id, l.analysis.lembrete) : ""}
         ${l.analysis?.lembrete?.quando ? `<button type="button" onclick='removerLembrete(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(244,118,138,.10);color:#ffd7de;border:1px solid rgba(244,118,138,.26);border-radius:8px;cursor:pointer;font-weight:950">🗑 Excluir</button>` : ""}
       </div>
     </div>`;
 }
-// Controle de "Reagendar": botões rápidos (Amanhã/+7/+15/+30) + data e hora opcional, tudo
-// compacto (v1200 — o painel anterior, com um rótulo e uma linha pra cada campo, tinha virado um
-// "quadradão" alto demais no cartão da Agenda; data, hora e o botão de confirmar agora dividem
-// UMA linha só, que quebra sozinha em telas estreitas). idRaw = id do lead.
-function reagendarControlHTML(idRaw){
+// ===== v1208 — PAINEL DE AGENDAMENTO (um só, usado pelo lead e pela Agenda) =====
+// Print do dono, irritado: "não estou conseguindo agendar a hora... boto ali o dia, e daí quando
+// eu vou tentar selecionar a hora fecha. Sem falar que está feio, nem parece um app desse nível".
+// Eram DOIS defeitos somados, e os dois eram nossos:
+//
+// 1. FECHAVA NO MEIO. Escolher a data SALVAVA na hora (onchange), e salvar redesenha a tela
+//    (abrirLead/carregarAgenda) — o painel morria junto, antes de ele chegar na hora. Ou seja: o
+//    jeito "esperto" de salvar sozinho tornava impossível marcar dia E hora na mesma ida.
+//    Agora nada é salvo até ele tocar em "Confirmar agendamento". Os atalhos (Hoje/Amanhã/+7...)
+//    também só PREENCHEM o dia — não salvam mais sozinhos.
+// 2. FICAVA FEIO/INVISÍVEL. Os campos nativos de data e hora do Android herdam o esquema de cor
+//    CLARO: o texto guia ("dd/mm/aaaa", "--:--") e os ícones saíam escuros sobre o fundo escuro
+//    do app — no print são duas caixas vazias com uma setinha. `color-scheme:dark` nos campos
+//    resolve, e agora eles têm rótulo, altura de dedo e fonte de 16px (abaixo disso o celular dá
+//    zoom sozinho ao tocar).
+//
+// Além disso: atalhos de HORA (09:00, 10:00, 14:00...) pra não precisar abrir o relógio do
+// celular no caso comum, e uma frase de conferência ("Vai agendar: quinta, 13/08 às 09:00")
+// embaixo do botão, pra ele ver o que vai salvar ANTES de salvar.
+const CP1208_HORAS_RAPIDAS = ["08:00","09:00","10:00","14:00","16:00","18:00"];
+// Rótulos curtos ("+7d") de propósito: com "+7 dias" os cinco atalhos viravam duas linhas no
+// celular, e o dono já reclamou disso em outra tela (v1204).
+const CP1208_DIAS_RAPIDOS = [["Hoje",0],["Amanhã",1],["+7d",7],["+15d",15],["+30d",30]];
+
+// Monta o painel. `pref` prefixa os ids (a Agenda desenha um painel por cartão, então não pode
+// haver id repetido); `atual` = {data:"aaaa-mm-dd", hora:"hh:mm"} pré-preenche o que já está
+// marcado, pra ele enxergar o compromisso atual em vez de dois campos vazios.
+function cpAgendarPainelHTML(idRaw, pref, atual){
+  const idJs = JSON.stringify(String(idRaw||""));
+  const p = JSON.stringify(String(pref||"ag"));
+  const dataAtual = /^\d{4}-\d{2}-\d{2}$/.test(String(atual?.data||"")) ? atual.data : "";
+  const horaAtual = /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(atual?.hora||"")) ? atual.hora : "";
+  const chipsDia = CP1208_DIAS_RAPIDOS
+    .map(([rot,n]) => `<button type="button" class="cp1208-chip" onclick='cpAgendarEscolherDia(${p},${n},this)'>${rot}</button>`).join("");
+  const chipsHora = CP1208_HORAS_RAPIDAS
+    .map(h => `<button type="button" class="cp1208-chip${h===horaAtual?" ativo":""}" onclick='cpAgendarEscolherHora(${p},"${h}",this)'>${h}</button>`).join("")
+    + `<button type="button" class="cp1208-chip" onclick='cpAgendarEscolherHora(${p},"",this)'>Sem hora</button>`;
+  return `<div class="cp1208-agendar">`
+    + `<div class="cp1208-bloco"><span class="cp1208-rot">Dia</span><div class="cp1208-chips">${chipsDia}</div>`
+    + `<input type="date" class="cp1208-campo" id="${pref}Data" value="${dataAtual}" aria-label="Dia do compromisso" onchange='cpAgendarResumo(${p})'></div>`
+    + `<div class="cp1208-bloco"><span class="cp1208-rot">Hora <i>(opcional)</i></span><div class="cp1208-chips">${chipsHora}</div>`
+    + `<input type="time" class="cp1208-campo" id="${pref}Hora" value="${horaAtual}" aria-label="Hora do compromisso" onchange='cpAgendarResumo(${p})'></div>`
+    + `<button type="button" class="cp1208-ok" onclick='cpAgendarConfirmar(${p},${idJs})'>Confirmar agendamento</button>`
+    + `<div class="cp1208-resumo" id="${pref}Resumo">${cpAgendarResumoTexto(dataAtual, horaAtual)}</div>`
+    + `</div>`;
+}
+window.cpAgendarPainelHTML = cpAgendarPainelHTML;
+
+// As funções abaixo são chamadas de dentro de onclick/onchange, então PRECISAM estar em window e
+// só podem usar globais de verdade (lição da v1202: `qs` é binding de módulo e não existe lá).
+function cpAgendarCampos(pref){
+  return {
+    data: document.getElementById(pref+"Data"),
+    hora: document.getElementById(pref+"Hora"),
+    resumo: document.getElementById(pref+"Resumo")
+  };
+}
+function cpAgendarMarcarChip(btn){
+  if(!btn || !btn.parentElement) return;
+  const irmaos = btn.parentElement.querySelectorAll(".cp1208-chip");
+  for(const b of irmaos) b.classList.toggle("ativo", b === btn);
+}
+function cpAgendarEscolherDia(pref, dias, btn){
+  const d = new Date(); d.setDate(d.getDate() + Number(dias||0));
+  const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const c = cpAgendarCampos(pref);
+  if(c.data) c.data.value = s;
+  cpAgendarMarcarChip(btn);
+  cpAgendarResumo(pref);
+}
+function cpAgendarEscolherHora(pref, hora, btn){
+  const c = cpAgendarCampos(pref);
+  if(c.hora) c.hora.value = String(hora||"");
+  cpAgendarMarcarChip(btn);
+  cpAgendarResumo(pref);
+}
+// Frase de conferência: o que ele vai salvar, em português, antes de salvar.
+function cpAgendarResumoTexto(data, hora){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data||""))) return "Escolha o dia acima — a hora é opcional.";
+  let quando = data;
+  try{
+    quando = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
+  }catch(_){ }
+  return hora ? `Vai agendar: ${quando}, às ${hora}.` : `Vai agendar: ${quando} (sem hora marcada).`;
+}
+function cpAgendarResumo(pref){
+  const c = cpAgendarCampos(pref);
+  if(c.resumo) c.resumo.textContent = cpAgendarResumoTexto(c.data?.value||"", c.hora?.value||"");
+}
+// ÚNICO ponto que salva. Antes da v1208 os campos salvavam sozinhos e o painel fechava no meio.
+function cpAgendarConfirmar(pref, id){
+  const c = cpAgendarCampos(pref);
+  const data = c.data?.value || "";
+  if(!data){ toast("Escolha o dia primeiro — depois, se quiser, a hora."); return; }
+  reagendarLembrete(id, data, c.hora?.value || "");
+}
+window.cpAgendarEscolherDia = cpAgendarEscolherDia;
+window.cpAgendarEscolherHora = cpAgendarEscolherHora;
+window.cpAgendarResumo = cpAgendarResumo;
+window.cpAgendarResumoTexto = cpAgendarResumoTexto;
+window.cpAgendarConfirmar = cpAgendarConfirmar;
+window.cpAgendarCampos = cpAgendarCampos;
+window.cpAgendarMarcarChip = cpAgendarMarcarChip;
+
+// Data (aaaa-mm-dd) do lembrete já marcado, no fuso de Brasília — pra pré-preencher o painel.
+function cpAgendarDataDoLembrete(quando){
+  try{
+    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric"})
+      .formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+    return (p.year && p.month && p.day) ? `${p.year}-${p.month}-${p.day}` : "";
+  }catch(_){ return ""; }
+}
+
+// Controle de "Reagendar" do cartão da Agenda: o botão que abre o painel + o painel (o mesmo do
+// lead, desde a v1208 — antes eram dois painéis diferentes com o mesmo defeito).
+function reagendarControlHTML(idRaw, lembrete){
   const id = String(idRaw||"");
   const idJs = JSON.stringify(id);
-  const chip = "padding:4px 9px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950";
-  const campo = "background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;flex:1 1 100px;min-width:0";
-  const confirmar = `const d=document.querySelector("#reag_${id}")?.value; if(!d){ toast("Escolha a data primeiro."); return; } reagendarLembrete(${idJs}, d, document.querySelector("#reagHora_${id}")?.value)`;
+  const atual = { data: cpAgendarDataDoLembrete(lembrete?.quando), hora: lembrete?.hora || "" };
   return `<button type="button" onclick='toggleReagendar(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);border-radius:8px;cursor:pointer;font-weight:950">🗓 Reagendar</button>`
-    + `<div id="reagbox_${id}" style="display:none;margin-top:5px;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:8px;flex-direction:column;gap:6px;min-width:160px">`
-    + `<div style="display:flex;gap:4px;flex-wrap:wrap">`
-    + `<button type="button" onclick='reagendarDias(${idJs},1)' style="${chip}">Amanhã</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},7)' style="${chip}">+7 dias</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},15)' style="${chip}">+15 dias</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},30)' style="${chip}">+30 dias</button>`
-    + `</div>`
-    + `<label style="font-size:10px;color:var(--muted)">ou escolha data e hora (opcional):</label>`
-    + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">`
-    + `<input type="date" id="reag_${id}" style="${campo}" onchange='reagendarLembrete(${idJs}, this.value, document.querySelector("#reagHora_${id}")?.value)'>`
-    // v1199 — pedido do dono: um jeito de guardar o HORÁRIO combinado (ex.: "reunião às 14h"),
-    // opcional — sem isso ele tinha que ir procurar de novo no WhatsApp na hora do compromisso.
-    // Escolher a data já agenda (comportamento de sempre); preencher a hora depois (ou antes)
-    // também reagenda, agora com os dois juntos — nenhum dos dois é obrigatório sozinho.
-    + `<input type="time" id="reagHora_${id}" style="${campo}" onchange='const d=document.querySelector("#reag_${id}")?.value; if(d) reagendarLembrete(${idJs}, d, this.value)'>`
-    // v1200 — o dono editou data e hora e não achou onde salvar: os campos salvam sozinhos ao
-    // mudar (onchange), mas isso não fica claro pra quem espera um botão. Este botão não troca o
-    // salvamento automático (continua valendo pra quem só mexe num campo), só dá um jeito ÓBVIO
-    // de confirmar depois de preencher os dois — e fica na MESMA linha, sem esticar o painel.
-    + `<button type="button" onclick='${confirmar}' style="flex:0 0 auto;padding:6px 10px;font-size:11.5px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Confirmar</button>`
-    + `</div>`
+    + `<div id="reagbox_${id}" class="cp1208-caixa" style="display:none">`
+    + cpAgendarPainelHTML(id, "reag_"+id, atual)
     + `</div>`;
 }
 window.reagendarControlHTML = reagendarControlHTML;
@@ -5654,9 +5744,10 @@ function toggleAgendar(id){
   box.style.display = (box.style.display === "flex") ? "none" : "flex";
 }
 window.toggleAgendar = toggleAgendar;
-// Reagenda por atalho (N dias a partir de hoje).
-// v1207 — horaStr é OPCIONAL: o painel do lead manda junto a hora que estiver preenchida, pra
-// "Amanhã" + "09:00" marcar amanhã ÀS 9, não amanhã sem hora.
+// Reagenda por atalho (N dias a partir de hoje), salvando na hora.
+// v1208 — os chips do painel NÃO usam mais isto: lá eles só preenchem o dia, porque salvar na
+// hora fechava o painel antes do dono conseguir escolher o horário. Fica disponível pra quem
+// quiser um atalho de um toque só (window.reagendarDias) sem passar pelo painel.
 function reagendarDias(id, dias, horaStr){
   const d = new Date(); d.setDate(d.getDate() + dias);
   const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -11439,26 +11530,16 @@ window.ui670Reanalisar=async function(btn){
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
 
 // v1207 — este painel (o "Agendar" de dentro do lead, que é por onde o dono agenda no dia a dia)
-// só tinha DATA. A hora existia apenas no "Reagendar" da tela Agenda (v1199), ou seja: pra
-// guardar "quinta que vem às 9h" ele tinha que agendar aqui e depois ir na Agenda reabrir o
-// compromisso — no celular ele simplesmente não achou. Agora data e hora ficam lado a lado aqui
-// também, a hora continua OPCIONAL, e os atalhos (Hoje/Amanhã/+7...) levam junto a hora que
-// estiver preenchida.
+// só tinha DATA. A hora existia apenas no "Reagendar" da tela Agenda (v1199).
+// v1208 — passou a usar o painel único (cpAgendarPainelHTML): nada salva antes do "Confirmar
+// agendamento", campos com cor visível no celular e atalhos de dia E de hora. Ver o comentário
+// grande em cpAgendarPainelHTML pro histórico dos dois defeitos que levaram a isso.
 function ui670ScheduleHtml(lead){
   if(!lead?.id)return "";
-  const id=JSON.stringify(String(lead.id));
-  const lerData = `document.querySelector("#ui670ScheduleData")?.value`;
-  const lerHora = `document.querySelector("#ui670ScheduleHora")?.value`;
-  const atalhos = [["Hoje",0],["Amanhã",1],["+7 dias",7],["+15 dias",15],["+30 dias",30]]
-    .map(([rot,n]) => `<button onclick='reagendarDias(${id},${n},${lerHora})'>${rot}</button>`).join("");
+  const lem = lead?.analysis?.lembrete;
+  const atual = { data: cpAgendarDataDoLembrete(lem?.quando), hora: lem?.hora || "" };
   return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b>`
-    + `<div class="ui670-quick-dates">${atalhos}</div>`
-    + `<div class="ui670-schedule-row">`
-    + `<input type="date" id="ui670ScheduleData" aria-label="Dia do compromisso" onchange='reagendarLembrete(${id},this.value,${lerHora})'>`
-    + `<input type="time" id="ui670ScheduleHora" aria-label="Hora do compromisso" onchange='const d=${lerData}; if(d) reagendarLembrete(${id},d,this.value)'>`
-    + `<button type="button" class="ui670-schedule-ok" onclick='const d=${lerData}; if(!d){ toast("Escolha o dia primeiro."); return; } reagendarLembrete(${id},d,${lerHora})'>Confirmar</button>`
-    + `</div>`
-    + `<small class="ui670-schedule-dica">A hora é opcional — sem ela, fica marcado só o dia.</small>`
+    + cpAgendarPainelHTML(String(lead.id), "ui670Schedule", atual)
     + `</div>`;
 }
 window.ui670ScheduleHtml = ui670ScheduleHtml;
