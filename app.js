@@ -5592,11 +5592,16 @@ function agendaCardHTML(l, extra){
       </div>
     </div>`;
 }
-// Controle de "Reagendar": botões rápidos (Amanhã/+7/+15/+30) + data opcional. idRaw = id do lead.
+// Controle de "Reagendar": botões rápidos (Amanhã/+7/+15/+30) + data e hora opcional, tudo
+// compacto (v1200 — o painel anterior, com um rótulo e uma linha pra cada campo, tinha virado um
+// "quadradão" alto demais no cartão da Agenda; data, hora e o botão de confirmar agora dividem
+// UMA linha só, que quebra sozinha em telas estreitas). idRaw = id do lead.
 function reagendarControlHTML(idRaw){
   const id = String(idRaw||"");
   const idJs = JSON.stringify(id);
   const chip = "padding:4px 9px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950";
+  const campo = "background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;flex:1 1 100px;min-width:0";
+  const confirmar = `const d=qs("#reag_${id}")?.value; if(!d){ toast("Escolha a data primeiro."); return; } reagendarLembrete(${idJs}, d, qs("#reagHora_${id}")?.value)`;
   return `<button type="button" onclick='toggleReagendar(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);border-radius:8px;cursor:pointer;font-weight:950">🗓 Reagendar</button>`
     + `<div id="reagbox_${id}" style="display:none;margin-top:5px;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:8px;flex-direction:column;gap:6px;min-width:160px">`
     + `<div style="display:flex;gap:4px;flex-wrap:wrap">`
@@ -5605,14 +5610,20 @@ function reagendarControlHTML(idRaw){
     + `<button type="button" onclick='reagendarDias(${idJs},15)' style="${chip}">+15 dias</button>`
     + `<button type="button" onclick='reagendarDias(${idJs},30)' style="${chip}">+30 dias</button>`
     + `</div>`
-    + `<label style="font-size:10px;color:var(--muted)">ou escolha a data:</label>`
-    + `<input type="date" id="reag_${id}" style="background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:13px" onchange='reagendarLembrete(${idJs}, this.value, qs("#reagHora_${id}")?.value)'>`
+    + `<label style="font-size:10px;color:var(--muted)">ou escolha data e hora (opcional):</label>`
+    + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">`
+    + `<input type="date" id="reag_${id}" style="${campo}" onchange='reagendarLembrete(${idJs}, this.value, qs("#reagHora_${id}")?.value)'>`
     // v1199 — pedido do dono: um jeito de guardar o HORÁRIO combinado (ex.: "reunião às 14h"),
     // opcional — sem isso ele tinha que ir procurar de novo no WhatsApp na hora do compromisso.
     // Escolher a data já agenda (comportamento de sempre); preencher a hora depois (ou antes)
     // também reagenda, agora com os dois juntos — nenhum dos dois é obrigatório sozinho.
-    + `<label style="font-size:10px;color:var(--muted)">hora (opcional):</label>`
-    + `<input type="time" id="reagHora_${id}" style="background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:13px" onchange='const d=qs("#reag_${id}")?.value; if(d) reagendarLembrete(${idJs}, d, this.value)'>`
+    + `<input type="time" id="reagHora_${id}" style="${campo}" onchange='const d=qs("#reag_${id}")?.value; if(d) reagendarLembrete(${idJs}, d, this.value)'>`
+    // v1200 — o dono editou data e hora e não achou onde salvar: os campos salvam sozinhos ao
+    // mudar (onchange), mas isso não fica claro pra quem espera um botão. Este botão não troca o
+    // salvamento automático (continua valendo pra quem só mexe num campo), só dá um jeito ÓBVIO
+    // de confirmar depois de preencher os dois — e fica na MESMA linha, sem esticar o painel.
+    + `<button type="button" onclick='${confirmar}' style="flex:0 0 auto;padding:6px 10px;font-size:11.5px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Confirmar</button>`
+    + `</div>`
     + `</div>`;
 }
 window.reagendarControlHTML = reagendarControlHTML;
