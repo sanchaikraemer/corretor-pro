@@ -2679,19 +2679,24 @@ Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este nú
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
-AS TRÊS MENSAGENS PRECISAM SER TRÊS CAMINHOS DIFERENTES — NÃO a mesma ideia reescrita.
-Cada uma segue uma estratégia distinta, com um próximo passo diferente, pra o corretor
-escolher a abordagem:
+AS TRÊS MENSAGENS PRECISAM TER ÂNGULOS COMERCIAIS DIFERENTES — NÃO a mesma ideia reescrita.
+Cada uma segue uma estratégia distinta, pra o corretor escolher a abordagem:
 - "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
   diagnóstico e pelo Cérebro). É a que você mandaria se só pudesse mandar uma.
 - "maisSuave": ângulo consultivo, de baixa pressão. Em vez de empurrar o mesmo passo,
   QUALIFIQUE ou destrave o que trava — faça a pergunta que falta, trate a objeção/impedimento
-  principal ou ofereça ajuda sem cobrar decisão. Precisa abrir uma porta DIFERENTE da recomendada.
-- "maisDireta": objetiva, com UM próximo passo concreto e um convite claro (propor o envio,
-  marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
-Se as três acabarem propondo a MESMA ação (ex.: as três só perguntam "quer que eu te mande as
-propostas?"), reescreva até virarem três caminhos realmente distintos. Todas seguem o Cérebro,
-usam só fatos da conversa e mantêm o jeito de escrever do corretor.
+  principal ou ofereça ajuda sem cobrar decisão.
+- "maisDireta": a mais objetiva das três, com UM próximo passo concreto e um convite claro
+  (propor o envio, marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
+  Quando a conversa ainda NÃO tiver maturidade pra visita/proposta/decisão, "maisDireta" não
+  força esse avanço: ela vira a versão mais objetiva e direta do passo que É adequado agora.
+O padrão é que os próximos passos também sejam diferentes, e se as três repetirem a MESMA
+pergunta de sempre (ex.: as três só perguntam "quer que eu te mande as propostas?"), reescreva.
+EXCEÇÃO: quando existir objetivamente UM ÚNICO próximo passo adequado neste momento, as três
+PODEM convergir para ele, cada uma chegando lá por um caminho e um enquadramento diferentes.
+Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens —
+diferença forçada que não serve ao cliente é pior do que convergência honesta. Todas seguem o
+Cérebro, usam só fatos da conversa e mantêm o jeito de escrever do corretor.
 
 PRODUTO ESPECÍFICO: se o cliente citou identificadores específicos de unidade (lote, quadra,
 apartamento, bloco, torre, metragem exata etc.), "produtoInteresse" PRECISA incluir esses
