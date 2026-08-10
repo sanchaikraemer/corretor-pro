@@ -3128,7 +3128,11 @@ function renderBotoesHome(){
     // ("nem eu sei mais"): a explicação só existia como title (dica ao passar o mouse), que
     // ninguém acha sozinho — principalmente no celular, onde não existe hover. Uma legenda fixa,
     // sempre visível, tira a dúvida sem precisar abrir nada.
-    top3Html = `<div class="cp-hoje-legenda">Barra e número = mensagens do cliente nos últimos 90 dias. "há Xd" = dias desde o último contato (ou o atendimento marcado, quando já existir um).</div>`
+    // v1204 — a frase original (3 linhas inteiras no celular, empurrando a lista pra baixo) foi
+    // reclamação direta do dono ("q bosta no mobile"). Encurtada pro essencial; quem quiser o
+    // detalhe fino (ex.: que "há Xd" vem do atendimento marcado, quando existir) continua achando
+    // no title de cada linha, que não sumiu.
+    top3Html = `<div class="cp-hoje-legenda">Barra/número: mensagens do cliente (90 dias). "há Xd": dias sem contato.</div>`
       + `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
           ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
