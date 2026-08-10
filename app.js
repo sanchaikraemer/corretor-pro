@@ -2665,12 +2665,19 @@ function cpDiasDescansoPosAtendimento(){
   }catch(_){}
   return 5;
 }
-// v1017 criou aqui ultimaMsgClientePedeResposta: uma peneira pra decidir se a última fala do
-// cliente "pedia resposta" (pergunta, "me manda", "quanto custa") ou era só um "Ok/Obrigada" —
-// ela existia pra afinar a liberação antecipada da espera e a prioridade máxima do nível 1.
-// v1190 — removida junto com as duas: sem nenhuma decisão baseada em "quem falou por último",
-// ela não tinha mais o que peneirar. Fica registrado pra ninguém achar que foi esquecimento —
-// se essa função voltar, é sinal de que a inferência proibida voltou junto.
+// v1017 criou ultimaMsgClientePedeResposta: uma peneira pra decidir se a última fala do cliente
+// "pedia resposta" (pergunta, "me manda", "quanto custa") ou era só um "Ok/Obrigada". Ela servia
+// a dois usos: a prioridade máxima do nível 1 (REMOVIDA na v1190, não volta) e a liberação
+// antecipada de entraEmRetomada (removida por engano na v1190, DEVOLVIDA na v1192 — ver o
+// comentário lá). Continua existindo só pro segundo uso.
+function ultimaMsgClientePedeResposta(l){
+  try{
+    const last = (typeof ui670UltimaMensagemReal === 'function') ? ui670UltimaMensagemReal(l) : null;
+    if(!last || last.falante !== "contato") return true; // sem como checar: não trava a espera à toa
+    const t = String(last.m?.text || "");
+    return /\?/.test(t) || /^\s*(pode|consegue|tem como|tem disponibilidade|me manda|me envia|qual|quanto|quando|onde|como|por que|porque)\b/i.test(t);
+  }catch(_){ return true; }
+}
 function limiarRetomada(l){
   return cpDiasDescansoPosAtendimento();
 }
@@ -2703,11 +2710,20 @@ function emJanelaDeEspera(l){
 // Um lead com contato MUITO recente (< 7 dias) ainda não deve entrar em "retomada" —
 // não demos tempo do cliente responder. Exceções (entram mesmo recente):
 //  - tem lembrete vencido/pra hoje, ou compromisso hoje/amanhã (motivo agendado);
-//  - está quente pra fechar (não faz sentido esperar).
-// v1190 — havia uma terceira exceção: "o CLIENTE falou por último (a bola está com a gente)".
-// Saiu pelo mesmo motivo do nível 1 de filaPorFatos (ver o comentário lá): a última fala
-// importada não prova que o corretor deve resposta. Sem ela, um lead contatado há poucos dias
-// simplesmente espera o prazo normal e volta pela retomada por tempo, como qualquer outro.
+//  - está quente pra fechar (não faz sentido esperar);
+//  - o cliente perguntou algo e não há atendimento nenhum registrado neste lead.
+//
+// v1190 tirou a terceira exceção junto com o nível 1 de filaPorFatos. v1192 DEVOLVEU, por ordem
+// do dono ("não cria problemas") — e ele está certo, os dois casos não são a mesma coisa:
+//
+//   • O nível 1 AFIRMAVA uma pendência ("cliente esperando sua resposta") e furava o descanso de
+//     um lead JÁ ATENDIDO. Isso continua removido, e não volta.
+//   • Aqui não há descanso pra furar: a linha logo acima (emJanelaDeEspera) já devolveu false, o
+//     que só acontece quando NÃO existe nenhum atendimento marcado neste lead. Ou seja, ninguém
+//     colocou esse cliente em espera — e segurar por 5 dias um lead novo que fez uma pergunta é
+//     perder venda, não evitar ruído.
+//
+// A diferença prática pro dono: o cartão "Fazer agora" volta a contar esses leads no mesmo dia.
 function entraEmRetomada(l){
   if(emJanelaDeEspera(l)) return false; // contatei há <5 dias e ela não respondeu: esperar
   if(lembreteVencido(l)) return true;
@@ -2717,12 +2733,21 @@ function entraEmRetomada(l){
   if(String(l.analysis?.tipoRetomada||"").toLowerCase() === "quente-fechar") return true;
   const dias = Number(l.daysSinceLastInteraction);
   const limiar = limiarRetomada(l);
-  // contato recente (< limiar dias: 3 p/ lead novo, 5 p/ estabelecido) → espera o prazo.
-  // v1190 — aqui ficava a liberação antecipada por "o cliente falou por último e pediu resposta"
-  // (v1017). Removida: era a mesma inferência proibida, entrando na fila oficial pelo caminho de
-  // cp786Categoria (que termina em entraEmRetomada). Um fato com data — lembrete vencido,
-  // compromisso hoje/amanhã — continua liberando logo acima, como sempre.
-  if(Number.isFinite(dias) && dias < limiar) return false;
+  if(Number.isFinite(dias) && dias < limiar){
+    // Contato recente (< limiar dias) e nenhum atendimento marcado: entra se o cliente fez uma
+    // pergunta de verdade. v1017 — sem checar O QUE ele disse, um "Ok"/"Obrigada" já liberava o
+    // lead antes da hora. v1190 tirou isto por engano junto com o nível 1; v1192 devolveu (ver o
+    // comentário acima da função). Esta é a ÚNICA sobrevivente da leitura de "quem falou por
+    // último", e ela não afirma pendência nenhuma na tela: só decide se vale um toque hoje.
+    const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
+    const primeiroNome = String(l.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
+    for(let i = msgs.length - 1; i >= 0; i--){
+      const m = msgs[i];
+      if(!m || !String(m.text||"").trim()) continue;
+      return ehMsgDoCliente(m, primeiroNome) && ultimaMsgClientePedeResposta(l);
+    }
+    return false; // recém-criado, sem conversa → espera
+  }
   return true; // 5+ dias (ou sem info) → pode retomar
 }
 
@@ -8782,14 +8807,59 @@ async function _checkSharedImpl(){
 
   if(cameFromShare){
     const debug=await readShareDebug().catch(()=>null);
+
+    // v1192 — LIMPA O ENDEREÇO NA HORA (a correção mais importante desta tela).
+    //
+    // Relato do dono, com print: "eu só atualizo a página e vai pra essa merda de tela". Era
+    // verdade e era grave. Quando o compartilhamento falhava, o "?shared=1&shareId=..." continuava
+    // grudado no endereço da página — e como é ele que faz o app entrar no modo importação, TODA
+    // atualização, e toda reabertura do app instalado, caía de novo nesta tela travada em
+    // "Conversa recebida. Preparando a importação…". Não havia saída pela tela: o app ficava
+    // inutilizável até alguém saber limpar o endereço na mão. Agora o endereço é limpo antes
+    // mesmo de desenhar o aviso — atualizar a página volta pro app normal.
+    try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+    window.__cpShareImportActive=false;
+    state.pendingSharedRecordId='';
+
+    // O ZIP chegou e foi gravado, mas veio VAZIO (0 byte). Acontece de verdade no Android: o
+    // WhatsApp entrega o arquivo antes de terminar de montá-lo. Antes isso caía no texto genérico
+    // de "ainda não apareceu... toque em Tentar recuperar" — e recuperar um arquivo vazio nunca
+    // ia dar certo, então o dono ficava preso num botão que não tinha como funcionar.
+    let registroVazio = false;
+    try{
+      const bruto = shareId ? await shareIdbGet(shareId) : null;
+      registroVazio = !!(bruto && (!bruto.blob || !bruto.blob.size));
+    }catch(_){ }
+    if(!registroVazio && debug?.chosenFile && Number(debug.chosenFile.size) === 0) registroVazio = true;
+
     show('zip'); showCard('resultCard',true);
     qs('#resultBox').className='notice error';
+    const nomeArquivo = debug?.chosenFile?.name ? ' de <b>'+escapeHtml(debug.chosenFile.name)+'</b>' : ' do arquivo';
+    const corpo = registroVazio
+      ? '<b>O WhatsApp mandou o arquivo vazio (0 KB).</b><br><br>'+
+        'Não veio nada dentro'+nomeArquivo+' — não é o Corretor Pro que perdeu a conversa, ela não chegou. '+
+        'Costuma acontecer quando a exportação ainda estava sendo gerada no celular.<br><br>'+
+        'Nenhum lead seu foi alterado. Toque em <b>Voltar ao app</b> pra seguir usando normalmente; '+
+        'quando quiser tentar de novo, use o botão <b>“Escolher o arquivo da conversa (.zip)”</b> aqui de cima.'
+      : '<b>O arquivo não chegou ao armazenamento do aplicativo.</b><br><br>'+
+        'Nenhum lead seu foi alterado. Toque em <b>Voltar ao app</b> pra seguir usando normalmente, ou em '+
+        '<b>Tentar recuperar</b> pra procurar de novo.';
     qs('#resultBox').innerHTML=
-      '<b>O arquivo ainda não apareceu no armazenamento do aplicativo.</b><br><br>'+
-      'O Corretor Pro não voltou para a tela inicial e não apagou nada. Volte aqui em alguns segundos e toque em <b>Tentar recuperar</b>.'+
+      corpo+
       (erroUrl?'<br><br><b>Motivo:</b> '+escapeHtml(erroUrl):'')+
       (debug?'<br><br><details><summary>Diagnóstico técnico</summary>'+formatShareDebug(debug)+'</details>':'')+
-      '<div style="margin-top:14px"><button type="button" class="btn" id="btnRecuperarShare">Tentar recuperar</button></div>';
+      '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">'+
+        '<button type="button" class="btn" id="btnVoltarDoShare">Voltar ao app</button>'+
+        (registroVazio?'':'<button type="button" class="btn secondary" id="btnRecuperarShare">Tentar recuperar</button>')+
+      '</div>';
+    // v1192 — a saída que faltava. Sem ela, a única forma de sair desta tela era fechar o app —
+    // e reabrir caía aqui de novo, por causa do endereço grudado (já corrigido acima).
+    qs('#btnVoltarDoShare')?.addEventListener('click', () => {
+      try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+      showCard('resultCard',false);
+      qs('#processingBox')?.classList.remove('show');
+      show('home');
+    });
     // v983 — o clique só disparava uma nova espera de até 8s por trás, sem NENHUM sinal na tela;
     // pro dono parecia botão morto ("cliquei e nada aconteceu"). Agora desativa e troca o texto
     // na hora, antes mesmo da nova tentativa começar.
@@ -8798,7 +8868,7 @@ async function _checkSharedImpl(){
       if(btn){ btn.disabled = true; btn.textContent = 'Procurando…'; }
       __cpCheckSharedPromise=null; checkShared();
     });
-    return {handled:true,waiting:true};
+    return {handled:true,waiting:true,vazio:registroVazio};
   }
   return {handled:false};
 }

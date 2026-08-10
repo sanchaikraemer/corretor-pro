@@ -211,6 +211,18 @@ async function handleShare(request) {
     debug.chosenFile = { key: picked.key, name: file.name || 'whatsapp.zip', type: file.type || '', size: file.size || 0 };
     const body = await file.arrayBuffer();
 
+    // v1192 — ARQUIVO VAZIO NÃO É COMPARTILHAMENTO VÁLIDO.
+    // Caso real do dono (09/08/2026): o WhatsApp entregou um ZIP de 0 byte. O worker gravava esse
+    // vazio como pendente, redirecionava como se tivesse dado certo, e o app ficava 15 segundos
+    // procurando um conteúdo que não existe pra então mostrar "o arquivo não apareceu" — com um
+    // botão "Tentar recuperar" que nunca teria como funcionar. Agora para aqui, com motivo próprio,
+    // e nada é gravado: sem registro pendente vazio sobrando no aparelho.
+    if (!body || body.byteLength === 0) {
+      debug.step = 'arquivo-vazio';
+      await saveShareDebug(debug);
+      return redirect('&erro=arquivo-vazio');
+    }
+
     // O arquivo recebe um ID único e permanece como pendente até o APP confirmar
     // que todo o processamento terminou. Nunca apagamos no cold start.
     try {
