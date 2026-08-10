@@ -35,7 +35,11 @@ descreve como isso funciona em `processar-storage.js`. Ver `NOTAS-v1141.md`._
   `manifest.json`, instalável no celular). Tela principal em `index.html` + `app.js` (arquivo
   grande — ver seção 8, "Pendências conhecidas") mais os módulos de `js/` (`state.js`, `dom.js`,
   `tema.js`, `proposta.js`, `pwa-install.js`, `dados-locais.js`, `commercial-schema.js` e o
-  `importacao.js`, este último baixado sob demanda). Painel administrativo separado
+  `importacao.js`, este último baixado sob demanda). A biblioteca do Supabase que vai pro navegador
+  é montada no build a partir da oficial, com os módulos não usados (tempo real, Storage no
+  navegador, Edge Functions) trocados por peças vazias em `vendor-enxuto/` — 200 KB viraram 124 KB;
+  o servidor (`api/`) segue com a biblioteca completa (ver `NOTAS-v1196.md` e a guarda
+  `tests/v1196-supabase-enxuto.test.mjs`). Painel administrativo separado
   (`admin-plataforma.html`), telas de conta (`cadastro.html`, `entrar.html`,
   `recuperar-senha.html`, `redefinir-senha.html`).
 - **Backend**: funções serverless na Vercel, uma por arquivo em `api/*.js` com
