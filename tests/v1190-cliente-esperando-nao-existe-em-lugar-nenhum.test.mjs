@@ -17,6 +17,13 @@ import assert from "node:assert/strict";
 //
 // Este teste protege COMPORTAMENTO, não só nome de variável: quem quiser recriar a ideia com
 // outro nome vai esbarrar nas execuções de verdade lá embaixo.
+//
+// v1192 — UMA EXCEÇÃO, decidida pelo dono: entraEmRetomada pode olhar se o cliente fez uma
+// PERGUNTA pra deixar um lead entrar na fila do dia antes do prazo — mas só quando NÃO existe
+// atendimento marcado nenhum naquele lead (a linha de emJanelaDeEspera logo acima garante isso).
+// Ali não há descanso pra furar nem afirmação de pendência na tela; é só "vale um toque hoje?".
+// O que continua proibido, e é o que este teste trava, é AFIRMAR que o cliente está esperando e
+// FURAR o descanso de quem já foi atendido.
 
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const sw = fs.readFileSync(new URL("../service-worker.js", import.meta.url), "utf8");
@@ -31,7 +38,6 @@ for (const proibido of [
   /clienteAguardandoVoce/,
   /cpLeadsAguardandoResposta/,
   /cpAtualizarRetratoCobranca/,
-  /ultimaMsgClientePedeResposta/,
   /clientePrecisaResposta|bolaComCorretor|clienteSemResposta|aguardandoCorretor|clienteRespondeu/i,
   /"Cliente aguardando"|'Cliente aguardando'/,
   /Cliente esperando sua resposta/,
@@ -41,6 +47,17 @@ for (const proibido of [
 }
 for (const proibido of [/esperando sua resposta/, /retrato\.nomes/, /nomes:/]) {
   assert.doesNotMatch(swCodigo, proibido, `service-worker.js não pode ter em código: ${proibido}`);
+}
+
+// ── 1b. A exceção da v1192 vale SÓ em entraEmRetomada, e em mais lugar nenhum ────────────────
+{
+  const usos = [...appCodigo.matchAll(/ultimaMsgClientePedeResposta/g)];
+  assert.equal(usos.length, 2,
+    `ultimaMsgClientePedeResposta só pode existir na definição e no uso de entraEmRetomada (achei ${usos.length})`);
+  const retomada = appCodigo.match(/function entraEmRetomada\(l\)\{[\s\S]*?\n\}/)[0];
+  assert.match(retomada, /ultimaMsgClientePedeResposta/, 'o uso permitido é o de entraEmRetomada');
+  const prioridade = appCodigo.match(/function _prioridadeAtendimentoCalcular\(l\)\{[\s\S]*?\n\}/)[0];
+  assert.doesNotMatch(prioridade, /ultimaMsgClientePedeResposta/, 'o motor de prioridade não pode consultar isso');
 }
 
 // ── 2. COMPORTAMENTO: a fila de fatos não tem mais nível 1 e não fura o descanso ───────────────

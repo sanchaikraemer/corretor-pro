@@ -256,16 +256,15 @@ function parteJanelaDeEspera() {
   // completa do comportamento atual está em tests/v981-janela-espera-considera-atendimento.test.mjs
   // (reescrito) e tests/v1018-atendimento-e-nao-mensagem-define-espera.test.mjs (novo).
   //
-  // v1190 — o ramo de entraEmRetomada que este teste conferia FOI REMOVIDO. Ele liberava o lead da
-  // espera antes do prazo quando "o cliente falou por último e pediu resposta" — a mesma inferência
-  // que a v1158/v1189 baniram, entrando na fila oficial por cp786Categoria. Agora, dentro do prazo,
-  // só fato com data (lembrete vencido, compromisso hoje/amanhã) libera. A trava mudou de lado:
-  // o que este teste protege agora é a AUSÊNCIA da inferência.
+  // v1190 tirou este ramo junto com o nível 1 de filaPorFatos; v1192 DEVOLVEU por ordem do dono.
+  // Os dois casos não são a mesma coisa: o nível 1 AFIRMAVA pendência e furava o descanso de um
+  // lead já atendido (continua removido); aqui não há descanso pra furar — a linha de cima
+  // (emJanelaDeEspera) só devolve false quando NÃO existe atendimento marcado nenhum. Segurar por
+  // 5 dias um lead novo que fez uma pergunta é perder venda.
   const retomadaSrc = extrai(/function entraEmRetomada\(l\)\{[\s\S]*?\n\}/, 'entraEmRetomada');
-  const semComentarios = retomadaSrc.replace(/\/\/[^\n]*/g, '');
-  assert.doesNotMatch(semComentarios, /ehMsgDoCliente|ultimaMsgClientePedeResposta/,
-    'entraEmRetomada não pode voltar a decidir por quem falou por último (v1190)');
-  console.log('v1017 (entraEmRetomada): a liberação antecipada por "cliente falou por último" saiu na v1190 — ok');
+  assert.match(retomadaSrc, /ehMsgDoCliente\(m, primeiroNome\) && ultimaMsgClientePedeResposta\(l\)/,
+    'entraEmRetomada exige que a última mensagem do cliente peça resposta, não só que seja dele');
+  console.log('v1017 (entraEmRetomada): liberação antecipada só com pergunta de verdade — ok');
 }
 
 function parteCartaoLateral() {
