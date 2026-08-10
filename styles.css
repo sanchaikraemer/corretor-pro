@@ -1385,6 +1385,20 @@ html[data-theme="light"] .cp704-quickbar{
   border-color:var(--cp-border)!important;
   color:var(--cp-text)!important;
 }
+/* v1197 — o X de "não enviei essa mensagem" (histórico do cliente) nasce com borda e fundo
+   branquinhos (rgba de branco), o que funciona no tema escuro e some no fundo BRANCO do tema
+   claro — conferido em print, mesma armadilha da regra logo abaixo. Aqui ele ganha borda e
+   texto com contraste real, e fica vermelho ao passar o dedo/mouse, porque é uma remoção. */
+html[data-theme="light"] .cp704-tmsg-undo{
+  border-color:var(--cp-border-strong)!important;
+  background:#fff!important;
+  color:var(--cp-soft)!important;
+}
+html[data-theme="light"] .cp704-tmsg-undo:hover{
+  border-color:rgba(214,58,45,.75)!important;
+  background:#fff5f4!important;
+  color:#c0392b!important;
+}
 /* v1186 — "Excluir definitivamente" precisa PARECER perigoso nos dois temas. A regra acima
    (`.cp704-actions-grid button` no tema claro) tem especificidade maior que `.cp704-danger` e
    estava deixando o botão de apagar para sempre com a mesma cara de um botão comum. Isso só
