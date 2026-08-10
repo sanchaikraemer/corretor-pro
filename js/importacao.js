@@ -194,9 +194,10 @@ function janelaAudioPadrao(){
 // progresso já aparecia atrás da pergunta (8%, "Recebendo"), como se algo estivesse rodando
 // antes da decisão — foi a v1116 tentando esconder o anel, mas o card de progresso continuava lá.
 //
-// O período continua existindo e continua configurável: vem do Cérebro ("Período padrão dos
-// áudios"), e o resultado da importação segue mostrando qual período foi aplicado com o atalho
-// "ajustar padrão". O que acabou foi o pedágio a cada importação.
+// O período continua existindo por dentro: vem do que está salvo no Cérebro (90 dias por
+// padrão). Desde a v1196 o campo saiu também da tela do Cérebro (decisão do dono) — é uma
+// proteção de custo fixa, não uma escolha; o resultado da importação segue mostrando qual
+// período foi aplicado. O que acabou foi o pedágio a cada importação.
 function janelaAudioDaImportacao(){
   const final = janelaAudioPadrao();
   // Guarda a janela desta importação pra uma retentativa usar exatamente a mesma (o servidor só
@@ -650,7 +651,7 @@ async function renderProcessedResult(data, meta){
 
   const j = data.janelaConversa;
   const janelaHtml = (j && (j.tipo === "audio" || j.aplicado || j.todoPeriodo)) ?
-    `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}. <a href="#" onclick="show('cerebro');return false" style="color:var(--lime);text-decoration:underline">ajustar padrão</a></div>` : "";
+    `<div style="margin-top:10px;padding:10px 12px;background:rgba(55,232,255,.06);border:1px solid rgba(55,232,255,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}.</div>` : "";
 
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";

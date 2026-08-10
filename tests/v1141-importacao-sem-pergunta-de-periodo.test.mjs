@@ -44,11 +44,13 @@ assert.match(
   assert.ok(posEscolha < posSlim && posSlim < posUpload, "período definido antes de preparar e de subir o ZIP");
 }
 
-// ── 3. O corretor continua no controle — pelo Cérebro ─────────────────────────────────────────
-assert.match(html, /id="cerebroDiasImportacao"/, "o campo do período segue existindo no Cérebro");
-assert.match(html, /a importação não pergunta mais/i, "o Cérebro explica que agora é ali que se muda o período");
+// ── 3. O período segue aplicado e informado — sem campo na tela ───────────────────────────────
+// v1196 — o campo "Período padrão dos áudios" saiu também do Cérebro (decisão do dono): virou
+// proteção fixa interna. Este bloco guardava o campo; agora guarda a ausência dele — os detalhes
+// do comportamento interno estão em v1196-periodo-audios-sem-campo-na-tela.
+assert.doesNotMatch(html, /id="cerebroDiasImportacao"/, "o campo do período não pode voltar pra tela do Cérebro");
 assert.match(app, /Período dos áudios:<\/b>/, "o resultado da importação continua dizendo qual período foi aplicado");
-assert.match(app, /ajustar padrão/, "com o atalho pra ajustar o padrão no Cérebro");
+assert.doesNotMatch(app, /ajustar padrão/, "sem atalho pra um campo que não existe mais na tela");
 
 // ── 4. O ZIP preparado no celular não recompacta áudio ────────────────────────────────────────
 // Áudio do WhatsApp já é comprimido: passar DEFLATE de novo gastava segundos de processador do
