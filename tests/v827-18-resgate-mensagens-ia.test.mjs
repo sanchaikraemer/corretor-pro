@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 const inicio = pipeline.indexOf("export async function analyzeWithBrain");
-const fim = pipeline.indexOf("export async function compararEvolucao", inicio);
+// v1194 — o marcador de fim era compararEvolucao, removida por não ter chamador; o vizinho
+// seguinte de analyzeWithBrain agora é getOpenAIRaw.
+const fim = pipeline.indexOf("export function getOpenAIRaw", inicio);
 const bloco = pipeline.slice(inicio, fim);
 // v946: chamarGPT4Json passou a rodar com retry de TRANSPORTE (erro transitório de rede/API tipo
 // 429/5xx/timeout). Isso é diferente do padrão que este teste protege (reprompt pedindo pra IA se

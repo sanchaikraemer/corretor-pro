@@ -310,32 +310,6 @@ async function withRetries(fn, { tries = 3, baseDelayMs = 600 } = {}) {
 
 const WHISPER_EXT_MAP = { ".opus": ".ogg", ".aac": ".m4a" };
 
-export async function transcribeAudio({ zip, audioName, openai }) {
-  const audioFile = zip.files[audioName];
-  if (!audioFile) return "";
-  // Checa o tamanho DECLARADO pelo ZIP antes de descompactar — um áudio "bomba" (pequeno
-  // fechado, gigante quando aberto) não pode ser lido inteiro na memória só para então
-  // ser descartado. zipEntrySize já é usada com o mesmo objetivo para o .txt da conversa.
-  if (zipEntrySize(audioFile) > 24 * 1024 * 1024) return "";
-  const buffer = await audioFile.async("nodebuffer");
-  if (buffer.length > 24 * 1024 * 1024) return ""; // reforço: confere o tamanho real, caso o ZIP declare errado. Whisper aceita até 25 MB.
-  const rawExt = (path.extname(audioName) || ".ogg").toLowerCase();
-  // Whisper aceita ogg/m4a/mp3/wav/etc. mas rejeita .opus e .aac no nome do arquivo,
-  // mesmo sendo containers equivalentes. Renomeia antes de enviar.
-  const ext = WHISPER_EXT_MAP[rawExt] || rawExt;
-  const tempPath = path.join(os.tmpdir(), `direciona-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`);
-  fs.writeFileSync(tempPath, buffer);
-  try {
-    const result = await withRetries(() => openai.audio.transcriptions.create({
-      file: fs.createReadStream(tempPath),
-      model: modeloTranscricao(),
-      language: "pt"
-    }));
-    return stripEmojis(result.text || "");
-  } finally {
-    try { fs.unlinkSync(tempPath); } catch {}
-  }
-}
 
 
 // v1092 — buildTimeline removida: era a montagem antiga da conversa a partir do .zip, exportada
@@ -1689,19 +1663,6 @@ export async function aprenderComHistoricoReal({ timeline, clientName = "", lead
   };
 }
 
-export function ranquearCasosAprendidos(casos, contexto, limite = 5) {
-  const query = new Set(_tokensRank(contexto || ""));
-  return (Array.isArray(casos) ? casos : []).map((c, i) => {
-    const base = [c.situacao, c.sinalCliente, c.impedimento, c.regra, c.produto, c.etapa].filter(Boolean).join(" ");
-    let score = _simRank(query, base);
-    if (c.resultado === "validada") score += 0.10;
-    else if (c.resultado === "parcial") score += 0.05;
-    else if (c.resultado === "nao-funcionou") score += 0.02;
-    return { ...c, _score: score, _ordem: i };
-  }).filter(c => c._score > 0 || !query.size)
-    .sort((a, b) => b._score - a._score || b._ordem - a._ordem)
-    .slice(0, Math.max(1, limite));
-}
 
 // v1092 — casosSemelhantesPrompt removida: sem chamador (o prompt usa jeitoAprendidoCompacto).
 
@@ -3021,93 +2982,6 @@ ${timelineText}`;
   }
 }
 
-// Compara a análise ANTERIOR (do último atendimento) com a ATUAL (conversa
-// reimportada) e diz o que aconteceu: o cliente respondeu? a abordagem
-// sugerida funcionou? o que mudou? É o coração do Aprendizado por reimportação.
-export async function compararEvolucao({ anterior, atual, novasMensagens, openai }) {
-  if (!openai || !anterior) return null;
-  const resumoAnterior = {
-    data: anterior._registradaEm || anterior.registradaEm || null,
-    tipoRetomada: anterior.tipoRetomada || null,
-    nextAction: anterior.nextAction || null,
-    mensagemSugerida: anterior.messages?.a || anterior.messages?.direta || anterior.messages?.b || anterior.messages?.consultiva || null,
-    risco: anterior.risk || null
-  };
-  const resumoAtual = {
-    tipoRetomada: atual.tipoRetomada || null,
-    nextAction: atual.nextAction || null,
-    risco: atual.risk || null
-  };
-  let trechoNovas = "(não foi possível isolar as mensagens novas — compare pelo estado geral)";
-  if (Array.isArray(novasMensagens) && novasMensagens.length) {
-    const linhas = novasMensagens.map(m => `[${m.date||""} ${m.time||""}] ${m.author}: ${m.text}`);
-    const textoCompleto = linhas.join("\n");
-    // Nenhuma mensagem é descartada. Quando o novo atendimento é grande demais para
-    // uma única chamada, todos os trechos são lidos em blocos e resumidos antes da
-    // comparação final. O limite é por tamanho técnico do bloco, nunca por quantidade.
-    if (textoCompleto.length <= 60000) {
-      trechoNovas = textoCompleto;
-    } else {
-      const blocos = [];
-      let atual = [], tamanho = 0;
-      for (const linha of linhas) {
-        const n = linha.length + 1;
-        if (atual.length && tamanho + n > 28000) {
-          blocos.push(atual.join("\n")); atual = []; tamanho = 0;
-        }
-        atual.push(linha); tamanho += n;
-      }
-      if (atual.length) blocos.push(atual.join("\n"));
-      const resumos = [];
-      for (let i = 0; i < blocos.length; i++) {
-        try {
-          const r = await withRetries(() => openai.chat.completions.create({
-            model: modeloTarefasSimples(),
-            messages: [{ role: "user", content: `Resuma factual e cronologicamente este bloco de mensagens novas de um atendimento imobiliário. Preserve compromissos, objeções, valores, perguntas, respostas e quem disse cada ponto. Não invente e não omita mudanças comerciais relevantes. Bloco ${i+1} de ${blocos.length}:\n\n${blocos[i]}` }],
-          }));
-          resumos.push(`BLOCO ${i+1}/${blocos.length}: ${r.choices?.[0]?.message?.content || blocos[i]}`);
-        } catch (_) {
-          // Falha no resumo não elimina o bloco: ele segue integralmente.
-          resumos.push(`BLOCO ${i+1}/${blocos.length} (integral):\n${blocos[i]}`);
-        }
-      }
-      trechoNovas = resumos.join("\n\n");
-    }
-  }
-  const prompt = `Você é o Agente Aprendizado do Corretor Pro. O corretor reimportou a conversa deste lead ao fim de um novo atendimento. Compare a análise ANTERIOR com a situação ATUAL e diga, de forma honesta e baseada SÓ no que está escrito, o que aconteceu desde a última vez.
-
-ANÁLISE ANTERIOR:
-${JSON.stringify(resumoAnterior)}
-
-ANÁLISE ATUAL:
-${JSON.stringify(resumoAtual)}
-
-MENSAGENS NOVAS DESDE A ÚLTIMA ANÁLISE (se houver):
-${trechoNovas}
-
-Retorne APENAS JSON válido com:
-{
-  "houveResposta": true/false (o cliente respondeu/interagiu desde a última análise?),
-  "comoReagiu": "frase curta sobre como o cliente reagiu, ou 'sem resposta'",
-  "abordagemFuncionou": "sim" | "parcial" | "nao" | "sem-dados" (a abordagem/ação sugerida antes deu resultado?),
-  "evoluiu": "avancou" | "estagnou" | "esfriou" | "fechou" | "perdeu" (pra onde o negócio foi),
-  "oQueMudou": "frase curta do que mudou no estado do lead",
-  "licao": "lição prática pro corretor pra próximos casos parecidos (1 frase). Se não há dado suficiente, escreva 'sem lição clara ainda'."
-}
-Não invente. Se não há mensagens novas reais do cliente, houveResposta=false e abordagemFuncionou="sem-dados".`;
-  try {
-    const completion = await withRetries(() => openai.chat.completions.create({
-      model: modeloTarefasSimples(),
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" }
-    }));
-    const parsed = JSON.parse(completion.choices[0].message.content);
-    parsed.comparadoEm = new Date().toISOString();
-    return parsed;
-  } catch (_) {
-    return null;
-  }
-}
 
 // Cliente OpenAI REAL (usado pra transcrição de áudio/Whisper e leitura de imagens/visão).
 export function getOpenAIRaw() {

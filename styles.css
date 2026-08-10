@@ -159,12 +159,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .top3-mini .motivo-mini{font-size:11px;color:var(--soft);line-height:1.4;opacity:.85}
 /* Redesign cards: avatar com inicial + barra de progresso (estilo do mock) */
 .lead-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:950;font-size:15px;color:var(--text);background:rgba(255,255,255,.07);border:1px solid var(--line)}
-.lead-avatar.lg{width:54px;height:54px;font-size:20px}
-/* Avatar com foto recortada do print */
-.pbar{height:5px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;margin-top:5px;width:100%}
-.pbar > i{display:block;height:100%;border-radius:999px;background:var(--lime);transition:width .4s ease}
-.pbar.warn > i{background:#ffd24d}
-.pbar.cold > i{background:var(--risco)}
 @media(max-width:899px){
   .top3-mini{padding:10px;min-width:78vw;max-width:78vw;flex-shrink:0;scroll-snap-align:start}
 }
@@ -283,7 +277,6 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 .dash-stats .st span{font-size:11px;color:var(--soft);line-height:1.2}
 .dash-btn{width:100%;margin-top:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);border-radius:11px;padding:10px;font-weight:700;font-size:12px;cursor:pointer}
 .ins-item .it{font-size:13px;color:var(--soft);line-height:1.45}
-.ins-item .big{font-family:var(--font-display);font-size:18px;font-weight:700;margin:4px 0}
 .ins-item a{display:inline-block;margin-top:6px;color:var(--soft);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer}
 .ins-item + .ins-item{border-top:1px solid var(--line);margin-top:13px;padding-top:13px}
 
@@ -300,7 +293,7 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
   .main-col{flex:1;min-width:0}
   .top .brand{display:none}
   .top{justify-content:flex-end}
-  #buscaGlobalDesktop,.top .busca-global{margin-right:auto}
+  .top .busca-global{margin-right:auto}
   .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
   .home-right{display:flex;flex-direction:column;gap:16px}
   /* Lead aberto: esconde "Seu desempenho/Insights" e usa a largura toda pro lead (perfil legível) */
@@ -412,26 +405,13 @@ body.lead-foco-aberto .lead-foco{gap:10px}
 body.lead-foco-aberto .btn{font-size:13px}
 body.lead-foco-aberto .small{line-height:1.35}
 @media(max-width:760px){
-  body.lead-foco-aberto #msgFocoText{font-size:13px !important;line-height:1.45 !important;min-height:70px !important;padding:12px !important}
   body.lead-foco-aberto .btn{font-size:13px}
   details.bloco-recolhe>summary{padding:9px 12px;font-size:12px;border-radius:12px}
 }
 
 /* Atualização #590 — layout aprovado aplicado de forma fiel na tela do lead */
-body.lead-foco-aberto .lead590{max-width:1040px;margin:0 auto;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012)) !important}
-body.lead-foco-aberto .lead590 #msgFocoText{box-shadow:inset 0 0 0 1px rgba(255,98,88,.10)}
 body.lead-foco-aberto details.bloco-recolhe>summary{border-radius:10px;background:rgba(255,255,255,.03)}
 body.lead-foco-aberto details.bloco-recolhe>summary::before{color:var(--lime)}
-@media(max-width:760px){
-  body.lead-foco-aberto .lead590{max-width:none;margin:0;background:var(--panel) !important}
-}
-
-/* Atualização #592 — respostas mais visíveis e compactas */
-body.lead-foco-aberto .lead590{gap:8px !important}
-body.lead-foco-aberto .lead590 #msgFocoText{min-height:42px !important;max-height:76px !important;font-size:13px !important;line-height:1.38 !important;padding:10px 12px !important}
-@media(max-width:760px){
-  body.lead-foco-aberto .lead590 #msgFocoText{min-height:42px !important;max-height:72px !important;font-size:13px !important;line-height:1.35 !important;padding:10px 12px !important}
-}
 
 /* ============================================================
    DIRECIONA CORRETOR — IDENTIDADE VISUAL 2026 / ATUALIZAÇÃO 630
@@ -622,7 +602,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 .btn.secondary,.dash-btn{background:var(--surface-soft);color:var(--text);border-color:var(--line);box-shadow:none}
 .btn.cyan{background:var(--accent);color:#fff}
 .tag.hot{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
-.pbar>i,.pbar.warn>i{background:var(--accent)}
+
 .resumo-dia .item.sel{background:var(--accent-soft);border-color:var(--accent)}
 .top3-mini .pct-mini,.top3-mini .pct-mini.warn{background:var(--accent);color:#fff}
 .top3-mini .dias-mini{background:var(--accent-soft);color:var(--accent)}
@@ -1090,8 +1070,6 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .lead-ui670{display:flex;flex-direction:column;gap:14px;width:100%;padding-bottom:12px}
 .ui670-action-card h3{font-family:var(--font-display);font-size:18px;line-height:1.35;margin:0;color:#fff;max-width:920px}
 .ui670-inline-panel{margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--input)}.ui670-inline-panel>b{display:block;font-size:11px;color:var(--text);margin-bottom:8px}.ui670-quick-dates{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.ui670-quick-dates button{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;cursor:pointer}.ui670-inline-panel input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
-#ui670HistorySlot>details{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
-#ui670NoteSlot #novoAtendimentoPanel{margin:0!important;border:0!important;background:transparent!important;padding:0!important}
 
 @media(max-width:700px){
   .lead-ui670{gap:11px}.ui670-action-card h3{font-size:16px}
@@ -1184,8 +1162,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .card:hover,.menu-card:hover,.top3-mini:hover{box-shadow:var(--cp687-shadow);border-color:rgba(255,98,88,.28)!important}
 .sb-item{min-height:48px;position:relative;overflow:hidden}.sb-item::after{content:"";position:absolute;inset:0;background:rgba(255,98,88,.08);opacity:0;transition:opacity .18s var(--cp687-ease);pointer-events:none}.sb-item:hover::after,.sb-item.active::after{opacity:1}.sb-item.active{background:var(--accent-soft)!important;color:#fff!important;border-color:rgba(255,98,88,.30)!important;box-shadow:inset 3px 0 0 var(--accent)!important}.sb-item.active .ic{color:#fff}.sb-brand{transition:transform .16s var(--cp687-ease),background .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.sb-brand:hover{transform:translateY(-1px);background:rgba(255,255,255,.035)}
 .cp-topbar{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(151,197,211,.10)}
-.cp-search input,#buscaCarteira,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
-.cp-search input:focus,#buscaCarteira:focus,.ui677-search-wrap>input:focus{background:rgba(255,255,255,.045)!important;box-shadow:0 0 0 3px rgba(255,98,88,.14)!important}
+.cp-search input,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
+.cp-search input:focus,.ui677-search-wrap>input:focus{background:rgba(255,255,255,.045)!important;box-shadow:0 0 0 3px rgba(255,98,88,.14)!important}
 .home-page-heading h2,#home h1,#home h2,.screen>h1,.screen>h2{letter-spacing:-.04em}.home-center{gap:18px}.resumo-dia{border-radius:18px!important}.resumo-dia .item,.dash-card{border-radius:16px!important;transition:transform .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.resumo-dia .item:hover,.dash-card:hover{transform:translateY(-2px);box-shadow:var(--cp687-shadow)}
 #leadFocoArea .lead-ui670{max-width:100%}.ui670-action-card{background:var(--accent-soft)!important;border-color:rgba(255,98,88,.22)!important}.ui670-action-card h3{letter-spacing:-.025em}.btn,.btn.secondary{border-radius:13px!important}.btn:hover{box-shadow:var(--cp687-glow)}
 #carteira table{border-collapse:separate;border-spacing:0}tr{transition:background .14s var(--cp687-ease),transform .14s var(--cp687-ease)}
@@ -1608,7 +1586,6 @@ html[data-theme="light"] [style*="color: #ffc"]{
 }
 
 /* v785 — bloco "Preparação da carteira" removido da Home */
-#cp697HomeProgress,#cp702HomeProgress{display:none!important}
 
 /* ===== v787 — Sino da Central de atenção =====
    Um único indicador, preso ao sino e sem contador ambíguo. */

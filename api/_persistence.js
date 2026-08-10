@@ -841,7 +841,6 @@ export function _mesclarTimelinesV681(antiga, nova) {
 
 // null = ainda não sabemos; true = migração 0010 aplicada; false = não aplicada (não tenta mais).
 let _dedupeIndexadoDisponivel = null;
-export function _dedupeIndexadoEstado(){ return _dedupeIndexadoDisponivel; }
 export function _dedupeIndexadoResetar(){ _dedupeIndexadoDisponivel = null; }
 
 export async function _buscarProcessamentoExistenteV681(supabase, { result, fileName, path, organizationId, idJaIdentificado = "" }) {
