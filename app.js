@@ -5655,10 +5655,12 @@ function toggleAgendar(id){
 }
 window.toggleAgendar = toggleAgendar;
 // Reagenda por atalho (N dias a partir de hoje).
-function reagendarDias(id, dias){
+// v1207 — horaStr é OPCIONAL: o painel do lead manda junto a hora que estiver preenchida, pra
+// "Amanhã" + "09:00" marcar amanhã ÀS 9, não amanhã sem hora.
+function reagendarDias(id, dias, horaStr){
   const d = new Date(); d.setDate(d.getDate() + dias);
   const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  reagendarLembrete(id, s);
+  reagendarLembrete(id, s, horaStr);
 }
 window.reagendarDias = reagendarDias;
 // Remarca o lembrete pra nova data (rápido, sem reanalisar). Valida o ano pra não sumir o lembrete.
@@ -11436,11 +11438,30 @@ window.ui670Reanalisar=async function(btn){
 };
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
 
+// v1207 — este painel (o "Agendar" de dentro do lead, que é por onde o dono agenda no dia a dia)
+// só tinha DATA. A hora existia apenas no "Reagendar" da tela Agenda (v1199), ou seja: pra
+// guardar "quinta que vem às 9h" ele tinha que agendar aqui e depois ir na Agenda reabrir o
+// compromisso — no celular ele simplesmente não achou. Agora data e hora ficam lado a lado aqui
+// também, a hora continua OPCIONAL, e os atalhos (Hoje/Amanhã/+7...) levam junto a hora que
+// estiver preenchida.
 function ui670ScheduleHtml(lead){
   if(!lead?.id)return "";
   const id=JSON.stringify(String(lead.id));
-  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b><div class="ui670-quick-dates"><button onclick='reagendarDias(${id},0)'>Hoje</button><button onclick='reagendarDias(${id},1)'>Amanhã</button><button onclick='reagendarDias(${id},7)'>+7 dias</button><button onclick='reagendarDias(${id},15)'>+15 dias</button><button onclick='reagendarDias(${id},30)'>+30 dias</button></div><input type="date" onchange='reagendarLembrete(${id},this.value)'></div>`;
+  const lerData = `document.querySelector("#ui670ScheduleData")?.value`;
+  const lerHora = `document.querySelector("#ui670ScheduleHora")?.value`;
+  const atalhos = [["Hoje",0],["Amanhã",1],["+7 dias",7],["+15 dias",15],["+30 dias",30]]
+    .map(([rot,n]) => `<button onclick='reagendarDias(${id},${n},${lerHora})'>${rot}</button>`).join("");
+  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b>`
+    + `<div class="ui670-quick-dates">${atalhos}</div>`
+    + `<div class="ui670-schedule-row">`
+    + `<input type="date" id="ui670ScheduleData" aria-label="Dia do compromisso" onchange='reagendarLembrete(${id},this.value,${lerHora})'>`
+    + `<input type="time" id="ui670ScheduleHora" aria-label="Hora do compromisso" onchange='const d=${lerData}; if(d) reagendarLembrete(${id},d,this.value)'>`
+    + `<button type="button" class="ui670-schedule-ok" onclick='const d=${lerData}; if(!d){ toast("Escolha o dia primeiro."); return; } reagendarLembrete(${id},d,${lerHora})'>Confirmar</button>`
+    + `</div>`
+    + `<small class="ui670-schedule-dica">A hora é opcional — sem ela, fica marcado só o dia.</small>`
+    + `</div>`;
 }
+window.ui670ScheduleHtml = ui670ScheduleHtml;
 
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
 

@@ -1070,6 +1070,12 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .lead-ui670{display:flex;flex-direction:column;gap:14px;width:100%;padding-bottom:12px}
 .ui670-action-card h3{font-family:var(--font-display);font-size:18px;line-height:1.35;margin:0;color:#fff;max-width:920px}
 .ui670-inline-panel{margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--input)}.ui670-inline-panel>b{display:block;font-size:11px;color:var(--text);margin-bottom:8px}.ui670-quick-dates{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.ui670-quick-dates button{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;cursor:pointer}.ui670-inline-panel input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+/* v1207 — data + hora + Confirmar numa linha só (quebra sozinha no celular). A hora é opcional;
+   o painel do lead antes só tinha data e o dono não achava onde marcar o horário combinado. */
+.ui670-schedule-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ui670-schedule-row input{flex:1 1 118px;min-width:0}
+.ui670-schedule-ok{flex:0 0 auto;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:950;cursor:pointer}
+.ui670-schedule-dica{display:block;margin-top:6px;color:var(--muted);font-size:10px;line-height:1.35}
 
 @media(max-width:700px){
   .lead-ui670{gap:11px}.ui670-action-card h3{font-size:16px}
