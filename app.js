@@ -5962,7 +5962,6 @@ export function obterCerebroConfigParaAnalise() {
   // Ler esses campos vazios nesse momento apagava o Método salvo no localStorage
   // e enviava um Cérebro parcial/sem instruções para a análise.
   if (cerebroFormularioCarregado) {
-    const diasRaw = qs("#cerebroDiasImportacao")?.value;
     cfg = {
       ...(cfg || {}),
       corretorNome: qs("#cerebroCorretorNome")?.value || cfg?.corretorNome || "",
@@ -5970,7 +5969,8 @@ export function obterCerebroConfigParaAnalise() {
       tom: qs("#cerebroTom")?.value ?? cfg?.tom ?? "",
       diferenciais: qs("#cerebroDiferenciais")?.value ?? cfg?.diferenciais ?? "",
       evitar: qs("#cerebroEvitar")?.value ?? cfg?.evitar ?? "",
-      diasImportacao: Number(diasRaw) || cfg?.diasImportacao || 90,
+      // v1198 — o campo do período dos áudios saiu da tela: vale o que está salvo (90 por padrão).
+      diasImportacao: cfg?.diasImportacao || 90,
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || cfg?.atendimentosPorDia || 10,
       // v1139 — não dá pra usar "||" aqui: 0 (resgate desligado) é escolha válida e "||" jogaria
       // fora. Campo vazio = vale o que está salvo.
@@ -6774,8 +6774,6 @@ async function carregarCerebro(){
   qs("#cerebroTom").value = config.tom || "";
   qs("#cerebroDiferenciais").value = config.diferenciais || "";
   qs("#cerebroEvitar").value = config.evitar || "";
-  const inpDias = qs("#cerebroDiasImportacao");
-  if(inpDias) inpDias.value = (config.diasImportacao && Number(config.diasImportacao) > 0) ? config.diasImportacao : 90;
   const inpAtend = qs("#cerebroAtendimentosDia");
   if(inpAtend) inpAtend.value = (Number(config.atendimentosPorDia) >= 1) ? config.atendimentosPorDia : 10;
   const inpResg = qs("#cerebroResgatesDia");
@@ -6835,9 +6833,19 @@ cp7SincronizarCerebroConfigInicial();
 // corretor); rodá-lo hoje juntaria a configuração de contas diferentes na mesma linha. As três
 // auditorias de 08/2026 pediram a retirada. O aviso agora só diz o que houve.
 
+// v1198 — o campo "Período padrão dos áudios" saiu da tela do Cérebro. O período continua
+// existindo por dentro (limita só a transcrição de áudio na importação — proteção de custo),
+// mas agora vale o que já está salvo, sem formulário: quem tinha um valor próprio mantém,
+// todo o resto fica no padrão 90. Salvar o Cérebro NÃO pode rebaixar um valor salvo pra 90.
+function cpDiasImportacaoSalvo(){
+  try{
+    const d = Number(JSON.parse(localStorage.getItem(CEREBRO_LS_KEY) || "null")?.diasImportacao);
+    if(Number.isFinite(d) && d > 0 && d <= 365) return Math.round(d);
+  }catch(_){}
+  return 90;
+}
+
 async function salvarCerebro(){
-  const diasRaw = qs("#cerebroDiasImportacao")?.value;
-  const diasN = Number(diasRaw);
   const atendRaw = qs("#cerebroAtendimentosDia")?.value;
   const atendN = Number(atendRaw);
   // v1139 — 0 é válido (desliga o resgate); só campo realmente vazio cai no padrão (via NaN).
@@ -6851,7 +6859,7 @@ async function salvarCerebro(){
     tom: qs("#cerebroTom").value,
     diferenciais: qs("#cerebroDiferenciais").value,
     evitar: qs("#cerebroEvitar").value,
-    diasImportacao: (Number.isFinite(diasN) && diasN > 0 && diasN <= 365) ? diasN : 90,
+    diasImportacao: cpDiasImportacaoSalvo(),
     atendimentosPorDia: (Number.isFinite(atendN) && atendN >= 1 && atendN <= 50) ? Math.round(atendN) : 10,
     resgatesPorDia: (Number.isFinite(resgN) && resgN >= 0 && resgN <= 20) ? Math.round(resgN) : 2,
     diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
@@ -6905,7 +6913,7 @@ async function zerarCerebroTudo(){
       corretorNome: qs("#cerebroCorretorNome")?.value || "",
       metodo: "", tom: "", evitar: "",
       diferenciais: "",
-      diasImportacao: Number(qs("#cerebroDiasImportacao")?.value) || 90,
+      diasImportacao: cpDiasImportacaoSalvo(),
       // Meta diária, resgates e dias de descanso são preferência de trabalho (como o período
       // dos áudios), não aprendizado — ficam.
       atendimentosPorDia: Number(qs("#cerebroAtendimentosDia")?.value) || 10,

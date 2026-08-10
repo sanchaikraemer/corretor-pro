@@ -14,7 +14,9 @@ const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
 // Todos os campos continuam existindo com os mesmos IDs que app.js já lê/grava.
-for (const id of ["cerebroCorretorNome", "cerebroMetodo", "cerebroTom", "cerebroDiferenciais", "cerebroEvitar", "cerebroRegrasTexto", "cerebroObjecoesTexto", "cerebroDiasImportacao", "cerebroAtendimentosDia", "cerebroDiasDescanso", "cerebroSalvar", "cerebroResetar", "cerebroZerar", "cerebroStatus"]) {
+// (cerebroDiasImportacao saiu da lista na v1198: o campo do período dos áudios foi retirado da
+// tela — a proteção de 90 dias segue por dentro, ver v1198-periodo-audios-sem-campo-na-tela.)
+for (const id of ["cerebroCorretorNome", "cerebroMetodo", "cerebroTom", "cerebroDiferenciais", "cerebroEvitar", "cerebroRegrasTexto", "cerebroObjecoesTexto", "cerebroAtendimentosDia", "cerebroDiasDescanso", "cerebroSalvar", "cerebroResetar", "cerebroZerar", "cerebroStatus"]) {
   assert.match(html, new RegExp(`id="${id}"`), `campo ${id} precisa continuar existindo com o mesmo id`);
 }
 

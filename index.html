@@ -395,9 +395,12 @@
 
         <div class="small cerebro-grupo-label">Configurações técnicas</div>
         <div style="margin-top:2px">
-          <label>Período padrão dos áudios <span class="small" style="color:var(--muted);font-weight:400">(30, 60 ou 90 dias)</span></label>
-          <input type="number" id="cerebroDiasImportacao" min="1" max="365" placeholder="90" style="max-width:120px">
-          <div class="small" style="color:var(--muted);margin-top:4px">As mensagens escritas entram completas <b>sempre</b>. Este campo define o período dos <b>áudios</b> que serão transcritos em toda importação — é aqui que você muda (a importação não pergunta mais, pra não travar cada envio). Padrão: 90 dias.</div>
+          <!-- v1198 — o campo do período dos áudios (cerebroDiasImportacao) saiu da tela
+               (decisão do dono, 10/08/2026).
+               A proteção continua valendo por dentro: toda importação transcreve os áudios dos
+               últimos 90 dias da conversa (as mensagens escritas entram completas sempre), e a
+               reimportação reaproveita o que já foi transcrito. Ninguém precisava ver nem mexer
+               nesse número — quem tiver um valor salvo diferente continua com ele. -->
           <label>Atendimentos por dia <span class="small" style="color:var(--muted);font-weight:400">(meta do "Fazer agora")</span></label>
           <input type="number" id="cerebroAtendimentosDia" min="1" max="50" placeholder="10" style="max-width:120px">
           <div class="small" style="color:var(--muted);margin-top:4px">Quantos clientes entram na sua fila "Fazer agora" por dia. Cada corretor escolhe a sua meta (de 1 a 50). Padrão: 10.</div>
