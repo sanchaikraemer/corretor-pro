@@ -7,11 +7,11 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 // porque o prompt só pedia recomendada/maisSuave/maisDireta sem dizer que precisam ser
 // ESTRATÉGIAS diferentes. Este guard trava a instrução de diferenciação no prompt.
 //
-// v1204 ajustou a REDAÇÃO (não a intenção): a exigência deixou de ser "três próximos passos
+// v1205 ajustou a REDAÇÃO (não a intenção): a exigência deixou de ser "três próximos passos
 // diferentes SEMPRE" — que brigava com a regra do Cérebro Comercial de que as três podem
 // convergir quando só existe um passo adequado — e passou a ser "três ângulos comerciais
 // diferentes", com a convergência liberada só nessa exceção. Continuar proibindo a mesma ideia
-// reescrita 3x segue sendo o objetivo deste teste; ver v1204-tres-mensagens-podem-convergir.
+// reescrita 3x segue sendo o objetivo deste teste; ver v1205-tres-mensagens-podem-convergir.
 
 assert.match(pipeline, /ÂNGULOS COMERCIAIS DIFERENTES/, 'o prompt precisa exigir três ângulos comerciais diferentes');
 assert.match(pipeline, /NÃO a mesma ideia reescrita/, 'o prompt precisa proibir reescrever a mesma ideia');
