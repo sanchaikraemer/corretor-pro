@@ -8766,6 +8766,36 @@ async function _checkSharedImpl(){
 
   const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||'').trim();
   const erroUrl=params.get('erro');
+
+  // v1193 — MARCA VELHA NO ENDEREÇO NÃO É COMPARTILHAMENTO NOVO.
+  //
+  // Relato do dono, depois de a v1192 já ter limpado o endereço na falha: "eu não to importando
+  // nada, somente atualizei passando o dedo na tela, e muda pra essa tela de merda". A causa é
+  // que o "?shared=1&shareId=..." de um compartilhamento antigo continua no endereço do app
+  // instalado (o Android reabre o PWA na última URL). Enquanto ele estiver ali, todo puxão de
+  // tela pra atualizar reentra no modo importação — e, na v1192, ainda esperava 15 segundos antes
+  // de dizer que não achou nada.
+  //
+  // Agora, ANTES de mostrar qualquer coisa: se o último compartilhamento registrado neste
+  // aparelho tem mais de 10 minutos e não há ZIP com conteúdo esperando, isto é marca velha.
+  // Limpa o endereço e devolve o app normal na hora — sem tela de importação, sem espera, sem
+  // aviso de erro. O caminho de um compartilhamento DE VERDADE (que acabou de acontecer, com
+  // registro fresco) continua exatamente como era.
+  try{
+    const debugAntigo = await readShareDebug().catch(()=>null);
+    const tsDebug = Date.parse(debugAntigo?.ts || '');
+    const velho = Number.isFinite(tsDebug) && (Date.now()-tsDebug) > 10*60*1000;
+    if(velho){
+      const pendente = shareId ? await shareIdbGet(shareId) : null;
+      if(!pendente?.blob?.size){
+        try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+        window.__cpShareImportActive=false;
+        state.pendingSharedRecordId='';
+        return {handled:false,staleShare:true};
+      }
+    }
+  }catch(_){ /* na dúvida, segue o caminho normal abaixo */ }
+
   window.__cpShareImportActive=true;
   mostrarRecebimentoShare();
 
@@ -8868,7 +8898,11 @@ async function _checkSharedImpl(){
       if(btn){ btn.disabled = true; btn.textContent = 'Procurando…'; }
       __cpCheckSharedPromise=null; checkShared();
     });
-    return {handled:true,waiting:true,vazio:registroVazio};
+    // v1192 — "falhou" avisa o arranque (iniciarDireciona) que ele deve seguir carregando o app
+    // normalmente por trás deste aviso. Antes, um compartilhamento falho devolvia handled:true e o
+    // arranque PARAVA ali: a carteira nunca era carregada. Quem saísse desta tela encontrava uma
+    // Home vazia — parte do "cadê meus leads?" que o dono relatou.
+    return {handled:true,waiting:true,falhou:true,vazio:registroVazio};
   }
   return {handled:false};
 }
@@ -11684,7 +11718,10 @@ async function iniciarDireciona(){
   // Share Target vem antes da Home. Enquanto existe um ZIP pendente, nenhuma rotina
   // inicial pode trocar a tela nem disparar recarga automática.
   const compartilhado = await checkShared().catch(() => ({ handled:false }));
-  if(compartilhado?.handled || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
+  // v1192 — "falhou" (compartilhamento que não deu certo) NÃO interrompe mais o arranque: o aviso
+  // fica na tela e o app carrega a carteira por trás, pra quem tocar em "Voltar ao app" encontrar
+  // tudo no lugar. Só uma importação DE VERDADE em andamento segura o arranque, como sempre.
+  if((compartilhado?.handled && !compartilhado?.falhou) || window.__cpShareImportActive || state?.pendingSharedRecordId) return;
   // v1026 — pedido explícito e repetido do dono: atualizar a página (F5/Ctrl+Shift+R, ou o
   // Android recarregando o PWA sozinho) NUNCA pode abrir outra coisa além da Home. Isto aqui
   // ANTES reabria um lead salvo em history.state de propósito (pra sobreviver a uma troca de
