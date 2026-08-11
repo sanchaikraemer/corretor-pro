@@ -512,7 +512,9 @@ window.restaurarLeadsAntigos = restaurarLeadsAntigos;
 
 const LEAD_DETAIL_CACHE_TTL = 10 * 60 * 1000;
 const _leadDetailCache = new Map();
-async function getLeadDetail(id, force){
+// v1211 — exportada: a tela da importação passou a abrir o cadastro parecido ali mesmo (com as
+// últimas mensagens dele) pra o corretor decidir "é o mesmo cliente?" vendo o cliente.
+export async function getLeadDetail(id, force){
   const key = String(id || "");
   if(!key) throw new Error("Lead inválido.");
   const cached = _leadDetailCache.get(key);
@@ -4145,7 +4147,9 @@ const ETAPA_ARQUIVADO = "Geladeira";  // valor gravado no banco; na tela sempre 
 const ETAPA_ATIVO = "Ativo";
 const ETAPAS = [ETAPA_ATIVO, ETAPA_ARQUIVADO];
 
-function normalizarEtapa(raw){
+// v1210 — exportada porque a tela da importação passou a dizer se o cadastro parecido está ativo
+// ou arquivado (js/importacao.js). A regra de o que conta como arquivado continua morando só aqui.
+export function normalizarEtapa(raw){
   const bruto = String(raw || "").trim();
   const s = bruto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   // v1105 — auditoria do backup real (298 registros): 244 tinham um TEXTO de análise da IA
@@ -4949,6 +4953,21 @@ function cp704Css(){
 
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
   function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
+  // v1210 — O BOTÃO QUE FALTAVA DENTRO DO LEAD ARQUIVADO (pedido do dono, 11/08/2026).
+  //
+  // "Reativar" só existia na lista da tela Arquivados. Quem achasse o cliente pela busca da Home
+  // (que mostra os arquivados com a etiqueta ARQUIVADO) e abrisse o lead ficava sem saída: a barra
+  // de cima oferecia "Arquivar" — o que ele já era — e nada mais. Agora o mesmo lugar da barra
+  // mostra "Arquivar" quando o lead está ativo e "Reativar" quando está arquivado.
+  function cp704BotaoEtapa(lead){
+    const idJs = JSON.stringify(String(lead?.id || ''));
+    const arquivado = (typeof normalizarEtapa === 'function') && normalizarEtapa(lead?.etapa) === ETAPA_ARQUIVADO;
+    if(arquivado){
+      // Caixa de arquivo com a seta PRA CIMA: tirar de dentro da caixa, o contrário do arquivar.
+      return `<button type="button" class="cp704-ico" onclick='reativarLeadArquivado(${idJs},this)' title="Reativar — volta pros atendimentos ativos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6M9 15l3-3 3 3"/></svg><span class="lb">Reativar</span></button>`;
+    }
+    return `<button type="button" class="cp704-ico" onclick='arquivarLead(${idJs},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button>`;
+  }
   // v889 — no lugar do "passo X de 6" (funil que o dono mandou tirar): barra de INTERESSE do
   // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=100
   // cheia). Mede engajamento real, não etapa. Largura total.
@@ -5396,7 +5415,7 @@ function renderLeadFoco(lead){
     const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
     const cp7RolagemPagina = window.scrollY;
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
+      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button>${cp704BotaoEtapa(lead)}<button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
@@ -5600,43 +5619,133 @@ function agendaCardHTML(l, extra){
       </div>
       <div class="agenda-acoes">
         <button type="button" onclick='abrirLead(${idJs})' style="padding:7px 13px;font-size:11px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Ver análise</button>
-        ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id) : ""}
+        ${l.analysis?.lembrete?.quando ? reagendarControlHTML(l.id, l.analysis.lembrete) : ""}
         ${l.analysis?.lembrete?.quando ? `<button type="button" onclick='removerLembrete(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(244,118,138,.10);color:#ffd7de;border:1px solid rgba(244,118,138,.26);border-radius:8px;cursor:pointer;font-weight:950">🗑 Excluir</button>` : ""}
       </div>
     </div>`;
 }
-// Controle de "Reagendar": botões rápidos (Amanhã/+7/+15/+30) + data e hora opcional, tudo
-// compacto (v1200 — o painel anterior, com um rótulo e uma linha pra cada campo, tinha virado um
-// "quadradão" alto demais no cartão da Agenda; data, hora e o botão de confirmar agora dividem
-// UMA linha só, que quebra sozinha em telas estreitas). idRaw = id do lead.
-function reagendarControlHTML(idRaw){
+// ===== v1208 — PAINEL DE AGENDAMENTO (um só, usado pelo lead e pela Agenda) =====
+// Print do dono, irritado: "não estou conseguindo agendar a hora... boto ali o dia, e daí quando
+// eu vou tentar selecionar a hora fecha. Sem falar que está feio, nem parece um app desse nível".
+// Eram DOIS defeitos somados, e os dois eram nossos:
+//
+// 1. FECHAVA NO MEIO. Escolher a data SALVAVA na hora (onchange), e salvar redesenha a tela
+//    (abrirLead/carregarAgenda) — o painel morria junto, antes de ele chegar na hora. Ou seja: o
+//    jeito "esperto" de salvar sozinho tornava impossível marcar dia E hora na mesma ida.
+//    Agora nada é salvo até ele tocar em "Confirmar agendamento". Os atalhos (Hoje/Amanhã/+7...)
+//    também só PREENCHEM o dia — não salvam mais sozinhos.
+// 2. FICAVA FEIO/INVISÍVEL. Os campos nativos de data e hora do Android herdam o esquema de cor
+//    CLARO: o texto guia ("dd/mm/aaaa", "--:--") e os ícones saíam escuros sobre o fundo escuro
+//    do app — no print são duas caixas vazias com uma setinha. `color-scheme:dark` nos campos
+//    resolve, e agora eles têm rótulo, altura de dedo e fonte de 16px (abaixo disso o celular dá
+//    zoom sozinho ao tocar).
+//
+// Além disso: atalhos de HORA (09:00, 10:00, 14:00...) pra não precisar abrir o relógio do
+// celular no caso comum, e uma frase de conferência ("Vai agendar: quinta, 13/08 às 09:00")
+// embaixo do botão, pra ele ver o que vai salvar ANTES de salvar.
+const CP1208_HORAS_RAPIDAS = ["08:00","09:00","10:00","14:00","16:00","18:00"];
+// Rótulos curtos ("+7d") de propósito: com "+7 dias" os cinco atalhos viravam duas linhas no
+// celular, e o dono já reclamou disso em outra tela (v1204).
+const CP1208_DIAS_RAPIDOS = [["Hoje",0],["Amanhã",1],["+7d",7],["+15d",15],["+30d",30]];
+
+// Monta o painel. `pref` prefixa os ids (a Agenda desenha um painel por cartão, então não pode
+// haver id repetido); `atual` = {data:"aaaa-mm-dd", hora:"hh:mm"} pré-preenche o que já está
+// marcado, pra ele enxergar o compromisso atual em vez de dois campos vazios.
+function cpAgendarPainelHTML(idRaw, pref, atual){
+  const idJs = JSON.stringify(String(idRaw||""));
+  const p = JSON.stringify(String(pref||"ag"));
+  const dataAtual = /^\d{4}-\d{2}-\d{2}$/.test(String(atual?.data||"")) ? atual.data : "";
+  const horaAtual = /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(atual?.hora||"")) ? atual.hora : "";
+  const chipsDia = CP1208_DIAS_RAPIDOS
+    .map(([rot,n]) => `<button type="button" class="cp1208-chip" onclick='cpAgendarEscolherDia(${p},${n},this)'>${rot}</button>`).join("");
+  const chipsHora = CP1208_HORAS_RAPIDAS
+    .map(h => `<button type="button" class="cp1208-chip${h===horaAtual?" ativo":""}" onclick='cpAgendarEscolherHora(${p},"${h}",this)'>${h}</button>`).join("")
+    + `<button type="button" class="cp1208-chip" onclick='cpAgendarEscolherHora(${p},"",this)'>Sem hora</button>`;
+  return `<div class="cp1208-agendar">`
+    + `<div class="cp1208-bloco"><span class="cp1208-rot">Dia</span><div class="cp1208-chips">${chipsDia}</div>`
+    + `<input type="date" class="cp1208-campo" id="${pref}Data" value="${dataAtual}" aria-label="Dia do compromisso" onchange='cpAgendarResumo(${p})'></div>`
+    + `<div class="cp1208-bloco"><span class="cp1208-rot">Hora <i>(opcional)</i></span><div class="cp1208-chips">${chipsHora}</div>`
+    + `<input type="time" class="cp1208-campo" id="${pref}Hora" value="${horaAtual}" aria-label="Hora do compromisso" onchange='cpAgendarResumo(${p})'></div>`
+    + `<button type="button" class="cp1208-ok" onclick='cpAgendarConfirmar(${p},${idJs})'>Confirmar agendamento</button>`
+    + `<div class="cp1208-resumo" id="${pref}Resumo">${cpAgendarResumoTexto(dataAtual, horaAtual)}</div>`
+    + `</div>`;
+}
+window.cpAgendarPainelHTML = cpAgendarPainelHTML;
+
+// As funções abaixo são chamadas de dentro de onclick/onchange, então PRECISAM estar em window e
+// só podem usar globais de verdade (lição da v1202: `qs` é binding de módulo e não existe lá).
+function cpAgendarCampos(pref){
+  return {
+    data: document.getElementById(pref+"Data"),
+    hora: document.getElementById(pref+"Hora"),
+    resumo: document.getElementById(pref+"Resumo")
+  };
+}
+function cpAgendarMarcarChip(btn){
+  if(!btn || !btn.parentElement) return;
+  const irmaos = btn.parentElement.querySelectorAll(".cp1208-chip");
+  for(const b of irmaos) b.classList.toggle("ativo", b === btn);
+}
+function cpAgendarEscolherDia(pref, dias, btn){
+  const d = new Date(); d.setDate(d.getDate() + Number(dias||0));
+  const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const c = cpAgendarCampos(pref);
+  if(c.data) c.data.value = s;
+  cpAgendarMarcarChip(btn);
+  cpAgendarResumo(pref);
+}
+function cpAgendarEscolherHora(pref, hora, btn){
+  const c = cpAgendarCampos(pref);
+  if(c.hora) c.hora.value = String(hora||"");
+  cpAgendarMarcarChip(btn);
+  cpAgendarResumo(pref);
+}
+// Frase de conferência: o que ele vai salvar, em português, antes de salvar.
+function cpAgendarResumoTexto(data, hora){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data||""))) return "Escolha o dia acima — a hora é opcional.";
+  let quando = data;
+  try{
+    quando = new Date(data+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
+  }catch(_){ }
+  return hora ? `Vai agendar: ${quando}, às ${hora}.` : `Vai agendar: ${quando} (sem hora marcada).`;
+}
+function cpAgendarResumo(pref){
+  const c = cpAgendarCampos(pref);
+  if(c.resumo) c.resumo.textContent = cpAgendarResumoTexto(c.data?.value||"", c.hora?.value||"");
+}
+// ÚNICO ponto que salva. Antes da v1208 os campos salvavam sozinhos e o painel fechava no meio.
+function cpAgendarConfirmar(pref, id){
+  const c = cpAgendarCampos(pref);
+  const data = c.data?.value || "";
+  if(!data){ toast("Escolha o dia primeiro — depois, se quiser, a hora."); return; }
+  reagendarLembrete(id, data, c.hora?.value || "");
+}
+window.cpAgendarEscolherDia = cpAgendarEscolherDia;
+window.cpAgendarEscolherHora = cpAgendarEscolherHora;
+window.cpAgendarResumo = cpAgendarResumo;
+window.cpAgendarResumoTexto = cpAgendarResumoTexto;
+window.cpAgendarConfirmar = cpAgendarConfirmar;
+window.cpAgendarCampos = cpAgendarCampos;
+window.cpAgendarMarcarChip = cpAgendarMarcarChip;
+
+// Data (aaaa-mm-dd) do lembrete já marcado, no fuso de Brasília — pra pré-preencher o painel.
+function cpAgendarDataDoLembrete(quando){
+  try{
+    const p = new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric"})
+      .formatToParts(new Date(quando)).reduce((o,x)=>(x.type!=="literal"&&(o[x.type]=x.value),o),{});
+    return (p.year && p.month && p.day) ? `${p.year}-${p.month}-${p.day}` : "";
+  }catch(_){ return ""; }
+}
+
+// Controle de "Reagendar" do cartão da Agenda: o botão que abre o painel + o painel (o mesmo do
+// lead, desde a v1208 — antes eram dois painéis diferentes com o mesmo defeito).
+function reagendarControlHTML(idRaw, lembrete){
   const id = String(idRaw||"");
   const idJs = JSON.stringify(id);
-  const chip = "padding:4px 9px;font-size:11px;background:rgba(255,45,155,.10);color:var(--timing);border:1px solid var(--timing);border-radius:999px;cursor:pointer;font-weight:950";
-  const campo = "background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;flex:1 1 100px;min-width:0";
-  const confirmar = `const d=document.querySelector("#reag_${id}")?.value; if(!d){ toast("Escolha a data primeiro."); return; } reagendarLembrete(${idJs}, d, document.querySelector("#reagHora_${id}")?.value)`;
+  const atual = { data: cpAgendarDataDoLembrete(lembrete?.quando), hora: lembrete?.hora || "" };
   return `<button type="button" onclick='toggleReagendar(${idJs})' style="padding:6px 10px;font-size:11px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);border-radius:8px;cursor:pointer;font-weight:950">🗓 Reagendar</button>`
-    + `<div id="reagbox_${id}" style="display:none;margin-top:5px;background:var(--input);border:1px solid var(--line);border-radius:10px;padding:8px;flex-direction:column;gap:6px;min-width:160px">`
-    + `<div style="display:flex;gap:4px;flex-wrap:wrap">`
-    + `<button type="button" onclick='reagendarDias(${idJs},1)' style="${chip}">Amanhã</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},7)' style="${chip}">+7 dias</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},15)' style="${chip}">+15 dias</button>`
-    + `<button type="button" onclick='reagendarDias(${idJs},30)' style="${chip}">+30 dias</button>`
-    + `</div>`
-    + `<label style="font-size:10px;color:var(--muted)">ou escolha data e hora (opcional):</label>`
-    + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">`
-    + `<input type="date" id="reag_${id}" style="${campo}" onchange='reagendarLembrete(${idJs}, this.value, document.querySelector("#reagHora_${id}")?.value)'>`
-    // v1199 — pedido do dono: um jeito de guardar o HORÁRIO combinado (ex.: "reunião às 14h"),
-    // opcional — sem isso ele tinha que ir procurar de novo no WhatsApp na hora do compromisso.
-    // Escolher a data já agenda (comportamento de sempre); preencher a hora depois (ou antes)
-    // também reagenda, agora com os dois juntos — nenhum dos dois é obrigatório sozinho.
-    + `<input type="time" id="reagHora_${id}" style="${campo}" onchange='const d=document.querySelector("#reag_${id}")?.value; if(d) reagendarLembrete(${idJs}, d, this.value)'>`
-    // v1200 — o dono editou data e hora e não achou onde salvar: os campos salvam sozinhos ao
-    // mudar (onchange), mas isso não fica claro pra quem espera um botão. Este botão não troca o
-    // salvamento automático (continua valendo pra quem só mexe num campo), só dá um jeito ÓBVIO
-    // de confirmar depois de preencher os dois — e fica na MESMA linha, sem esticar o painel.
-    + `<button type="button" onclick='${confirmar}' style="flex:0 0 auto;padding:6px 10px;font-size:11.5px;background:var(--lime);color:var(--on-accent);border:1px solid var(--lime);border-radius:8px;cursor:pointer;font-weight:950">Confirmar</button>`
-    + `</div>`
+    + `<div id="reagbox_${id}" class="cp1208-caixa" style="display:none">`
+    + cpAgendarPainelHTML(id, "reag_"+id, atual)
     + `</div>`;
 }
 window.reagendarControlHTML = reagendarControlHTML;
@@ -5654,11 +5763,14 @@ function toggleAgendar(id){
   box.style.display = (box.style.display === "flex") ? "none" : "flex";
 }
 window.toggleAgendar = toggleAgendar;
-// Reagenda por atalho (N dias a partir de hoje).
-function reagendarDias(id, dias){
+// Reagenda por atalho (N dias a partir de hoje), salvando na hora.
+// v1208 — os chips do painel NÃO usam mais isto: lá eles só preenchem o dia, porque salvar na
+// hora fechava o painel antes do dono conseguir escolher o horário. Fica disponível pra quem
+// quiser um atalho de um toque só (window.reagendarDias) sem passar pelo painel.
+function reagendarDias(id, dias, horaStr){
   const d = new Date(); d.setDate(d.getDate() + dias);
   const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  reagendarLembrete(id, s);
+  reagendarLembrete(id, s, horaStr);
 }
 window.reagendarDias = reagendarDias;
 // Remarca o lembrete pra nova data (rápido, sem reanalisar). Valida o ano pra não sumir o lembrete.
@@ -7488,6 +7600,12 @@ const CP_SHARE_ID_INICIAL = String(CP_SHARE_PARAMS_INICIAIS.get('shareId') || ''
 const CP_VEIO_DE_SHARE = CP_SHARE_PARAMS_INICIAIS.has('shared') || CP_SHARE_PARAMS_INICIAIS.get('source') === 'share-target' || CP_SHARE_PARAMS_INICIAIS.has('share-target');
 window.__cpShareImportActive = CP_VEIO_DE_SHARE;
 let __cpCheckSharedPromise = null;
+// v1209 — "este compartilhamento já foi resolvido nesta aba, não entre no modo importação de novo".
+// CP_VEIO_DE_SHARE é lido uma vez só, no arranque, e continua verdadeiro mesmo depois de o endereço
+// ser limpo — então a segunda passada de checkShared() (a que roda ~1s depois, junto com o service
+// worker) reentrava na tela de importação e ficava 15 segundos procurando um ZIP que sabidamente
+// nunca chegou, apagando o aviso que o dono estava lendo.
+let __cpShareEncerrado = false;
 
 function shareIdbOpen(){
   return new Promise((resolve, reject)=>{
@@ -7665,6 +7783,16 @@ async function localizarShareNoCache(idPreferido){
   return null;
 }
 
+// v1209 — religa o recebedor de conversas compartilhadas (o service worker) na hora, sem esperar
+// o 'load' da página. Quando o app é aberto justamente porque um compartilhamento se perdeu por
+// falta dele, esperar o fim do carregamento pra reinstalá-lo é tempo perdido.
+function religarRecebedorDeConversa(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register("/service-worker.js?v=__VERSION__", { scope: "/" }).catch(()=>{});
+  }catch(_){ }
+}
+
 function mostrarRecebimentoShare(){
   show('zip');
   qs('#processingBox')?.classList.add('show');
@@ -7680,7 +7808,7 @@ async function _checkSharedImpl(){
     return {handled:true,awaitingSave:true,shareId:String(state.pendingSharedRecordId)};
   }
   const params=new URLSearchParams(location.search);
-  const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
+  const cameFromShare=!__cpShareEncerrado && (CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target'));
 
   // Uma abertura normal do aplicativo nunca deve procurar ZIPs antigos no IndexedDB/cache.
   // Antes, checkShared() era chamado no boot mesmo sem Share Target e acabava escolhendo o
@@ -7692,6 +7820,58 @@ async function _checkSharedImpl(){
 
   const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||'').trim();
   const erroUrl=params.get('erro');
+
+  // v1209 — A TELA DE ERRO DO SERVIDOR ("404: NOT_FOUND") NO LUGAR DO APP (print do dono, 11/08).
+  //
+  // Quando o WhatsApp compartilha a conversa com o Corretor Pro, quem recebe o arquivo é o
+  // "recebedor" que fica instalado dentro do celular junto com o app (o service worker). Se ele
+  // não estiver ligado naquele momento — o Android desliga/limpa isso sozinho quando o aparelho
+  // fica sem espaço, quando o app passa muito tempo sem ser aberto, ou quando o navegador limpa
+  // os dados do site — o celular manda a conversa direto pro servidor, que não tem essa porta:
+  // resultado, o dono via uma página branca de erro em inglês, sem nenhum botão, e a conversa
+  // sumia. Ele nem sabia que era isso: pra ele "a exportação do zip deu pau".
+  //
+  // Agora o servidor devolve o dono PRA DENTRO do app com este aviso (ver vercel.json), e aqui a
+  // gente religa o recebedor na hora — a próxima conversa compartilhada volta a entrar sozinha.
+  if(erroUrl==='sem-worker'){
+    try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+    __cpShareEncerrado=true;
+    window.__cpShareImportActive=false;
+    state.pendingSharedRecordId='';
+    religarRecebedorDeConversa();
+    show('zip');
+    // Sem esta linha, a barra "Conversa recebida. Preparando a importação…" ficava girando em cima
+    // do aviso — dando a entender que ainda há algo em andamento quando não há.
+    qs('#processingBox')?.classList.remove('show');
+    showCard('resultCard',true);
+    const box=qs('#resultBox');
+    if(box){
+      box.className='notice error';
+      box.innerHTML=
+        '<b>Essa conversa não chegou ao app.</b><br><br>'+
+        'O recebimento automático do Corretor Pro estava desligado neste celular, então o WhatsApp '+
+        'não teve pra quem entregar a conversa (foi por isso que apareceu aquela tela de erro em inglês). '+
+        '<b>Nenhum lead seu foi alterado.</b><br><br>'+
+        'Acabei de religar o recebimento agora. Da próxima vez que você compartilhar do WhatsApp, a conversa '+
+        'entra direto de novo.<br><br>'+
+        '<b>Pra não perder esta conversa:</b> exporte de novo no WhatsApp escolhendo <b>salvar o arquivo</b> no '+
+        'celular e toque no botão abaixo pra selecionar o ZIP.'+
+        '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">'+
+          '<button type="button" class="btn" id="btnEscolherZipDoShare">Escolher o arquivo da conversa</button>'+
+          '<button type="button" class="btn secondary" id="btnVoltarDoShareSemWorker">Voltar ao app</button>'+
+        '</div>';
+    }
+    qs('#btnEscolherZipDoShare')?.addEventListener('click', ()=>{ qs('#btnEscolherZip')?.click(); });
+    qs('#btnVoltarDoShareSemWorker')?.addEventListener('click', ()=>{
+      showCard('resultCard',false);
+      qs('#processingBox')?.classList.remove('show');
+      show('home');
+    });
+    // O aviso mora abaixo do cartão "Importar conversa": no celular ele nasce fora da tela. Sem
+    // trazer o aviso pra vista, o dono chega numa tela que parece normal e não fica sabendo de nada.
+    try{ requestAnimationFrame(()=>{ qs('#resultCard')?.scrollIntoView({block:'start'}); }); }catch(_){ }
+    return {handled:true,waiting:true,falhou:true,semWorker:true};
+  }
 
   // v1193 — MARCA VELHA NO ENDEREÇO NÃO É COMPARTILHAMENTO NOVO.
   //
@@ -8309,21 +8489,37 @@ function renderBuscaGlobal(termo){
   if(!box) return;
   if(!termo || termo.length < 2){ box.style.display = "none"; box.innerHTML = ""; return; }
   // Busca na lista completa; cai pros 8 da home se a completa ainda não carregou.
-  const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
-  if(!state.todosLeads || !state.todosLeads.length) loadTodosLeadsBusca();
+  // v1210 — E AVISA QUANDO ESTÁ BUSCANDO NA LISTA CURTA (relato do dono, 11/08/2026).
+  //
+  // Ele procurou um cliente logo depois de abrir o app, veio um resultado só, e a conclusão
+  // natural foi "esse cliente não existe" — quando na verdade a carteira completa ainda estava
+  // chegando e a busca tinha varrido só os leads da Home. Duas correções: a lista completa, ao
+  // chegar, REFAZ a busca que está na tela (antes era preciso apagar e digitar de novo), e
+  // enquanto ela não chega o resultado diz, em letra pequena, que ainda está incompleto.
+  const carteiraCompleta = !!(state.todosLeads && state.todosLeads.length);
+  const fonte = carteiraCompleta ? state.todosLeads : (state.leads || []);
+  if(!carteiraCompleta){
+    loadTodosLeadsBusca().then(() => {
+      const digitado = String(qs("#buscaGlobal")?.value || "").toLowerCase().trim();
+      if(digitado === termo && state.todosLeads && state.todosLeads.length) renderBuscaGlobal(termo);
+    }).catch(()=>{});
+  }
   const tt = semAcento(termo);
   const numeros = String(termo||"").replace(/\D/g,"");
   const matches = fonte.filter(l => {
     return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros));
   }).sort((a, b) => (leadArquivado(a) ? 1 : 0) - (leadArquivado(b) ? 1 : 0)) // ativos primeiro
     .slice(0, 12);
+  const avisoParcial = carteiraCompleta
+    ? ""
+    : `<div class="small" style="padding:8px 10px;color:var(--muted);text-align:center">Ainda carregando o restante da sua carteira — a lista pode crescer em instantes.</div>`;
   if(!matches.length){
     box.style.display = "block";
-    box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(termo)}"</div>`;
+    box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(termo)}"</div>` + avisoParcial;
     return;
   }
   box.style.display = "block";
-  box.innerHTML = matches.map(l => {
+  box.innerHTML = avisoParcial + matches.map(l => {
     const idJs = JSON.stringify(String(l.id||""));
     const arq = leadArquivado(l);
     // O arquivado vem apagado (mais transparente) e com tarja — dá pra saber o que é sem abrir.
@@ -8810,6 +9006,16 @@ window.registrarRespostaCliente = registrarRespostaCliente;
 // carregarTelaAtiva). valeRevisitarArquivado também saiu: só era usada por este bloco morto,
 // e já nem era chamada com motivos reais (sempre null) havia tempo.
 
+// v1210 — o botão Reativar passou a existir também na barra de cima do lead (onde fica o
+// "Arquivar"), e lá ele é ícone + rótulo. Trocar o textContent do botão inteiro, como era feito
+// antes, apagaria o desenho do ícone e deixaria um botão torto depois de um erro. Quando existe o
+// rótulo <span class="lb">, só ele muda.
+function cpTrocarRotuloBotao(btn, texto){
+  if(!btn) return;
+  const lb = btn.querySelector?.(".lb");
+  if(lb) lb.textContent = texto; else btn.textContent = texto;
+}
+
 async function reativarLeadArquivado(id, btn){
   if(!id) return;
   const msg = "Reativar este cliente? Ele volta para os atendimentos ativos.";
@@ -8817,7 +9023,10 @@ async function reativarLeadArquivado(id, btn){
     ? await cp903Confirm({ titulo: "Reativar lead", mensagem: msg, ok: "Reativar" })
     : confirm(msg);
   if(!ok) return;
-  if(btn){ btn.disabled = true; btn.textContent = "Reativando..."; }
+  // O detalhe do lead aberto precisa ser redesenhado depois (o botão vira "Arquivar" de novo).
+  // Na lista de Arquivados não há detalhe aberto, e redesenhar ali levaria pra outra tela.
+  const detalheAberto = String(state?.lead?.id || "") === String(id);
+  if(btn){ btn.disabled = true; cpTrocarRotuloBotao(btn, "Reativando..."); }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -8834,8 +9043,11 @@ async function reativarLeadArquivado(id, btn){
     const card = document.querySelector(`[data-arquivado-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
+    // Reativado de dentro do próprio lead: redesenha o detalhe pra barra de cima voltar a mostrar
+    // "Arquivar" e o lead aparecer como ativo, sem precisar sair e entrar de novo.
+    if(detalheAberto){ try{ await abrirLead(id); }catch(_){ } }
   }catch(err){
-    if(btn){ btn.disabled = false; btn.textContent = "Reativar"; }
+    if(btn){ btn.disabled = false; cpTrocarRotuloBotao(btn, "Reativar"); }
     toast("Erro ao reativar.");
   }
 }
@@ -11436,11 +11648,20 @@ window.ui670Reanalisar=async function(btn){
 };
 window.ui670Toggle=function(id){const el=qs("#"+id);if(!el)return;el.hidden=!el.hidden;if(!el.hidden){if(el.tagName==="DETAILS")el.open=true;setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"nearest"}),40);}};
 
+// v1207 — este painel (o "Agendar" de dentro do lead, que é por onde o dono agenda no dia a dia)
+// só tinha DATA. A hora existia apenas no "Reagendar" da tela Agenda (v1199).
+// v1208 — passou a usar o painel único (cpAgendarPainelHTML): nada salva antes do "Confirmar
+// agendamento", campos com cor visível no celular e atalhos de dia E de hora. Ver o comentário
+// grande em cpAgendarPainelHTML pro histórico dos dois defeitos que levaram a isso.
 function ui670ScheduleHtml(lead){
   if(!lead?.id)return "";
-  const id=JSON.stringify(String(lead.id));
-  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b><div class="ui670-quick-dates"><button onclick='reagendarDias(${id},0)'>Hoje</button><button onclick='reagendarDias(${id},1)'>Amanhã</button><button onclick='reagendarDias(${id},7)'>+7 dias</button><button onclick='reagendarDias(${id},15)'>+15 dias</button><button onclick='reagendarDias(${id},30)'>+30 dias</button></div><input type="date" onchange='reagendarLembrete(${id},this.value)'></div>`;
+  const lem = lead?.analysis?.lembrete;
+  const atual = { data: cpAgendarDataDoLembrete(lem?.quando), hora: lem?.hora || "" };
+  return `<div id="ui670SchedulePanel" class="ui670-inline-panel" hidden><b>Agendar próximo contato</b>`
+    + cpAgendarPainelHTML(String(lead.id), "ui670Schedule", atual)
+    + `</div>`;
 }
+window.ui670ScheduleHtml = ui670ScheduleHtml;
 
 // Atualização #724-2: wrapper antigo de renderLeadFoco removido.
 

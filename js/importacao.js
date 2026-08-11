@@ -32,11 +32,13 @@ import {
   ensureJSZip,
   fetchComTimeout,
   finalizarSharePendente,
+  getLeadDetail,
   getLeadsData,
   invalidarLeadDetail,
   invalidarLeadsCache,
   limparLead,
   loadRecentLeads,
+  normalizarEtapa,
   obterCerebroConfigParaAnalise,
   pl,
   refreshAllSections,
@@ -707,8 +709,36 @@ async function renderProcessedResult(data, meta){
     // caía direto no "senão" abaixo e criava um cadastro novo em silêncio, sem avisar o
     // corretor, gerando duplicata (o cliente ficava com dois cadastros e o mais antigo parado
     // "esquecido" enquanto o novo tinha a conversa atualizada).
+    // v1210 — QUEM É ESSE CLIENTE "QUE JÁ EXISTE"? (relato do dono, 11/08/2026, com três prints
+    // seguidos: "só apareceu um Tales", "tb só tem um joel", "tudo tá parecido com outro q não
+    // aparece na busca nem ativo nem arquivado".)
+    //
+    // A caixa mostrava só um nome. Pra conferir se aquele cadastro existia mesmo, ele tinha que
+    // sair da importação e procurar na mão — e, quando o cadastro antigo tem o nome CURTO (sem o
+    // empreendimento no fim), procurar pelo nome longo desta importação não acha nada, o que dá a
+    // impressão de que o app inventou um cliente. Agora a caixa diz o que é aquele cadastro
+    // (ativo ou arquivado, empreendimento, quanto tempo parado) e avisa o efeito do "Sim": o
+    // cadastro antigo passa a se chamar como esta importação — é por isso que o nome curto some da
+    // busca depois de juntar.
+    const arquivadoExistente = normalizarEtapa(existente.etapa) === "Geladeira";
+    const produtoExistente = String(existente.product || "").trim();
+    const paradoExistente = Number.isFinite(Number(existente.daysSinceLastInteraction))
+      ? `parado há ${Number(existente.daysSinceLastInteraction)} ${pl(Number(existente.daysSinceLastInteraction), "dia", "dias")}`
+      : "";
+    const fichaExistente = [
+      arquivadoExistente ? "<b>arquivado</b>" : "<b>ativo</b>",
+      produtoExistente ? escapeHtml(produtoExistente) : "",
+      paradoExistente
+    ].filter(Boolean).join(" · ");
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br><span style="font-size:12px">Esse cadastro está ${fichaExistente}.</span><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?<br><span style="font-size:12px;color:var(--muted)">Se responder <b>Sim</b>, a conversa entra nesse cadastro e ele passa a se chamar “${escapeHtml(state.lead.name)}” — por isso o nome antigo deixa de aparecer na busca depois.</span></div>` +
+      // v1211 — "existia, mas existia aonde?" (dono, 11/08/2026). Juntar é fácil, separar não é:
+      // depois do "Sim", as duas conversas viram uma só e não há como desfazer. Então o momento de
+      // conferir é ESTE, e até agora ele decidia no escuro, com um nome e nada mais. O botão abre o
+      // cadastro apontado aqui mesmo — sem sair da importação (sair no meio é o caminho que já
+      // travou a tela na v1192) e sem perder a análise que acabou de rodar.
+      `<div style="margin-top:10px"><button type="button" id="btnVerCadastroParecido" class="btn secondary" style="width:100%;padding:10px 14px">Ver esse cadastro</button></div>` +
+      `<div id="cadastroParecidoDetalhe" data-aberto="0" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03)"></div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else if(perguntarNome){
     // v953 — pedido do dono: quando o nome bate EXATO (não "parecido"), não pergunta mais.
@@ -756,6 +786,7 @@ async function renderProcessedResult(data, meta){
   qs("#btnSalvarComoNovo")?.addEventListener("click", salvarLeadPendente);
   qs("#btnDescartarLead")?.addEventListener("click", descartarLeadPendente);
   qs("#btnAtualizarLead")?.addEventListener("click", atualizarLeadComEvolucao);
+  qs("#btnVerCadastroParecido")?.addEventListener("click", (ev) => verCadastroParecido(ev.currentTarget));
   if(nomeSoParecido){
     // Nome só parecido (não idêntico): espera o corretor confirmar se é o mesmo cliente ou
     // outro — a única ambiguidade real que ainda pergunta (ver v953 acima).
@@ -796,6 +827,57 @@ function _palavrasNome(valor){
 // ordem, dentro do nome mais longo — só palavras A MAIS no meio/fim são toleradas. Isso NUNCA
 // decide fusão sozinho (ver acharLeadExistente/renderProcessedResult): só sinaliza a dúvida
 // pro corretor confirmar, porque nome parecido pode muito bem ser outra pessoa.
+// v1211 — abre, DENTRO da pergunta, o cadastro que o app apontou como parecido: situação, produto,
+// telefone, quando foi a última conversa e as últimas mensagens guardadas. É o que permite decidir
+// "é o mesmo cliente?" olhando o cliente, e não só o nome dele. Nada aqui muda dado nenhum — é
+// leitura pura, e a análise pendente continua intacta na memória enquanto o painel está aberto.
+async function verCadastroParecido(btn){
+  const existente = state.pendingExistente;
+  const alvo = qs("#cadastroParecidoDetalhe");
+  if(!alvo) return;
+  if(!existente?.id){
+    alvo.style.display = "block";
+    alvo.innerHTML = `<div class="small" style="color:var(--muted)">Não consegui identificar esse cadastro agora.</div>`;
+    return;
+  }
+  if(alvo.dataset.aberto === "1"){
+    alvo.dataset.aberto = "0";
+    alvo.style.display = "none";
+    if(btn) btn.textContent = "Ver esse cadastro";
+    return;
+  }
+  alvo.dataset.aberto = "1";
+  alvo.style.display = "block";
+  alvo.innerHTML = `<div class="small" style="color:var(--muted)">Abrindo o cadastro…</div>`;
+  if(btn) btn.textContent = "Esconder esse cadastro";
+
+  let completo = existente;
+  try{ completo = await getLeadDetail(existente.id) || existente; }catch(_){ /* sem o histórico completo, mostra o que já temos */ }
+  if(alvo.dataset.aberto !== "1") return; // fechou enquanto carregava
+
+  const arquivado = normalizarEtapa(completo.etapa) === "Geladeira";
+  const mensagens = Array.isArray(completo.recentMessages) ? completo.recentMessages.slice(-4) : [];
+  const ultima = mensagens.length ? mensagens[mensagens.length - 1] : null;
+  const quando = ultima ? `${ultima.date || ""} ${ultima.time || ""}`.trim() : "";
+  const linhas = [
+    `<b>${escapeHtml(completo.name || existente.name || "Cliente")}</b> — ${arquivado ? "arquivado" : "ativo"}`,
+    completo.product ? escapeHtml(String(completo.product)) : "",
+    completo.phone ? `Telefone: ${escapeHtml(String(completo.phone))}` : "",
+    quando ? `Última mensagem guardada: ${escapeHtml(quando)}` : ""
+  ].filter(Boolean);
+
+  const historico = mensagens.length
+    ? mensagens.map(m => `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><div class="small" style="color:var(--muted)">${escapeHtml(`${m.date || ""} ${m.time || ""} — ${m.author || ""}`.trim())}</div><div style="font-size:13px;line-height:1.4">${escapeHtml(String(m.text || "").slice(0, 240))}</div></div>`).join("")
+    : `<div class="small" style="margin-top:8px;color:var(--muted)">Esse cadastro não tem mensagens guardadas pra mostrar aqui.</div>`;
+
+  alvo.innerHTML =
+    `<div class="small" style="color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:950;font-size:10px;margin-bottom:6px">Cadastro que já existe</div>` +
+    `<div style="font-size:13px;line-height:1.5">${linhas.join("<br>")}</div>` +
+    `<div class="small" style="margin-top:10px;color:var(--muted)">Últimas mensagens desse cadastro:</div>` +
+    historico +
+    `<div class="small" style="margin-top:10px;color:var(--muted)">Se essas mensagens são deste mesmo cliente, responda <b>Sim</b>. Se for outra pessoa, responda <b>Não, é outro — salvar novo</b>: aí nada se mistura.</div>`;
+}
+
 function nomesParecemMesmoCliente(nomeA, nomeB){
   const a = _palavrasNome(nomeA);
   const b = _palavrasNome(nomeB);

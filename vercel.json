@@ -10,6 +10,18 @@
       "destination": "/api/processar-storage"
     }
   ],
+  "redirects": [
+    {
+      "source": "/share-target",
+      "destination": "/?source=share-target&shared=1&erro=sem-worker",
+      "statusCode": 303
+    },
+    {
+      "source": "/share-target/",
+      "destination": "/?source=share-target&shared=1&erro=sem-worker",
+      "statusCode": 303
+    }
+  ],
   "functions": {
     "api/processar-storage.js": {
       "maxDuration": 60

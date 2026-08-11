@@ -10,7 +10,12 @@ const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 // v911: o "Excluir" saiu do topo (fica só dentro do Editar) — o toolbar não tem mais o danger.
 const toolbar = app.match(/<div class="cp704-toolbar">[\s\S]*?<span class="lb">Reanalisar<\/span>/)[0];
 assert.match(toolbar, /<span class="lb">Proposta<\/span>/, 'ícone Proposta no topo');
-assert.match(toolbar, /<span class="lb">Arquivar<\/span>/, 'ícone Arquivar no topo');
+// v1210 — o ícone desta posição é montado por cp704BotaoEtapa(lead): "Arquivar" no lead ativo,
+// "Reativar" no lead já arquivado. Continua sendo um ícone da barra do topo, com rótulo .lb.
+assert.match(toolbar, /\$\{cp704BotaoEtapa\(lead\)\}/, 'ícone Arquivar/Reativar no topo');
+const botaoEtapa908 = app.match(/function cp704BotaoEtapa\(lead\)\{[\s\S]*?\n  \}/)[0];
+assert.match(botaoEtapa908, /<span class="lb">Arquivar<\/span>/, 'rótulo Arquivar no lead ativo');
+assert.match(botaoEtapa908, /<span class="lb">Reativar<\/span>/, 'rótulo Reativar no lead arquivado');
 assert.match(toolbar, /<span class="lb">Mensagens<\/span>/, 'ícone Mensagens no topo');
 assert.doesNotMatch(app, /cp704-ico cp704-ico-danger/, 'ícone Excluir saiu do topo (só no Editar)');
 // A função que abre o histórico e o card recolhível existem; o card antigo saiu.
