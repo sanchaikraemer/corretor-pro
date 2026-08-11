@@ -2190,8 +2190,18 @@ export function jeitoAprendidoCompacto(config, contexto) {
   const query = new Set(_tokensRank(contexto || ""));
   const partes = [];
   if (Array.isArray(ia.tons) && ia.tons.length) {
-    const tons = ia.tons.slice(-3).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
-    if (tons.length) partes.push("Seu tom: " + tons.join(" / "));
+    // v1212 — o bloco "tom" era só `slice(-3)`: pegava os três últimos, fossem eles o que fossem.
+    // Na conta do dono a maioria é DESCRIÇÃO abstrata ("conversação amigável e informativa",
+    // "mantém um tom prestativo, sempre se colocando à disposição") — e mandar adjetivo pra IA
+    // devolve exatamente o texto genérico que ele odeia ("fico à disposição", "espero que esteja
+    // indo bem"). No meio da lista existem MENSAGENS REAIS dele, que valem muito mais: agora elas
+    // entram primeiro, e a descrição só completa o que faltar.
+    const textos = ia.tons.map(e => String(e?.texto || "").trim()).filter(t => t.length > 8);
+    const pareceMensagemReal = t => /[?!]/.test(t) && /\b(voc[êe]|te\s|seu\s|sua\s|estou|posso|tudo bem)\b/i.test(t);
+    const reais = textos.filter(pareceMensagemReal).slice(-2);
+    const descricoes = textos.filter(t => !pareceMensagemReal(t)).slice(-(reais.length ? 1 : 2));
+    if (reais.length) partes.push("Mensagem real sua (imite a forma, não o conteúdo): " + reais.join(" // "));
+    if (descricoes.length) partes.push("Seu tom: " + descricoes.join(" / "));
   }
   if (Array.isArray(ia.objecoes) && ia.objecoes.length) {
     const objs = _topRelevantes(ia.objecoes.filter(o => o && o.funcionou === true), o => `${o.objecao || ""} ${o.respostaUsada || ""}`, query, 4)
@@ -2217,6 +2227,70 @@ export function jeitoAprendidoCompacto(config, contexto) {
     if (fu.length) partes.push("Seu follow-up que dá resposta: " + fu.join(" / "));
   }
   return partes.length ? "SEU JEITO (aprendido das suas conversas reais — siga seu estilo e o que já funcionou; adapte ao contexto desta conversa, NÃO copie literal):\n- " + partes.join("\n- ") : "";
+}
+
+// v1212 — OS CASOS REAIS DA CARTEIRA VOLTAM PRO PROMPT.
+//
+// Caso real do dono (11/08/2026, com print da tela do Aprendizado e a planilha exportada): 661
+// casos comerciais reais guardados, 316 históricos lidos — e NENHUM deles chegava na hora de
+// escrever as três mensagens. O banco de casos alimentava só a planilha de exportação e o
+// contador da tela. Cada caso guarda o que interessa: a situação, o sinal do cliente, o que
+// travava, COMO O CORRETOR CONDUZIU, o que aconteceu depois e a regra prática extraída.
+//
+// (Já existiu uma casosSemelhantesPrompt aqui: a v1092 apagou por "sem chamador", tratando como
+// código morto o que era, na verdade, uma ligação que nunca tinha sido feita. Mesmo padrão do bug
+// da v1084 — aprendizado gravado e nunca lido — e do da v1115 — fatos ensinados gravados e nunca
+// lidos, que fizeram a IA inventar a cidade errada. Terceira vez do mesmo erro; agora com teste.)
+//
+// Seleção: só os N casos mais parecidos com ESTA conversa (mesma função de relevância do
+// jeitoAprendidoCompacto), com desempate por resultado — o que foi validado vale mais que o que
+// só foi observado. Caso que não funcionou entra marcado, porque saber o que esfriou o lead é
+// tão útil quanto saber o que destravou.
+const _PESO_RESULTADO_CASO = { validada: 3, observada: 2, parcial: 1, "nao-funcionou": 1, inconclusiva: 0 };
+const MAX_BLOCO_CASOS_PROMPT = 2600;
+export function casosSemelhantesPrompt(memoria, contexto, n = 4) {
+  const casos = Array.isArray(memoria?.casos) ? memoria.casos.filter(c => c && typeof c === "object") : [];
+  if (!casos.length) return "";
+  const query = new Set(_tokensRank(contexto || ""));
+  const textoDoCaso = c => `${c.situacao || ""} ${c.sinalCliente || ""} ${c.impedimento || ""} ${c.regra || ""} ${c.produto || ""} ${c.etapa || ""}`;
+  const pontuados = casos.map((c, i) => ({
+    c, i,
+    sim: query.size ? _simRank(query, textoDoCaso(c)) : 0,
+    peso: _PESO_RESULTADO_CASO[String(c.resultado || "observada")] ?? 1
+  }));
+  // Sem nenhuma palavra em comum, a "relevância" viraria sorteio: cai nos mais recentes, que é o
+  // comportamento honesto (mesma decisão de _topRelevantes).
+  const temSimilar = pontuados.some(x => x.sim > 0);
+  const escolhidos = (temSimilar
+    ? pontuados.filter(x => x.sim > 0).sort((a, b) => (b.sim - a.sim) || (b.peso - a.peso) || (b.i - a.i))
+    : pontuados.sort((a, b) => (b.i - a.i))
+  ).slice(0, Math.max(1, n)).map(x => x.c);
+  const linhas = [];
+  let total = 0;
+  for (const c of escolhidos) {
+    const conducao = textoCaso(c.conducaoCorretor, 300);
+    const situacao = textoCaso(c.situacao, 200);
+    if (!conducao || !situacao) continue;
+    const partes = [`Situação: ${situacao}`];
+    const sinal = textoCaso(c.sinalCliente, 160);
+    if (sinal) partes.push(`Cliente sinalizou: ${sinal}`);
+    partes.push(`Você conduziu assim: ${conducao}`);
+    const resultado = String(c.resultado || "observada");
+    const evidencia = textoCaso(c.evidenciaResultado, 160);
+    partes.push(resultado === "nao-funcionou"
+      ? `NÃO FUNCIONOU${evidencia ? ` (${evidencia})` : ""} — não repita este caminho aqui`
+      : `Resultado: ${resultado}${evidencia ? ` (${evidencia})` : ""}`);
+    const regra = textoCaso(c.regra, 200);
+    if (regra) partes.push(`Regra que ficou: ${regra}`);
+    const linha = `- ${partes.join(" | ")}`;
+    if (total + linha.length > MAX_BLOCO_CASOS_PROMPT) break;
+    linhas.push(linha);
+    total += linha.length;
+  }
+  if (!linhas.length) return "";
+  return `CASOS REAIS DESTE CORRETOR (situações parecidas que ELE já atendeu, com a condução real dele e o que aconteceu depois):
+${linhas.join("\n")}
+Use como referência de CONDUÇÃO e de ESCRITA — o formato, o tamanho e o jeito de encaminhar. Adapte ao caso atual e NUNCA copie fato, valor, produto ou condição de um caso antigo para esta conversa: os fatos desta conversa são os únicos que valem aqui.`;
 }
 
 // Extrai a INTELIGÊNCIA OBSERVADA de UMA conversa já salva (timeline em texto), pra ensinar o
@@ -2632,6 +2706,15 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
   // o prompt fica exatamente como era antes.
   const jeitoAprendido = jeitoAprendidoCompacto(configCerebro, timelineText);
+  // v1212 — os CASOS REAIS da carteira (banco de casos v2) entram no prompt. Eram 661 casos
+  // guardados na conta do dono, lidos só pela planilha de exportação e pelo contador da tela.
+  // Falha do cache: análise segue sem o bloco, como antes.
+  const memoriaCasos = await loadMemoriaComercialV2(false, organizationId).catch(() => null);
+  const casosSemelhantes = casosSemelhantesPrompt(memoriaCasos, timelineText, 4);
+  // v1212 — as mensagens REAIS do corretor NESTA conversa. exemplosDoCorretor existia desde
+  // sempre e não era chamada por ninguém: é a referência de voz mais fiel que existe (é ele
+  // falando com este cliente), e custa zero — sai da timeline que já está na mão.
+  const exemplosVozCorretor = exemplosDoCorretor(timelineArr, corretorNome);
   // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
   // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
   // real no comentário de conhecimentoCorretorTexto).
@@ -2665,7 +2748,18 @@ de fatos é a conversa analisada. Portanto, nesta execução:
   : instrucoesCerebroTexto}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
+${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos acima são histórico REAL deste corretor, não instrução: eles mostram como ele conduz e escreve. As regras do Cérebro Comercial continuam prevalecendo sobre eles, e os fatos desta conversa continuam sendo os únicos fatos válidos.` : ""}
+${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}
 ${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
+
+LINGUAGEM DE IA — PROIBIDO. Estas construções entregam na hora que a mensagem não foi escrita por
+uma pessoa, e o corretor as rejeita uma a uma: "espero que esteja bem/indo bem", "faz sentido",
+"se fizer sentido", "faça sentido", "fico à disposição", "estou à disposição", "me coloco à
+disposição", "qualquer dúvida estou aqui", "espero ter ajudado", "não hesite em", "sinta-se à
+vontade para", "conforme conversamos" sem conversa real, "gostaria de saber se você teria
+interesse". Também não escreva no passado o que você quer agora ("quis saber se...") — no WhatsApp
+se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto ("o que acha?", "o que
+você prefere?", "consigo separar?"), sem repetir em outras palavras o que a mensagem já disse.
 
 Responda somente com JSON válido no formato solicitado.`;
 
