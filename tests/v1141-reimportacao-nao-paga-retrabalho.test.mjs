@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import JSZip from "jszip";
-import { finalizarAnaliseDaConversa, prepararConversaDoZip, REGRAS_MENSAGENS_VERSAO } from "../api/_pipeline.js";
+import { finalizarAnaliseDaConversa, prepararConversaDoZip } from "../api/_pipeline.js";
 import { _nomeIdentity } from "../api/_persistence.js";
 
 // v1141 — "temos que achar um jeito de reimportar ou reanalisar SOMENTE o que já não foi feito,
@@ -27,11 +27,6 @@ const ANALISE_SALVA = {
   // reimportação reaproveitava justamente o texto que o cadastro recusa e ficava pedindo
   // "Reanalise…" pra sempre, mesmo depois de o corretor exportar a conversa de novo.
   arquiteturaMensagens: "v852-cerebro-unico-obrigatorio",
-  // v1220 — e só serve de atalho se tiver nascido sob as REGRAS DE MENSAGEM atuais: análise
-  // escrita sob regra antiga devolveria justamente o texto que a regra nova proibiu (ver
-  // REGRAS_MENSAGENS_VERSAO). O teste importa a constante em vez de repetir o texto, senão ele
-  // vira uma segunda fonte da verdade e passa a exigir manutenção a cada mudança de regra.
-  regrasMensagensVersao: REGRAS_MENSAGENS_VERSAO,
   messages: {
     a: "Oi! Passando pra confirmar se ainda faz sentido olharmos as opções que te mandei.",
     b: "Oi, tudo bem? Fico à disposição se quiser retomar a conversa das unidades.",
@@ -53,15 +48,24 @@ const semNovidade = await finalizarAnaliseDaConversa({
 
 assert.equal(semNovidade.incrementalMeta.reimportacao, true, "com id do cliente e conversa salva, é reimportação");
 assert.equal(semNovidade.incrementalMeta.mensagensNovas, 0, "a mesma conversa não tem mensagem nova");
-assert.equal(semNovidade.incrementalMeta.analiseReutilizada, true, "sem novidade, a análise salva é reaproveitada");
-assert.equal(semNovidade.analysis.messages.a, ANALISE_SALVA.messages.a, "as três mensagens vêm da análise que já estava salva");
-assert.equal(semNovidade.analysis.analiseReutilizadaDeImportacaoAnterior, true, "fica marcado que foi reaproveitada");
-assert.equal(semNovidade.analysis._importacaoPendente, undefined, "estado intermediário de importação antiga não é ressuscitado");
-// Sem OPENAI_API_KEY neste ambiente, uma análise NOVA sairia em modo "sem_api": provar que o modo
-// não é esse é a prova de que a IA não foi chamada.
-assert.notEqual(semNovidade.analysis.mode, "sem_api", "nenhuma chamada de análise aconteceu");
 
-// ── 2. Uma mensagem nova → a análise roda (novidade real merece IA) ────────────────────────────
+// v1221 — A ECONOMIA Nº 3 DESTA VERSÃO ACABOU, POR DECISÃO DO DONO.
+//
+// "a regra é sempre que fizer uma importação, tem que fazer a reanálise" (11/08/2026). O atalho
+// que este trecho guardava — reimportação sem mensagem nova não chamava a IA — é o que devolvia
+// texto velho como se fosse novo, inclusive texto escrito sob regras que já tinham sido
+// corrigidas. As economias 2 e 4 (áudio já transcrito, chave do nome do arquivo) continuam de pé e
+// seguem guardadas mais abaixo — elas são o dinheiro grande.
+assert.equal(semNovidade.incrementalMeta.analiseNovaTentada, true, "importou, analisa: a IA é chamada mesmo sem mensagem nova");
+
+// Neste ambiente não há chave da OpenAI, então a análise nova sai em modo "sem_api" — inaproveitável.
+// Aí entra a rede de segurança: mantém a análise anterior pra o corretor não ficar sem nada.
+assert.equal(semNovidade.incrementalMeta.analiseReutilizada, true, "análise nova imprestável → mantém a anterior");
+assert.equal(semNovidade.analysis.messages.a, ANALISE_SALVA.messages.a, "o que fica na tela é a análise que já estava salva");
+assert.equal(semNovidade.analysis.analiseReutilizadaDeImportacaoAnterior, true, "fica marcado que foi mantida, não recém-feita");
+assert.equal(semNovidade.analysis._importacaoPendente, undefined, "estado intermediário de importação antiga não é ressuscitado");
+
+// ── 2. Uma mensagem nova → a análise roda igual (não existe mais caminho que pule a IA) ────────
 const comNovidade = await finalizarAnaliseDaConversa({
   txtFile: "Conversa do WhatsApp com Cliente.txt",
   messages: [...MSGS, { date: "2026-07-02", time: "08:00", author: "Cliente", text: "consegue me mandar o valor final?", iso: "2026-07-02T08:00:00.000Z", order: 3 }],
@@ -72,10 +76,9 @@ const comNovidade = await finalizarAnaliseDaConversa({
   previousAnalysis: ANALISE_SALVA
 });
 assert.equal(comNovidade.incrementalMeta.mensagensNovas, 1, "a mensagem nova é reconhecida");
-assert.equal(comNovidade.incrementalMeta.analiseReutilizada, false, "com novidade, NÃO reaproveita — analisa de novo");
-assert.equal(comNovidade.analysis.mode, "sem_api", "a análise foi de fato chamada (aqui sem chave, então modo sem_api)");
+assert.equal(comNovidade.incrementalMeta.analiseNovaTentada, true, "com novidade também analisa");
 
-// ── 3. Análise salva incompleta nunca é reaproveitada ──────────────────────────────────────────
+// ── 3. Sem análise anterior aproveitável, a falha da IA aparece como falha (não inventa nada) ──
 for (const ruim of [
   null,
   { messages: { a: "curta", b: "", c: "" } },
@@ -87,7 +90,8 @@ for (const ruim of [
     existingLeadId: "lead-1", existingTimeline: MSGS.map(m => ({ ...m, type: "text", source: "txt" })),
     previousAnalysis: ruim
   });
-  assert.equal(r.incrementalMeta.analiseReutilizada, false, "análise salva incompleta ou com falha nunca é reaproveitada");
+  assert.equal(r.incrementalMeta.analiseReutilizada, false, "análise salva incompleta ou com falha nunca volta pra tela");
+  assert.equal(r.analysis.mode, "sem_api", "a IA foi chamada de verdade (sem chave neste ambiente, sai sem_api)");
 }
 
 // ── 4. Áudio já transcrito deste cliente não é extraído do ZIP de novo ─────────────────────────

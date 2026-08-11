@@ -27,23 +27,6 @@ const MODELOS_PADRAO = {
 
 export const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
 
-// v1220 — VERSÃO DAS REGRAS DE MENSAGEM.
-//
-// "continua sugerindo opções novas mesmo sem eu ter mencionado isso, mesmo na nova atualização"
-// (dono, 11/08/2026, 18h33). A regra nova da v1219 estava no ar — mas as três mensagens do print
-// eram IDÊNTICAS, palavra por palavra, às de 40 minutos antes. Não eram mensagens novas: a
-// reimportação sem novidade REAPROVEITA a análise já salva (economia da v1141), e a análise salva
-// tinha nascido sob as regras antigas. Ou seja: mudar a regra não alcançava nada do que já estava
-// guardado, e pro dono parecia que a correção não funcionou.
-//
-// Esta marca resolve isso: toda análise carimba sob QUAIS regras nasceu, e o reaproveitamento só
-// vale quando a marca é a atual. Mudou regra de mensagem? Troque este texto na mesma versão — a
-// próxima reimportação daquele cliente refaz a análise em vez de devolver o texto velho.
-//
-// (Deliberadamente separada de ARQUITETURA_MENSAGENS_ATUAL: aquela é lida pela TELA pra decidir se
-// a análise ainda pode ser exibida — mexer nela marcaria toda a carteira como "reanalise", que não
-// é o caso aqui. A análise antiga continua exibível; ela só não serve mais como atalho.)
-export const REGRAS_MENSAGENS_VERSAO = "v1219-sem-acao-nem-novidade-inventada";
 
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
@@ -3097,8 +3080,6 @@ ${timelineText}`;
       raciocinioComercial: null,
       estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
-      // v1220 — sob quais regras de mensagem esta análise nasceu (ver REGRAS_MENSAGENS_VERSAO).
-      regrasMensagensVersao: REGRAS_MENSAGENS_VERSAO,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
@@ -3505,32 +3486,37 @@ function mesclarTimelineIncremental(antiga, nova) {
 }
 
 
-// v1141 — a análise já salva deste cliente só pode ser reaproveitada se estiver COMPLETA: as três
-// mensagens de verdade (a regra que o resto do sistema exige em toda gravação) e sem marca de
-// falha. Análise pela metade nunca é reaproveitada — nesse caso a IA roda, como sempre rodou.
-function analiseAnteriorReutilizavel(previousAnalysis) {
-  const a = previousAnalysis && typeof previousAnalysis === "object" && !Array.isArray(previousAnalysis) ? previousAnalysis : null;
+// v1221 — "a regra é sempre que fizer uma importação, tem que fazer a reanálise" (dono,
+// 11/08/2026). É a regra dele, e agora vale sem exceção: importou, a IA roda. A economia da v1141
+// (reimportação sem novidade não chamava a IA) morreu aqui — foi ela que devolveu, no print das
+// 18h33, o mesmo texto de 40 minutos antes, escrito sob regras que já tinham sido corrigidas.
+//
+// O dinheiro que ele defendeu na v1141 continua defendido no lugar que pesa: o áudio já
+// transcrito deste cliente NÃO é transcrito de novo (economia nº 2 da v1141, independente desta e
+// intocada). O que volta a ser pago por importação é uma análise de texto.
+//
+// Esta função deixou de ser "posso usar como atalho?" e virou "esta análise SERVE pra ser
+// mostrada?" — a mesma régua da tela (analiseAtualValida752 em app.js). Ela é usada em dois
+// lugares: pra conferir a análise que acabou de sair da IA e, se essa não servir, pra manter a que
+// já estava salva em vez de deixar o corretor sem nada (ver o uso mais abaixo).
+function analiseUtilizavel(analise) {
+  const a = analise && typeof analise === "object" && !Array.isArray(analise) ? analise : null;
   if (!a) return null;
-  // v1177 — "quando eu exporto uma conversa tem que fazer análise e ponto final. Eu não tenho que
-  // exportar um cliente e daí o sistema vai me mandar fazer análise" (dono, 07/08/2026). Ele está
-  // certo, e o defeito era aqui: a economia da v1141 (reimportação sem novidade não paga análise
-  // nova) reaproveitava a análise salva SEM conferir se a tela ainda a aceita. Numa análise salva
-  // por versão antiga, o cadastro mostra "Análise comercial pendente nesta versão. Reanalise…" —
-  // então reimportar aquele cliente reaproveitava justamente o texto que a tela recusa, e a
-  // exportação não mudava nada: continuava pedindo reanálise pra sempre.
-  //
-  // A regra passa a ser a MESMA da tela (analiseAtualValida752 em app.js): análise salva só é
-  // reaproveitada se ela puder ser exibida como está. Não podendo, a IA roda — isso não é
-  // retrabalho, é a única forma de a exportação entregar o que ele espera.
+  // v1177 — a régua é a MESMA da tela: análise que o cadastro recusa mostrar ("Análise comercial
+  // pendente nesta versão. Reanalise…") não serve pra nada aqui também.
   if (String(a.arquiteturaMensagens || "") !== ARQUITETURA_MENSAGENS_ATUAL) return null;
-  // v1220 — análise escrita sob regras ANTIGAS não serve de atalho: devolver o texto velho é
-  // devolver o defeito que a regra nova acabou de proibir (foi exatamente o que aconteceu com as
-  // "opções novas" que o corretor nunca ofereceu). Sem a marca atual, a IA roda de novo.
-  if (String(a.regrasMensagensVersao || "") !== REGRAS_MENSAGENS_VERSAO) return null;
-  if (["erro_api", "sem_api", "reconciliacao_local", "reanalise_pendente"].includes(String(a.mode || ""))) return null;
+  if (["erro_api", "sem_api", "reconciliacao_local", "reanalise_pendente", "limite_diario_excedido"].includes(String(a.mode || ""))) return null;
   if (a.sugestoesPendentes === true) return null;
   const m = a.messages && typeof a.messages === "object" ? a.messages : {};
   if (![m.a, m.b, m.c].every(v => String(v || "").trim().length >= 10)) return null;
+  return a;
+}
+
+// A análise salva volta pra tela quando a nova não deu certo. Carimba que é isso que aconteceu —
+// nada aqui pode se passar por análise recém-feita (foi a data mentirosa que confundiu o dono).
+function manterAnaliseSalva(previousAnalysis) {
+  const a = analiseUtilizavel(previousAnalysis);
+  if (!a) return null;
   const copia = { ...a, analiseReutilizadaDeImportacaoAnterior: true, analiseReutilizadaEm: new Date().toISOString() };
   // Estado intermediário de uma importação anterior não pode ser ressuscitado como se fosse atual.
   delete copia._importacaoPendente;
@@ -3568,33 +3554,39 @@ export async function finalizarAnaliseDaConversa(payload) {
 
   let analysis;
   let analiseReutilizada = false;
+  // v1221 — fica registrado que a IA FOI chamada nesta importação. É uma marca sempre verdadeira
+  // de propósito: é ela que prova, no teste, que a regra "importou, analisa" continua valendo —
+  // se alguém reintroduzir um atalho que pule a IA, esta marca vira falsa e a guarda quebra.
+  let analiseNovaTentada = false;
   let itensContextoAnterior = 0;
   // v754: reimportação também é analisada a partir da conversa mesclada completa.
   // Não reutiliza análise antiga e não injeta resumo/nextAction/produto antigo.
   // A conversa é a única fonte de verdade para evitar contaminação entre contextos.
   if (reimportacao) itensContextoAnterior = Math.max(0, timeline.length - mensagensNovas.length);
-  // v1141 — REIMPORTAR SEM NOVIDADE NÃO PAGA ANÁLISE.
+  // v1221 — IMPORTOU, ANALISA. SEM EXCEÇÃO.
   //
-  // Reclamação do dono, com razão: "temos que achar um jeito de reimportar ou reanalisar SOMENTE o
-  // que já não foi feito, senão vou perder MUITO DINHEIRO com retrabalho que já está salvo". Era
-  // exatamente o que acontecia: quando a conversa reimportada não trazia UMA mensagem nova (o caso
-  // clássico de reexportar o mesmo cliente pra conferir algo), a IA era chamada de novo sobre a
-  // conversa inteira, gastava os mesmos tokens e devolvia praticamente o mesmo texto. Pior: a tela
-  // já dizia "mantive a análise anterior sem nova cobrança" — uma promessa que o código não
-  // cumpria, porque `analiseReutilizada` nunca virava true em lugar nenhum.
+  // "a regra é sempre que fizer uma importação, tem que fazer a reanálise" (dono, 11/08/2026),
+  // confirmando o que ele já tinha dito na v1177 ("exportou uma conversa tem que fazer análise e
+  // ponto final"). A exceção que existia desde a v1141 — reimportação sem UMA mensagem nova
+  // reaproveitava a análise salva — era o que fazia a exportação parecer que "não fez nada", e foi
+  // ela que devolveu texto escrito sob regras já corrigidas (as "opções novas" que ele nunca
+  // ofereceu). A exceção acabou.
   //
-  // Regras da reutilização (conservadoras de propósito): só com cliente já identificado, só com
-  // ZERO mensagem nova, e só se a análise salva estiver completa (as 3 mensagens validadas). Se
-  // qualquer uma dessas condições falhar, a análise roda normalmente — mensagem nova, áudio que
-  // finalmente virou texto ou análise anterior incompleta são novidade real e merecem IA.
-  const analiseAnteriorOk = (mensagensNovas.length === 0 && reimportacao)
-    ? analiseAnteriorReutilizavel(previousAnalysis)
-    : null;
-  if (analiseAnteriorOk) {
-    analysis = analiseAnteriorOk;
-    analiseReutilizada = true;
-  } else {
-    analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  // A economia grande da v1141 continua intacta e é outra: áudio já transcrito deste cliente não é
+  // transcrito de novo (isso acontece antes daqui, na etapa de preparar/transcrever).
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  analiseNovaTentada = true;
+
+  // REDE DE SEGURANÇA: se a análise nova não serve (IA fora do ar, teto de análises do dia, retorno
+  // sem as três mensagens), o corretor não pode FICAR SEM NADA por ter reimportado um cliente que
+  // já tinha análise boa. Nesse caso a salva volta pra tela, carimbada como o que é — mantida, não
+  // recém-feita. Sem isto, a regra nova transformaria um dia de teto atingido em cadastro vazio.
+  if (!analiseUtilizavel(analysis)) {
+    const salva = manterAnaliseSalva(previousAnalysis);
+    if (salva) {
+      analysis = salva;
+      analiseReutilizada = true;
+    }
   }
 
   // v1179 — a análise leu a conversa inteira e sabe quem prospectou e quem respondeu; o palpite da
@@ -3651,6 +3643,7 @@ export async function finalizarAnaliseDaConversa(payload) {
       audiosReaproveitados: Number(audiosReaproveitados) || 0,
       audiosNovosTranscritos: Number(audiosNovosSolicitados) || 0,
       analiseReutilizada,
+      analiseNovaTentada,
       itensContextoAnterior,
       cobrancaOtimizada: reimportacao
     },

@@ -577,7 +577,7 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
     renderEtapas(3, audiosReaproveitados ? `${audiosReaproveitados} ${pl(audiosReaproveitados, "transcrição reaproveitada", "transcrições reaproveitadas")}` : "sem áudio para transcrever");
   }
 
-  renderEtapas(4, prep?.leadAnterior ? "comparando com a conversa já salva — só a novidade paga análise" : "validando as três mensagens pelo Cérebro");
+  renderEtapas(4, prep?.leadAnterior ? "juntando com a conversa já salva e analisando tudo de novo" : "validando as três mensagens pelo Cérebro");
   // v1024 — mesma rede de segurança da etapa "preparar" acima: "analisar" não grava nada no
   // banco (só devolve o resultado pro navegador — quem grava é "Salvar lead", ação separada e
   // explícita), então repetir aqui não duplica nem gasta 2x à toa em caso de sucesso.
@@ -655,9 +655,12 @@ async function processarStorageEmEtapas(bucket, path, fileName, options = {}){
   // "aparece tão rápido que não dá nem pra perceber" no quadro do fim — agora ela mora aqui, no
   // decorrer do progresso, e fica na tela enquanto salva).
   const incEtapa = result?.incrementalMeta || {};
+  // v1221 — importar agora SEMPRE analisa (regra do dono). "Análise mantida" deixou de significar
+  // economia e passou a significar problema: a análise nova não deu certo e a anterior foi
+  // preservada pra ele não ficar sem nada. O texto tem que dizer isso, não o contrário.
   const resumoEtapa = incEtapa.reimportacao
     ? (incEtapa.analiseReutilizada
-        ? "nada novo: análise salva mantida, nada pago"
+        ? "não consegui analisar agora — mantive a análise anterior"
         : `${Number(incEtapa.mensagensNovas) || 0} ${pl(Number(incEtapa.mensagensNovas) || 0, "mensagem nova", "mensagens novas")} — análise refeita`)
     : "";
   renderEtapas(5, resumoEtapa ? `preparando pra salvar · ${resumoEtapa}` : "preparando pra salvar");
@@ -737,7 +740,7 @@ async function renderProcessedResult(data, meta){
     ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8">⚠️ ${motivoAudio}</div>`
     : "";
   const inc = data.incrementalMeta || {};
-  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:10px;font-size:13px;color:var(--acao)"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>Nada novo nesta conversa:</b> a análise que já estava salva foi mantida e nenhuma análise nova foi gerada (nada a pagar por retrabalho)." : " Havia novidade, então a análise foi refeita sobre a conversa completa."}</div>` : "";
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:10px;font-size:13px;color:var(--acao)"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>A análise nova não pôde ser concluída agora</b> (IA fora do ar ou teto de análises do dia) — a análise anterior foi mantida pra você não ficar sem nada. Tente de novo mais tarde pra ter a leitura atualizada." : " A conversa foi analisada de novo, do zero — toda importação analisa."}</div>` : "";
 
   // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
   // quando o nome exportado coincide (ou se parece) com um nome já salvo.
@@ -1156,9 +1159,9 @@ async function atualizarLeadComEvolucao(){
     const nMsgFim = Number(incrementalMeta?.mensagensNovas) || 0;
     const resumoFim = incrementalMeta?.reimportacao
       ? (incrementalMeta.analiseReutilizada
-          ? "nada novo: análise mantida, nada pago"
+          ? "análise nova não concluída — mantida a anterior"
           : (nMsgFim === 0
-              ? "sem mensagem nova; análise refeita (a salva estava incompleta)"
+              ? "sem mensagem nova; análise refeita mesmo assim"
               : `${nMsgFim} ${pl(nMsgFim, "mensagem nova incorporada", "mensagens novas incorporadas")}`))
       : "";
     const audioFim = cpResumoAudioSemTexto(importacaoConcluida?.result);
