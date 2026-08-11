@@ -512,7 +512,9 @@ window.restaurarLeadsAntigos = restaurarLeadsAntigos;
 
 const LEAD_DETAIL_CACHE_TTL = 10 * 60 * 1000;
 const _leadDetailCache = new Map();
-async function getLeadDetail(id, force){
+// v1211 — exportada: a tela da importação passou a abrir o cadastro parecido ali mesmo (com as
+// últimas mensagens dele) pra o corretor decidir "é o mesmo cliente?" vendo o cliente.
+export async function getLeadDetail(id, force){
   const key = String(id || "");
   if(!key) throw new Error("Lead inválido.");
   const cached = _leadDetailCache.get(key);
