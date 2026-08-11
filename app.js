@@ -7358,7 +7358,15 @@ function cpImportOverlayAtualizar(idx, sub){
 // opts.pausar = ponto em que o app ESPERA uma decisão dele (salvar/atualizar): a tela cheia sai
 // de cena, senão os botões ficariam cobertos e a importação travaria de vez.
 function cpImportOverlaySincronizar(idx, sub, opts){
-  if(opts && opts.pausar){ cpImportOverlayVisivel(false); return; }
+  // v1223 — `aguardando` (a espera pela resposta do corretor, criada na v1219) precisa fazer a
+  // MESMA coisa que `pausar`: tirar a tela cheia da frente. Faltava esta linha, e o efeito foi o
+  // print do dono às 19h32 — "travou aqui": a tela cheia dizia "Salvando na carteira · 98% ·
+  // responda a pergunta acima pra continuar" e ficava assim pra sempre. A pergunta ESTAVA pronta
+  // atrás dela, no topo da tela, mas coberta — e a tela cheia ainda trava a rolagem do corpo da
+  // página (body.cpio-aberto), então nem rolar até ela dava. O caminho era: a importação fechava a
+  // tela cheia e, na linha seguinte, renderEtapas(5, …, {aguardando:true}) caía no ramo "idx 0..5"
+  // abaixo e a reabria na hora.
+  if(opts && (opts.pausar || opts.aguardando)){ cpImportOverlayVisivel(false); return; }
   if(idx >= 0 && idx <= 5){ cpImportOverlayAtualizar(idx, sub); cpImportOverlayVisivel(true); return; }
   if(idx === 6){
     // v1089-2 — Concluído mostra 100% e FICA. Antes ela sumia sozinha aos 650ms, mas o lead só
