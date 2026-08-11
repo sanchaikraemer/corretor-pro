@@ -1894,6 +1894,16 @@ html[data-theme="light"] .cp788-day-name{background:#F4F8F9!important;border-col
   animation:cpioEntra .22s ease-out;
 }
 #cpImportOverlay[hidden]{display:none}
+/* v1224 — abertura pelo compartilhamento do WhatsApp: a tela cheia da importação já aparece na
+   PRIMEIRA pintura, em 0%, e o app fica escondido atrás dela. Sem isto, o celular mostra a Home
+   (com esqueleto de leads e faixa de instalar) por um pedaço de segundo antes de a importação
+   assumir — o "frame de outra tela" que o dono via e lia como erro. A marca é posta por um script
+   no <head> do index.html e retirada quando a importação de verdade toma conta. */
+html.cp-entrando-pelo-share #cpImportOverlay[hidden]{display:grid}
+html.cp-entrando-pelo-share body{overflow:hidden}
+html.cp-entrando-pelo-share .app,
+html.cp-entrando-pelo-share .bottom-nav,
+html.cp-entrando-pelo-share #bannerOnboarding{visibility:hidden}
 @keyframes cpioEntra{from{opacity:0}to{opacity:1}}
 .cpio-conteudo{
   width:100%; max-width:360px; display:flex; flex-direction:column;

@@ -7212,6 +7212,11 @@ const CPIO_CIRCUNFERENCIA = 351.9; // 2πr com r=56, igual ao SVG do index.html
 export function cpImportOverlayVisivel(mostrar){
   const el = qs("#cpImportOverlay");
   if(!el) return;
+  // v1224 — a partir daqui quem manda na tela cheia é o app. A marca de "entrando pelo
+  // compartilhar" (posta no <head>, antes da primeira pintura, pra não haver frame de outra tela)
+  // cumpriu o papel e sai: se ficasse, o CSS dela continuaria mostrando a tela cheia mesmo depois
+  // de o app mandar escondê-la.
+  try{ document.documentElement.classList.remove("cp-entrando-pelo-share"); }catch(_){ }
   if(mostrar){
     if(el.hidden){
       // Importação nova começando: o andamento recomeça do zero.
@@ -7864,6 +7869,10 @@ async function _checkSharedImpl(){
   // primeiro registro pendente antigo, começando sozinho uma importação já feita.
   if(!cameFromShare){
     window.__cpShareImportActive=false;
+    // v1224 — abertura normal: se sobrou a marca de "entrando pelo compartilhar" (endereço antigo
+    // guardado, atalho reaberto), ela sai agora — senão a tela cheia em 0% ficaria de pé sem
+    // importação nenhuma acontecendo, que é pior do que o frame que ela veio evitar.
+    try{ document.documentElement.classList.remove("cp-entrando-pelo-share"); }catch(_){ }
     return {handled:false};
   }
 
@@ -7884,6 +7893,9 @@ async function _checkSharedImpl(){
   // gente religa o recebedor na hora — a próxima conversa compartilhada volta a entrar sozinha.
   if(erroUrl==='sem-worker'){
     try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+    // v1224 — o aviso tem que ficar VISÍVEL: sem tirar a marca, a tela cheia da abertura por
+    // compartilhamento continuaria por cima dele.
+    try{ document.documentElement.classList.remove("cp-entrando-pelo-share"); }catch(_){ }
     __cpShareEncerrado=true;
     window.__cpShareImportActive=false;
     state.pendingSharedRecordId='';
