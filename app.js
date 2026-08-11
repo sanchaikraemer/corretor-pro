@@ -3888,6 +3888,54 @@ function renderResumoDia(items){
   document.title = totalUrgente > 0 ? `(${totalUrgente}) Corretor Pro` : "Corretor Pro";
 }
 
+// v1215 — FONTE ÚNICA da agenda do dia. O número do sino e as listas da tela Agenda saíam de dois
+// pedidos de código diferentes e por isso divergiam: a Agenda deixou de mostrar quem já foi
+// atendido hoje (v1199) e o sino continuou contando essa pessoa. Resultado que o dono viu na tela:
+// sino avisando 2 com um único lembrete listado no dia. Agora as duas telas leem daqui.
+// Recebe SÓ leads ativos (sem geladeira) — quem chama já filtra.
+function cpAgendaDoDia(items){
+  const iniHojeA = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const fimHojeA = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
+  // Lembrete com data de HOJE (lead ativo) → seção "de hoje" (é o que o número do topo conta).
+  // v1199 — faltava a mesma proteção que "Atrasados" (cp786CompromissoAtrasado) já tinha: quem
+  // foi atendido hoje sai da lista do dia. Sem isso, marcar atendimento não tirava o lembrete
+  // de hoje da Agenda (relato do dono: atendeu dois clientes marcados pra hoje e eles continuaram
+  // aparecendo) — o lembrete só some se for excluído ou reagendado à mão, mesmo já resolvido.
+  const lembretesHoje = items.filter(l => {
+    if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return false;
+    const t = lembreteTs(l); return !isNaN(t) && t >= iniHojeA && t <= fimHojeA;
+  });
+  lembretesHoje.sort((a,b) => lembreteTs(a) - lembreteTs(b));
+  // Compromissos confirmados — todos, agrupados por urgência
+  const compHoje = [], compAmanha = [], compFuturo = [];
+  for(const l of items){
+    const aps = l.analysis?.confirmedAppointments;
+    if(!Array.isArray(aps)) continue;
+    // v1199 — mesma correção do lembrete de hoje, logo acima: um compromisso de HOJE some da
+    // lista assim que o cliente é atendido hoje (compromisso de outro dia não é afetado).
+    const atendidoHoje = typeof ehContatadoHoje === 'function' && ehContatadoHoje(l);
+    for(const ap of aps){
+      const q = String(ap.quando||"").toLowerCase();
+      if(/\bhoje\b/.test(q)){ if(!atendidoHoje) compHoje.push({ ...l, _ap: ap }); }
+      else if(/amanh[ãa]/.test(q)) compAmanha.push({ ...l, _ap: ap });
+      else compFuturo.push({ ...l, _ap: ap });
+    }
+  }
+  // v1011 — "Atrasados": lembrete ou compromisso com data vencida em até 60 dias, de lead ativo
+  // ainda não atendido hoje (a régua mora em cp786CompromissoAtrasado).
+  const atrasados = items
+    .map(l => ({ l, at: (typeof cp786CompromissoAtrasado === 'function') ? cp786CompromissoAtrasado(l) : null }))
+    .filter(x => x.at);
+  atrasados.sort((a,b) => a.at.dias - b.at.dias);
+  return { lembretesHoje, compHoje, compAmanha, compFuturo, atrasados };
+}
+window.cpAgendaDoDia = cpAgendaDoDia;
+
+// Chave de um cliente pra contagem: o sino conta PESSOAS, não linhas. Quem tem lembrete de hoje
+// E compromisso de hoje é um cliente só esperando por você — contar 2 seria o mesmo susto que o
+// dono relatou na v1215.
+function cpChaveLead(l){ return String(l?.id || l?.phone || l?.name || ''); }
+
 // Atualiza o SINO do topo + o nº da Agenda (compromissos/lembretes de HOJE). Extraído pra rodar
 // em QUALQUER tela: sem isso, excluir/reagendar um lembrete fora da Home não mexia no sino até dar F5.
 // Recebe a lista já carregada (opcional) pra não rebuscar; senão pega do cache (fresco quando quem
@@ -3897,22 +3945,19 @@ async function atualizarSinoAgenda(leadsAll){
   if(!Array.isArray(all)){
     try{ const data = await getLeadsData(); all = (data?.items || []).map(limparLead); }catch(_){ return; }
   }
-  const ini = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const fim = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
-  let agendaN = 0;
+  const ativos = all.filter(l => normalizarEtapa(l.etapa) !== ETAPA_ARQUIVADO);
+  const { lembretesHoje, compHoje, atrasados } = cpAgendaDoDia(ativos);
   // v1093 — compromisso ATRASADO passa a acender o sino. Antes o pontinho só olhava a agenda de
   // HOJE: quem tinha um compromisso vencido (e nada marcado pra hoje) não via aviso nenhum no
   // topo — o item mais urgente do app era justamente o único invisível.
-  let atrasadosN = 0;
-  for(const l of all){
-    const e = normalizarEtapa(l.etapa);
-    if(e === ETAPA_ARQUIVADO) continue;
-    if(typeof cp786CompromissoAtrasado === 'function' && cp786CompromissoAtrasado(l)){ atrasadosN++; continue; }
-    const q = l.analysis?.lembrete?.quando;
-    if(q){ const t = new Date(q).getTime(); if(!isNaN(t) && t >= ini && t <= fim){ agendaN++; continue; } }
-    const aps = l.analysis?.confirmedAppointments;
-    if(Array.isArray(aps) && aps.some(ap => /\bhoje\b/.test(String(ap.quando||"").toLowerCase()))) agendaN++;
+  const atrasadosIds = new Set(atrasados.map(x => cpChaveLead(x.l)));
+  const hojeIds = new Set();
+  for(const l of [...lembretesHoje, ...compHoje]){
+    const k = cpChaveLead(l);
+    if(!atrasadosIds.has(k)) hojeIds.add(k); // já está sendo cobrado como atrasado: não conta duas vezes
   }
+  const atrasadosN = atrasadosIds.size;
+  const agendaN = hojeIds.size;
   state.agendaAtrasados = atrasadosN;
   state.agendaCount = agendaN + atrasadosN;
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
@@ -5851,19 +5896,11 @@ async function carregarAgenda(){
     const itemsAll = (data?.items || []).map(limparLead);
     const items = itemsAll.filter(l => normalizarEtapa(l.etapa) !== ETAPA_ARQUIVADO);
 
-    const agoraTs = Date.now();
-    const iniHojeA = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
     const fimHojeA = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
-    // Lembrete com data de HOJE (lead ativo) → seção "de hoje" (é o que o número do topo conta).
-    // v1199 — faltava a mesma proteção que "Atrasados" (cp786CompromissoAtrasado) já tinha: quem
-    // foi atendido hoje sai da lista do dia. Sem isso, marcar atendimento não tirava o lembrete
-    // de hoje da Agenda (relato do dono: atendeu dois clientes marcados pra hoje e eles continuaram
-    // aparecendo) — o lembrete só some se for excluído ou reagendado à mão, mesmo já resolvido.
-    const lembretesHoje = items.filter(l => {
-      if(typeof ehContatadoHoje === 'function' && ehContatadoHoje(l)) return false;
-      const t = lembreteTs(l); return !isNaN(t) && t >= iniHojeA && t <= fimHojeA;
-    });
-    lembretesHoje.sort((a,b) => lembreteTs(a) - lembreteTs(b));
+    // v1215 — as listas do DIA (atrasados, lembretes de hoje, compromissos) vêm da mesma função que
+    // alimenta o número do sino (cpAgendaDoDia). Antes eram dois cálculos parecidos em lugares
+    // diferentes, e bastou um deles ganhar uma regra nova pra tela e sino discordarem.
+    const { lembretesHoje, compHoje, compAmanha, compFuturo, atrasados } = cpAgendaDoDia(items);
     // Futuros = data DEPOIS de hoje (ativos + geladeira).
     // Lembrete VENCIDO de lead na GELADEIRA → reaparece AQUI pra revisar (está parkeado, não vai pro Hoje).
     const lembretesFuturos = itemsAll.filter(l => { const t = lembreteTs(l); return !isNaN(t) && t > fimHojeA; });
@@ -5871,31 +5908,7 @@ async function carregarAgenda(){
     const lembretesArquivadosVencidos = itemsAll.filter(l => lembreteVencido(l) && normalizarEtapa(l.etapa) === ETAPA_ARQUIVADO);
     lembretesArquivadosVencidos.sort((a,b) => lembreteTs(a) - lembreteTs(b));
 
-    // Compromissos confirmados — todos, agrupados por urgência
-    const compHoje = [], compAmanha = [], compFuturo = [];
-    for(const l of items){
-      const aps = l.analysis?.confirmedAppointments;
-      if(!Array.isArray(aps)) continue;
-      // v1199 — mesma correção do lembrete de hoje, logo acima: um compromisso de HOJE some da
-      // lista assim que o cliente é atendido hoje (compromisso de outro dia não é afetado).
-      const atendidoHoje = typeof ehContatadoHoje === 'function' && ehContatadoHoje(l);
-      for(const ap of aps){
-        const q = String(ap.quando||"").toLowerCase();
-        if(/\bhoje\b/.test(q)){ if(!atendidoHoje) compHoje.push({ ...l, _ap: ap }); }
-        else if(/amanh[ãa]/.test(q)) compAmanha.push({ ...l, _ap: ap });
-        else compFuturo.push({ ...l, _ap: ap });
-      }
-    }
     const compromissos = [...compHoje, ...compAmanha, ...compFuturo];
-
-    // v1011 — seção "Atrasados" no topo: é AQUI que mora a lista dos "N compromissos atrasados"
-    // que o sino anuncia (antes só existia o número, sem lugar pra ver quem são). Mesma régua
-    // da contagem (cp786CompromissoAtrasado): lembrete ou compromisso com data vencida em até
-    // 60 dias, de lead ativo ainda não atendido hoje.
-    const atrasados = items
-      .map(l => ({ l, at: (typeof cp786CompromissoAtrasado === 'function') ? cp786CompromissoAtrasado(l) : null }))
-      .filter(x => x.at);
-    atrasados.sort((a,b) => a.at.dias - b.at.dias);
 
     if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesArquivadosVencidos.length && !atrasados.length){
       box.innerHTML = '<div class="empty">Nada agendado. Quando você ou o cliente marcarem um retorno (ex.: "retomar em 60 dias"), aparece aqui.</div>';
@@ -10474,6 +10487,17 @@ function ui667ModoDetalheLead(ativo){
 }
 window.ui667ModoDetalheLead=ui667ModoDetalheLead;
 
+// v1215 — marcar/desmarcar atendimento redesenhava a barra de compromissos do topo mas NÃO o
+// número do sino: o cliente saía da Agenda e continuava sendo contado lá em cima até um F5. Aqui
+// os dois avisos são refeitos juntos, e o sino usa a carteira que já está em memória (com a
+// marcação recém-aplicada) em vez de esperar o banco responder.
+function cpAtualizarAvisosAgenda(){
+  try{ carregarAgendaTopo?.(); }catch(_){}
+  const memoria = [state.itemsAtivos, state.todosLeads, state.leads].find(x => Array.isArray(x) && x.length);
+  try{ atualizarSinoAgenda(memoria); }catch(_){}
+}
+window.cpAtualizarAvisosAgenda = cpAtualizarAvisosAgenda;
+
 function ui667AplicarAtendidoLocal(lead, quando, dataBR, horaBR, detalhes = {tipo:"Atendido",de:"botao_atendido"}){
   if(!lead) return;
   lead.analysis=lead.analysis||{};
@@ -10508,6 +10532,10 @@ function ui667ReconciliarAtendimentoLocal(leadId, aplicarFn){
     renderListasHome(ordenados);
     if(typeof renderBotoesHome === 'function') renderBotoesHome();
   }
+  // v1215 — ponto de passagem de TODAS as marcações de atendimento (botão, cópia de mensagem,
+  // observação, agendamento): é aqui que o número do sino também se acerta, senão ele continuava
+  // cobrando um cliente que já saiu da Agenda.
+  try{ cpAtualizarAvisosAgenda?.(); }catch(_){}
 }
 
 window.ui667MarcarAtendido=async function(btn){
@@ -10545,7 +10573,7 @@ window.ui667MarcarAtendido=async function(btn){
     state.analysis=lead.analysis||null;
     renderLeadFoco(lead);
     invalidarLeadsCache();
-    carregarAgendaTopo?.();
+    cpAtualizarAvisosAgenda(); // v1215 — barra do topo E número do sino, juntos
     loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(lead.id, item => ui667AplicarAtendidoLocal(item, quando, dataLocal, horaLocal)));
     recarregarLeadFoco(lead.id);
     toast(d.atualizado?`Atendimento atualizado às ${horaLocal}.`:`Atendimento marcado às ${horaLocal}.`);
@@ -10591,7 +10619,7 @@ window.ui667DesmarcarAtendido=async function(btn){
     const d=await res.json().catch(()=>({}));
     if(!res.ok||!d?.ok) throw new Error(d?.error||"falha ao desmarcar");
     invalidarLeadsCache();
-    carregarAgendaTopo?.();
+    cpAtualizarAvisosAgenda(); // v1215 — desmarcar também devolve o cliente ao número do sino
     loadRecentLeads(false).then(() => ui667ReconciliarAtendimentoLocal(lead.id, item => ui667RemoverAtendidoLocal(item)));
     toast("Atendimento de hoje desmarcado.");
   }catch(err){

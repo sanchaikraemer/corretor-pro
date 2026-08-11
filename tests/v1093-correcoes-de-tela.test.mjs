@@ -110,7 +110,11 @@ function extrair(nome){
 // ─── 3b. O sino precisa acender por atraso, não só pela agenda de hoje ────────────────────────
 {
   const sino = extrair('atualizarSinoAgenda');
-  assert.match(sino, /cp786CompromissoAtrasado/,
+  // v1215 — a régua do atraso saiu de dentro do sino e virou fonte única (cpAgendaDoDia), a mesma
+  // que monta as listas da tela Agenda. A garantia continua a mesma: o sino olha o atrasado.
+  assert.match(sino, /cpAgendaDoDia/,
+    'o sino precisa ler a agenda do dia da fonte única, junto com a tela Agenda');
+  assert.match(extrair('cpAgendaDoDia'), /cp786CompromissoAtrasado/,
     'o sino precisa olhar compromisso atrasado — antes só via a agenda de HOJE');
   assert.match(sino, /state\.agendaAtrasados\s*=/, 'o total de atrasados precisa ficar guardado pro sino');
   assert.match(sino, /state\.agendaCount\s*=\s*agendaN\s*\+\s*atrasadosN/,
