@@ -36,6 +36,33 @@
   })();
 </script>
 <script>
+  // v1224 — QUEM CHEGA COMPARTILHANDO UMA CONVERSA NÃO PODE VER MAIS NADA ANTES DA RODINHA.
+  //
+  // "quando eu vou exportar um lead, em vez de começar já do zero e ir crescendo a rodinha, ele
+  // ainda mostra uma tela, um frame, uma coisa antes de começar, que dá a impressão de ser erro"
+  // (dono, 11/08/2026). Ele está certo: o app abre em /?source=share-target&… e o app.js, que é
+  // quem manda a tela cheia da importação aparecer, é um MÓDULO — só roda depois que a página
+  // inteira foi lida. Nesse intervalo o celular pinta o app normal (Home, esqueleto de leads,
+  // faixa de instalar) e só então a importação toma conta. É esse pedaço de segundo que ele vê.
+  //
+  // Este script roda no <head>, antes de QUALQUER pintura, e marca a página como "entrando pelo
+  // compartilhar". O CSS (styles.css) usa essa marca pra já mostrar a tela cheia da importação em
+  // 0% e esconder o resto — sem depender do app.js. Quando a importação de verdade assume, ela
+  // apaga a marca (cpImportOverlayVisivel), e daí em diante tudo segue como sempre.
+  (function(){
+    try{
+      var p = new URLSearchParams(location.search || "");
+      var veioDoCompartilhar = p.has("shared") || p.get("source") === "share-target" || p.has("share-target");
+      if(!veioDoCompartilhar) return;
+      document.documentElement.classList.add("cp-entrando-pelo-share");
+      // Rede de segurança: se em 8 segundos a importação não tiver assumido (endereço antigo
+      // reaberto, conversa que não chegou), a marca sai sozinha e o app aparece normalmente. Ficar
+      // preso numa tela de 0% seria pior do que o frame que isto veio evitar.
+      setTimeout(function(){ document.documentElement.classList.remove("cp-entrando-pelo-share"); }, 8000);
+    }catch(_){ }
+  })();
+</script>
+<script>
   // Captura o convite de instalação (beforeinstallprompt) o MAIS CEDO possível.
   // O app.js é grande e carrega no fim do body — se o Chrome disparar o evento antes
   // dele, o convite se perde e o botão "Baixar app" não instala. Aqui guardamos o
