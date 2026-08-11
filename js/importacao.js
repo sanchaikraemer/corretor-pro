@@ -693,7 +693,7 @@ async function renderProcessedResult(data, meta){
     ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8">⚠️ ${motivoAudio}</div>`
     : "";
   const inc = data.incrementalMeta || {};
-  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.30);border-radius:10px;font-size:13px;color:#bdffd0"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>Nada novo nesta conversa:</b> a análise que já estava salva foi mantida e nenhuma análise nova foi gerada (nada a pagar por retrabalho)." : " Havia novidade, então a análise foi refeita sobre a conversa completa."}</div>` : "";
+  const incrementalHtml = inc.reimportacao ? `<div style="margin-top:10px;padding:11px 13px;background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:10px;font-size:13px;color:var(--acao)"><b>Atualização incremental:</b> ${Number(inc.mensagensNovas)||0} ${pl(Number(inc.mensagensNovas)||0, "mensagem nova", "mensagens novas")} · ${Number(inc.audiosNovosTranscritos)||0} ${pl(Number(inc.audiosNovosTranscritos)||0, "áudio novo transcrito", "áudios novos transcritos")} · ${Number(inc.audiosReaproveitados)||0} ${pl(Number(inc.audiosReaproveitados)||0, "áudio já pronto reaproveitado", "áudios já prontos reaproveitados")}.${inc.analiseReutilizada ? " <b>Nada novo nesta conversa:</b> a análise que já estava salva foi mantida e nenhuma análise nova foi gerada (nada a pagar por retrabalho)." : " Havia novidade, então a análise foi refeita sobre a conversa completa."}</div>` : "";
 
   // Telefone é apenas dado auxiliar. A decisão de unir ou separar é acionada somente
   // quando o nome exportado coincide (ou se parece) com um nome já salvo.
@@ -745,11 +745,11 @@ async function renderProcessedResult(data, meta){
     // Ele nunca usou a opção "é outro" nesse caso. Atualiza direto; os botões ficam ocultos
     // só como caminho de retomada manual se a chamada automática falhar (ver mais abaixo).
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>Atualizando o cadastro automaticamente, sem criar duplicata.</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:12px;color:var(--acao)"><b>Cliente existente identificado: “${escapeHtml(existente.name || state.lead.name)}”.</b><br>Atualizando o cadastro automaticamente, sem criar duplicata.</div>` +
       `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Atualizar cliente</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else{
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(104,255,149,.08);border:1px solid rgba(104,255,149,.32);border-radius:12px;color:#bdffd0"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:12px;color:var(--acao)"><b>Salvando o lead...</b> Já abre com a análise.</div>` +
       `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnSalvarLead" class="btn" style="flex:1;min-width:160px">Salvar lead</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:160px">Cancelar</button></div>`;
   }
 
@@ -1044,9 +1044,9 @@ async function atualizarLeadComEvolucao(){
     const primeiroNome = (existente.name||"").split(" ")[0] || "o lead";
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
-      pendingBox.style.background = "rgba(104,255,149,.08)";
-      pendingBox.style.borderColor = "rgba(104,255,149,.32)";
-      pendingBox.style.color = "#bdffd0";
+      pendingBox.style.background = "var(--acao-soft)";
+      pendingBox.style.borderColor = "var(--acao-line)";
+      pendingBox.style.color = "var(--acao)";
       let txt = "<b>Atualizado.</b> ";
       if(incrementalMeta?.reimportacao){
         const nMsg = Number(incrementalMeta.mensagensNovas)||0;
@@ -1147,9 +1147,9 @@ async function salvarLeadPendente(){
     state.ultimoUploadStorage = null;
     const pendingBox = qs("#pendingBox");
     if(pendingBox){
-      pendingBox.style.background = "rgba(104,255,149,.08)";
-      pendingBox.style.borderColor = "rgba(104,255,149,.32)";
-      pendingBox.style.color = "#bdffd0";
+      pendingBox.style.background = "var(--acao-soft)";
+      pendingBox.style.borderColor = "var(--acao-line)";
+      pendingBox.style.color = "var(--acao)";
       pendingBox.innerHTML = "<b>Salvo no banco.</b> Lead disponível na Condução e na Home." + (!limpeza.ok ? " <b>A limpeza temporária ficou programada para nova tentativa.</b>" : "");
     }
     qs("#pendingActions")?.remove();
@@ -1187,8 +1187,8 @@ async function salvarLeadPendente(){
       try{ renderEtapas(7, "a gravação não terminou a tempo"); }catch(_){ try{ cpImportOverlayVisivel(false); }catch(_){} }
       const pendingBox = qs("#pendingBox");
       if(pendingBox){
-        pendingBox.style.background = "rgba(255,107,107,.08)";
-        pendingBox.style.borderColor = "rgba(255,107,107,.4)";
+        pendingBox.style.background = "var(--risco-soft)";
+        pendingBox.style.borderColor = "var(--risco-line)";
         pendingBox.style.color = "#ffd9d9";
         pendingBox.innerHTML = `<b>A gravação não terminou a tempo.</b><br>Sua análise <b>não foi perdida</b> — toque em “Salvar lead” pra tentar de novo.`;
       }
