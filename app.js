@@ -4145,7 +4145,9 @@ const ETAPA_ARQUIVADO = "Geladeira";  // valor gravado no banco; na tela sempre 
 const ETAPA_ATIVO = "Ativo";
 const ETAPAS = [ETAPA_ATIVO, ETAPA_ARQUIVADO];
 
-function normalizarEtapa(raw){
+// v1210 — exportada porque a tela da importação passou a dizer se o cadastro parecido está ativo
+// ou arquivado (js/importacao.js). A regra de o que conta como arquivado continua morando só aqui.
+export function normalizarEtapa(raw){
   const bruto = String(raw || "").trim();
   const s = bruto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   // v1105 — auditoria do backup real (298 registros): 244 tinham um TEXTO de análise da IA
@@ -4949,6 +4951,21 @@ function cp704Css(){
 
   function cp704Modelo(lead){ try{return ui670ModeloComercial(lead)||{};}catch(_){return lead?.analysis?.modeloComercial||{};} }
   function cp704Produto(lead, mc){ return cp704Text(mc?.oportunidade?.produto || (typeof produtosLabel==='function'?produtosLabel(lead):lead?.product) || lead?.product || 'Produto não identificado'); }
+  // v1210 — O BOTÃO QUE FALTAVA DENTRO DO LEAD ARQUIVADO (pedido do dono, 11/08/2026).
+  //
+  // "Reativar" só existia na lista da tela Arquivados. Quem achasse o cliente pela busca da Home
+  // (que mostra os arquivados com a etiqueta ARQUIVADO) e abrisse o lead ficava sem saída: a barra
+  // de cima oferecia "Arquivar" — o que ele já era — e nada mais. Agora o mesmo lugar da barra
+  // mostra "Arquivar" quando o lead está ativo e "Reativar" quando está arquivado.
+  function cp704BotaoEtapa(lead){
+    const idJs = JSON.stringify(String(lead?.id || ''));
+    const arquivado = (typeof normalizarEtapa === 'function') && normalizarEtapa(lead?.etapa) === ETAPA_ARQUIVADO;
+    if(arquivado){
+      // Caixa de arquivo com a seta PRA CIMA: tirar de dentro da caixa, o contrário do arquivar.
+      return `<button type="button" class="cp704-ico" onclick='reativarLeadArquivado(${idJs},this)' title="Reativar — volta pros atendimentos ativos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6M9 15l3-3 3 3"/></svg><span class="lb">Reativar</span></button>`;
+    }
+    return `<button type="button" class="cp704-ico" onclick='arquivarLead(${idJs},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button>`;
+  }
   // v889 — no lugar do "passo X de 6" (funil que o dono mandou tirar): barra de INTERESSE do
   // cliente = mensagens DO CLIENTE (não as minhas) sobre o teto CP_TETO_BARRA_INTERESSE (=100
   // cheia). Mede engajamento real, não etapa. Largura total.
@@ -5396,7 +5413,7 @@ function renderLeadFoco(lead){
     const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
     const cp7RolagemPagina = window.scrollY;
     area.innerHTML=`<div class="cp704-lead">
-      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button><button type="button" class="cp704-ico" onclick='arquivarLead(${JSON.stringify(String(lead?.id||''))},${safeJson(lead?.name||'')})' title="Arquivar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg><span class="lb">Arquivar</span></button><button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
+      <div class="cp704-top"><div class="cp704-toolbar"><button class="cp704-back" onclick="voltarDoLead()" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg><span class="lb">Voltar</span></button><button type="button" class="cp704-ico" onclick='abrirPropostaComLead(${safeJson(lead?.name||'')},${safeJson(cp704Produto(lead,mc))},${JSON.stringify(String(lead?.id||''))})' title="Gerar proposta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span class="lb">Proposta</span></button>${cp704BotaoEtapa(lead)}<button type="button" class="cp704-ico" onclick="cp704ToggleHistorico()" title="Últimas mensagens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg><span class="lb">Mensagens</span></button><button type="button" id="btnReanalisarLeadTop" class="cp704-ico" onclick="ui670Reanalisar(this)" title="Reanalisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4"/></svg><span class="lb">Reanalisar</span></button><button type="button" class="cp704-ico" onclick="ui670Toggle&&ui670Toggle('ui670SchedulePanel')" title="Agendar retorno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Agendar</span></button><button type="button" class="cp704-ico" onclick='cp715EditarLead(${JSON.stringify(String(lead.id||''))})' title="Editar lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="lb">Editar</span></button>${attended?`<button type="button" class="cp704-ico done" onclick="ui667DesmarcarAtendido(this)" title="Atendido hoje — tocar de novo desmarca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Atendido</span></button>`:`<button type="button" class="cp704-ico" onclick="ui667MarcarAtendido(this)" title="Marcar atendimento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg><span class="lb">Marcar</span></button>`}</div></div>
       <div class="cp704-herorow">
         <section class="cp704-hero">
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
@@ -8470,21 +8487,37 @@ function renderBuscaGlobal(termo){
   if(!box) return;
   if(!termo || termo.length < 2){ box.style.display = "none"; box.innerHTML = ""; return; }
   // Busca na lista completa; cai pros 8 da home se a completa ainda não carregou.
-  const fonte = (state.todosLeads && state.todosLeads.length) ? state.todosLeads : (state.leads || []);
-  if(!state.todosLeads || !state.todosLeads.length) loadTodosLeadsBusca();
+  // v1210 — E AVISA QUANDO ESTÁ BUSCANDO NA LISTA CURTA (relato do dono, 11/08/2026).
+  //
+  // Ele procurou um cliente logo depois de abrir o app, veio um resultado só, e a conclusão
+  // natural foi "esse cliente não existe" — quando na verdade a carteira completa ainda estava
+  // chegando e a busca tinha varrido só os leads da Home. Duas correções: a lista completa, ao
+  // chegar, REFAZ a busca que está na tela (antes era preciso apagar e digitar de novo), e
+  // enquanto ela não chega o resultado diz, em letra pequena, que ainda está incompleto.
+  const carteiraCompleta = !!(state.todosLeads && state.todosLeads.length);
+  const fonte = carteiraCompleta ? state.todosLeads : (state.leads || []);
+  if(!carteiraCompleta){
+    loadTodosLeadsBusca().then(() => {
+      const digitado = String(qs("#buscaGlobal")?.value || "").toLowerCase().trim();
+      if(digitado === termo && state.todosLeads && state.todosLeads.length) renderBuscaGlobal(termo);
+    }).catch(()=>{});
+  }
   const tt = semAcento(termo);
   const numeros = String(termo||"").replace(/\D/g,"");
   const matches = fonte.filter(l => {
     return semAcento(l.name).includes(tt) || semAcento(l.product).includes(tt) || (numeros.length >= 3 && String(l.phone||"").replace(/\D/g,"").includes(numeros));
   }).sort((a, b) => (leadArquivado(a) ? 1 : 0) - (leadArquivado(b) ? 1 : 0)) // ativos primeiro
     .slice(0, 12);
+  const avisoParcial = carteiraCompleta
+    ? ""
+    : `<div class="small" style="padding:8px 10px;color:var(--muted);text-align:center">Ainda carregando o restante da sua carteira — a lista pode crescer em instantes.</div>`;
   if(!matches.length){
     box.style.display = "block";
-    box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(termo)}"</div>`;
+    box.innerHTML = `<div class="small" style="padding:10px;color:var(--muted);text-align:center">Nenhum lead com "${escapeHtml(termo)}"</div>` + avisoParcial;
     return;
   }
   box.style.display = "block";
-  box.innerHTML = matches.map(l => {
+  box.innerHTML = avisoParcial + matches.map(l => {
     const idJs = JSON.stringify(String(l.id||""));
     const arq = leadArquivado(l);
     // O arquivado vem apagado (mais transparente) e com tarja — dá pra saber o que é sem abrir.
@@ -8971,6 +9004,16 @@ window.registrarRespostaCliente = registrarRespostaCliente;
 // carregarTelaAtiva). valeRevisitarArquivado também saiu: só era usada por este bloco morto,
 // e já nem era chamada com motivos reais (sempre null) havia tempo.
 
+// v1210 — o botão Reativar passou a existir também na barra de cima do lead (onde fica o
+// "Arquivar"), e lá ele é ícone + rótulo. Trocar o textContent do botão inteiro, como era feito
+// antes, apagaria o desenho do ícone e deixaria um botão torto depois de um erro. Quando existe o
+// rótulo <span class="lb">, só ele muda.
+function cpTrocarRotuloBotao(btn, texto){
+  if(!btn) return;
+  const lb = btn.querySelector?.(".lb");
+  if(lb) lb.textContent = texto; else btn.textContent = texto;
+}
+
 async function reativarLeadArquivado(id, btn){
   if(!id) return;
   const msg = "Reativar este cliente? Ele volta para os atendimentos ativos.";
@@ -8978,7 +9021,10 @@ async function reativarLeadArquivado(id, btn){
     ? await cp903Confirm({ titulo: "Reativar lead", mensagem: msg, ok: "Reativar" })
     : confirm(msg);
   if(!ok) return;
-  if(btn){ btn.disabled = true; btn.textContent = "Reativando..."; }
+  // O detalhe do lead aberto precisa ser redesenhado depois (o botão vira "Arquivar" de novo).
+  // Na lista de Arquivados não há detalhe aberto, e redesenhar ali levaria pra outra tela.
+  const detalheAberto = String(state?.lead?.id || "") === String(id);
+  if(btn){ btn.disabled = true; cpTrocarRotuloBotao(btn, "Reativando..."); }
   try{
     const res = await fetch("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -8995,8 +9041,11 @@ async function reativarLeadArquivado(id, btn){
     const card = document.querySelector(`[data-arquivado-id="${id}"]`);
     if(card){ card.style.transition = "opacity .25s, transform .25s"; card.style.opacity = "0"; card.style.transform = "translateX(18px)"; setTimeout(() => card.remove(), 240); }
     loadRecentLeads();
+    // Reativado de dentro do próprio lead: redesenha o detalhe pra barra de cima voltar a mostrar
+    // "Arquivar" e o lead aparecer como ativo, sem precisar sair e entrar de novo.
+    if(detalheAberto){ try{ await abrirLead(id); }catch(_){ } }
   }catch(err){
-    if(btn){ btn.disabled = false; btn.textContent = "Reativar"; }
+    if(btn){ btn.disabled = false; cpTrocarRotuloBotao(btn, "Reativar"); }
     toast("Erro ao reativar.");
   }
 }
