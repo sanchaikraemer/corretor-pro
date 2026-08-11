@@ -46,7 +46,11 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (event.request.method === 'POST' && (url.pathname === '/share-target' || url.pathname === '/share.html')) {
+  // v1209 — a comparação ignora barra final ("/share-target/" é o mesmo endereço que
+  // "/share-target"). Uma diferença boba dessas fazia a conversa compartilhada escapar daqui e ir
+  // parar no servidor, que devolvia a tela de erro em inglês no lugar do app.
+  const caminho = url.pathname.replace(/\/+$/, '') || '/';
+  if (event.request.method === 'POST' && (caminho === '/share-target' || caminho === '/share.html')) {
     event.respondWith(handleShare(event.request));
     return;
   }
