@@ -22,7 +22,15 @@ assert.doesNotMatch(html, />Perdido</, 'sem botão Perdido no index.html');
 const toolbar = app.match(/<div class="cp704-toolbar">[\s\S]*?<\/div><\/div>/)[0];
 assert.doesNotMatch(toolbar, /Encerramento/, 'sem grupo Encerramento');
 assert.doesNotMatch(toolbar, /marcarVendido/, 'sem ação de vender');
-assert.match(toolbar, /arquivarLead\(/, 'Arquivar continua na barra do topo');
+// v1210 — o botão desta posição passou a ser montado por cp704BotaoEtapa(lead): "Arquivar" quando
+// o lead está ativo, "Reativar" quando já está arquivado (pedido do dono — antes só dava pra
+// reativar pela lista da tela Arquivados). O desfecho continua sendo um só; o que mudou é que ele
+// não é mais cravado no meio da barra.
+assert.match(toolbar, /\$\{cp704BotaoEtapa\(lead\)\}/, 'a barra do topo monta o botão pelo estado do lead');
+const botaoEtapa = app.match(/function cp704BotaoEtapa\(lead\)\{[\s\S]*?\n  \}/)[0];
+assert.match(botaoEtapa, /arquivarLead\(/, 'Arquivar continua sendo o desfecho do lead ativo');
+assert.match(botaoEtapa, /reativarLeadArquivado\(/, 'lead arquivado oferece Reativar no mesmo lugar');
+assert.doesNotMatch(botaoEtapa, /marcarVendido|abrirVenda/, 'nenhum desfecho de venda volta por aqui');
 assert.match(app, /id="editLeadExcluir"/, 'Excluir continua em Editar lead → Zona perigosa');
 
 // 3. As ações do lead (viraram ícones no topo na v908) e a barra rápida ui683 não têm Vendido.

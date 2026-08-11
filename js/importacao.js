@@ -37,6 +37,7 @@ import {
   invalidarLeadsCache,
   limparLead,
   loadRecentLeads,
+  normalizarEtapa,
   obterCerebroConfigParaAnalise,
   pl,
   refreshAllSections,
@@ -707,8 +708,29 @@ async function renderProcessedResult(data, meta){
     // caía direto no "senão" abaixo e criava um cadastro novo em silêncio, sem avisar o
     // corretor, gerando duplicata (o cliente ficava com dois cadastros e o mais antigo parado
     // "esquecido" enquanto o novo tinha a conversa atualizada).
+    // v1210 — QUEM É ESSE CLIENTE "QUE JÁ EXISTE"? (relato do dono, 11/08/2026, com três prints
+    // seguidos: "só apareceu um Tales", "tb só tem um joel", "tudo tá parecido com outro q não
+    // aparece na busca nem ativo nem arquivado".)
+    //
+    // A caixa mostrava só um nome. Pra conferir se aquele cadastro existia mesmo, ele tinha que
+    // sair da importação e procurar na mão — e, quando o cadastro antigo tem o nome CURTO (sem o
+    // empreendimento no fim), procurar pelo nome longo desta importação não acha nada, o que dá a
+    // impressão de que o app inventou um cliente. Agora a caixa diz o que é aquele cadastro
+    // (ativo ou arquivado, empreendimento, quanto tempo parado) e avisa o efeito do "Sim": o
+    // cadastro antigo passa a se chamar como esta importação — é por isso que o nome curto some da
+    // busca depois de juntar.
+    const arquivadoExistente = normalizarEtapa(existente.etapa) === "Geladeira";
+    const produtoExistente = String(existente.product || "").trim();
+    const paradoExistente = Number.isFinite(Number(existente.daysSinceLastInteraction))
+      ? `parado há ${Number(existente.daysSinceLastInteraction)} ${pl(Number(existente.daysSinceLastInteraction), "dia", "dias")}`
+      : "";
+    const fichaExistente = [
+      arquivadoExistente ? "<b>arquivado</b>" : "<b>ativo</b>",
+      produtoExistente ? escapeHtml(produtoExistente) : "",
+      paradoExistente
+    ].filter(Boolean).join(" · ");
     acoesHtml =
-      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?</div>` +
+      `<div id="pendingBox" style="margin-top:14px;padding:12px;background:rgba(184,194,201,.08);border:1px solid var(--morno);border-radius:12px;color:var(--soft)"><b>Pode ser o mesmo cliente que já existe: “${escapeHtml(existente.name || "")}”.</b><br><span style="font-size:12px">Esse cadastro está ${fichaExistente}.</span><br>O nome desta importação (“${escapeHtml(state.lead.name)}”) é parecido, mas não idêntico. É o mesmo cliente?<br><span style="font-size:12px;color:var(--muted)">Se responder <b>Sim</b>, a conversa entra nesse cadastro e ele passa a se chamar “${escapeHtml(state.lead.name)}” — por isso o nome antigo deixa de aparecer na busca depois.</span></div>` +
       `<div id="pendingActions" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnAtualizarLead" class="btn" style="flex:1;min-width:160px">Sim, é o mesmo — atualizar</button><button type="button" id="btnSalvarComoNovo" class="btn secondary" style="flex:1;min-width:160px">Não, é outro — salvar novo</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:120px">Cancelar</button></div>`;
   }else if(perguntarNome){
     // v953 — pedido do dono: quando o nome bate EXATO (não "parecido"), não pergunta mais.
