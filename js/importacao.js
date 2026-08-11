@@ -837,6 +837,11 @@ async function renderProcessedResult(data, meta){
     // v1089 — É AQUI, e só aqui, que a tela cheia sai de cena: é o único momento em que a
     // importação para de verdade pra ouvir uma decisão. Sem isso, a pergunta ficaria coberta.
     try{ cpImportOverlayVisivel(false); }catch(_){}
+    // v1219 — e a linha de andamento precisa DIZER isso. Até aqui ela continuava em "Salvando —
+    // preparando pra salvar" com a rodinha girando, enquanto o app estava parado esperando a
+    // resposta dele: o print do dono ("de novo dando pau") é exatamente essa tela. Agora ela para
+    // de girar, muda de cor e diz o que falta — a resposta que está logo abaixo.
+    renderEtapas(5, "responda a pergunta acima pra continuar", { aguardando: true });
   }else if(perguntarNome){
     // Nome exato: já sabemos que é o mesmo cliente — atualiza direto, sem perguntar (v953).
     atualizarLeadComEvolucao();
