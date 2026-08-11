@@ -10130,7 +10130,7 @@ function cp786CompromissoAtrasado(l){
   if(typeof ehContatadoHoje==='function' && ehContatadoHoje(l)) return null;
   const JANELA=60; // mantém o compromisso vencido em destaque por um bom tempo, até ser atendido
   let melhor=null; // vencido mais RECENTE (diff negativo mais próximo de zero)
-  // v1212 — COMPROMISSO ATENDIDO NO DIA MARCADO NÃO É ATRASADO (relato do dono, 11/08/2026).
+  // v1213 — COMPROMISSO ATENDIDO NO DIA MARCADO NÃO É ATRASADO (relato do dono, 11/08/2026).
   //
   // O lead "Bocorni" aparecia em "Atrasados — retome ou descarte" com o lembrete de 10/08, mas o
   // próprio cadastro dizia que ele tinha sido atendido em 10/08 — ou seja, o compromisso foi
@@ -10158,7 +10158,7 @@ function cp786CompromissoAtrasado(l){
   return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) };
 }
 window.cp786CompromissoAtrasado=cp786CompromissoAtrasado;
-// v1212 — "atendi no dia marcado; por que ainda está atrasado?".
+// v1213 — "atendi no dia marcado; por que ainda está atrasado?".
 //
 // Compara por DIA (fuso de São Paulo, que é o do app inteiro), não pela hora: um compromisso das
 // 14h atendido às 9h do mesmo dia está cumprido do mesmo jeito — quem trabalha não registra
@@ -10192,7 +10192,7 @@ function cpCompromissosVencidosDoLead(l){
     if(dispensados?.has?.(key)) continue;
     const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
     if(diff==null||diff>=0||diff< -60) continue;
-    // v1212 — mesma régua da contagem: compromisso atendido na data marcada (ou depois) está
+    // v1213 — mesma régua da contagem: compromisso atendido na data marcada (ou depois) está
     // cumprido e não pode continuar listado como pendência dentro do lead.
     if(cpCompromissoJaAtendido(l, cp786DataTs(data,'12:00'))) continue;
     out.push({ key, oQue:String(ap?.oQue||'compromisso'), trecho:String(ap?.trechoLiteral||'').trim(), dias:Math.abs(diff), dataBR:new Date(cp786DataTs(data,'12:00')).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) });

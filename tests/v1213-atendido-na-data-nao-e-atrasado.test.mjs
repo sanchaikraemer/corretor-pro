@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-// v1212 — relato do dono (11/08/2026, print da Agenda): o lead "Bocorni" estava em
+// v1213 — relato do dono (11/08/2026, print da Agenda): o lead "Bocorni" estava em
 // "Atrasados — retome ou descarte" por causa do lembrete de 10/08, mas o próprio cadastro mostrava
 // que ele havia sido atendido em 10/08. Ou seja: o compromisso foi CUMPRIDO no dia marcado e o app
 // cobrava assim mesmo no dia seguinte.
@@ -83,4 +83,4 @@ assert.equal(cpCompromissoJaAtendido({ __atendidoTs: ts('2026-08-10') }, 0), fal
 const fonteVencidos = extrair('function cpCompromissosVencidosDoLead(l){', 'window.cpCompromissosVencidosDoLead=');
 assert.match(fonteVencidos, /if\(cpCompromissoJaAtendido\(l, cp786DataTs\(data,'12:00'\)\)\) continue;/, 'a lista de vencidos do lead precisa respeitar o atendimento na data');
 
-console.log('v1212-atendido-na-data-nao-e-atrasado: ok');
+console.log('v1213-atendido-na-data-nao-e-atrasado: ok');
