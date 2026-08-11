@@ -48,7 +48,9 @@ assert.ok(/html\[data-theme="light"\]\{[\s\S]*?--text:\s*#102A34/i.test(styles),
 assert.ok(/html\[data-theme="light"\]\{[\s\S]*?--accent-soft:\s*#FFF0EE/i.test(styles), "Coral suave light oficial #FFF0EE ausente");
 
 // 5. Tokens de escala do design system.
-for (const tok of ["--space-4:16px", "--radius-lg:16px", "--control-height-md:44px", "--font-size-base:15px", "--brand-primary:#FF6258", "--status-success:#28B875"]) {
+// v1216 — --status-success deixou de ser o verde #28B875 e passou a apontar pro token de
+// confirmação (--acao, o ciano da identidade); o token continua existindo, só mudou de cor.
+for (const tok of ["--space-4:16px", "--radius-lg:16px", "--control-height-md:44px", "--font-size-base:15px", "--brand-primary:#FF6258", "--status-success:var(--acao)"]) {
   assert.ok(styles.includes(tok), `Token de design system ausente: ${tok}`);
 }
 

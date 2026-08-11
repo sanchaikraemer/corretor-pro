@@ -14,7 +14,10 @@ assert.doesNotMatch(app, /<div class="cp704-top-actions">/, 'os pills antigos (c
 // ícones em si continua existindo — só confere que a classe está definida no CSS.
 assert.match(app, /\.cp704-toolbar\{/, 'CSS da toolbar existe');
 assert.match(app, /\.cp704-ico\{/, 'CSS dos ícones existe');
-assert.match(app, /\.cp704-ico\.done\{[^}]*112,212,157/, 'estado "Atendido" (done) fica verde');
+// v1216 — o estado "Atendido" continua destacado, mas pela paleta: fundo, borda e texto saem dos
+// tokens (o verde cravado que estava aqui é justamente o que o dono flagrou no print).
+assert.match(app, /\.cp704-ico\.done\{background:var\(--acao-soft\);border-color:var\(--acao-line\);color:var\(--acao\)\}/,
+  'estado "Atendido" (done) destacado pelos tokens da paleta');
 
 // 2. Os 4 ícones com legenda.
 for(const t of ['title="Reanalisar"','title="Agendar retorno"','title="Editar lead"']){
