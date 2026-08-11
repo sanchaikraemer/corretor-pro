@@ -1041,6 +1041,11 @@ export function clearAnalysis(){
   qs("#progressBar").style.width="0%";
   qs("#resultBox").className="empty";
   qs("#resultBox").innerHTML="Aguardando uma conversa real.";
+  // v1220 — a caixa de decisão do topo ("é o mesmo cliente?") só existe enquanto há uma pergunta
+  // pendente: numa análise nova ela precisa sumir, senão a pergunta da importação anterior fica
+  // de pé em cima da tela, apontando pra um cadastro que não tem mais nada a ver.
+  const cpPerguntaTopo = qs("#perguntaTopo");
+  if(cpPerguntaTopo){ cpPerguntaTopo.innerHTML=""; cpPerguntaTopo.hidden=true; }
   qs("#analysisBox").className="empty";
   qs("#analysisBox").innerHTML="Aguardando análise.";
   qs("#timeline").innerHTML='<div class="event"><b>Aguardando importação</b><p>A conversa organizada aparecerá aqui.</p></div>';

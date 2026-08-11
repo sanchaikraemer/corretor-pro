@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { finalizarAnaliseDaConversa } from "../api/_pipeline.js";
+import { finalizarAnaliseDaConversa, REGRAS_MENSAGENS_VERSAO } from "../api/_pipeline.js";
 import { _buscarProcessamentoExistenteV681, _dedupeIndexadoResetar } from "../api/_persistence.js";
 
 // v1177 — "quando eu exporto uma conversa tem que fazer análise e ponto final. Eu não tenho que
@@ -61,7 +61,9 @@ for (const caso of RECUSADAS_PELA_TELA) {
 
 // ── 2. Análise salva boa continua sendo reaproveitada (a economia da v1141 fica de pé) ─────────
 {
-  const r = await reimportar({ summary: "x", clientName: "Cliente", messages: TRIO, arquiteturaMensagens: "v852-cerebro-unico-obrigatorio" });
+  // v1220 — além da arquitetura (que a TELA confere), o atalho exige que a análise tenha nascido
+  // sob as regras de mensagem atuais; senão reaproveitar devolveria texto escrito sob regra velha.
+  const r = await reimportar({ summary: "x", clientName: "Cliente", messages: TRIO, arquiteturaMensagens: "v852-cerebro-unico-obrigatorio", regrasMensagensVersao: REGRAS_MENSAGENS_VERSAO });
   assert.equal(r.incrementalMeta.analiseReutilizada, true, "sem novidade e com análise válida, nada de nova cobrança");
   assert.notEqual(r.analysis.mode, "sem_api", "nenhuma chamada de análise aconteceu");
 }

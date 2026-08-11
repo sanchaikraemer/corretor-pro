@@ -488,7 +488,16 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
     // sobrevivia ao "...anterior" e ficava PRA SEMPRE na frente do geradoEm fresco desta
     // reimportação, mostrando uma data velha mesmo com a conversa acabada de reimportar/reanalisar
     // (bug relatado pelo dono: reimportou e "Última análise" continuou com a data de 9 dias atrás).
-    reanalisadoEm: concluidaEm,
+    //
+    // v1220 — MAS SÓ QUANDO ANALISOU DE VERDADE. Quando a reimportação não traz novidade, a
+    // análise salva é REAPROVEITADA sem chamar a IA (economia da v1141) — e esta linha carimbava a
+    // hora de agora assim mesmo. O cadastro então dizia "Última análise — hoje, 18:33" mostrando
+    // um texto escrito horas antes: foi o que fez o dono concluir que a correção das mensagens não
+    // tinha funcionado ("continua sugerindo opções novas... mesmo na nova atualização"). Data de
+    // análise agora só muda quando houve análise.
+    ...(nova?.analiseReutilizadaDeImportacaoAnterior === true
+      ? {}
+      : { reanalisadoEm: concluidaEm }),
     // v1023 — agendamento só nasce de clique explícito em Agenda, nunca de texto/reanálise.
     confirmedAppointments: []
   };

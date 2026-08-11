@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import JSZip from "jszip";
-import { finalizarAnaliseDaConversa, prepararConversaDoZip } from "../api/_pipeline.js";
+import { finalizarAnaliseDaConversa, prepararConversaDoZip, REGRAS_MENSAGENS_VERSAO } from "../api/_pipeline.js";
 import { _nomeIdentity } from "../api/_persistence.js";
 
 // v1141 — "temos que achar um jeito de reimportar ou reanalisar SOMENTE o que já não foi feito,
@@ -27,6 +27,11 @@ const ANALISE_SALVA = {
   // reimportação reaproveitava justamente o texto que o cadastro recusa e ficava pedindo
   // "Reanalise…" pra sempre, mesmo depois de o corretor exportar a conversa de novo.
   arquiteturaMensagens: "v852-cerebro-unico-obrigatorio",
+  // v1220 — e só serve de atalho se tiver nascido sob as REGRAS DE MENSAGEM atuais: análise
+  // escrita sob regra antiga devolveria justamente o texto que a regra nova proibiu (ver
+  // REGRAS_MENSAGENS_VERSAO). O teste importa a constante em vez de repetir o texto, senão ele
+  // vira uma segunda fonte da verdade e passa a exigir manutenção a cada mudança de regra.
+  regrasMensagensVersao: REGRAS_MENSAGENS_VERSAO,
   messages: {
     a: "Oi! Passando pra confirmar se ainda faz sentido olharmos as opções que te mandei.",
     b: "Oi, tudo bem? Fico à disposição se quiser retomar a conversa das unidades.",

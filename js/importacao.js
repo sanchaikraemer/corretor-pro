@@ -797,6 +797,17 @@ async function renderProcessedResult(data, meta){
       `<div id="pendingActions" style="display:none;gap:10px;margin-top:12px;flex-wrap:wrap"><button type="button" id="btnSalvarLead" class="btn" style="flex:1;min-width:160px">Salvar lead</button><button type="button" id="btnDescartarLead" class="btn secondary" style="flex:1;min-width:160px">Cancelar</button></div>`;
   }
 
+  // v1220 — "esse botão precisa aparecer logo na tela inicial sem ter que rolar pra baixo, senão
+  // dá impressão que travou" (dono, 11/08/2026). A pergunta que SEGURA a importação sai do fim do
+  // card de Resultado e vai pro topo da tela — os outros dois casos não perguntam nada (salvam
+  // sozinhos), então continuam junto do resultado, onde não atrapalham.
+  const caixaTopo = qs("#perguntaTopo");
+  if(nomeSoParecido && caixaTopo){
+    caixaTopo.innerHTML = `<div class="label">Precisa da sua resposta</div>` + acoesHtml;
+    caixaTopo.hidden = false;
+    acoesHtml = "";
+  }
+
   qs("#resultBox").className = "small";
   qs("#resultBox").innerHTML =
     acoesHtml +
@@ -812,12 +823,10 @@ async function renderProcessedResult(data, meta){
     openAIErrorBlock(data);
   qs("#btnPreviaConfigurarCerebro")?.addEventListener("click", () => { try{ show("cerebro"); }catch(_){ } });
   showCard("resultCard", true); showCard("timelineCard", true); showCard("goToTimelineCard", true);
-  // Decisão "é o mesmo / é outro" (nome só parecido, ambíguo de verdade): traz a pergunta pra
-  // vista, senão fica embaixo e parece que travou. Nome exato não pergunta mais (v953) — sem
-  // pergunta, sem precisar trazer pra vista.
-  if(nomeSoParecido){
-    setTimeout(() => { (qs("#pendingBox") || qs("#resultCard"))?.scrollIntoView({ behavior:"smooth", block:"center" }); }, 80);
-  }
+  // v1220 — a rolagem pro topo NÃO pode acontecer aqui: enquanto a tela cheia da importação está
+  // de pé, o corpo da página fica travado (body.cpio-aberto{overflow:hidden} no styles.css), então
+  // qualquer scroll daqui não sai do lugar. Ela acontece no fim desta função, logo depois de a
+  // tela cheia ser fechada — ver o bloco `if(nomeSoParecido)` mais abaixo.
 
   const timeline = (data.timeline || []).slice(-200).map(m =>
     `<div class="event"><b>${escapeHtml((m.date || "") + " " + (m.time || "") + " — " + (m.author || ""))}</b><p>${escapeHtml(m.text || "")}</p></div>`
@@ -842,6 +851,17 @@ async function renderProcessedResult(data, meta){
     // resposta dele: o print do dono ("de novo dando pau") é exatamente essa tela. Agora ela para
     // de girar, muda de cor e diz o que falta — a resposta que está logo abaixo.
     renderEtapas(5, "responda a pergunta acima pra continuar", { aguardando: true });
+    // v1220 — e a tela vai pro TOPO, onde a pergunta está: "esse botão precisa aparecer logo na
+    // tela inicial sem ter que rolar pra baixo, senão dá impressão que travou" (dono). Só dá pra
+    // rolar DEPOIS da linha acima, porque a tela cheia trava o corpo da página enquanto está de
+    // pé. A segunda passada cobre a mudança de altura: o resto do resultado (análise, linha do
+    // tempo) continua sendo escrito depois daqui.
+    const irProTopo = () => {
+      try{ window.scrollTo({ top: 0, behavior: "auto" }); }catch(_){ window.scrollTo(0, 0); }
+      try{ qs("#perguntaTopo")?.scrollIntoView({ block: "start" }); }catch(_){ }
+    };
+    irProTopo();
+    setTimeout(irProTopo, 120);
   }else if(perguntarNome){
     // Nome exato: já sabemos que é o mesmo cliente — atualiza direto, sem perguntar (v953).
     atualizarLeadComEvolucao();
