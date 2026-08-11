@@ -1,6 +1,6 @@
 # Corretor Pro no iPhone — o que já funciona, o que falta e quanto custa
 
-_Levantamento pedido pelo dono em 10/08/2026, depois de conferir com os parceiros: de 150
+_Levantamento pedido pelo dono em 11/08/2026, depois de conferir com os parceiros: de 150
 corretores, só 4 usam Android. Documento de decisão — não altera nada no sistema._
 
 ---
@@ -170,15 +170,18 @@ empresta um Mac pela internet:
 
 Registro pra não se perder, e como lição sobre pendências que dependem do dono.
 
-A v1035 (13/07/2026) construiu o Atalho do iPhone inteiro — as duas rotas, a chave assinada, os
+A v1035 construiu o Atalho do iPhone inteiro — as duas rotas, a chave assinada, os
 testes — e terminou com um "passo obrigatório antes de funcionar em produção": cadastrar a variável
 `ATALHO_ZIP_TOKEN_SECRET` no painel da Vercel. **Isso nunca foi feito.** Confirmado pelo dono em
 11/08/2026: *"nunca cadastrei nada, porque pareceu complicado demais"*.
 
 Consequência: desde a v1035 o cartão "Compartilhar direto do WhatsApp (iPhone)" existe no Menu, o
 botão "Gerar minha chave" aparece — e responde erro para qualquer corretor que tente. **O recurso
-esteve quebrado por 13 meses sem ninguém saber**, e o `ESTADO-ATUAL.md` seguiu listando o Atalho
-como se cobrisse a necessidade do iPhone.
+esteve quebrado desde que foi construído, sem ninguém saber**, e o `ESTADO-ATUAL.md` seguiu
+listando o Atalho como se cobrisse a necessidade do iPhone. (Quanto tempo faz disso, este documento
+não afirma: `NOTAS-v1035.md` não traz data e a cópia do repositório desta sessão só tem o histórico
+a partir de 06/08/2026. Uma versão anterior deste texto cravou "13/07/2026" e "13 meses" sem
+nenhuma fonte — era invenção, e o dono pegou.)
 
 Duas lições para as próximas sessões:
 
