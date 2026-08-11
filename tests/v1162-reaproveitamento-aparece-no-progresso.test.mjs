@@ -29,16 +29,20 @@ assert.match(app, /renderEtapas\(3, `\$\{Math\.min\(i\+LOTE,audios\.length\)\}\/
   "os lotes de transcrição seguem mostrando novos × reaproveitados");
 
 // ── Etapa 4: cliente conhecido = a análise avisa que só a novidade paga ───────────────────────
-assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "comparando com a conversa já salva — só a novidade paga análise" : "validando as três mensagens pelo Cérebro"\);/,
+// v1221 — o texto dizia "só a novidade paga análise", que deixou de ser verdade: toda importação
+// analisa (regra do dono). A etapa continua contando o que está acontecendo, sem prometer economia.
+assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "juntando com a conversa já salva e analisando tudo de novo" : "validando as três mensagens pelo Cérebro"\);/,
   "a etapa de análise diz o que está sendo comparado");
 
 // ── Etapa 5: o veredito da comparação aparece assim que a análise volta ───────────────────────
 {
   const ini = app.indexOf("const incEtapa = result?.incrementalMeta || {};");
   assert.ok(ini > -1, "o resumo da etapa 5 lê o incrementalMeta da resposta");
-  const trecho = app.slice(ini, ini + 700);
-  assert.match(trecho, /"nada novo: análise salva mantida, nada pago"/,
-    "reimportação sem novidade diz na hora que nada foi pago");
+  const trecho = app.slice(ini, ini + 1100);
+  // v1221 — "análise mantida" deixou de ser economia e virou aviso de problema: a análise nova não
+  // deu certo e a anterior foi preservada. O texto acompanha.
+  assert.match(trecho, /"não consegui analisar agora — mantive a análise anterior"/,
+    "quando a análise nova falha, a tela diz isso na hora — sem se passar por economia");
   assert.match(trecho, /análise refeita/, "com novidade, diz que a análise foi refeita (e quantas mensagens)");
   assert.match(trecho, /renderEtapas\(5, resumoEtapa \? `preparando pra salvar · \$\{resumoEtapa\}` : "preparando pra salvar"\);/,
     "e o texto entra na etapa 5, visível enquanto salva");
@@ -49,9 +53,9 @@ assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "comparando com a co
   const ini = app.indexOf("const resumoFim = incrementalMeta?.reimportacao");
   assert.ok(ini > -1, "o resumo final existe");
   const trecho = app.slice(ini, ini + 700);
-  assert.match(trecho, /"nada novo: análise mantida, nada pago"/, "sem novidade: dito no Concluído");
-  assert.match(trecho, /sem mensagem nova; análise refeita \(a salva estava incompleta\)/,
-    "o caso raro (zero novas mas análise salva incompleta) é dito com honestidade — refez e explica por quê");
+  assert.match(trecho, /"análise nova não concluída — mantida a anterior"/, "análise nova que falhou: dito no Concluído");
+  assert.match(trecho, /sem mensagem nova; análise refeita mesmo assim/,
+    "reimportar sem mensagem nova continua analisando — e a tela diz isso (regra do dono, v1221)");
   // v1178 — a linha do Concluído passou a somar também o aviso de áudio que não virou texto
   // (teto de áudios do dia / falha de transcrição), que antes não aparecia em lugar nenhum.
   assert.match(trecho, /renderEtapas\(6, linhaFim \? `lead atualizado · \$\{linhaFim\}` : "lead atualizado e importação confirmada"\);/,
