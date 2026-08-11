@@ -31,7 +31,7 @@ assert.match(app, /renderEtapas\(3, `\$\{Math\.min\(i\+LOTE,audios\.length\)\}\/
 // ── Etapa 4: cliente conhecido = a análise avisa que só a novidade paga ───────────────────────
 // v1221 — o texto dizia "só a novidade paga análise", que deixou de ser verdade: toda importação
 // analisa (regra do dono). A etapa continua contando o que está acontecendo, sem prometer economia.
-assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "juntando com a conversa já salva e analisando tudo de novo" : "validando as três mensagens pelo Cérebro"\);/,
+assert.match(app, /renderEtapas\(4, prep\?\.leadAnterior \? "analisando de novo, relendo só o que ainda não foi analisado" : "validando as três mensagens pelo Cérebro"\);/,
   "a etapa de análise diz o que está sendo comparado");
 
 // ── Etapa 5: o veredito da comparação aparece assim que a análise volta ───────────────────────

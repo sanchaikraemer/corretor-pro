@@ -2554,10 +2554,41 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   const observacoesManuaisArr = timelineArr.filter(m => m?.type === "observacao_manual" || m?.source === "corretor-pro-manual");
   const observacoesManuaisTexto = observacoesManuaisArr.map(m => `[${m?.date || ""} ${m?.time || ""}] ${m?.text || ""}`).join("\n");
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // v1222 — ANÁLISE INCREMENTAL: relê só o que ainda não foi analisado.
+  //
+  // "Tem que fazer análise somente do que já não está no histórico... Não quero que faça análise
+  // inteira, senão vou perder dinheiro com retrabalho e reanálise. Agora, se eu fizer uma
+  // importação, que as conversas forem diferentes, você tem que sim fazer a reanálise. Agora, se
+  // as conversas forem a mesma, eu também quero que você faça uma reanálise porque o prompt pode
+  // ter mudado." (dono, 11/08/2026 — a distinção que faltava.)
+  //
+  // Até aqui a conversa INTEIRA era reenviada à IA em toda importação: 400 mensagens já lidas mil
+  // vezes, pagas de novo a cada exportação. Agora, quando já existe análise salva deste cliente:
+  //   • as mensagens antigas NÃO são reenviadas — o que vai é o RESUMO CONSOLIDADO delas (o que a
+  //     análise anterior concluiu: resumo, etapa, produto, objeção, próximo passo, perfil);
+  //   • as últimas mensagens conhecidas vão inteiras, pra IA pegar o fio e o tom;
+  //   • as mensagens NOVAS vão inteiras — é sobre elas que a leitura de hoje se debruça.
+  // A análise continua acontecendo SEMPRE (inclusive sem mensagem nova, porque as regras podem ter
+  // mudado): o que muda é o TAMANHO do que se paga pra reler.
+  //
+  // Conversa pequena continua indo inteira: o resumo não economizaria nada e a leitura completa é
+  // melhor. O limiar é por tamanho de texto, não por número de mensagens.
+  const LIMIAR_INCREMENTAL_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_MIN_CHARS || 6000);
+  const CAUDA_CONHECIDA_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_CAUDA_CHARS || 3000);
+  const entradaIncremental = montarEntradaIncremental({
+    timelineArr,
+    linhaDe,
+    textoCompleto: timelineTextFull,
+    contexto: contextoIncremental,
+    limiarChars: LIMIAR_INCREMENTAL_CHARS,
+    caudaChars: CAUDA_CONHECIDA_CHARS
+  });
+
   // Limite técnico para evitar travar a etapa de análise em conversas enormes.
   // Não injeta resumo antigo, produto antigo, unidade antiga ou nextAction antigo.
   const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 30000);
-  let timelineText = timelineTextFull;
+  let timelineText = entradaIncremental ? entradaIncremental.texto : timelineTextFull;
   if (timelineText.length > MAX_CHARS) {
     const linhas = timelineArr.map(linhaDe);
     const recentes = [];
@@ -2909,7 +2940,7 @@ Formato JSON obrigatório:
 ${observacoesManuaisTexto ? `OBSERVAÇÕES DO CORRETOR (registradas manualmente por ${corretorNome}, o administrador deste lead — NÃO são mensagens do WhatsApp, são fatos que ele confirma terem acontecido fora da conversa, como enviar uma imagem/print/áudio externo que o sistema não consegue ler). Trate cada uma como VERDADE CONFIRMADA, nunca como algo a checar ou duvidar. Dê peso alto no diagnóstico e no próximo passo. As três mensagens NÃO PODEM ignorar uma observação nem oferecer de novo algo que ela já diz ter sido feito (ex.: se a observação diz "já enviei outra opção", a mensagem não pode perguntar se pode enviar — o próximo passo é dar seguimento ao que já foi enviado):
 ${observacoesManuaisTexto}
 
-` : ""}CONVERSA COMPLETA:
+` : ""}${entradaIncremental ? "CONVERSA — RESUMO DO QUE JÁ FOI ANALISADO + O QUE É NOVO:" : "CONVERSA COMPLETA:"}
 ${timelineText}`;
 
   try {
@@ -3080,6 +3111,8 @@ ${timelineText}`;
       raciocinioComercial: null,
       estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      // v1222 — o que foi de fato enviado à IA nesta análise (mensagens poupadas × enviadas).
+      ...(entradaIncremental ? { _entradaIncremental: { poupadas: entradaIncremental.poupadas, enviadas: entradaIncremental.enviadas, novas: entradaIncremental.novas } } : {}),
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
@@ -3460,6 +3493,69 @@ function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcrip
 
 // Assinatura estável para descobrir o que realmente é novo numa reimportação.
 // Áudios usam o nome do arquivo; textos usam data, hora, autor e conteúdo normalizado.
+// v1222 — monta a entrada da IA no modo incremental (ver o comentário grande em analyzeWithBrain).
+// Devolve null quando não vale a pena — e aí a conversa vai inteira, como sempre foi:
+//   • sem análise anterior aproveitável (primeira importação, ou a salva está imprestável): não
+//     existe resumo consolidado pra colocar no lugar das mensagens antigas;
+//   • conversa curta: reenviar tudo custa quase nada e a leitura completa é melhor;
+//   • nada de antigo pra poupar (todas as mensagens são novas).
+function montarEntradaIncremental({ timelineArr, linhaDe, textoCompleto, contexto, limiarChars, caudaChars }) {
+  const anterior = analiseUtilizavel(contexto?.analiseAnterior);
+  if (!anterior) return null;
+  if (String(textoCompleto || "").length <= limiarChars) return null;
+
+  const novas = new Set((contexto?.assinaturasNovas || []).filter(Boolean));
+  const ehNova = (m) => novas.has(assinaturaTimelineIncremental(m));
+  const antigas = timelineArr.filter(m => !ehNova(m));
+  const recentes = timelineArr.filter(ehNova);
+  if (!antigas.length) return null;
+
+  const limpo = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
+  const d = anterior.diagnostico && typeof anterior.diagnostico === "object" ? anterior.diagnostico : {};
+  const fichas = [
+    ["Resumo do que já aconteceu", anterior.summary],
+    ["Etapa em que a conversa parou", d.etapaFunil || anterior.etapaSugerida],
+    ["Produto/empreendimento em jogo", d.produtoAtual || anterior.produtoInteresse],
+    ["Objeção principal já identificada", d.objecaoPrincipal],
+    ["Pendência financeira já identificada", d.pendenciaFinanceira],
+    ["Perfil do cliente já observado", anterior.clientProfile],
+    ["Próximo passo que estava combinado", anterior.nextAction]
+  ].map(([rot, val]) => [rot, limpo(val)])
+   .filter(([, val]) => val && !/^(—|-|não identificado)$/i.test(val))
+   .map(([rot, val]) => `${rot}: ${val}`);
+  if (!fichas.length) return null;
+
+  // Cauda: as últimas mensagens JÁ CONHECIDAS, pra IA pegar o fio e o tom de voz real dos dois.
+  const cauda = [];
+  let total = 0;
+  for (let i = antigas.length - 1; i >= 0; i--) {
+    const linha = linhaDe(antigas[i]);
+    total += linha.length + 1;
+    if (total > caudaChars && cauda.length) break;
+    cauda.unshift(linha);
+    if (total > caudaChars) break;
+  }
+
+  const poupadas = antigas.length - cauda.length;
+  const blocoNovas = recentes.length
+    ? `=== MENSAGENS NOVAS DESDE A ÚLTIMA ANÁLISE (${recentes.length}) — É SOBRE ESTAS QUE A LEITURA DE HOJE SE DEBRUÇA ===\n${recentes.map(linhaDe).join("\n")}`
+    : `=== NENHUMA MENSAGEM NOVA DESDE A ÚLTIMA ANÁLISE ===\nA conversa é exatamente a mesma da última vez. Refaça a leitura mesmo assim, com as regras de hoje (elas podem ter mudado desde então), usando o resumo consolidado e as últimas mensagens acima. Não invente movimento que não houve: se nada aconteceu, o diagnóstico é o de uma conversa parada.`;
+
+  const texto = [
+    `=== O QUE JÁ FOI LIDO E ANALISADO ANTES (resumo consolidado — não é pra reanalisar) ===`,
+    `${poupadas} ${poupadas === 1 ? "mensagem anterior desta conversa já foi lida" : "mensagens anteriores desta conversa já foram lidas"} numa análise passada e não ${poupadas === 1 ? "é reenviada" : "são reenviadas"} aqui de propósito. O que ficou dela${poupadas === 1 ? "" : "s"} é isto:`,
+    fichas.join("\n"),
+    `=== FIM DO RESUMO CONSOLIDADO ===`,
+    "",
+    `=== ÚLTIMAS MENSAGENS JÁ CONHECIDAS (${cauda.length}) — contexto e tom, não são novidade ===`,
+    cauda.join("\n"),
+    "",
+    blocoNovas
+  ].join("\n");
+
+  return { texto, poupadas, enviadas: cauda.length + recentes.length, novas: recentes.length };
+}
+
 function assinaturaTimelineIncremental(m) {
   if (!m || typeof m !== "object") return "";
   // minúsculo de propósito: mesma normalização que _assinaturaTimelineV681 (api/_persistence.js)
@@ -3574,7 +3670,13 @@ export async function finalizarAnaliseDaConversa(payload) {
   //
   // A economia grande da v1141 continua intacta e é outra: áudio já transcrito deste cliente não é
   // transcrito de novo (isso acontece antes daqui, na etapa de preparar/transcrever).
-  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, cerebroConfig, organizationId });
+  // v1222 — o que a IA recebe: a conversa inteira na PRIMEIRA análise deste cliente; daí em
+  // diante, o resumo do que já foi analisado + o que é novo (ver montarEntradaIncremental). É a
+  // separação que o dono cobrou: analisar sempre, sim; reler (e pagar) tudo de novo, não.
+  const contextoIncremental = reimportacao && previousAnalysis
+    ? { analiseAnterior: previousAnalysis, assinaturasNovas: mensagensNovas.map(assinaturaTimelineIncremental).filter(Boolean) }
+    : null;
+  analysis = await analyzeWithBrain({ lead, timeline, openai, leadId: existingLeadId, contextoIncremental, cerebroConfig, organizationId });
   analiseNovaTentada = true;
 
   // REDE DE SEGURANÇA: se a análise nova não serve (IA fora do ar, teto de análises do dia, retorno
@@ -3644,6 +3746,9 @@ export async function finalizarAnaliseDaConversa(payload) {
       audiosNovosTranscritos: Number(audiosNovosSolicitados) || 0,
       analiseReutilizada,
       analiseNovaTentada,
+      // v1222 — quanto da conversa NÃO precisou ser reenviado à IA nesta importação.
+      analiseIncremental: !!analysis?._entradaIncremental,
+      mensagensPoupadasDaIA: Number(analysis?._entradaIncremental?.poupadas) || 0,
       itensContextoAnterior,
       cobrancaOtimizada: reimportacao
     },
