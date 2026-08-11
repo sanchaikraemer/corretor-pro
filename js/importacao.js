@@ -135,6 +135,11 @@ function openAIErrorBlock(data){
 // Abre o lead com a tela cheia AINDA de pé e só a fecha depois — assim a troca é direto de
 // "Pronto" pro cliente, sem a tela de importação aparecer no meio do caminho.
 async function cpioFecharQuandoLeadAbrir(id){
+  // v1223 — o cliente abriu: a decisão do topo cumpriu o papel e some junto. Sem isto ela ficava
+  // de pé, e da próxima vez que ele entrasse na tela de importação encontrava a pergunta do
+  // cliente ANTERIOR esperando resposta que já tinha sido dada ("uma tela nada a ver antes de
+  // começar a importação").
+  try{ cpFecharPerguntaTopo(); }catch(_){}
   try{ if(id) await abrirLead(id); }
   catch(_){}
   finally{ try{ cpImportOverlayVisivel(false); }catch(_){} }
@@ -679,6 +684,17 @@ function cpResumoAudioSemTexto(result){
 }
 
 // ============ RENDERIZAÇÃO + SALVAR/DESCARTAR ============
+// v1223 — a caixa de decisão do topo (v1220) só pode existir ENQUANTO existe decisão pendente.
+// Print do dono: "tá aparecendo uma tela nada a ver antes de começar a importação (e antes não
+// tinha)" — era ela, sobrando na tela depois que o assunto acabou. Quem responde a pergunta ou
+// descarta a importação fecha a caixa aqui; começar uma importação nova também limpa (clearAnalysis).
+function cpFecharPerguntaTopo(){
+  const caixa = qs("#perguntaTopo");
+  if(!caixa) return;
+  caixa.innerHTML = "";
+  caixa.hidden = true;
+}
+
 async function renderProcessedResult(data, meta){
  try{
   const lead = data.lead || {};
@@ -749,6 +765,11 @@ async function renderProcessedResult(data, meta){
   state.pendingExistente = existente;
   const perguntarNome = !!existente;
   const nomeSoParecido = perguntarNome && match.via === "nome-parecido";
+  // v1223 — guarda que a atualização deste lead vai sair de uma RESPOSTA do corretor ("Sim, é o
+  // mesmo"), e não de um nome idêntico reconhecido sozinho. É essa diferença que autoriza
+  // renomear o cadastro (ver atualizarLeadComEvolucao e api/lead-update.js).
+  state.pendingNomeSoParecido = nomeSoParecido;
+  state.pendingNomeImportado = String(state.lead?.name || "");
   let acoesHtml;
   if(nomeSoParecido){
     // Nome mudou entre importações (ex.: contato editado no celular) mas não é idêntico ao
@@ -1091,7 +1112,13 @@ async function atualizarLeadComEvolucao(){
     // travar a tela em "Salvando..." pra sempre se a rede engasgasse.
     const res = await fetchComTimeout("./api/lead-update", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ action: "atualizar-com-evolucao", id: existente.id, result: state.pendingSave.result, importId: state.pendingSave.importId, cerebroConfig: state.pendingSave.cerebroConfig })
+      // v1223 — "quando clicar q é o mesmo e atualizar, já altere o nome no sistema para evitar
+      // isso nas próximas análises do mesmo lead" (dono). O renomear só viaja quando a atualização
+      // veio da resposta dele à pergunta do nome parecido — que é, aliás, o que a própria caixa
+      // promete ("ele passa a se chamar…"). Reimportação de nome idêntico não manda nada, e a
+      // proteção do nome curado na carteira continua valendo pra ela.
+      body: JSON.stringify({ action: "atualizar-com-evolucao", id: existente.id, result: state.pendingSave.result, importId: state.pendingSave.importId, cerebroConfig: state.pendingSave.cerebroConfig,
+        ...(state.pendingNomeSoParecido && state.pendingNomeImportado ? { renomearPara: state.pendingNomeImportado } : {}) })
     }, 45000);
     const data = await res.json().catch(()=>({ok:false,error:"Resposta inválida do servidor."}));
     if(!res.ok || !data.ok) throw new Error(data.error || "Erro ao atualizar.");
@@ -1111,6 +1138,8 @@ async function atualizarLeadComEvolucao(){
     cpLimparImportPendente();
     state.ultimoUploadStorage = null;
     state.pendingExistente = null;
+    state.pendingNomeSoParecido = false;
+    state.pendingNomeImportado = "";
     const ev = data.evolucao;
     const juntou = !incrementalMeta?.reimportacao && Number(data.preservadasDoAntigo||0) > 0; // no fluxo incremental, o servidor recebeu só as novidades de propósito
     const primeiroNome = (existente.name||"").split(" ")[0] || "o lead";
@@ -1277,6 +1306,7 @@ async function descartarLeadPendente(){
     ? await cp903Confirm({ titulo: "Descartar análise", mensagem: msgDescartarAn, ok: "Descartar", perigo: true })
     : confirm(msgDescartarAn);
   if(!okDescartarAn) return;
+  cpFecharPerguntaTopo();
   const shareDescartadoId = String(state.pendingSharedRecordId || "");
   const importacaoDescartada = state.pendingSave;
   await finalizarImportacaoStorage(importacaoDescartada);

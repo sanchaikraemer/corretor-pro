@@ -556,8 +556,28 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
   // não bate com autor nenhum e continua intocado.
   const autoresDaConversa = [...new Set((Array.isArray(novaTimeline) ? novaTimeline : [])
     .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
+  // v1223 — "quando clicar q é o mesmo e atualizar, já altere o nome no sistema para evitar isso
+  // nas próximas análises do mesmo lead" (dono, 11/08/2026).
+  //
+  // Aqui estava a razão de a pergunta "é o mesmo cliente?" voltar TODA importação do mesmo
+  // cliente: o cadastro guardava o nome curto ("Alisson Franca") e o arquivo exportado trazia o
+  // longo ("Alisson Franca NVRIII"), então na próxima vez os nomes continuavam "parecidos mas não
+  // idênticos" e a pergunta reaparecia. Pior: a própria caixa PROMETIA que o cadastro passaria a
+  // se chamar como a importação — e não passava, porque a regra abaixo (correta pro caso geral)
+  // protege o nome curado do corretor contra o nome bagunçado do contato do WhatsApp.
+  //
+  // A resposta explícita dele resolve a ambiguidade: quando o app manda `renomearPara`, é porque o
+  // corretor tocou em "Sim, é o mesmo — atualizar" sabendo que o nome mudaria. Só nesse caso o
+  // nome do arquivo vence o nome salvo. Reimportação automática (nome idêntico) não manda nada e
+  // a proteção continua valendo.
   const nomeCorrigido = corrigirNomeDoCliente(nomeAnterior, nova?.clienteConfirmado, autoresDaConversa, "");
-  if (nomeCorrigido) {
+  let nomeParaColuna = "";
+  const renomearPara = String(body?.renomearPara || "").trim();
+  if (renomearPara && !nomeRuim(renomearPara)) {
+    merged.clientName = renomearPara;
+    merged.lead = { ...(merged.lead || {}), clientName: renomearPara };
+    nomeParaColuna = renomearPara;
+  } else if (nomeCorrigido) {
     merged.clientName = nomeCorrigido;
     merged.lead = { ...(merged.lead || {}), clientName: nomeCorrigido };
   } else if (!nomeRuim(nomeAnterior)) {
@@ -574,16 +594,29 @@ async function acaoAtualizarComEvolucao(body, res, organizationId) {
   // Texto cru reconstruído da conversa JÁ JUNTADA (mesmo formato do pipeline), pra não
   // perder as mensagens do arquivo antigo que não vinham no novo rawText.
   updatePayload.texto_extraido = novaTimeline.map(m => `[${m.date || ""} ${m.time || ""}] ${m.author}: ${m.text}`).join("\n");
+  // v1223 — o nome também vive numa coluna própria da tabela (usada por busca e listagens): sem
+  // atualizar os DOIS lugares, o cadastro apareceria com um nome na tela do cliente e outro na
+  // busca. A coluna é opcional em bancos antigos — se ela não existir, o update é refeito sem ela
+  // (mesmo cuidado que o resto do arquivo já toma).
+  if (nomeParaColuna) updatePayload.nome_cliente = nomeParaColuna;
   if (result.audiosEncontrados != null) updatePayload.audios_encontrados = result.audiosEncontrados;
   if (result.audiosTranscritos != null) updatePayload.audios_transcritos = result.audiosTranscritos;
 
-  const { data: persistedRow, error: putErr } = await supabase
+  const gravarAtualizacao = (payload) => supabase
     .from("whatsapp_processamentos")
-    .update(updatePayload)
+    .update(payload)
     .eq("id", id)
     .eq("organization_id", organizationId)
     .select("id,resultado_analise,timeline_json,atualizado_em,updated_at")
     .maybeSingle();
+
+  let { data: persistedRow, error: putErr } = await gravarAtualizacao(updatePayload);
+  // v1223 — banco sem a coluna nome_cliente (instalação antiga): refaz sem ela em vez de deixar a
+  // atualização inteira falhar por causa do renomear.
+  if (putErr && nomeParaColuna && /column .* does not exist|nome_cliente/i.test(putErr.message || "")) {
+    const { nome_cliente, ...semNome } = updatePayload;
+    ({ data: persistedRow, error: putErr } = await gravarAtualizacao(semNome));
+  }
   if (putErr) return json(res, 500, { ok: false, recoverable: true, conversationSaved: true, error: putErr.message });
   if (!persistedRow?.id) {
     return json(res, 409, { ok:false, recoverable:true, conversationSaved:true, error:"O banco não confirmou a atualização do cliente." });

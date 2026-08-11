@@ -44,7 +44,10 @@ const corpo = sinc[0];
 
 // 3a. Ponto de decisão do corretor (salvar/atualizar): a tela SAI, senão cobre os botões e a
 // importação trava de vez.
-assert.match(corpo, /if\(opts && opts\.pausar\)\{ cpImportOverlayVisivel\(false\); return; \}/,
+// v1223 — a espera ganhou um segundo nome (`aguardando`, da v1219, usada pela pergunta "é o mesmo
+// cliente?"). Os dois querem a mesma coisa: a vez é do corretor, a tela cheia sai da frente. Faltar
+// um deles é o print "travou aqui" — tela cheia em 98% cobrindo a pergunta que a destravaria.
+assert.match(corpo, /if\(opts && \(opts\.pausar \|\| opts\.aguardando\)\)\{ cpImportOverlayVisivel\(false\); return; \}/,
   'quando o app espera uma decisão do corretor, a tela cheia precisa sair ANTES de qualquer outra regra');
 // v1089 — a etapa "aguardando confirmação" NÃO é mais uma pausa: no caminho normal o app salva
 // sozinho logo em seguida, e esconder a tela ali fazia os cartões da importação piscarem no meio
