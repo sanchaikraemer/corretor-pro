@@ -44,10 +44,15 @@ assert.match(atualizar, /cpImportacaoFalhouNaGravacao\("Não foi possível atual
 
 // A rodinha só existe nas etapas em andamento: a etapa 7 não pode desenhá-la (senão o conserto
 // não conserta nada — continuaria "girando" na cara do corretor).
-assert.match(app, /idxAtual === 7 \? "" : '<span class="spinner"><\/span>'/,
+// v1219 — a mesma lição ganhou um segundo caso: além da etapa 7 (falha), agora a espera pela
+// resposta do corretor também para a rodinha (opts.aguardando). A regra guardada aqui não mudou —
+// rodinha só nas etapas em que o app está mesmo trabalhando sozinho.
+assert.match(app, /const semRodinha = idxAtual === 7 \|\| aguardando;/,
   'a etapa de falha não desenha a rodinha');
+assert.match(app, /\(semRodinha \? "" : '<span class="spinner"><\/span>'\)/,
+  'quem decide desenhar a rodinha é esse estado, não o índice solto');
 // E ela destrava os botões da importação (setBotoesImportacao só trava de 0 a 5).
-assert.match(app, /setBotoesImportacao\(idxAtual >= 0 && idxAtual <= 5\);/,
+assert.match(app, /setBotoesImportacao\(!aguardando && idxAtual >= 0 && idxAtual <= 5\);/,
   'a etapa 7 precisa liberar "Nova análise" e "Diagnóstico"');
 
 console.log('v1175-gravacao-que-falha-nao-deixa-tela-girando: ok');

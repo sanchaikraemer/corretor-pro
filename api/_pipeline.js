@@ -2760,6 +2760,20 @@ ${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos acima são histórico REAL
 ${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}
 ${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
 
+AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO. A mensagem é assinada PELO corretor: escrever que ele
+fez algo que não está nas fontes (conversa, observações registradas por ele, Cérebro) é colocar uma
+mentira na boca dele — e quem desmente é o próprio cliente, na resposta. Nunca escreva que o
+corretor conferiu, pesquisou, separou, levantou, verificou com alguém, recebeu retorno de terceiro
+ou "aproveitou pra ver" se isso não aconteceu nas fontes. Nunca AFIRME nem SUGIRA que existe
+novidade do lado dele: "surgiram opções novas", "apareceram alternativas nos últimos dias",
+"chegaram unidades", "as melhores opções disponíveis hoje", "tenho novidades", "o que temos de
+novo" — sem novidade escrita nas fontes, NÃO existe novidade, e a mensagem não pode insinuar que
+existe. Isso vale inclusive quando a conversa parou faz tempo e a tentação é criar um motivo pra
+voltar: o motivo tem que ser real (o que ficou pendente na conversa), não inventado.
+O QUE É PERMITIDO no lugar: OFERECER fazer agora ("quer que eu veja o que está disponível e te
+mando?"), retomar o que REALMENTE ficou em aberto na conversa, e perguntar. Verbo no futuro ou no
+condicional — nunca no passado.
+
 LINGUAGEM DE IA — PROIBIDO. Estas construções entregam na hora que a mensagem não foi escrita por
 uma pessoa, e o corretor as rejeita uma a uma: "espero que esteja bem/indo bem", "faz sentido",
 "se fizer sentido", "faça sentido", "fico à disposição", "estou à disposição", "me coloco à

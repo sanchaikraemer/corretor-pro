@@ -7385,10 +7385,18 @@ export function setBotoesImportacao(desabilitados){
   });
 }
 
+// v1219 — ESPERANDO VOCÊ ≠ TRABALHANDO.
+//
+// Print do dono ("de novo dando pau"): a tela mostrava "Salvando — preparando pra salvar" com a
+// rodinha girando e a barra quase cheia... enquanto o app, na verdade, estava PARADO esperando
+// ele responder "é o mesmo cliente?" logo abaixo. Quem olha vê trabalho em andamento que não
+// termina nunca — a leitura óbvia é que travou. Com opts.aguardando a linha para de girar, muda
+// de cor e diz o que falta: uma resposta dele.
 export function renderEtapas(idxAtual, sub, opts){
+  const aguardando = !!(opts && opts.aguardando);
   // Etapas 0..5 (Recebendo…Salvando) = em andamento → botões travados.
   // Etapa 6 (Concluído) e 7 (Falha recuperável) → botões liberados.
-  setBotoesImportacao(idxAtual >= 0 && idxAtual <= 5);
+  setBotoesImportacao(!aguardando && idxAtual >= 0 && idxAtual <= 5);
   // v1088 — a tela cheia da importação vem DEPOIS de travar os botões: se algo falhar aqui, os
   // botões já estão no estado certo. O try/catch mantém a importação andando mesmo que a tela
   // cheia não exista (é assim que os testes extraem esta função pra rodar contra um DOM falso).
@@ -7401,15 +7409,24 @@ export function renderEtapas(idxAtual, sub, opts){
   ol.innerHTML = etapasVisiveis.map((label, i) => {
     let icone = "", cor = "var(--muted)", peso = "400";
     if(i < idxAtual && idxAtual !== 7){ icone = "✓"; cor = "var(--acao)"; peso = "600"; }
-    else if(i === idxAtual){ icone = idxAtual === 7 ? "!" : ""; cor = idxAtual === 7 ? "var(--morno)" : "var(--lime)"; peso = "950"; }
+    else if(i === idxAtual){
+      icone = idxAtual === 7 ? "!" : aguardando ? "?" : "";
+      cor = (idxAtual === 7 || aguardando) ? "var(--morno)" : "var(--lime)";
+      peso = "950";
+    }
+    const rotulo = (i === idxAtual && aguardando) ? "Esperando sua resposta" : label;
     const extra = (i === idxAtual && sub) ? ` <span style="color:var(--muted);font-weight:400">— ${escapeHtml(sub)}</span>` : "";
-    return `<li style="padding:4px 0;color:${cor};font-weight:${peso}"><span style="display:inline-block;width:18px">${icone}</span>${escapeHtml(label)}${extra}</li>`;
+    return `<li style="padding:4px 0;color:${cor};font-weight:${peso}"><span style="display:inline-block;width:18px">${icone}</span>${escapeHtml(rotulo)}${extra}</li>`;
   }).join("");
   const pctPorEtapa = [8, 32, 48, 70, 86, 94, 100, 100];
   const pct = pctPorEtapa[idxAtual] ?? 0;
   const bar = qs("#progressBar"); if(bar) bar.style.width = pct + "%";
   const txt = qs("#processingText");
-  if(txt) txt.innerHTML = (idxAtual === 7 ? "" : '<span class="spinner"></span>') + escapeHtml(ETAPAS_PROCESSAMENTO[idxAtual]) + (sub ? ` — ${escapeHtml(sub)}` : "") + ` <span style="opacity:.7">(${pct}%)</span>`;
+  if(txt){
+    const semRodinha = idxAtual === 7 || aguardando;
+    const titulo = aguardando ? "Esperando sua resposta" : ETAPAS_PROCESSAMENTO[idxAtual];
+    txt.innerHTML = (semRodinha ? "" : '<span class="spinner"></span>') + escapeHtml(titulo) + (sub ? ` — ${escapeHtml(sub)}` : "") + ` <span style="opacity:.7">(${pct}%)</span>`;
+  }
 }
 
 
