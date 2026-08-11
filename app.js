@@ -3,6 +3,7 @@ import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commerc
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
 window.toast = toast; // precisa estar em window: atributos inline (onclick/onchange) rodam fora do escopo do módulo
 import { configurarEscolhaTema } from './js/tema.js?v=__VERSION__';
+import { corrigirSaudacaoAbertura, saudacaoAgora } from './js/saudacao.js?v=__VERSION__';
 import { garantirDonoDosDadosLocais, aoSairDaConta } from './js/dados-locais.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
 import './js/pwa-install.js?v=__VERSION__';
@@ -1338,9 +1339,14 @@ function mensagensDaAnalise(a){
   const pick = (key) => {
     const v = m[key];
     if(v == null) return "";
-    return typeof v === "object"
+    const texto = typeof v === "object"
       ? String(v.msg || v.mensagem || v.texto || "").trim()
       : String(v).trim();
+    // v1218 — a saudação é corrigida NA HORA DE MOSTRAR, não na hora de gerar. Duas razões: a
+    // análise pode ter sido feita de manhã e ser copiada à noite (a sugestão abriria com "Bom
+    // dia" às 21h), e as análises JÁ SALVAS passam a sair certas sem precisar reanalisar nada.
+    // Só a saudação de abertura muda — nenhuma palavra comercial é reescrita pelo código.
+    return corrigirSaudacaoAbertura(texto);
   };
   // v750: NUNCA exibir mensagens de arquitetura antiga.
   // Se o lead ainda tem análise salva por versões anteriores, a tela deve pedir reanálise,
@@ -3774,11 +3780,9 @@ window.renderTop3 = renderTop3;
 // fechadas" (valor/mês), tudo removido (o dono não marca Vendido no app — só Arquivar).
 
 function renderSaudacao(items){
-  const h = new Date().getHours();
-  let saud = "Olá";
-  if(h < 12) saud = "Bom dia";
-  else if(h < 18) saud = "Boa tarde";
-  else saud = "Boa noite";
+  // v1218 — a régua ("bom dia até 11h59, boa tarde até 17h59, boa noite a partir das 18h") saiu
+  // daqui pra js/saudacao.js, pra ser a MESMA usada na correção das sugestões de mensagem.
+  const saud = saudacaoAgora() || "Olá";
   // v1007 — prioridade do nome: o que o corretor escreveu no Cérebro > o nome da conta
   // logada (preenchido no cadastro) > "corretor" genérico.
   const corretorNome = (cpNomeCorretorCerebro() || window.__cpContaNome || "").trim().split(/\s+/)[0] || "";
