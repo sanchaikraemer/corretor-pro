@@ -7581,6 +7581,12 @@ const CP_SHARE_ID_INICIAL = String(CP_SHARE_PARAMS_INICIAIS.get('shareId') || ''
 const CP_VEIO_DE_SHARE = CP_SHARE_PARAMS_INICIAIS.has('shared') || CP_SHARE_PARAMS_INICIAIS.get('source') === 'share-target' || CP_SHARE_PARAMS_INICIAIS.has('share-target');
 window.__cpShareImportActive = CP_VEIO_DE_SHARE;
 let __cpCheckSharedPromise = null;
+// v1209 — "este compartilhamento já foi resolvido nesta aba, não entre no modo importação de novo".
+// CP_VEIO_DE_SHARE é lido uma vez só, no arranque, e continua verdadeiro mesmo depois de o endereço
+// ser limpo — então a segunda passada de checkShared() (a que roda ~1s depois, junto com o service
+// worker) reentrava na tela de importação e ficava 15 segundos procurando um ZIP que sabidamente
+// nunca chegou, apagando o aviso que o dono estava lendo.
+let __cpShareEncerrado = false;
 
 function shareIdbOpen(){
   return new Promise((resolve, reject)=>{
@@ -7758,6 +7764,16 @@ async function localizarShareNoCache(idPreferido){
   return null;
 }
 
+// v1209 — religa o recebedor de conversas compartilhadas (o service worker) na hora, sem esperar
+// o 'load' da página. Quando o app é aberto justamente porque um compartilhamento se perdeu por
+// falta dele, esperar o fim do carregamento pra reinstalá-lo é tempo perdido.
+function religarRecebedorDeConversa(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register("/service-worker.js?v=__VERSION__", { scope: "/" }).catch(()=>{});
+  }catch(_){ }
+}
+
 function mostrarRecebimentoShare(){
   show('zip');
   qs('#processingBox')?.classList.add('show');
@@ -7773,7 +7789,7 @@ async function _checkSharedImpl(){
     return {handled:true,awaitingSave:true,shareId:String(state.pendingSharedRecordId)};
   }
   const params=new URLSearchParams(location.search);
-  const cameFromShare=CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target');
+  const cameFromShare=!__cpShareEncerrado && (CP_VEIO_DE_SHARE || params.has('shared') || params.get('source')==='share-target' || params.has('share-target'));
 
   // Uma abertura normal do aplicativo nunca deve procurar ZIPs antigos no IndexedDB/cache.
   // Antes, checkShared() era chamado no boot mesmo sem Share Target e acabava escolhendo o
@@ -7785,6 +7801,58 @@ async function _checkSharedImpl(){
 
   const shareId=String(params.get('shareId')||CP_SHARE_ID_INICIAL||'').trim();
   const erroUrl=params.get('erro');
+
+  // v1209 — A TELA DE ERRO DO SERVIDOR ("404: NOT_FOUND") NO LUGAR DO APP (print do dono, 11/08).
+  //
+  // Quando o WhatsApp compartilha a conversa com o Corretor Pro, quem recebe o arquivo é o
+  // "recebedor" que fica instalado dentro do celular junto com o app (o service worker). Se ele
+  // não estiver ligado naquele momento — o Android desliga/limpa isso sozinho quando o aparelho
+  // fica sem espaço, quando o app passa muito tempo sem ser aberto, ou quando o navegador limpa
+  // os dados do site — o celular manda a conversa direto pro servidor, que não tem essa porta:
+  // resultado, o dono via uma página branca de erro em inglês, sem nenhum botão, e a conversa
+  // sumia. Ele nem sabia que era isso: pra ele "a exportação do zip deu pau".
+  //
+  // Agora o servidor devolve o dono PRA DENTRO do app com este aviso (ver vercel.json), e aqui a
+  // gente religa o recebedor na hora — a próxima conversa compartilhada volta a entrar sozinha.
+  if(erroUrl==='sem-worker'){
+    try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+    __cpShareEncerrado=true;
+    window.__cpShareImportActive=false;
+    state.pendingSharedRecordId='';
+    religarRecebedorDeConversa();
+    show('zip');
+    // Sem esta linha, a barra "Conversa recebida. Preparando a importação…" ficava girando em cima
+    // do aviso — dando a entender que ainda há algo em andamento quando não há.
+    qs('#processingBox')?.classList.remove('show');
+    showCard('resultCard',true);
+    const box=qs('#resultBox');
+    if(box){
+      box.className='notice error';
+      box.innerHTML=
+        '<b>Essa conversa não chegou ao app.</b><br><br>'+
+        'O recebimento automático do Corretor Pro estava desligado neste celular, então o WhatsApp '+
+        'não teve pra quem entregar a conversa (foi por isso que apareceu aquela tela de erro em inglês). '+
+        '<b>Nenhum lead seu foi alterado.</b><br><br>'+
+        'Acabei de religar o recebimento agora. Da próxima vez que você compartilhar do WhatsApp, a conversa '+
+        'entra direto de novo.<br><br>'+
+        '<b>Pra não perder esta conversa:</b> exporte de novo no WhatsApp escolhendo <b>salvar o arquivo</b> no '+
+        'celular e toque no botão abaixo pra selecionar o ZIP.'+
+        '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">'+
+          '<button type="button" class="btn" id="btnEscolherZipDoShare">Escolher o arquivo da conversa</button>'+
+          '<button type="button" class="btn secondary" id="btnVoltarDoShareSemWorker">Voltar ao app</button>'+
+        '</div>';
+    }
+    qs('#btnEscolherZipDoShare')?.addEventListener('click', ()=>{ qs('#btnEscolherZip')?.click(); });
+    qs('#btnVoltarDoShareSemWorker')?.addEventListener('click', ()=>{
+      showCard('resultCard',false);
+      qs('#processingBox')?.classList.remove('show');
+      show('home');
+    });
+    // O aviso mora abaixo do cartão "Importar conversa": no celular ele nasce fora da tela. Sem
+    // trazer o aviso pra vista, o dono chega numa tela que parece normal e não fica sabendo de nada.
+    try{ requestAnimationFrame(()=>{ qs('#resultCard')?.scrollIntoView({block:'start'}); }); }catch(_){ }
+    return {handled:true,waiting:true,falhou:true,semWorker:true};
+  }
 
   // v1193 — MARCA VELHA NO ENDEREÇO NÃO É COMPARTILHAMENTO NOVO.
   //
