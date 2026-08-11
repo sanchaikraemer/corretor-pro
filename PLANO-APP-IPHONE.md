@@ -5,32 +5,36 @@ corretores, só 4 usam Android. Documento de decisão — não altera nada no si
 
 ---
 
-## 1. A primeira coisa, e a mais importante: o iPhone NÃO está de fora hoje
+## 1. O iPhone está fora hoje — e a App Store não é conforto, é a única saída
 
-O Corretor Pro **já funciona no iPhone hoje, inteiro**. Nenhum corretor de iPhone está impedido
-de usar o sistema neste momento. O que existe é **atrito**, não bloqueio.
+_(Correção. A primeira versão deste documento dizia que "o iPhone já funciona inteiro, o que existe
+é atrito, não bloqueio". O dono corrigiu, com razão, e a correção muda a conclusão do documento
+inteiro. Registro o erro pra não se repetir: eu li o código, vi os caminhos previstos pro iPhone e
+concluí que funcionavam — sem confirmar que algum corretor de iPhone tinha, de fato, conseguido
+importar uma conversa. Nenhum tinha.)_
 
-O que um corretor de iPhone consegue fazer hoje, sem nós mudarmos uma linha:
+A cadeia real, do jeito que acontece na mão do corretor:
 
-| Recurso | iPhone hoje |
-|---|---|
-| Entrar, usar a Home, a fila "Fazer agora", a Carteira, a Agenda, o cliente | Sim, igual ao Android |
-| Instalar o ícone na tela do celular (sem barra de navegador) | Sim — pelo Safari, "Compartilhar → Adicionar à Tela de Início" |
-| Importar a conversa do WhatsApp (com áudios) | Sim — salvando o arquivo e escolhendo dentro do app |
-| Mandar a conversa **direto** do botão Compartilhar do WhatsApp | **Só com o Atalho** (v1035), configurado uma vez |
-| Lembrete diário na tela | Sim, se o app estiver instalado na tela de início |
-| Funcionar com internet ruim / abrir rápido | Sim (o app guarda o que precisa no aparelho) |
+1. O corretor de iPhone recebe o link do Corretor Pro e **não consegue "baixar o aplicativo"** —
+   no iPhone não existe botão de instalar; é um caminho manual pelo Safari que ele não completa.
+2. Sem o ícone instalado, **não há para onde mandar a conversa** no botão Compartilhar do WhatsApp.
+3. E o caminho de contorno — salvar o arquivo e depois escolher dentro do app — **não existe na
+   prática**: o WhatsApp do iPhone **exporta**, não salva. Palavra do dono, que testou:
+   *"não tem como salvar a conversa daí entrar no Corretor Pro e importar o ZIP"*.
 
-O único buraco real é o **botão Compartilhar do WhatsApp**: o iPhone não deixa um site instalado
-aparecer naquela lista (limitação da Apple no motor do Safari — pedido aberto desde 2019). Foi
-exatamente por isso que a v1035 criou o **Atalho do iPhone**: uma vez configurado, o Corretor Pro
-passa a aparecer na lista de compartilhar igual a um app de verdade.
+Sem a conversa entrar, **nada** do resto do sistema tem serventia: a fila "Fazer agora", a análise,
+as sugestões de mensagem, a Carteira — tudo depende da conversa importada. Então não é atrito: o
+iPhone está fora, e com ele 146 dos 150 corretores parceiros.
 
-**Conclusão honesta:** o sistema não "vai por água abaixo" sem a App Store. O que a App Store
-resolve são três coisas: (a) o corretor achar o app onde ele está acostumado a procurar,
-(b) instalar em 1 toque em vez de 4, (c) o botão Compartilhar do WhatsApp funcionar sem Atalho.
-São ganhos de **adoção e credibilidade**, e para uma venda B2B com 150 corretores de iPhone isso
-tem peso comercial de verdade — só não é uma questão de "funciona ou não funciona".
+**O Atalho da v1035 não resolve e deve ser considerado morto como caminho comercial.** Além de
+depender de uma chave que nunca foi cadastrada no servidor (`ATALHO_ZIP_TOKEN_SECRET`, ver seção
+7), ele exige que cada corretor monte o atalho à mão. O próprio dono tentou e desistiu:
+*"pareceu complicado demais e muita coisa pra fazer. Eu não consegui nem entender."* Se ele não
+conseguiu, nenhum corretor vai conseguir.
+
+**Conclusão:** o aplicativo na App Store, com a extensão de compartilhamento, é a **única** forma
+de o Corretor Pro existir para 97% dos corretores. Não é ganho de adoção nem de credibilidade —
+é a diferença entre o sistema ter ou não ter clientes.
 
 ---
 
@@ -137,16 +141,16 @@ empresta um Mac pela internet:
 
 ## 5. Recomendação
 
-**Fazer, e fazer na ordem certa — mas sem parar de vender enquanto isso.**
+**Fazer, e começar pela conta da Apple — é o item de prazo mais longo e nada anda sem ele.**
 
-- **Agora (custo zero):** vender pro corretor de iPhone com o caminho que já existe — Safari →
-  Adicionar à Tela de Início → configurar o Atalho uma vez. Isso já entrega o produto inteiro. Se
-  a instalação no iPhone estiver travando alguém na prática, isso vira prioridade de ajuste na
-  tela, não de App Store.
-- **Em paralelo:** abrir a conta na Apple (é o item de prazo mais longo, sobretudo se for como
-  empresa) e começar a construção da casca.
+- **Não existe plano B enquanto isso.** A versão anterior deste documento sugeria "continuar
+  vendendo pro iPhone pelo caminho de hoje". Não há caminho de hoje. Vender pra corretor de iPhone
+  antes do app pronto é vender o que ele não vai conseguir usar.
 - **Não fazer:** reescrever o sistema em linguagem de aplicativo. Seria meses de trabalho, jogaria
   fora 1.200 versões de refinamento e acabaria com a atualização diária sem passar pela Apple.
+- **Não fazer:** insistir no Atalho como solução para o corretor. Ele pode, no máximo, servir de
+  ponte para uns poucos corretores enquanto o app não sai — e só se o dono cadastrar a chave que
+  falta (seção 7) e alguém montar o atalho pronto pra eles.
 
 ---
 
@@ -159,3 +163,27 @@ empresta um Mac pela internet:
    compartilhamento → notificações → ficha da loja.
 4. Primeiro envio com login de teste pronto pro avaliador.
 5. Publicado, o app passa a receber as atualizações do site sem novo envio.
+
+---
+
+## 7. A chave do Atalho que nunca foi cadastrada (`ATALHO_ZIP_TOKEN_SECRET`)
+
+Registro pra não se perder, e como lição sobre pendências que dependem do dono.
+
+A v1035 (13/07/2026) construiu o Atalho do iPhone inteiro — as duas rotas, a chave assinada, os
+testes — e terminou com um "passo obrigatório antes de funcionar em produção": cadastrar a variável
+`ATALHO_ZIP_TOKEN_SECRET` no painel da Vercel. **Isso nunca foi feito.** Confirmado pelo dono em
+11/08/2026: *"nunca cadastrei nada, porque pareceu complicado demais"*.
+
+Consequência: desde a v1035 o cartão "Compartilhar direto do WhatsApp (iPhone)" existe no Menu, o
+botão "Gerar minha chave" aparece — e responde erro para qualquer corretor que tente. **O recurso
+esteve quebrado por 13 meses sem ninguém saber**, e o `ESTADO-ATUAL.md` seguiu listando o Atalho
+como se cobrisse a necessidade do iPhone.
+
+Duas lições para as próximas sessões:
+
+- **Funcionalidade que depende de um passo manual do dono não está pronta quando o código está
+  pronto.** Ou se confirma o passo, ou o app precisa dizer na tela que aquilo está indisponível —
+  não pode oferecer um botão que só dá erro.
+- **Não escrever no `ESTADO-ATUAL.md` que algo "cobre a necessidade" sem que alguém tenha usado
+  aquilo de verdade, ponta a ponta, no aparelho real.**
