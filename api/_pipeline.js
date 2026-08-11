@@ -2600,6 +2600,14 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     hoje = _agoraDt.toISOString().slice(0, 10);
     dataHoraAtualAnalise = _agoraDt.toISOString();
   }
+  // v1218 — print do dono às 17h37: a sugestão abria com "Boa noite". A hora certa já ia no
+  // prompt, mas a RÉGUA não, e a IA chutava a faixa. Agora a saudação certa vai pronta.
+  // A régua é a mesma de js/saudacao.js (a saudação da Home) — se mudar lá, muda aqui.
+  let horaAnalise = _agoraDt.getHours();
+  try {
+    horaAnalise = Number(new Intl.DateTimeFormat("en-GB", { timeZone: fusoAnalise, hour: "2-digit", hour12: false }).format(_agoraDt));
+  } catch (_) { /* fica a hora do servidor */ }
+  const saudacaoDoHorario = horaAnalise < 12 ? "Bom dia" : horaAnalise < 18 ? "Boa tarde" : "Boa noite";
   const configCerebro = await loadCerebroConfig(cerebroConfig, organizationId).catch(() => null);
   // v1132 — MODO PRÉVIA (conta nova, Cérebro ainda vazio).
   //
@@ -2767,6 +2775,7 @@ Responda somente com JSON válido no formato solicitado.`;
 
 Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
 Fuso horário da análise: ${fusoAnalise}
+Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília).
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.

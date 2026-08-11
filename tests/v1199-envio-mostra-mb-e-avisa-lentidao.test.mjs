@@ -13,9 +13,11 @@ import assert from 'node:assert/strict';
 const src = fs.readFileSync(new URL('../js/importacao.js', import.meta.url), 'utf8');
 
 // 1. O texto mostrado durante o envio inclui MB enviados / MB totais, não só a porcentagem crua.
+// v1217 — o texto ganhou o sufixo da tentativa (o envio agora se repete sozinho quando a
+// conexão cai), mas o "X de Y MB" que esta guarda existe pra proteger continua ali.
 assert.match(
   src,
-  /renderEtapas\(1, `enviando a conversa — \$\{enviadoMb\} de \$\{totalMb\.toFixed\(1\)\} MB`\);/,
+  /renderEtapas\(1, `enviando a conversa — \$\{enviadoMb\} de \$\{totalMb\.toFixed\(1\)\} MB\$\{sufixo\}`\);/,
   'o progresso do envio precisa mostrar "X de Y MB", não só a porcentagem'
 );
 
@@ -23,13 +25,17 @@ assert.match(
 assert.match(src, /const vigiaLentidao = setInterval\(/, 'precisa existir um vigia de lentidão do envio');
 assert.match(
   src,
-  /está lento, aguarde ou tente de novo em instantes/,
+  /está lento, aguarde — se a conexão cair o app tenta de novo sozinho/,
   'o aviso de lentidão precisa deixar claro que não travou, só está demorando'
 );
 
 // 3. O vigia é encerrado tanto no sucesso/erro HTTP quanto na falha de conexão — nunca fica
 // rodando pra sempre depois que o envio termina.
-assert.match(src, /xhr\.onload = function\(\)\{\s*\n\s*clearInterval\(vigiaLentidao\);/, 'onload precisa parar o vigia');
-assert.match(src, /xhr\.onerror = function\(\)\{ clearInterval\(vigiaLentidao\);/, 'onerror precisa parar o vigia');
+// v1217 — quem para o vigia virou encerrar(), chamado nas TRÊS saídas do envio (sucesso/erro
+// HTTP, queda de conexão e corte por envio parado).
+assert.match(src, /const encerrar = \(\) => \{ clearInterval\(vigiaLentidao\); \};/, 'precisa existir um único jeito de parar o vigia');
+assert.match(src, /xhr\.onload = function\(\)\{\s*\n\s*encerrar\(\);/, 'onload precisa parar o vigia');
+assert.match(src, /xhr\.onerror = function\(\)\{ encerrar\(\);/, 'onerror precisa parar o vigia');
+assert.match(src, /xhr\.onabort = function\(\)\{ encerrar\(\);/, 'o corte por envio parado precisa parar o vigia');
 
 console.log('v1199-envio-mostra-mb-e-avisa-lentidao: ok');

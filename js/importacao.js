@@ -17,6 +17,12 @@
 import { state } from './state.js?v=__VERSION__';
 import { qs, escapeHtml, toast } from './dom.js?v=__VERSION__';
 import {
+  TENTATIVAS_ENVIO,
+  classificarFalhaEnvio,
+  enviarComRetentativa,
+  passouDoTempoParado
+} from './envio-retentativa.js?v=__VERSION__';
+import {
   CP_IMPORT_PENDENTE_KEY,
   CP_IMPORT_PENDENTE_VALIDADE_MS,
   KEEP_RE,
@@ -245,78 +251,116 @@ async function uploadLargeZipToSupabase(file, options = {}){
   state.activeImportId = importId;
   renderEtapas(1, "preparando envio seguro");
 
-  const metaRes = await fetch("./api/criar-upload-url", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      fileName:file.name,
-      size:file.size,
-      contentType:file.type || "application/zip",
-      importId
-    })
-  });
+  const totalMb = file.size / 1024 / 1024;
 
-  let meta;
-  try{ meta = await metaRes.json(); }
-  catch(e){ throw new Error("A rota de upload grande não respondeu em JSON."); }
+  async function pedirUrlDeEnvio(){
+    const metaRes = await fetch("./api/criar-upload-url", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        fileName:file.name,
+        size:file.size,
+        contentType:file.type || "application/zip",
+        importId
+      })
+    });
 
-  if(!metaRes.ok || !meta.ok){
-    const partesErro = [
-      meta.error,
-      meta.details,
-      meta.bucket ? `Armazenamento: ${meta.bucket}` : "",
-      meta.bucketWarning ? `Aviso: ${meta.bucketWarning}` : ""
-    ].filter(Boolean);
-    throw new Error(partesErro.join("\n") || "Não foi possível preparar o upload grande.");
+    let meta;
+    try{ meta = await metaRes.json(); }
+    catch(e){ throw new Error("A rota de upload grande não respondeu em JSON."); }
+
+    if(!metaRes.ok || !meta.ok){
+      const partesErro = [
+        meta.error,
+        meta.details,
+        meta.bucket ? `Armazenamento: ${meta.bucket}` : "",
+        meta.bucketWarning ? `Aviso: ${meta.bucketWarning}` : ""
+      ].filter(Boolean);
+      throw new Error(partesErro.join("\n") || "Não foi possível preparar o upload grande.");
+    }
+
+    // Use a signed URL retornada pelo backend e faça PUT direto (compatível com Supabase).
+    // Isso evita depender do cliente supabase-js no navegador para uploads assinados.
+    const signedUrl = meta.signedUrl || meta.signedurl || meta.signed_url;
+    if(!signedUrl){ throw new Error("Não consegui preparar o envio agora. Tente novamente em alguns segundos."); }
+    return { meta, signedUrl };
   }
 
-  renderEtapas(1, "enviando a conversa");
+  // Uma tentativa de PUT. Erros de CONEXÃO (queda da rede, envio parado) e erros temporários do
+  // servidor (5xx) são marcados com cpPodeTentarDeNovo pra o laço abaixo repetir sozinho; recusa
+  // do arquivo (4xx) não é repetida, porque repetir daria o mesmo resultado.
+  function enviarUmaVez(signedUrl, tentativa, tentativas){
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', signedUrl, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/zip');
+      xhr.setRequestHeader('x-upsert', 'true');
+      // v1199 — pedido do dono: quando o envio demora, ele não tinha como saber se estava
+      // progredindo devagar ou se o app tinha travado (aconteceu com um ZIP pequeno, de só 5
+      // mensagens — nada a ver com tamanho de arquivo). Agora mostra quantos MB já foram enviados
+      // de verdade, e avisa se passar um tempo sem nenhum byte novo.
+      const sufixo = tentativa > 1 ? ` · tentativa ${tentativa} de ${tentativas}` : "";
+      let ultimoLoaded = 0, ultimoProgressoEm = Date.now(), desistiuPorParada = false;
+      const encerrar = () => { clearInterval(vigiaLentidao); };
+      xhr.upload.onprogress = function(evt){
+        if(!evt.lengthComputable) return;
+        const pct = Math.round((evt.loaded/evt.total)*60) + 20; // map progress into 20-80%
+        qs("#progressBar").style.width = Math.min(95, pct) + "%";
+        if(evt.loaded !== ultimoLoaded){ ultimoLoaded = evt.loaded; ultimoProgressoEm = Date.now(); }
+        const enviadoMb = (evt.loaded/1024/1024).toFixed(1);
+        renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB${sufixo}`);
+      };
+      const vigiaLentidao = setInterval(() => {
+        const parado = Date.now() - ultimoProgressoEm;
+        if(parado < 12000) return;
+        const enviadoMb = (ultimoLoaded/1024/1024).toFixed(1);
+        // v1217 — antes o vigia só AVISAVA que estava parado e ficava avisando pra sempre: num
+        // celular que perde o sinal no meio do envio, o XHR pode nunca disparar erro nenhum e a
+        // importação ficava presa no mesmo número de MB. Passados 90s sem UM byte novo, corta a
+        // tentativa — o laço de fora recomeça o envio, que é o que o dono faria na mão.
+        if(passouDoTempoParado(parado)){
+          desistiuPorParada = true;
+          encerrar();
+          try{ xhr.abort(); }catch(_){ }
+          return;
+        }
+        renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB, está lento, aguarde — se a conexão cair o app tenta de novo sozinho${sufixo}`);
+      }, 4000);
+      const falha = (dados) => reject(classificarFalhaEnvio({ ...dados, totalMb, enviadoMb: ultimoLoaded/1024/1024 }));
+      xhr.onload = function(){
+        encerrar();
+        if(xhr.status>=200 && xhr.status<300){ resolve(); return; }
+        falha({ tipo:"http", status: xhr.status });
+      };
+      xhr.onerror = function(){ encerrar(); falha({ tipo:"rede" }); };
+      xhr.onabort = function(){ encerrar(); falha({ tipo: desistiuPorParada ? "parado" : "abortado" }); };
+      xhr.send(file);
+    });
+  }
 
-  // Use a signed URL retornada pelo backend e faça PUT direto (compatível com Supabase).
-  // Isso evita depender do cliente supabase-js no navegador para uploads assinados.
-  const signedUrl = meta.signedUrl || meta.signedurl || meta.signed_url;
-  if(!signedUrl){ throw new Error("Não consegui preparar o envio agora. Tente novamente em alguns segundos."); }
-
-  // Enviar com XHR para acompanhar progresso
-  await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', signedUrl, true);
-    xhr.setRequestHeader('Content-Type', file.type || 'application/zip');
-    xhr.setRequestHeader('x-upsert', 'true');
-    // v1199 — pedido do dono: quando o envio demora, ele não tinha como saber se estava
-    // progredindo devagar ou se o app tinha travado (aconteceu com um ZIP pequeno, de só 5
-    // mensagens — nada a ver com tamanho de arquivo). Agora mostra quantos MB já foram enviados
-    // de verdade, e avisa se passar um tempo sem nenhum byte novo — sem cancelar nada sozinho,
-    // só deixando claro que ainda está tentando.
-    const totalMb = file.size / 1024 / 1024;
-    let ultimoLoaded = 0, ultimoProgressoEm = Date.now();
-    xhr.upload.onprogress = function(evt){
-      if(!evt.lengthComputable) return;
-      const pct = Math.round((evt.loaded/evt.total)*60) + 20; // map progress into 20-80%
-      qs("#progressBar").style.width = Math.min(95, pct) + "%";
-      if(evt.loaded !== ultimoLoaded){ ultimoLoaded = evt.loaded; ultimoProgressoEm = Date.now(); }
-      const enviadoMb = (evt.loaded/1024/1024).toFixed(1);
-      renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB`);
-    };
-    const vigiaLentidao = setInterval(() => {
-      if(Date.now() - ultimoProgressoEm < 12000) return;
-      const enviadoMb = (ultimoLoaded/1024/1024).toFixed(1);
-      renderEtapas(1, `enviando a conversa — ${enviadoMb} de ${totalMb.toFixed(1)} MB, está lento, aguarde ou tente de novo em instantes`);
-    }, 4000);
-    xhr.onload = function(){
-      clearInterval(vigiaLentidao);
-      if(xhr.status>=200 && xhr.status<300){ resolve(); return; }
-      let detail = (xhr.responseText || '').slice(0, 400);
-      try{
-        const parsed = JSON.parse(xhr.responseText);
-        detail = parsed.message || parsed.error || parsed.statusText || detail;
-      }catch(_){}
-      const sizeMb = (file.size/1024/1024).toFixed(1);
-      reject(new Error('O envio da conversa não foi aceito (o arquivo pode estar grande demais — ' + sizeMb + ' MB). Tente uma conversa menor ou tente de novo em instantes.'));
-    };
-    xhr.onerror = function(){ clearInterval(vigiaLentidao); reject(new Error('Falha de conexão durante o envio. Verifique a internet e tente novamente.')); };
-    xhr.send(file);
+  // v1217 — print do dono: ZIP de 54 MB no 4G morria na PRIMEIRA queda de conexão, com
+  // "Falha de conexão durante o envio" e nada mais acontecendo até ele tocar em "Tentar
+  // novamente" (que recomeçava tudo, inclusive o preparo do ZIP). Agora o próprio app repete o
+  // envio, pedindo uma URL nova a cada tentativa (a anterior pode ter expirado) — o ZIP já
+  // preparado é reaproveitado, então a repetição é só o envio. A regra em si mora em
+  // js/envio-retentativa.js pra o teste conseguir executá-la de verdade.
+  const vencedor = await enviarComRetentativa({
+    totalMb,
+    pedirUrl: () => pedirUrlDeEnvio(),
+    enviar: (preparo, tentativa) => enviarUmaVez(preparo.signedUrl, tentativa, TENTATIVAS_ENVIO),
+    esperar: (ms) => new Promise(r => setTimeout(r, ms)),
+    avisar: (evento) => {
+      if(evento.fase === "enviando"){
+        renderEtapas(1, evento.tentativa === 1
+          ? "enviando a conversa"
+          : `reenviando a conversa (tentativa ${evento.tentativa} de ${evento.tentativas})`);
+        return;
+      }
+      qs("#progressBar").style.width = "20%";
+      renderEtapas(1, `a conexão caiu com ${evento.enviadoMb.toFixed(1)} de ${totalMb.toFixed(1)} MB enviados — recomeçando o envio em instantes (${evento.tentativa + 1} de ${evento.tentativas})`);
+    }
   });
+  const meta = vencedor.meta;
 
   qs("#progressBar").style.width="80%";
   state.ultimoUploadStorage = { bucket: meta.bucket, path: meta.path, importId };
