@@ -27,6 +27,24 @@ const MODELOS_PADRAO = {
 
 export const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
 
+// v1220 — VERSÃO DAS REGRAS DE MENSAGEM.
+//
+// "continua sugerindo opções novas mesmo sem eu ter mencionado isso, mesmo na nova atualização"
+// (dono, 11/08/2026, 18h33). A regra nova da v1219 estava no ar — mas as três mensagens do print
+// eram IDÊNTICAS, palavra por palavra, às de 40 minutos antes. Não eram mensagens novas: a
+// reimportação sem novidade REAPROVEITA a análise já salva (economia da v1141), e a análise salva
+// tinha nascido sob as regras antigas. Ou seja: mudar a regra não alcançava nada do que já estava
+// guardado, e pro dono parecia que a correção não funcionou.
+//
+// Esta marca resolve isso: toda análise carimba sob QUAIS regras nasceu, e o reaproveitamento só
+// vale quando a marca é a atual. Mudou regra de mensagem? Troque este texto na mesma versão — a
+// próxima reimportação daquele cliente refaz a análise em vez de devolver o texto velho.
+//
+// (Deliberadamente separada de ARQUITETURA_MENSAGENS_ATUAL: aquela é lida pela TELA pra decidir se
+// a análise ainda pode ser exibida — mexer nela marcaria toda a carteira como "reanalise", que não
+// é o caso aqui. A análise antiga continua exibível; ela só não serve mais como atalho.)
+export const REGRAS_MENSAGENS_VERSAO = "v1219-sem-acao-nem-novidade-inventada";
+
 function envModel(name, fallback) {
   const v = String(process.env[name] || "").trim();
   return v || fallback;
@@ -3079,6 +3097,8 @@ ${timelineText}`;
       raciocinioComercial: null,
       estrategia: clean(raw.estrategiaMensagem),
       arquiteturaMensagens: ARQUITETURA_MENSAGENS_ATUAL,
+      // v1220 — sob quais regras de mensagem esta análise nasceu (ver REGRAS_MENSAGENS_VERSAO).
+      regrasMensagensVersao: REGRAS_MENSAGENS_VERSAO,
       modeloMensagens: modeloAnalise(),
       _modelo: completion?.model || modeloAnalise(),
       _modeloMensagens: null,
@@ -3503,6 +3523,10 @@ function analiseAnteriorReutilizavel(previousAnalysis) {
   // reaproveitada se ela puder ser exibida como está. Não podendo, a IA roda — isso não é
   // retrabalho, é a única forma de a exportação entregar o que ele espera.
   if (String(a.arquiteturaMensagens || "") !== ARQUITETURA_MENSAGENS_ATUAL) return null;
+  // v1220 — análise escrita sob regras ANTIGAS não serve de atalho: devolver o texto velho é
+  // devolver o defeito que a regra nova acabou de proibir (foi exatamente o que aconteceu com as
+  // "opções novas" que o corretor nunca ofereceu). Sem a marca atual, a IA roda de novo.
+  if (String(a.regrasMensagensVersao || "") !== REGRAS_MENSAGENS_VERSAO) return null;
   if (["erro_api", "sem_api", "reconciliacao_local", "reanalise_pendente"].includes(String(a.mode || ""))) return null;
   if (a.sugestoesPendentes === true) return null;
   const m = a.messages && typeof a.messages === "object" ? a.messages : {};

@@ -168,6 +168,12 @@
     </section>
 
     <section id="zip" class="screen">
+      <!-- v1220 — A DECISÃO FICA NO TOPO. A pergunta "é o mesmo cliente?" nascia lá embaixo, dentro
+           do card de Resultado, depois da análise inteira: o dono precisava rolar a tela pra achar
+           o que o app estava esperando — e, sem ver a pergunta, a leitura é de que travou. Ela
+           passa a ser desenhada aqui, a primeira coisa da tela, e a página volta pro topo quando
+           ela aparece. Fica escondido enquanto não há decisão pendente. -->
+      <div class="card compact" id="perguntaTopo" hidden></div>
       <div class="card compact" id="importCard">
         <div class="label">Importar conversa</div>
         <div class="small" id="importAjuda" style="color:var(--muted);margin-bottom:10px;line-height:1.6">Sempre direto do WhatsApp: abra a conversa, toque em "⋮" → "Mais" → "Exportar conversa" → "Incluir mídia" e compartilhe o ZIP com o Corretor Pro. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.</div>
