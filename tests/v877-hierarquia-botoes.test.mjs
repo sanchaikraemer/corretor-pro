@@ -32,9 +32,12 @@ assert.ok(
   /\.cp704-attended\{border:1px solid var\(--accent\);background:var\(--accent\);color:#fff/.test(app),
   "cp704-attended deveria ser coral (ação principal)"
 );
+// v1214 — o "concluído" deixou de ser verde-lima cravado e passou a usar o token de confirmação
+// (--acao, hoje o ciano da identidade). A regra que este item guarda é a HIERARQUIA — ação
+// principal coral, concluído em outra cor, sem cor solta fora da paleta —, não o verde em si.
 assert.ok(
-  /\.cp704-attended:disabled\{opacity:1;background:rgba\(104,255,149/.test(app),
-  "cp704-attended:disabled deveria ficar verde (concluído)"
+  /\.cp704-attended:disabled\{opacity:1;background:var\(--acao-soft\);border-color:var\(--acao-line\);color:var\(--acao\)/.test(app),
+  "cp704-attended:disabled deveria usar o token de confirmação (--acao), não uma cor cravada"
 );
 
 // 4. "Reanalisar" perde o destaque ciano (fica neutro).

@@ -26,14 +26,19 @@
   --lime:#FF6258;
   --wa:#FF6258;             /* LIME do CTA do WhatsApp */
   --green:#A6E800;          /* base verde do CTA WhatsApp */
-  /* status */
-  --acao:#79E08A;           /* positivo */
-  --timing:#EC85B0;         /* lembrete / timing (rosa suave) */
+  /* status — v1214: fora o verde-lima e o rosa. Confirmação/agenda usam o CIANO da identidade
+     (mesma família do --dados) e risco usa o VERMELHO do sistema; coral segue sendo a marca. */
+  --acao:#56C7F2;           /* confirmado / agenda (ciano da identidade) */
+  --acao-soft:rgba(86,199,242,.10);
+  --acao-line:rgba(86,199,242,.34);
+  --timing:#56C7F2;         /* lembrete / timing — mesma família do agendado */
   --cerebro:#9B8CFF;        /* roxo: negociação/cérebro */
   --morno:#B8C2C9;          /* v942: era amarelo queimado (#F5C36B) — dono pediu cinza claro em todo o app */
-  --risco:#F4768A;          /* negativo / risco */
-  --pink:#EC85B0;
-  --red:#F4768A;
+  --risco:#E35454;          /* negativo / risco (--status-danger do sistema) */
+  --risco-soft:rgba(227,84,84,.12);
+  --risco-line:rgba(227,84,84,.38);
+  --pink:#56C7F2;
+  --red:#E35454;
   --radius:14px;
   --shadow:none;
   --font-display:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
@@ -71,7 +76,7 @@ h1{font-size:28px;line-height:1;margin:0;letter-spacing:-.05em}
 .btn.secondary{background:rgba(255,255,255,.055);color:var(--text);border:1px solid var(--line);box-shadow:none}
 .btn:disabled,.btn[disabled]{opacity:.45!important;cursor:not-allowed!important;filter:grayscale(.35);pointer-events:none}
 .btn.cyan{background:var(--accent)}
-.btn.danger{background:rgba(255,91,122,.12);color:#ffdbe2;border:1px solid rgba(255,91,122,.25);box-shadow:none}
+.btn.danger{background:var(--risco-soft);color:#ffdbe2;border:1px solid var(--risco-line);box-shadow:none}
 @keyframes barraInd{0%{left:-40%}100%{left:100%}}
 .lead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.035);padding:14px;margin-top:10px}
 .lead strong{display:block;font-size:16px;margin-bottom:4px}
@@ -82,7 +87,7 @@ label{display:block;color:var(--muted);font-size:14px;margin:14px 0 7px}
 .timeline{border-left:2px solid rgba(55,232,255,.32);padding-left:13px;margin-top:10px;max-height:560px;overflow:auto}
 .event{padding:9px 0}.event b{font-size:13px}.event p{font-size:13px;line-height:1.35;color:var(--muted);margin:4px 0 0;white-space:pre-wrap}
 .notice{padding:13px;border-radius:18px;border:1px solid rgba(255,98,88,.22);background:rgba(255,98,88,.08);color:#edfbc4;font-size:13px;line-height:1.42;margin:12px 0}
-.notice.error{border-color:rgba(255,91,122,.28);background:rgba(255,91,122,.10);color:#ffdbe2}
+.notice.error{border-color:var(--risco-line);background:var(--risco-soft);color:#ffdbe2}
 .empty{border:1px dashed rgba(255,255,255,.16);border-radius:18px;padding:18px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.45}
 .file-name{display:none;border-top:1px solid var(--line);padding-top:10px;color:#dffbff;font-size:13px;line-height:1.35;word-break:break-word}.file-name.show{display:block}
 .processing{display:none;margin-top:10px}.processing.show{display:block}
@@ -253,9 +258,9 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 
 /* Topo: sino + avatar (desktop) */
 /* Sino com compromisso de hoje: badge vermelho + balança/pulsa pra "gritar" */
-.bell-badge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#ff3b30;color:#fff;font-size:10px;font-weight:900;line-height:17px;text-align:center;border:2px solid var(--bg);box-sizing:content-box;pointer-events:none}
+.bell-badge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--risco);color:#fff;font-size:10px;font-weight:900;line-height:17px;text-align:center;border:2px solid var(--bg);box-sizing:content-box;pointer-events:none}
 @keyframes bellShake{0%,78%,100%{transform:rotate(0)}82%{transform:rotate(-14deg)}86%{transform:rotate(12deg)}90%{transform:rotate(-8deg)}94%{transform:rotate(5deg)}}
-@keyframes bellPulse{0%{box-shadow:0 0 0 0 rgba(255,59,48,.6)}70%{box-shadow:0 0 0 7px rgba(255,59,48,0)}100%{box-shadow:0 0 0 0 rgba(255,59,48,0)}}
+@keyframes bellPulse{0%{box-shadow:0 0 0 0 var(--risco-line)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
 /* Raio-X da carteira: no celular aparece embaixo da lista; no desktop vai pra coluna direita */
 
 /* Home: centro + coluna direita */
@@ -463,13 +468,17 @@ html[data-theme="dark"]{
   --lime:#FF6258;
   --wa:#25D366;
   --green:#25D366;
-  --acao:#70D49D;
-  --timing:#E89BB7;
+  --acao:#61C7E8;           /* v1214 — confirmado/agenda em ciano (era verde #70D49D) */
+  --acao-soft:rgba(97,199,232,.12);
+  --acao-line:rgba(97,199,232,.38);
+  --timing:#61C7E8;         /* v1214 — lembrete/timing (era rosa #E89BB7) */
   --cerebro:#A99AF8;
   --morno:#C2CBD1;
-  --risco:#F07F8E;
-  --pink:#E89BB7;
-  --red:#F07F8E;
+  --risco:#E35454;          /* v1214 — vermelho do sistema (era o salmão #F07F8E) */
+  --risco-soft:rgba(227,84,84,.14);
+  --risco-line:rgba(227,84,84,.42);
+  --pink:#61C7E8;
+  --red:#E35454;
   --on-accent:#FFFFFF;
   --surface-soft:rgba(230,238,240,.045);
   --surface-hover:rgba(230,238,240,.075);
@@ -501,13 +510,17 @@ html[data-theme="light"]{
   --lime:#FF6258;
   --wa:#1FB65B;
   --green:#1FB65B;
-  --acao:#218B5B;
-  --timing:#B85A7D;
+  --acao:#238AB3;           /* v1214 — confirmado/agenda em ciano (era verde #218B5B) */
+  --acao-soft:rgba(35,138,179,.10);
+  --acao-line:rgba(35,138,179,.34);
+  --timing:#238AB3;         /* v1214 — lembrete/timing (era rosa #B85A7D) */
   --cerebro:#6D5EC8;
   --morno:#6E7A82;
-  --risco:#CC4E61;
-  --pink:#B85A7D;
-  --red:#CC4E61;
+  --risco:#C9453C;          /* v1214 — vermelho do sistema (era o vinho-rosado #CC4E61) */
+  --risco-soft:rgba(201,69,60,.10);
+  --risco-line:rgba(201,69,60,.34);
+  --pink:#238AB3;
+  --red:#C9453C;
   --on-accent:#FFFFFF;
   --surface-soft:rgba(12,29,36,.035);
   --surface-hover:rgba(12,29,36,.06);
@@ -757,7 +770,7 @@ html[data-theme="dark"]{
   --cp-muted:#8FA0A8;       /* Auxiliar */
   --cp-coral:#FF6258;       /* Coral oficial */
   --cp-coral-2:#FF6258;
-  --cp-green:#31cd73;
+  --cp-green:#61C7E8;   /* v1214 — era verde */
   --cp-orange:#ffad42;
   --cp-blue:#55b8e8;
   --cp-slate:#315766;
@@ -794,7 +807,7 @@ html[data-theme="light"]{
   --cp-muted:#7E8D94;       /* Auxiliar */
   --cp-coral:#FF6258;
   --cp-coral-2:#FF6258;
-  --cp-green:#22b867;
+  --cp-green:#238AB3;   /* v1214 — era verde */
   --cp-orange:#ffa32d;
   --cp-blue:#4aa8dd;
   --cp-slate:#cad5da;
@@ -1085,10 +1098,10 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .cp1208-agendar .cp1208-chips{display:flex;flex-wrap:wrap;gap:6px}
 .cp1208-agendar .cp1208-chip{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--soft);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;line-height:1;cursor:pointer;min-height:36px}
 .cp1208-agendar .cp1208-chip:hover{border-color:rgba(255,255,255,.28)}
-.cp1208-agendar .cp1208-chip.ativo{border-color:var(--acao,#68FF95);background:rgba(104,255,149,.15);color:var(--acao,#68FF95)}
+.cp1208-agendar .cp1208-chip.ativo{border-color:var(--acao);background:var(--acao-soft);color:var(--acao)}
 .cp1208-agendar .cp1208-campo{color-scheme:dark;width:100%;box-sizing:border-box;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:11px;padding:12px 13px;font-size:16px;font-family:inherit;min-height:48px}
-.cp1208-agendar .cp1208-campo:focus{outline:none;border-color:var(--acao,#68FF95)}
-.cp1208-agendar .cp1208-ok{width:100%;background:var(--acao,#68FF95);color:#04371F;border:1px solid var(--acao,#68FF95);border-radius:12px;padding:14px;font-size:14px;font-weight:950;cursor:pointer;min-height:50px}
+.cp1208-agendar .cp1208-campo:focus{outline:none;border-color:var(--acao)}
+.cp1208-agendar .cp1208-ok{width:100%;background:var(--acao);color:#052B36;border:1px solid var(--acao);border-radius:12px;padding:14px;font-size:14px;font-weight:950;cursor:pointer;min-height:50px}
 .cp1208-agendar .cp1208-resumo{font-size:12px;color:var(--muted);line-height:1.4;text-align:center}
 /* A caixa do "Reagendar" no cartão da Agenda (o painel é o mesmo, só muda a moldura). */
 .cp1208-caixa{margin-top:6px;background:var(--input);border:1px solid var(--line);border-radius:12px;padding:11px;flex-direction:column;min-width:min(280px,100%);flex:1 1 100%}
@@ -1444,11 +1457,11 @@ html[data-theme="light"] .cp704-reanalyse:hover{background:#f8fbfc!important;bor
    e nada muda de cor, que foi exatamente o que ele relatou. */
 html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada{background:rgba(255,98,88,.10)!important;border-color:var(--cp-coral)!important}
 html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada .cp704-copy{background:var(--cp-coral)!important;border-color:transparent!important;color:#ffffff!important}
-html[data-theme="light"] .cp704-attended:disabled{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.4)!important;color:#138348!important}
+html[data-theme="light"] .cp704-attended:disabled{background:var(--acao-soft)!important;border-color:rgba(34,184,103,.4)!important;color:var(--acao)!important}
 html[data-theme="light"] .cp704-pill{background:rgba(255,163,45,.12)!important;border-color:rgba(255,163,45,.42)!important;color:#9b5b00!important}
-html[data-theme="light"] .cp704-pill.green{background:rgba(34,184,103,.10)!important;border-color:rgba(34,184,103,.40)!important;color:#138348!important}
+html[data-theme="light"] .cp704-pill.green{background:var(--acao-soft)!important;border-color:var(--acao-line)!important;color:var(--acao)!important}
 html[data-theme="light"] .cp704-pill.red{background:rgba(255,98,88,.10)!important;border-color:rgba(255,98,88,.38)!important;color:#c93a32!important}
-html[data-theme="light"] .cp704-ai i{color:#138348!important}
+html[data-theme="light"] .cp704-ai i{color:var(--acao)!important}
 html[data-theme="light"] .cp704-dot.you{background:var(--cp-coral)!important}
 
 /* Formulários e botões no claro */
@@ -1679,19 +1692,19 @@ html[data-theme="light"] [style*="color: #ffc"]{
   height:18px!important;
   padding:0 5px!important;
   border-radius:999px!important;
-  background:#ff3b30!important;
+  background:var(--risco)!important;
   color:#fff!important;
   font-size:11px!important;
   font-weight:950!important;
   line-height:14px!important;
   text-align:center!important;
-  box-shadow:0 0 0 4px rgba(255,59,48,.22)!important;
+  box-shadow:0 0 0 4px var(--risco-line)!important;
 }
 /* O sino inteiro assume a cor de risco quando há atraso, pra chamar atenção antes de abrir. */
 #topBell.tem-atraso{
   color:#fff!important;
-  border-color:rgba(255,59,48,.85)!important;
-  background:rgba(255,59,48,.20)!important;
+  border-color:var(--risco-line)!important;
+  background:var(--risco-soft)!important;
 }
 
 /* v1168 — mesma correção do bloco #1093 acima, agora pra quem tem agenda HOJE mas AINDA não
@@ -1706,13 +1719,13 @@ html[data-theme="light"] [style*="color: #ffc"]{
   height:18px!important;
   padding:0 5px!important;
   border-radius:999px!important;
-  background:var(--acao, #68FF95)!important;
-  color:#04371F!important;
+  background:var(--acao)!important;
+  color:#052B36!important;
   font-size:11px!important;
   font-weight:950!important;
   line-height:14px!important;
   text-align:center!important;
-  box-shadow:0 0 0 4px rgba(104,255,149,.24)!important;
+  box-shadow:0 0 0 4px var(--acao-line)!important;
 }
 
 /* Atualização #788 — Atendimentos reais, em ordem cronológica */
@@ -1720,11 +1733,11 @@ html[data-theme="light"] [style*="color: #ffc"]{
 .cp788-att-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
 .cp788-att-head h2{margin:0;color:var(--text);font-size:32px;line-height:1;font-weight:950;letter-spacing:-.045em}
 .cp788-att-head p{margin:9px 0 0;color:var(--muted);font-size:14px;line-height:1.4}
-.cp788-att-head>span{flex:0 0 auto;padding:7px 11px;border:1px solid rgba(104,255,149,.28);border-radius:999px;background:rgba(104,255,149,.07);color:#68ff95;font-size:12px;font-weight:950}
+.cp788-att-head>span{flex:0 0 auto;padding:7px 11px;border:1px solid var(--acao-line);border-radius:999px;background:var(--acao-soft);color:var(--acao);font-size:12px;font-weight:950}
 .cp788-att-empty,.cp788-att-loading{min-height:230px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:28px;border:1px solid rgba(255,255,255,.10);border-radius:18px;background:rgba(7,52,64,.58);text-align:center;color:var(--muted)}
 .cp788-att-empty b,.cp788-att-loading b{color:var(--text);font-size:17px}
 .cp788-att-empty span,.cp788-att-loading span{max-width:440px;font-size:13px;line-height:1.45}
-.cp788-att-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.15);border-top-color:#68ff95;animation:cp788spin .8s linear infinite}
+.cp788-att-loading i{width:30px;height:30px;border-radius:999px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--acao);animation:cp788spin .8s linear infinite}
 @keyframes cp788spin{to{transform:rotate(360deg)}}
 @media(max-width:760px){
   .cp788-att-page{padding-bottom:calc(145px + env(safe-area-inset-bottom,0px))}
