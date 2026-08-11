@@ -10130,7 +10130,15 @@ function cp786CompromissoAtrasado(l){
   if(typeof ehContatadoHoje==='function' && ehContatadoHoje(l)) return null;
   const JANELA=60; // mantém o compromisso vencido em destaque por um bom tempo, até ser atendido
   let melhor=null; // vencido mais RECENTE (diff negativo mais próximo de zero)
-  const considerar=(diff,ts)=>{ if(diff==null||diff>=0||diff< -JANELA||!ts) return; if(!melhor||diff>melhor.diff) melhor={diff,ts}; };
+  // v1213 — COMPROMISSO ATENDIDO NO DIA MARCADO NÃO É ATRASADO (relato do dono, 11/08/2026).
+  //
+  // O lead "Bocorni" aparecia em "Atrasados — retome ou descarte" com o lembrete de 10/08, mas o
+  // próprio cadastro dizia que ele tinha sido atendido em 10/08 — ou seja, o compromisso foi
+  // CUMPRIDO no dia. A régua antiga só perdoava quem tivesse sido atendido HOJE, então todo
+  // compromisso cumprido na data virava cobrança no dia seguinte: o corretor fez o que tinha que
+  // fazer e o app cobrava assim mesmo. Agora o atendimento registrado NA DATA do compromisso (ou
+  // depois dela) cumpre aquele compromisso, e ele não entra mais na lista.
+  const considerar=(diff,ts)=>{ if(diff==null||diff>=0||diff< -JANELA||!ts) return; if(cpCompromissoJaAtendido(l,ts)) return; if(!melhor||diff>melhor.diff) melhor={diff,ts}; };
   try{
     const lt=cp786DataTs(l?.analysis?.lembrete?.quando);
     if(lt){ const iso=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(lt)); considerar(typeof ui671DiasAte==='function'?ui671DiasAte(iso):null, lt); }
@@ -10150,6 +10158,24 @@ function cp786CompromissoAtrasado(l){
   return { dias:Math.abs(melhor.diff), dataLabel:new Date(melhor.ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) };
 }
 window.cp786CompromissoAtrasado=cp786CompromissoAtrasado;
+// v1213 — "atendi no dia marcado; por que ainda está atrasado?".
+//
+// Compara por DIA (fuso de São Paulo, que é o do app inteiro), não pela hora: um compromisso das
+// 14h atendido às 9h do mesmo dia está cumprido do mesmo jeito — quem trabalha não registra
+// atendimento com cronômetro. O que conta como atendimento é o MESMO de sempre
+// (ultimoAtendimentoTs: botão "Marcar atendimento", cópia de mensagem, visita/ligação/observação
+// registradas na timeline e os campos de último atendimento gravados na base) — esta peça só
+// compara datas, não inventa uma definição nova de atendimento.
+function cpCompromissoJaAtendido(l, ts){
+  if(!ts) return false;
+  const atendidoEm = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
+  if(!atendidoEm) return false;
+  try{
+    const dia = (t) => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(t));
+    return dia(atendidoEm) >= dia(ts); // 'AAAA-MM-DD' compara certo como texto
+  }catch(_){ return atendidoEm >= ts; }
+}
+window.cpCompromissoJaAtendido=cpCompromissoJaAtendido;
 // v1011 — lista os compromissos VENCIDOS de um lead (mesmos critérios da contagem acima:
 // data concreta no passado até 60 dias, com trecho literal de prova, não dispensado). Usada
 // pela seção "Atrasados" da Agenda — o dono via "9 atrasados" no sino e não tinha ONDE ver quais.
@@ -10166,6 +10192,9 @@ function cpCompromissosVencidosDoLead(l){
     if(dispensados?.has?.(key)) continue;
     const diff=typeof ui671DiasAte==='function'?ui671DiasAte(data):null;
     if(diff==null||diff>=0||diff< -60) continue;
+    // v1213 — mesma régua da contagem: compromisso atendido na data marcada (ou depois) está
+    // cumprido e não pode continuar listado como pendência dentro do lead.
+    if(cpCompromissoJaAtendido(l, cp786DataTs(data,'12:00'))) continue;
     out.push({ key, oQue:String(ap?.oQue||'compromisso'), trecho:String(ap?.trechoLiteral||'').trim(), dias:Math.abs(diff), dataBR:new Date(cp786DataTs(data,'12:00')).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/Sao_Paulo'}) });
   }
   out.sort((a,b)=>a.dias-b.dias);
