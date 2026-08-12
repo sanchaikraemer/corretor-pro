@@ -719,11 +719,15 @@ export function validarFormatoMensagens(mensagens) {
 //               Encontradas aqui, viram reescrita obrigatória.
 //   SUSPEITAS — dependem do contexto: 1ª pessoa do passado afirmando trabalho feito ("separei",
 //               "preparei", "conferi") pode ser verdade quando a conversa ou uma observação do
-//               corretor mostram que aquilo aconteceu mesmo; e "faz sentido" tanto enfeita quanto
-//               pergunta de verdade. Por isso o código NÃO julga sozinho: manda a suspeita pra
-//               releitura, que tem a conversa na mão e decide.
+//               corretor mostram que aquilo aconteceu mesmo. Só por isso o código não julga
+//               sozinho aqui: manda a suspeita pra releitura, que tem a conversa na mão e decide.
 // Exportadas pro teste conferir o EFEITO (o que é pego e o que passa), não o texto do código.
 const FRASES_PROIBIDAS_MENSAGEM = [
+  // v1236 — "faz sentido" voltou pra lista DURA a pedido direto do dono: "não quero a expressão
+  // 'faz sentido', já disse mil vezes". Na v1235 ela tinha sido afrouxada porque ele mandou uma
+  // mensagem do ChatGPT que usava a expressão — mas ele só mandou aquilo pra mostrar o quanto a
+  // sugestão dele era melhor que a do sistema, não pra aprovar a expressão. Sem exceção agora.
+  "faz sentido", "faca sentido", "fizer sentido", "fizesse sentido", "fazia sentido",
   "a disposicao", "as ordens",
   "qualquer duvida estou aqui", "qualquer duvida e so chamar", "qualquer duvida me chama",
   "espero que esteja bem", "espero que esteja indo bem", "espero que voce esteja bem",
@@ -734,14 +738,7 @@ const FRASES_PROIBIDAS_MENSAGEM = [
   "imagino que a correria", "se ainda tiver interesse", "desculpa incomodar",
   "desculpe incomodar", "sei que voce deve estar ocupado", "conforme conversamos"
 ];
-// v1235 — "faz sentido" SAIU da lista dura e virou suspeita, por decisão do próprio dono: ele
-// mandou como EXEMPLO BOM uma mensagem do ChatGPT que usa a expressão ("Ainda faz sentido a ideia
-// de pegar um apartamento na planta...?"). A diferença não está na expressão, está no que vem
-// depois dela: "me diz se faz sentido seguir nessa linha" é enfeite que devolve a decisão pro
-// cliente sem perguntar nada; "ainda faz sentido a ideia de X?" é uma pergunta concreta sobre um
-// plano real. Quem sabe distinguir os dois é a releitura com a conversa na mão, não uma lista.
 const EXPRESSOES_SUSPEITAS_MENSAGEM = [
-  "faz sentido", "faca sentido", "fizer sentido", "fizesse sentido",
   "separei", "conferi", "pesquisei", "levantei", "verifiquei", "preparei", "montei",
   "elaborei", "consultei", "deixei pronto", "deixei separado", "deixei separada",
   "aproveitei pra ver", "aproveitei para ver", "trago aqui", "trago pra voce",
@@ -3065,7 +3062,24 @@ CLIENTE como ele aparece na conversa (o texto que vem antes dos dois-pontos na l
 traduza, não abrevie, não corrija e NUNCA use um nome que apareça apenas dentro do texto de uma
 mensagem. Se os dois lados forem ambíguos, use exatamente "Não identificado".
 
+ENTENDER ANTES DE ESCREVER — A ORDEM DOS CAMPOS É OBRIGATÓRIA. Preencha o JSON na ordem exata
+abaixo, sem pular e sem voltar atrás. As três mensagens são o ÚLTIMO campo de propósito: elas são a
+CONCLUSÃO da leitura da conversa, não o começo dela. Até aqui você já terá escrito o que o cliente
+se comprometeu a fazer ("ultimoCompromissoCliente"), o que ficou sem resposta ("pedidoSemResposta"),
+o que trava ("objecaoPrincipal") e qual é o próximo passo ("nextAction"). Escrever as três ANTES de
+decidir esses campos é o que produz três mensagens genéricas e intercambiáveis — três variações do
+nada. Primeiro leia e decida; só depois escreva.
+
+AS TRÊS SÃO TRÊS CAMINHOS PARA O MESMO "nextAction" — não três assuntos diferentes, nem a mesma
+frase reescrita três vezes. Antes de entregar, confira uma a uma: se alguma não leva ao próximo
+passo que você acabou de definir, ela está errada — reescreva.
+E "nextAction" não é escolha livre: quando "ultimoCompromissoCliente" for uma condição da VIDA do
+cliente (a colheita, vender um bem, uma viagem, a decisão de outra pessoa) e esse prazo já tiver
+passado, o próximo passo é PERGUNTAR COMO AQUILO FICOU — nunca reoferecer o material que ele não
+respondeu.
+
 Formato JSON obrigatório:
+(preencha exatamente nesta ordem — as três mensagens são o último campo)
 {
   "quemEhOCliente":"texto",
   "summary":"texto",
@@ -3076,20 +3090,20 @@ Formato JSON obrigatório:
     "objecaoPrincipal":"texto",
     "pendenciaFinanceira":"texto"
   },
-  "mensagens":{
-    "recomendada":"texto",
-    "maisSuave":"texto",
-    "maisDireta":"texto"
-  },
-  "recomendacaoContato":{
-    "aguardar":false,
-    "motivo":"texto"
-  },
   "produtoInteresse":"texto",
   "produtosInteresse":["texto"],
   "etapaSugerida":"texto",
   "clientProfile":"texto",
-  "nextAction":"texto"
+  "recomendacaoContato":{
+    "aguardar":false,
+    "motivo":"texto"
+  },
+  "nextAction":"texto",
+  "mensagens":{
+    "recomendada":"texto",
+    "maisSuave":"texto",
+    "maisDireta":"texto"
+  }
 }
 
 ${observacoesManuaisTexto ? `OBSERVAÇÕES DO CORRETOR (registradas manualmente por ${corretorNome}, o administrador deste lead — NÃO são mensagens do WhatsApp, são fatos que ele confirma terem acontecido fora da conversa, como enviar uma imagem/print/áudio externo que o sistema não consegue ler). Trate cada uma como VERDADE CONFIRMADA, nunca como algo a checar ou duvidar. Dê peso alto no diagnóstico e no próximo passo. As três mensagens NÃO PODEM ignorar uma observação nem oferecer de novo algo que ela já diz ter sido feito (ex.: se a observação diz "já enviei outra opção", a mensagem não pode perguntar se pode enviar — o próximo passo é dar seguimento ao que já foi enviado):
@@ -3157,6 +3171,12 @@ ${timelineText}`;
     let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
     let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
 
+    // v1236 — o passo que ESTA análise decidiu, pra releitura abaixo não trocar de assunto na hora
+    // de reescrever. Vem dos campos que a IA já preenche e que já aparecem na tela do corretor
+    // (regra da v1145: nada é escrito só pra ser jogado fora) — nenhum campo novo foi criado.
+    const passoDecidido = clean(raw.nextAction || d.quemDeveAgirAgora, "");
+    const compromissoDoCliente = clean(d.ultimoCompromissoCliente, "");
+
     // v1235 — RELEITURA DAS TRÊS MENSAGENS (ver conferirTrioMensagens lá em cima pro caso real).
     // Só roda quando a conferência local encontra algo — trio limpo é entregue direto, sem custo e
     // sem espera a mais. A releitura cabe no MESMO orçamento de tempo da análise (não estica o
@@ -3180,8 +3200,8 @@ ${apontamentos}
 
 COMO TRATAR CADA TIPO:
 - "PROIBIDO": a expressão está banida em qualquer contexto. Tire e escreva a frase de outro jeito, sem substituir por outro clichê. Nunca pergunte e responda por si mesmo no mesmo fôlego ("tudo bem? tranquilo por aqui"): ou cumprimente, ou pergunte — não os dois.
-- "CONFERIR NA CONVERSA": pode estar certo ou errado, depende dos FATOS. Se a conversa ou as observações do corretor mostram que aquilo aconteceu MESMO, mantenha. Se NÃO mostram, é ação inventada assinada pelo corretor: troque por oferta no futuro ("quero preparar", "posso montar") ou tire. No caso de "faz sentido": mantenha só quando estiver perguntando de verdade sobre um plano concreto do cliente; se for enfeite que devolve a decisão pra ele sem perguntar nada, reescreva.
-
+- "CONFERIR NA CONVERSA": pode estar certo ou errado, depende dos FATOS. Se a conversa ou as observações do corretor mostram que aquilo aconteceu MESMO, mantenha. Se NÃO mostram, é ação inventada assinada pelo corretor: troque por oferta no futuro ("quero preparar", "posso montar") ou tire.
+${passoDecidido ? `\nO PRÓXIMO PASSO desta conversa, decidido nesta mesma análise, é: ${passoDecidido}\n${compromissoDoCliente && !/^(nenhum|nenhuma|não identificado)$/i.test(compromissoDoCliente) ? `O que o PRÓPRIO CLIENTE ficou de fazer foi: ${compromissoDoCliente} — se esse prazo já passou, é por aí que a retomada começa.\n` : ""}As três mensagens reescritas precisam ser TRÊS CAMINHOS para esse mesmo passo.\n` : ""}
 REGRA QUE MANDA EM TUDO: não invente NENHUM fato, número, condição, material ou ação que não esteja na conversa, nas observações ou no Cérebro. Mantenha o ângulo comercial de cada uma das três (recomendada / maisSuave / maisDireta) e o jeito de escrever do corretor. Se o cliente condicionou o próximo passo a algo da vida dele (colheita, venda de um bem, viagem, decisão de terceiro), é POR AÍ que a retomada começa — perguntando como aquilo ficou —, não repetindo a oferta que ele não respondeu.
 
 MENSAGENS ATUAIS:
