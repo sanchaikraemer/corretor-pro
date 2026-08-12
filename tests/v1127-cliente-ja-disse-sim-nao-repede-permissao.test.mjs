@@ -39,8 +39,10 @@ assert.match(pipeline, /NENHUMA das três\s*\n?mensagens pode voltar a pedir a m
   "a proibição precisa valer para as três sugestões");
 
 // As frases exatas que saíram erradas no caso real precisam estar citadas como exemplo do que não fazer.
-for (const errada of ["posso te mostrar?", "posso te enviar?", "já posso\nencaminhar?", "posso sugerir?"]) {
-  assert.ok(pipeline.includes(errada),
+// v1240 — os seis blocos que repetiam esta ideia viraram um só, e o texto foi reescrito. A regra
+// é a mesma; o que muda aqui é onde ela mora.
+for (const errada of ["posso te mostrar?", "posso te enviar?", "já posso encaminhar?", "posso sugerir?"]) {
+  assert.ok(pipeline.replace(/\s+/g, " ").includes(errada),
     `a regra precisa citar o pedido repetido "${errada.replace(/\n/g, " ")}" como exemplo proibido`);
 }
 
