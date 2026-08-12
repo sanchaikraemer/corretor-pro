@@ -1404,6 +1404,11 @@ html[data-theme="light"] .cp704-body,
 html[data-theme="light"] .cp704-ai li,
 html[data-theme="light"] .cp704-last,
 html[data-theme="light"] .cp704-tmsg p{color:var(--cp-soft)!important}
+/* v1239 — bloco "Como conduzir este atendimento". O texto da condução é a conclusão da análise:
+   precisa do contraste FORTE do tema claro (--cp-text), não do cinza de corpo de texto. Sem esta
+   regra ele herdava um cinza médio sobre o cartão branco — flagrado na conferência no navegador,
+   não no código. */
+html[data-theme="light"] .cp704-conducao-txt{color:var(--cp-text)!important}
 html[data-theme="light"] .cp704-tag,
 html[data-theme="light"] .cp704-card-title small,
 html[data-theme="light"] .cp704-last span,
