@@ -10,16 +10,23 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // porque cp786Categoria conta como "programados" também compromisso VENCIDO (fica em destaque
 // até ser atendido, decisão de outra tela), e a tela Agenda nunca lista vencido de lead ativo.
 
-// 1. O tile agora navega pra tela Agenda de verdade (mesma função da aba de baixo), não pra Condução.
+// 1. v1232 — o tile "Agenda" SAIU da fileira da Home (decisão do dono): o número mora agora no
+// bloco do topo (calendário = total, sino = hoje). A fileira não pode voltar a ter o tile, e
+// muito menos voltar a abrir a Condução (o bug original desta guarda).
 const iniRBH = app.indexOf('renderResumoDia = function(items){');
 const fimRBH = app.indexOf('\n};', iniRBH) + 3;
 assert.ok(iniRBH !== -1, 'renderResumoDia não encontrada em app.js');
 const rbh = app.slice(iniRBH, fimRBH);
-assert.match(rbh, /onclick="show\('agenda'\)"><span>Agenda<\/span>/, 'o tile Agenda deve abrir a tela Agenda (show(\'agenda\')), não a Condução');
-assert.doesNotMatch(rbh, /cp786AbrirConducao\('programados'\)/, 'o tile Agenda não pode mais abrir a Condução');
+assert.doesNotMatch(rbh, /<span>Agenda<\/span>/, 'o tile Agenda saiu da Home na v1232 — o número vive no bloco do topo');
+assert.doesNotMatch(rbh, /cp786AbrirConducao\('programados'\)/, 'nada na fileira pode abrir a Condução');
 
-// 2. O número do tile vem de cpAgendaContagem (mesma régua da tela Agenda), não de cp786Categoria.
-assert.match(rbh, /const compromissos ?= ?cpAgendaContagem\(ativos\)/, 'a contagem do tile Agenda deve vir de cpAgendaContagem');
+// 2. O número do TOTAL no topo (calendário do bloco) vem de cpAgendaContagem — a mesma régua da
+// tela Agenda —, atualizado junto com o sino (fonte única, lição das v1215/v1227).
+const iniSino = app.indexOf('async function atualizarSinoAgenda(');
+assert.ok(iniSino !== -1, 'atualizarSinoAgenda não encontrada em app.js');
+const sinoSrc = app.slice(iniSino, app.indexOf('\nwindow.atualizarSinoAgenda', iniSino));
+assert.match(sinoSrc, /cpAgTotalN/, 'o total do topo (#cpAgTotalN) precisa ser atualizado junto com o sino');
+assert.match(sinoSrc, /cpAgendaContagem\(ativos\)/, 'a contagem do total do topo deve vir de cpAgendaContagem');
 
 // 3. cpAgendaContagem — o número do tile precisa bater com a tela Agenda.
 //

@@ -146,7 +146,7 @@
   <div class="main-col">
   <div class="top cp-topbar">
     <div class="brand go cp-mobile-brand" data-target="home" title="Voltar para Hoje">
-      <img src="/logo-cp.png?v=__VERSION__" alt=""><span class="cp-mobile-brand-copy"><b>Corretor <strong>Pro</strong></b><small class="cp-mobile-version">Atualização #__VERSION__</small></span>
+      <img src="/logo-cp.png?v=__VERSION__" alt=""><span class="cp-mobile-brand-copy"><b>Corretor <strong>Pro</strong></b><small class="cp-mobile-version"><span class="cp-versao-palavra">Atualização </span>#__VERSION__</small></span>
     </div>
     <div class="cp-search desktop-only">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -154,7 +154,14 @@
       <div id="buscaGlobalResults" class="cp-search-results"></div>
     </div>
     <div class="cp-top-actions">
-      <button type="button" class="cp-icon-btn" id="topBell" title="Abrir a Agenda" onclick="show('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><span class="bell-badge" id="bellBadge" hidden></span></button>
+      <!-- v1232 — modelo C escolhido pelo dono: bloco único no topo (calendário = TOTAL da agenda,
+           sino = agenda de HOJE, com a metade de hoje acesa). O tile "Agenda" saiu da fileira da
+           Home; este bloco é a casa nova desses números. Os dois lados abrem a tela Agenda. -->
+      <div class="cp-agbloco" id="cpAgendaBloco">
+        <button type="button" class="cp-agbloco-met" id="btnAgendaTotalTopo" title="Abrir a Agenda — total de compromissos e lembretes" onclick="show('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><b id="cpAgTotalN">0</b></button>
+        <span class="cp-agbloco-div" aria-hidden="true"></span>
+        <button type="button" class="cp-agbloco-met cp-agbloco-hoje" id="topBell" title="Abrir a Agenda" onclick="show('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><b id="cpAgHojeN">0</b><span class="bell-badge" id="bellBadge" hidden></span></button>
+      </div>
       <button type="button" class="cp-icon-btn cp-menu-mobile" title="Menu" onclick="show('menu')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <button type="button" class="cp-profile desktop-only" onclick="show('menu')" title="Perfil"><span>S</span></button>
     </div>

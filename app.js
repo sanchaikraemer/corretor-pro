@@ -3975,6 +3975,11 @@ async function atualizarSinoAgenda(leadsAll){
   // divergiam; ver o comentário em renderResumoDia, de onde este contador saiu).
   document.title = state.agendaCount > 0 ? `(${state.agendaCount}) Corretor Pro` : "Corretor Pro";
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
+  // v1232 — o TOTAL da agenda (mesma régua do antigo card da Home: cpAgendaContagem, que bate com
+  // a tela Agenda desde a v931) vai pro calendário do bloco do topo. Atualiza junto com o sino
+  // pra nunca existirem dois relógios (lição das v1215/v1227).
+  const totalTopoEl = qs("#cpAgTotalN");
+  if(totalTopoEl){ try{ totalTopoEl.textContent = String(cpAgendaContagem(ativos)); }catch(_){} }
   // v787/v1205: o sino mostra só o aviso da agenda de hoje (e o número de atrasados).
   // A agenda mantém sua contagem própria, sem disputar o mesmo badge visual.
   try{ window.cpAtualizarSinoAtencao?.(); }catch(_){}
@@ -5995,13 +6000,66 @@ async function carregarAgenda(){
 
     if(!compromissos.length && !lembretesHoje.length && !lembretesFuturos.length && !lembretesArquivadosVencidos.length && !atrasados.length){
       box.innerHTML = '<div class="empty">Nada agendado. Quando você ou o cliente marcarem um retorno (ex.: "retomar em 60 dias"), aparece aqui.</div>';
+      state.agendaFiltroDia = null; // sem itens não há o que filtrar (v1232)
       return;
     }
 
-    let html = "";
-    if(atrasados.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--risco);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Atrasados — retome ou descarte (${atrasados.length})</div>`;
-      html += atrasados.map(({ l, at }) => {
+    // ===== v1232 — SEMANA NO TOPO (modelo 4 escolhido pelo dono) =====
+    // Faixa com os próximos 7 dias e a quantidade de cada um; tocar num dia filtra a tela pra
+    // mostrar só o que é daquele dia (tocar em "Tudo" volta ao normal). O dia vem sempre no fuso
+    // de São Paulo, o mesmo do resto do app (cp786CompromissoAtrasado etc.).
+    const diaSP = (ts) => {
+      try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(ts)); }
+      catch(_){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    };
+    const hojeKey = diaSP(Date.now());
+    const dias = [];
+    for(let i=0;i<7;i++){ const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+i); dias.push({ key: diaSP(d.getTime()), d }); }
+    const amanhaKey = dias[1].key;
+    // Compromisso só entra na conta de um dia quando tem data concreta (AAAA-MM-DD) — texto solto
+    // tipo "semana que vem" continua aparecendo, mas só na visão "Tudo".
+    const apDia = (x) => { const raw=String(x?._ap?.data||'').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''; };
+    const lemDia = (l) => { const t = lembreteTs(l); return isNaN(t) ? '' : diaSP(t); };
+    const contarDia = (key) => {
+      if(key === hojeKey) return lembretesHoje.length + compHoje.length;
+      let n = lembretesFuturos.filter(l => lemDia(l) === key).length + compFuturo.filter(x => apDia(x) === key).length;
+      if(key === amanhaKey) n += compAmanha.length;
+      return n;
+    };
+    // Filtro escolhido: null = Tudo, 'atrasados', ou uma data da semana. Se o dia guardado ficou
+    // pra trás (virou o dia, atraso resolvido), volta sozinho pro Tudo em vez de mostrar vazio.
+    let f = state.agendaFiltroDia || null;
+    if(f && f !== 'atrasados' && !dias.some(x => x.key === f)) f = state.agendaFiltroDia = null;
+    if(f === 'atrasados' && !atrasados.length && !lembretesArquivadosVencidos.length) f = state.agendaFiltroDia = null;
+    const vAtras   = (f && f !== 'atrasados') ? [] : atrasados;
+    const vLemArq  = (f && f !== 'atrasados') ? [] : lembretesArquivadosVencidos;
+    const vLemHoje = (!f || f === hojeKey) ? lembretesHoje : [];
+    const vHoje    = (!f || f === hojeKey) ? compHoje : [];
+    const vAmanha  = (!f || f === amanhaKey) ? compAmanha : [];
+    const vLemFut  = !f ? lembretesFuturos : (f !== 'atrasados' && f !== hojeKey ? lembretesFuturos.filter(l => lemDia(l) === f) : []);
+    const vFut     = !f ? compFuturo : (f !== 'atrasados' && f !== hojeKey ? compFuturo.filter(x => apDia(x) === f) : []);
+
+    const totalTudo = atrasados.length + lembretesHoje.length + lembretesArquivadosVencidos.length + lembretesFuturos.length + compromissos.length;
+    const SEMANA = ['dom','seg','ter','qua','qui','sex','sáb'];
+    const rotuloDia = (d,i) => i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : SEMANA[d.getDay()];
+    let html = `<div class="cp-ag-semana">`;
+    html += `<button type="button" class="cp-ag-dia${!f?' ativo':''}" onclick="cpAgendaFiltrarDia(null)"><span>Tudo</span><b>${totalTudo}</b></button>`;
+    if(atrasados.length || lembretesArquivadosVencidos.length){
+      html += `<button type="button" class="cp-ag-dia atras${f==='atrasados'?' ativo':''}" onclick="cpAgendaFiltrarDia('atrasados')"><span>Atrasados</span><b>${atrasados.length + lembretesArquivadosVencidos.length}</b></button>`;
+    }
+    for(let i=0;i<dias.length;i++){
+      const n = contarDia(dias[i].key);
+      html += `<button type="button" class="cp-ag-dia${f===dias[i].key?' ativo':''}${n?'':' vazio'}" onclick="cpAgendaFiltrarDia('${dias[i].key}')"><span>${rotuloDia(dias[i].d,i)}</span><b>${n}</b><small>${String(dias[i].d.getDate()).padStart(2,'0')}/${String(dias[i].d.getMonth()+1).padStart(2,'0')}</small></button>`;
+    }
+    html += `</div>`;
+    if(!vAtras.length && !vLemHoje.length && !vLemArq.length && !vLemFut.length && !vHoje.length && !vAmanha.length && !vFut.length){
+      html += '<div class="empty">Nada marcado para este dia.</div>';
+      box.innerHTML = html;
+      return;
+    }
+    if(vAtras.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--risco);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Atrasados — retome ou descarte (${vAtras.length})</div>`;
+      html += vAtras.map(({ l, at }) => {
         const lem = l.analysis?.lembrete || null;
         const lemTs = lem?.quando ? new Date(lem.quando).getTime() : NaN;
         const lemVencido = Number.isFinite(lemTs) && lemTs < Date.now();
@@ -6019,9 +6077,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(lembretesHoje.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes de hoje (${lembretesHoje.length})</div>`;
-      html += lembretesHoje.map(l => {
+    if(vLemHoje.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes de hoje (${vLemHoje.length})</div>`;
+      html += vLemHoje.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--acao-soft);border-left:3px solid var(--acao);border-radius:6px;font-size:12px"><b style="color:var(--acao)">📅 Lembrete de hoje (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""})</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
@@ -6029,9 +6087,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(lembretesArquivadosVencidos.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${lembretesArquivadosVencidos.length})</div>`;
-      html += lembretesArquivadosVencidos.map(l => {
+    if(vLemArq.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${vLemArq.length})</div>`;
+      html += vLemArq.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,45,155,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
@@ -6039,9 +6097,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(lembretesFuturos.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes agendados (${lembretesFuturos.length})</div>`;
-      html += lembretesFuturos.map(l => {
+    if(vLemFut.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes agendados (${vLemFut.length})</div>`;
+      html += vLemFut.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(55,232,255,.05);border-left:3px solid var(--dados);border-radius:6px;font-size:12px"><b style="color:var(--dados)">Lembrar em ${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(_cortarFrase(String(lem.motivo), 70))}</div>` : ""}</div>`;
@@ -6049,9 +6107,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(compHoje.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos hoje (${compHoje.length})</div>`;
-      html += compHoje.map(l => {
+    if(vHoje.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos hoje (${vHoje.length})</div>`;
+      html += vHoje.map(l => {
         const ap = l._ap;
         const oQue = ap.oQue || "compromisso";
         const trecho = ap.trechoLiteral ? `<div class="small" style="margin-top:4px;color:var(--muted);font-style:italic">"${escapeHtml(ap.trechoLiteral.slice(0,80))}"</div>` : "";
@@ -6060,9 +6118,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(compAmanha.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--lime);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos amanhã (${compAmanha.length})</div>`;
-      html += compAmanha.map(l => {
+    if(vAmanha.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--lime);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos amanhã (${vAmanha.length})</div>`;
+      html += vAmanha.map(l => {
         const ap = l._ap;
         const oQue = ap.oQue || "compromisso";
         const trecho = ap.trechoLiteral ? `<div class="small" style="margin-top:4px;color:var(--muted);font-style:italic">"${escapeHtml(ap.trechoLiteral.slice(0,80))}"</div>` : "";
@@ -6071,9 +6129,9 @@ async function carregarAgenda(){
       }).join("");
       html += `</div>`;
     }
-    if(compFuturo.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos futuros (${compFuturo.length})</div>`;
-      html += compFuturo.map(l => {
+    if(vFut.length){
+      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos futuros (${vFut.length})</div>`;
+      html += vFut.map(l => {
         const ap = l._ap;
         const oQue = ap.oQue || "compromisso";
         const quando = ap.quando || "data a confirmar";
@@ -6114,6 +6172,14 @@ async function carregarAgenda(){
 // v1107 — o "×" de descartar compromisso atrasado (na própria Agenda) chama carregarAgenda()
 // no onclick; sem esta ponte o descarte gravava mas a lista não atualizava até sair e voltar.
 window.carregarAgenda = carregarAgenda;
+
+// v1232 — toque num dia da faixa da semana: guarda a escolha e redesenha a Agenda (a memória já
+// está carregada, então o redesenho é imediato). null = "Tudo".
+function cpAgendaFiltrarDia(v){
+  state.agendaFiltroDia = v || null;
+  carregarAgenda();
+}
+window.cpAgendaFiltrarDia = cpAgendaFiltrarDia;
 
 // ============ CÉREBRO COMERCIAL ============
 const CEREBRO_LS_KEY = "direciona-cerebro-config";
@@ -10494,7 +10560,8 @@ renderResumoDia = function(items){
   // v1091 — o card mostrava "Final de semana" no lugar do número, quebrando o alinhamento com os
   // outros cards e repetindo o aviso da saudação. Em dia sem fila ele mostra 0, que é a verdade.
   const faB=`<b>${fds?0:fazerAgora}</b>`;
-  const compromissos=cpAgendaContagem(ativos);
+  // v1232 — o card "Agenda" SAIU desta fileira (pedido do dono): o número do total mora agora no
+  // bloco do topo (calendário + sino, ver atualizarSinoAgenda), sempre visível em qualquer tela.
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
   // v1071 — pedido do dono: quantos leads estão sem atender há 30 dias ou mais (prazo fixo,
@@ -10522,7 +10589,6 @@ renderResumoDia = function(items){
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="abrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" onclick="show('agenda')"><span>Agenda</span><div><b>${compromissos}</b><i>${ui631Icon('compromisso')}</i></div></div>
     <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>
     <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>
@@ -12190,24 +12256,21 @@ window.ui670ScheduleHtml = ui670ScheduleHtml;
   // tapava a tela inteira ao abrir o app. O sino continua existindo só como AVISO da agenda de
   // hoje (o número no cantinho, regras v787/v1093/v1168) e agora leva direto para a Agenda.
   function updateBell(){
-    const badge = $('#bellBadge');
+    // v1232 — modelo C do topo: o sino vive dentro do bloco da agenda com o NÚMERO de hoje ao
+    // lado (não mais o pontinho/badge de v787/v1093/v1168 — o #bellBadge segue no HTML, sempre
+    // escondido, só como âncora histórica). A metade de hoje acende em ciano quando há agenda no
+    // dia e em vermelho quando há atraso — cores da paleta oficial (--acao / --risco).
     const bell = $('#topBell');
-    if(!badge || !bell) return;
-    // O pontinho do sino reflete a AGENDA DE HOJE: aparece só quando há compromisso ou
-    // lembrete para o dia (state.agendaCount, calculado em atualizarSinoAgenda). Sem agenda
-    // hoje, sem pontinho. O sino leva direto para a Agenda.
-    const n = Number(state.agendaCount) || 0;
-    // v1093 — compromisso ATRASADO ganha destaque próprio. Pedido do dono: "está muito discreto
-    // um compromisso que é importantíssimo". Sem atraso, segue o pontinho discreto de sempre;
-    // COM atraso, o sino mostra o NÚMERO de atrasados e ganha a cor de risco.
+    const num = $('#cpAgHojeN');
+    if(!bell || !num) return;
+    const n = Number(state.agendaCount) || 0;      // hoje (inclui atrasados)
     const atr = Number(state.agendaAtrasados) || 0;
-    badge.hidden = !n;
-    // v1168 — antes, sem atraso, o texto ficava vazio (o CSS escondia o número mesmo). Agora que
-    // "hoje, no prazo" também ganhou número visível (ver styles.css #topBell.tem-alerta), precisa
-    // ter o QUE mostrar: a contagem de hoje (n já inclui atrasados, mas quando atr=0, n = agendaN).
-    badge.textContent = atr > 0 ? String(atr) : (n > 0 ? String(n) : '');
-    bell.classList.toggle('tem-alerta', n > 0);
-    bell.classList.toggle('tem-atraso', atr > 0);
+    num.textContent = String(n);
+    // Classes próprias (cp-hoje-*) em vez de tem-alerta/tem-atraso: os blocos antigos de CSS do
+    // #topBell continuam no styles.css (inertes) e usariam essas classes com !important por cima
+    // do desenho novo.
+    bell.classList.toggle('cp-hoje-alerta', n > 0 && atr === 0);
+    bell.classList.toggle('cp-hoje-atraso', atr > 0);
     const label = atr > 0
       ? `Agenda — ${atr} compromisso${atr===1?'':'s'} ATRASADO${atr===1?'':'S'}`
       : n > 0
@@ -12420,7 +12483,12 @@ window.ui670ScheduleHtml = ui670ScheduleHtml;
       });
       document.querySelectorAll('[data-version],.sb-brand small,.cp-brand small,.brand small,.mobile-brand small,.top-brand small,.app-brand small,small').forEach(el=>{
         const txt = el.textContent || '';
-        if(/Atualiza[cç][aã]o\s*#/i.test(txt)) el.textContent = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #__VERSION__');
+        if(!/Atualiza[cç][aã]o\s*#/i.test(txt)) return;
+        const novo = txt.replace(/Atualiza[cç][aã]o\s*#\d+(?:-\d+)?/i, 'Atualização #__VERSION__');
+        // v1232 — só mexe quando o número está realmente errado: gravar textContent sempre
+        // apagava o <span class="cp-versao-palavra"> de dentro do rótulo (que deixa a palavra
+        // "Atualização" sair em tela estreita), mesmo com o número já certo.
+        if(novo !== txt) el.textContent = novo;
       });
     }catch(_){ }
   }

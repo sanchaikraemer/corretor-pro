@@ -9,8 +9,10 @@ import assert from 'node:assert/strict';
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
-// Os cards continuam existindo com os destinos certos (v1124: entrou o sexto, "Arquivados").
-for (const destino of ['abrirFazerAgora()', 'abrirCarteiraAtiva()', "show('agenda')",
+// Os cards continuam existindo com os destinos certos (v1124: entrou o sexto, "Arquivados";
+// v1232: o card "Agenda" SAIU da fileira — o número mora agora no bloco do topo, ver
+// tests/v1232-agenda-topo-bloco-e-semana.test.mjs).
+for (const destino of ['abrirFazerAgora()', 'abrirCarteiraAtiva()',
   'abrirAguardandoCliente()', 'cpAbrirSemAtender30Dias()', "show('arquivados')"]) {
   assert.ok(app.includes(`onclick="${destino}"`), `o card com ${destino} continua na Home`);
 }
