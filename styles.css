@@ -2008,15 +2008,38 @@ body.cpio-aberto{overflow:hidden}
   .cp-versao-palavra{display:none!important}
 }
 
-/* Faixa da semana no topo da tela Agenda (modelo 4): 7 dias + "Tudo" + "Atrasados", cada um com
-   sua quantidade; o dia escolhido fica aceso em ciano (atrasados, em vermelho). */
-.cp-ag-semana{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;margin:0 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.cp-ag-dia{flex:0 0 auto;min-width:54px;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 10px;border:1px solid var(--cp-border,var(--line));border-radius:12px;background:var(--cp-panel-2,rgba(255,255,255,.04));color:var(--cp-text,var(--text));cursor:pointer;font:inherit;line-height:1.2}
-.cp-ag-dia span{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cp-muted,var(--muted))}
-.cp-ag-dia b{font-size:16px;font-weight:900;font-variant-numeric:tabular-nums}
-.cp-ag-dia small{font-size:9px;color:var(--cp-muted,var(--muted))}
-.cp-ag-dia.vazio b{color:var(--cp-muted,var(--muted));font-weight:700}
-.cp-ag-dia.ativo{border-color:var(--acao);background:var(--acao-soft)}
-.cp-ag-dia.ativo span,.cp-ag-dia.ativo b{color:var(--acao)}
+/* Faixa da semana no topo da tela Agenda (v1233 — desenho da simulação aprovada, modelo 4):
+   quadradinho por dia com o DIA DA SEMANA em cima, o NÚMERO DO DIA grande e a bolinha com a
+   contagem; o dia escolhido acende em CORAL (a cor da marca, igual à simulação). "Atraso" em
+   vermelho; "+" no fim é o que vem depois da semana. */
+.cp-ag-semana{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 8px;margin:0 0 6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.cp-ag-dia{flex:0 0 auto;min-width:58px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 8px 8px;border:1px solid var(--cp-border,var(--line));border-radius:14px;background:var(--cp-panel-2,rgba(255,255,255,.04));color:var(--cp-text,var(--text));cursor:pointer;font:inherit;line-height:1}
+.cp-ag-dia span{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--cp-muted,var(--muted))}
+.cp-ag-dia b{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums}
+.cp-ag-dia em{font-style:normal;min-width:18px;height:16px;line-height:16px;padding:0 5px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:10px;font-weight:900;text-align:center}
+.cp-ag-dia em.zero{background:transparent;color:var(--cp-muted,var(--muted));font-weight:700}
+.cp-ag-dia.ativo{background:var(--cp-coral,#FF6258);border-color:var(--cp-coral,#FF6258)}
+.cp-ag-dia.ativo span{color:rgba(255,255,255,.85)}
+.cp-ag-dia.ativo b{color:#fff}
+.cp-ag-dia.ativo em{background:rgba(0,0,0,.28);color:#fff}
+.cp-ag-dia.ativo em.zero{background:transparent;color:rgba(255,255,255,.75)}
+.cp-ag-dia.atras{border-color:var(--risco-line)}
 .cp-ag-dia.atras span,.cp-ag-dia.atras b{color:var(--risco)}
-.cp-ag-dia.atras.ativo{border-color:var(--risco);background:var(--risco-soft)}
+.cp-ag-dia.atras em{background:var(--risco-soft);color:var(--risco)}
+.cp-ag-dia.atras.ativo{background:var(--risco);border-color:var(--risco)}
+.cp-ag-dia.atras.ativo span,.cp-ag-dia.atras.ativo b{color:#fff}
+.cp-ag-dia.atras.ativo em{background:rgba(0,0,0,.28);color:#fff}
+/* Título do dia escolhido ("Terça, 12 de agosto · 2 na agenda") */
+.cp-ag-titulo{display:flex;align-items:baseline;gap:8px;margin:8px 2px 12px;flex-wrap:wrap}
+.cp-ag-titulo b{font-size:15px;font-weight:900;letter-spacing:-.01em}
+.cp-ag-titulo span{font-size:12px;color:var(--cp-muted,var(--muted))}
+/* Coluna da hora à esquerda de cada cartão do dia */
+.cp-ag-hcol{flex:0 0 54px;text-align:center;padding-top:2px}
+.cp-ag-hcol b{display:block;font-size:14.5px;font-weight:900;font-variant-numeric:tabular-nums}
+.cp-ag-hcol small{display:block;font-size:9.5px;color:var(--cp-muted,var(--muted));margin-top:2px}
+@media(max-width:760px){
+  /* No celular o cartão empilha em coluna — a hora vira uma linha em cima, não uma coluna. */
+  .cp-ag-hcol{flex:none;display:flex;align-items:baseline;gap:6px;text-align:left;padding:0;margin-bottom:2px}
+  .cp-ag-hcol b{font-size:14px}
+  .cp-ag-hcol small{margin-top:0}
+}

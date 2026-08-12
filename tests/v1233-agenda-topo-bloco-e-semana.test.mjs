@@ -29,12 +29,21 @@ assert.doesNotMatch(bellSrc, /classList\.toggle\('tem-alerta'/, 'não pode volta
 assert.match(css, /#topBell\.cp-hoje-alerta\{background:var\(--acao-soft\)!important/, 'metade de hoje acesa em ciano (--acao) da paleta');
 assert.match(css, /#topBell\.cp-hoje-atraso\{background:var\(--risco-soft\)!important/, 'atraso em vermelho (--risco) da paleta');
 
-// --- Faixa da semana na tela Agenda ---
+// --- Faixa da semana na tela Agenda (v1233 — o desenho é o da simulação aprovada) ---
 assert.match(app, /class="cp-ag-semana"/, 'a faixa da semana precisa ser desenhada na Agenda');
 assert.match(app, /function cpAgendaFiltrarDia\(v\)\{/, 'tocar num dia filtra a tela (cpAgendaFiltrarDia)');
 assert.match(app, /window\.cpAgendaFiltrarDia = cpAgendaFiltrarDia/, 'a função precisa estar no window (onclick inline)');
-assert.match(app, /cpAgendaFiltrarDia\('atrasados'\)/, 'a faixa tem o atalho de Atrasados');
-assert.match(app, /cpAgendaFiltrarDia\(null\)/, 'a faixa tem o "Tudo" pra voltar ao normal');
+assert.match(app, /cpAgendaFiltrarDia\('atrasados'\)/, 'a faixa tem o quadradinho de Atraso');
+assert.match(app, /cpAgendaFiltrarDia\('depois'\)/, 'a faixa tem o "+" com o que vem depois da semana');
+// v1233 — pontos que diferenciavam a simulação do que saiu na v1232 (o dono flagrou com print):
+assert.match(app, /if\(f !== 'atrasados' && f !== 'depois' && !chaves\.has\(f\)\) f = hojeKey;/,
+  'HOJE precisa vir escolhido por padrão ao abrir a Agenda');
+assert.match(app, /class="cp-ag-hcol"/, 'cada cartão do dia precisa da coluna de hora à esquerda');
+assert.match(app, /agendaCardHTML\(l, extra, horaHtml\)|function agendaCardHTML\(l, extra, horaHtml\)/,
+  'agendaCardHTML precisa aceitar a coluna de hora');
+assert.match(css, /\.cp-ag-dia\.ativo\{background:var\(--cp-coral,#FF6258\)/,
+  'o dia escolhido acende em coral, como na simulação');
+assert.match(css, /\.cp-ag-dia b\{font-size:17px/, 'o número do DIA é o grande do quadradinho (não a contagem)');
 // O dia é calculado no fuso de São Paulo, como o resto do app.
 const iniAg = app.indexOf('async function carregarAgenda(){');
 const agSrc = app.slice(iniAg, app.indexOf('window.carregarAgenda', iniAg));
