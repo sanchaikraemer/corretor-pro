@@ -279,6 +279,84 @@ async function reanalisarLeadHandler702(req, res) {
     return json(res, 200, { ok: true, removido: true, atendimentoDesfeito, aindaTemCopiaNoDia });
   }
 
+  // v1237 — APAGAR UMA OBSERVAÇÃO DO HISTÓRICO.
+  //
+  // Pedido do dono (12/08/2026, com print): "quero opção de apagar a última mensagem, assim posso
+  // reanalisar de novo". Ele tinha registrado uma observação contando a mensagem que mandou pro
+  // cliente e queria tirá-la pra rodar a análise de novo sem ela. Não existia caminho nenhum: o ✕
+  // da v1197 só aparece em mensagem copiada pelo app ("mensagem_enviada").
+  //
+  // Isso importa porque observação NÃO é enfeite de tela — ela entra no pedido enviado à IA como
+  // VERDADE CONFIRMADA (ver observacoesManuaisTexto em api/_pipeline.js) e tem peso alto no
+  // diagnóstico. Uma observação escrita errada, ditada errada ou duplicada empurra a análise
+  // inteira pro lado errado, e a única saída era conviver com ela.
+  //
+  // Salvar uma observação grava QUATRO coisas (ver api/lead-update.js, ação "observacao"):
+  //   1. o item da timeline (type "observacao_manual");
+  //   2. a entrada em memoria.observacoesManuais;
+  //   3. a linha "[data hora] texto" no texto corrido memoria.observacoes;
+  //   4. o ATENDIMENTO do dia (evento contato_manual, detalhes.de = "observacao_manual").
+  // Apagar desfaz as quatro — senão o texto continuaria vivo em memoria e o cliente seguiria
+  // fora da fila por um atendimento que ele acabou de desfazer.
+  //
+  // Mesma regra de dia da v1197: o atendimento só cai se, tirada esta, não sobrar nenhuma outra
+  // observação no MESMO DIA.
+  if (body?.action === "apagar-observacao") {
+    const isoAlvo = String(body?.iso || "");
+    if (!isoAlvo) return json(res, 400, { ok: false, error: "Informe a observação a apagar." });
+    const alvo = timeline.find(m => String(m?.iso || "") === isoAlvo);
+    if (!alvo) return json(res, 404, { ok: false, error: "Essa observação não está mais no histórico." });
+    // Mesma trava da v1197: só o que o PRÓPRIO APP registrou sai por aqui. Fala que veio da
+    // conversa exportada do WhatsApp é registro do que aconteceu de verdade e não se apaga.
+    if (String(alvo.type || "") !== "observacao_manual") {
+      return json(res, 400, { ok: false, error: "Só dá pra apagar uma observação que você mesmo registrou." });
+    }
+    const novaTimeline = timeline.filter(m => String(m?.iso || "") !== isoAlvo);
+    const diaAlvo = agoraBR(new Date(alvo.iso)).dataBR;
+    const aindaTemObsNoDia = novaTimeline.some(m => {
+      if (String(m?.type || "") !== "observacao_manual" || !m?.iso) return false;
+      const d = new Date(m.iso);
+      return !isNaN(d.getTime()) && agoraBR(d).dataBR === diaAlvo;
+    });
+
+    const prev = row.resultado_analise || {};
+    const memAnterior = prev.memoria || {};
+    const idAlvo = String(alvo.id || "");
+    const obsManuais = Array.isArray(memAnterior.observacoesManuais)
+      ? memAnterior.observacoesManuais.filter(o => (idAlvo ? String(o?.id || "") !== idAlvo : String(o?.criadoEm || "") !== isoAlvo))
+      : [];
+    // Tira do texto corrido exatamente a linha desta observação, sem tocar no resto (o campo
+    // pode ter linhas antigas que não vieram de observação nenhuma).
+    const linhaAlvo = `[${alvo.date || ""} ${alvo.time || ""}] ${alvo.text || ""}`.trim();
+    const observacoesTexto = String(memAnterior.observacoes || "")
+      .split("\n")
+      .filter(l => l.trim() !== linhaAlvo)
+      .join("\n")
+      .trim();
+    const memoria = { ...memAnterior, observacoes: observacoesTexto, observacoesManuais: obsManuais };
+
+    const aprendizado = { ...(prev.aprendizado || {}) };
+    const eventos = Array.isArray(aprendizado.eventos) ? [...aprendizado.eventos] : [];
+    let atendimentoDesfeito = false;
+    if (!aindaTemObsNoDia) {
+      const restantes = eventos.filter((e) => {
+        if (!e?.quando) return true;
+        const d = new Date(e.quando);
+        if (isNaN(d.getTime()) || agoraBR(d).dataBR !== diaAlvo) return true;
+        return !(e.evento === "contato_manual" && e?.detalhes?.de === "observacao_manual");
+      });
+      atendimentoDesfeito = restantes.length !== eventos.length;
+      aprendizado.eventos = restantes;
+    }
+    const merged = { ...prev, memoria, aprendizado };
+    const { error: apagarErr } = await supabase
+      .from("whatsapp_processamentos")
+      .update({ timeline_json: novaTimeline, resultado_analise: merged, atualizado_em: new Date().toISOString() })
+      .eq("id", id).eq("organization_id", organizationId);
+    if (apagarErr) return json(res, 500, { ok: false, error: apagarErr.message });
+    return json(res, 200, { ok: true, removido: true, atendimentoDesfeito, aindaTemObsNoDia });
+  }
+
   // Marcação rápida de atendimento: um clique, sem texto obrigatório, sem IA e sem timer.
   // Guarda apenas um evento interno com a data/hora mais recente para o lead aparecer
   // como atendido. Não cria observação, mensagem na timeline nem lembrete automático.

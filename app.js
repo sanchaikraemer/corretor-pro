@@ -5133,9 +5133,17 @@ function cp704Css(){
       // v1197 — "copiei sem querer, não mandei": mensagem que o APP registrou quando você copiou
       // ganha um X pra desfazer. Só aparece nessas (type "mensagem_enviada"): fala que veio da
       // conversa exportada do WhatsApp é registro do que aconteceu de verdade e não se apaga aqui.
-      const podeDesfazer = ehEnviada && String(m?.iso || '');
+      // v1237 — o mesmo ✕ passou a valer pra OBSERVAÇÃO que você escreveu ("quero opção de apagar
+      // a última mensagem, assim posso reanalisar de novo"). Observação entra na análise como fato
+      // confirmado e pesa muito no diagnóstico — uma escrita/ditada errada empurrava a análise
+      // inteira e não tinha como tirar. Continua valendo só pro que o APP registrou: fala vinda da
+      // conversa exportada do WhatsApp é registro do que aconteceu e não se apaga por aqui.
+      const ehObsApagavel = tipo==='observacao_manual';
+      const podeDesfazer = (ehEnviada || ehObsApagavel) && String(m?.iso || '');
       const btnDesfazer = podeDesfazer
-        ? `<button type="button" class="cp704-tmsg-undo" title="Não enviei essa mensagem — desfazer" aria-label="Desfazer esta mensagem" onclick='event.stopPropagation();cp704DesfazerMensagemEnviada(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`
+        ? (ehObsApagavel
+          ? `<button type="button" class="cp704-tmsg-undo" title="Apagar esta observação" aria-label="Apagar esta observação" onclick='event.stopPropagation();cp704ApagarObservacao(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`
+          : `<button type="button" class="cp704-tmsg-undo" title="Não enviei essa mensagem — desfazer" aria-label="Desfazer esta mensagem" onclick='event.stopPropagation();cp704DesfazerMensagemEnviada(${JSON.stringify(String(lead?.id||''))},${JSON.stringify(String(m.iso||''))})'>✕</button>`)
         : '';
       return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text))}</p><small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
     }).join('') + btn;
@@ -5170,6 +5178,32 @@ function cp704Css(){
       try{ await loadRecentLeads(false); }catch(_){}
       try{ await recarregarLeadFoco(leadId); }catch(_){}
     }catch(err){ toast('Não consegui desfazer: ' + (err?.message || err)); }
+  };
+  // v1237 — APAGAR UMA OBSERVAÇÃO (pedido do dono: "quero opção de apagar a última mensagem,
+  // assim posso reanalisar de novo"). Depois de apagar, a tela oferece reanalisar na hora — que é
+  // o motivo de ele querer apagar: rodar a análise de novo sem aquela observação no meio.
+  window.cp704ApagarObservacao = async function(leadId, iso){
+    if(!leadId || !iso){ toast('Não consigo identificar essa observação.'); return; }
+    const aviso = 'Ela sai do histórico deste cliente e deixa de contar na próxima análise. Se for a única observação de hoje, o atendimento de hoje também é desfeito e o cliente volta pra fila.';
+    const ok = (typeof cp903Confirm === 'function')
+      ? await cp903Confirm({ titulo: 'Apagar esta observação', mensagem: aviso, ok: 'Apagar', cancelar: 'Cancelar', perigo: true })
+      : confirm(aviso);
+    if(!ok) return;
+    try{
+      const res = await fetch('./api/reanalisar-lead', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payloadComCerebro({ id: leadId, action:'apagar-observacao', iso }))
+      });
+      const d = await res.json().catch(()=>({}));
+      if(!d?.ok) throw new Error(d?.error || 'não consegui apagar');
+      try{ invalidarLeadsCache(); }catch(_){}
+      try{ invalidarLeadDetail(leadId); }catch(_){}
+      toast(d.atendimentoDesfeito
+        ? 'Observação apagada. O atendimento de hoje foi desfeito.'
+        : 'Observação apagada do histórico.');
+      try{ await loadRecentLeads(false); }catch(_){}
+      try{ await recarregarLeadFoco(leadId); }catch(_){}
+    }catch(err){ toast('Não consegui apagar: ' + (err?.message || err)); }
   };
   // v1025 — abre a proposta salva na timeline (busca o snapshot em state.lead.recentMessages
   // pelo mesmo `iso` da mensagem clicada e delega pro abridor real em js/proposta.js).
