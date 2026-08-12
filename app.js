@@ -2265,7 +2265,7 @@ function cpCadenciaNoticeHTML(l){
   if(!cad?.ativo) return "";
   if(cad.encerrar){
     const idJs = JSON.stringify(String(l?.id || ""));
-    return `<div class="notice" style="margin:0 0 12px;border-color:var(--risco)"><b>${escapeHtml(CP_CADENCIA_MSG_ARQUIVAR)}</b><div class="small" style="margin:6px 0 10px;color:var(--muted)">Cliente sem nenhuma resposta desde o primeiro contato. Se preferir, continue tentando — nada é arquivado sem você mandar.</div><button type="button" class="btn" style="width:auto;padding:10px 16px" onclick='arquivarLead(${idJs},${JSON.stringify(String(l?.name || ""))})'>Arquivar este lead</button></div>`;
+    return `<div class="notice" style="margin:0 0 12px;border-color:var(--risco)"><b>${escapeHtml(CP_CADENCIA_MSG_ARQUIVAR)}</b><div class="small" style="margin:6px 0 10px;color:var(--muted)">Cliente sem nenhuma resposta desde o primeiro contato. Se preferir, continue tentando — nada é arquivado sem você mandar.</div><button type="button" class="btn" style="width:auto;padding:10px 16px" onclick='arquivarLead(${idJs},${safeJson(String(l?.name || ""))})'>Arquivar este lead</button></div>`;
   }
   const dataProx = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(new Date(cad.proximaTs));
   const rotulo = cad.encerramento ? `mensagem de encerramento (${cad.total} de ${cad.total})` : `retomada ${cad.feitas + 1} de ${cad.total}`;
@@ -3892,9 +3892,11 @@ function renderResumoDia(items){
     if(totalAgenda > 0){ ba.style.display = "inline-block"; ba.textContent = totalAgenda; }
     else ba.style.display = "none";
   }
-  // Atualiza título da página com contador (útil pra ver em aba de fundo)
-  const totalUrgente = compHoje + lembretesVenceram;
-  document.title = totalUrgente > 0 ? `(${totalUrgente}) Corretor Pro` : "Corretor Pro";
+  // v1227 — o contador do título da aba saiu daqui e foi pra atualizarSinoAgenda: aqui ele fazia
+  // a própria conta (lembrete de hoje SEM descontar quem já foi atendido) e divergia do sino —
+  // a aba ficava "(1) Corretor Pro" com o sino zerado, a mesma doença de dois relógios da v1215.
+  // Agora o título usa a MESMA fonte única (cpAgendaDoDia) e se atualiza junto com o sino,
+  // inclusive quando um lembrete é excluído/reagendado fora da Home.
 }
 
 // v1215 — FONTE ÚNICA da agenda do dia. O número do sino e as listas da tela Agenda saíam de dois
@@ -3969,6 +3971,9 @@ async function atualizarSinoAgenda(leadsAll){
   const agendaN = hojeIds.size;
   state.agendaAtrasados = atrasadosN;
   state.agendaCount = agendaN + atrasadosN;
+  // v1227 — o título da aba conta o MESMO número do sino (antes cada um fazia a própria conta e
+  // divergiam; ver o comentário em renderResumoDia, de onde este contador saiu).
+  document.title = state.agendaCount > 0 ? `(${state.agendaCount}) Corretor Pro` : "Corretor Pro";
   const badgeAgT = qs("#btnAgendaTopoCount"); if(badgeAgT) badgeAgT.textContent = agendaN;
   // v787/v1205: o sino mostra só o aviso da agenda de hoje (e o número de atrasados).
   // A agenda mantém sua contagem própria, sem disputar o mesmo badge visual.
@@ -5678,7 +5683,10 @@ async function carregarAgendaTopo(){
       const bg = it.ordem === 1 ? "var(--acao-soft)" : "var(--accent-soft)";
       const nome = (it.lead.name||"Cliente").split(" ").slice(0,2).join(" ");
       const idJs = JSON.stringify(String(it.lead.id||""));
-      const keyJs = JSON.stringify(String(it.key||""));
+      // v1227 — safeJson, não JSON.stringify: a chave carrega texto livre extraído da conversa
+      // (o "oQue" do compromisso) e um apóstrofo nele estouraria o atributo onclick='...' —
+      // mesma classe de furo corrigida no botão "Arquivar este lead".
+      const keyJs = safeJson(String(it.key||""));
       // Formato natural: "Visita hoje à tarde · Nome do cliente" + um × pra remover se a IA errou.
       const frase = `${it.tipo} ${it.quando}${it.periodo}`;
       return `<span style="display:inline-flex;align-items:center;background:${bg};border:1px solid ${cor};border-radius:999px"><button type="button" onclick='abrirLead(${idJs})' style="background:none;border:none;color:var(--white);padding:7px 4px 7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px"><span style="color:${cor};font-weight:950">${escapeHtml(frase)}</span><span style="opacity:.5">·</span><span style="font-weight:700">${escapeHtml(nome)}</span></button><button type="button" title="Não é compromisso — remover" onclick='dispensarCompromisso(${keyJs})' style="margin:0 5px 0 2px;width:20px;height:20px;border-radius:999px;background:rgba(255,80,80,.22);border:1px solid rgba(255,120,120,.7);color:#ff8a8a;cursor:pointer;font-size:13px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto">×</button></span>`;
@@ -5962,7 +5970,7 @@ async function carregarAgenda(){
           linhas.push(`<div class="small" style="margin-top:4px">⏰ Lembrete vencido (${escapeHtml(new Date(lemTs).toLocaleDateString('pt-BR'))})${lem?.motivo ? ` — ${escapeHtml(_cortarFrase(String(lem.motivo), 70))}` : ''}</div>`);
         }
         for(const v of vencidos){
-          const keyJs = JSON.stringify(String(v.key));
+          const keyJs = safeJson(String(v.key)); // v1227 — texto livre na chave: ver comentário no outro keyJs
           linhas.push(`<div class="small" style="margin-top:4px;display:flex;align-items:center;gap:8px"><span style="min-width:0">${escapeHtml(v.oQue)} — era ${escapeHtml(v.dataBR)}${v.trecho ? ` · <i style="color:var(--muted)">"${escapeHtml(v.trecho.slice(0,60))}"</i>` : ''}</span><button type="button" title="Não é compromisso — descartar" onclick='dispensarCompromisso(${keyJs});carregarAgenda()' style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:rgba(255,80,80,.22);border:1px solid rgba(255,120,120,.7);color:#ff8a8a;cursor:pointer;font-size:13px;font-weight:900;line-height:1">×</button></div>`);
         }
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,80,80,.06);border-left:3px solid var(--risco);border-radius:6px;font-size:12px"><b style="color:var(--risco)">Atrasado há ${at.dias} dia${at.dias===1?'':'s'} (era ${escapeHtml(at.dataLabel)})</b>${linhas.join('')}</div>`;

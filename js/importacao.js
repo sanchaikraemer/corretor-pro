@@ -259,16 +259,25 @@ async function uploadLargeZipToSupabase(file, options = {}){
   const totalMb = file.size / 1024 / 1024;
 
   async function pedirUrlDeEnvio(){
-    const metaRes = await fetch("./api/criar-upload-url", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        fileName:file.name,
-        size:file.size,
-        contentType:file.type || "application/zip",
-        importId
-      })
-    });
+    let metaRes;
+    try{
+      metaRes = await fetch("./api/criar-upload-url", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          fileName:file.name,
+          size:file.size,
+          contentType:file.type || "application/zip",
+          importId
+        })
+      });
+    }catch(_){
+      // v1227 — sem conexão na hora de pedir a URL (o caso típico: a rede caiu no meio do envio
+      // e ainda não voltou quando o laço tenta de novo). É a mesma queda de rede do envio e tem
+      // que ser tratada igual: marcada como repetível pro laço gastar as tentativas que prometeu,
+      // em vez de estourar com um erro cru de "Failed to fetch".
+      throw classificarFalhaEnvio({ tipo:"rede", totalMb });
+    }
 
     let meta;
     try{ meta = await metaRes.json(); }
