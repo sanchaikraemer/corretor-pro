@@ -5224,7 +5224,10 @@ function cp704Css(){
       });
       const d = await res.json().catch(()=>({}));
       if(!d?.ok) throw new Error(d?.error || 'não consegui apagar');
+<<<<<<< HEAD
       cp7TiraDaTimelineLocal(leadId, iso);
+=======
+>>>>>>> origin/main
       try{ invalidarLeadsCache(); }catch(_){}
       try{ invalidarLeadDetail(leadId); }catch(_){}
       toast(d.atendimentoDesfeito
