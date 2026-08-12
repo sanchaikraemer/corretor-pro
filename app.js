@@ -4729,7 +4729,14 @@ export async function abrirLead(id, options={}){
     // O histórico integral permanece intacto. Só adiamos a montagem pesada para um
     // momento ocioso, evitando que a resposta da API congele o clique/rolagem.
     const aplicarCompleto = () => {
-      if(String(state.focoLeadId) === sid) aplicarLead(completo);
+      if(String(state.focoLeadId) !== sid) return;
+      // v1229 — se o corretor está com o painel "Agendar" aberto (muito provavelmente com o
+      // calendário/relógio nativo do celular na tela), remontar agora fecharia o calendário na
+      // cara dele — era o "toco na data e fecha sozinho" relatado no celular. Espera o painel
+      // fechar (confirmar/fechar já remontam por conta própria) e tenta de novo.
+      const cpAgPainelAberto = document.querySelector('#ui670SchedulePanel');
+      if(cpAgPainelAberto && !cpAgPainelAberto.hidden){ setTimeout(aplicarCompleto, 1500); return; }
+      aplicarLead(completo);
     };
     if("requestIdleCallback" in window){
       window.requestIdleCallback(aplicarCompleto, { timeout:700 });
@@ -5493,6 +5500,18 @@ function renderLeadFoco(lead){
       rolagemInterna: cp7ObsAntes.scrollTop,
       focado: document.activeElement === cp7ObsAntes
     } : null;
+    // v1229 — mesma doença da v1028 (card "Mensagens") e da v1081 (campo de observação), agora
+    // no painel "Agendar próximo contato": cada remontagem recriava o painel FECHADO (`hidden`
+    // cravado no HTML) e zerava dia/hora já escolhidos. No celular, a 2ª montagem (a que espera
+    // o servidor) chegava bem quando o corretor estava com o calendário nativo aberto — o painel
+    // sumia e parecia que a tela "fechou sozinha e voltou pro lead"; só na 2ª tentativa (lead já
+    // em cache, sem remontagem tardia) dava pra marcar. Guarda aberto/fechado + dia/hora antes
+    // de remontar e devolve logo depois.
+    const cpAgPainelAntes = area.querySelector('#ui670SchedulePanel');
+    const cpAgEstado = (cpAgPainelAntes && !cpAgPainelAntes.hidden) ? {
+      data: area.querySelector('#ui670ScheduleData')?.value || "",
+      hora: area.querySelector('#ui670ScheduleHora')?.value || ""
+    } : null;
     // Só vale restaurar a rolagem quando JÁ havia um detalhe montado aqui (remontagem).
     // Na primeira montagem (vindo do esqueleto) a página deve continuar se comportando como antes.
     const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
@@ -5559,6 +5578,19 @@ function renderLeadFoco(lead){
         try{ cp7ObsDepois.focus({ preventScroll:true }); }catch(_){ cp7ObsDepois.focus(); }
         try{ cp7ObsDepois.setSelectionRange(cp7ObsEstado.inicio, cp7ObsEstado.fim); }catch(_){}
       }
+    }
+  }
+  // v1229 — devolve o painel "Agendar" aberto e com o dia/hora que o corretor já tinha
+  // escolhido (ver comentário na captura, acima).
+  if(cpAgEstado){
+    const cpAgPainelDepois = area.querySelector('#ui670SchedulePanel');
+    if(cpAgPainelDepois){
+      cpAgPainelDepois.hidden = false;
+      const cpAgData = area.querySelector('#ui670ScheduleData');
+      const cpAgHora = area.querySelector('#ui670ScheduleHora');
+      if(cpAgData && cpAgEstado.data) cpAgData.value = cpAgEstado.data;
+      if(cpAgHora) cpAgHora.value = cpAgEstado.hora;
+      try{ cpAgendarResumo("ui670Schedule"); }catch(_){}
     }
   }
   // A remontagem troca a altura da área e o navegador reposiciona a página sozinho — é o
@@ -5898,7 +5930,16 @@ async function reagendarLembrete(id, dateStr, horaStr){
     toast("Agendado para " + new Date(dateStr+"T12:00:00").toLocaleDateString("pt-BR") + (horaValida ? `, ${horaStr}` : "") + " — e marcado como atendido hoje.");
     await atualizarSinoAgenda(); // sino do topo na hora, em qualquer tela (sem F5)
     if(state.active === "agenda") carregarAgenda();
-    else if(state.lead?.id) { try{ abrirLead(id); }catch(_){} }
+    else if(state.lead?.id) {
+      // v1229 — pedido do dono: depois de agendar, voltar pro TOPO da tela do cliente (a página
+      // parava lá embaixo, na altura de "Detalhes comerciais", onde o painel fica). Fecha o
+      // painel antes de remontar (senão a preservação da v1229 em renderLeadFoco o devolveria
+      // aberto e a remontagem tardia ficaria esperando à toa) e sobe a página ANTES da
+      // remontagem — assim a restauração de rolagem de renderLeadFoco já captura o topo.
+      try{ const cpAgP = document.querySelector('#ui670SchedulePanel'); if(cpAgP) cpAgP.hidden = true; }catch(_){}
+      try{ window.scrollTo({ top: 0, behavior: "auto" }); }catch(_){ try{ window.scrollTo(0,0); }catch(_){} }
+      try{ abrirLead(id); }catch(_){}
+    }
     else if(state.active === "home") carregarDashboard();
   }catch(err){ toast("Não consegui remarcar: " + (err?.message||err)); }
 }
