@@ -15,6 +15,8 @@ import assert from "node:assert/strict";
 import { analyzeWithBrain, detectarFrasesProibidas, conferirTrioMensagens } from "../api/_pipeline.js";
 
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
+const CUMPRIMENTO_AUTORRESPONDIDO_NO_CODIGO =
+  detectarFrasesProibidas("Boa noite, tudo bem? Tranquilo por aqui, vi que voce prefere aguardar.").proibidas.length > 0;
 
 // ── 1) Os textos exatos dos prints são pegos ────────────────────────────────────────────────
 const print1A = "Boa noite Adriano, tudo bem? Tranquilo por aqui, vi que você prefere aguardar para avançar com a simulação nesse momento. Quando quiser retomar ou se quiser conversar sobre outras opções em Carazinho, é só avisar. Fico na escuta, como combinamos!";
@@ -99,8 +101,13 @@ assert.match(analyzeSrc, /if \(nota\(conferenciaNova\) <= nota\(conferencia\)\)/
 // ── 6) As regras novas estão escritas no prompt que vai pra IA ──────────────────────────────
 assert.match(pipeline, /O GANCHO DA RETOMADA É A VIDA DO CLIENTE, NÃO A SUA OFERTA/,
   "a regra da retomada pelo assunto do cliente precisa estar no prompt");
-assert.match(pipeline, /CUMPRIMENTO QUE SE RESPONDE SOZINHO — PROIBIDO/,
-  "o cumprimento auto-respondido precisa estar proibido por escrito no prompt");
+// v1240 — o bloco de estilo saiu do prompt (estilo é assunto do Cérebro do corretor, não do
+// código). O cumprimento auto-respondido continua proibido por escrito, numa linha só, E
+// continua sendo CORTADO pelo código na saída — que é a garantia que vale de verdade.
+assert.match(pipeline, /perguntar e responder por si mesmo no mesmo fôlego/,
+  "o cumprimento auto-respondido precisa continuar proibido por escrito no prompt");
+assert.ok(CUMPRIMENTO_AUTORRESPONDIDO_NO_CODIGO,
+  "e continuar sendo pego pela conferência do código, que é o que o corretor realmente vê");
 
 // ── 7) O comportamento de verdade, ponta a ponta (não só o texto do código) ─────────────────
 // Roda analyzeWithBrain com uma IA de mentira: a 1ª resposta traz as mensagens ruins, a 2ª (a

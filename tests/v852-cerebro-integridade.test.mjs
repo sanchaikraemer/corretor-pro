@@ -79,7 +79,11 @@ assert.match(systemPromptCapturado, /NUNCA afirme preço, condição de pagament
   "a prévia precisa proibir explicitamente afirmar qualquer dado comercial que não esteja na conversa");
 assert.match(systemPromptCapturado, /Não identificado/,
   "campo sem base na conversa precisa continuar caindo em Não identificado");
-assert.match(systemPromptCapturado, /INTELIGÊNCIA COMERCIAL BASE/,
+// v1240 — o antigo "INTELIGÊNCIA COMERCIAL BASE" foi partido em dois, a pedido do dono ("a única
+// regra era seguir as ordens do cerebro"): a parte que PROÍBE INVENTAR continua entrando sempre,
+// e o método comercial virou só um ponto de partida pra quem ainda não escreveu o Cérebro. O que
+// este assert protege — a prévia não pode abrir a porta pra invenção — continua igual.
+assert.match(systemPromptCapturado, /NADA DE INVENTAR/,
   "o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt");
 
 // 3. Com Cérebro configurado, nada muda: não é prévia.

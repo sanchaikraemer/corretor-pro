@@ -19,8 +19,12 @@ const cerebroApi = fs.readFileSync(new URL("../api/cerebro-config.js", import.me
 // condição comercial que não esteja na conversa.
 assert.match(
   pipeline,
-  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*\$\{INTELIGENCIA_CARTEIRA\}[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*instrucoesCerebroTexto[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
-  "o playbook base precisa estar no prompt vivo, antes do Cérebro do corretor"
+  // v1240 — "a única regra era seguir as ordens do cerebro" (dono). O playbook virou duas coisas:
+  // NAO_INVENTE, que entra SEMPRE e é o que protege o corretor de uma mentira chegar no cliente, e
+  // o método comercial, que agora só vai pra quem ainda NÃO escreveu o Cérebro. A ordem que este
+  // teste protege continua: o que o código impõe vem antes, o Cérebro dele fecha e manda.
+  /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*\$\{NAO_INVENTE\}[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*instrucoesCerebroTexto[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
+  "o que o código impõe precisa vir antes do Cérebro do corretor, que fecha o prompt"
 );
 
 const chamadas = [];
@@ -47,7 +51,12 @@ await analyzeWithBrain({
   cerebroConfig: { metodo: "método do corretor", tom: "tom normal" }
 });
 const systemVivo = chamadas.at(-1).messages.find(m => m.role === "system")?.content || "";
-assert.match(systemVivo, /QUALIFICAR antes de empurrar produto/, "trecho do playbook precisa chegar no prompt de verdade enviado ao modelo");
+// v1240 — este corretor TEM Cérebro ("método do corretor"), então o método comercial do código
+// não vai mais junto: quem manda no método é ele. O que continua chegando sempre é a parte que o
+// protege de uma invenção — e é isso que se confere aqui agora.
+assert.match(systemVivo, /NADA DE INVENTAR/, "o que protege contra invenção chega sempre no prompt de verdade");
+assert.doesNotMatch(systemVivo, /QUALIFICAR antes de empurrar produto/,
+  "quem já escreveu o Cérebro não recebe mais o método comercial do código");
 // v1084 — o playbook base deixou de trazer ARGUMENTO PRONTO com condição comercial embutida
 // ("congela o preço", "pega desconto", "entrada + financiamento…"). Motivo: essas condições
 // dependem da construtora de cada corretor, e a IA as tratava como fato — quem vende só pronto
@@ -55,8 +64,13 @@ assert.match(systemVivo, /QUALIFICAR antes de empurrar produto/, "trecho do play
 // olhar em cada situação); toda condição precisa vir do Cérebro ou da própria conversa.
 assert.doesNotMatch(systemVivo, /congela o preço|pega desconto/,
   "o piso comercial não pode afirmar condição de venda (isso vem do Cérebro ou da conversa)");
-assert.match(systemVivo, /Quer dar imóvel na troca \(permuta\)/,
-  "o roteiro de permuta continua no prompt — o que saiu foi a promessa, não a situação");
+// v1240 — o ROTEIRO (permuta, investidor, decisão conjunta…) é método comercial e agora só vai
+// pra quem ainda não escreveu o Cérebro; quem já escreveu segue o dele. O roteiro não foi
+// destruído — continua no ponto de partida, e é isso que se confere.
+assert.doesNotMatch(systemVivo, /Quer dar imóvel na troca \(permuta\)/,
+  "quem já tem Cérebro não recebe mais o roteiro comercial do código");
+assert.match(pipeline, /Quer dar imóvel na troca \(permuta\)/,
+  "o roteiro continua existindo como ponto de partida de quem ainda não escreveu o Cérebro");
 assert.match(systemVivo, /só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa/,
   "o piso precisa deixar explícito que condição comercial nunca é inventada");
 

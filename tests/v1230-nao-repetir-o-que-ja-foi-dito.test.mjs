@@ -15,7 +15,9 @@ assert.match(pipeline, /NÃO REPETIR O QUE JÁ FOI DITO — REGRA DURA/,
   'o prompt da análise precisa ter a regra dura de não repetir o que já foi dito');
 
 // As três frentes da regra:
-assert.match(pipeline, /já respondeu uma informação[\s\S]{0,200}pode perguntar essa informação de novo/i,
+// v1240 — os seis blocos que repetiam esta ideia viraram um só, e o texto foi reescrito. A regra
+// é a mesma; o que muda aqui é onde ela mora.
+assert.match(pipeline, /Informação que o CLIENTE já respondeu[\s\S]{0,160}NÃO se pergunta\s*\n?\s*de novo/i,
   'pergunta já RESPONDIDA pelo cliente não pode ser perguntada de novo');
 assert.match(pipeline, /ÚLTIMA fala do corretor[\s\S]{0,300}MESMA pergunta como se fosse nova/,
   'a última pergunta do corretor ainda sem resposta não pode ser reescrita como se fosse nova');
