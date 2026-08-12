@@ -150,14 +150,21 @@ try {
 
 // ── 6. a tela: o X só aparece na mensagem que o app registrou ─────────────────────────────────
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
-assert.match(app, /const podeDesfazer = ehEnviada && String\(m\?\.iso \|\| ''\)/,
-  'o botão de desfazer só pode aparecer em mensagem que o app registrou (type "mensagem_enviada") e que tenha identificador');
+// v1237 — o mesmo ✕ passou a valer também pra OBSERVAÇÃO escrita pelo corretor. A intenção
+// original deste assert não mudou e continua travada: o botão só aparece no que o APP registrou
+// (mensagem copiada ou observação) e que tenha identificador — fala vinda da conversa exportada do
+// WhatsApp nunca ganha ✕.
+assert.match(app, /const podeDesfazer = \(ehEnviada \|\| ehObsApagavel\) && String\(m\?\.iso \|\| ''\)/,
+  'o botão de desfazer só pode aparecer no que o app registrou (mensagem copiada ou observação) e que tenha identificador');
+assert.match(app, /ehObsApagavel = tipo==='observacao_manual'/,
+  'a observação apagável é só a que o corretor registrou pelo app');
 assert.match(app, /cp704DesfazerMensagemEnviada\(/, "o X precisa chamar o desfazer");
 assert.match(app, /action:'desfazer-mensagem-enviada'/, "a tela precisa chamar a ação certa do servidor");
 assert.match(app, /event\.stopPropagation\(\)/,
   "o X não pode disparar o clique do balão (proposta salva abre ao tocar no balão)");
 // Confirmação obrigatória: é uma remoção, e o dono pediu, desde a v1186, que apagar sempre pergunte.
-const bloco = app.slice(app.indexOf("window.cp704DesfazerMensagemEnviada"), app.indexOf("window.cp704AbrirPropostaSalva"));
+// v1237 — o fim do bloco é a função nova de apagar observação, que passou a morar entre as duas.
+const bloco = app.slice(app.indexOf("window.cp704DesfazerMensagemEnviada"), app.indexOf("window.cp704ApagarObservacao"));
 assert.match(bloco, /cp903Confirm/, "desfazer precisa perguntar antes");
 assert.match(bloco, /atendimento de hoje também é desfeito/,
   "a pergunta precisa avisar, em português de gente, que o atendimento pode ser desfeito junto");
