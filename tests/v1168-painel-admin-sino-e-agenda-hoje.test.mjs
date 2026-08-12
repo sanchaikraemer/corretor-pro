@@ -122,9 +122,13 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
   assert.match(css, /#topBell \.bell-badge:not\(\[hidden\]\)\{/, 'a base do pontinho de v787 precisa continuar existindo');
   assert.match(css, /#topBell\.tem-atraso \.bell-badge:not\(\[hidden\]\)\{/, 'a regra de atraso (v1093) precisa continuar existindo');
 
-  // JS: o texto do selo passa a mostrar a contagem de hoje mesmo sem atraso.
-  assert.match(app, /badge\.textContent = atr > 0 \? String\(atr\) : \(n > 0 \? String\(n\) : ''\);/,
-    'sem atraso, o selo precisa mostrar a contagem de hoje — antes ficava vazio mesmo com CSS pronto pra mostrar');
+  // JS (v1232): o desenho do sino mudou — o número de hoje agora é SEMPRE visível, inline ao lado
+  // do sino, dentro do bloco da agenda do topo (#cpAgHojeN). A exigência desta guarda continua a
+  // mesma de sempre: a contagem de hoje precisa aparecer mesmo sem atraso — nunca voltar ao
+  // pontinho cego que o dono não percebia.
+  assert.match(app, /num\.textContent = String\(n\);/,
+    'o número de hoje precisa ser gravado sempre (n inclui atrasados) — nunca só quando há atraso');
+  assert.match(app, /cp-hoje-alerta/, 'com agenda hoje o sino precisa acender (cp-hoje-alerta)');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

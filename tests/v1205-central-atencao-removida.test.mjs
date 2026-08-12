@@ -27,9 +27,12 @@ assert.match(html, /id="bellBadge"/, 'o aviso no cantinho do sino continua exist
 assert.ok(!/bell\.addEventListener\('click'/.test(app), 'nenhum atalho pode roubar o toque do sino de volta pra um painel');
 
 // 3. O número do aviso (agenda de hoje / atrasados) segue funcionando.
+// v1232 — o sino mudou de desenho: agora vive no bloco da agenda do topo, com o número inline
+// (#cpAgHojeN) e classes próprias (cp-hoje-atraso deixa a metade de hoje vermelha). A exigência
+// desta guarda continua: atraso precisa continuar deixando o sino vermelho e com número visível.
 assert.match(app, /function updateBell\(\)/, 'o aviso do sino continua sendo atualizado');
-assert.match(app, /bell\.classList\.toggle\('tem-atraso', atr > 0\)/, 'compromisso atrasado continua deixando o sino vermelho (v1093)');
-assert.match(css, /#topBell\.tem-atraso \.bell-badge:not\(\[hidden\]\)\{/, 'o número de atrasados continua visível no sino');
+assert.match(app, /bell\.classList\.toggle\('cp-hoje-atraso', atr > 0\)/, 'compromisso atrasado continua deixando o sino vermelho');
+assert.match(css, /#topBell\.cp-hoje-atraso\{background:var\(--risco-soft\)!important;color:var\(--risco\)!important\}/, 'o atraso continua com a cor de risco no sino');
 
 // 4. O estilo do painel continua no CSS porque o Bloco de notas (v1171) o reaproveita.
 assert.ok(app.includes('cp687-notify-panel cp1170-panel'), 'o Bloco de notas continua usando esse estilo de painel');

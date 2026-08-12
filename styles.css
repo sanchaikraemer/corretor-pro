@@ -853,7 +853,9 @@ button,input,textarea,select{font-family:inherit}
 .sb-item .ic svg{width:17px!important;height:17px!important;stroke:currentColor!important}
 .sb-item:hover{background:rgba(255,255,255,.065)!important;color:#fff!important}
 .sb-item.active{background:var(--accent-soft)!important;color:#fff!important;box-shadow:inset 3px 0 0 var(--accent)!important}
-.cp-profile span{display:grid!important;place-items:center!important;border-radius:50%!important;background:linear-gradient(145deg,#efb28c,#8b5d4a)!important;color:#fff!important;font-weight:750!important}
+/* v1232 — avatar dentro da paleta oficial (era um degradê âmbar/marrom fora da paleta; o dono
+   barrou: "nenhuma cor pode fugir da paleta"). Agora usa o coral da marca. */
+.cp-profile span{display:grid!important;place-items:center!important;border-radius:50%!important;background:linear-gradient(145deg,var(--cp-coral,#FF6258),#C6493F)!important;color:#fff!important;font-weight:750!important}
 
 /* TOPBAR */
 .cp-topbar{display:flex!important;align-items:center!important;gap:15px!important;height:58px!important;min-height:58px!important;margin:0!important;padding:0 28px!important;border-bottom:1px solid var(--cp-border)!important;background:var(--cp-panel)!important;box-shadow:none!important}
@@ -1976,3 +1978,45 @@ body.cpio-aberto{overflow:hidden}
 .cp-met-mes-chips{display:flex;gap:8px;margin:2px 0 12px}
 .cp-met-mes-chip{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--soft);font:inherit;font-size:12px;font-weight:950;cursor:pointer}
 .cp-met-mes-chip.ativo{background:rgba(255,98,88,.16);border-color:rgba(255,98,88,.6);color:var(--text)}
+
+/* ===== v1232 — Agenda: bloco único no topo (modelo C) + semana no topo da tela (modelo 4) ===== */
+/* Bloco do topo: calendário (TOTAL da agenda) + sino (agenda de HOJE), numa cápsula só.
+   Substitui o sino solto com pontinho (v787/v1093/v1168 — aqueles blocos de CSS seguem no
+   arquivo, mas inertes: o #bellBadge fica sempre [hidden] e as classes tem-alerta/tem-atraso
+   não são mais aplicadas; o sino agora usa cp-hoje-alerta/cp-hoje-atraso, abaixo). */
+.cp-agbloco{display:inline-flex!important;align-items:center!important;gap:2px!important;height:32px!important;padding:0 3px!important;border:1px solid var(--cp-border,var(--line))!important;border-radius:999px!important;background:var(--cp-panel-2,rgba(255,255,255,.04))!important}
+.cp-agbloco-met{display:inline-flex!important;align-items:center!important;gap:5px!important;height:26px!important;width:auto!important;padding:0 9px!important;border:0!important;border-radius:999px!important;background:transparent!important;color:var(--cp-muted,var(--muted))!important;font:inherit!important;font-size:12px!important;font-weight:800!important;cursor:pointer!important}
+.cp-agbloco-met svg{width:14px!important;height:14px!important;flex:none!important}
+.cp-agbloco-met b{font-size:12px!important;font-weight:900!important;font-variant-numeric:tabular-nums!important;line-height:1!important}
+.cp-agbloco-met:hover{background:color-mix(in srgb,var(--cp-muted,#8FB1BF) 14%,transparent)!important;color:var(--cp-text,var(--text))!important}
+.cp-agbloco-div{width:1px!important;height:15px!important;background:var(--cp-border,var(--line))!important;flex:none!important}
+/* A metade de HOJE acende: ciano (--acao, a cor da agenda no app inteiro) quando há compromisso
+   no dia; vermelho (--risco) quando há atraso. Sem nada hoje, fica apagada como o resto. */
+#topBell.cp-hoje-alerta{background:var(--acao-soft)!important;color:var(--acao)!important}
+#topBell.cp-hoje-atraso{background:var(--risco-soft)!important;color:var(--risco)!important}
+@media(max-width:999px){
+  /* Compacto no celular: sem isso o bloco espremia o "Atualização #NNNN" da marca (flagrado na
+     conferência visual em 390px — o número da versão é a referência do dono, não pode cortar). */
+  .cp-agbloco{height:32px!important;padding:0 2px!important;gap:1px!important}
+  .cp-agbloco-met{height:27px!important;padding:0 6px!important;gap:4px!important}
+  .cp-mobile-brand-copy{min-width:0!important}
+  .cp-mobile-version{margin-left:5px!important}
+}
+/* Em tela bem estreita, a palavra "Atualização" sai e fica só o "#NNNN" (a referência que o dono
+   confere) — senão o número ficava por baixo do bloco da agenda. */
+@media(max-width:430px){
+  .cp-versao-palavra{display:none!important}
+}
+
+/* Faixa da semana no topo da tela Agenda (modelo 4): 7 dias + "Tudo" + "Atrasados", cada um com
+   sua quantidade; o dia escolhido fica aceso em ciano (atrasados, em vermelho). */
+.cp-ag-semana{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;margin:0 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.cp-ag-dia{flex:0 0 auto;min-width:54px;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 10px;border:1px solid var(--cp-border,var(--line));border-radius:12px;background:var(--cp-panel-2,rgba(255,255,255,.04));color:var(--cp-text,var(--text));cursor:pointer;font:inherit;line-height:1.2}
+.cp-ag-dia span{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cp-muted,var(--muted))}
+.cp-ag-dia b{font-size:16px;font-weight:900;font-variant-numeric:tabular-nums}
+.cp-ag-dia small{font-size:9px;color:var(--cp-muted,var(--muted))}
+.cp-ag-dia.vazio b{color:var(--cp-muted,var(--muted));font-weight:700}
+.cp-ag-dia.ativo{border-color:var(--acao);background:var(--acao-soft)}
+.cp-ag-dia.ativo span,.cp-ag-dia.ativo b{color:var(--acao)}
+.cp-ag-dia.atras span,.cp-ag-dia.atras b{color:var(--risco)}
+.cp-ag-dia.atras.ativo{border-color:var(--risco);background:var(--risco-soft)}

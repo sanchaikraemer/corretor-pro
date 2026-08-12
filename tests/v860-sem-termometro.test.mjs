@@ -27,7 +27,9 @@ assert.doesNotMatch(app, /Precisa reaquecer/, 'rótulo "Precisa reaquecer" preci
 // "Fazer agora / Agenda / Aguardando cliente / Carteira ativa" (nenhum fala de temperatura,
 // que é o ponto desta regressão). Confirma que os rótulos atuais existem.
 assert.match(app, /meta:\{titulo:'Fazer agora',sub\}/, 'lista atual usa "Fazer agora" (sem termômetro)');
-assert.match(app, /onclick="show\('agenda'\)"><span>Agenda<\/span>/, 'card atual usa "Agenda" (sem termômetro)');
+// v1232 — o card "Agenda" saiu da fileira da Home (o número mora no bloco do topo); a tela
+// Agenda continua existindo com esse nome, sem termômetro — é o que esta regressão vigia.
+assert.match(app, /Agenda/, 'a Agenda continua com esse nome (sem termômetro)');
 assert.match(app, /titulo:'Aguardando cliente'/, 'lista atual usa "Aguardando cliente" (sem termômetro)');
 
 console.log('v860-sem-termometro: ok');
