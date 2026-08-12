@@ -76,18 +76,18 @@ h1{font-size:28px;line-height:1;margin:0;letter-spacing:-.05em}
 .btn.secondary{background:rgba(255,255,255,.055);color:var(--text);border:1px solid var(--line);box-shadow:none}
 .btn:disabled,.btn[disabled]{opacity:.45!important;cursor:not-allowed!important;filter:grayscale(.35);pointer-events:none}
 .btn.cyan{background:var(--accent)}
-.btn.danger{background:var(--risco-soft);color:#ffdbe2;border:1px solid var(--risco-line);box-shadow:none}
+.btn.danger{background:var(--risco-soft);color:var(--risco);border:1px solid var(--risco-line);box-shadow:none}
 @keyframes barraInd{0%{left:-40%}100%{left:100%}}
 .lead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.035);padding:14px;margin-top:10px}
 .lead strong{display:block;font-size:16px;margin-bottom:4px}
-.tag{display:inline-flex;border-radius:999px;padding:6px 9px;font-weight:950;font-size:12px;color:#bdf8ff;background:rgba(55,232,255,.12);border:1px solid rgba(55,232,255,.22);white-space:nowrap}.tag.hot{color:#efffb0;background:rgba(255,98,88,.12);border-color:rgba(255,98,88,.28)}.tag.warn{color:#ffc4f4;background:rgba(255,79,216,.10);border-color:rgba(255,79,216,.2)}
+.tag{display:inline-flex;border-radius:999px;padding:6px 9px;font-weight:950;font-size:12px;color:var(--dados);background:rgba(86,199,242,.12);border:1px solid rgba(86,199,242,.22);white-space:nowrap}.tag.hot{color:var(--accent);background:rgba(255,98,88,.12);border-color:rgba(255,98,88,.28)}.tag.warn{color:var(--soft);background:rgba(255,79,216,.10);border-color:rgba(255,79,216,.2)}
 input,textarea{width:100%;background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:16px;padding:14px 13px;outline:none;font-size:16px}
 textarea{min-height:176px;resize:vertical;line-height:1.45}
 label{display:block;color:var(--muted);font-size:14px;margin:14px 0 7px}
-.timeline{border-left:2px solid rgba(55,232,255,.32);padding-left:13px;margin-top:10px;max-height:560px;overflow:auto}
+.timeline{border-left:2px solid rgba(86,199,242,.32);padding-left:13px;margin-top:10px;max-height:560px;overflow:auto}
 .event{padding:9px 0}.event b{font-size:13px}.event p{font-size:13px;line-height:1.35;color:var(--muted);margin:4px 0 0;white-space:pre-wrap}
 .notice{padding:13px;border-radius:18px;border:1px solid rgba(255,98,88,.22);background:rgba(255,98,88,.08);color:#edfbc4;font-size:13px;line-height:1.42;margin:12px 0}
-.notice.error{border-color:var(--risco-line);background:var(--risco-soft);color:#ffdbe2}
+.notice.error{border-color:var(--risco-line);background:var(--risco-soft);color:var(--risco)}
 .empty{border:1px dashed rgba(255,255,255,.16);border-radius:18px;padding:18px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.45}
 .file-name{display:none;border-top:1px solid var(--line);padding-top:10px;color:#dffbff;font-size:13px;line-height:1.35;word-break:break-word}.file-name.show{display:block}
 .processing{display:none;margin-top:10px}.processing.show{display:block}
@@ -315,7 +315,7 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 /* v1139 — .home-saud-acoes/.seq-link removidos: só existiam pro botão "Pular próximo", que saiu. */
 
 /* Leitura do cliente (diagnóstico) no topo do lead */
-.diag-card{margin-bottom:14px;padding:13px 15px;background:rgba(55,232,255,.05);border:1px solid rgba(55,232,255,.22);border-radius:14px}
+.diag-card{margin-bottom:14px;padding:13px 15px;background:rgba(86,199,242,.05);border:1px solid rgba(86,199,242,.22);border-radius:14px}
 .diag-tit{text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:950;color:var(--dados);margin-bottom:9px}
 .diag-int{display:inline-block;border:1px solid;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:950;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
 .diag-row{font-size:13px;line-height:1.55;margin:2px 0;color:var(--text)}
@@ -388,7 +388,7 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 .btn{ border-radius:12px; }
 .btn.secondary{ background:rgba(255,255,255,.05); border-color:var(--line2); color:var(--text); }
 .btn.cyan{ background:var(--accent); color:var(--on-accent); }
-.btn.danger{ background:rgba(244,118,138,.10); color:#ffd7de; border-color:rgba(244,118,138,.26); }
+.btn.danger{ background:rgba(227,84,84,.10); color:var(--risco); border-color:rgba(227,84,84,.26); }
 button:focus-visible,.btn:focus-visible,.sb-item:focus-visible,.nav:focus-visible{
   outline:2px solid var(--accent); outline-offset:2px;
 }
@@ -1984,21 +1984,36 @@ body.cpio-aberto{overflow:hidden}
    Substitui o sino solto com pontinho (v787/v1093/v1168 — aqueles blocos de CSS seguem no
    arquivo, mas inertes: o #bellBadge fica sempre [hidden] e as classes tem-alerta/tem-atraso
    não são mais aplicadas; o sino agora usa cp-hoje-alerta/cp-hoje-atraso, abaixo). */
-.cp-agbloco{display:inline-flex!important;align-items:center!important;gap:2px!important;height:32px!important;padding:0 3px!important;border:1px solid var(--cp-border,var(--line))!important;border-radius:999px!important;background:var(--cp-panel-2,rgba(255,255,255,.04))!important}
-.cp-agbloco-met{display:inline-flex!important;align-items:center!important;gap:5px!important;height:26px!important;width:auto!important;padding:0 9px!important;border:0!important;border-radius:999px!important;background:transparent!important;color:var(--cp-muted,var(--muted))!important;font:inherit!important;font-size:12px!important;font-weight:800!important;cursor:pointer!important}
-.cp-agbloco-met svg{width:14px!important;height:14px!important;flex:none!important}
-.cp-agbloco-met b{font-size:12px!important;font-weight:900!important;font-variant-numeric:tabular-nums!important;line-height:1!important}
-.cp-agbloco-met:hover{background:color-mix(in srgb,var(--cp-muted,#8FB1BF) 14%,transparent)!important;color:var(--cp-text,var(--text))!important}
-.cp-agbloco-div{width:1px!important;height:15px!important;background:var(--cp-border,var(--line))!important;flex:none!important}
-/* A metade de HOJE acende: ciano (--acao, a cor da agenda no app inteiro) quando há compromisso
-   no dia; vermelho (--risco) quando há atraso. Sem nada hoje, fica apagada como o resto. */
-#topBell.cp-hoje-alerta{background:var(--acao-soft)!important;color:var(--acao)!important}
-#topBell.cp-hoje-atraso{background:var(--risco-soft)!important;color:var(--risco)!important}
+/* v1234 — o dono pediu MAIS DESTAQUE ("isso aqui precisa chamar mais a atenção também"): no
+   print, o bloco sumia no fundo escuro do topo — números cinza, contorno quase invisível. Agora
+   ele é uma cápsula sólida, com contorno visível e os números em branco/tamanho de leitura; e a
+   metade de HOJE fica PREENCHIDA (ciano da agenda) quando há compromisso no dia, ou vermelha e
+   pulsando quando há atraso — em vez do fundo levemente tingido de antes. Tudo na paleta. */
+.cp-agbloco{display:inline-flex!important;align-items:center!important;gap:3px!important;height:36px!important;padding:0 4px!important;border:1px solid color-mix(in srgb,var(--cp-text,#F7FAFB) 22%,transparent)!important;border-radius:999px!important;background:var(--cp-panel-2,rgba(255,255,255,.04))!important;box-shadow:0 2px 10px rgba(0,0,0,.16)!important}
+.cp-agbloco-met{display:inline-flex!important;align-items:center!important;gap:6px!important;height:28px!important;width:auto!important;padding:0 10px!important;border:0!important;border-radius:999px!important;background:transparent!important;color:var(--cp-text,var(--text))!important;font:inherit!important;font-size:13px!important;font-weight:800!important;cursor:pointer!important}
+.cp-agbloco-met svg{width:16px!important;height:16px!important;flex:none!important;opacity:.85!important}
+.cp-agbloco-met b{font-size:14px!important;font-weight:900!important;font-variant-numeric:tabular-nums!important;line-height:1!important}
+.cp-agbloco-met:hover{background:color-mix(in srgb,var(--cp-text,#F7FAFB) 12%,transparent)!important}
+.cp-agbloco-div{width:1px!important;height:17px!important;background:color-mix(in srgb,var(--cp-text,#F7FAFB) 20%,transparent)!important;flex:none!important}
+/* Metade de HOJE preenchida: ciano (--acao, a cor da agenda no app) com compromisso no dia;
+   vermelho (--risco) com atraso, pulsando de leve pra puxar o olho. */
+#topBell.cp-hoje-alerta{background:var(--acao)!important;color:#052B36!important}
+#topBell.cp-hoje-alerta svg{opacity:1!important}
+#topBell.cp-hoje-alerta:hover{background:var(--acao)!important;filter:brightness(1.06)!important}
+/* No tema claro o ciano é mais escuro (#238AB3): ali quem lê melhor é o texto branco (conferido
+   no navegador — com o azul-petróleo o contraste caía abaixo do aceitável). */
+html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
+#topBell.cp-hoje-atraso{background:var(--risco)!important;color:#fff!important;animation:cpAgPulsa 1.6s ease-in-out infinite!important}
+#topBell.cp-hoje-atraso svg{opacity:1!important}
+#topBell.cp-hoje-atraso:hover{background:var(--risco)!important;filter:brightness(1.06)!important}
+@keyframes cpAgPulsa{0%,100%{box-shadow:0 0 0 0 rgba(227,84,84,.55)}50%{box-shadow:0 0 0 5px rgba(227,84,84,0)}}
+@media (prefers-reduced-motion: reduce){ #topBell.cp-hoje-atraso{animation:none!important} }
 @media(max-width:999px){
   /* Compacto no celular: sem isso o bloco espremia o "Atualização #NNNN" da marca (flagrado na
      conferência visual em 390px — o número da versão é a referência do dono, não pode cortar). */
-  .cp-agbloco{height:32px!important;padding:0 2px!important;gap:1px!important}
-  .cp-agbloco-met{height:27px!important;padding:0 6px!important;gap:4px!important}
+  .cp-agbloco{height:34px!important;padding:0 3px!important;gap:2px!important}
+  .cp-agbloco-met{height:27px!important;padding:0 8px!important;gap:5px!important;font-size:12.5px!important}
+  .cp-agbloco-met b{font-size:13.5px!important}
   .cp-mobile-brand-copy{min-width:0!important}
   .cp-mobile-version{margin-left:5px!important}
 }
