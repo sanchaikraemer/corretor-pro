@@ -68,7 +68,22 @@ export function mensagemDesistencia({ enviadoMb = 0, totalMb = 0, tentativas = T
 export async function enviarComRetentativa({ pedirUrl, enviar, avisar, esperar, totalMb = 0, tentativas = TENTATIVAS_ENVIO }){
   const avisa = (evento) => { try{ avisar && avisar(evento); }catch(_){ } };
   for(let tentativa = 1; ; tentativa++){
-    const preparo = await pedirUrl(tentativa);
+    // v1227 — a queda de conexão também acontece AQUI. O cenário é justamente o da v1217: a rede
+    // caiu no meio do envio, o laço espera 3s e volta — só que a internet ainda não voltou, e o
+    // pedido da URL nova falhava com um erro cru que escapava do laço inteiro. Resultado: das 3
+    // tentativas prometidas, o dono via 1 e um erro em inglês. Falha marcada como repetível
+    // (cpPodeTentarDeNovo) gasta a tentativa e espera de novo, como qualquer queda no envio.
+    let preparo;
+    try{
+      preparo = await pedirUrl(tentativa);
+    }catch(err){
+      if(!err?.cpPodeTentarDeNovo) throw err;
+      const enviadoMb = Number.isFinite(err?.cpEnviadoMb) ? err.cpEnviadoMb : 0;
+      if(tentativa >= tentativas) throw new Error(mensagemDesistencia({ enviadoMb, totalMb, tentativas }));
+      avisa({ fase:"recomecando", tentativa, tentativas, enviadoMb, totalMb });
+      await esperar(tentativa * ESPERA_ENTRE_TENTATIVAS_MS);
+      continue;
+    }
     avisa({ fase:"enviando", tentativa, tentativas });
     try{
       await enviar(preparo, tentativa);
