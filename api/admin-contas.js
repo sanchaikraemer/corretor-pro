@@ -94,10 +94,25 @@ async function lerEventosUsoIA(supabase, desdeISO) {
   return { ok: true, rows };
 }
 
+// v1226 — "hoje" do custo tem que ser o MESMO "hoje" do contador de análises: o dia de calendário
+// de Brasília. Antes o custo cortava o dia à meia-noite de Londres (UTC), e o contador de análises
+// (diaCalendarioSP em _pipeline.js) à meia-noite de Brasília — três horas de diferença. Resultado
+// que o dono flagrou no painel: entre meia-noite e 3h da manhã, o cartão mostrava "R$ 2,64 hoje"
+// ao lado de "0/150 hoje", porque o gasto das últimas horas da noite anterior ainda contava como
+// "hoje" na coluna do dinheiro e já tinha virado ontem na coluna das análises.
+function diaCalendarioSP(data) {
+  try {
+    const d = data instanceof Date ? data : new Date(data);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
+  } catch (_) { return ""; }
+}
+
 async function relatorioUsoIA(req, res, supabase) {
   const dias = Math.min(90, Math.max(1, Number(req.query?.dias) || 30));
   const agora = new Date();
-  const inicioHoje = new Date(agora); inicioHoje.setUTCHours(0, 0, 0, 0);
+  const hojeSP = diaCalendarioSP(agora);
+  const ehDeHoje = (evento) => !!hojeSP && diaCalendarioSP(evento?.criado_em) === hojeSP;
   const inicioPeriodo = new Date(agora.getTime() - dias * 86400000);
 
   const [{ data: organizacoes, error: orgErro }, eventos] = await Promise.all([
@@ -122,7 +137,7 @@ async function relatorioUsoIA(req, res, supabase) {
     if (!porEmpresa.has(orgId)) porEmpresa.set(orgId, novaEntradaEmpresa());
     const entrada = porEmpresa.get(orgId);
     const categoria = categoriaDoEvento(evento);
-    const ehHoje = new Date(evento.criado_em) >= inicioHoje;
+    const ehHoje = ehDeHoje(evento);
     somarUsoIA(entrada.periodo, evento);
     somarUsoIA(entrada.categoriasPeriodo[categoria], evento);
     if (ehHoje) {
@@ -148,7 +163,7 @@ async function relatorioUsoIA(req, res, supabase) {
   const totalPeriodo = novoAcumuladorUsoIA();
   for (const evento of eventos.rows) {
     somarUsoIA(totalPeriodo, evento);
-    if (new Date(evento.criado_em) >= inicioHoje) somarUsoIA(totalHoje, evento);
+    if (ehDeHoje(evento)) somarUsoIA(totalHoje, evento);
   }
 
   return json(res, 200, {
