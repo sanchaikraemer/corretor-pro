@@ -26,8 +26,9 @@ const bellSrc = app.slice(iniBell, app.indexOf('window.cpAtualizarSinoAtencao', 
 assert.match(bellSrc, /cp-hoje-alerta/, 'sino acende com cp-hoje-alerta (ciano da agenda)');
 assert.match(bellSrc, /cp-hoje-atraso/, 'sino acende com cp-hoje-atraso (vermelho de risco)');
 assert.doesNotMatch(bellSrc, /classList\.toggle\('tem-alerta'/, 'não pode voltar a aplicar tem-alerta (CSS legado com !important)');
-assert.match(css, /#topBell\.cp-hoje-alerta\{background:var\(--acao-soft\)!important/, 'metade de hoje acesa em ciano (--acao) da paleta');
-assert.match(css, /#topBell\.cp-hoje-atraso\{background:var\(--risco-soft\)!important/, 'atraso em vermelho (--risco) da paleta');
+// v1234 — o sino ficou PREENCHIDO (era só tingido): mesma cor da paleta, com mais presença.
+assert.match(css, /#topBell\.cp-hoje-alerta\{background:var\(--acao\)!important/, 'metade de hoje acesa em ciano (--acao) da paleta');
+assert.match(css, /#topBell\.cp-hoje-atraso\{background:var\(--risco\)!important/, 'atraso em vermelho (--risco) da paleta');
 
 // --- Faixa da semana na tela Agenda (v1233 — o desenho é o da simulação aprovada) ---
 assert.match(app, /class="cp-ag-semana"/, 'a faixa da semana precisa ser desenhada na Agenda');

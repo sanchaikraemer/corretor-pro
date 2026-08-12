@@ -498,7 +498,7 @@
         .prop-prefix{position:relative}
         .prop-prefix .pfx{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;font-weight:700;pointer-events:none}
         .prop-prefix .prop-input{padding-left:34px}
-        .prop-add{width:100%;border:1px dashed var(--line);background:rgba(0,212,255,.06);color:var(--cyan);border-radius:9px;padding:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:var(--font-body)}
+        .prop-add{width:100%;border:1px dashed var(--line);background:rgba(86,199,242,.06);color:var(--cyan);border-radius:9px;padding:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:var(--font-body)}
         .prop-add:hover{border-color:var(--cyan)}
         .prop-aporte{display:grid;grid-template-columns:1fr 1fr 34px;gap:6px;margin-bottom:6px;align-items:center}
         .prop-aporte .prop-del{background:var(--risco-soft);border:1px solid var(--risco-line);color:var(--risco);border-radius:8px;height:38px;cursor:pointer;font-size:16px;font-weight:900;line-height:1}
@@ -534,13 +534,17 @@
         .pp-table th{text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7a8595;font-weight:700;border-bottom:1px solid #e2e7ee;padding:8px 6px}
         .pp-table td{padding:9px 6px;border-bottom:1px solid #eef1f6;vertical-align:top}
         .pp-itit{font-weight:800;color:#0D1117}
-        .pp-idesc{font-size:11px;color:#7a8595;margin-top:2px;line-height:1.35}
+        /* v1234 — pedido do dono: o que ele escreve em várias linhas (descrição da permuta,
+           observações) tem que SAIR em várias linhas na proposta. Sem isto o navegador junta
+           tudo numa tira só, como ele mostrou no print. */
+        .pp-idesc{font-size:11px;color:#7a8595;margin-top:2px;line-height:1.35;white-space:pre-line}
         .pp-idesc .pp-money{color:#0D1117;font-weight:700}
         .pp-ival{text-align:right;font-weight:800;color:#0D1117;white-space:nowrap}
         .pp-totals{margin-bottom:14px}
         .pp-trow{display:flex;justify-content:space-between;padding:6px 2px;font-size:13px;color:#3a434f}
         .pp-trow.grand{border-top:2px solid #0D1117;margin-top:4px;padding-top:10px;font-family:var(--font-display);font-weight:800;font-size:18px;color:#0D1117}
         .pp-obs{margin-top:6px;padding:11px 13px;background:#f7f9fc;border:1px solid #e2e7ee;border-radius:10px;font-size:12px;color:#3a434f}
+        .pp-obs #pp-obs{white-space:pre-line}
         .pp-obs h5{margin:0 0 4px;font-size:10px;letter-spacing:.10em;text-transform:uppercase;color:#7a8595}
         .pp-foot{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e2e7ee;padding-top:12px;margin-top:16px;font-size:10px;color:#7a8595}
         @media print{
@@ -581,7 +585,7 @@
             <div class="prop-sec">
               <div class="prop-sec-title">3. Condições de pagamento</div>
               <div class="prop-fg"><label>Entrada / Ato</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-entrada" placeholder="0,00" oninput="propRender()"></div></div>
-              <div class="prop-fg"><label>Permuta (valor)</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-permuta" placeholder="0,00" oninput="propRender()"></div><input class="prop-input" type="text" id="pf-permuta-desc" placeholder="Descrição da permuta (ex: carro, terreno)" style="margin-top:6px" oninput="propRender()"></div>
+              <div class="prop-fg"><label>Permuta (valor)</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-permuta" placeholder="0,00" oninput="propRender()"></div><textarea class="prop-input" id="pf-permuta-desc" rows="3" placeholder="Descrição da permuta (ex: carro, terreno). Dê Enter pra escrever na linha de baixo." style="margin-top:6px;min-height:0;resize:vertical" oninput="propRender()"></textarea></div>
               <div class="prop-fg"><label>Aportes / Reforços</label><div id="pf-aportes-list"></div><button type="button" class="prop-add" onclick="propAddAporte()">+ Aporte</button></div>
               <div class="prop-fg"><label>Chaves</label><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-chaves" placeholder="0,00" oninput="propRender()"></div></div>
               <div class="prop-fg"><label>Parcelamento mensal</label><div class="prop-grid2"><input class="prop-input" type="number" id="pf-parc-mensais" placeholder="Nº parcelas" oninput="propRender()"><div class="prop-prefix"><span class="pfx">R$</span><input class="prop-input" type="number" step="0.01" id="pf-valor-mensal" placeholder="Valor" oninput="propRender()"></div></div></div>
