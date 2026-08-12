@@ -2574,8 +2574,13 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   //
   // Conversa pequena continua indo inteira: o resumo não economizaria nada e a leitura completa é
   // melhor. O limiar é por tamanho de texto, não por número de mensagens.
-  const LIMIAR_INCREMENTAL_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_MIN_CHARS || 6000);
-  const CAUDA_CONHECIDA_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_CAUDA_CHARS || 3000);
+  // v1225 — os limites subiram. Com 6.000/3.000, quase toda conversa virava "resumo + pedacinho do
+  // fim", e o resultado foi mensagem genérica: "que ridículas essas sugestões... só pode que o
+  // sistema não está olhando" (dono, 11/08/2026, 21h31). Ele estava certo — a IA tinha pouco
+  // material real pra trabalhar. A economia continua, mas só onde ela é grande de verdade
+  // (conversa muito longa), e mesmo lá com bem mais conversa de verdade na mão.
+  const LIMIAR_INCREMENTAL_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_MIN_CHARS || 15000);
+  const CAUDA_CONHECIDA_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_CAUDA_CHARS || 9000);
   const entradaIncremental = montarEntradaIncremental({
     timelineArr,
     linhaDe,
@@ -2805,6 +2810,30 @@ voltar: o motivo tem que ser real (o que ficou pendente na conversa), não inven
 O QUE É PERMITIDO no lugar: OFERECER fazer agora ("quer que eu veja o que está disponível e te
 mando?"), retomar o que REALMENTE ficou em aberto na conversa, e perguntar. Verbo no futuro ou no
 condicional — nunca no passado.
+
+RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA. Você recebe abaixo, no pedido, "Dias corridos
+desde a última mensagem". Quando esse número for relevante (a partir do prazo de retomada do
+corretor, e sempre que passar de uma semana), a mensagem É uma retomada e precisa se comportar como
+tal:
+- RECONHEÇA o tempo, com naturalidade e sem drama ("faz um tempo que a gente não se falava",
+  "voltando aqui depois desses dias"). Escrever como se a conversa tivesse parado ontem é o erro
+  que faz o corretor parecer desatento — o cliente sabe quantos dias passaram.
+- TRAGA UM MOTIVO REAL pra estar voltando, tirado do que ficou pendente NA CONVERSA (o que ele
+  pediu e não recebeu, a dúvida que ficou no ar, o passo que vocês combinaram). Sem motivo real,
+  a retomada vira "oi, sumiu?" — e é isso que faz o cliente não responder.
+- NUNCA dê a desculpa pronta pro cliente. Frases como "sei que a vida corre", "imagino que esteja
+  corrido", "sei que a correria é grande", "se ainda tiver interesse", "desculpa incomodar",
+  "sei que você deve estar ocupado" são PROIBIDAS: elas entregam de bandeja o motivo pra ele
+  adiar de novo, e nenhum corretor bom escreve isso.
+- Nada de comentário sobre o estado mental do cliente ("vi que você está com X na cabeça"): você
+  não sabe o que ele está pensando; você sabe o que ele ESCREVEU.
+
+AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA. Se o cliente já demonstrou querer algo na conversa,
+perguntar de novo "quer que eu te mande?" devolve o trabalho pra ele e é o jeito mais fácil de a
+mensagem ser ignorada. Pelo menos a "maisDireta" tem que AVANÇAR SOZINHA: anuncia o que o corretor
+vai fazer agora (mandar o material, preparar a simulação) e coloca UMA escolha concreta na mesa —
+duas opções de horário, dois caminhos, uma data. "Me avisa e eu mando" não é direta: é pedir
+licença com outro nome.
 
 LINGUAGEM DE IA — PROIBIDO. Estas construções entregam na hora que a mensagem não foi escrita por
 uma pessoa, e o corretor as rejeita uma a uma: "espero que esteja bem/indo bem", "faz sentido",
@@ -3124,6 +3153,13 @@ ${timelineText}`;
       // Comercial pra IA falar do SEU jeito e com as SUAS condições". A análise em si é real e
       // utilizável — nada aqui a marca como pendente ou inválida.
       modoPrevia,
+      // v1225 — "só pode que o sistema não está analisando o do cérebro". Em vez de ele adivinhar,
+      // a análise passa a carregar a resposta: o Cérebro entrou ou não, e quanto da conversa a IA
+      // leu de verdade. A tela mostra isso numa linha discreta embaixo das sugestões.
+      cerebroAplicado: !modoPrevia,
+      conversaLidaPelaIA: entradaIncremental
+        ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas }
+        : { modo: "conversa inteira", mensagensEnviadas: timelineArr.length, mensagensResumidas: 0 },
       // v1137 — quando o aprendizado automático já leu as conversas deste corretor, a prévia NÃO
       // pode dizer "a IA ainda não conhece o seu jeito" (conhece — aprendeu sozinha). A tela usa
       // esta marca pra trocar o texto do convite: o que falta são as condições comerciais, que só

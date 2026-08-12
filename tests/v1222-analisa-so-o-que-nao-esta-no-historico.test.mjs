@@ -15,7 +15,10 @@ import { analyzeWithBrain } from '../api/_pipeline.js';
 // Este teste não confere o código por leitura: ele CHAMA a análise com um cliente falso da OpenAI
 // e mede o prompt que saiu — quantos caracteres, quais mensagens foram e quais não foram.
 
-const CONVERSA_LONGA = Array.from({ length: 120 }, (_, i) => ({
+// v1225 — o limiar subiu pra 15.000 caracteres (conversa média voltou a ir inteira, porque
+// resumo demais estava produzindo mensagem genérica). A conversa deste teste cresceu junto: ela
+// precisa ser LONGA DE VERDADE pra exercitar o caminho do resumo.
+const CONVERSA_LONGA = Array.from({ length: 250 }, (_, i) => ({
   date: '2026-06-01', time: String(8 + (i % 12)).padStart(2, '0') + ':00',
   author: i % 2 ? 'Corretor' : 'Cliente',
   text: `mensagem antiga número ${i} sobre condições, valores e visita ao empreendimento`,
@@ -91,14 +94,16 @@ assert.match(promptIncremental, /Etapa em que a conversa parou: Negociação/, '
 assert.match(promptIncremental, /Objeção principal já identificada: Achou o valor alto/, 'e a objeção já identificada');
 // A cauda de contexto continua indo (tom e fio da conversa), mas é só o fim.
 assert.match(promptIncremental, /ÚLTIMAS MENSAGENS JÁ CONHECIDAS/, 'as últimas conhecidas vão, pra pegar o fio');
-assert.match(promptIncremental, /mensagem antiga número 119/, 'e a cauda é o FIM da conversa');
+assert.match(promptIncremental, /mensagem antiga número 249/, 'e a cauda é o FIM da conversa');
 
 // A economia é o ponto. Mede-se no PEDAÇO DA CONVERSA — o resto do pedido (as instruções, o
 // Cérebro) tem tamanho fixo e não é o que estava sendo pago duas vezes.
 const soAConversa = (prompt) => prompt.slice(prompt.search(/CONVERSA (COMPLETA|—)/));
 const economia = 1 - (soAConversa(promptIncremental).length / soAConversa(promptCompleto).length);
 console.log(`   conversa enviada à IA: ${soAConversa(promptCompleto).length} → ${soAConversa(promptIncremental).length} caracteres (-${Math.round(economia*100)}%)`);
-assert.ok(economia > 0.5, `a conversa reenviada precisa encolher pelo menos pela metade (encolheu ${Math.round(economia*100)}%)`);
+// v1225 — a meta de encolhimento baixou junto com a decisão de dar MAIS conversa real pra IA:
+// resumir demais estava produzindo mensagem genérica, que é um custo pior que o dos tokens.
+assert.ok(economia > 0.3, `a conversa reenviada precisa encolher de verdade (encolheu ${Math.round(economia*100)}%)`);
 
 // ── 3. Reimportação SEM mensagem nova: ANALISA IGUAL (o prompt pode ter mudado) — mas também
 //      sem reler tudo. É a segunda metade do pedido, e a que mais confundiu até aqui.
@@ -142,8 +147,8 @@ for(const anteriorRuim of [null, { messages: {} }, { arquiteturaMensagens: 'v700
 // ── 6. O limiar é configurável e o padrão está documentado no código ────────────────────────────
 {
   const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
-  assert.match(src, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| 6000/, 'limiar de conversa curta configurável');
-  assert.match(src, /DIRECIONA_INCREMENTAL_CAUDA_CHARS \|\| 3000/, 'tamanho da cauda de contexto configurável');
+  assert.match(src, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| 15000/, 'limiar de conversa curta configurável');
+  assert.match(src, /DIRECIONA_INCREMENTAL_CAUDA_CHARS \|\| 9000/, 'tamanho da cauda de contexto configurável');
 }
 
 console.log('v1222-analisa-so-o-que-nao-esta-no-historico: ok');
