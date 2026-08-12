@@ -11671,6 +11671,11 @@ window.cp7ObsSalvar = async function(btn){
       ui667ReconciliarAtendimentoLocal(lead.id, (item) => ui667AplicarAtendidoLocal(item, data.item.iso, data.item.date, data.item.time, detalhesObs));
     }
     if(ta) ta.value="";
+    // v1231 — pedido do dono: depois de salvar a observação, voltar pro TOPO da tela do cliente
+    // (mesma regra do confirmar agendamento, v1229). A subida vem ANTES da remontagem, pra
+    // restauração de rolagem de renderLeadFoco já capturar o topo — depois dela, a tela voltaria
+    // pra onde estava (na altura do painel de observação).
+    try{ window.scrollTo({ top: 0, behavior: "auto" }); }catch(_){ try{ window.scrollTo(0,0); }catch(_){} }
     renderLeadFoco(lead);
     toast("Observação salva. Ela entra na próxima análise (toque em Reanalisar quando quiser atualizar).");
     invalidarLeadsCache();
