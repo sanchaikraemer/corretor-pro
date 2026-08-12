@@ -5406,6 +5406,28 @@ function cp717MudancasHtml(a){
 // aparecia no cabeçalho do lead e sumiu num refactor — volta como linha própria. Prioriza
 // os carimbos da própria análise (reanálise > geração) e, só na falta deles, usa a última
 // atualização do lead.
+// v1225 — DE ONDE SAIU ESTA ANÁLISE (uma linha, embaixo das sugestões).
+//
+// "só pode que não está olhando, só pode que o sistema não está analisando o do cérebro ou o do
+// cérebro está muito errado" (dono, 11/08/2026). Enquanto isso for adivinhação, toda sugestão ruim
+// vira uma dúvida sobre o sistema inteiro. A análise agora carrega a resposta e a tela mostra:
+// o Cérebro entrou ou não, e quanto da conversa a IA leu de verdade.
+function cp1225LinhaDeOndeVeio(a){
+  if(!a || typeof a !== "object") return "";
+  const lida = a.conversaLidaPelaIA;
+  if(a.cerebroAplicado == null && !lida) return ""; // análise antiga, de antes deste registro
+  const semCerebro = a.cerebroAplicado === false;
+  const quanto = lida?.modo === "resumo+novidade"
+    ? `leu ${Number(lida.mensagensEnviadas)||0} ${pl(Number(lida.mensagensEnviadas)||0, "mensagem", "mensagens")} + resumo de ${Number(lida.mensagensResumidas)||0} antigas`
+    : (Number(lida?.mensagensEnviadas) > 0
+        ? `leu a conversa inteira (${Number(lida.mensagensEnviadas)} ${pl(Number(lida.mensagensEnviadas), "mensagem", "mensagens")})`
+        : "");
+  const cerebro = semCerebro
+    ? '<b style="color:var(--risco)">sem o seu Cérebro</b>'
+    : "com o seu Cérebro";
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}</div>`;
+}
+
 function cp865UltimaAnaliseISO(lead, a){
   // Só carimbos da PRÓPRIA análise. NÃO usa updatedAt/atualizadoEm: marcar/desmarcar atendimento
   // atualiza a linha e isso fazia a "Última análise" mudar de horário sem ter reanalisado (v896).
@@ -5498,6 +5520,7 @@ function renderLeadFoco(lead){
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
+            ${cp1225LinhaDeOndeVeio(a)}
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
             ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
             <div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button></div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button></div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button></div>`:''}</div>`}
