@@ -24,7 +24,7 @@ assert.ok(r1A.proibidas.length > 0,
 
 const print2A = "Boa noite Adriano! Trago aqui aquela simulação detalhada do Renaissance que conversamos. Dá uma olhada e me diz se faz sentido seguir nessa linha.";
 const r2A = detectarFrasesProibidas(print2A);
-assert.ok(r2A.suspeitas.includes("faz sentido"), '"faz sentido" precisa ser conferido');
+assert.ok(r2A.proibidas.includes("faz sentido"), '"faz sentido" é PROIBIDO — o dono repetiu o pedido na v1236');
 assert.ok(r2A.suspeitas.includes("trago aqui"), '"trago aqui" (material que não existe) precisa ser conferido');
 
 const print2C = "Boa noite Adriano! Separei agora a simulação do Renaissance com as alternativas de entrada e safra. Posso te encaminhar o PDF?";
@@ -49,12 +49,18 @@ const rBoa = detectarFrasesProibidas(boa);
 assert.equal(rBoa.proibidas.length, 0, "a retomada modelo do dono não pode cair na lista dura");
 assert.equal(rBoa.suspeitas.length, 0, "a retomada modelo do dono não pode nem levantar suspeita");
 
-// v1235 — "faz sentido" saiu da lista DURA de propósito: o próprio dono mandou como exemplo BOM
-// uma mensagem que usa a expressão ("Ainda faz sentido a ideia de pegar um apartamento na
-// planta?"). Ela pode continuar existindo — só não pode passar sem alguém conferir.
-const comFazSentido = "Ainda faz sentido a ideia de pegar um apartamento na planta, com duas vagas?";
-assert.equal(detectarFrasesProibidas(comFazSentido).proibidas.length, 0,
-  '"faz sentido" não pode ser proibição dura — o dono aprovou uma mensagem que usa a expressão');
+// v1236 — "faz sentido" é PROIBIÇÃO DURA, sem exceção: "não quero a expressão 'faz sentido', já
+// disse mil vezes". Na v1235 ela tinha sido afrouxada por leitura errada de um exemplo que o dono
+// mandou (ele só queria mostrar que a sugestão do ChatGPT era melhor, não aprovar a expressão).
+// Nem essa frase, que veio no exemplo elogiado, pode passar.
+for (const comFazSentido of [
+  "Ainda faz sentido a ideia de pegar um apartamento na planta, com duas vagas?",
+  "Se fizer sentido pra você, a gente marca uma visita.",
+  "Me diz se faça sentido seguir por aqui."
+]) {
+  assert.ok(detectarFrasesProibidas(comFazSentido).proibidas.length > 0,
+    `"faz sentido" tem que ser barrado em qualquer forma: "${comFazSentido}"`);
+}
 
 // Um cumprimento normal, sem auto-resposta, continua livre.
 assert.equal(detectarFrasesProibidas("Boa tarde Adriano, tudo bem? Consegui as duas opções com duas vagas.").proibidas.length, 0,
