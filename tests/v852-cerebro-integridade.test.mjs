@@ -60,7 +60,12 @@ const semCerebro = await analyzeWithBrain({
 });
 
 // 1. A prévia acontece de verdade — é o que o cliente novo precisa ver no primeiro uso.
-assert.equal(chamadas, 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
+// v1235 — antes este assert exigia exatamente 1 chamada. O que ele protege é que a análise
+// ACONTEÇA (a recusa da v1131 é que era o beco); o número exato deixou de ser o jeito de medir
+// isso: a resposta de exemplo deste mock traz "fico à disposição" e "se você ainda tem interesse",
+// dois clichês da lista dura, então a conferência das três mensagens manda reescrever — que é
+// exatamente o comportamento novo e desejado, inclusive na prévia.
+assert.ok(chamadas >= 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
 assert.equal(semCerebro.mode, "openai");
 assert.equal(semCerebro.modoPrevia, true, "o resultado precisa se identificar como prévia, pra a tela convidar a configurar");
 assert.equal(semCerebro.sugestoesPendentes, false, "a prévia é utilizável: não pode voltar marcada como pendente");
