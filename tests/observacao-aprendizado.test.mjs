@@ -29,15 +29,14 @@ const obsEnd = app.indexOf('window.ui670Reanalisar=', obsStart);
 const obsBlock = app.slice(obsStart, obsEnd);
 assert.match(obsBlock, /action:"observacao-adicionar"/);
 assert.match(obsBlock, /renderLeadFoco\(lead\)/, 'observação deve aparecer imediatamente');
-// v1171 — pedido do dono: depois de salvar a observação, reanalisar SOZINHO (sem precisar
-// clicar em "Reanalisar" à parte). cp7ObsSalvar chama a mesma reanálise de 1 lead que o botão
-// já usa (ui670Reanalisar) — não a rota crua nem o "Reanalisar todos" (removido na v1114, esse
-// sim queimava crédito de API varrendo a carteira inteira; aqui é só o lead que acabou de
-// receber a observação, 1 chamada, igual já acontecia manualmente).
-assert.match(obsBlock, /ui670Reanalisar\(qs\("#btnReanalisarLeadTop"\)\)/,
-  'salvar observação precisa disparar a reanálise sozinha, usando a referência FRESCA do botão (pós renderLeadFoco)');
-assert.match(obsBlock, /renderLeadFoco\(lead\);[\s\S]*ui670Reanalisar\(/,
-  'a reanálise automática só pode disparar DEPOIS da observação já estar visível na tela (renderLeadFoco)');
+// v1228 — pedido do dono (revertendo a v1171): salvar observação NÃO reanalisa mais sozinho.
+// A observação entra na linha do tempo e na próxima análise; a reanálise só roda quando o
+// corretor tocar no botão "Reanalisar". cp7ObsSalvar não pode chamar ui670Reanalisar nem a
+// rota de reanálise diretamente.
+assert.doesNotMatch(obsBlock, /ui670Reanalisar\(/,
+  'salvar observação não pode mais disparar a reanálise sozinha (pedido do dono na v1228)');
+assert.doesNotMatch(obsBlock, /reanalisar-lead/,
+  'salvar observação não pode chamar a rota de reanálise diretamente');
 
 assert.match(leadUpdate, /case "observacao-adicionar"/);
 assert.match(leadUpdate, /motivo:"observacao-manual-adicionada"/);

@@ -11631,15 +11631,12 @@ window.cp7ObsSalvar = async function(btn){
     }
     if(ta) ta.value="";
     renderLeadFoco(lead);
-    toast("Observação salva. Atualizando a análise agora…");
+    toast("Observação salva. Ela entra na próxima análise (toque em Reanalisar quando quiser atualizar).");
     invalidarLeadsCache();
     setTimeout(()=>window.iniciarAprendizadoContinuoAutomatico?.({somentePendentes:true}),500);
-    // v1171 — pedido do dono: depois de salvar a observação, reanalisar sozinho — mesma
-    // reanálise de sempre (ui670Reanalisar), só que disparada automaticamente, sem precisar
-    // tocar no botão "Reanalisar". O botão já foi redesenhado por renderLeadFoco() logo acima,
-    // então pega a referência FRESCA dele (a antiga, se existisse, estaria desconectada da
-    // tela) — assim a barra de progresso da reanálise aparece no lugar de sempre.
-    ui670Reanalisar(qs("#btnReanalisarLeadTop")).catch(()=>{});
+    // v1228 — pedido do dono (revertendo a v1171): salvar observação NÃO dispara mais a
+    // reanálise sozinho. A observação fica registrada na linha do tempo e entra na próxima
+    // análise; a reanálise só roda quando o corretor tocar no botão "Reanalisar".
   }catch(err){
     if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(userFriendlyError(err))+'</span>';
     if(btn){ btn.disabled=false; btn.textContent=original; }
