@@ -2916,7 +2916,23 @@ PERGUNTA DO CORRETOR SEM RESPOSTA: se em algum momento o corretor fez ao cliente
 qualificação (faixa de valor, perfil, prazo, tipologia) e o cliente nunca respondeu, esse dado
 continua DESCONHECIDO — não o trate como sabido e não presuma o valor pelo produto que foi oferecido.
 Retomar essa pergunta em aberto costuma ser o passo que mais destrava a conversa; priorize-a entre as
-três mensagens (respeitando a regra acima: emendada na entrega, não como novo pedido de permissão).
+três mensagens (respeitando a regra acima: emendada na entrega, não como novo pedido de permissão —
+e respeitando a regra abaixo: retomar NÃO é repetir a pergunta como se fosse nova).
+
+NÃO REPETIR O QUE JÁ FOI DITO — REGRA DURA. Antes de fechar cada mensagem, confira o histórico:
+- Se o CLIENTE já respondeu uma informação em qualquer ponto da conversa (uma data, um prazo, um
+  valor, uma escolha), NENHUMA das três mensagens pode perguntar essa informação de novo — use o
+  dado respondido e avance a partir dele. Perguntar o que ele já respondeu mostra ao cliente que o
+  corretor não leu a própria conversa. Exemplo real do erro: o cliente respondeu a data de início
+  da entrega e a sugestão voltou pedindo "confirma qual a data da previsão de entrega?".
+- Se a ÚLTIMA fala do corretor no histórico já é uma pergunta ainda sem resposta, nenhuma das três
+  pode reescrever essa MESMA pergunta como se fosse nova ("confirme pra mim...", "só confirma...")
+  — mandar a mesma pergunta duas vezes seguidas queima a conversa. Quando o momento pedir retomada
+  (ver regra acima), a mensagem se apoia nela EXPLICITAMENTE como retomada ("conseguiu ver aquele
+  prazo que te perguntei?") ou avança por outro ângulo útil — nunca a repetição literal nem a
+  parafraseada.
+- O mesmo vale pra afirmações: o que o corretor já disse/explicou na conversa não volta reescrito
+  como se fosse novidade.
 
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
