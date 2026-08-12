@@ -4944,7 +4944,7 @@ function cp704Css(){
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:var(--acao);font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
       .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
-      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
+      .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
       .cp715-reading{font-size:13px;line-height:1.46;color:rgba(237,246,248,.94)}
@@ -5148,6 +5148,33 @@ function cp704Css(){
       return `<div class="cp704-tmsg${wrapCls}${podeDesfazer?' cp704-tmsg-comundo':''}"${propAttr}><span class="cp704-dot ${dotCls}"></span><div><b>${escapeHtml(who)}</b><p>${escapeHtml(cp704Text(m.text))}</p><small>${escapeHtml(cp704DataHora(m))}</small>${propHint}</div>${btnDesfazer}</div>`;
     }).join('') + btn;
   }
+  // v1238 — TIRA A LINHA APAGADA DA CÓPIA QUE ESTÁ NA TELA, na hora.
+  //
+  // Bug real (prints do dono, 12/08/2026): ele apagou uma observação, o aviso disse "Observação
+  // apagada", o contador do card caiu de 3 pra 2 — e a observação CONTINUOU na lista. Tocando o ✕
+  // dela de novo vinha "Essa observação não está mais no histórico". Ou seja: sumiu do servidor,
+  // ficou na tela.
+  //
+  // A causa está em recarregarLeadFoco: a LISTA de leads traz só um recorte das mensagens, então
+  // existe lá uma proteção que diz "se a cópia local tem MAIS mensagens que a que veio agora,
+  // fica com a local" (senão a barra de interesse despencava de 108 pra 4 ao marcar atendimento).
+  // Depois de APAGAR, essa proteção é exatamente o contrário do certo: a cópia local tem mais
+  // mensagens justamente porque ainda tem a que acabou de ser apagada — e ela voltava.
+  //
+  // Consertado na origem: quem apaga tira a linha da cópia local ANTES de recarregar. Aí a
+  // proteção continua fazendo o que sempre fez (preservar o histórico completo) sem nunca
+  // ressuscitar o que o corretor acabou de apagar.
+  function cp7TiraDaTimelineLocal(leadId, iso){
+    if(!state.lead || String(state.lead.id) !== String(leadId)) return;
+    const antes = Array.isArray(state.lead.recentMessages) ? state.lead.recentMessages : [];
+    const depois = antes.filter(m => String(m?.iso || '') !== String(iso));
+    if(depois.length === antes.length) return;
+    state.lead.recentMessages = depois;
+    // O total mostrado no card vem daqui quando o histórico completo ainda não foi carregado.
+    if(Number.isFinite(Number(state.lead.messageCount))){
+      state.lead.messageCount = Math.max(0, Number(state.lead.messageCount) - 1);
+    }
+  }
   // v1197 — DESFAZER UMA MENSAGEM COPIADA MAS NÃO ENVIADA.
   //
   // Relato do dono (10/08/2026, com print): "quero ver como podemos fazer pra deletar essa
@@ -5170,6 +5197,7 @@ function cp704Css(){
       });
       const d = await res.json().catch(()=>({}));
       if(!d?.ok) throw new Error(d?.error || 'não consegui desfazer');
+      cp7TiraDaTimelineLocal(leadId, iso);
       try{ invalidarLeadsCache(); }catch(_){}
       try{ invalidarLeadDetail(leadId); }catch(_){}
       toast(d.atendimentoDesfeito
@@ -5196,6 +5224,7 @@ function cp704Css(){
       });
       const d = await res.json().catch(()=>({}));
       if(!d?.ok) throw new Error(d?.error || 'não consegui apagar');
+      cp7TiraDaTimelineLocal(leadId, iso);
       try{ invalidarLeadsCache(); }catch(_){}
       try{ invalidarLeadDetail(leadId); }catch(_){}
       toast(d.atendimentoDesfeito
@@ -5227,6 +5256,31 @@ function cp704Css(){
   }
   function cp704MarcaCopiada(lead,k,texto){ return cp704FoiCopiada(lead,k,texto) ? ' cp704-msg-copiada' : ''; }
   function cp704RotuloCopiar(lead,k,texto){ return cp704FoiCopiada(lead,k,texto) ? 'Copiado' : 'Copiar'; }
+  // v1239 — "analise toda conversa, e sugira conduções de atendimento... TUDO é sobre isso, e é o
+  // q menos esta sendo aplicado" (dono, 12/08/2026). A leitura que a IA faz da conversa antes de
+  // escrever qualquer mensagem passou a APARECER aqui: o que o cliente quer, onde a conversa
+  // parou, o que o tempo mudou, a condição que ele colocou, e como conduzir agora.
+  //
+  // Mostrar isso não é enfeite: é o que deixa ele conferir se o sistema ENTENDEU a conversa, em
+  // vez de julgar só pelas três mensagens. E é o que faz a leitura respeitar a regra da v1145
+  // ("se não aparece na tela, não precisa existir") — ela aparece.
+  function cp704ConducaoHtml(lead){
+    const L = lead?.analysis?.leituraDaConversa;
+    if(!L || typeof L !== 'object') return '';
+    const conduzir = cp704Text(L.comoConduzir);
+    const linhas = [
+      ['O que o cliente quer', L.oQueOClienteQuer],
+      ['Onde a conversa parou', L.ondeParou],
+      ['O que mudou no tempo', L.oQueMudouNoTempo],
+      ['Condição que o cliente colocou', /^nenhuma$/i.test(cp704Text(L.condicaoDoCliente)) ? '' : L.condicaoDoCliente]
+    ].filter(r => cp704Text(r[1]));
+    if(!conduzir && !linhas.length) return '';
+    return `<section class="cp704-card cp704-conducao">
+      <div class="cp704-card-title"><h2>Como conduzir este atendimento</h2></div>
+      ${conduzir?`<p class="cp704-conducao-txt">${escapeHtml(conduzir)}</p>`:''}
+      ${linhas.length?`<div class="cp704-rows">${linhas.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('')}</div>`:''}
+    </section>`;
+  }
   function cp704DetailRows(lead,mc){
     const a=lead?.analysis||{}, mem=a.memoria||a.memoriaSugerida||{};
     // v935 — quando o cliente cita MAIS DE UMA unidade específica (lote/quadra/apartamento),
@@ -5476,7 +5530,18 @@ function cp1225LinhaDeOndeVeio(a){
   const cerebro = semCerebro
     ? '<b style="color:var(--risco)">sem o seu Cérebro</b>'
     : "com o seu Cérebro";
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}</div>`;
+  // v1239 — quanto de cada campo do Cérebro foi junto. O dono cravou "leia as regras do cerebro!
+  // ou ele nao esta sendo usado" e não tinha como conferir sozinho. Agora tem: se um campo
+  // aparecer aqui, o texto dele foi enviado; se não aparecer, está vazio no cadastro.
+  const env = a.cerebroEnviado;
+  let detalhe = "";
+  if(env && Number(env.total) > 0){
+    const rot = { metodo:"método", tom:"tom", diferenciais:"diferenciais", evitar:"o que evitar", regras:"regras", objecoes:"objeções" };
+    const partes = Object.keys(rot).filter(k => Number(env[k]) > 0)
+      .map(k => `${rot[k]} ${Number(env[k]).toLocaleString("pt-BR")}`);
+    if(partes.length) detalhe = ` · seu Cérebro enviado: ${partes.join(", ")} (${Number(env.total).toLocaleString("pt-BR")} caracteres)`;
+  }
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}${escapeHtml(detalhe)}</div>`;
 }
 
 function cp865UltimaAnaliseISO(lead, a){
@@ -5551,6 +5616,18 @@ function renderLeadFoco(lead){
       data: area.querySelector('#ui670ScheduleData')?.value || "",
       hora: area.querySelector('#ui670ScheduleHora')?.value || ""
     } : null;
+    // v1238 — mesma doença da v1028/v1081/v1229, agora no card "Últimas mensagens" DURANTE uma
+    // remontagem disparada de dentro dele. A v1028 já preservava aberto/fechado, mas só no
+    // caminho de ABRIR o lead — quem remonta depois (apagar uma mensagem do histórico, marcar
+    // atendimento, reanalisar) recriava o card FECHADO (`hidden` cravado no HTML).
+    //
+    // O efeito era o relato do dono (print de 12/08/2026): apagou uma observação e "veio pra
+    // outra tela". Não foi a rolagem que falhou — foi o card fechar. A página inteira encolheu de
+    // altura, e a rolagem restaurada logo abaixo (que devolve o MESMO número de pixels) passou a
+    // cair lá embaixo, no "Histórico de contatos". Preservando o card aberto, a altura não muda
+    // e a restauração da rolagem volta a pousar exatamente onde ele estava.
+    const cp7HistAntes = area.querySelector('#cp704HistCard');
+    const cp7HistAberto = !!cp7HistAntes && !cp7HistAntes.hidden;
     // Só vale restaurar a rolagem quando JÁ havia um detalhe montado aqui (remontagem).
     // Na primeira montagem (vindo do esqueleto) a página deve continuar se comportando como antes.
     const cp7JaTinhaDetalhe = !!area.querySelector('.cp704-lead');
@@ -5591,6 +5668,7 @@ function renderLeadFoco(lead){
           ${cp717MudancasHtml(a)}
         </main>
         <aside class="cp704-secondary">
+          ${cp704ConducaoHtml(lead)}
           <div class="cp704-accordions">
             <details class="cp704-details" open><summary>Detalhes comerciais</summary><div class="cp704-body"><div class="cp704-rows">${cp704DetailRows(lead,mc)}</div></div></details>
           </div>
@@ -5632,6 +5710,10 @@ function renderLeadFoco(lead){
       try{ cpAgendarResumo("ui670Schedule"); }catch(_){}
     }
   }
+  // v1238 — devolve o card "Últimas mensagens" aberto ANTES de mexer na rolagem: se ele voltasse
+  // fechado, a página ficaria mais curta e o número de pixels restaurado abaixo pousaria noutro
+  // lugar (era exatamente isso que jogava o dono pro "Histórico de contatos" ao apagar).
+  if(cp7HistAberto){ const cp7HistDepois = area.querySelector('#cp704HistCard'); if(cp7HistDepois) cp7HistDepois.hidden = false; }
   // A remontagem troca a altura da área e o navegador reposiciona a página sozinho — é o
   // "a tela pulou pra baixo" relatado pelo dono. Volta pra onde ele estava.
   if(cp7JaTinhaDetalhe && Math.abs(window.scrollY - cp7RolagemPagina) > 2){

@@ -166,7 +166,15 @@ const boas = {
     maisDireta: "Sinta-se à vontade."
   });
   assert.equal(r.mensagensRevisadas, undefined, "reescrita com MAIS clichê não pode substituir a original");
-  assert.equal(r.messages.a, ruins.recomendada, "recusada a reescrita, valem as mensagens originais");
+  // v1238 — recusada a reescrita, valem as ORIGINAIS; só que agora elas ainda passam pela rede de
+  // segurança do código antes de ir pra tela (o dono flagrou clichê chegando nela). Então o que
+  // se confere aqui é a origem do texto, não o texto cru: o assunto da original tem que
+  // sobreviver, e nada de proibido pode passar.
+  assert.ok(/simulação/i.test(r.messages.b), "recusada a reescrita, é o conteúdo da original que fica");
+  for (const k of ["a", "b", "c"]) {
+    assert.equal(detectarFrasesProibidas(r.messages[k]).proibidas.length, 0,
+      "nem quando a reescrita é recusada pode sair frase proibida");
+  }
 }
 
 // 7d. Releitura incompleta (mensagem vazia) também é recusada, sem derrubar a análise.
@@ -192,7 +200,13 @@ const boas = {
     cerebroConfig: { corretorNome: "Sanchai", metodo: "Consultivo", tom: "Direto", diferenciais: "", evitar: "", regras: [], objecoes: [] }
   });
   assert.equal(r.mode, "openai", "releitura que falha não pode derrubar a análise");
-  assert.equal(r.messages.a, ruins.recomendada, "valem as mensagens originais");
+  // v1238 — mesma coisa: valem as originais, já passadas pela rede de segurança do código. Este
+  // é o caminho mais importante dela — a releitura EXPLODIU, então é o código ou nada.
+  assert.ok(/simulação/i.test(r.messages.b), "vale o conteúdo das mensagens originais");
+  for (const k of ["a", "b", "c"]) {
+    assert.equal(detectarFrasesProibidas(r.messages[k]).proibidas.length, 0,
+      "releitura que falha não pode virar desculpa pra clichê chegar na tela");
+  }
   assert.equal(r.sugestoesPendentes, false, "a análise continua utilizável pro corretor");
 }
 

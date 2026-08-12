@@ -1561,9 +1561,15 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       "clientName", "clientProfile", "lead", "confirmedAppointments", "lembrete",
       "tipoRetomada", "tipoContato", "venda", "motivoPerda", "motivo_perda",
       "permuta", "risk", "produtoInteresse", "produtosInteresse", "mode",
-      "diagnostico", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
+      // v1239 — "leituraDaConversa" é a leitura que a IA faz da conversa antes de escrever as
+      // mensagens, e é o que a tela mostra no bloco "Como conduzir este atendimento". Sem ela
+      // aqui, o bloco só apareceria depois que o detalhe completo chegasse do servidor — ou seja,
+      // sumia e voltava na frente do corretor a cada abertura de lead.
+      "diagnostico", "leituraDaConversa", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
       "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
       "sugestoesPendentes", "arquiteturaMensagens", "error",
+      // v1239 — a prova de quanto do Cérebro foi enviado precisa viajar junto (a tela mostra).
+      "cerebroAplicado", "cerebroEnviado", "conversaLidaPelaIA",
       // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no
       // cabeçalho do lead). Sem eles aqui, a lista carrega uma análise sem data e, ao reabrir
       // o lead a partir dela, "Última análise" some mesmo pra quem acabou de reanalisar.

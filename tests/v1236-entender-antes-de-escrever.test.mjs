@@ -53,17 +53,31 @@ assert.ok(posProximo < posMensagens,
 assert.equal(posMensagens, Math.max(posDiagnostico, posProximo, posMensagens),
   "as três mensagens têm que ser o ÚLTIMO campo — são a conclusão da leitura, não o começo");
 
-// Nenhum campo inventado só pra IA pensar: isso custaria tempo de escrita e quebraria a v1145.
-assert.ok(!/"leituraDaConversa"|"oPassoCerto"|"condicaoQueOClientePos"/.test(formato),
-  "não pode haver campo novo que a tela não mostra — o conserto é de ordem, não de campo novo");
+// A regra da v1145 é "se não aparece na tela, não precisa existir". Na v1236 eu cumpri isso
+// APAGANDO o raciocínio da IA — e o dono depois cravou que a análise da conversa é o que mais
+// importa e o que menos estava sendo feito. A saída certa não era apagar o raciocínio: era
+// MOSTRÁ-LO. Na v1239 a leitura da conversa voltou ao pedido e aparece na tela, no bloco "Como
+// conduzir este atendimento". Então o que este teste tranca agora é a regra de verdade: campo
+// pedido à IA tem que ter destino na tela.
+const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+if (formato.includes('"leituraDaConversa"')) {
+  assert.match(appSrc, /function cp704ConducaoHtml\(lead\)\{/,
+    "se a leitura da conversa é pedida à IA, ela PRECISA aparecer na tela (regra da v1145)");
+  assert.match(appSrc, /\$\{cp704ConducaoHtml\(lead\)\}/,
+    "o bloco da condução precisa estar montado na tela do lead, não só definido");
+}
 
 // A instrução que explica POR QUE a ordem importa precisa estar escrita.
-assert.match(pipeline, /ENTENDER ANTES DE ESCREVER — A ORDEM DOS CAMPOS É OBRIGATÓRIA/,
-  "a regra da ordem precisa ir escrita no pedido");
-assert.match(pipeline, /AS TRÊS SÃO TRÊS CAMINHOS PARA O MESMO "nextAction"/,
-  "as três mensagens precisam servir ao mesmo passo, não a três assuntos diferentes");
-assert.match(pipeline, /o próximo passo é PERGUNTAR COMO AQUILO FICOU/,
-  "quando o cliente condicionou a decisão a algo da vida dele, o passo é perguntar como ficou");
+// v1239 — o texto foi reescrito quando a leitura da conversa virou o primeiro trabalho; o que
+// este teste protege (pensar antes de escrever) continua igual, só mudou a redação.
+assert.match(pipeline, /O TRABALHO É ESTE: LER A CONVERSA INTEIRA E DECIDIR COMO CONDUZIR ESTE ATENDIMENTO/,
+  "a tarefa principal precisa ser ler a conversa e decidir a condução");
+assert.match(pipeline, /Primeiro leia e decida; só depois escreva/,
+  "a ordem 'pensar antes de escrever' precisa continuar escrita no pedido");
+assert.match(pipeline, /AS TRÊS MENSAGENS EXECUTAM "comoConduzir"/,
+  "as três mensagens precisam executar a condução, não virar três assuntos diferentes");
+assert.match(pipeline, /conduzir é PERGUNTAR COMO AQUILO FICOU/,
+  "quando o cliente condicionou a decisão a algo da vida dele, conduzir é perguntar como ficou");
 
 // ── 3) A releitura continua no MESMO passo que a análise decidiu ────────────────────────────
 // Sem isso, a reescrita conserta o clichê mas troca o assunto — e o corretor recebe outra coisa.
@@ -104,11 +118,13 @@ assert.match(pipeline, /o próximo passo é PERGUNTAR COMO AQUILO FICOU/,
 
   assert.equal(n, 2, "trio com clichê tem que disparar a releitura");
   const pedidoDaReleitura = prompts[1] || "";
-  assert.match(pedidoDaReleitura, /O PRÓXIMO PASSO desta conversa, decidido nesta mesma análise, é: Perguntar como ficou a colheita/,
-    "a releitura precisa receber o passo que a análise já decidiu");
-  assert.match(pedidoDaReleitura, /O que o PRÓPRIO CLIENTE ficou de fazer foi: Ver o resultado da colheita/,
-    "a releitura precisa receber o compromisso que o cliente assumiu");
-  assert.match(pedidoDaReleitura, /TRÊS CAMINHOS para esse mesmo passo/,
+  // v1239 — o que manda na releitura passou a ser a CONDUÇÃO decidida na leitura da conversa
+  // (antes era o "próximo passo" solto). Mesma garantia: a reescrita não escolhe outro assunto.
+  assert.match(pedidoDaReleitura, /A CONDUÇÃO desta conversa, decidida nesta mesma análise, é: Perguntar como ficou a colheita/,
+    "a releitura precisa receber a condução que a análise já decidiu");
+  assert.match(pedidoDaReleitura, /A condição que o PRÓPRIO CLIENTE colocou foi: Ver o resultado da colheita/,
+    "a releitura precisa receber a condição que o cliente colocou");
+  assert.match(pedidoDaReleitura, /EXECUTAR essa condução/,
     "a releitura não pode trocar o assunto das três");
   assert.equal(r.mensagensRevisadas, true, "as mensagens com clichê têm que ser trocadas");
   assert.ok(/colheita/.test(r.messages.a), "a mensagem entregue tem que falar do que o cliente condicionou");
@@ -139,9 +155,9 @@ assert.match(pipeline, /o próximo passo é PERGUNTAR COMO AQUILO FICOU/,
     cerebroConfig: { corretorNome: "S", metodo: "M", tom: "T", diferenciais: "", evitar: "", regras: [], objecoes: [] }
   });
   const pedido = prompts[1] || "";
-  assert.ok(!/O que o PRÓPRIO CLIENTE ficou de fazer/.test(pedido),
-    'sem compromisso do cliente ("Não identificado"), a releitura não pode receber um inventado');
-  assert.match(pedido, /O PRÓXIMO PASSO desta conversa/, "o próximo passo continua indo");
+  assert.ok(!/A condição que o PRÓPRIO CLIENTE colocou/.test(pedido),
+    'sem condição do cliente ("Não identificado"), a releitura não pode receber uma inventada');
+  assert.match(pedido, /A CONDUÇÃO desta conversa/, "a condução continua indo");
 }
 
 console.log("v1236-entender-antes-de-escrever: ok");
