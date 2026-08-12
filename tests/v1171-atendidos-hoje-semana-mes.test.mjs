@@ -10,14 +10,17 @@ import assert from 'node:assert/strict';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-// ---------- 1. cp7ObsSalvar dispara a reanálise sozinha depois de mostrar a observação ----------
+// ---------- 1. cp7ObsSalvar mostra a observação na hora (a reanálise automática da v1171 ----------
+// foi revertida na v1228 a pedido do dono — a prova de que ela NÃO dispara mais está em
+// tests/observacao-aprendizado.test.mjs; aqui fica só o que continua valendo deste pedido:
+// a observação aparece imediatamente na tela depois de salvar).
 {
   const obsStart = app.indexOf('window.cp7ObsSalvar = async function(btn)');
   const obsEnd = app.indexOf('window.ui670Reanalisar=', obsStart);
   assert.ok(obsStart >= 0 && obsEnd > obsStart, 'cp7ObsSalvar não encontrada em app.js');
   const obsBlock = app.slice(obsStart, obsEnd);
-  assert.match(obsBlock, /renderLeadFoco\(lead\);[\s\S]*ui670Reanalisar\(qs\("#btnReanalisarLeadTop"\)\)/,
-    'salvar observação precisa mostrar a observação (renderLeadFoco) e DEPOIS reanalisar sozinha, usando a referência fresca do botão Reanalisar');
+  assert.match(obsBlock, /renderLeadFoco\(lead\)/,
+    'salvar observação precisa mostrar a observação na tela na hora (renderLeadFoco)');
 }
 
 // ---------- 2a. ehAtendidoNaSemana / ehAtendidoNoMes — SEMANA e MÊS DE CALENDÁRIO ----------
