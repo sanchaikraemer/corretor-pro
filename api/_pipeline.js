@@ -705,6 +705,97 @@ export function validarFormatoMensagens(mensagens) {
   return { ok: motivos.length === 0, motivos };
 }
 
+// ─── CONFERÊNCIA DAS TRÊS MENSAGENS ANTES DE ENTREGAR (v1235) ────────────────────────────────
+// Prints do dono (12/08/2026): as três sugestões saíram com "me diz se faz sentido
+// seguir nessa linha", "se ainda faz sentido seguir avaliando" e "Separei agora a simulação do
+// <empreendimento>" — sendo que o prompt JÁ PROÍBE, com todas as letras, tanto "faz sentido" (no
+// bloco de jargão de IA) quanto escrever que o corretor "separou" algo que não aconteceu (no bloco de
+// ação e novidade que não existem). A regra existia e o modelo passou por cima dela assim mesmo.
+// Repetir a ordem mais alto dentro do mesmo muro de texto é a estratégia que já falhou; o que
+// faltava era CONFERIR a saída antes de entregar.
+//
+// Duas listas, com pesos diferentes de propósito:
+//   PROIBIDAS — erradas SEMPRE, em qualquer contexto (é a mesma lista que o prompt já declara).
+//               Encontradas aqui, viram reescrita obrigatória.
+//   SUSPEITAS — dependem do contexto: 1ª pessoa do passado afirmando trabalho feito ("separei",
+//               "preparei", "conferi") pode ser verdade quando a conversa ou uma observação do
+//               corretor mostram que aquilo aconteceu mesmo; e "faz sentido" tanto enfeita quanto
+//               pergunta de verdade. Por isso o código NÃO julga sozinho: manda a suspeita pra
+//               releitura, que tem a conversa na mão e decide.
+// Exportadas pro teste conferir o EFEITO (o que é pego e o que passa), não o texto do código.
+const FRASES_PROIBIDAS_MENSAGEM = [
+  "a disposicao", "as ordens",
+  "qualquer duvida estou aqui", "qualquer duvida e so chamar", "qualquer duvida me chama",
+  "espero que esteja bem", "espero que esteja indo bem", "espero que voce esteja bem",
+  "espero que esteja tudo bem", "espero ter ajudado",
+  "nao hesite", "sinta-se a vontade", "sinta se a vontade",
+  "gostaria de saber se voce teria interesse",
+  "sei que a vida corre", "sei que a correria", "imagino que esteja corrido",
+  "imagino que a correria", "se ainda tiver interesse", "desculpa incomodar",
+  "desculpe incomodar", "sei que voce deve estar ocupado", "conforme conversamos"
+];
+// v1235 — "faz sentido" SAIU da lista dura e virou suspeita, por decisão do próprio dono: ele
+// mandou como EXEMPLO BOM uma mensagem do ChatGPT que usa a expressão ("Ainda faz sentido a ideia
+// de pegar um apartamento na planta...?"). A diferença não está na expressão, está no que vem
+// depois dela: "me diz se faz sentido seguir nessa linha" é enfeite que devolve a decisão pro
+// cliente sem perguntar nada; "ainda faz sentido a ideia de X?" é uma pergunta concreta sobre um
+// plano real. Quem sabe distinguir os dois é a releitura com a conversa na mão, não uma lista.
+const EXPRESSOES_SUSPEITAS_MENSAGEM = [
+  "faz sentido", "faca sentido", "fizer sentido", "fizesse sentido",
+  "separei", "conferi", "pesquisei", "levantei", "verifiquei", "preparei", "montei",
+  "elaborei", "consultei", "deixei pronto", "deixei separado", "deixei separada",
+  "aproveitei pra ver", "aproveitei para ver", "trago aqui", "trago pra voce",
+  "acabei de separar", "acabei de preparar", "ja tenho aqui", "consegui uma condicao",
+  "surgiram opcoes", "surgiram novas", "apareceram opcoes", "chegaram unidades",
+  "tenho novidades", "tenho uma novidade", "opcoes novas", "novas opcoes"
+];
+
+// Normalização que PRESERVA a pontuação — a detecção do cumprimento auto-respondido depende do
+// "?" (é ele que separa a pergunta da resposta que o corretor dá a si mesmo).
+function _normalizarParaConferencia(texto = "") {
+  return stripEmojis(String(texto || ""))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// "Boa noite <cliente>, tudo bem? Tranquilo por aqui" — o corretor pergunta e responde a si mesmo na
+// mesma frase. Foi o primeiro print do dono ("olha os termos... (tranquilo por aqui)"). Ninguém
+// escreve assim no WhatsApp: ou pergunta, ou conta como está — nunca os dois de uma vez.
+const CUMPRIMENTO_AUTORRESPONDIDO =
+  /\b(tudo bem|tudo certo|tudo certinho|tudo tranquilo|como vai|como voce esta|beleza|tudo joia)\s*\?[^?!.]{0,40}?\b(tranquilo|tudo bem|tudo certo|tudo tranquilo|tudo otimo|tudo em ordem|por aqui tudo|aqui tudo)\b/;
+
+export function detectarFrasesProibidas(texto = "") {
+  const t = _normalizarParaConferencia(texto);
+  if (!t) return { proibidas: [], suspeitas: [] };
+  const proibidas = FRASES_PROIBIDAS_MENSAGEM.filter(f => t.includes(f));
+  if (CUMPRIMENTO_AUTORRESPONDIDO.test(t)) proibidas.push("cumprimento respondido pelo próprio corretor");
+  // Só conta como ação inventada quando o verbo está mesmo em 1ª pessoa do passado nesta mensagem
+  // (limite de palavra dos dois lados evita pegar "separei" dentro de outra palavra).
+  const suspeitas = EXPRESSOES_SUSPEITAS_MENSAGEM.filter(f => new RegExp(`(^|[^a-z0-9])${f}([^a-z0-9]|$)`).test(t));
+  return { proibidas, suspeitas };
+}
+
+// Roda a conferência nas três de uma vez e devolve o que precisa ser reescrito.
+export function conferirTrioMensagens({ a = "", b = "", c = "" } = {}) {
+  const porMensagem = [
+    { chave: "recomendada", texto: a },
+    { chave: "maisSuave", texto: b },
+    { chave: "maisDireta", texto: c }
+  ].map(m => ({ ...m, ...detectarFrasesProibidas(m.texto) }));
+  const comProblema = porMensagem.filter(m => m.proibidas.length || m.suspeitas.length);
+  return {
+    // "limpo" = nenhuma frase proibida E nenhuma ação suspeita: pode entregar direto.
+    limpo: comProblema.length === 0,
+    // Quantas frases PROIBIDAS (as que nunca têm desculpa) o trio inteiro carrega. É por este
+    // número que a reescrita é comparada com o original — nunca entregamos algo pior.
+    totalProibidas: porMensagem.reduce((s, m) => s + m.proibidas.length, 0),
+    porMensagem: comProblema
+  };
+}
+
 async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
   // localStorage desatualizado não pode substituir silenciosamente o conteúdo
@@ -2844,6 +2935,13 @@ interesse". Também não escreva no passado o que você quer agora ("quis saber 
 se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto ("o que acha?", "o que
 você prefere?", "consigo separar?"), sem repetir em outras palavras o que a mensagem já disse.
 
+CUMPRIMENTO QUE SE RESPONDE SOZINHO — PROIBIDO. "Tudo bem? Tranquilo por aqui", "tudo certo? Por
+aqui tudo ótimo": perguntar e responder por si mesmo no mesmo fôlego não é coisa que alguém escreva
+no WhatsApp — entrega na primeira linha que a mensagem é automática. Escolha UM: ou cumprimenta e
+já entra no assunto, ou pergunta e espera a resposta. E abertura só de enfeite ("só pra reforçar",
+"passando pra saber", "espero que dê tudo certo") gasta a primeira linha, que é a única que o
+cliente lê na notificação — abra pelo assunto real.
+
 Responda somente com JSON válido no formato solicitado.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial recebido no prompt de sistema e os dados abaixo.
@@ -2933,6 +3031,18 @@ NÃO REPETIR O QUE JÁ FOI DITO — REGRA DURA. Antes de fechar cada mensagem, c
   parafraseada.
 - O mesmo vale pra afirmações: o que o corretor já disse/explicou na conversa não volta reescrito
   como se fosse novidade.
+
+O GANCHO DA RETOMADA É A VIDA DO CLIENTE, NÃO A SUA OFERTA — REGRA DURA. Quando o cliente
+condicionou o próximo passo a algo DELE ("depois que eu ver a colheita", "quando eu vender o
+carro", "depois da viagem", "quando minha esposa voltar", "depois que sair o financiamento") e
+esse prazo passou, é ESSE assunto que abre a retomada: pergunte como aquilo ficou. Essa é a
+pergunta que o cliente tem vontade de responder, porque é sobre a vida dele — e a resposta dela é
+que diz se o negócio segue vivo. É ERRO GRAVE voltar oferecendo de novo o material/simulação/visita
+que ficou pendente, ignorando a condição que o próprio cliente colocou: isso mostra que o corretor
+ouviu a conversa como uma fila de tarefas dele, não como o que o cliente disse. Vale ainda mais
+quando a ÚLTIMA mensagem do corretor no histórico já era essa oferta E o cliente não respondeu —
+repetir a oferta não respondida é o jeito mais rápido de continuar sem resposta.
+Só depois de o cliente responder sobre a condição dele é que o material/simulação volta pra mesa.
 
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
@@ -3043,9 +3153,73 @@ ${timelineText}`;
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
-    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
-    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+    let msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    let msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    let msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
+
+    // v1235 — RELEITURA DAS TRÊS MENSAGENS (ver conferirTrioMensagens lá em cima pro caso real).
+    // Só roda quando a conferência local encontra algo — trio limpo é entregue direto, sem custo e
+    // sem espera a mais. A releitura cabe no MESMO orçamento de tempo da análise (não estica o
+    // envelope de 52s travado pelos testes v947/v1140): se não sobrou tempo, entrega o que veio.
+    // Nada aqui pode derrubar a análise — em qualquer falha ficam valendo as mensagens originais.
+    const conferencia = conferirTrioMensagens({ a: msgA, b: msgB, c: msgC });
+    let mensagensReescritas = false;
+    if (!conferencia.limpo && validarFormatoMensagens({ a: msgA, b: msgB, c: msgC }).ok) {
+      const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
+      if (sobraReescritaMs >= 10000) {
+        const apontamentos = conferencia.porMensagem.map(m => {
+          const partes = [];
+          if (m.proibidas.length) partes.push(`PROIBIDO (tire sempre): ${m.proibidas.join("; ")}`);
+          if (m.suspeitas.length) partes.push(`CONFERIR NA CONVERSA: ${m.suspeitas.join("; ")}`);
+          return `- "${m.chave}" → ${partes.join(" | ")}`;
+        }).join("\n");
+        const promptReescrita = `Você escreveu as três mensagens abaixo nesta mesma análise. A conferência automática apontou trechos que precisam ser revistos ANTES de entregar ao corretor. Reescreva as três seguindo as MESMAS regras do Cérebro Comercial e do prompt de sistema.
+
+APONTAMENTOS:
+${apontamentos}
+
+COMO TRATAR CADA TIPO:
+- "PROIBIDO": a expressão está banida em qualquer contexto. Tire e escreva a frase de outro jeito, sem substituir por outro clichê. Nunca pergunte e responda por si mesmo no mesmo fôlego ("tudo bem? tranquilo por aqui"): ou cumprimente, ou pergunte — não os dois.
+- "CONFERIR NA CONVERSA": pode estar certo ou errado, depende dos FATOS. Se a conversa ou as observações do corretor mostram que aquilo aconteceu MESMO, mantenha. Se NÃO mostram, é ação inventada assinada pelo corretor: troque por oferta no futuro ("quero preparar", "posso montar") ou tire. No caso de "faz sentido": mantenha só quando estiver perguntando de verdade sobre um plano concreto do cliente; se for enfeite que devolve a decisão pra ele sem perguntar nada, reescreva.
+
+REGRA QUE MANDA EM TUDO: não invente NENHUM fato, número, condição, material ou ação que não esteja na conversa, nas observações ou no Cérebro. Mantenha o ângulo comercial de cada uma das três (recomendada / maisSuave / maisDireta) e o jeito de escrever do corretor. Se o cliente condicionou o próximo passo a algo da vida dele (colheita, venda de um bem, viagem, decisão de terceiro), é POR AÍ que a retomada começa — perguntando como aquilo ficou —, não repetindo a oferta que ele não respondeu.
+
+MENSAGENS ATUAIS:
+${JSON.stringify({ recomendada: msgA, maisSuave: msgB, maisDireta: msgC }, null, 2)}
+
+${observacoesManuaisTexto ? `OBSERVAÇÕES DO CORRETOR (fatos confirmados por ele):\n${observacoesManuaisTexto}\n\n` : ""}CONVERSA COMPLETA:
+${timelineText}
+
+Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuave":"texto","maisDireta":"texto"}}`;
+        try {
+          const rr = await chamarGPT4Json({
+            openai,
+            systemPrompt: systemPromptAnalise,
+            prompt: promptReescrita,
+            model: modeloAnalise(),
+            maxOutputTokens: 1200,
+            timeout: Math.min(sobraReescritaMs, 22000)
+          });
+          await registrarUsoIA({ organizationId, kind: "chat", model: rr.response?.model || modeloAnalise(), rota: "revisao-mensagens", usage: rr.response?.usage });
+          const novasRaw = (rr.parsed?.mensagens && typeof rr.parsed.mensagens === "object") ? rr.parsed.mensagens : {};
+          const novaA = pickMsg(novasRaw, ["recomendada", "a"]);
+          const novaB = pickMsg(novasRaw, ["maisSuave", "suave", "b"]);
+          const novaC = pickMsg(novasRaw, ["maisDireta", "direta", "c"]);
+          if (validarFormatoMensagens({ a: novaA, b: novaB, c: novaC }).ok) {
+            // Só troca se a reescrita REALMENTE ficou melhor (ou igual) na conferência: uma
+            // releitura que reintroduz clichê não pode substituir o que já estava na mão. Frase
+            // proibida pesa muito mais que suspeita — suspeita pode ser legítima e permanecer.
+            const nota = c2 => c2.porMensagem.reduce((s, m) => s + m.proibidas.length * 10 + m.suspeitas.length, 0);
+            const conferenciaNova = conferirTrioMensagens({ a: novaA, b: novaB, c: novaC });
+            if (nota(conferenciaNova) <= nota(conferencia)) {
+              msgA = novaA; msgB = novaB; msgC = novaC;
+              mensagensReescritas = true;
+            }
+          }
+        } catch (_) { /* a análise continua valendo com as mensagens originais */ }
+      }
+    }
+
     const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
     // v827 §7.1: o produto vem só do que a IA leu na conversa. Sem catálogo fixo para
     // "completar" — na ausência, fica "Não identificado" (cautela, não invenção).
@@ -3078,6 +3252,9 @@ ${timelineText}`;
       // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
       // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
       ...(modeloFallbackUsado ? { modeloFallback: true } : {}),
+      // v1235 — registro honesto de que a conferência pegou algo nas três mensagens e elas
+      // passaram por uma releitura antes de chegar ao corretor.
+      ...(mensagensReescritas ? { mensagensRevisadas: true } : {}),
       // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
       //
       // O JSON pedido à IA tinha 12 campos de diagnóstico e a tela mostra CINCO. Os outros sete só
