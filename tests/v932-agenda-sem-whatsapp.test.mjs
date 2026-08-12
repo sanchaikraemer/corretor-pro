@@ -7,7 +7,9 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url).pathname, 'utf
 // da Agenda (quando o lead tinha telefone) era desnecessário ali — "Ver análise" já leva pro
 // lead, de onde dá pra abrir o WhatsApp. Removido só o botão do card da Agenda.
 
-const ini = app.indexOf('function agendaCardHTML(l, extra){');
+// v1233 — a função ganhou o parâmetro opcional da coluna de hora (horaHtml); a regra desta
+// guarda (sem botão de WhatsApp no card) continua igual.
+const ini = app.indexOf('function agendaCardHTML(l, extra, horaHtml){');
 const fim = app.indexOf('\n}', ini) + 2;
 assert.ok(ini !== -1, 'agendaCardHTML não encontrada em app.js');
 const fn = app.slice(ini, fim);

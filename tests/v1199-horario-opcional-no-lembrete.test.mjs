@@ -14,8 +14,13 @@ const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(appSrc, /cpAgendarPainelHTML\(id, "reag_"\+id, atual\)/, 'o painel de reagendar da Agenda precisa usar o painel único');
   assert.match(appSrc, /async function reagendarLembrete\(id, dateStr, horaStr\)\{/, 'reagendarLembrete precisa aceitar a hora, opcional');
   assert.match(appSrc, /body: JSON\.stringify\(payloadComCerebro\(\{ id, action:"reagendar-lembrete", data: dateStr, hora: horaValida \? horaStr : undefined \}\)\)/, 'a hora precisa ser enviada pro servidor quando válida');
+  // v1233 — a Agenda virou lista por dia (desenho da simulação aprovada): a hora do lembrete
+  // aparece na COLUNA DA ESQUERDA de cada cartão do dia (hcolHora), em destaque — melhor que o
+  // texto pequeno de antes. A intenção da v1199 segue: hora gravada tem que voltar visível.
+  assert.match(appSrc, /const hcolHora = \(hora\) => `<div class="cp-ag-hcol"><b>\$\{hora \? escapeHtml\(hora\) : '—'\}/,
+    'a coluna do dia precisa mostrar a hora do item quando ela existir');
   const ocorrencias = (appSrc.match(/\$\{lem\.hora \? ` às \$\{escapeHtml\(lem\.hora\)\}` : ""\}/g) || []).length;
-  assert.equal(ocorrencias, 3, 'os três cartões da Agenda (hoje / vencido arquivado / futuro) precisam mostrar a hora quando ela existir');
+  assert.ok(ocorrencias >= 1, 'o cartão de lembrete vencido de arquivado continua mostrando a hora quando ela existir');
 }
 
 // v1199 — pedido do dono, olhando a Agenda: "minha reunião com Mateus amanhã é às 14h, mas tive

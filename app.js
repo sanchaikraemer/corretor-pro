@@ -5731,10 +5731,13 @@ async function carregarAgendaTopo(){
   }catch(_){ /* falha silenciosa */ }
 }
 
-function agendaCardHTML(l, extra){
+function agendaCardHTML(l, extra, horaHtml){
+  // v1233 — horaHtml (opcional): coluna da hora à esquerda do cartão, usada pela lista do dia
+  // da Agenda (desenho da simulação aprovada). Quem não passa nada fica igual a antes.
   const idJs = JSON.stringify(String(l.id||""));
   return `
     <div class="agenda-item">
+      ${horaHtml || ""}
       <div style="flex:1;min-width:0">
         <strong onclick='abrirLead(${idJs})' style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.18)">${escapeHtml(l.name||"Cliente")}</strong>
         <div class="small" style="margin-top:3px">${escapeHtml(l.product||"--")}</div>
@@ -6004,10 +6007,14 @@ async function carregarAgenda(){
       return;
     }
 
-    // ===== v1232 — SEMANA NO TOPO (modelo 4 escolhido pelo dono) =====
-    // Faixa com os próximos 7 dias e a quantidade de cada um; tocar num dia filtra a tela pra
-    // mostrar só o que é daquele dia (tocar em "Tudo" volta ao normal). O dia vem sempre no fuso
-    // de São Paulo, o mesmo do resto do app (cp786CompromissoAtrasado etc.).
+    // ===== v1233 — SEMANA NO TOPO, agora IGUAL à simulação escolhida (modelo 4) =====
+    // O dono conferiu com print: a v1232 tinha feito quadradinhos com a CONTAGEM grande e mantido
+    // as listas antigas embaixo — a simulação aprovada era outra coisa. Aqui é o desenho dela:
+    // quadradinho com o DIA DA SEMANA em cima e o NÚMERO DO DIA grande, bolinha com a contagem,
+    // o dia de HOJE já escolhido ao abrir (aceso em coral, a cor da marca), e embaixo SÓ a lista
+    // do dia escolhido, cada cartão com a HORA grande à esquerda, em ordem cronológica.
+    // "Atraso" (vermelho) ganha quadradinho quando existir; "+" no fim mostra o que vem depois
+    // desta semana (inclusive compromisso sem data concreta). Fuso de São Paulo, como o app todo.
     const diaSP = (ts) => {
       try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(ts)); }
       catch(_){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -6016,50 +6023,86 @@ async function carregarAgenda(){
     const dias = [];
     for(let i=0;i<7;i++){ const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+i); dias.push({ key: diaSP(d.getTime()), d }); }
     const amanhaKey = dias[1].key;
-    // Compromisso só entra na conta de um dia quando tem data concreta (AAAA-MM-DD) — texto solto
-    // tipo "semana que vem" continua aparecendo, mas só na visão "Tudo".
+    const chaves = new Set(dias.map(x => x.key));
+    // Compromisso só entra na conta de um dia quando tem data concreta (AAAA-MM-DD); texto solto
+    // tipo "semana que vem" cai no "+" (depois desta semana).
     const apDia = (x) => { const raw=String(x?._ap?.data||'').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''; };
     const lemDia = (l) => { const t = lembreteTs(l); return isNaN(t) ? '' : diaSP(t); };
-    const contarDia = (key) => {
-      if(key === hojeKey) return lembretesHoje.length + compHoje.length;
-      let n = lembretesFuturos.filter(l => lemDia(l) === key).length + compFuturo.filter(x => apDia(x) === key).length;
-      if(key === amanhaKey) n += compAmanha.length;
-      return n;
-    };
-    // Filtro escolhido: null = Tudo, 'atrasados', ou uma data da semana. Se o dia guardado ficou
-    // pra trás (virou o dia, atraso resolvido), volta sozinho pro Tudo em vez de mostrar vazio.
-    let f = state.agendaFiltroDia || null;
-    if(f && f !== 'atrasados' && !dias.some(x => x.key === f)) f = state.agendaFiltroDia = null;
-    if(f === 'atrasados' && !atrasados.length && !lembretesArquivadosVencidos.length) f = state.agendaFiltroDia = null;
-    const vAtras   = (f && f !== 'atrasados') ? [] : atrasados;
-    const vLemArq  = (f && f !== 'atrasados') ? [] : lembretesArquivadosVencidos;
-    const vLemHoje = (!f || f === hojeKey) ? lembretesHoje : [];
-    const vHoje    = (!f || f === hojeKey) ? compHoje : [];
-    const vAmanha  = (!f || f === amanhaKey) ? compAmanha : [];
-    const vLemFut  = !f ? lembretesFuturos : (f !== 'atrasados' && f !== hojeKey ? lembretesFuturos.filter(l => lemDia(l) === f) : []);
-    const vFut     = !f ? compFuturo : (f !== 'atrasados' && f !== hojeKey ? compFuturo.filter(x => apDia(x) === f) : []);
 
-    const totalTudo = atrasados.length + lembretesHoje.length + lembretesArquivadosVencidos.length + lembretesFuturos.length + compromissos.length;
-    const SEMANA = ['dom','seg','ter','qua','qui','sex','sáb'];
-    const rotuloDia = (d,i) => i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : SEMANA[d.getDay()];
+    // Hora de cada item — pra coluna da esquerda e pra ordem cronológica do dia.
+    const horaDoAp = (ap) => {
+      const s = String(ap?.hora || ap?.quando || ap?.dataHora || '');
+      let m = s.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+      if(m) return `${m[1].padStart(2,'0')}:${m[2]}`;
+      m = s.match(/\b([01]?\d|2[0-3])h\b/i);
+      return m ? `${m[1].padStart(2,'0')}:00` : '';
+    };
+    const minDe = (hora) => hora ? Number(hora.slice(0,2))*60 + Number(hora.slice(3,5)) : null;
+    const periodoDe = (hora) => !hora ? 'sem hora' : (Number(hora.slice(0,2)) < 12 ? 'manhã' : Number(hora.slice(0,2)) < 18 ? 'tarde' : 'noite');
+    const hcolHora = (hora) => `<div class="cp-ag-hcol"><b>${hora ? escapeHtml(hora) : '—'}</b><small>${periodoDe(hora)}</small></div>`;
+
+    const itemLem = (l) => {
+      const lem = l.analysis?.lembrete || {};
+      let hora = String(lem.hora||'').trim();
+      if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(hora)) hora = '';
+      if(!hora){
+        const t = lembreteTs(l);
+        if(Number.isFinite(t)){ const d = new Date(t); if(d.getHours() || d.getMinutes()) hora = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+      }
+      const extra = lem.motivo ? `<div class="small" style="margin-top:6px;color:var(--dados)">📅 ${escapeHtml(_cortarFrase(String(lem.motivo), 90))}</div>` : '';
+      return { l, hora, min: minDe(hora), extra, dataKey: lemDia(l) };
+    };
+    const itemAp = (x) => {
+      const ap = x._ap || {};
+      const hora = horaDoAp(ap);
+      const trecho = ap.trechoLiteral ? ` · <i style="color:var(--muted)">"${escapeHtml(String(ap.trechoLiteral).slice(0,60))}"</i>` : '';
+      const extra = `<div class="small" style="margin-top:6px;color:var(--acao)">🤝 ${escapeHtml(ap.oQue || 'compromisso')}${trecho}</div>`;
+      return { l: x, hora, min: minDe(hora), extra, dataKey: apDia(x) };
+    };
+
+    const itensDoDia = (key) => {
+      const out = [];
+      const lems = key === hojeKey ? lembretesHoje : lembretesFuturos.filter(l => lemDia(l) === key);
+      for(const l of lems) out.push(itemLem(l));
+      let aps;
+      if(key === hojeKey) aps = compHoje;
+      else if(key === amanhaKey) aps = [...compAmanha, ...compFuturo.filter(x => apDia(x) === key)];
+      else aps = compFuturo.filter(x => apDia(x) === key);
+      for(const x of aps) out.push(itemAp(x));
+      out.sort((a,b) => (a.min ?? 100000) - (b.min ?? 100000)); // sem hora vai pro fim
+      return out;
+    };
+    const porDia = dias.map(x => itensDoDia(x.key));
+    const ultimaChave = dias[6].key;
+    const depois = [];
+    for(const l of lembretesFuturos){ const k = lemDia(l); if(k && k > ultimaChave) depois.push(itemLem(l)); }
+    for(const x of compFuturo){ const k = apDia(x); if(!k || k > ultimaChave) depois.push(itemAp(x)); }
+    depois.sort((a,b) => String(a.dataKey || '9999') < String(b.dataKey || '9999') ? -1 : 1);
+    const atrasN = atrasados.length + lembretesArquivadosVencidos.length;
+
+    // Escolha atual: HOJE já vem escolhido ao abrir (como na simulação). Escolha que ficou velha
+    // (virou o dia, atraso resolvido, "+" esvaziou) volta pra Hoje em vez de abrir uma tela vazia.
+    let f = state.agendaFiltroDia;
+    if(f !== 'atrasados' && f !== 'depois' && !chaves.has(f)) f = hojeKey;
+    if(f === 'atrasados' && !atrasN) f = hojeKey;
+    if(f === 'depois' && !depois.length) f = hojeKey;
+    state.agendaFiltroDia = f;
+
+    const SEM3 = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
     let html = `<div class="cp-ag-semana">`;
-    html += `<button type="button" class="cp-ag-dia${!f?' ativo':''}" onclick="cpAgendaFiltrarDia(null)"><span>Tudo</span><b>${totalTudo}</b></button>`;
-    if(atrasados.length || lembretesArquivadosVencidos.length){
-      html += `<button type="button" class="cp-ag-dia atras${f==='atrasados'?' ativo':''}" onclick="cpAgendaFiltrarDia('atrasados')"><span>Atrasados</span><b>${atrasados.length + lembretesArquivadosVencidos.length}</b></button>`;
-    }
+    if(atrasN) html += `<button type="button" class="cp-ag-dia atras${f==='atrasados'?' ativo':''}" onclick="cpAgendaFiltrarDia('atrasados')" title="Atrasados — retome ou descarte"><span>Atraso</span><b>!</b><em>${atrasN}</em></button>`;
     for(let i=0;i<dias.length;i++){
-      const n = contarDia(dias[i].key);
-      html += `<button type="button" class="cp-ag-dia${f===dias[i].key?' ativo':''}${n?'':' vazio'}" onclick="cpAgendaFiltrarDia('${dias[i].key}')"><span>${rotuloDia(dias[i].d,i)}</span><b>${n}</b><small>${String(dias[i].d.getDate()).padStart(2,'0')}/${String(dias[i].d.getMonth()+1).padStart(2,'0')}</small></button>`;
+      const n = porDia[i].length;
+      html += `<button type="button" class="cp-ag-dia${f===dias[i].key?' ativo':''}" onclick="cpAgendaFiltrarDia('${dias[i].key}')"><span>${SEM3[dias[i].d.getDay()]}</span><b>${dias[i].d.getDate()}</b><em${n?'':' class="zero"'}>${n}</em></button>`;
     }
+    if(depois.length) html += `<button type="button" class="cp-ag-dia${f==='depois'?' ativo':''}" onclick="cpAgendaFiltrarDia('depois')" title="Depois desta semana"><span>+</span><b>›</b><em>${depois.length}</em></button>`;
     html += `</div>`;
-    if(!vAtras.length && !vLemHoje.length && !vLemArq.length && !vLemFut.length && !vHoje.length && !vAmanha.length && !vFut.length){
-      html += '<div class="empty">Nada marcado para este dia.</div>';
-      box.innerHTML = html;
-      return;
-    }
-    if(vAtras.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--risco);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Atrasados — retome ou descarte (${vAtras.length})</div>`;
-      html += vAtras.map(({ l, at }) => {
+
+    const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    const DIAS_LONGOS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    if(f === 'atrasados'){
+      html += `<div class="cp-ag-titulo"><b style="color:var(--risco)">Atrasados — retome ou descarte</b><span>· ${atrasN} no total</span></div>`;
+      html += atrasados.map(({ l, at }) => {
         const lem = l.analysis?.lembrete || null;
         const lemTs = lem?.quando ? new Date(lem.quando).getTime() : NaN;
         const lemVencido = Number.isFinite(lemTs) && lemTs < Date.now();
@@ -6075,72 +6118,29 @@ async function carregarAgenda(){
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,80,80,.06);border-left:3px solid var(--risco);border-radius:6px;font-size:12px"><b style="color:var(--risco)">Atrasado há ${at.dias} dia${at.dias===1?'':'s'} (era ${escapeHtml(at.dataLabel)})</b>${linhas.join('')}</div>`;
         return agendaCardHTML(l, extra);
       }).join("");
-      html += `</div>`;
-    }
-    if(vLemHoje.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes de hoje (${vLemHoje.length})</div>`;
-      html += vLemHoje.map(l => {
-        const lem = l.analysis?.lembrete || {};
-        const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--acao-soft);border-left:3px solid var(--acao);border-radius:6px;font-size:12px"><b style="color:var(--acao)">📅 Lembrete de hoje (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""})</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
-        return agendaCardHTML(l, extra);
-      }).join("");
-      html += `</div>`;
-    }
-    if(vLemArq.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--timing);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes vencidos — revisar (arquivados) (${vLemArq.length})</div>`;
-      html += vLemArq.map(l => {
+      html += lembretesArquivadosVencidos.map(l => {
         const lem = l.analysis?.lembrete || {};
         const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
         const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,45,155,.05);border-left:3px solid var(--timing);border-radius:6px;font-size:12px"><b style="color:var(--timing)">⏰ Lembrete venceu (${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}) · está arquivado</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(lem.motivo)}</div>` : ""}</div>`;
         return agendaCardHTML(l, extra);
       }).join("");
-      html += `</div>`;
+    } else if(f === 'depois'){
+      html += `<div class="cp-ag-titulo"><b>Depois desta semana</b><span>· ${depois.length} marcado${depois.length===1?'':'s'}</span></div>`;
+      html += depois.map(it => {
+        const dk = it.dataKey;
+        const hcol = `<div class="cp-ag-hcol"><b>${dk ? `${dk.slice(8,10)}/${dk.slice(5,7)}` : '—'}</b><small>${dk ? (it.hora || '') : 'sem data'}</small></div>`;
+        return agendaCardHTML(it.l, it.extra, hcol);
+      }).join('');
+    } else {
+      const idx = Math.max(0, dias.findIndex(x => x.key === f));
+      const d = dias[idx].d, itens = porDia[idx];
+      const rot = `${DIAS_LONGOS[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}`;
+      html += `<div class="cp-ag-titulo"><b>${idx===0?'Hoje — ':''}${rot}</b><span>· ${itens.length ? `${itens.length} na agenda` : 'nada marcado'}</span></div>`;
+      html += itens.length
+        ? itens.map(it => agendaCardHTML(it.l, it.extra, hcolHora(it.hora))).join('')
+        : `<div class="empty">Nada marcado para este dia. Toque em outro dia da faixa acima pra ver o resto da semana.</div>`;
     }
-    if(vLemFut.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Lembretes agendados (${vLemFut.length})</div>`;
-      html += vLemFut.map(l => {
-        const lem = l.analysis?.lembrete || {};
-        const dataBR = new Date(lem.quando).toLocaleDateString("pt-BR");
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(55,232,255,.05);border-left:3px solid var(--dados);border-radius:6px;font-size:12px"><b style="color:var(--dados)">Lembrar em ${escapeHtml(dataBR)}${lem.hora ? ` às ${escapeHtml(lem.hora)}` : ""}</b>${lem.motivo ? `<div class="small" style="margin-top:2px;color:var(--soft)">${escapeHtml(_cortarFrase(String(lem.motivo), 70))}</div>` : ""}</div>`;
-        return agendaCardHTML(l, extra);
-      }).join("");
-      html += `</div>`;
-    }
-    if(vHoje.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--acao);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos hoje (${vHoje.length})</div>`;
-      html += vHoje.map(l => {
-        const ap = l._ap;
-        const oQue = ap.oQue || "compromisso";
-        const trecho = ap.trechoLiteral ? `<div class="small" style="margin-top:4px;color:var(--muted);font-style:italic">"${escapeHtml(ap.trechoLiteral.slice(0,80))}"</div>` : "";
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--acao-soft);border-left:3px solid var(--acao);border-radius:6px;font-size:12px"><b style="color:var(--acao)">Hoje — ${escapeHtml(oQue)}</b>${trecho}</div>`;
-        return agendaCardHTML(l, extra);
-      }).join("");
-      html += `</div>`;
-    }
-    if(vAmanha.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--lime);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos amanhã (${vAmanha.length})</div>`;
-      html += vAmanha.map(l => {
-        const ap = l._ap;
-        const oQue = ap.oQue || "compromisso";
-        const trecho = ap.trechoLiteral ? `<div class="small" style="margin-top:4px;color:var(--muted);font-style:italic">"${escapeHtml(ap.trechoLiteral.slice(0,80))}"</div>` : "";
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:var(--accent-soft);border-left:3px solid var(--lime);border-radius:6px;font-size:12px"><b style="color:var(--lime)">Amanhã — ${escapeHtml(oQue)}</b>${trecho}</div>`;
-        return agendaCardHTML(l, extra);
-      }).join("");
-      html += `</div>`;
-    }
-    if(vFut.length){
-      html += `<div style="margin-bottom:14px"><div class="small" style="color:var(--dados);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Compromissos futuros (${vFut.length})</div>`;
-      html += vFut.map(l => {
-        const ap = l._ap;
-        const oQue = ap.oQue || "compromisso";
-        const quando = ap.quando || "data a confirmar";
-        const trecho = ap.trechoLiteral ? `<div class="small" style="margin-top:4px;color:var(--muted);font-style:italic">"${escapeHtml(ap.trechoLiteral.slice(0,80))}"</div>` : "";
-        const extra = `<div style="margin-top:6px;padding:6px 8px;background:rgba(55,232,255,.05);border-left:3px solid var(--dados);border-radius:6px;font-size:12px"><b style="color:var(--dados)">${escapeHtml(quando)} — ${escapeHtml(oQue)}</b>${trecho}</div>`;
-        return agendaCardHTML(l, extra);
-      }).join("");
-      html += `</div>`;
-    }
+
     box.innerHTML = html;
   }catch(err){
     box.innerHTML = '<div class="notice error">Falha: '+escapeHtml(String(err?.message||err))+'</div>';
