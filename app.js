@@ -3284,26 +3284,8 @@ function renderBotoesHome(){
       .cp1170-item button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;padding:2px 5px}
       .cp1170-item button:hover{color:var(--risco)}
       .cp1170-vazio{color:var(--muted);font-size:12.5px;padding:6px 0}
-      /* v1171 — quadradinho "Atendidos": modelo 4 dos que o dono viu (o do arozinho), mas com 3
-         números em vez de 2 — pedido dele foi hoje / semana / mês, cada um só uma CONTAGEM
-         concluída (não é meta nem dose batida). #home força font-size:24px!important em QUALQUER
-         <b> dentro de .ui-kpi (v1077) e .ui-kpi svg{width:17px;height:17px} (base, styles.css) —
-         os dois precisam de uma regra mais específica (ID #home + mais classes) pra vencer sem
-         quebrar os outros quadradinhos. Lição da v1077→v1078: checar sempre contra !important já
-         existente antes de assumir que o CSS novo "pegou".
-         v1183 — o arinho decorativo saiu: era um círculo INCOMPLETO verde no canto e todo mundo
-         lia como rodinha de "carregando" (o dono pediu pra tirar). No lugar entrou o mesmo ícone
-         de concluído dos outros quadradinhos, sem a bolinha de fundo (que aqui, no topo, brigava
-         com o rótulo) — o !important é pra vencer .ui-kpi i{background;border-radius} da base. */
-      #home .ui-kpi.cp1171-atendidos{position:relative}
-      #home .ui-kpi.cp1171-atendidos .cp1171-ic{position:absolute;top:9px;right:11px;width:16px!important;height:16px!important;background:none!important;border-radius:0!important}
-      #home .ui-kpi.cp1171-atendidos .cp1171-ic svg{width:16px;height:16px}
-      #home .ui-kpi.cp1171-atendidos>div.cp1171-trio{display:flex;align-items:stretch;justify-content:space-between;gap:4px;margin-top:8px}
-      #home .ui-kpi.cp1171-atendidos .cp1171-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:1px}
-      #home .ui-kpi.cp1171-atendidos .cp1171-col+.cp1171-col{border-left:1px solid var(--line2);padding-left:4px}
-      #home .ui-kpi.cp1171-atendidos .cp1171-col b{font-size:15px!important;line-height:1.05}
-      #home .ui-kpi.cp1171-atendidos .cp1171-col small{margin-top:0;color:var(--muted);font-size:8.5px;text-transform:uppercase;letter-spacing:.02em;font-weight:800}
-      @media(max-width:620px){#home .ui-kpi.cp1171-atendidos .cp1171-col b{font-size:13px!important}#home .ui-kpi.cp1171-atendidos .cp1171-col small{font-size:7.5px}}
+      /* v1251 — o CSS do quadradinho "Atendidos" (v1171/v1183) saiu junto com o quadradinho:
+         as três contagens mudaram de casa pro painel "Seu mês" (ver cp1251PainelHTML). */
     </style>
     <div class="home-saud">
       <div class="home-saud-sub"><span class="home-saud-titulo"></span></div>
@@ -3409,14 +3391,154 @@ function buildDesempenhoInsightsHTML(items){
 function renderHomeRight(items){
   // Atualização #810: a coluna lateral repetia indicadores já exibidos nos cards
   // principais e podia ficar presa no skeleton quando o dashboard caía no fallback.
-  // Ela permanece desativada e nunca deve bloquear o carregamento da Home.
+  // Por isso ela ficou VAZIA desde então — espaço bom desperdiçado no computador.
+  //
+  // v1251 — ela volta a ter dono, e desta vez com conteúdo que NÃO existe em nenhum outro lugar
+  // da Home: os números do mês (atendidos e mensagens trocadas) e o gráfico de atendimentos dia a
+  // dia. Escolha do dono, depois de ver o desenho nas duas telas: aberto no computador (aqui não
+  // custa nada — a coluna já estava vazia e a lista de clientes não perde uma linha) e fechado no
+  // celular (lá custaria 4 dos 5 clientes visíveis sem rolar). Quem cuida do celular é
+  // cp1251RenderResumo, logo abaixo. Continua sem bloquear nada: se der erro, a Home segue.
   const el = qs("#homeRight");
   if(!el) return;
-  el.innerHTML = "";
-  el.hidden = true;
-  el.style.setProperty("display", "none", "important");
+  try{
+    el.innerHTML = cp1251PainelHTML(cp1251Dados(), { compacto:true });
+    el.hidden = false;
+    el.style.removeProperty("display");
+  }catch(_){
+    el.innerHTML = "";
+    el.hidden = true;
+    el.style.setProperty("display", "none", "important");
+  }
 }
 window.renderHomeRight = renderHomeRight;
+
+// ── v1251 — SEUS NÚMEROS DO MÊS ───────────────────────────────────────────────────────────────
+// Pedido do dono: além de "Atendidos", ver quantas mensagens foram trocadas no mês — o total, as
+// que ele mandou e as que recebeu — e tirar isso de dentro do quadradinho apertado da Home.
+//
+// TUDO AQUI É DO PRIMEIRO AO ÚLTIMO DIA DO MÊS (calendário de Brasília), como ele pediu — não é
+// "últimos 30 dias".
+//
+// De onde vem cada número:
+//  • Atendidos (hoje/semana/mês): dos eventos "contato_manual" de cada cliente, a MESMA régua que
+//    o quadradinho antigo usava — inclusive quem foi arquivado depois ("arquivado também é
+//    atendimento", palavras do dono na v1183).
+//  • Mensagens do mês: dos campos msgMes* que o SERVIDOR manda prontos (v1251). Antes esse número
+//    era montado aqui em cima da prévia de 8 mensagens por cliente — ou seja, saía muito menor que
+//    a realidade em qualquer conversa de verdade.
+//  • Gráfico: quantos clientes você atendeu em cada dia do mês (o mesmo evento dos atendidos).
+function cp1251Dados(){
+  const base = (Array.isArray(state.todosLeads) && state.todosLeads.length) ? state.todosLeads : (state.itemsAtivos || []);
+  const iniMes = cpInicioMesMs();
+  const hojeBR = inicioDoDiaBR().getTime();
+  const diaDeHoje = Math.max(0, Math.floor((hojeBR - iniMes) / 86400000));
+  const porDia = new Array(diaDeHoje + 1).fill(null).map(() => new Set());
+  let total = 0, enviadas = 0, recebidas = 0;
+  for(const l of base){
+    total += Number(l?.msgMesTotal) || 0;
+    enviadas += Number(l?.msgMesCorretor) || 0;
+    recebidas += Number(l?.msgMesCliente) || 0;
+    const eventos = l?.analysis?.aprendizado?.eventos || [];
+    for(const e of eventos){
+      if(e?.evento !== "contato_manual" || !e?.quando) continue;
+      const t = Date.parse(e.quando);
+      if(!Number.isFinite(t) || t < iniMes) continue;
+      const idx = Math.floor((t - iniMes) / 86400000);
+      if(idx >= 0 && idx < porDia.length) porDia[idx].add(String(l.id));
+    }
+  }
+  return {
+    atendidosHoje: base.filter(ehAtendidoHoje).length,
+    atendidosSemana: base.filter(ehAtendidoNaSemana).length,
+    atendidosMes: base.filter(ehAtendidoNoMes).length,
+    total, enviadas, recebidas,
+    porDia: porDia.map(s => s.size),
+    mesNome: new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", month:"long" }).format(new Date()),
+    diasNoMes: new Date(new Date(iniMes).getUTCFullYear(), new Date(iniMes).getUTCMonth() + 1, 0).getDate()
+  };
+}
+
+function cp1251Num(n){ return Number(n || 0).toLocaleString("pt-BR"); }
+
+function cp1251GraficoHTML(porDia){
+  const maior = Math.max(1, ...porDia);
+  const barras = porDia.map((q, i) => {
+    const alt = Math.max(4, Math.round((q / maior) * 100));
+    // O dia de hoje só acende em coral quando REALMENTE teve atendimento — senão a barrinha
+    // mínima (que existe só pra marcar o dia no gráfico) daria a entender que houve movimento.
+    const ultima = i === porDia.length - 1 && q > 0;
+    return `<i class="${ultima ? "cp1251-hoje" : ""}" style="height:${alt}%" title="dia ${i + 1}: ${q} atendido${q === 1 ? "" : "s"}"></i>`;
+  }).join("");
+  return `<div class="cp1251-gr" aria-hidden="true">${barras}</div>
+    <div class="cp1251-gr-leg"><span>dia 1</span><span>hoje</span></div>
+    <p class="cp1251-gr-tit">Clientes atendidos por dia</p>`;
+}
+
+function cp1251LinhaHTML(cor, icone, titulo, sub, valor){
+  return `<div class="cp1251-num">
+    <span class="cp1251-bolha" style="background:${cor.fundo};color:${cor.cor}">${icone}</span>
+    <span class="cp1251-txt"><b>${escapeHtml(titulo)}</b><small>${escapeHtml(sub)}</small></span>
+    <b class="cp1251-val">${cp1251Num(valor)}</b>
+  </div>`;
+}
+
+function cp1251PainelHTML(d, opts = {}){
+  const compacto = opts.compacto === true;
+  const pct = (n) => d.total > 0 ? Math.round((Number(n) || 0) / d.total * 100) + "%" : "—";
+  const coral = { fundo:"rgba(255,98,88,.14)", cor:"var(--cp-coral, var(--accent))" };
+  const azul  = { fundo:"rgba(85,184,232,.14)", cor:"var(--cp-blue, var(--dados))" };
+  const ciano = { fundo:"rgba(97,199,232,.14)", cor:"var(--cp-green, var(--dados))" };
+  const mes = d.mesNome.charAt(0).toUpperCase() + d.mesNome.slice(1);
+  // Dentro da folha do celular o título já está na barra de cima — repetir "Seu mês" duas vezes,
+  // uma embaixo da outra, é ruído.
+  const titulo = opts.semTitulo === true ? "" : `<h3 class="cp1251-tit">Seu mês</h3>`;
+  return `<section class="cp1251-painel${compacto ? " cp1251-compacto" : ""}">
+    ${titulo}
+    <p class="cp1251-per">${escapeHtml(mes)} · do dia 1 ao dia ${d.diasNoMes}</p>
+    <div class="cp1251-lista">
+      ${cp1251LinhaHTML(coral, "✓", "Clientes atendidos", `${cp1251Num(d.atendidosHoje)} hoje · ${cp1251Num(d.atendidosSemana)} nesta semana`, d.atendidosMes)}
+      ${cp1251LinhaHTML(azul, "↔", "Mensagens trocadas", "no mês inteiro", d.total)}
+      ${cp1251LinhaHTML(coral, "↑", "Enviadas por você", `${pct(d.enviadas)} do total`, d.enviadas)}
+      ${cp1251LinhaHTML(ciano, "↓", "Recebidas dos clientes", `${pct(d.recebidas)} do total`, d.recebidas)}
+    </div>
+    ${cp1251GraficoHTML(d.porDia)}
+  </section>`;
+}
+
+// Celular: só a linha de resumo. Toque abre o painel inteiro por cima.
+function cp1251RenderResumo(){
+  const el = qs("#cpMesResumo");
+  if(!el) return;
+  try{
+    const d = cp1251Dados();
+    el.innerHTML = `<button type="button" class="cp1251-resumo" onclick="cp1251AbrirPainel()">
+      <span class="cp1251-resumo-txt">
+        <b>${cp1251Num(d.atendidosMes)} atendidos · ${cp1251Num(d.total)} mensagens</b>
+        <small>${escapeHtml(d.mesNome.charAt(0).toUpperCase() + d.mesNome.slice(1))}, do dia 1 até hoje · toque pra ver tudo</small>
+      </span>
+      <span class="cp1251-resumo-seta" aria-hidden="true">›</span>
+    </button>`;
+  }catch(_){ el.innerHTML = ""; }
+}
+
+function cp1251AbrirPainel(){
+  qs("#cp1251Modal")?.remove();
+  const ov = document.createElement("div");
+  ov.id = "cp1251Modal";
+  ov.className = "cp1251-modal";
+  ov.innerHTML = `<div class="cp1251-folha">
+    <div class="cp1251-folha-topo">
+      <button type="button" class="cp1251-voltar" id="cp1251Fechar">‹ Voltar</button>
+      <b>Seu mês</b><span style="width:56px"></span>
+    </div>
+    ${cp1251PainelHTML(cp1251Dados(), { semTitulo:true })}
+  </div>`;
+  document.body.appendChild(ov);
+  qs("#cp1251Fechar")?.addEventListener("click", () => ov.remove(), { once:true });
+  ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
+}
+window.cp1251AbrirPainel = cp1251AbrirPainel;
 // Mobile: abre desempenho + insights num modal (pelo menu / item Insights da lateral).
 function abrirDesempenhoInsights(){
   const items = state.itemsAtivos || [];
@@ -10809,16 +10931,18 @@ renderResumoDia = function(items){
   // aqui, enquanto a frase da saudação logo acima continuava contando (ela usa
   // cpAtendidosHojeTotal, que nunca filtrou arquivado — é o mesmo defeito que a v980 já tinha
   // corrigido lá e que nasceu de novo neste quadradinho). Mesma base das duas, sem divergir.
-  const baseAtendidos=(Array.isArray(state.todosLeads) && state.todosLeads.length) ? state.todosLeads : items;
-  const atendidosHoje=baseAtendidos.filter(ehAtendidoHoje).length;
-  const atendidosSemana=baseAtendidos.filter(ehAtendidoNaSemana).length;
-  const atendidosMes=baseAtendidos.filter(ehAtendidoNoMes).length;
+  // v1251 — O QUADRADINHO "ATENDIDOS" SAIU DAQUI. Ele apertava três contagens (hoje/semana/mês)
+  // num quadrado do tamanho dos outros, e o dono pediu pra tirar de lá ("acho q ta na hora de
+  // tirarmos ele de dentro desse card"). As três contagens continuam existindo, com a mesma régua
+  // de sempre — mudaram de casa: agora moram no painel "Seu mês", junto das mensagens trocadas e
+  // do gráfico de atendimentos dia a dia (ver cp1251Dados). No computador o painel fica aberto na
+  // coluna da direita; no celular, atrás da linha de resumo logo abaixo desta fileira.
   box.style.display="grid";
   box.innerHTML = `
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="abrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi cp1171-atendidos" onclick="show('relatorio')" title="Atendimentos concluídos — hoje, nesta semana e neste mês (inclusive quem você arquivou depois)"><span>Atendidos</span><i class="cp1171-ic">${ui631Icon('compromisso')}</i><div class="cp1171-trio"><div class="cp1171-col"><b>${atendidosHoje}</b><small>hoje</small></div><div class="cp1171-col"><b>${atendidosSemana}</b><small>semana</small></div><div class="cp1171-col"><b>${atendidosMes}</b><small>mês</small></div></div></div>`;
+    <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>`;
+  try{ cp1251RenderResumo(); }catch(_){ }
 };
 
 // v1246 — os dois números que subiram pro bloco do topo (Bloco de notas e Arquivados).

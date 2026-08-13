@@ -1031,7 +1031,7 @@ html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{bac
    subiram pro bloco do topo (modelo B escolhido pelo dono). O número de colunas TEM que
    acompanhar a quantidade de quadradinhos, senão sobra card esticado numa segunda linha —
    foi o que aconteceu na v1124 quando entrou o sexto sem mexer aqui. */
-#home .resumo-dia{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;margin:0 0 15px!important;padding:0!important;background:transparent!important;border:0!important}
+#home .resumo-dia{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;margin:0 0 15px!important;padding:0!important;background:transparent!important;border:0!important}
 #home .ui-kpi{background:var(--cp-panel)!important;border:1px solid var(--cp-border)!important;border-radius:10px!important;box-shadow:var(--cp-card-shadow)!important;min-height:0!important;padding:12px 14px!important}
 #home .ui-kpi.active{background:var(--accent-soft)!important;border-color:var(--accent-line)!important}
 #home .ui-kpi>span{color:var(--cp-muted)!important;text-transform:none!important;letter-spacing:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
@@ -1058,7 +1058,7 @@ body.lead-foco-aberto #home .home-right{display:none!important}
   #home .cp-lead-workspace{padding:16px 12px 88px!important}
   #home .home-grid{display:block!important}
   #home .home-right{display:none!important}
-  #home .resumo-dia{grid-template-columns:repeat(4,118px)!important;overflow-x:auto!important;padding-bottom:4px!important}
+  #home .resumo-dia{grid-template-columns:repeat(3,minmax(0,1fr))!important;overflow-x:visible!important;padding-bottom:0!important}
   #home .ui-kpi{min-height:80px!important;padding:11px!important}
   #relatorio .cp-dashboard{padding:0 0 74px!important}
   #relatorio .performance-page-head{padding:0 1px!important}
@@ -1072,7 +1072,12 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 @media (max-width:620px){
   #home #resumoDia{
     display:grid!important;
-    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    /* v1251 — eram DUAS colunas porque a fileira tinha 4 quadradinhos (2 linhas de 2). Com a
+       saída do "Atendidos" (foi pro painel "Seu mês"), sobraram TRÊS: em duas colunas ficava
+       um sozinho na segunda linha, com um buraco do lado. Três colunas fecham a fileira numa
+       linha só. Esta é a regra que MANDA no celular (dois ids: #home #resumoDia) — mexer só nas
+       outras não muda nada na tela, exatamente o tipo de coisa que a conferência visual pega. */
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
     gap:10px!important;
     overflow:visible!important;
     margin-left:0!important;
@@ -1791,9 +1796,18 @@ html[data-theme="light"] .cp788-day-name{background:#F4F8F9!important;border-col
   html[data-theme="light"] .cp788-day:not(:last-child){border-bottom-color:#E4EBEE}
 }
 
-/* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno */
-#home .home-grid{grid-template-columns:minmax(0,1fr)!important}
-#home .home-right{display:none!important}
+/* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno.
+   v1251 — A COLUNA VOLTOU, e por um motivo diferente do que a #810 matou. Ela foi desligada
+   porque REPETIA indicadores já mostrados nos quadradinhos (e podia ficar presa no "carregando").
+   Agora ela carrega o painel "Seu mês" — números que não existem em nenhum outro lugar da Home
+   (mensagens trocadas no mês, enviadas, recebidas, e o gráfico de atendimentos dia a dia) — e o
+   conteúdo é montado de uma vez, sem esqueleto de carregamento. Vale só no COMPUTADOR: no celular
+   a coluna continua fora (lá o painel abre pela linha de resumo). Decisão do dono depois de ver o
+   desenho nas duas telas. */
+@media(max-width:999px){
+  #home .home-grid{grid-template-columns:minmax(0,1fr)!important}
+  #home .home-right{display:none!important}
+}
 
 /* v864 — aqui morava a barra de progresso do chip de etapa ("Negociando · passo 5 de 6").
    v1186 — REMOVIDA. Não é regressão: a v889 registra a decisão do dono de tirar o funil de 6
@@ -2112,3 +2126,68 @@ html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
 }
 /* Tela de cliente aberta esconde o cabeçalho da Hoje inteiro — o botão vai junto, como o resto. */
 body.lead-foco-aberto .cp1248-importar{display:none!important}
+
+/* ── v1251 — SEUS NÚMEROS DO MÊS ───────────────────────────────────────────────────────────────
+   Pedido do dono: além de "Atendidos", ver as mensagens trocadas no mês (total, enviadas por ele
+   e recebidas), e tirar isso do quadradinho apertado da Home. Modelo escolhido por ele depois de
+   ver o desenho nas duas telas: ABERTO no computador, FECHADO no celular.
+
+   Computador — o painel mora na coluna da direita da tela Hoje, que estava VAZIA desde a v810
+   (ela repetia indicadores e foi desligada). Como o espaço já existia e não era usado, o painel
+   não empurra nada: a lista de clientes fica exatamente do mesmo tamanho.
+   Celular — não existe coluna sobrando: sempre aberto, o painel comeria 4 dos 5 clientes que
+   aparecem sem rolar a tela. Por isso fica só a linha de resumo, que abre o painel ao toque. */
+.cp1251-painel{background:var(--cp-panel,var(--panel));border:1px solid var(--cp-border-strong,var(--line2));border-radius:16px;padding:14px}
+.cp1251-tit{margin:0;font-size:15px;font-weight:800;letter-spacing:-.01em;color:var(--cp-text,var(--text))}
+.cp1251-per{margin:1px 0 12px;font-size:11px;color:var(--cp-muted,var(--muted))}
+.cp1251-lista{display:flex;flex-direction:column;gap:10px}
+.cp1251-num{display:flex;align-items:center;gap:10px}
+.cp1251-bolha{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:14px;font-weight:800;line-height:1}
+.cp1251-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.cp1251-txt b{font-size:12.5px;font-weight:700;color:var(--cp-text,var(--text))}
+.cp1251-txt small{font-size:10px;color:var(--cp-muted,var(--muted))}
+.cp1251-val{font-size:20px;font-weight:800;flex:none;font-variant-numeric:tabular-nums;color:var(--cp-text,var(--text))}
+/* Gráfico: quantos clientes foram atendidos em cada dia do mês. O dia de hoje acende em coral. */
+.cp1251-gr{display:flex;align-items:flex-end;gap:2px;height:46px;margin-top:14px}
+.cp1251-gr i{flex:1;min-width:2px;background:var(--cp-border-strong,var(--line2));border-radius:2px 2px 0 0;display:block}
+.cp1251-gr i.cp1251-hoje{background:var(--cp-coral,var(--accent))}
+.cp1251-gr-leg{display:flex;justify-content:space-between;font-size:9.5px;color:var(--cp-muted,var(--muted));margin-top:5px}
+.cp1251-gr-tit{margin:6px 0 0;font-size:10px;color:var(--cp-muted,var(--muted));text-align:center}
+.cp1251-compacto .cp1251-val{font-size:18px}
+.cp1251-compacto .cp1251-bolha{width:27px;height:27px;font-size:13px}
+
+/* Linha de resumo (celular) */
+#cpMesResumo:empty{display:none}
+.cp1251-resumo{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  background:var(--cp-panel,var(--panel));border:1px solid var(--cp-border,var(--line));border-radius:14px;
+  padding:11px 13px;margin:10px 0 0;cursor:pointer;font:inherit;text-align:left;color:var(--cp-text,var(--text));
+  -webkit-tap-highlight-color:transparent;
+}
+.cp1251-resumo-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cp1251-resumo-txt b{font-size:13px;font-weight:800}
+.cp1251-resumo-txt small{font-size:10.5px;color:var(--cp-muted,var(--muted))}
+.cp1251-resumo-seta{color:var(--cp-coral,var(--accent));font-size:20px;font-weight:800;flex:none;line-height:1}
+
+/* Painel por cima, no celular */
+.cp1251-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto}
+.cp1251-folha{width:100%;max-width:460px;margin:auto 0;background:var(--cp-shell,var(--bg));border:1px solid var(--cp-border-strong,var(--line2));border-radius:18px;padding:14px}
+.cp1251-folha-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:11px;margin-bottom:12px;border-bottom:1px solid var(--cp-border,var(--line))}
+.cp1251-folha-topo b{font-size:13px;font-weight:800;color:var(--cp-text,var(--text))}
+.cp1251-voltar{border:0;background:transparent;color:var(--cp-coral,var(--accent));font:inherit;font-size:13px;font-weight:800;cursor:pointer;padding:0;width:56px;text-align:left}
+.cp1251-folha .cp1251-painel{border:0;padding:0;background:transparent}
+
+/* Quem aparece onde: o painel da coluna só no computador, a linha de resumo só no celular. */
+@media(max-width:999px){
+  #home .home-right,#homeRight{display:none!important}
+}
+@media(min-width:1000px){
+  #cpMesResumo{display:none!important}
+}
+
+/* v1251 — a fileira de quadradinhos da Home perdeu o "Atendidos" (foi pro painel "Seu mês") e
+   ficou com TRÊS. As regras acima fixavam quatro colunas — com três cartões sobrava um buraco no
+   fim da linha no computador, e no celular a última coluna ficava vazia puxando a rolagem. */
+.resumo-dia{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:999px){.resumo-dia{grid-template-columns:repeat(3,minmax(92px,1fr))}}
+@media(max-width:620px){.resumo-dia{grid-template-columns:repeat(3,minmax(0,1fr))}}
