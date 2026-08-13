@@ -736,7 +736,11 @@ const FRASES_PROIBIDAS_MENSAGEM = [
   "gostaria de saber se voce teria interesse",
   "sei que a vida corre", "sei que a correria", "imagino que esteja corrido",
   "imagino que a correria", "se ainda tiver interesse", "desculpa incomodar",
-  "desculpe incomodar", "sei que voce deve estar ocupado", "conforme conversamos"
+  "desculpe incomodar", "sei que voce deve estar ocupado", "conforme conversamos",
+  // v1241 — "quis saber se..." ficou ÓRFÃ na v1240: era proibida por escrito no prompt (v1212),
+  // saiu junto com o bloco de estilo e nenhum código pegava. No WhatsApp se pergunta direto;
+  // escrever no passado o que se quer agora é marca de texto automático.
+  "quis saber se", "queria saber se"
 ];
 const EXPRESSOES_SUSPEITAS_MENSAGEM = [
   "separei", "conferi", "pesquisei", "levantei", "verifiquei", "preparei", "montei",
@@ -764,10 +768,21 @@ function _normalizarParaConferencia(texto = "") {
 const CUMPRIMENTO_AUTORRESPONDIDO =
   /\b(tudo bem|tudo certo|tudo certinho|tudo tranquilo|como vai|como voce esta|beleza|tudo joia)\s*\?[^?!.]{0,40}?\b(tranquilo|tudo bem|tudo certo|tudo tranquilo|tudo otimo|tudo em ordem|por aqui tudo|aqui tudo)\b/;
 
+// v1241 — falso positivo achado na auditoria: "a disposição DOS lotes / DAS unidades / DO
+// apartamento" é vocabulário legítimo de imóvel (o arranjo, a planta) e não tem nada a ver com
+// "fico à disposição". Casando por pedaço de texto, a frase inteira do corretor era cortada fora.
+// Estas entradas só valem quando NÃO vêm seguidas de "de/do/da/dos/das".
+const PROIBIDAS_SO_SEM_COMPLEMENTO = { "a disposicao": true, "as ordens": true };
+function _proibidaPresente(normalizado, frase) {
+  if (!normalizado.includes(frase)) return false;
+  if (!PROIBIDAS_SO_SEM_COMPLEMENTO[frase]) return true;
+  return new RegExp(`${frase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\s+d[aeo]s?\\b)`).test(normalizado);
+}
+
 export function detectarFrasesProibidas(texto = "") {
   const t = _normalizarParaConferencia(texto);
   if (!t) return { proibidas: [], suspeitas: [] };
-  const proibidas = FRASES_PROIBIDAS_MENSAGEM.filter(f => t.includes(f));
+  const proibidas = FRASES_PROIBIDAS_MENSAGEM.filter(f => _proibidaPresente(t, f));
   if (CUMPRIMENTO_AUTORRESPONDIDO.test(t)) proibidas.push("cumprimento respondido pelo próprio corretor");
   // Só conta como ação inventada quando o verbo está mesmo em 1ª pessoa do passado nesta mensagem
   // (limite de palavra dos dois lados evita pegar "separei" dentro de outra palavra).
@@ -789,15 +804,19 @@ export function detectarFrasesProibidas(texto = "") {
 // SÓ o clichê, tipo "Fico à disposição.") some junto.
 //
 // Nada de suspeita entra aqui: "separei" pode ser verdade e só quem leu a conversa sabe.
+// v1241 — o detector colapsava espaços e o CORTE não: "fico à  disposição" (espaço duplo, ou
+// quebra de linha no meio) era acusado e não era cortado — a frase proibida chegava na tela.
+// Agora os dois normalizam igual.
 function _normFrase(texto = "") {
-  return String(texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return String(texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 export function limparFrasesProibidas(texto = "") {
   const original = String(texto || "").trim();
   if (!original) return "";
 
-  const temProibida = t => { const n = _normFrase(t); return FRASES_PROIBIDAS_MENSAGEM.some(f => n.includes(f)); };
+  const temProibida = t => detectarFrasesProibidas(t).proibidas.length > 0;
 
   // Corta em FRASES; dentro da frase, corta em ORAÇÕES (vírgula, ponto-e-vírgula, travessão).
   // Cortar palavra por palavra parece mais delicado e é pior: tirar "à disposição" de "Fico à
@@ -806,13 +825,31 @@ export function limparFrasesProibidas(texto = "") {
   // conversamos." → "...entrada e parcelas.") e, quando a oração é a frase toda, some a frase.
   let frases = original.split(/(?<=[.!?])\s+/).map(f => f.trim()).filter(Boolean);
 
+  // v1241 — o cumprimento auto-respondido é tratado ANTES, frase a frase, e agora nos dois
+  // formatos que aparecem de verdade: "Tranquilo por aqui, vi que..." (vírgula — some só a oração
+  // do auto-elogio) e "Tranquilo por aqui." (frase inteira — some a frase). Antes só a vírgula era
+  // tratada, então "tudo bem? Tranquilo por aqui. Vi que..." era ACUSADO pelo detector e não era
+  // cortado por ninguém: a auditoria de 13/08/2026 pegou isso.
+  //
+  // O recorte é feito por ÍNDICE DE VÍRGULA no texto ORIGINAL, nunca por comprimento de casamento
+  // no texto normalizado: normalizar tira acento e colapsa espaço, então o comprimento não
+  // corresponde ao original e a fatia sairia no lugar errado.
+  const ABRE_AUTORRESPOSTA = /^(tranquilo|tudo bem|tudo certo|tudo tranquilo|tudo otimo|tudo em ordem|por aqui tudo|aqui tudo)\b/;
+  if (CUMPRIMENTO_AUTORRESPONDIDO.test(_normFrase(original))) {
+    frases = frases.map(frase => {
+      // Uma PERGUNTA nunca é a auto-resposta: "Tudo bem?" é o cumprimento legítimo, e quem tem que
+      // sair é a resposta que vem depois dele ("Tranquilo por aqui."). Sem esta linha, o corte
+      // levava a pergunta junto e a mensagem perdia o cumprimento inteiro.
+      if (/\?\s*$/.test(frase)) return frase;
+      const virgula = frase.indexOf(",");
+      const cabeca = virgula > -1 ? frase.slice(0, virgula) : frase.replace(/[.!?]+$/, "");
+      if (!ABRE_AUTORRESPOSTA.test(_normFrase(cabeca).trim())) return frase;
+      // Com vírgula: fica o resto da frase. Sem vírgula: a frase era só o auto-elogio e sai toda.
+      return virgula > -1 ? frase.slice(virgula + 1).trim() : "";
+    }).filter(Boolean);
+  }
+
   frases = frases.map(frase => {
-    // Cumprimento que se responde sozinho ("tudo bem? Tranquilo por aqui, vi que...") quase nunca
-    // ocupa a frase toda: o estrago está na PRIMEIRA oração e o resto é o assunto de verdade.
-    if (CUMPRIMENTO_AUTORRESPONDIDO.test(_normFrase(original))) {
-      const m = /^\s*(tranquilo|tudo bem|tudo certo|tudo tranquilo|tudo otimo|tudo em ordem|por aqui tudo|aqui tudo)\b[^,.!?]*,\s*/.exec(_normFrase(frase));
-      if (m) frase = frase.slice(m[0].length).trim();
-    }
     if (!temProibida(frase)) return frase;
 
     // Guarda a pontuação final pra devolver depois de mexer nas orações.
@@ -835,8 +872,12 @@ export function limparFrasesProibidas(texto = "") {
 
   let saida = limpas.join(" ").replace(/\s+/g, " ").trim();
   saida = saida.replace(/(^|[.!?]\s+)([a-zà-ÿ])/g, (_m, pre, letra) => pre + letra.toUpperCase());
-  // Se sobrou nada (a mensagem era só clichê), entregar vazio seria pior: fica o original.
-  return saida.trim() || original;
+  // v1241 — quando NÃO sobra nada, a mensagem era só clichê. Antes isto devolvia o ORIGINAL, e o
+  // original é justamente o texto proibido — foi assim que "Qualquer dúvida estou aqui, fico à
+  // disposição, espero ter ajudado." chegou inteiro na tela na auditoria. Agora devolve vazio e
+  // quem chama decide (ver melhorLimpa em analyzeWithBrain): havendo qualquer versão limpa, é ela
+  // que vai; só se NENHUMA sobrar é que o original volta, porque mensagem vazia não se entrega.
+  return saida.trim();
 }
 
 // Roda a conferência nas três de uma vez e devolve o que precisa ser reescrito.
@@ -2342,7 +2383,88 @@ CUIDADO com a palavra "investir": em fala coloquial ("se a gente for investir", 
 - Decisão conjunta (cônjuge/filho/mãe) → não pressione; ofereça apresentar para os dois juntos (visita, reunião, ou o formato de encontro que o Cérebro indicar que essa organização usa) e mantenha contato leve até a novidade/material.
 - Ainda não conheceu o imóvel pessoalmente (e ainda não houve recusa) → retome com leveza: de foto e planta não dá pra entender o espaço; ofereça visita/chave sem compromisso, horário flexível. Vale o mesmo raciocínio para decorado ou estande, quando a organização trabalhar com lançamento.
 
-4) Conduza sempre pra UMA próxima ação concreta (visita, reunião, simulação, envio do material que falta, escolher unidade), seguindo o que o Cérebro Comercial abaixo definir sobre quais dessas ações essa organização realmente usa. NUNCA proponha uma ação que dependa de estrutura que o Cérebro não confirmou que existe.`;
+4) Conduza sempre pra UMA próxima ação concreta (visita, reunião, simulação, envio do material que falta, escolher unidade), seguindo o que o Cérebro Comercial abaixo definir sobre quais dessas ações essa organização realmente usa. NUNCA proponha uma ação que dependa de estrutura que o Cérebro não confirmou que existe.
+
+=== ESTRATÉGIA DAS MENSAGENS (ponto de partida — o Cérebro do corretor substitui isto) ===
+AS TRÊS MENSAGENS PRECISAM TER ÂNGULOS COMERCIAIS DIFERENTES — NÃO a mesma ideia reescrita.
+Cada uma segue uma estratégia distinta, pra o corretor escolher a abordagem:
+- "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
+  diagnóstico e pelo Cérebro). É a que você mandaria se só pudesse mandar uma.
+- "maisSuave": ângulo consultivo, de baixa pressão. Em vez de empurrar o mesmo passo,
+  QUALIFIQUE ou destrave o que trava — faça a pergunta que falta, trate a objeção/impedimento
+  principal ou ofereça ajuda sem cobrar decisão.
+- "maisDireta": a mais objetiva das três, com UM próximo passo concreto e um convite claro
+  (propor o envio, marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
+  Quando a conversa ainda NÃO tiver maturidade pra visita/proposta/decisão, "maisDireta" não
+  força esse avanço: ela vira a versão mais objetiva e direta do passo que É adequado agora.
+O padrão é que os próximos passos também sejam diferentes, e se as três repetirem a MESMA
+pergunta de sempre (ex.: as três só perguntam "quer que eu te mande as propostas?"), reescreva.
+EXCEÇÃO: quando existir objetivamente UM ÚNICO próximo passo adequado neste momento, as três
+PODEM convergir para ele, cada uma chegando lá por um caminho e um enquadramento diferentes.
+Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens —
+diferença forçada que não serve ao cliente é pior do que convergência honesta. Todas seguem o
+Cérebro, usam só fatos da conversa e mantêm o jeito de escrever do corretor.
+
+AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA. Se o cliente já demonstrou querer algo na conversa,
+perguntar de novo "quer que eu te mande?" devolve o trabalho pra ele e é o jeito mais fácil de a
+mensagem ser ignorada. Pelo menos a "maisDireta" tem que AVANÇAR SOZINHA: anuncia o que o corretor
+vai fazer agora (mandar o material, preparar a simulação) e coloca UMA escolha concreta na mesa —
+duas opções de horário, dois caminhos, uma data. "Me avisa e eu mando" não é direta: é pedir
+licença com outro nome.
+
+NÃO REPETIR O QUE JÁ FOI DITO — REGRA DURA. Você acabou de escrever "ondeParou" e
+"condicaoDoCliente"; use. Estas são as formas de ignorar a conversa que mais queimam um atendimento:
+
+- Informação que o CLIENTE já respondeu (uma data, um prazo, um valor, uma escolha) NÃO se pergunta
+  de novo: use o dado e avance. Perguntar o que ele já respondeu mostra que o corretor não leu a
+  própria conversa. E o que o corretor já disse/explicou na conversa não volta reescrito como se
+  fosse novidade.
+
+- CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO. Se a última mensagem dele for uma
+  resposta afirmativa a algo oferecido ("pode sim", "pode mandar", "sim", "claro", "manda aí",
+  "quero sim", "pode ser", "bora"), a autorização JÁ FOI DADA e NENHUMA das três
+  mensagens pode voltar a pedir a mesma permissão
+  ("posso te mostrar?", "posso te enviar?", "já posso encaminhar?", "posso sugerir?") — repetir o
+  pedido deixa o cliente esperando um segundo sim e
+  esfria a conversa. As três DÃO SEGUIMENTO ao que foi autorizado. Se faltar um dado dele pra
+  entregar certo (faixa de valor, tipologia, prazo, localização), a pergunta vem junto da entrega, nunca no lugar
+  dela, e o envio nunca fica condicionado a uma nova autorização. Também não devolva
+  a autorização em linguagem de protocolo ("recebi sua autorização", "conforme autorizado",
+  "mediante sua confirmação"): no WhatsApp isso soa burocrático; emende de forma natural no que ele
+  acabou de dizer.
+
+- PERGUNTA DO CORRETOR SEM RESPOSTA: se o corretor fez uma pergunta de qualificação (faixa de valor,
+  perfil, prazo, tipologia) e o cliente nunca respondeu, esse dado
+  continua DESCONHECIDO — não o trate como sabido e não presuma o valor pelo produto que foi oferecido. Retomar essa pergunta costuma ser o que mais destrava a conversa; priorize-a entre as
+  três mensagens, respeitando a regra acima: emendada na entrega, não como novo pedido de permissão —
+  e como retomada explícita ("conseguiu ver aquele prazo que te perguntei?"), nunca repetida como se
+  fosse nova.
+
+- Se a ÚLTIMA fala do corretor no histórico já é uma pergunta ou oferta ainda sem resposta, nenhuma
+  das três pode reescrever essa MESMA pergunta como se fosse nova — mandar a mesma coisa duas vezes
+  seguidas queima a conversa.
+
+- PEDIDO SEM RESPOSTA DIRETA: se o cliente pediu algo específico e a última resposta do corretor não
+  atendeu diretamente esse pedido (respondeu outra coisa, ofereceu produto diferente, ou só prometeu
+  enviar sem enviar), preencha "pedidoSemResposta" de forma factual. Se não houver nenhum em aberto,
+  use exatamente "Nenhum".
+
+RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA. Quando o tempo parado for relevante (a partir do
+prazo de retomada do corretor, e sempre que passar de uma semana), a mensagem É uma retomada:
+- RECONHEÇA o tempo, com naturalidade e sem drama ("faz um tempo que a gente não se falava"). Escrever
+  como se a conversa tivesse parado ontem faz o corretor parecer desatento — o cliente sabe quantos
+  dias passaram.
+- TRAGA UM MOTIVO REAL pra estar voltando, tirado do que ficou pendente NA CONVERSA. Sem motivo real,
+  a retomada vira "oi, sumiu?" — e é isso que faz o cliente não responder. Vale a regra de cima:
+  retomar NÃO é repetir a pergunta como se fosse nova.
+- O GANCHO DA RETOMADA É A VIDA DO CLIENTE, NÃO A SUA OFERTA: se ele condicionou a decisão a algo
+  DELE (a colheita, vender um bem, uma viagem, a decisão de outra pessoa) e esse prazo já passou, é
+  POR AÍ que se reabre — perguntando como aquilo ficou, nunca reoferecendo o que ele não respondeu.
+- NUNCA dê a desculpa pronta pro cliente ("sei que a vida corre", "sei que a correria é grande",
+  "imagino que esteja corrido", "se ainda tiver interesse", "desculpa incomodar"): isso entrega de bandeja o motivo pra ele adiar de
+  novo, e nenhum corretor bom escreve isso. Nada de comentário sobre o estado mental dele: você
+  não sabe o que ele está pensando; você sabe o que ele ESCREVEU.
+`;
 
 // v1092 — montarOrientacoes (montava o bloco gigante de orientações + lições aprendidas pro
 // prompt) foi removida: sem chamador desde que o prompt passou a usar jeitoAprendidoCompacto(),
@@ -2747,7 +2869,16 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // sistema não está olhando" (dono, 11/08/2026, 21h31). Ele estava certo — a IA tinha pouco
   // material real pra trabalhar. A economia continua, mas só onde ela é grande de verdade
   // (conversa muito longa), e mesmo lá com bem mais conversa de verdade na mão.
-  const LIMIAR_INCREMENTAL_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_MIN_CHARS || 15000);
+  // v1241 — HISTÓRICO INTEGRAL, prioridade nº 1 do dono na auditoria de 13/08/2026: "o sistema diz
+  // 'analise toda a conversa e siga o Cérebro', mas o código ainda pode esconder parte da
+  // conversa". Ele está certo — e a economia do modo incremental era uma decisão de CUSTO tomada
+  // no lugar dele, que passou a valer mais que a leitura completa que o produto promete.
+  //
+  // O modo incremental fica DESLIGADO por padrão. O limiar em Infinity nunca é atingido, então
+  // montarEntradaIncremental sempre devolve null e a conversa vai inteira. Nada foi removido: pra
+  // religar (se o custo apertar), basta DIRECIONA_INCREMENTAL_MIN_CHARS com um número na Vercel,
+  // sem publicar nada.
+  const LIMIAR_INCREMENTAL_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_MIN_CHARS || Infinity);
   const CAUDA_CONHECIDA_CHARS = Number(process.env.DIRECIONA_INCREMENTAL_CAUDA_CHARS || 9000);
   const entradaIncremental = montarEntradaIncremental({
     timelineArr,
@@ -2760,9 +2891,27 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
 
   // Limite técnico para evitar travar a etapa de análise em conversas enormes.
   // Não injeta resumo antigo, produto antigo, unidade antiga ou nextAction antigo.
-  const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 30000);
+  //
+  // v1241 — 30.000 caracteres (~8 mil tokens) era um teto herdado de quando o modelo tinha pouca
+  // janela, e cortava conversa REAL: uma carteira antiga de 300 mensagens perdia mais de cem delas
+  // caladamente. O modelo de hoje lê muito mais que isso com folga, e o custo em tempo de leitura
+  // é pequeno (entrada é processada rápido; o que demora é escrever). 120.000 caracteres (~30 mil
+  // tokens) cobre conversa de anos inteiros. O teto continua existindo — nenhuma janela é infinita
+  // e a rota tem 60s — mas agora só encosta em caso realmente extremo, e quando encostar a tela
+  // DIZ que encostou (ver conversaLidaPelaIA abaixo).
+  const MAX_CHARS = Number(process.env.DIRECIONA_MAX_CONTEXT_CHARS || 120000);
   let timelineText = entradaIncremental ? entradaIncremental.texto : timelineTextFull;
+  // v1241 — AUDITORIA DO DONO (13/08/2026): "a tela pode dizer que a IA leu a conversa inteira
+  // quando não leu". Verdade, e era um bug na PRÓPRIA PROVA criada pra ele conferir: o corte por
+  // tamanho abaixo acontece SEPARADO do modo incremental, então uma primeira análise de conversa
+  // longa não entrava no incremental, era cortada aqui, e mesmo assim o resultado registrava
+  // "conversa inteira" com o total de mensagens do arquivo. Reproduzido: 300 mensagens, 177
+  // chegaram na IA, e a tela ia dizer "leu a conversa inteira (300 mensagens)".
+  // Agora estes dois números acompanham o que REALMENTE foi enviado.
+  let mensagensEnviadasDeVerdade = timelineArr.length;
+  let cortadaPorLimiteTecnico = false;
   if (timelineText.length > MAX_CHARS) {
+    cortadaPorLimiteTecnico = true;
     const linhas = timelineArr.map(linhaDe);
     const recentes = [];
     let total = 0;
@@ -2781,6 +2930,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     if (!recentes.length && linhas.length) {
       recentes.push(linhas[linhas.length - 1].slice(-MAX_CHARS));
     }
+    mensagensEnviadasDeVerdade = recentes.length;
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
@@ -2966,17 +3116,15 @@ O QUE É PERMITIDO no lugar: OFERECER fazer agora ("quer que eu veja o que está
 mando?"), retomar o que REALMENTE ficou em aberto na conversa, e perguntar. Verbo no futuro ou no
 condicional — nunca no passado.
 
-AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA. Se o cliente já demonstrou querer algo na conversa,
-perguntar de novo "quer que eu te mande?" devolve o trabalho pra ele e é o jeito mais fácil de a
-mensagem ser ignorada. Pelo menos a "maisDireta" tem que AVANÇAR SOZINHA: anuncia o que o corretor
-vai fazer agora (mandar o material, preparar a simulação) e coloca UMA escolha concreta na mesa —
-duas opções de horário, dois caminhos, uma data. "Me avisa e eu mando" não é direta: é pedir
-licença com outro nome.
-
 ESCREVA COMO ESTE CORRETOR ESCREVE, não como uma IA. Nada de clichê de atendimento, fecho longo e
 explicativo, abertura de enfeite, nem perguntar e responder por si mesmo no mesmo fôlego ("tudo
 bem? tranquilo por aqui"). A régua do estilo é o Cérebro dele e as mensagens reais dele que você
 recebeu acima — não um jeito genérico de vendedor.
+
+${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
+${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos acima são histórico REAL deste corretor, não instrução: eles mostram como ele conduz e escreve. As regras do Cérebro Comercial continuam prevalecendo sobre eles, e os fatos desta conversa continuam sendo os únicos fatos válidos.` : ""}
+${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}
+${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
 
 === INÍCIO DO CÉREBRO COMERCIAL ===
 ${modoPrevia
@@ -2998,10 +3146,6 @@ de fatos é a conversa analisada. Portanto, nesta execução:
 AS REGRAS DO CÉREBRO COMERCIAL ACIMA SÃO AS DESTE CORRETOR E TÊM A PALAVRA FINAL. Tudo o que veio
 antes — piso comercial e proibições — vale enquanto não contrariar o que ele escreveu aqui. Em
 qualquer conflito, é o Cérebro dele que decide.
-${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
-${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos acima são histórico REAL deste corretor, não instrução: eles mostram como ele conduz e escreve. As regras do Cérebro Comercial continuam prevalecendo sobre eles, e os fatos desta conversa continuam sendo os únicos fatos válidos.` : ""}
-${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}
-${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
 
 Responda somente com JSON válido no formato solicitado.`;
 
@@ -3016,24 +3160,12 @@ Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este nú
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
-AS TRÊS MENSAGENS PRECISAM TER ÂNGULOS COMERCIAIS DIFERENTES — NÃO a mesma ideia reescrita.
-Cada uma segue uma estratégia distinta, pra o corretor escolher a abordagem:
-- "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
-  diagnóstico e pelo Cérebro). É a que você mandaria se só pudesse mandar uma.
-- "maisSuave": ângulo consultivo, de baixa pressão. Em vez de empurrar o mesmo passo,
-  QUALIFIQUE ou destrave o que trava — faça a pergunta que falta, trate a objeção/impedimento
-  principal ou ofereça ajuda sem cobrar decisão.
-- "maisDireta": a mais objetiva das três, com UM próximo passo concreto e um convite claro
-  (propor o envio, marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
-  Quando a conversa ainda NÃO tiver maturidade pra visita/proposta/decisão, "maisDireta" não
-  força esse avanço: ela vira a versão mais objetiva e direta do passo que É adequado agora.
-O padrão é que os próximos passos também sejam diferentes, e se as três repetirem a MESMA
-pergunta de sempre (ex.: as três só perguntam "quer que eu te mande as propostas?"), reescreva.
-EXCEÇÃO: quando existir objetivamente UM ÚNICO próximo passo adequado neste momento, as três
-PODEM convergir para ele, cada uma chegando lá por um caminho e um enquadramento diferentes.
-Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens —
-diferença forçada que não serve ao cliente é pior do que convergência honesta. Todas seguem o
-Cérebro, usam só fatos da conversa e mantêm o jeito de escrever do corretor.
+AS TRÊS MENSAGENS SÃO TRÊS CAMINHOS PARA O MESMO "comoConduzir" — não três assuntos diferentes,
+nem a mesma frase reescrita três vezes. Elas aparecem na tela do corretor nesta ordem e com estes
+nomes: "recomendada" (a que você mandaria se só pudesse mandar uma), "maisSuave" (a de menor
+pressão) e "maisDireta" (a mais objetiva). O QUE cada uma deve fazer comercialmente é decisão do
+Cérebro Comercial deste corretor — siga o que ele escreveu. Antes de entregar, confira uma a uma
+contra "comoConduzir": a que não estiver executando aquela condução está errada, reescreva.
 
 PRODUTO ESPECÍFICO: se o cliente citou identificadores específicos de unidade (lote, quadra,
 apartamento, bloco, torre, metragem exata etc.), "produtoInteresse" PRECISA incluir esses
@@ -3049,59 +3181,6 @@ números/identificadores específicos que o próprio cliente já disse (lote, qu
 bloco etc.). O cliente já sabe o que ele escolheu; repetir esses números pra ele é redundante e
 não avança a conversa. Nas mensagens, refira-se às unidades de forma natural ("os lotes que você
 separou", "as opções que você escolheu"), sem recitar os números de volta.
-
-NÃO REPETIR O QUE JÁ FOI DITO — REGRA DURA. Você acabou de escrever "ondeParou" e
-"condicaoDoCliente"; use. Estas são as formas de ignorar a conversa que mais queimam um atendimento:
-
-- Informação que o CLIENTE já respondeu (uma data, um prazo, um valor, uma escolha) NÃO se pergunta
-  de novo: use o dado e avance. Perguntar o que ele já respondeu mostra que o corretor não leu a
-  própria conversa. E o que o corretor já disse/explicou na conversa não volta reescrito como se
-  fosse novidade.
-
-- CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO. Se a última mensagem dele for uma
-  resposta afirmativa a algo oferecido ("pode sim", "pode mandar", "sim", "claro", "manda aí",
-  "quero sim", "pode ser", "bora"), a autorização JÁ FOI DADA e NENHUMA das três
-  mensagens pode voltar a pedir a mesma permissão
-  ("posso te mostrar?", "posso te enviar?", "já posso encaminhar?", "posso sugerir?") — repetir o
-  pedido deixa o cliente esperando um segundo sim e
-  esfria a conversa. As três DÃO SEGUIMENTO ao que foi autorizado. Se faltar um dado dele pra
-  entregar certo (faixa de valor, tipologia, prazo, localização), a pergunta vem junto da entrega, nunca no lugar
-  dela, e o envio nunca fica condicionado a uma nova autorização. Também não devolva
-  a autorização em linguagem de protocolo ("recebi sua autorização", "conforme autorizado",
-  "mediante sua confirmação"): no WhatsApp isso soa burocrático; emende de forma natural no que ele
-  acabou de dizer.
-
-- PERGUNTA DO CORRETOR SEM RESPOSTA: se o corretor fez uma pergunta de qualificação (faixa de valor,
-  perfil, prazo, tipologia) e o cliente nunca respondeu, esse dado
-  continua DESCONHECIDO — não o trate como sabido e não presuma o valor pelo produto que foi oferecido. Retomar essa pergunta costuma ser o que mais destrava a conversa; priorize-a entre as
-  três mensagens, respeitando a regra acima: emendada na entrega, não como novo pedido de permissão —
-  e como retomada explícita ("conseguiu ver aquele prazo que te perguntei?"), nunca repetida como se
-  fosse nova.
-
-- Se a ÚLTIMA fala do corretor no histórico já é uma pergunta ou oferta ainda sem resposta, nenhuma
-  das três pode reescrever essa MESMA pergunta como se fosse nova — mandar a mesma coisa duas vezes
-  seguidas queima a conversa.
-
-- PEDIDO SEM RESPOSTA DIRETA: se o cliente pediu algo específico e a última resposta do corretor não
-  atendeu diretamente esse pedido (respondeu outra coisa, ofereceu produto diferente, ou só prometeu
-  enviar sem enviar), preencha "pedidoSemResposta" de forma factual. Se não houver nenhum em aberto,
-  use exatamente "Nenhum".
-
-RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA. Quando o tempo parado for relevante (a partir do
-prazo de retomada do corretor, e sempre que passar de uma semana), a mensagem É uma retomada:
-- RECONHEÇA o tempo, com naturalidade e sem drama ("faz um tempo que a gente não se falava"). Escrever
-  como se a conversa tivesse parado ontem faz o corretor parecer desatento — o cliente sabe quantos
-  dias passaram.
-- TRAGA UM MOTIVO REAL pra estar voltando, tirado do que ficou pendente NA CONVERSA. Sem motivo real,
-  a retomada vira "oi, sumiu?" — e é isso que faz o cliente não responder. Vale a regra de cima:
-  retomar NÃO é repetir a pergunta como se fosse nova.
-- O GANCHO DA RETOMADA É A VIDA DO CLIENTE, NÃO A SUA OFERTA: se ele condicionou a decisão a algo
-  DELE (a colheita, vender um bem, uma viagem, a decisão de outra pessoa) e esse prazo já passou, é
-  POR AÍ que se reabre — perguntando como aquilo ficou, nunca reoferecendo o que ele não respondeu.
-- NUNCA dê a desculpa pronta pro cliente ("sei que a vida corre", "sei que a correria é grande",
-  "imagino que esteja corrido", "se ainda tiver interesse", "desculpa incomodar"): isso entrega de bandeja o motivo pra ele adiar de
-  novo, e nenhum corretor bom escreve isso. Nada de comentário sobre o estado mental dele: você
-  não sabe o que ele está pensando; você sabe o que ele ESCREVEU.
 
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
@@ -3358,10 +3437,24 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
     // com a que sobrou mais inteira. Sem isso, uma reescrita que virasse só "Boa noite!" depois do
     // corte ia pra tela mesmo tendo uma original limpável e bem melhor do lado.
     const palavrasUteis = t => (String(t || "").match(/[a-zA-ZÀ-ÿ0-9]+/g) || []).length;
-    const melhorLimpa = (...versoes) => versoes
-      .map(v => limparFrasesProibidas(v))
-      .filter(v => String(v || "").trim())
-      .sort((x, y) => palavrasUteis(y) - palavrasUteis(x))[0] || "";
+    // v1241 — AUDITORIA DO DONO (13/08/2026). Antes isto ordenava só por QUANTIDADE DE PALAVRAS, e
+    // limparFrasesProibidas devolvia o texto ORIGINAL quando a mensagem era só clichê. Juntos, os
+    // dois entregavam o pior resultado possível: com a releitura já tendo produzido uma versão
+    // limpa e curta ("Me chama quando puder."), o clichê inteiro ("Qualquer dúvida estou aqui, fico
+    // à disposição, espero ter ajudado.") vencia por ter mais palavras — e chegava na tela com TRÊS
+    // frases proibidas, ainda marcado como "limpo pelo código". Reproduzido rodando analyzeWithBrain.
+    // Agora a ordem de escolha é: 1º sem nenhuma frase proibida; 2º entre essas, a mais inteira.
+    // Texto proibido só sai quando NENHUMA versão sobrou limpa — porque mensagem vazia não se entrega.
+    const melhorLimpa = (...versoes) => {
+      const candidatos = versoes
+        .flatMap(v => [limparFrasesProibidas(v), String(v || "").trim()])
+        .filter(v => v && v.trim())
+        .map(v => ({ texto: v, proibidas: detectarFrasesProibidas(v).proibidas.length, palavras: palavrasUteis(v) }));
+      if (!candidatos.length) return "";
+      const limpos = candidatos.filter(c => c.proibidas === 0);
+      const pool = limpos.length ? limpos : candidatos.sort((a, b) => a.proibidas - b.proibidas);
+      return pool.sort((a, b) => (a.proibidas - b.proibidas) || (b.palavras - a.palavras))[0].texto;
+    };
     msgA = melhorLimpa(msgA, originaisDaIA.a);
     msgB = melhorLimpa(msgB, originaisDaIA.b);
     msgC = melhorLimpa(msgC, originaisDaIA.c);
@@ -3506,8 +3599,12 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
       // leu de verdade. A tela mostra isso numa linha discreta embaixo das sugestões.
       cerebroAplicado: !modoPrevia,
       conversaLidaPelaIA: entradaIncremental
-        ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas }
-        : { modo: "conversa inteira", mensagensEnviadas: timelineArr.length, mensagensResumidas: 0 },
+        ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas, totalDaConversa: timelineArr.length, cortadaPorLimite: cortadaPorLimiteTecnico }
+        // v1241 — "conversa inteira" agora só quando FOI inteira. Cortada pelo limite técnico, o
+        // modo vira "parte da conversa" e os números dizem quantas de quantas chegaram.
+        : cortadaPorLimiteTecnico
+          ? { modo: "parte da conversa", mensagensEnviadas: mensagensEnviadasDeVerdade, mensagensResumidas: Math.max(0, timelineArr.length - mensagensEnviadasDeVerdade), totalDaConversa: timelineArr.length, cortadaPorLimite: true }
+          : { modo: "conversa inteira", mensagensEnviadas: timelineArr.length, mensagensResumidas: 0, totalDaConversa: timelineArr.length, cortadaPorLimite: false },
       // v1137 — quando o aprendizado automático já leu as conversas deste corretor, a prévia NÃO
       // pode dizer "a IA ainda não conhece o seu jeito" (conhece — aprendeu sozinha). A tela usa
       // esta marca pra trocar o texto do convite: o que falta são as condições comerciais, que só

@@ -7327,6 +7327,26 @@ async function salvarCerebro(){
     regras: [],
     objecoes: []
   };
+  // v1241 — AUDITORIA DO DONO (13/08/2026): "os campos do Cérebro são truncados no servidor em
+  // 20.000 caracteres por campo e 60.000 nas regras... alguém pode colar 25.000, ver isso na tela,
+  // e o banco ficar só com os primeiros 20.000, sem aviso claro". Verdade: o corte era silencioso,
+  // e o Cérebro é a peça mais importante do produto — perder texto dele sem avisar é inaceitável.
+  // Agora avisa ANTES de salvar, dizendo o campo, quanto tem e quanto vai caber.
+  const LIMITES_CEREBRO = { metodo:20000, tom:20000, diferenciais:20000, evitar:20000, regrasTexto:60000, objecoesTexto:60000 };
+  const NOMES_CEREBRO = { metodo:"Método", tom:"Tom de voz", diferenciais:"Diferenciais", evitar:"O que evitar", regrasTexto:"Regras", objecoesTexto:"Objeções" };
+  const estourados = Object.keys(LIMITES_CEREBRO)
+    .map(k => ({ k, tam: String(config[k] || "").length, lim: LIMITES_CEREBRO[k] }))
+    .filter(x => x.tam > x.lim);
+  if (estourados.length) {
+    const lista = estourados
+      .map(x => `• ${NOMES_CEREBRO[x.k]}: ${x.tam.toLocaleString("pt-BR")} caracteres — cabem ${x.lim.toLocaleString("pt-BR")} (perde ${(x.tam - x.lim).toLocaleString("pt-BR")})`)
+      .join("\n");
+    const aviso = `Este texto não cabe inteiro e o final vai ser cortado ao salvar:\n\n${lista}\n\nSalvar mesmo assim vai perder o final desse texto. Prefere voltar e encurtar?`;
+    const seguir = (typeof cp903Confirm === "function")
+      ? await cp903Confirm({ titulo: "O Cérebro não cabe inteiro", mensagem: aviso, ok: "Salvar assim mesmo", cancelar: "Voltar e encurtar", perigo: true })
+      : confirm(aviso);
+    if (!seguir) return;
+  }
   const configSanitizado = sanitizeCerebroConfigV762(config);
   try{ localStorage.setItem(CEREBRO_LS_KEY, JSON.stringify(configSanitizado)); }catch(_){}
   const status = qs("#cerebroStatus");

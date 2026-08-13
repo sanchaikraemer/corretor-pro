@@ -93,7 +93,10 @@ assert.match(pipeline, /CUIDADO com a palavra "investir"/, "o aviso do 'investir
 assert.doesNotMatch(systemVivo, /Reserva só com negociação avançada/, "reserva não pode chegar no prompt vivo");
 assert.match(userVivo, /Prazo configurado pelo corretor para reconhecer intervalo\/retomada.*: 7 dias corridos/, "o prazo configurado (7, igual ao Descanso após atender) precisa chegar no prompt vivo");
 assert.match(userVivo, /"pedidoSemResposta":"texto"/, "o formato JSON pedido à IA precisa incluir pedidoSemResposta");
-assert.match(userVivo, /PEDIDO SEM RESPOSTA DIRETA/, "a instrução explicando quando preencher o campo precisa estar no prompt vivo");
+// v1241 — AUDITORIA DO DONO (13/08/2026): o Cérebro passou a ser a única autoridade comercial.
+// Esta regra é método comercial: saiu do pedido de quem TEM Cérebro e virou ponto de partida da
+// conta nova (METODO_BASE_PREVIA). Continua existindo no produto — mudou quem manda nela.
+assert.match(pipeline, /PEDIDO SEM RESPOSTA DIRETA/, "a instrução precisa continuar existindo no produto (ponto de partida da conta nova)");
 assert.equal(resultado.diagnostico.pedidoSemResposta, "Cliente pediu 2 quartos prontos; a resposta ofereceu produto na planta.", "o campo novo precisa vir populado no resultado final");
 
 // Sem diasDescansoPosAtendimento configurado, cai no padrão (5), igual ao clamp de cerebro-config.js.

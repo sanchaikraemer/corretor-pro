@@ -43,7 +43,11 @@ assert.match(trio, /UMA escolha concreta na mesa/, 'e coloca uma escolha concret
 assert.match(trio, /"Me avisa e eu mando" não é direta/, 'com o exemplo do print, pra não sobrar dúvida');
 
 // ── 3. A IA voltou a receber CONVERSA DE VERDADE (resumo demais gera mensagem genérica) ────────
-assert.match(pipeline, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| 15000/, 'conversa média volta a ir inteira');
+// v1241 — prioridade nº 1 do dono na auditoria: HISTÓRICO INTEGRAL. O modo incremental (que
+// mandava resumo + pedaço do fim em vez da conversa) ficou DESLIGADO por padrão: o limiar é
+// Infinity, então nunca é atingido e a conversa vai sempre inteira. O que este assert protegia
+// (conversa média não virar resumo) passou a valer pra TODA conversa, que é mais forte.
+assert.match(pipeline, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| Infinity/, 'a conversa vai inteira: o modo incremental fica desligado');
 assert.match(pipeline, /DIRECIONA_INCREMENTAL_CAUDA_CHARS \|\| 9000/, 'e a conversa longa vai com bem mais material real');
 
 // ── 4. O corretor para de adivinhar se o Cérebro entrou ────────────────────────────────────────
