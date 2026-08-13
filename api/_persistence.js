@@ -1568,6 +1568,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       "diagnostico", "leituraDaConversa", "leituraComercial", "modeloComercial", "_schemaComercial", "evolucao", "memoria", "aprendizado", "objections",
       "oportunidadeId", "contatoId", "origemOportunidadeId", "oportunidadesVinculadas",
       "sugestoesPendentes", "arquiteturaMensagens", "error",
+      // v1241 — AUDITORIA DO DONO: "recomendacaoContato" ficava de fora e o aviso de AGUARDAR
+      // ("ainda não é hora de mandar mensagem", com o motivo) sumia da tela até o detalhe
+      // completo chegar do servidor. É justamente o aviso que evita o corretor mandar
+      // mensagem num cliente que pediu espaço — não pode piscar.
+      "recomendacaoContato",
       // v1239 — a prova de quanto do Cérebro foi enviado precisa viajar junto (a tela mostra).
       "cerebroAplicado", "cerebroEnviado", "conversaLidaPelaIA",
       // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no

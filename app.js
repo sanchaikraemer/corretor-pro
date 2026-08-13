@@ -513,6 +513,13 @@ window.restaurarLeadsAntigos = restaurarLeadsAntigos;
 
 const LEAD_DETAIL_CACHE_TTL = 10 * 60 * 1000;
 const _leadDetailCache = new Map();
+// v1241 — AUDITORIA DO DONO: um pedido de detalhe JÁ EM VOO ressuscitava a observação recém-apagada.
+// invalidarLeadDetail() apagava a entrada do cache, mas o pedido que tinha saído ANTES continuava
+// correndo com dado velho na mão e, ao terminar, gravava esse dado velho de volta — a observação
+// apagada voltava e ficava lá pelo tempo de vida do cache. Cada lead tem agora uma GERAÇÃO: quem
+// invalida avança o número, e a resposta em voo só é aceita se a geração não mudou no meio.
+const _leadDetailGeracao = new Map();
+const _geracaoLeadDetail = (key) => Number(_leadDetailGeracao.get(key) || 0);
 // v1211 — exportada: a tela da importação passou a abrir o cadastro parecido ali mesmo (com as
 // últimas mensagens dele) pra o corretor decidir "é o mesmo cliente?" vendo o cliente.
 export async function getLeadDetail(id, force){
@@ -522,12 +529,19 @@ export async function getLeadDetail(id, force){
   if(!force && cached?.data && (Date.now() - cached.ts) < LEAD_DETAIL_CACHE_TTL) return cached.data;
   if(cached?.inflight) return cached.inflight;
   const _perfStart = cpPerfNow();
+  const geracaoNoInicio = _geracaoLeadDetail(key);
   const inflight = (async () => {
     const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
     const data = await res.json().catch(()=>({ok:false}));
     if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "Não foi possível carregar o histórico completo.");
     const item = limparLead(data.item);
     cpPerfMark("leadDetail", _perfStart, { mensagens: totalMensagensLead(item) });
+    // Se alguém invalidou este lead enquanto a resposta vinha (apagou uma observação, por
+    // exemplo), este dado já nasceu velho: devolve pra quem pediu, mas NÃO grava no cache.
+    if (_geracaoLeadDetail(key) !== geracaoNoInicio) {
+      _leadDetailCache.delete(key);
+      return item;
+    }
     _leadDetailCache.set(key, { ts:Date.now(), data:item, inflight:null });
     return item;
   })().catch(err => {
@@ -540,8 +554,15 @@ export async function getLeadDetail(id, force){
   return inflight;
 }
 export function invalidarLeadDetail(id){
-  if(id == null) _leadDetailCache.clear();
-  else _leadDetailCache.delete(String(id));
+  if(id == null){
+    _leadDetailCache.clear();
+    // avança a geração de TODOS os que estavam em voo, senão eles regravam depois do clear
+    for(const k of _leadDetailGeracao.keys()) _leadDetailGeracao.set(k, _geracaoLeadDetail(k) + 1);
+    return;
+  }
+  const key = String(id);
+  _leadDetailCache.delete(key);
+  _leadDetailGeracao.set(key, _geracaoLeadDetail(key) + 1);
 }
 // v1135 — carimba que a carteira em memória acabou de ser preenchida com o que o servidor
 // devolveu. Chamado SÓ onde state.todosLeads recebe resultado de getLeadsData — nunca onde ele
