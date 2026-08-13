@@ -487,25 +487,59 @@ export function guessLeadData(timeline, corretorNome = "", nomeArquivo = "") {
 }
 
 
-// Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
-// o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
-function exemplosDoCorretor(timeline, corretorNome = "") {
-  if (!Array.isArray(timeline)) return "";
+// v1244 — DE QUEM É CADA VOZ NA CONVERSA.
+//
+// Antes, o lado do corretor só era reconhecido se o rótulo do WhatsApp batesse com o nome guardado
+// no Cérebro. Quando o dono salvou o nome comercial e o WhatsApp exporta o apelido (ou vice-versa),
+// os exemplos de voz dele saíam VAZIOS — e a IA escrevia no tom genérico de vendedor, que é
+// exatamente a reclamação dele. Numa conversa 1 pra 1, se sabemos o nome do contato, todo autor
+// humano que NÃO é o contato é o corretor. Registros de sugestão copiada pelo app ficam de fora dos
+// dois lados: alimentar texto de IA de volta como "voz real" vai deixando tudo mais artificial a
+// cada rodada.
+const _AUTOR_DO_APP = /mensagem enviada|sugest[aã]o|openai|chatgpt|ia do sistema/i;
+
+function _autorEhDoApp(m) {
+  const tipo = String(m?.type || "").toLowerCase();
+  const fonte = String(m?.source || "").toLowerCase();
+  return tipo === "mensagem_enviada" || fonte === "assistant" || _AUTOR_DO_APP.test(String(m?.author || ""));
+}
+
+// "cliente" | "corretor" | "" (não dá pra afirmar)
+function _ladoDaMensagem(m, corretorNome = "", lead = {}) {
+  const autor = String(m?.author || "").trim();
+  if (!autor || autor === "Sistema" || m?.system) return "";
+  if (/^(observa[çc][ãa]o|resumo)/i.test(autor)) return "";
+  if (_autorEhDoApp(m)) return "";
+  const autorNorm = _semAcento(autor);
+  const nomeLead = String(lead?.clientName || lead?.nomeCliente || lead?.contactName || lead?.name || "").trim();
+  const primeiroLead = _semAcento(nomeLead.replace(/^conversa\s+do\s+whatsapp\s+com\s+/i, "")).split(/\s+/)[0] || "";
+  if (primeiroLead && autorNorm.includes(primeiroLead)) return "cliente";
   const business = /(construtora|corretor|imobili[áa]ria|direciona|atendimento)/i;
-  const corretor = String(corretorNome || "").trim().toLowerCase();
+  const corretor = _semAcento(corretorNome);
+  if (business.test(autor)) return "corretor";
+  if (corretor && (autorNorm === corretor || autorNorm.includes(corretor) || corretor.includes(autorNorm))) return "corretor";
+  // Sabemos quem é o contato e este autor não é ele: numa conversa 1 pra 1, sobra o corretor.
+  if (primeiroLead) return "corretor";
+  return "";
+}
+
+function _vozes(timeline, corretorNome = "", lead = {}, lado = "corretor", minChars = 18, quantos = 8) {
+  if (!Array.isArray(timeline)) return "";
   const out = [];
   for (const m of timeline) {
-    if (!m || m.system) continue;
-    const autor = String(m.author || "").trim();
-    const autorLower = autor.toLowerCase();
+    if (_ladoDaMensagem(m, corretorNome, lead) !== lado) continue;
     const texto = String(m.text || "").replace(/\s+/g, " ").trim();
-    const ehCorretor = business.test(autor) || (!!corretor && (autorLower === corretor || autorLower.includes(corretor)));
-    if (!autor || autor === "Sistema" || !ehCorretor) continue;
-    if (texto.length < 18 || texto.length > 300) continue;
+    if (texto.length < minChars || texto.length > 300) continue;
     if (/<m[íi]dia|arquivo anexado|[áa]udio|https?:\/\//i.test(texto)) continue;
     out.push(texto);
   }
-  return [...new Set(out)].slice(-8).map(t => `- ${t}`).join("\n");
+  return [...new Set(out)].slice(-quantos).map(t => `- ${t}`).join("\n");
+}
+
+// Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
+// o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
+function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
+  return _vozes(timeline, corretorNome, lead, "corretor", 18, 8);
 }
 
 // v1243 — COMO ESSA DUPLA SE TRATA. O caso do dono (13/08/2026): ele e o contato se falam por
@@ -513,24 +547,8 @@ function exemplosDoCorretor(timeline, corretorNome = "") {
 // Passou a semana que tínhamos comentado...". Um estranho falando. As mensagens DELE já iam no
 // pedido (bloco "COMO ESTE CORRETOR ESCREVE"), mas tratamento é coisa de DOIS: sem ver como o
 // cliente fala com ele, o modelo cai no registro comercial padrão. Agora as duas vozes vão.
-function exemplosDoCliente(timeline, corretorNome = "") {
-  if (!Array.isArray(timeline)) return "";
-  const business = /(construtora|corretor|imobili[áa]ria|direciona|atendimento|mensagem enviada)/i;
-  const corretor = String(corretorNome || "").trim().toLowerCase();
-  const out = [];
-  for (const m of timeline) {
-    if (!m || m.system) continue;
-    const autor = String(m.author || "").trim();
-    const autorLower = autor.toLowerCase();
-    const texto = String(m.text || "").replace(/\s+/g, " ").trim();
-    const ehCorretor = business.test(autor) || (!!corretor && (autorLower === corretor || autorLower.includes(corretor)));
-    if (!autor || autor === "Sistema" || ehCorretor) continue;
-    if (/^(observa[çc][ãa]o|resumo)/i.test(autor)) continue;
-    if (texto.length < 6 || texto.length > 300) continue;
-    if (/<m[íi]dia|arquivo anexado|[áa]udio|https?:\/\//i.test(texto)) continue;
-    out.push(texto);
-  }
-  return [...new Set(out)].slice(-6).map(t => `- ${t}`).join("\n");
+function exemplosDoCliente(timeline, corretorNome = "", lead = {}) {
+  return _vozes(timeline, corretorNome, lead, "cliente", 6, 6);
 }
 
 
@@ -703,6 +721,152 @@ function dataCivilDeMensagem(m) {
 }
 
 // Apenas contexto técnico de data. Nenhuma regra comercial é extraída ou aplicada pelo código.
+// ─── O PRAZO QUE O PRÓPRIO CLIENTE MARCOU (v1244) ────────────────────────────────────────────
+//
+// Print do dono (13/08/2026): em 03/08 (uma segunda) o CLIENTE escreveu "vamos falar sobre o
+// assunto na semana que vem" e o corretor respondeu "Combinado". "Semana que vem" dito naquele dia
+// é 10 a 16/08. A análise rodou em 13/08 — ou seja, DENTRO do combinado. Mesmo assim a tela dizia
+// que o prazo padrão de retomada tinha sido ultrapassado, e as três sugestões saíram com cara de
+// cobrança de atraso ("passou a semana que tínhamos comentado").
+//
+// A causa: o prazo genérico do Cérebro ("X dias sem contato") atropelava o prazo que o próprio
+// cliente marcou. Um é chute de régua; o outro é combinado explícito entre os dois.
+//
+// A conta é feita AQUI, no código, e entra no pedido como FATO — não se pede pra IA calcular
+// calendário, que é justamente onde ela erra. Três cuidados que fazem a diferença entre acertar e
+// criar um problema novo:
+//   1. só conta o que o CLIENTE disse (o corretor dizer "te chamo semana que vem" não é combinado
+//      do cliente, é promessa dele);
+//   2. depois do marco, só confirmação curta ("Combinado", "ok", "blz") mantém a janela viva —
+//      qualquer mensagem de conteúdo novo significa que a conversa andou e aquele marco não pode
+//      continuar mandando semanas depois;
+//   3. marco com mais de 180 dias não governa negociação de hoje.
+function _textoSemAcentoTemporal(v = "") {
+  return String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function _civilTextoPorDia(dia) {
+  if (!Number.isFinite(dia)) return "";
+  const d = new Date(dia * 86400000);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+}
+
+// Converte a expressão de tempo em janela civil (dia inicial e final). null quando não é
+// inequívoca — "mais pra frente", "qualquer hora dessas" não viram prazo.
+function _janelaTemporalDoTexto(texto, dataMensagem) {
+  const t = _textoSemAcentoTemporal(texto);
+  if (!t || dataMensagem?.dia == null) return null;
+  const baseDia = dataMensagem.dia;
+  let inicio = null, fim = null, tipo = "";
+
+  if (/\b(na |pra |para )?(semana que vem|proxima semana|semana seguinte)\b/.test(t)) {
+    // Semana civil seguinte inteira: segunda a domingo.
+    const dow = new Date(Date.UTC(dataMensagem.y, dataMensagem.m - 1, dataMensagem.d)).getUTCDay();
+    const diasDesdeSegunda = (dow + 6) % 7;
+    inicio = baseDia - diasDesdeSegunda + 7;
+    fim = inicio + 6;
+    tipo = "semana_seguinte";
+  } else if (/\b(mes que vem|proximo mes|mes seguinte)\b/.test(t)) {
+    const proximo = new Date(Date.UTC(dataMensagem.y, dataMensagem.m, 1));
+    const depois = new Date(Date.UTC(dataMensagem.y, dataMensagem.m + 1, 1));
+    inicio = Math.floor(proximo.getTime() / 86400000);
+    fim = Math.floor(depois.getTime() / 86400000) - 1;
+    tipo = "mes_seguinte";
+  } else if (/\bdepois de amanha\b/.test(t)) {
+    inicio = fim = baseDia + 2;
+    tipo = "depois_de_amanha";
+  } else if (/\bamanha\b/.test(t)) {
+    inicio = fim = baseDia + 1;
+    tipo = "amanha";
+  } else {
+    const mDias = t.match(/\b(?:daqui a|em) (?:uns? )?(\d{1,3}) dias?\b/);
+    const mSemanas = t.match(/\b(?:daqui a|em) (?:umas? )?(\d{1,2}) semanas?\b/);
+    if (mDias) {
+      const n = Number(mDias[1]);
+      if (n >= 1 && n <= 180) { inicio = fim = baseDia + n; tipo = "daqui_a_dias"; }
+    } else if (mSemanas) {
+      const n = Number(mSemanas[1]);
+      if (n >= 1 && n <= 26) { inicio = fim = baseDia + n * 7; tipo = "daqui_a_semanas"; }
+    }
+  }
+
+  if (inicio == null || fim == null) return null;
+  return { inicioDia: inicio, fimDia: fim, tipo };
+}
+
+// "Combinado" depois de "falamos semana que vem" mantém o marco de pé. Conteúdo novo, não.
+function _ehApenasConfirmacaoDepoisDoMarco(m) {
+  if (!m || !ehMensagemRealParaTempo(m)) return true;
+  if (_autorEhDoApp(m)) return true;
+  const t = _textoSemAcentoTemporal(m?.text || "").replace(/[.!?,;:]+$/g, "").trim();
+  if (!t) return true;
+  if (t.length > 70) return false;
+  return /^(combinado|ok|okay|blz+|beleza|certo|show|fechado|perfeito|tranquilo|ta bom|valeu|obrigad[oa]|grato|👍|👌|show de bola)( mano| amigo| meu amigo)?$/.test(t);
+}
+
+export function calcularMarcoTemporalExplicitoCliente(timeline, lead = {}, corretorNome = "", agora = new Date()) {
+  const hojePartes = partesDataBR(agora);
+  const hojeDia = hojePartes ? numeroDiaCivil(hojePartes.y, hojePartes.m, hojePartes.d) : null;
+  if (hojeDia == null) return { encontrado: false, status: "nao_identificado" };
+
+  const arr = Array.isArray(timeline) ? timeline : [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const m = arr[i];
+    if (!m || !ehMensagemRealParaTempo(m)) continue;
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "cliente") continue;
+
+    const dataMsg = dataCivilDeMensagem(m);
+    if (dataMsg?.dia == null) continue;
+    if (hojeDia - dataMsg.dia > 180) continue;
+
+    const janela = _janelaTemporalDoTexto(m?.text || "", dataMsg);
+    if (!janela) continue;
+
+    const houveAvancoDepois = arr.slice(i + 1).some(x => !_ehApenasConfirmacaoDepoisDoMarco(x));
+    if (houveAvancoDepois) return { encontrado: false, status: "marco_superado_pela_conversa" };
+
+    const status = hojeDia < janela.inicioDia ? "antes_da_janela"
+      : hojeDia > janela.fimDia ? "janela_encerrada"
+      : "dentro_da_janela";
+    const inicio = _civilTextoPorDia(janela.inicioDia);
+    const fim = _civilTextoPorDia(janela.fimDia);
+    const intervalo = inicio === fim ? inicio : `${inicio} a ${fim}`;
+    const resumo = status === "dentro_da_janela"
+      ? `Hoje está DENTRO da janela combinada pelo cliente (${intervalo}). Não diga que o prazo venceu, passou ou foi superado.`
+      : status === "antes_da_janela"
+        ? `Hoje ainda está ANTES da janela combinada pelo cliente (${intervalo}). Não cobre nem trate o combinado como vencido.`
+        : `A janela explicitamente combinada pelo cliente terminou em ${fim}. Só agora é factual dizer que o período combinado passou.`;
+    return {
+      encontrado: true,
+      status,
+      tipo: janela.tipo,
+      textoOriginal: String(m?.text || "").replace(/\s+/g, " ").trim().slice(0, 500),
+      dataMensagem: dataMsg.texto || "",
+      inicio,
+      fim,
+      intervalo,
+      resumo
+    };
+  }
+  return { encontrado: false, status: "nenhum_marco_explicito" };
+}
+
+// Coerência temporal é fato, não estilo: se a janela ainda está aberta (ou nem começou), dizer que
+// "passou o prazo que combinamos" é objetivamente falso e vai pra reescrita mesmo sem nenhum clichê
+// da lista dura. Devolve "" quando não há problema.
+function _problemaTemporalMensagem(texto = "", marco = null) {
+  if (!marco?.encontrado || !["dentro_da_janela", "antes_da_janela"].includes(marco.status)) return "";
+  const t = _textoSemAcentoTemporal(texto);
+  const gatilho = /\b(passou|passaram|venceu|vencid[oa]s?|superou|superad[oa]s?|superando|acabou|terminou|encerrou|expirou|estourou)\b/;
+  const alvo = /\b(prazo|periodo|tempo|combinad\w*|semana|semanas|janela)\b/;
+  const perto = new RegExp(`${gatilho.source}.{0,45}${alvo.source}|${alvo.source}.{0,45}${gatilho.source}`);
+  if (!perto.test(t)) return "";
+  const faixa = marco.intervalo || marco.inicio;
+  return marco.status === "dentro_da_janela"
+    ? `A mensagem diz ou insinua que o combinado venceu, mas hoje está DENTRO da janela ${faixa}.`
+    : `A mensagem diz ou insinua que o combinado venceu, mas hoje ainda está ANTES da janela ${faixa}.`;
+}
+
 export function calcularContextoTemporalMensagens(timeline, _cfg = {}, agora = new Date()) {
   const hojePartes = partesDataBR(agora);
   const hojeDia = hojePartes ? numeroDiaCivil(hojePartes.y, hojePartes.m, hojePartes.d) : null;
@@ -2824,7 +2988,7 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
   }
 }
 
-export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA }) {
+export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarVariacao = false, contextoIncremental = null, cerebroConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA, agora = null }) {
   const emptyMessages = { a: "", b: "", c: "", aLabel: "Reanalisar", bLabel: "Reanalisar", cLabel: "Reanalisar", recomendada: "a" };
   const nowIso = new Date().toISOString();
   const clean = (v, fallback = "") => String(v ?? fallback ?? "").replace(/\s+/g, " ").trim();
@@ -2959,7 +3123,9 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
     timelineText = "[Conversa longa: parte antiga omitida apenas por limite técnico da importação. Use as mensagens abaixo como histórico recente, sem análise antiga.]\n" + recentes.join("\n");
   }
 
-  const _agoraDt = new Date();
+  // `agora` só é passado pelos testes (pra congelar o calendário e conferir a conta do prazo
+  // combinado). Em produção ninguém passa: vale o relógio de verdade.
+  const _agoraDt = agora instanceof Date && !Number.isNaN(agora.getTime()) ? agora : new Date();
   // Data e hora atuais no fuso do corretor, fornecidas apenas como contexto técnico da análise.
   const fusoAnalise = "America/Sao_Paulo";
   let hoje, hojeSemana = "", dataHoraAtualAnalise = "";
@@ -3082,6 +3248,28 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   };
 
   const contextoTemporal = calcularContextoTemporalMensagens(timelineArr, configCerebro || {}, _agoraDt);
+  // v1244 — o prazo que o PRÓPRIO CLIENTE marcou ("semana que vem", "mês que vem", "daqui a 10
+  // dias"). Calculado aqui no código, não pela IA: calendário é onde ela erra, e errar aqui faz o
+  // corretor cobrar atraso de quem está em dia. Ver calcularMarcoTemporalExplicitoCliente.
+  const marcoTemporalCliente = calcularMarcoTemporalExplicitoCliente(timelineArr, lead || {}, corretorNome, _agoraDt);
+  const blocoJanelaCombinada = (() => {
+    if (!marcoTemporalCliente?.encontrado) {
+      return "MARCO TEMPORAL EXPLÍCITO DO CLIENTE: nenhum reconhecido. Aqui o prazo genérico de retomada pode ser usado conforme o Cérebro.\n";
+    }
+    const j = marcoTemporalCliente;
+    const situacao = j.status === "dentro_da_janela"
+      ? "DENTRO DO PRAZO COMBINADO. NÃO existe atraso, NÃO existe prazo vencido e NÃO existe silêncio a cobrar — o combinado está sendo cumprido AGORA. Falar hoje é HONRAR o combinado, e a mensagem tem que soar assim (\"como a gente combinou de falar essa semana...\"). É PROIBIDO escrever ou sugerir que o prazo passou, que faz tempo, que ele sumiu ou que não respondeu."
+      : j.status === "antes_da_janela"
+      ? "AINDA NÃO CHEGOU o prazo que ele marcou. Cobrar agora é atropelar o que ele pediu; se houver motivo real pra falar antes, ele precisa ser outro, e reconhecendo que o combinado é pra frente."
+      : `O PRAZO COMBINADO JÁ PASSOU (terminou em ${j.fim}). Aí sim cabe retomar pelo combinado que não se cumpriu — sem drama e sem cobrança.`;
+    return `PRAZO QUE O PRÓPRIO CLIENTE MARCOU — ISTO MANDA NA LEITURA DO TEMPO, e já vem calculado pelo sistema. NÃO REINTERPRETE:
+O cliente disse "${j.textoOriginal}" em ${j.dataMensagem}, o que corresponde ao período de ${j.intervalo}.
+Hoje a situação é: ${situacao}
+Regra factual: ${j.resumo}
+O número de dias corridos abaixo NÃO pode contradizer isto: prazo que o cliente marcou vence prazo genérico de régua.
+
+`;
+  })();
   const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro);
   // v1058: número real pro Cérebro comparar quando ele tiver uma regra do tipo "depois de X dias
   // sem interação, reconheça o intervalo antes de retomar" — sem isso a IA não tinha como saber
@@ -3102,8 +3290,8 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // v1212 — as mensagens REAIS do corretor NESTA conversa. exemplosDoCorretor existia desde
   // sempre e não era chamada por ninguém: é a referência de voz mais fiel que existe (é ele
   // falando com este cliente), e custa zero — sai da timeline que já está na mão.
-  const exemplosVozCorretor = exemplosDoCorretor(timelineArr, corretorNome);
-  const exemplosVozCliente = exemplosDoCliente(timelineArr, corretorNome);
+  const exemplosVozCorretor = exemplosDoCorretor(timelineArr, corretorNome, lead || {});
+  const exemplosVozCliente = exemplosDoCliente(timelineArr, corretorNome, lead || {});
   // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
   // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
   // real no comentário de conhecimentoCorretorTexto).
@@ -3182,7 +3370,7 @@ Fuso horário da análise: ${fusoAnalise}
 Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília).
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
-Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.
+${blocoJanelaCombinada}Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação, e SOMENTE quando não houver acima um prazo marcado pelo próprio cliente governando o momento): ${diasParaRetomada} dias corridos.
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -3251,7 +3439,9 @@ APARECE NA TELA do corretor, e é por ela que este trabalho vale alguma coisa:
 - "oQueMudouNoTempo": quantos dias/meses se passaram e o que isso significa PARA ESTE CASO — o
   prazo que o cliente deu já venceu? o que ele disse que ia acontecer já aconteceu? Se o tempo não
   muda nada aqui, diga isso.
-- "condicaoDoCliente": a condição que o PRÓPRIO CLIENTE colocou pra decidir — o acontecimento da
+- "condicaoDoCliente": a condição que o PRÓPRIO CLIENTE colocou pra decidir. ATENÇÃO: combinar
+  QUANDO conversar ("falamos semana que vem", "te ligo amanhã") NÃO é condição — é agenda, e já
+  está tratada no prazo calculado acima. Condição é acontecimento de que a DECISÃO depende — o acontecimento da
   vida dele de que ele fez depender tudo ("depois que eu ver a colheita", "quando eu vender o
   carro", "quando minha esposa decidir"). Copie o que ele disse. Se não colocou nenhuma, escreva
   exatamente "Nenhuma".
@@ -3266,6 +3456,10 @@ APARECE NA TELA do corretor, e é por ela que este trabalho vale alguma coisa:
   for "Nenhuma" e o prazo dela já passou, conduzir é PERGUNTAR COMO AQUILO FICOU — descobrir se o
   projeto de compra dele continua vivo — e só depois voltar a oferecer material. Reoferecer o que
   ele não respondeu é o erro mais comum e o mais caro.
+  SE O CLIENTE JÁ DISSE QUE VIU/OLHOU/ANALISOU o que você mandou ("dei uma olhada", "recebi",
+  "vi sim", "analisei"), está PROIBIDO oferecer de novo aquele mesmo material, planta, tabela ou
+  simulação como se fosse novidade — pra ele isso é sinal de que ninguém leu o que ele escreveu.
+  A condução ali é PERGUNTAR O QUE ELE ACHOU, e a partir da resposta dele decidir o passo.
 
 Depois disso vêm os campos do diagnóstico e o próximo passo; as três mensagens são o ÚLTIMO campo,
 de propósito: elas são a CONCLUSÃO da leitura, não o começo dela. Escrever as três antes de ter
@@ -3391,6 +3585,28 @@ ${timelineText}`;
       condicaoDoCliente: clean(leitura.condicaoDoCliente, ""),
       comoConduzir: clean(leitura.comoConduzir, "")
     };
+    // v1244 — o painel "Como conduzir este atendimento" também não pode dizer que o prazo venceu
+    // quando o próprio cliente marcou um período que ainda está aberto. Corrigir só as três
+    // mensagens deixava a tela contraditória: sugestão certa embaixo de um diagnóstico errado.
+    if (marcoTemporalCliente?.encontrado) {
+      const diasTxt = contextoTemporal.dias == null ? "" : `Passaram ${contextoTemporal.dias} dias desde a última mensagem, mas `;
+      if (_problemaTemporalMensagem(leituraDaConversa.oQueMudouNoTempo, marcoTemporalCliente)) {
+        leituraDaConversa.oQueMudouNoTempo = marcoTemporalCliente.status === "dentro_da_janela"
+          ? `${diasTxt}o cliente combinou falar no período de ${marcoTemporalCliente.intervalo}, e hoje ainda estamos dentro dessa janela. O combinado não está vencido.`
+          : `${diasTxt}a janela combinada pelo cliente começa em ${marcoTemporalCliente.inicio}. Ainda não chegou o momento combinado para a retomada.`;
+      }
+      if (_problemaTemporalMensagem(leituraDaConversa.comoConduzir, marcoTemporalCliente)) {
+        leituraDaConversa.comoConduzir = marcoTemporalCliente.status === "dentro_da_janela"
+          ? `Retome DENTRO da janela combinada pelo cliente (${marcoTemporalCliente.intervalo}), como quem cumpre o combinado — nunca como quem cobra atraso. Parta do ponto em que a conversa realmente parou e siga a estratégia do Cérebro Comercial, sem repetir automaticamente uma oferta que ele já recebeu.`
+          : `Ainda não chegou a janela combinada pelo cliente, que começa em ${marcoTemporalCliente.inicio}. Respeite esse timing e a estratégia do Cérebro Comercial; não use atraso ou prazo vencido como motivo de contato.`;
+      }
+      // Combinar de FALAR não é condição pra COMPRAR. Sem isto a tela mostrava "falamos semana que
+      // vem" no mesmo campo onde deveria estar algo como "só depois que eu vender a colheita".
+      const c = _textoSemAcentoTemporal(leituraDaConversa.condicaoDoCliente);
+      const soAgenda = /semana que vem|proxima semana|semana seguinte|mes que vem|proximo mes|amanha|daqui a \d+ (dias?|semanas?)/.test(c)
+        && !/colheita|vender|venda do|esposa|marido|familia|financi|entrada|dinheiro|receber|pagamento|trabalho|viagem|obra|documenta/.test(c);
+      if (soAgenda) leituraDaConversa.condicaoDoCliente = "Nenhuma";
+    }
     // A condução manda na releitura: sem isso ela conserta o texto e troca o assunto.
     const passoDecidido = leituraDaConversa.comoConduzir || clean(raw.nextAction || d.quemDeveAgirAgora, "");
     const compromissoDoCliente = leituraDaConversa.condicaoDoCliente || clean(d.ultimoCompromissoCliente, "");
@@ -3401,6 +3617,25 @@ ${timelineText}`;
     // envelope de 52s travado pelos testes v947/v1140): se não sobrou tempo, entrega o que veio.
     // Nada aqui pode derrubar a análise — em qualquer falha ficam valendo as mensagens originais.
     const conferencia = conferirTrioMensagens({ a: msgA, b: msgB, c: msgC });
+    // v1244 — erro de calendário entra na MESMA conferência. "Passou a semana que tínhamos
+    // comentado" não tem nenhum clichê da lista dura, então a conferência antiga dava tudo limpo e
+    // entregava — mesmo estando dentro do prazo que o cliente marcou. Agora vira reescrita.
+    const marcarErroTemporal = (conf, trio) => {
+      const problemas = [
+        { chave: "recomendada", texto: trio.a },
+        { chave: "maisSuave", texto: trio.b },
+        { chave: "maisDireta", texto: trio.c }
+      ].map(m => ({ ...m, problema: _problemaTemporalMensagem(m.texto, marcoTemporalCliente) })).filter(m => m.problema);
+      if (!problemas.length) return conf;
+      conf.limpo = false;
+      for (const m of problemas) {
+        const existente = conf.porMensagem.find(x => x.chave === m.chave);
+        if (existente) existente.suspeitas = [...(existente.suspeitas || []), `ERRO TEMPORAL: ${m.problema}`];
+        else conf.porMensagem.push({ chave: m.chave, texto: m.texto, proibidas: [], suspeitas: [`ERRO TEMPORAL: ${m.problema}`] });
+      }
+      return conf;
+    };
+    marcarErroTemporal(conferencia, { a: msgA, b: msgB, c: msgC });
     // v1238 — guarda as originais: se a releitura vier boa num ponto e ruim noutro, a limpeza
     // lá embaixo escolhe, POR MENSAGEM, a melhor versão limpa entre as duas.
     const originaisDaIA = { a: msgA, b: msgB, c: msgC };
@@ -3450,8 +3685,15 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
             // Só troca se a reescrita REALMENTE ficou melhor (ou igual) na conferência: uma
             // releitura que reintroduz clichê não pode substituir o que já estava na mão. Frase
             // proibida pesa muito mais que suspeita — suspeita pode ser legítima e permanecer.
-            const nota = c2 => c2.porMensagem.reduce((s, m) => s + m.proibidas.length * 10 + m.suspeitas.length, 0);
-            const conferenciaNova = conferirTrioMensagens({ a: novaA, b: novaB, c: novaC });
+            // v1244 — erro de calendário pesa igual a frase proibida: é FATO errado, não estilo.
+            const nota = c2 => c2.porMensagem.reduce((s, m) => s
+              + m.proibidas.length * 10
+              + m.suspeitas.filter(x => /^ERRO TEMPORAL/.test(x)).length * 10
+              + m.suspeitas.filter(x => !/^ERRO TEMPORAL/.test(x)).length, 0);
+            const conferenciaNova = marcarErroTemporal(
+              conferirTrioMensagens({ a: novaA, b: novaB, c: novaC }),
+              { a: novaA, b: novaB, c: novaC }
+            );
             if (nota(conferenciaNova) <= nota(conferencia)) {
               msgA = novaA; msgB = novaB; msgC = novaC;
               mensagensReescritas = true;
@@ -3484,11 +3726,18 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
       const candidatos = versoes
         .flatMap(v => [limparFrasesProibidas(v), String(v || "").trim()])
         .filter(v => v && v.trim())
-        .map(v => ({ texto: v, proibidas: detectarFrasesProibidas(v).proibidas.length, palavras: palavrasUteis(v) }));
+        .map(v => ({
+          texto: v,
+          proibidas: detectarFrasesProibidas(v).proibidas.length,
+          // v1244 — entre duas versões igualmente limpas de clichê, nunca fique com a que diz que
+          // o prazo venceu enquanto o combinado do cliente ainda está aberto.
+          temporal: _problemaTemporalMensagem(v, marcoTemporalCliente) ? 1 : 0,
+          palavras: palavrasUteis(v)
+        }));
       if (!candidatos.length) return "";
-      const limpos = candidatos.filter(c => c.proibidas === 0);
-      const pool = limpos.length ? limpos : candidatos.sort((a, b) => a.proibidas - b.proibidas);
-      return pool.sort((a, b) => (a.proibidas - b.proibidas) || (b.palavras - a.palavras))[0].texto;
+      const limpos = candidatos.filter(c => c.proibidas === 0 && c.temporal === 0);
+      const pool = limpos.length ? limpos : candidatos;
+      return pool.sort((a, b) => (a.proibidas - b.proibidas) || (a.temporal - b.temporal) || (b.palavras - a.palavras))[0].texto;
     };
     msgA = melhorLimpa(msgA, originaisDaIA.a);
     msgB = melhorLimpa(msgB, originaisDaIA.b);
@@ -3506,6 +3755,24 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
     const autoresDaConversa = [...new Set(timelineArr
       .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
     const clienteConfirmado = nomeClienteConfirmadoPelaConversa(clean(raw.quemEhOCliente, ""), autoresDaConversa, corretorNome);
+
+    // v1244 — o calendário explícito também manda no cartão "Fazer agora". Se a IA devolvesse
+    // "aguardar" no meio da semana que o próprio cliente escolheu, a tela ficava contraditória
+    // mesmo com as três mensagens certas: o lead sumia da fila justo no dia de falar com ele.
+    let recomendacaoContatoFinal = {
+      aguardar: raw?.recomendacaoContato?.aguardar === true,
+      motivo: raw?.recomendacaoContato?.aguardar === true ? clean(raw?.recomendacaoContato?.motivo) : ""
+    };
+    if (marcoTemporalCliente?.encontrado) {
+      if (marcoTemporalCliente.status === "antes_da_janela") {
+        recomendacaoContatoFinal = {
+          aguardar: true,
+          motivo: `O cliente combinou retomar a partir de ${marcoTemporalCliente.inicio}; essa janela ainda não começou.`
+        };
+      } else {
+        recomendacaoContatoFinal = { aguardar: false, motivo: "" };
+      }
+    }
 
     // Nenhuma sugestão de mensagem é reinterpretada, corrigida ou substituída pelo código.
     // A única validação local é técnica: presença das três sugestões.
@@ -3576,6 +3843,9 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
       // este atendimento"). É o que o dono pediu: "analise toda conversa, e sugira conduções de
       // atendimento".
       leituraDaConversa,
+      // v1244 — o prazo que o próprio cliente marcou, já calculado. Fica gravado junto da análise
+      // pra dar pra conferir depois POR QUE a análise tratou (ou não tratou) o contato como atrasado.
+      ...(marcoTemporalCliente?.encontrado ? { marcoTemporalCliente } : {}),
       oQueFaltaDescobrir: arr(raw.oQueFaltaDescobrir),
       estrategiaMensagem: clean(raw.estrategiaMensagem),
       prioridadeLead: clean(raw.prioridadeLead),
@@ -3584,10 +3854,7 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
       etapaSugerida: clean(raw.etapaSugerida || d.etapaFunil, "Não identificado"),
       clientProfile: clean(raw.clientProfile),
       nextAction: clean(raw.nextAction || d.quemDeveAgirAgora || d.ultimoCompromissoCliente),
-      recomendacaoContato: {
-        aguardar: raw?.recomendacaoContato?.aguardar === true,
-        motivo: raw?.recomendacaoContato?.aguardar === true ? clean(raw?.recomendacaoContato?.motivo) : ""
-      },
+      recomendacaoContato: recomendacaoContatoFinal,
       messages: {
         a: msgA,
         b: msgB,
