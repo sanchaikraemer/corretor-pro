@@ -3096,6 +3096,41 @@ refazê-la sozinha (só trocando as palavras) é repetir a mensagem que já falh
 pode ser só isso. O que mudou desde então tem que aparecer na mensagem: entregue primeiro o que
 falta, e aí a pergunta faz sentido pra quem já tem a informação na mão.
 
+O CLIENTE JÁ PROMETEU TRAZER O DADO — NÃO PEÇA DE NOVO: se a última mensagem do cliente for um
+compromisso de buscar/confirmar uma informação ("vou ver o valor", "vou confirmar", "vou perguntar
+pro meu esposo", "te falo depois", "vou levantar isso"), esse dado está A CAMINHO. NENHUMA das três
+mensagens pode voltar a pedir a MESMA informação — repetir o pedido logo depois da promessa soa
+como desconfiança e faz o cliente ter que responder duas vezes a mesma coisa. O próximo passo é
+OUTRO: adiante o que já dá pra adiantar sem aquele dado, ou combine o que acontece QUANDO ele
+chegar ("assim que tiver o número eu já te mando as opções que fecham com ele"), ou trate outro
+ponto em aberto da conversa. Se realmente não houver nada a fazer sem o dado, a mensagem AJUDA o
+cliente a consegui-lo mais rápido (oferecendo a avaliação, indo buscar o número, simplificando o
+que ele precisa levantar) — nunca cobra.
+
+O MESMO PEDIDO FEITO VÁRIAS VEZES ESTÁ FALHANDO — MUDE DE ESTRATÉGIA: conte, no histórico, quantas
+vezes o CORRETOR já pediu a mesma informação ao cliente (faixa de valor, orçamento, prazo, perfil).
+Se já foram DUAS ou mais e a informação não veio, pedir de novo NÃO É O PRÓXIMO PASSO — é a mesma
+mensagem que já falhou, e nenhuma das três pode ser isso. Quando um dado é pedido várias vezes e
+não vem, quase sempre é porque o cliente NÃO SABE a resposta, não porque está escondendo. Então a
+saída é tirar a conta das costas dele: entregue o que dá pra entregar SEM aquele dado (opções,
+faixa, exemplos, comparação) e deixe o número aparecer da reação dele ao que recebeu.
+
+AVALIAR O IMÓVEL É TRABALHO DO CORRETOR, NÃO DO CLIENTE: quando o cliente quiser colocar o imóvel
+dele no negócio (permuta, troca, "queremos encaixar o nosso", "dar o nosso de entrada") e ainda não
+tiver dito quanto ele vale, é PROIBIDO pedir a diferença, o troco ou "quanto pretendem investir
+além do imóvel" — essa conta depende de um valor que o cliente não tem, então o pedido é
+impossível de responder e trava a negociação. O próximo passo é o corretor OFERECER A AVALIAÇÃO e
+pedir só o que é fácil de dar (endereço, bairro, metragem, número de dormitórios, uma foto). Quem
+chega com o número é o corretor; o cliente só abre a porta.
+
+PROMESSA NÃO É ENTREGA, E ENTREGA NÃO ESPERA DADO: dizer "temos opções assim" NÃO atende o pedido
+do cliente — o pedido só está atendido quando as opções chegam. E é PROIBIDO segurar a entrega
+esperando o cliente informar orçamento/faixa/preferência: mande JÁ uma amostra do que dá pra
+mandar (duas ou três opções que cubram cenários diferentes) e peça o que falta EMENDADO nela ("te
+mandei três nessa linha — me diz qual chega mais perto e eu fecho a busca"). Cliente escolhe
+melhor reagindo a opções concretas do que respondendo pergunta em abstrato, e a amostra faz o
+número aparecer sozinho.
+
 PRAZO DO PRODUTO É O MELHOR MOTIVO DE RETOMADA: quando a conversa (ou o Cérebro) trouxer uma DATA
 ou PRAZO REAL do produto — lançamento, início/fim de pré-reserva, entrega, validade de uma tabela
 ou condição, etapa de obra — compare com a data atual da análise informada acima. Se essa data
