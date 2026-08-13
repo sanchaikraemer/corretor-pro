@@ -508,6 +508,31 @@ function exemplosDoCorretor(timeline, corretorNome = "") {
   return [...new Set(out)].slice(-8).map(t => `- ${t}`).join("\n");
 }
 
+// v1243 — COMO ESSA DUPLA SE TRATA. O caso do dono (13/08/2026): ele e o contato se falam por
+// "buenas", "mano", "kambio", "blzzz", "abss" — e o app sugeriu "Bom dia Thume, tudo certo?
+// Passou a semana que tínhamos comentado...". Um estranho falando. As mensagens DELE já iam no
+// pedido (bloco "COMO ESTE CORRETOR ESCREVE"), mas tratamento é coisa de DOIS: sem ver como o
+// cliente fala com ele, o modelo cai no registro comercial padrão. Agora as duas vozes vão.
+function exemplosDoCliente(timeline, corretorNome = "") {
+  if (!Array.isArray(timeline)) return "";
+  const business = /(construtora|corretor|imobili[áa]ria|direciona|atendimento|mensagem enviada)/i;
+  const corretor = String(corretorNome || "").trim().toLowerCase();
+  const out = [];
+  for (const m of timeline) {
+    if (!m || m.system) continue;
+    const autor = String(m.author || "").trim();
+    const autorLower = autor.toLowerCase();
+    const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+    const ehCorretor = business.test(autor) || (!!corretor && (autorLower === corretor || autorLower.includes(corretor)));
+    if (!autor || autor === "Sistema" || ehCorretor) continue;
+    if (/^(observa[çc][ãa]o|resumo)/i.test(autor)) continue;
+    if (texto.length < 6 || texto.length > 300) continue;
+    if (/<m[íi]dia|arquivo anexado|[áa]udio|https?:\/\//i.test(texto)) continue;
+    out.push(texto);
+  }
+  return [...new Set(out)].slice(-6).map(t => `- ${t}`).join("\n");
+}
+
 
 
 function _regrasLegadasParaTextoPipeline(arr) {
@@ -3078,6 +3103,7 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // sempre e não era chamada por ninguém: é a referência de voz mais fiel que existe (é ele
   // falando com este cliente), e custa zero — sai da timeline que já está na mão.
   const exemplosVozCorretor = exemplosDoCorretor(timelineArr, corretorNome);
+  const exemplosVozCliente = exemplosDoCliente(timelineArr, corretorNome);
   // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
   // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
   // real no comentário de conhecimentoCorretorTexto).
@@ -3119,11 +3145,11 @@ condicional — nunca no passado.
 ESCREVA COMO ESTE CORRETOR ESCREVE, não como uma IA. Nada de clichê de atendimento, fecho longo e
 explicativo, abertura de enfeite, nem perguntar e responder por si mesmo no mesmo fôlego ("tudo
 bem? tranquilo por aqui"). A régua do estilo é o Cérebro dele e as mensagens reais dele que você
-recebeu acima — não um jeito genérico de vendedor.
+recebe logo abaixo, no bloco "COMO ESTE CORRETOR ESCREVE" — não um jeito genérico de vendedor.
 
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" acima vem das conversas reais deste corretor. Use como referência de estilo e do que já deu certo com ele; as regras do Cérebro Comercial acima continuam prevalecendo sobre ele.` : ""}
 ${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos acima são histórico REAL deste corretor, não instrução: eles mostram como ele conduz e escreve. As regras do Cérebro Comercial continuam prevalecendo sobre eles, e os fatos desta conversa continuam sendo os únicos fatos válidos.` : ""}
-${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}
+${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE (mensagens reais dele NESTA conversa) ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nEssa é a régua da voz dele: tamanho das frases, como abre, como encaminha, como fecha. Escreva as três sugestões nesse mesmo registro. COPIE A FORMA, NUNCA O CONTEÚDO — não reaproveite fato, valor, produto nem promessa dessas mensagens.` : ""}${exemplosVozCliente ? `\n\n=== COMO ESTA PESSOA FALA COM ELE (mensagens reais do contato NESTA conversa) ===\n${exemplosVozCliente}\n=== FIM ===\nTRATAMENTO — REGRA DURA: use com esta pessoa o MESMO tratamento que os dois já usam entre si nas mensagens acima. Se eles se chamam de "mano", "amigo", "parceiro", ou se abrem com "buenas", "e aí", "fala", é assim que a mensagem começa — não com abertura de atendimento comercial ("Bom dia Fulano, tudo certo?") quando a conversa inteira mostra outra coisa. Escrever formal com quem ele trata por "mano" soa como outra pessoa assumindo o WhatsApp dele, e o cliente percebe na primeira linha.` : ""}
 ${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR (extraídos das conversas reais dele) ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse o bloco acima como fonte de FATOS (endereço/localização de empreendimentos, condições, regras que ele já explicou a clientes). Em caso de conflito, o Cérebro Comercial prevalece.` : ""}
 
 === INÍCIO DO CÉREBRO COMERCIAL ===
@@ -3215,9 +3241,13 @@ APARECE NA TELA do corretor, e é por ela que este trabalho vale alguma coisa:
 
 - "oQueOClienteQuer": o que essa pessoa procura, do jeito que ELA disse — uso, exigência
   inegociável, prazo, forma de pagamento, o que a move. Só o que está escrito na conversa.
-- "ondeParou": onde a conversa parou e POR QUÊ. Quem falou por último, quem ficou devendo
-  resposta a quem, e o que exatamente ficou no ar. Seja específico: "o corretor ofereceu X e o
-  cliente não respondeu" vale; "a conversa esfriou" não vale.
+- "ondeParou": TODOS os assuntos que ficaram em aberto — não só o último. Uma conversa de meses
+  costuma ter mais de um fio solto ao mesmo tempo, e o erro que mais estraga a sugestão é enxergar
+  só o assunto da última mensagem. Liste cada um com a data e o que exatamente ficou no ar: o que
+  o cliente prometeu, o que VOCÊ prometeu, o que depende de terceiro (um resultado, uma decisão,
+  uma pessoa da família), o combinado de voltar a falar em tal época. Vale também o que não é
+  venda: uma visita combinada, um favor, um assunto pessoal que ele mesmo trouxe. Seja específico
+  ("o corretor ofereceu X em tal dia e o cliente não respondeu" vale; "a conversa esfriou" não).
 - "oQueMudouNoTempo": quantos dias/meses se passaram e o que isso significa PARA ESTE CASO — o
   prazo que o cliente deu já venceu? o que ele disse que ia acontecer já aconteceu? Se o tempo não
   muda nada aqui, diga isso.
@@ -3227,7 +3257,12 @@ APARECE NA TELA do corretor, e é por ela que este trabalho vale alguma coisa:
   exatamente "Nenhuma".
 - "comoConduzir": COMO CONDUZIR O ATENDIMENTO AGORA, em 2 ou 3 frases, como um gerente experiente
   explicaria pro corretor. Não é a mensagem — é a estratégia: por onde reabrir, o que descobrir
-  antes de oferecer qualquer coisa, o que NÃO fazer agora e por quê. Se a condição do cliente não
+  antes de oferecer qualquer coisa, o que NÃO fazer agora e por quê.
+  ESCOLHA, ENTRE OS FIOS DE "ondeParou", POR QUAL SE REABRE — e diga por quê. Nem sempre é o
+  assunto da última mensagem, e quase nunca é reoferecer material. Um assunto onde a bola está com
+  o OUTRO LADO (um resultado que ele estava esperando, uma decisão de terceiro, um prazo que ele
+  mesmo marcou) quase sempre reabre melhor do que empurrar de novo o que já foi mandado: é o que
+  ele tem vontade de responder, e a resposta dele é que diz se o negócio segue vivo. Se a condição do cliente não
   for "Nenhuma" e o prazo dela já passou, conduzir é PERGUNTAR COMO AQUILO FICOU — descobrir se o
   projeto de compra dele continua vivo — e só depois voltar a oferecer material. Reoferecer o que
   ele não respondeu é o erro mais comum e o mais caro.
