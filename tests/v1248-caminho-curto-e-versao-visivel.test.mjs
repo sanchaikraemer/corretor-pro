@@ -30,17 +30,11 @@ assert.ok(Number(escondePalavra[1]) <= 360,
   `a palavra "Atualização" não pode sumir já em ${escondePalavra[1]}px: com a linha própria ela cabe`);
 
 // ── 2. Caminho curto pra importar ───────────────────────────────────────────────────────────
+// v1252 — a metade CELULAR desta parte foi desfeita a pedido do dono: o botão na tela Hoje saiu
+// (ver tests/v1252-hoje-sem-botao-e-sem-legenda.test.mjs, que agora garante que ele NÃO volte).
+// O item do menu da esquerda, do computador, continua valendo e é o que este teste ainda tranca.
 assert.match(html, /class="sb-item go" data-target="zip" data-nav-key="importar"/,
   'no computador, "Importar conversa" precisa ser item do menu da esquerda');
-assert.match(html, /id="btnImportarHome" class="cp1248-importar go" data-target="zip"/,
-  'no celular, o atalho precisa estar na tela Hoje (lá não existe menu da esquerda)');
-
-// O botão do celular fica escondido no computador — lá o item do menu já resolve, não pode duplicar.
-assert.match(css, /\.cp1248-importar\{display:none\}/, 'o botão da Hoje nasce escondido (computador)');
-assert.match(css, /@media\(max-width:999px\)\{[\s\S]*?\.cp1248-importar\{[\s\S]*?display:flex!important/,
-  'o botão da Hoje só aparece no celular');
-assert.match(css, /body\.lead-foco-aberto \.cp1248-importar\{display:none!important\}/,
-  'com um cliente aberto, o cabeçalho da Hoje some inteiro — o botão vai junto');
 
 // Os dois usam a navegação padrão do app (classe "go" + data-target), sem onclick próprio.
 const itemMenu = html.match(/<button type="button" class="sb-item go" data-target="zip"[^>]*>/);
