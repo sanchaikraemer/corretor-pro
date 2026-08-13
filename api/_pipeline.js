@@ -13,6 +13,29 @@ const DOC_INLINE_RE = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|csv|vcf|txt)\b/i;
 const HIDDEN_MEDIA_TAG_RE = /<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>/i;
 const HIDDEN_MEDIA_CLEAN_RE = /<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>/gi;
 const HIDDEN_MEDIA_ONLY_RE = /^\s*<[^>]*(omitida|oculta|omitido|ocultado|omitted|hidden)[^>]*>\s*$/i;
+// v1258 — a MESMA coisa, mas sem os sinais de menor/maior: o iPhone escreve "imagem omitida",
+// "documento omitido", "áudio ocultado" na linha, sem "<>". Lista fechada de propósito, pra não
+// engolir frase normal do corretor que por acaso termine em "omitido".
+const HIDDEN_MEDIA_BARE_RE = /^\s*(imagem|foto|v[ií]deo|[áa]udio|documento|arquivo|figurinha|adesivo|sticker|gif|m[ií]dia|image|photo|video|audio|document|file|media)\s+(omitid[ao]s?|ocultad[ao]s?|ocult[ao]s?|omitted|hidden)\s*$/i;
+
+// v1258 — Quando a conversa é exportada SEM os arquivos (a opção leve do WhatsApp, e a que quase
+// todo mundo escolhe), cada foto, PDF, catálogo ou tabela vira só "<Mídia oculta>". Até aqui essa
+// linha era DESCARTADA — e, se ela fosse o único conteúdo da mensagem, a mensagem inteira sumia da
+// linha do tempo mais adiante ("if (!text) return false"). Resultado: a IA não tinha como saber que
+// um arquivo existiu ali, e concluía que o corretor nunca respondeu o cliente. Foi exatamente o que
+// aconteceu na conversa que o dono trouxe: ele mandou as opções, a análise disse que ele não mandou.
+// A v1058 já tinha resolvido isso pro outro formato ("IMG-x.jpg (arquivo anexado)", que só aparece
+// quando a exportação INCLUI os arquivos). Este é o mesmo remédio pro formato sem arquivos.
+function marcadorDeMidiaOculta(linha) {
+  const t = String(linha || "").toLowerCase();
+  if (/imagem|foto|image|photo|figurinha|adesivo|sticker|gif/.test(t)) return "[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]";
+  if (/v[ií]deo|video/.test(t)) return "[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]";
+  if (/[áa]udio|voz|voice|ptt/.test(t)) return "[Arquivo enviado nesta mensagem: áudio — conteúdo não analisado pela IA]";
+  if (/documento|document|pdf|planilha|arquivo|file/.test(t)) return "[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]";
+  // "<Mídia oculta>" (Android, pt-BR) não diz o tipo — o marcador genérico já basta pra IA saber
+  // que houve envio, que é o que importa.
+  return "[Arquivo enviado nesta mensagem: arquivo — conteúdo não analisado pela IA]";
+}
 
 // Modelos IA do Direciona — configuração central por etapa.
 // A chave API só autoriza a conta/projeto; quem define a qualidade/custo é o modelo abaixo.
@@ -228,7 +251,11 @@ export function parseWhatsappTxt(txt) {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        if (HIDDEN_MEDIA_ONLY_RE.test(trimmed)) continue;
+        // v1258 — vira marcador em vez de sumir (ver marcadorDeMidiaOculta).
+        if (HIDDEN_MEDIA_ONLY_RE.test(trimmed) || HIDDEN_MEDIA_BARE_RE.test(trimmed)) {
+          kept.push(marcadorDeMidiaOculta(trimmed));
+          continue;
+        }
         if (ATTACHED_SUFFIX_RE.test(trimmed)) {
           if (AUDIO_INLINE_RE.test(trimmed)) { kept.push(trimmed); continue; }
           // v1058: antes a linha inteira era descartada — a IA perdia até o FATO de que um
@@ -240,8 +267,11 @@ export function parseWhatsappTxt(txt) {
           continue;
         }
         if (HIDDEN_MEDIA_TAG_RE.test(trimmed)) {
+          // Linha com texto E marca de arquivo escondido (ex.: "Segue a tabela <Mídia oculta>").
+          // v1258 — o texto continua, e o FATO do envio passa a ficar registrado do lado dele.
           const cleaned = trimmed.replace(HIDDEN_MEDIA_CLEAN_RE, "").trim();
           if (cleaned) kept.push(cleaned);
+          kept.push(marcadorDeMidiaOculta(trimmed));
           continue;
         }
         kept.push(trimmed);
