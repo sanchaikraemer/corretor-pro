@@ -2989,6 +2989,16 @@ Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este nú
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
+LEIA O HISTÓRICO INTEIRO, DO COMEÇO — SEMPRE. Não analise só as últimas mensagens: o que define a
+negociação costuma estar lá atrás (o que o cliente pediu na primeira mensagem, a unidade ou
+característica que ele apontou, a objeção que ele soltou uma vez só, o valor que já foi informado,
+o que já foi enviado). Antes de escrever qualquer coisa, percorra a conversa do início ao fim.
+E entenda o que este histórico NÃO mostra: o conteúdo de imagem, vídeo, PDF/documento e áudio não
+vem junto — chega só o marcador de que um arquivo foi enviado ali. Tudo o que você não vê no texto
+pode ter sido enviado assim mesmo. Nunca trate "não aparece aqui" como "não aconteceu": só afirme
+que algo faltou quando a PRÓPRIA conversa disser isso (o cliente cobrando, o corretor prometendo e
+o assunto morrendo sem nenhum arquivo ou link no meio).
+
 AS TRÊS MENSAGENS PRECISAM TER ÂNGULOS COMERCIAIS DIFERENTES — NÃO a mesma ideia reescrita.
 Cada uma segue uma estratégia distinta, pra o corretor escolher a abordagem:
 - "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
@@ -3071,6 +3081,23 @@ ENTREGAR o que o cliente pediu (ou dizer que está enviando agora, emendando o e
 uma pergunta no lugar da entrega. Cliente que pediu algo e não recebeu não escolhe, não filtra e
 não responde qualificação — ele está esperando aquilo. Isso vale mesmo que já tenham passado
 semanas ou meses desde o pedido: o tempo parado não cancela o pedido, aumenta a dívida.
+
+TRAVA OBRIGATÓRIA ANTES DE DIZER QUE ALGO NÃO FOI ENTREGUE: a conversa exportada do WhatsApp NÃO
+carrega o conteúdo de imagem, vídeo, PDF/documento nem áudio. Onde havia um arquivo, chega só o
+marcador "[Arquivo enviado nesta mensagem: ...]" — e um catálogo inteiro, uma tabela de valores,
+uma planta ou um print de opções podem estar EXATAMENTE ali dentro, invisíveis pra você. Link
+também é entrega: uma URL mandada pelo corretor pode abrir a tabela, o mapa de disponibilidades ou
+a lista de opções.
+Portanto: se DEPOIS do pedido do cliente existir, em mensagem do CORRETOR, qualquer marcador de
+arquivo ou qualquer link, então o pedido conta como ATENDIDO e "pedidoSemResposta" recebe
+"Nenhum". É PROIBIDO afirmar, sugerir ou escrever mensagem que dê a entender que o cliente não
+recebeu algo só porque o conteúdo não aparece no texto — o texto não mostra tudo o que foi
+enviado. Ausência no histórico NÃO é prova de ausência no WhatsApp.
+E na dúvida, a mensagem tem que funcionar NOS DOIS CASOS: em vez de "vou te mandar as opções"
+(que soa como se nada tivesse sido enviado e constrange o corretor se já foi), escreva de um jeito
+que serve tanto pra quem recebeu quanto pra quem não recebeu — "das opções que te mandei, alguma
+chegou perto do que vocês querem?", "quer que eu reenvie o material?". Fazer o corretor reenviar
+como novidade algo que ele já enviou é um erro grave: passa desatenção pro cliente.
 
 CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO: se a última mensagem do cliente for uma
 resposta afirmativa a algo que o corretor ofereceu ou propôs ("pode sim", "pode mandar", "sim",
