@@ -152,6 +152,7 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
     function normalizarEtapa(raw){ return raw === "Geladeira" ? "Geladeira" : (raw || "Ativo"); }
     function lembreteTs(l){ const q = l?.analysis?.lembrete?.quando; if(!q) return NaN; const t = new Date(q).getTime(); return isNaN(t) ? NaN : t; }
     function ehContatadoHoje(l){ return !!l.__contatadoHoje; }
+    ${extrairFn('inicioDoDiaBR')}
     ${extrairFn('cp1168HoraCurta')}
     ${extrairFn('cp1168HoraDoTexto')}
     ${extrairFn('cp1168TsDeHojeComHora')}

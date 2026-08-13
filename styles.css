@@ -2026,13 +2026,33 @@ html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
   .cp-agbloco-met{height:27px!important;padding:0 5px!important;gap:4px!important;font-size:12.5px!important}
   .cp-agbloco-met svg{width:15px!important;height:15px!important}
   .cp-agbloco-met b{font-size:13px!important}
-  .cp-mobile-brand-copy{min-width:0!important}
-  .cp-mobile-version{margin-left:5px!important}
+  /* v1248 — O NÚMERO DA VERSÃO APARECIA CORTADO ("#124" no lugar de "#1247") no celular. Ele ficava
+     na MESMA LINHA do nome "Corretor Pro" e, somados, os dois passavam da largura disponível:
+     as últimas letras/dígitos entravam por baixo do bloco de contadores do topo, que tem fundo
+     próprio e cobria tudo. Como é justamente esse número que o dono usa pra conferir se está
+     vendo a versão certa, ele não pode ficar pela metade. Agora a versão ganha a LINHA DE BAIXO,
+     dentro da altura que a barra do topo já tinha — some a disputa por espaço, e a palavra
+     "Atualização" volta a caber por inteiro. Conferido em 320, 390 e 430 px de largura. */
+  .cp-mobile-brand-copy{min-width:0!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:2px!important}
+  /* A palavra "Atualização" é um <span> e vinha herdando o 14px do NOME da marca (a regra
+     .cp-mobile-brand span), ficando quase do tamanho de "Corretor Pro" — é o que empurrava o
+     número pra fora. Aqui ela volta ao tamanho pequeno que sempre foi a intenção. */
+  .cp-mobile-version,.cp-mobile-version span{margin-left:0!important;line-height:1!important;font-size:9px!important;font-weight:650!important;color:var(--cp-muted)!important;letter-spacing:.01em!important}
 }
-/* Em tela bem estreita, a palavra "Atualização" sai e fica só o "#NNNN" (a referência que o dono
-   confere) — senão o número ficava por baixo do bloco da agenda. */
-@media(max-width:430px){
+/* v1248 — a palavra "Atualização" saía da tela em celular estreito porque a versão dividia a
+   linha com o nome "Corretor Pro". Agora a versão tem linha própria (bloco acima) e a palavra
+   cabe inteira até em 320 px — o dono lê "Atualização #NNNN", não só "#NNNN". Abaixo de 320 px
+   (nenhum celular em uso hoje) ela sai, por garantia. */
+@media(max-width:360px){
   .cp-versao-palavra{display:none!important}
+}
+/* Celular bem estreito (320 px): com os quatro contadores no topo, sobrava tão pouco que o nome
+   "Corretor Pro" saía cortado em "Correto". Aperta um pouco a fonte do nome e o espaçamento dos
+   contadores — nada some, tudo cabe. */
+@media(max-width:360px){
+  .cp-mobile-brand span{font-size:12.5px!important}
+  .cp-agbloco-met{padding:0 3px!important;gap:3px!important}
+  .cp-agbloco{gap:0!important}
 }
 
 /* Faixa da semana no topo da tela Agenda (v1233 — desenho da simulação aprovada, modelo 4):
@@ -2070,3 +2090,25 @@ html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
   .cp-ag-hcol b{font-size:14px}
   .cp-ag-hcol small{margin-top:0}
 }
+
+/* v1248 — ATALHO DE IMPORTAR CONVERSA NA TELA HOJE (celular).
+   Importar a conversa do WhatsApp é a ação de onde sai TODA análise do produto — e era a única
+   que não tinha caminho curto: no celular, só por "Mais" → "Importar conversa", e no computador
+   só por "Configurações". O atalho que existia na Hoje aparecia exclusivamente pra conta sem
+   nenhum cliente, ou seja, sumia justamente pra quem usa o app todo dia.
+   No computador este botão fica escondido: lá o item novo do menu da esquerda já resolve. */
+.cp1248-importar{display:none}
+@media(max-width:999px){
+  .cp1248-importar{
+    display:flex!important;align-items:center;justify-content:center;gap:8px;
+    width:100%;margin:10px 0 2px;padding:12px 14px;
+    border:1px solid var(--cp-border,var(--line));border-radius:14px;
+    background:var(--cp-panel-2,rgba(255,255,255,.04));color:var(--cp-text,var(--text));
+    font:inherit;font-weight:800;font-size:13.5px;line-height:1;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .cp1248-importar svg{width:18px;height:18px;flex:none;color:var(--cp-coral,var(--accent))}
+  .cp1248-importar:active{transform:scale(.99)}
+}
+/* Tela de cliente aberta esconde o cabeçalho da Hoje inteiro — o botão vai junto, como o resto. */
+body.lead-foco-aberto .cp1248-importar{display:none!important}

@@ -2,6 +2,25 @@ import { resolveOrganizationId, getSupabaseAdmin, listRecentProcessings, EMPRESA
 
 const CACHE_TTL_MS = 5000; // no máximo 5 s; sincronização entre celular e PC tem prioridade
 const responseCache = new Map();
+// v1248 — o cache nunca apagava nada. Cada entrada guarda a carteira formatada de até 2.000
+// clientes (com a análise de cada um) e o prazo de 5 s só marcava a entrada como velha: ela
+// continuava ocupando memória pra sempre. Numa máquina quente atendendo várias contas, isso
+// crescia até a função morrer sem memória — e o sintoma aparecia como um erro aleatório pra quem
+// nem estava fazendo nada pesado. Agora toda gravação joga fora o que já venceu e mantém um teto.
+const CACHE_MAX_ENTRADAS = 12;
+function guardarNoCache(chave, result) {
+  const agora = Date.now();
+  for (const [k, v] of responseCache) {
+    if (agora - v.ts >= CACHE_TTL_MS) responseCache.delete(k);
+  }
+  responseCache.delete(chave); // reinsere no fim: o teto abaixo descarta sempre o mais antigo
+  responseCache.set(chave, { ts: agora, result });
+  while (responseCache.size > CACHE_MAX_ENTRADAS) {
+    const maisAntiga = responseCache.keys().next().value; // Map preserva a ordem de inserção
+    if (maisAntiga === undefined) break;
+    responseCache.delete(maisAntiga);
+  }
+}
 
 
 // organizationId, quando informado, filtra a tabela por essa empresa — nunca lê outra. Passe
@@ -184,7 +203,12 @@ async function exportarTudo(req, res, organizationId) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Disposition", `attachment; filename="corretor-pro-backup-completo-${generatedAt.slice(0,10)}.json"`);
-  res.end(JSON.stringify(payload, null, 2));
+  // v1248 — sem a indentação. O `null, 2` deixava o arquivo BONITO de ler no bloco de notas, mas
+  // pra isso precisava montar, em memória, uma segunda cópia inteira da carteira só com os espaços
+  // — em cima da cópia que já estava carregada. Numa carteira grande, com as conversas completas,
+  // era o suficiente pra função estourar a memória e o corretor receber erro no lugar do backup.
+  // O arquivo continua o mesmo backup, com os mesmos dados; só não vem mais espaçado.
+  res.end(JSON.stringify(payload));
 }
 
 function json(res, status, payload) {
@@ -275,6 +299,6 @@ export default async function handler(req, res) {
     return json(res, 200, cached.result);
   }
   const result = await listRecentProcessings(limit, { previewLimit: 8, organizationId });
-  if (result.ok) responseCache.set(cacheKey, { ts: Date.now(), result });
+  if (result.ok) guardarNoCache(cacheKey, result);
   return json(res, result.ok ? 200 : 500, result);
 }

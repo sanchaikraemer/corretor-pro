@@ -717,13 +717,23 @@ async function reanalisarLeadHandler702(req, res) {
     atualizarConhecimentoCorretor({ timeline: timelineFinal, clientName: nomeClientePraAprendizado }, openai, organizationId).catch(() => {});
   }
 
-  // Re-lê o estado ATUAL do banco antes de salvar. Armazena updated_at para
+  // Re-lê o estado ATUAL do banco antes de salvar. Armazena a marca de alteração para
   // o optimistic lock no UPDATE: se outra reanálise gravou antes, essa não sobrescreve.
-  const { data: freshRow } = await supabase
+  //
+  // v1248 — a coluna certa é "atualizado_em", não "updated_at" (ver o uso lá embaixo). E o erro
+  // desta leitura não pode mais ser descartado: quando ela falhava, o código seguia com a cópia
+  // lida no INÍCIO da requisição — e como a reanálise leva dezenas de segundos (é a IA
+  // trabalhando), qualquer coisa que o corretor tivesse salvo nesse meio-tempo (o nome do
+  // cliente corrigido, uma observação) era regravada com o valor ANTIGO por cima, em silêncio e
+  // ainda respondendo "deu certo". Falhando aqui, é melhor pedir pra tentar de novo.
+  const { data: freshRow, error: freshErr } = await supabase
     .from("whatsapp_processamentos")
-    .select("resultado_analise, updated_at")
+    .select("resultado_analise, atualizado_em")
     .eq("id", id).eq("organization_id", organizationId)
     .single();
+  if (freshErr) {
+    return json(res, 409, { ok: false, error: "Não consegui reler este cliente antes de salvar a análise. Nada foi alterado — toque em Reanalisar de novo." });
+  }
   const freshPrevious = freshRow?.resultado_analise || previous;
 
   // v750: análise nova não herda diagnóstico, mensagens, produto, unidade ou nextAction antigos.
@@ -799,9 +809,15 @@ async function reanalisarLeadHandler702(req, res) {
   // devolvia algo como "Atendimento", e o lead voltava sozinho pra fila do dia (a Home trata como
   // ativo tudo que não é "Geladeira") — a decisão de arquivar sumia sem aviso. O palpite da IA
   // continua salvo dentro de resultado_analise.etapaSugerida, que é de onde a tela sempre leu.
-  const freshUpdatedAt = freshRow?.updated_at;
+  // v1248 — A TRAVA NÃO TRAVAVA NADA. Ela comparava a coluna "updated_at", que ESTA rota nunca
+  // escreve (o update logo acima grava "atualizado_em"). Resultado: duas reanálises do mesmo
+  // cliente ao mesmo tempo — o corretor toca em "Reanalisar" no celular e no computador, ou toca
+  // duas vezes achando que travou — liam a mesma marca, as duas passavam pela trava, as duas
+  // gravavam e as duas respondiam "deu certo": a primeira análise era apagada em silêncio. A
+  // marca certa é "atualizado_em", que TODAS as gravações de análise do sistema atualizam.
+  const freshMarca = freshRow?.atualizado_em;
   let updateQuery = supabase.from("whatsapp_processamentos").update(update).eq("id", id).eq("organization_id", organizationId);
-  let finalQuery = freshUpdatedAt ? updateQuery.eq("updated_at", freshUpdatedAt) : updateQuery;
+  let finalQuery = freshMarca ? updateQuery.eq("atualizado_em", freshMarca) : updateQuery;
   let { data: updatedRows, error: putErr } = await finalQuery.select("id");
   if (putErr) return json(res, 500, { ok: false, error: putErr.message });
 
@@ -809,7 +825,7 @@ async function reanalisarLeadHandler702(req, res) {
   if (!updatedRows || updatedRows.length === 0) {
     const { data: retryRow, error: retryReadErr } = await supabase
       .from("whatsapp_processamentos")
-      .select("resultado_analise, updated_at")
+      .select("resultado_analise, atualizado_em")
       .eq("id", id).eq("organization_id", organizationId)
       .single();
     if (retryReadErr) return json(res, 409, { ok:false, error:"O lead mudou durante a atualização. Tente novamente." });
@@ -820,7 +836,7 @@ async function reanalisarLeadHandler702(req, res) {
     retryMerged = stampCommercialSchema(retryMerged);
     const retryUpdate = { ...update, resultado_analise: retryMerged, atualizado_em: new Date().toISOString() };
     let retryQ = supabase.from("whatsapp_processamentos").update(retryUpdate).eq("id", id).eq("organization_id", organizationId);
-    if (retryRow?.updated_at) retryQ = retryQ.eq("updated_at", retryRow.updated_at);
+    if (retryRow?.atualizado_em) retryQ = retryQ.eq("atualizado_em", retryRow.atualizado_em);
     const retryResult = await retryQ.select("id");
     if (retryResult.error) return json(res, 500, { ok:false, error:retryResult.error.message });
     if (!retryResult.data || retryResult.data.length === 0) return json(res, 409, { ok:false, error:"Outra atualização ocorreu ao mesmo tempo. Toque novamente." });

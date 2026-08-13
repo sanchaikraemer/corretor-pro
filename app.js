@@ -2093,8 +2093,18 @@ function cpNomeEmpreendimentoCurto(texto){
   t = t.replace(/\b(pronto[a]?\s+para\s+morar|na\s+planta|em\s+constru[çc][ãa]o|financi[aá]vel|futuros?\s+lan[çc]amentos?|prontos?\s+para\s+construir)\b/gi, " ");
   t = t.replace(/\b(apartamentos?|casas?|sobrados?|coberturas?|studios?|kitnets?|salas?\s+comerciais?|terrenos?|lotes?|quadras?|loteamentos?|im[óo]ve(?:l|is)|unidades?|edif[íi]cio|pr[ée]dio|residencial|condom[íi]nio)\b/gi, " ");
   t = t.replace(/\bpronto?a?s?\b/gi, " "); // "pronto(s)/pronta(s)" solto (sem "pra morar/construir" na frase) também é genérico
-  t = t.replace(/\b(no|na|nos|nas|de|do|da|dos|das|para)\b/gi, " ");
+  // v1248 — faltavam conectivos no meio da lista, e o resultado era LIXO NA TELA: "Casa em
+  // condomínio" perdia "Casa" e "condomínio" (as duas palavras genéricas, certo) e sobrava só a
+  // palavra "em" — que ia parar no lugar do nome do empreendimento, na tela Hoje. Com o "em" (e os
+  // outros conectivos) também saindo, não sobra nada e o texto é tratado como 100% genérico, que é
+  // o que ele é: quem chama (produtosLabelCurto) então mostra o texto original inteiro, que é
+  // informação de verdade.
+  t = t.replace(/\b(no|na|nos|nas|de|do|da|dos|das|para|em|com|sem|por|pra|e|ou|a|o|as|os|um|uma|uns|umas|ao|aos|entre|at[ée])\b/gi, " ");
   t = t.replace(/[,;]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  // Sobra de uma ou duas letras (resto de sigla partida, conectivo com acento que escapou) não é
+  // nome de empreendimento nenhum — é sujeira. Sem nada com pelo menos 3 letras/números, o texto
+  // conta como genérico.
+  if(!t.split(/\s+/).some(p => p.length >= 3)) return "";
   return t;
 }
 // Versão compacta de produtosLabel pra Home: mesma fonte de dados (l.produtos/l.product). Cada
@@ -3049,15 +3059,24 @@ window.copiarMensagemLead = function(id){
   // ABERTO na tela de detalhe). Copiando direto do card da Home, nenhum lead está aberto, então
   // o evento nunca era salvo (Desempenho > Mensagens copiadas ficava zerado mesmo com uso real).
   // Aqui registra direto no lead do card (l.id).
-  const done = () => {
+  // v1248 — ESTE CAMINHO AINDA DISPARAVA AS DUAS GRAVAÇÕES AO MESMO TEMPO, e as duas escrevem no
+  // MESMO campo do cliente lendo antes de escrever: uma apagava a outra. Quando a perdedora era o
+  // atendimento, o cliente voltava pra fila "Fazer agora" como se você nunca tivesse falado com
+  // ele — o velho "atendi e não marcou". Quando era o contador, o Desempenho mostrava "Mensagens
+  // copiadas: 0" mesmo com uso real. A ordem certa já estava em uso nos outros dois botões de
+  // copiar (v1097/v1142): ATENDIMENTO PRIMEIRO — se só uma sobreviver, que seja a que importa —,
+  // o contador depois, com keepalive (copiar é exatamente quando o app vai pro fundo, indo pro
+  // WhatsApp), e as duas EM SEQUÊNCIA, nunca em paralelo.
+  const done = async () => {
     toast("Mensagem copiada");
+    try{ await registrarMensagemEnviada(l.id, msg); }catch(_){}
     try{
-      fetch("./api/lead-update", {
-        method:"POST", headers:{"Content-Type":"application/json"},
+      const r = await fetch("./api/lead-update", {
+        method:"POST", headers:{"Content-Type":"application/json"}, keepalive:true,
         body: JSON.stringify({ id:l.id, action:"aprendizado", evento:"mensagem_copiada", detalhes:{ de:"hero" } })
-      }).catch(()=>{});
+      }).catch(()=>null);
+      if(r && r.ok){ invalidarLeadsCache(); loadRecentLeads(true); }
     }catch(_){}
-    registrarMensagemEnviada(l.id, msg);
   };
   if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
   else { toast("Não consegui copiar"); }
@@ -5741,8 +5760,12 @@ function classificarCompromissoConfirmado(lead, ap){
   // = compromisso deduzido "no chute" → não mostra (evita coisas tipo "café amanhã" inventado).
   const dataAbs = String(ap?.data||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(!dataAbs) return null;
-  const dt = new Date(+dataAbs[1], +dataAbs[2]-1, +dataAbs[3]); dt.setHours(0,0,0,0);
-  const hj = new Date(); hj.setHours(0,0,0,0);
+  // v1248 — "hoje" pelo calendário de BRASÍLIA, como o resto do app (inicioDoDiaBR). Antes usava a
+  // meia-noite do RELÓGIO DO APARELHO: com o celular em outro fuso (corretor viajando, ou o relógio
+  // do Android em UTC — acontece em app reinstalado), das 21h à meia-noite o "hoje" do aparelho já
+  // era o dia seguinte, e a barra do topo anunciava como "hoje" um compromisso que é de amanhã.
+  const dt = new Date(Date.UTC(+dataAbs[1], +dataAbs[2]-1, +dataAbs[3], 3, 0, 0, 0)); // meia-noite em Brasília
+  const hj = inicioDoDiaBR();
   const diff = Math.round((dt - hj) / 86400000);
   let ordem = 9, quando = null;
   if(diff < 0) return null;        // já passou
@@ -7853,7 +7876,17 @@ window.cpImportacaoFalhouNaGravacao = cpImportacaoFalhouNaGravacao;
 // uma conversa. A promessa é guardada pra que duas chamadas seguidas não baixem duas vezes.
 let _moduloImportacao = null;
 function carregarModuloImportacao(){
-  if(!_moduloImportacao) _moduloImportacao = import('./js/importacao.js?v=__VERSION__');
+  // v1248 — a promessa guardada não pode ser a promessa QUEBRADA. Antes, uma única falha de rede
+  // (elevador, 4G oscilando, ou o recebedor instalado no celular ainda servindo o endereço da
+  // versão anterior logo depois de uma publicação) ficava guardada aqui pra sempre: toda tentativa
+  // seguinte de importar falhava na hora, sem nem tentar a rede de novo, até fechar e reabrir o
+  // app. O jeito certo já existia no próprio arquivo, em ensureJSZip: zerar em caso de falha.
+  if(!_moduloImportacao){
+    _moduloImportacao = import('./js/importacao.js?v=__VERSION__').catch(err => {
+      _moduloImportacao = null;
+      throw err;
+    });
+  }
   return _moduloImportacao;
 }
 // Assinatura idêntica à de antes, e continua devolvendo promessa: os dois chamadores existentes
@@ -8268,7 +8301,36 @@ async function _checkSharedImpl(){
     mostrarRecebimentoShare();
     try{ history.replaceState(null,'',`${location.pathname}?shared=1&shareId=${encodeURIComponent(id)}`); }catch(_){ }
     const file=new File([record.blob],record.name||'conversa-whatsapp.zip',{type:record.type||record.blob.type||'application/zip'});
-    const ok=await processFile(file,{shareId:id});
+    // v1248 — SEM ESTE try/catch O APP MORRIA DE VEZ. Se o pedaço da importação não conseguisse ser
+    // baixado (rede caindo, ou logo depois de uma publicação, com o recebedor do celular ainda
+    // procurando o endereço da versão anterior), a falha subia sem ninguém tratar: a marca
+    // __cpShareImportActive continuava ligada e travava a abertura normal do app, o endereço já
+    // tinha sido reescrito pra ?shared=1 (então atualizar a página caía na mesma armadilha) e a
+    // barra "Conversa recebida. Preparando a importação… 4%" ficava girando pra sempre, sem erro e
+    // sem botão. Só se curava sozinho 15 minutos depois — e a conversa se perdia.
+    let ok=false;
+    try{
+      ok=await processFile(file,{shareId:id});
+    }catch(err){
+      window.__cpShareImportActive=false;
+      state.pendingSharedRecordId='';
+      try{ history.replaceState(null,'',location.pathname); }catch(_){ }
+      try{ document.documentElement.classList.remove("cp-entrando-pelo-share"); }catch(_){ }
+      show('zip');
+      qs('#processingBox')?.classList.remove('show');
+      showCard('resultCard',true);
+      const box=qs('#resultBox');
+      if(box){
+        box.className='notice error';
+        box.innerHTML=
+          '<b>Não consegui abrir esta conversa agora.</b><br><br>'+
+          'A parte do app que lê a conversa não terminou de carregar — normalmente é internet oscilando, '+
+          'ou o app tendo acabado de ser atualizado. <b>Nenhum lead seu foi alterado.</b><br><br>'+
+          'Confira a internet e toque no botão <b>“Escolher o arquivo da conversa (.zip)”</b> aqui de cima '+
+          'pra tentar de novo com o mesmo arquivo — ou compartilhe de novo pelo WhatsApp.';
+      }
+      return {handled:true,processingFinished:false,shareId:id,falhouAoImportar:true};
+    }
     return {handled:true,processingFinished:ok,shareId:id};
   }
 
@@ -8299,7 +8361,13 @@ async function _checkSharedImpl(){
     }catch(_){ }
     if(!registroVazio && debug?.chosenFile && Number(debug.chosenFile.size) === 0) registroVazio = true;
 
-    show('zip'); showCard('resultCard',true);
+    show('zip');
+    // v1248 — a barra "Conversa recebida. Preparando a importação… 4%" continuava girando POR CIMA
+    // deste aviso de erro, dando a entender que ainda havia algo em andamento. O ramo vizinho
+    // (erro=sem-worker) já desligava a barra desde a v1209; aqui, que é o caminho mais comum,
+    // a linha nunca foi acrescentada.
+    qs('#processingBox')?.classList.remove('show');
+    showCard('resultCard',true);
     qs('#resultBox').className='notice error';
     const nomeArquivo = debug?.chosenFile?.name ? ' de <b>'+escapeHtml(debug.chosenFile.name)+'</b>' : ' do arquivo';
     const corpo = registroVazio
@@ -8763,7 +8831,13 @@ window.cp1149AbrirSePrimeiraVez = function(){
     // Zera o campo: sem isso, escolher DE NOVO o mesmo arquivo (ex.: depois de um erro) não
     // dispara nada, porque o navegador entende que o valor não mudou.
     ev.target.value = "";
-    if(file) processFile(file);
+    // v1248 — o botão ficava MORTO quando o pedaço da importação não conseguia ser baixado: o
+    // corretor escolhia o ZIP e a tela simplesmente não fazia nada — sem aviso, sem barra, sem
+    // erro. O miolo da importação já se protege sozinho; a janela descoberta era justamente o
+    // download desse pedaço, que acontece ANTES de qualquer coisa aparecer na tela.
+    if(file) Promise.resolve(processFile(file)).catch(() => {
+      toast("Não consegui carregar a leitura da conversa. Confira a internet e toque de novo.");
+    });
   });
 })();
 qs("#clearAnalysis").addEventListener("click",clearAnalysis);
@@ -10135,8 +10209,10 @@ function cpTruncarTexto(texto, max = 90){
 // com "hoje" no texto), pra nunca dizer uma coisa aqui e outra lá.
 function cp1168ItensDeHoje(items){
   if(!Array.isArray(items)) return [];
-  const iniHoje = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const fimHoje = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
+  // v1248 — mesma correção de fuso da barra do topo: o dia é o de BRASÍLIA, não o do relógio do
+  // aparelho. Com o celular noutro fuso, a faixa de hoje deixava de listar o compromisso de hoje.
+  const iniHoje = inicioDoDiaBR().getTime();
+  const fimHoje = iniHoje + 86400000 - 1;
   const lista = [];
   for(const l of items){
     if(normalizarEtapa(l.etapa) === ETAPA_ARQUIVADO) continue;
@@ -10307,12 +10383,26 @@ function cp1170AbrirPainel(){
   painel.classList.add("open");
   cp1170Carregar();
   setTimeout(() => qs("#cp1170Input")?.focus(), 80);
-  setTimeout(() => document.addEventListener("click", cp1170CliqueFora, { once: true }), 0);
+  // v1248 — SÓ UM vigia de clique por vez. Abrir o Bloco de notas com ele já aberto (gesto natural
+  // pra fechar) somava mais um vigia em cima do anterior, e nada nunca os removia: ao longo de um
+  // dia de uso eles iam se acumulando e cada toque na tela acordava todos. Agora o anterior é
+  // retirado antes de pôr o novo, e fechar o painel retira o que estiver de pé.
+  cp1170LigarVigiaDeCliqueFora();
 }
 window.cp1170AbrirPainel = cp1170AbrirPainel;
 
+function cp1170LigarVigiaDeCliqueFora(){
+  document.removeEventListener("click", cp1170CliqueFora);
+  setTimeout(() => {
+    if(!_cp1170PainelAberto) return;
+    document.removeEventListener("click", cp1170CliqueFora);
+    document.addEventListener("click", cp1170CliqueFora, { once: true });
+  }, 0);
+}
+
 function cp1170FecharPainel(){
   _cp1170PainelAberto = false;
+  document.removeEventListener("click", cp1170CliqueFora);
   qs("#cp1170Panel")?.classList.remove("open");
 }
 window.cp1170FecharPainel = cp1170FecharPainel;
@@ -10321,7 +10411,7 @@ function cp1170CliqueFora(ev){
   const painel = qs("#cp1170Panel");
   if(!painel) return;
   if(!painel.contains(ev.target) && !ev.target.closest("#btnNotasTopo")) cp1170FecharPainel();
-  else if(_cp1170PainelAberto) setTimeout(() => document.addEventListener("click", cp1170CliqueFora, { once: true }), 0);
+  else if(_cp1170PainelAberto) cp1170LigarVigiaDeCliqueFora();
 }
 
 async function cp1170Adicionar(){
@@ -11799,6 +11889,14 @@ async function cp7ObsToggleGravacaoServidor(btn){
     if(btn){ btn.textContent = "⏹ Parar gravação"; }
     if(status) status.innerHTML = '<span style="color:var(--morno)">Gravando... toque em "Parar gravação" quando terminar.</span>';
   }catch(err){
+    // v1248 — DESLIGA O MICROFONE ao falhar. Se o microfone já tinha sido aberto e o que quebrou
+    // foi o gravador logo depois, o aparelho continuava com o microfone LIGADO (a bolinha de
+    // "gravando" acesa no celular) até fechar o app, mesmo com o aviso de erro na tela. O
+    // desligamento só existia no fim de uma gravação que deu certo.
+    try{ _cp7ObsStream?.getTracks()?.forEach(t => t.stop()); }catch(_){ }
+    _cp7ObsStream = null;
+    _cp7ObsRecorder = null;
+    if(btn) btn.textContent = "🎙️ Gravar áudio";
     if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui acessar o microfone: '+escapeHtml(String(err?.message||err))+'</span>';
   }
 }
@@ -12433,18 +12531,36 @@ window.ui670ScheduleHtml = ui670ScheduleHtml;
 
   function polishEmptyStates(root=document){
     const patterns = ['Nenhum lead perdido no momento.','Nada agendado.','Nenhum compromisso registrado','Nenhum lead marcado como atendido hoje ainda.','Nenhuma condição de pagamento definida.'];
+    const casa = (texto) => { const t=(texto||'').trim(); return !!t && t.length<=170 && patterns.some(p=>t.includes(p)); };
     $$('div,td,p,span', root).forEach(el=>{
       // Hotfix 687-1: evita reprocessar o próprio estado vazio e seus filhos.
       // Sem essa proteção, o MutationObserver podia embrulhar o mesmo texto
       // repetidas vezes e gerar vários cards aninhados na tela.
       if(el.dataset.cp687Empty || el.closest('.cp-empty-premium')) return;
       const txt = (el.textContent||'').trim();
-      if(!txt || txt.length>170) return;
-      if(patterns.some(p=>txt.includes(p))){
-        el.dataset.cp687Empty='1';
-        el.classList.add('cp-empty-premium');
-        el.innerHTML = `<span class="cp-empty-icon">✓</span><span><b>${txt.split('.')[0]}.</b><small>${txt.includes('Nada agendado')?'Quando houver retorno marcado, ele aparece aqui.': txt.includes('perdido')?'Quando um lead for marcado como perdido, ele aparece aqui para reabertura.':'O sistema vai atualizar este bloco automaticamente quando houver dados.'}</small></span>`;
-      }
+      if(!casa(txt)) return;
+      // v1248 — SÓ O BLOCO MAIS INTERNO. A varredura anda de fora pra dentro, e um bloco de fora
+      // (o cartão inteiro, com título e botão) também "contém" o texto do aviso: reescrever ele
+      // apagaria o título e o botão junto. Se algum bloco de dentro também casa, é dele a vez.
+      if([...el.querySelectorAll('div,td,p,span')].some(f => casa(f.textContent))) return;
+      // v1248 — o TÍTULO vinha de texto.split('.')[0], calculado em cima do textContent — que
+      // COLA as duas linhas do aviso sem espaço nenhum. Onde o aviso tinha título e explicação
+      // (o caso de "Nenhum compromisso registrado"), o corretor lia na tela o embolado
+      // "Nenhum compromisso registradoVisitas, reuniões e lembretes aparecerão aqui." como se
+      // fosse o título. Agora o título sai do próprio <strong>/<b> do aviso, e a explicação de
+      // verdade que já estava escrita ali é preservada em vez de ser trocada por uma frase
+      // genérica de sistema.
+      const tituloEl = el.querySelector('strong,b');
+      const subEl = el.querySelector('span,small,p');
+      const titulo = (tituloEl?.textContent || '').trim() || (txt.split('.')[0] + '.');
+      const subOriginal = (subEl && subEl !== tituloEl ? (subEl.textContent||'').trim() : '');
+      const sub = subOriginal
+        || (txt.includes('Nada agendado') ? 'Quando houver retorno marcado, ele aparece aqui.'
+        : txt.includes('perdido') ? 'Quando um lead for marcado como perdido, ele aparece aqui para reabertura.'
+        : 'O sistema vai atualizar este bloco automaticamente quando houver dados.');
+      el.dataset.cp687Empty='1';
+      el.classList.add('cp-empty-premium');
+      el.innerHTML = `<span class="cp-empty-icon">✓</span><span><b>${escapeHtml(titulo)}</b><small>${escapeHtml(sub)}</small></span>`;
     });
   }
 
