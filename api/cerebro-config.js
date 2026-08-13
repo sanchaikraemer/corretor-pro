@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, lerPrintDaConversa, limitePrintDoDia, limitePrintDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -382,6 +382,27 @@ export default async function handler(req, res) {
         return json(res, 200, { ok: true, texto });
       } catch (e) {
         return json(res, 200, { ok: false, error: e?.message || "Falha ao transcrever áudio." });
+      }
+    }
+
+    // AÇÃO (v1250): LER O PRINT DA RESPOSTA DO CLIENTE.
+    // O cliente respondeu duas linhas? Em vez de exportar a conversa inteira de novo e esperar a
+    // reanálise, o corretor tira um print, esta ação devolve o texto e ele confere antes de salvar
+    // como observação. A IA aqui só passa imagem pra texto — não cria lead, não muda etapa, não
+    // grava nada sozinha (ver o comentário longo em lerPrintDaConversa, no _pipeline).
+    if (body.action === "ler-print") {
+      const openai = getOpenAI();
+      if (!openai) return json(res, 200, { ok: false, error: "Leitura de print não configurada — não dá para ler a imagem agora." });
+      // Mesmo cuidado da transcrição de voz: teto diário por conta, menor em conta de teste, pra
+      // que nenhum uso automatizado gere custo de IA sem rede de segurança.
+      const limite = await verificarLimiteDiario(organizationId, "cerebro-leitura-print", limitePrintDoDia(), limitePrintDoDiaTeste());
+      if (!limite.permitido) return json(res, 429, { ok: false, error: `Limite diário de ${limite.limite} leituras de print foi atingido para esta conta. Tente novamente amanhã.` });
+      try {
+        const texto = await lerPrintDaConversa(body.imagemBase64, body.mime, openai, organizationId);
+        if (!texto) return json(res, 200, { ok: false, error: "Não achei texto de mensagem nesse print. Tente um print mais próximo, só das mensagens." });
+        return json(res, 200, { ok: true, texto });
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e?.message || "Não consegui ler esse print." });
       }
     }
 
