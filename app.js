@@ -5659,8 +5659,16 @@ function renderLeadFoco(lead){
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
           <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Registre algo que aconteceu fora do WhatsApp (visita, ligação etc.) — aparece na linha do tempo, ensina o sistema em segundo plano e entra na próxima análise.</p>
+          <p style="margin:-4px 0 10px;color:var(--muted);font-size:12.5px">Cliente respondeu pouca coisa? <b style="color:var(--text)">Tire um print da resposta</b> e toque em "Ler print" — o texto entra aqui pra você conferir, sem precisar mandar a conversa inteira de novo.</p>
           <textarea id="cp7ObsTexto" placeholder="Ex.: Fiz visita com o cliente, ele gostou muito e ficou de marcar visita de novo semana que vem." style="min-height:120px;margin-bottom:16px"></textarea>
+          <!-- v1250 — LER O PRINT DA RESPOSTA. Pedido do dono: quando o cliente responde pouca
+               coisa, mandar a conversa inteira de novo e esperar a reanálise é trabalho demais pra
+               duas linhas. Ele tira um print da resposta, o texto cai aqui em cima, ele confere e
+               salva. No celular o seletor já abre na galeria/câmera; no computador dá pra colar a
+               imagem direto no campo de texto (Ctrl+V). -->
+          <input type="file" id="cp1250PrintInput" accept="image/png,image/jpeg,image/webp" hidden onchange="cp1250LerPrint(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <button type="button" id="cp1250PrintBtn" onclick="document.getElementById('cp1250PrintInput')?.click()" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Ler print da resposta</button>
             <button type="button" id="cp7ObsGravarBtn" onclick="cp7ObsToggleGravacao(this)" style="flex:1;min-width:140px;background:transparent;border:1px solid var(--line);border-radius:12px;padding:11px;color:var(--text);font-weight:900;cursor:pointer">Gravar áudio</button>
             <button type="button" onclick="cp7ObsSalvar(this)" style="flex:1;min-width:140px;background:var(--accent);border:0;border-radius:12px;padding:11px;color:var(--on-accent);font-weight:950;cursor:pointer">Salvar observação</button>
           </div>
@@ -11900,6 +11908,106 @@ async function cp7ObsToggleGravacaoServidor(btn){
     if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui acessar o microfone: '+escapeHtml(String(err?.message||err))+'</span>';
   }
 }
+// ── v1250 — LER O PRINT DA RESPOSTA DO CLIENTE ────────────────────────────────────────────────
+// Mesmo caminho do ditado por voz: a IA devolve o TEXTO, o texto entra no campo de observação, e
+// nada é gravado até o corretor conferir e tocar em "Salvar observação".
+//
+// A imagem é REDUZIDA no próprio aparelho antes de subir (lado maior em 1600px, JPEG). Print de
+// celular moderno passa de 3 MB; subir isso cru numa rede de rua é o caminho certo pro pedido
+// morrer no meio. Reduzido fica em algumas centenas de KB e o texto continua legível.
+const CP1250_LADO_MAX = 1600;
+async function cp1250ReduzirImagem(file){
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ""));
+    r.onerror = () => reject(new Error("Não consegui abrir a imagem."));
+    r.readAsDataURL(file);
+  });
+  try{
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("Imagem inválida."));
+      im.src = dataUrl;
+    });
+    const maior = Math.max(img.naturalWidth || 0, img.naturalHeight || 0);
+    if(!maior) throw new Error("Imagem inválida.");
+    const escala = maior > CP1250_LADO_MAX ? CP1250_LADO_MAX / maior : 1;
+    const cv = document.createElement("canvas");
+    cv.width = Math.max(1, Math.round((img.naturalWidth || 1) * escala));
+    cv.height = Math.max(1, Math.round((img.naturalHeight || 1) * escala));
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    const reduzida = cv.toDataURL("image/jpeg", 0.85);
+    return { base64: reduzida.split(",")[1] || "", mime: "image/jpeg" };
+  }catch(_){
+    // Se o navegador não conseguir redesenhar (formato exótico), manda a original mesmo — o
+    // servidor tem o próprio teto de tamanho e recusa com aviso claro se for grande demais.
+    return { base64: dataUrl.split(",")[1] || "", mime: (file?.type || "image/jpeg").split(";")[0] };
+  }
+}
+
+async function cp1250EnviarPrint(file){
+  const status = qs("#cp7ObsStatus");
+  const ta = qs("#cp7ObsTexto");
+  const btn = qs("#cp1250PrintBtn");
+  if(!file){ return; }
+  if(!/^image\//.test(file.type || "")){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Isso não é uma imagem. Mande o print da conversa.</span>';
+    return;
+  }
+  const rotuloBtn = btn ? btn.textContent : "";
+  if(btn){ btn.disabled = true; btn.textContent = "Lendo o print…"; }
+  if(status) status.innerHTML = '<span style="color:var(--morno)">Lendo o print…</span>';
+  try{
+    const { base64, mime } = await cp1250ReduzirImagem(file);
+    if(!base64) throw new Error("Não consegui preparar a imagem.");
+    const res = await fetchComTimeout("./api/cerebro-config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ action:"ler-print", imagemBase64: base64, mime })
+    }, 60000);
+    const data = await res.json().catch(()=>({ ok:false }));
+    if(data?.ok && data.texto){
+      if(ta){
+        ta.value = (ta.value.trim() ? ta.value.trim()+"\n" : "") + data.texto;
+        ta.focus();
+      }
+      if(status) status.innerHTML = '<span style="color:var(--acao)">Li o print. <b>Confira o texto acima</b> e toque em Salvar observação.</span>';
+    } else {
+      if(status) status.innerHTML = '<span style="color:var(--risco)">'+escapeHtml(data?.error || "Não consegui ler esse print.")+'</span>';
+    }
+  }catch(err){
+    if(status) status.innerHTML = '<span style="color:var(--risco)">Não consegui ler o print: '+escapeHtml(String(err?.message||err))+'</span>';
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = rotuloBtn || "Ler print da resposta"; }
+  }
+}
+
+function cp1250LerPrint(input){
+  const file = input?.files?.[0];
+  // Zera o campo: sem isso, escolher DE NOVO o mesmo print (depois de um erro) não dispara nada,
+  // porque o navegador entende que o valor não mudou.
+  if(input) input.value = "";
+  cp1250EnviarPrint(file);
+}
+window.cp1250LerPrint = cp1250LerPrint;
+
+// Colar a imagem direto no campo (Ctrl+V no computador — é como o corretor recorta a tela e cola).
+// Um listener só, no documento, ligado uma vez: o campo de observação é redesenhado a cada
+// abertura de cliente, então prender o listener nele criaria um novo a cada vez.
+(function cp1250LigarColarPrint(){
+  document.addEventListener("paste", (ev) => {
+    const ta = qs("#cp7ObsTexto");
+    if(!ta || document.activeElement !== ta) return;
+    const itens = ev.clipboardData?.items ? [...ev.clipboardData.items] : [];
+    const img = itens.find(i => String(i.type || "").startsWith("image/"));
+    if(!img) return; // colou texto: deixa o navegador colar normalmente
+    const file = img.getAsFile();
+    if(!file) return;
+    ev.preventDefault();
+    cp1250EnviarPrint(file);
+  });
+})();
+
 async function cp7ObsTranscreverBlob(blob, btn){
   const status = qs("#cp7ObsStatus");
   const ta = qs("#cp7ObsTexto");

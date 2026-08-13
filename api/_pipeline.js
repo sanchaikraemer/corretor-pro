@@ -1077,6 +1077,79 @@ export function limiteTranscricaoVozDoDiaTeste() {
   return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_TRANSCRICAO_VOZ_DIA_TESTE_PADRAO;
 }
 
+// ─── LEITURA DE PRINT DA RESPOSTA DO CLIENTE (v1250) ──────────────────────────
+// Pedido do dono: quando o cliente responde POUCA coisa, exportar a conversa inteira de novo e
+// esperar a reanálise é trabalho demais pra ganho de duas linhas. Com isto ele tira um print da
+// resposta, o texto cai no campo de observação, ELE CONFERE, e salva.
+//
+// ATENÇÃO — ISTO NÃO É A VOLTA DO QUE A v1069 REMOVEU. Lá existiam "extrair lead de um print" e
+// "ler conversa por vários prints", que tentavam RECONSTRUIR sozinhas a conversa/o cadastro a
+// partir de imagens; nunca funcionaram bem e o dono mandou tirar. Aqui a IA só faz uma coisa —
+// passar pra texto o que está escrito na imagem — e não decide nada: não cria lead, não altera
+// etapa, não vira mensagem do histórico sozinha. O texto vai pro campo de observação e só entra
+// no sistema quando o corretor toca em "Salvar observação", como qualquer observação digitada.
+const LIMITE_PRINT_DIA_PADRAO = 100;
+const LIMITE_PRINT_DIA_TESTE_PADRAO = 20;
+
+export function limitePrintDoDia() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_LEITURA_PRINT_DIA);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_PRINT_DIA_PADRAO;
+}
+
+export function limitePrintDoDiaTeste() {
+  const configurado = Number(process.env.CORRETOR_PRO_LIMITE_LEITURA_PRINT_DIA_TESTE);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : LIMITE_PRINT_DIA_TESTE_PADRAO;
+}
+
+// Teto de tamanho da imagem já decodificada (o navegador manda a foto reduzida; isto é a rede de
+// segurança contra uma imagem gigante ocupando a memória da função).
+export const PRINT_MAX_BYTES = 5 * 1024 * 1024;
+const PRINT_MIMES_ACEITOS = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+
+export async function lerPrintDaConversa(base64, mime, openai, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
+  const limpo = String(base64 || "").replace(/^data:[^;]+;base64,/, "").trim();
+  if (!limpo) throw new Error("Imagem não recebida.");
+  const tipo = String(mime || "image/jpeg").toLowerCase().split(";")[0].trim();
+  if (!PRINT_MIMES_ACEITOS.has(tipo)) {
+    throw new Error("Formato de imagem não aceito. Mande um print em JPG, PNG ou WEBP.");
+  }
+  // Estimativa do tamanho real sem decodificar o base64 inteiro duas vezes.
+  const bytes = Math.floor(limpo.length * 3 / 4);
+  if (bytes > PRINT_MAX_BYTES) throw new Error("A imagem é grande demais. Tire um print só da parte que interessa.");
+  if (!openai) throw new Error("Leitura de imagem indisponível agora.");
+
+  const modeloUsado = modeloVisao();
+  const completion = await withRetries(() => openai.chat.completions.create({
+    model: modeloUsado,
+    // Sem "temperature" de propósito: o projeto proíbe fixar isso nas chamadas de IA desde a v855
+    // (guarda em tests/v855-cerebro-prioridade-sem-temperatura.test.mjs). A instrução de copiar o
+    // texto exatamente como está escrito é o que segura a leitura no lugar.
+    max_tokens: 900,
+    messages: [{
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: [
+            "A imagem é um print de uma conversa de WhatsApp.",
+            "Transcreva SOMENTE o texto das mensagens que aparecem, na mesma ordem, uma por linha.",
+            "Em cada linha, comece indicando quem escreveu: \"Cliente:\" para as mensagens recebidas (as da ESQUERDA) e \"Eu:\" para as enviadas (as da DIREITA).",
+            "Se a hora aparecer ao lado da mensagem, coloque-a entre parênteses no fim da linha.",
+            "Copie o texto exatamente como está escrito, sem corrigir, resumir, completar, traduzir ou comentar.",
+            "Não descreva a imagem, não descreva fotos, figurinhas ou anexos, e não invente nada que não esteja escrito.",
+            "Se não houver nenhum texto legível de mensagem, responda exatamente: SEM TEXTO"
+          ].join(" ")
+        },
+        { type: "image_url", image_url: { url: `data:${tipo};base64,${limpo}`, detail: "high" } }
+      ]
+    }]
+  }));
+  await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "ler-print-conversa", usage: completion?.usage });
+  const texto = String(completion?.choices?.[0]?.message?.content || "").trim();
+  if (!texto || /^SEM TEXTO$/i.test(texto)) return "";
+  return texto;
+}
+
 // ─── TETO DE TRANSCRIÇÃO DE IMPORTAÇÃO (v1119) ────────────────────────────────
 // Achado da auditoria (minha e do parecer externo): a transcrição de áudio da IMPORTAÇÃO — a parte
 // MAIS CARA e mais variável do custo (uma conversa com 20 áudios custa muito mais que uma de texto)
