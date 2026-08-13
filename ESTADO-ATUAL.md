@@ -37,6 +37,13 @@ precisa repetir (áudio já transcrito não é transcrito de novo), NÃO para a 
 já foi lido + só a novidade) está desligado por padrão e só volta por
 `DIRECIONA_INCREMENTAL_MIN_CHARS`. Ver `NOTAS-v1221.md` e `NOTAS-v1241.md`._
 
+_**v1247 — o prompt/Cérebro/análise voltou ao estado da v1225 (fim de 11/08/2026)**, a pedido do
+dono ("de ontem pra hoje está cada vez pior"). O que foi desfeito: v1230, v1235, v1236, v1239,
+v1240, v1241 (parte de prompt), v1243, v1244 e v1245. O que ficou de tudo isso: histórico integral
+(conversa inteira, teto técnico em 120.000 caracteres), a saudação certa por horário, a detecção
+correta de quem é a voz do corretor e a regra que proíbe inventar ação/novidade do corretor. Ver
+`NOTAS-v1247.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

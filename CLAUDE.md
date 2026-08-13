@@ -64,8 +64,17 @@ precisam estar citadas em `ESTADO-ATUAL.md`).
   `construirMensagensDeterministicasCerebro` NÃO EXISTE MAIS e não pode voltar; os testes de hoje
   exigem que ele não exista (ele substituía o texto real da IA por frase genérica, ver
   `NOTAS-v827-18.md`). O que garante a regra hoje é outra coisa: a análise sobrevive a qualquer
-  falha das mensagens, e a rede contra clichê é o corte determinístico em `limparFrasesProibidas`
-  + `melhorLimpa` (v1238/v1241), que nunca descarta a análise.
+  falha das mensagens. **Atualizado na v1247:** o corte determinístico de frase proibida
+  (`limparFrasesProibidas` + `melhorLimpa`, v1238/v1241) TAMBÉM foi removido — ele fazia cirurgia
+  no texto da IA e entrava no pacote de regras que o dono mandou desfazer. A rede contra clichê
+  hoje é a lista "LINGUAGEM DE IA — PROIBIDO" dentro do prompt, como era antes.
+- **Regra do prompt (v1247, vinda direto do dono):** o miolo do Cérebro/prompt/análise foi
+  restaurado ao estado do fim do dia 11/08/2026 (v1225), porque as mudanças de 12–13/08
+  (v1230/v1235/v1236/v1239/v1240/v1241/v1243/v1244/v1245) pioraram a análise e as sugestões a cada
+  publicação. O erro central da v1240: o método comercial e a estratégia das três mensagens saíram
+  do prompt de quem TEM Cérebro e passaram a valer só em modo prévia — ou seja, o dono ficou sem
+  eles. **Não refaça esse caminho:** não mova o piso comercial para dentro do modo prévia, e não
+  troque regra concreta do prompt por meta-instrução do tipo "o Cérebro decide".
 - `api/_persistence.js`, `_pipeline.js` e as demais rotas de `/api` só podem existir dentro
   de `api/` — `build.js` bloqueia o build se aparecerem duplicadas na raiz.
 

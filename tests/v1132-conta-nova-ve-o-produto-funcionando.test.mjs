@@ -84,11 +84,7 @@ for (const proibido of ['condição de pagamento', 'desconto', 'prazo', 'nome de
 assert.match(systemPrompt, /oferec[a-z]* confirmar|vai enviar\/confirmar/i,
   'quando o dado não está na conversa, a mensagem precisa oferecer confirmar — nunca chutar');
 assert.match(systemPrompt, /Não identificado/, 'campo sem base na conversa continua caindo em Não identificado');
-// v1240 — o antigo "INTELIGÊNCIA COMERCIAL BASE" foi partido em dois, a pedido do dono ("a única
-// regra era seguir as ordens do cerebro"): a parte que PROÍBE INVENTAR continua entrando sempre,
-// e o método comercial virou só um ponto de partida pra quem ainda não escreveu o Cérebro. O que
-// este assert protege — a prévia não pode abrir a porta pra invenção — continua igual.
-assert.match(systemPrompt, /NADA DE INVENTAR/,
+assert.match(systemPrompt, /INTELIGÊNCIA COMERCIAL BASE/,
   'o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt');
 
 // ---------------------------------------------------------------------------

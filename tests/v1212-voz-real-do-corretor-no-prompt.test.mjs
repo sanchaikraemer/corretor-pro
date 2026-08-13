@@ -7,7 +7,7 @@
 // amigável e informativa", "mantém um tom prestativo, sempre se colocando à disposição"). Pedir
 // "prestativo, à disposição" devolve exatamente "fico à disposição".
 import assert from "node:assert/strict";
-import { analyzeWithBrain, jeitoAprendidoCompacto, detectarFrasesProibidas } from "../api/_pipeline.js";
+import { analyzeWithBrain, jeitoAprendidoCompacto } from "../api/_pipeline.js";
 
 // ── 1) O bloco de tom prioriza MENSAGEM REAL sobre descrição abstrata ────────────────────────
 const config = {
@@ -72,15 +72,7 @@ assert.match(system, /COMO ESTE CORRETOR ESCREVE \(mensagens reais dele NESTA co
   "as mensagens reais do corretor nesta conversa precisam entrar no prompt");
 assert.match(system, /Conseguiu conferir as informações que enviei\?/,
   "a mensagem real precisa aparecer literalmente como referência de voz");
-// v1243 — a fala do CLIENTE passou a ter bloco PRÓPRIO ("COMO ESTA PESSOA FALA COM ELE"), porque
-// tratamento é coisa de dois: sem ver como o cliente fala com ele, o modelo escrevia formal pra
-// quem ele trata por "mano" (print do dono, 13/08/2026). O que este assert protege continua
-// intacto e é o que importa: a fala do cliente não pode CONTAMINAR os exemplos de voz DELE.
-const blocoVozCorretor = system.slice(
-  system.indexOf("=== COMO ESTE CORRETOR ESCREVE"),
-  system.indexOf("=== FIM DOS EXEMPLOS ==="));
-assert.ok(blocoVozCorretor.length > 40, "sanidade: o bloco de voz do corretor existe");
-assert.doesNotMatch(blocoVozCorretor, /Obrigada, vou olhar/,
+assert.doesNotMatch(system, /Obrigada, vou olhar/,
   "mensagem do CLIENTE não pode entrar como exemplo de voz do corretor");
 assert.match(system, /COPIE A FORMA, NUNCA O CONTEÚDO/,
   "precisa estar escrito que só a forma é copiada");
@@ -90,19 +82,12 @@ assert.match(system, /COPIE A FORMA, NUNCA O CONTEÚDO/,
 // Espaços normalizados: as instruções são texto formatado, e uma quebra de linha no meio de
 // "sinta-se à vontade" não pode fazer a checagem passar batido.
 const instrucoes = `${system}\n${pedido}`.replace(/\s+/g, " ");
-// v1240 — "a única regra era seguir as ordens do cerebro" (dono). A lista de jargão SAIU do texto
-// enviado à IA: estilo é assunto do Cérebro do corretor, não do código. Em troca, ela virou CORTE
-// no código — a frase é removida da mensagem antes de chegar na tela dele. É garantia mais forte
-// que a de antes, porque não depende de o modelo obedecer (e não dependia mesmo: os prints de
-// 12/08/2026 mostraram "faz sentido" e "conforme conversamos" passando com a regra escrita).
 for (const proibido of [
-  "espero que esteja bem", "faz sentido", "fico à disposição", "não hesite em",
-  "sinta-se à vontade"
+  "espero que esteja", "faz sentido", "fico à disposição", "não hesite em",
+  "sinta-se à vontade", "quis saber se"
 ]) {
-  assert.ok(detectarFrasesProibidas(`Boa noite! ${proibido} por aqui.`).proibidas.length > 0,
-    `o jargão "${proibido}" precisa ser cortado pelo código antes de chegar na tela`);
+  assert.ok(instrucoes.toLowerCase().includes(proibido.toLowerCase()), `o jargão proibido "${proibido}" precisa estar listado nas instruções`);
 }
-// E o pedido continua dizendo, em uma linha, que é pra escrever como ele escreve.
-assert.match(instrucoes, /ESCREVA COMO ESTE CORRETOR ESCREVE/);
+assert.match(instrucoes, /LINGUAGEM DE IA — PROIBIDO/);
 
 console.log("v1212-voz-real-do-corretor-no-prompt: ok");
