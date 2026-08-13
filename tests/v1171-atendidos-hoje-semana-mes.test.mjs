@@ -52,37 +52,36 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.equal(sandbox.ehAtendidoNoMes({ analysis: {} }), false, 'lead sem nenhum evento não conta');
 }
 
-// ---------- 2b. renderResumoDia — o quadradinho "Atendidos" existe, com os 3 números, depois do Bloco de notas ----------
+// ---------- 2b. v1251 — as três contagens MUDARAM DE CASA (mesma régua, outro lugar) ----------
+//
+// O dono pediu pra tirar do quadradinho ("acho q ta na hora de tirarmos ele de dentro desse
+// card") e ver junto as mensagens trocadas no mês. As três contagens continuam existindo, com a
+// mesma régua de sempre — agora dentro do painel "Seu mês": aberto na coluna da direita no
+// computador, atrás da linha de resumo no celular (modelo escolhido por ele em 13/08/2026).
 {
   const iniRBH = app.indexOf('renderResumoDia = function(items){');
   const fimRBH = app.indexOf('\n};', iniRBH) + 3;
   assert.ok(iniRBH >= 0, 'renderResumoDia não encontrada em app.js');
   const rbh = app.slice(iniRBH, fimRBH);
 
-  // v1183 — a base deixou de ser `ativos`: "arquivado também é atendimento" (dono). Ver
-  // tests/v1183-atendidos-mes-vigente.test.mjs.
-  assert.match(rbh, /const atendidosHoje ?= ?baseAtendidos\.filter\(ehAtendidoHoje\)\.length/);
-  assert.match(rbh, /const atendidosSemana ?= ?baseAtendidos\.filter\(ehAtendidoNaSemana\)\.length/);
-  assert.match(rbh, /const atendidosMes ?= ?baseAtendidos\.filter\(ehAtendidoNoMes\)\.length/);
+  // O quadradinho saiu da fileira, e a fileira ficou com três.
+  assert.doesNotMatch(rbh, /cp1171-atendidos/, 'o quadradinho "Atendidos" saiu da fileira (v1251)');
+  assert.equal((rbh.match(/class="ui-kpi/g) || []).length, 3, 'a fileira ficou com três quadradinhos');
+  assert.match(rbh, /cp1251RenderResumo\(\)/, 'a fileira precisa acionar a linha de resumo do celular');
 
-  assert.match(rbh, /class="ui-kpi cp1171-atendidos"/, 'precisa existir o quadradinho de Atendidos');
-  assert.match(rbh, /class="cp1171-col"><b>\$\{atendidosHoje\}<\/b><small>hoje<\/small>/);
-  assert.match(rbh, /class="cp1171-col"><b>\$\{atendidosSemana\}<\/b><small>semana<\/small>/);
-  assert.match(rbh, /class="cp1171-col"><b>\$\{atendidosMes\}<\/b><small>mês<\/small>/);
+  // E as três contagens seguem vivas, na mesma régua, dentro do painel novo.
+  const iniD = app.indexOf('function cp1251Dados(){');
+  const dados = app.slice(iniD, app.indexOf('\n}', iniD) + 2);
+  assert.ok(iniD >= 0, 'cp1251Dados não encontrada em app.js');
+  assert.match(dados, /atendidosHoje: base\.filter\(ehAtendidoHoje\)\.length/);
+  assert.match(dados, /atendidosSemana: base\.filter\(ehAtendidoNaSemana\)\.length/);
+  assert.match(dados, /atendidosMes: base\.filter\(ehAtendidoNoMes\)\.length/);
+  // v1183 — "arquivado também é atendimento": a base continua sendo a carteira INTEIRA.
+  assert.match(dados, /const base = \(Array\.isArray\(state\.todosLeads\) && state\.todosLeads\.length\)/,
+    'as contagens precisam sair da carteira inteira, não só da ativa');
 
-  // não pode virar barra/aro proporcional (dose batida) — o dono foi explícito: "concluídos e não
-  // dentro de uma meta". v1183: o arinho decorativo saiu de vez (parecia rodinha de carregando),
-  // então agora a regra é mais simples — nenhum aro, proporcional ou não.
-  assert.doesNotMatch(rbh, /stroke-dasharray/, 'o quadradinho de Atendidos não pode ter aro nenhum (v1183: parecia carregando)');
-
-  // v1246 — a fileira encolheu de 8 pra 4 (Sem atender 30d+ apagado; Arquivados e Bloco de notas
-  // subiram pro bloco do topo). "Atendidos" continua sendo o ÚLTIMO da fileira, que é o que importa
-  // pra ele: os três números do período fecham a linha, não aparecem no meio dos contadores secos.
-  const posAtendidos = rbh.indexOf('cp1171-atendidos');
-  const posAguardando = rbh.indexOf('abrirAguardandoCliente()');
-  assert.ok(posAtendidos > 0 && posAtendidos > posAguardando,
-    'o quadradinho de Atendidos precisa fechar a fileira, depois dos contadores simples');
-  assert.equal((rbh.match(/class="ui-kpi/g) || []).length, 4, 'a fileira ficou com quatro quadradinhos');
+  // Nada de aro/rodinha (v1183: o dono leu como "carregando").
+  assert.doesNotMatch(app, /stroke-dasharray/, 'nenhum aro proporcional volta pro lugar dos atendidos');
 }
 
 console.log('v1171-atendidos-hoje-semana-mes: ok');

@@ -44,13 +44,16 @@ assert.ok(fileira, 'a fileira de quadradinhos precisa existir');
 for (const sumiu of ['Sem atender 30d+', 'Arquivados', 'Bloco de notas']) {
   assert.ok(!fileira.includes(`<span>${sumiu}</span>`), `"${sumiu}" não pode continuar na fileira`);
 }
-for (const fica of ['Fazer agora', 'Total de leads', 'Aguardando cliente', 'Atendidos']) {
+for (const fica of ['Fazer agora', 'Total de leads', 'Aguardando cliente']) {
   assert.ok(fileira.includes(`<span>${fica}</span>`), `"${fica}" continua na fileira`);
 }
-assert.equal((fileira.match(/class="ui-kpi/g) || []).length, 4, 'a fileira fica com quatro');
+// v1251 — "Atendidos" também saiu da fileira: virou o painel "Seu mês", junto das mensagens
+// trocadas no mês e do gráfico de atendimentos dia a dia (ver tests/v1251-*).
+assert.ok(!fileira.includes('<span>Atendidos</span>'), '"Atendidos" saiu da fileira na v1251');
+assert.equal((fileira.match(/class="ui-kpi/g) || []).length, 3, 'a fileira fica com três');
 // E o desktop precisa acompanhar: coluna a mais que quadradinho deixa card esticado sozinho.
-assert.match(css, /#home \.resumo-dia\{display:grid!important;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/,
-  'quatro quadradinhos, quatro colunas no computador');
+assert.match(css, /#home \.resumo-dia\{display:grid!important;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)!important/,
+  'três quadradinhos, três colunas no computador');
 
 // ── 3. "SEM ATENDER 30D+" FOI APAGADO DE VERDADE ───────────────────────────────────────────────
 // Ele disse "nao sera mais necessario". Sem o quadradinho, a lista não tinha mais porta de entrada:

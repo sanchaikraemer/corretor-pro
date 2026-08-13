@@ -1589,6 +1589,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
 
   const statsCacheWriteBacks = [];
   const hoje = hojeCalendarioBR();
+  // v1251 — primeiro instante do MÊS CORRENTE no calendário de Brasília (o dono pediu os números
+  // "do primeiro ao último dia do mês", não dos últimos 30 dias). Brasília é UTC-3 fixo desde o
+  // fim do horário de verão em 2019 — a mesma conta que inicioDoDiaBR já faz no app.
+  const inicioDoMesBRMs = Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)) - 1, 1, 3, 0, 0, 0);
 
   // v1136 — o cache v3 vale quando: mesma versão, mesmo dia (os números de 90 dias envelhecem) e
   // a MESMA marca d'água de alteração da linha (atualizado_em — é a mesma marca que a gravação de
@@ -1597,7 +1601,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   // conferido — cinto e suspensório. Quando NÃO está (o caminho novo, sem egress), o cache ainda
   // precisa carregar a prévia e o total de mensagens, senão não há o que mostrar.
   const cacheV3Valido = (row, c, timelineOuNull) => {
-    if (!c || c.v !== 3 || c.dia !== hoje) return false;
+    if (!c || c.v !== 4 || c.dia !== hoje) return false;
     const marcaRow = String(row.atualizado_em || row.updated_at || "");
     if (String(c.marca || "") !== marcaRow) return false;
     if (timelineOuNull) return c.len === timelineOuNull.length;
@@ -1730,6 +1734,22 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       return primeiroNome ? (al.includes(primeiroNome) || primeiroNome.includes(al)) : !ehBusinessMsg.test(autor);
     };
 
+    // v1251 — "mensagem que EU mandei", pro contador do mês. É o outro lado do ehClienteMsg, mas
+    // não é simplesmente "tudo que não é do cliente": observação registrada à mão (visita, ligação,
+    // nota, print) NÃO é mensagem, e sugestão da IA que ficou guardada também não — só vira
+    // mensagem quando é copiada e enviada. Já a "Mensagem enviada (você)", que nasce quando o
+    // corretor copia uma sugestão, CONTA: ela representa uma mensagem que ele mandou de verdade.
+    const ehEnviadaPeloCorretor = (m) => {
+      if (ehClienteMsg(m)) return false;
+      const tp = String(m?.type || "");
+      const src = String(m?.source || "");
+      if (["atendimento", "nota", "ligacao", "visita", "presencial", "observacao_manual", "print-whatsapp"].includes(tp)) return false;
+      if (tp === "sugestao-ia" || src === "assistant") return false;
+      const autor = String(m?.author || "").trim();
+      if (!autor || autor === "Sistema") return false;
+      return !!String(m?.text || "").trim();
+    };
+
     // v1017 — a varredura abaixo (achar a última mensagem real, contar mensagens do cliente,
     // achar proposta) reprocessava o histórico INTEIRO de cada lead TODA VEZ que a lista
     // carregava — mesmo leads com anos de conversa e nenhuma mensagem nova — e era a causa real
@@ -1751,6 +1771,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     const cacheValido = cacheV3Valido(row, cacheStats, temTimeline ? timeline : null);
 
     let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal;
+    // v1251 — mensagens DESTE MÊS (total, do cliente, minhas). Ver o comentário na varredura.
+    let msgMesTotal, msgMesCliente, msgMesCorretor;
     if (cacheValido) {
       lastReal = cacheStats.lastIso ? { iso: cacheStats.lastIso } : null;
       lastClient = cacheStats.lastClientIso ? { iso: cacheStats.lastClientIso } : null;
@@ -1767,6 +1789,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientQuestionCount90d = cacheStats.clientQuestionCount90d;
       clientMessageDays90d = cacheStats.clientMessageDays90d;
       hasProposal = cacheStats.hasProposal;
+      msgMesTotal = Number(cacheStats.msgMesTotal) || 0;
+      msgMesCliente = Number(cacheStats.msgMesCliente) || 0;
+      msgMesCorretor = Number(cacheStats.msgMesCorretor) || 0;
     } else if (!temTimeline) {
       // v1136 — cache frio E a segunda consulta falhou (rede/banco): melhor esforço. Usa o último
       // cache conhecido, mesmo vencido — números de ontem na tela são melhores que zerar tudo e
@@ -1787,6 +1812,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientQuestionCount90d = Number.isFinite(Number(c.clientQuestionCount90d)) ? Number(c.clientQuestionCount90d) : null;
       clientMessageDays90d = Number.isFinite(Number(c.clientMessageDays90d)) ? Number(c.clientMessageDays90d) : null;
       hasProposal = !!c.hasProposal;
+      msgMesTotal = Number(c.msgMesTotal) || 0;
+      msgMesCliente = Number(c.msgMesCliente) || 0;
+      msgMesCorretor = Number(c.msgMesCorretor) || 0;
     } else {
       // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
       // aumentando muito memória e CPU quando havia centenas de mensagens por lead.
@@ -1828,10 +1856,23 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientMessageCount90d = 0;
       clientQuestionCount90d = 0;
       const _diasComMsg90d = new Set();
+      // v1251 — MENSAGENS DO MÊS, contadas aqui (onde a conversa INTEIRA está em mãos).
+      // O painel novo mostra quantas mensagens foram trocadas no mês, quantas o corretor mandou e
+      // quantas o cliente mandou. Até agora esse número era montado no navegador em cima da
+      // PRÉVIA de 8 mensagens por lead — ou seja, saía errado (muito menor) pra qualquer cliente
+      // com conversa de verdade. Sai na MESMA varredura, sem custo extra de loop.
+      msgMesTotal = 0; msgMesCliente = 0; msgMesCorretor = 0;
       for (let i = timeline.length - 1; i >= 0; i--) {
         const m = timeline[i];
         const tMs = m?.iso ? Date.parse(m.iso) : NaN;
         const dentro90d = Number.isFinite(tMs) && tMs >= cutoff90d;
+        if (Number.isFinite(tMs) && tMs >= inicioDoMesBRMs) {
+          if (ehClienteMsg(m) && String(m?.text || "").trim()) {
+            msgMesTotal++; msgMesCliente++;
+          } else if (ehEnviadaPeloCorretor(m)) {
+            msgMesTotal++; msgMesCorretor++;
+          }
+        }
         if (dentro90d) messageCount90d++;
         if (!ehClienteMsg(m)) {
           // v1102 — mensagem real do CORRETOR (não manual, não sugestão da IA, autor de verdade).
@@ -1879,7 +1920,11 @@ export async function listRecentProcessings(limit = 12, options = {}) {
         resultado_analise: {
           ...(analysisOriginal && typeof analysisOriginal === "object" ? analysisOriginal : {}),
           _statsCache: {
-            v: 3,
+            // v1251 — versão 4: entraram as mensagens DO MÊS (total/cliente/minhas). Subir a
+            // versão obriga UMA varredura completa por lead na primeira carga depois de publicar
+            // — depois disso volta ao regime barato de sempre (o cache já vence e é regravado
+            // todo dia, então o custo extra real é só o dessa primeira vez).
+            v: 4,
             len: timeline.length,
             dia: hoje,
             // v1136 — a marca d'água que faz a listagem confiar neste cache SEM buscar a conversa:
@@ -1894,6 +1939,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
             lastTouchTime: last?.time || null,
             clientMessageCount, clientQuestionCount, clientMessageDays,
             messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal,
+            msgMesTotal, msgMesCliente, msgMesCorretor,
             // A prévia que o celular recebe (as mesmas ~8 mensagens de sempre) — guardada pronta
             // pra lista não precisar da conversa inteira só pra montar isto.
             preview: timeline.slice(-8).map(mapearMsgLista)
@@ -1974,6 +2020,10 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       clientQuestionCount90d: Number.isFinite(Number(clientQuestionCount90d)) ? clientQuestionCount90d : null,
       clientMessageDays90d: Number.isFinite(Number(clientMessageDays90d)) ? clientMessageDays90d : null,
       hasProposal,
+      // v1251 — mensagens deste mês, contadas no servidor sobre a conversa INTEIRA.
+      msgMesTotal: Number(msgMesTotal) || 0,
+      msgMesCliente: Number(msgMesCliente) || 0,
+      msgMesCorretor: Number(msgMesCorretor) || 0,
       recentMessages,
       historyLoaded: includeFullTimeline,
       analyzed,

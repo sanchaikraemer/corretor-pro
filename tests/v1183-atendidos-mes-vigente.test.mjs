@@ -98,34 +98,36 @@ const DIA = 86400000;
 }
 
 // ── 3. "Arquivado também é atendimento": a base é a carteira inteira ───────────────────────────
+//
+// v1251 — as três contagens saíram do quadradinho da Home e foram pro painel "Seu mês"
+// (cp1251Dados). A REGRA não mudou: continua sendo a carteira INTEIRA, porque atender e arquivar
+// no mesmo dia zerava o número quando a base era só a ativa.
 {
-  const ini = app.indexOf('renderResumoDia = function(items){');
-  const rbh = app.slice(ini, app.indexOf('\n};', ini) + 3);
-  assert.match(rbh, /const baseAtendidos ?=.*state\.todosLeads/,
+  const ini = app.indexOf('function cp1251Dados(){');
+  assert.ok(ini >= 0, 'cp1251Dados não encontrada em app.js');
+  const dados = app.slice(ini, app.indexOf('\n}', ini) + 2);
+  assert.match(dados, /const base = \(Array\.isArray\(state\.todosLeads\) && state\.todosLeads\.length\) \? state\.todosLeads/,
     'as contagens precisam sair da carteira inteira (state.todosLeads), não só da ativa');
   for (const conta of ['atendidosHoje', 'atendidosSemana', 'atendidosMes']) {
-    assert.match(rbh, new RegExp(`const ${conta} ?= ?baseAtendidos\\.filter`),
+    assert.match(dados, new RegExp(`${conta}: base\\.filter`),
       `${conta} não pode voltar a filtrar só a carteira ativa — atender e arquivar no mesmo dia zerava o número`);
   }
-  // prova de comportamento: um lead arquivado atendido hoje precisa entrar na conta
+  // prova de comportamento: com a carteira inteira carregada, é ela que vale
   const fnBase = new Function('state', 'items', `
-    const baseAtendidos=(Array.isArray(state.todosLeads) && state.todosLeads.length) ? state.todosLeads : items;
-    return baseAtendidos.length;
+    const base = (Array.isArray(state.todosLeads) && state.todosLeads.length) ? state.todosLeads : items;
+    return base.length;
   `);
   assert.equal(fnBase({ todosLeads: [1, 2, 3] }, [1]), 3, 'com a carteira inteira carregada, é ela que vale');
   assert.equal(fnBase({}, [1]), 1, 'sem a carteira inteira (render adiantado), cai no que veio — nunca quebra');
 }
 
-// ── 4. O risco verde saiu ──────────────────────────────────────────────────────────────────────
+// ── 4. Nada de aro/rodinha ─────────────────────────────────────────────────────────────────────
 {
-  assert.doesNotMatch(app, /cp1171-aro/, 'o aro verde precisa sumir do HTML e do CSS — parecia rodinha de carregando');
-  const ini = app.indexOf('renderResumoDia = function(items){');
-  const rbh = app.slice(ini, app.indexOf('\n};', ini) + 3);
-  assert.match(rbh, /class="cp1171-ic">\$\{ui631Icon\('compromisso'\)\}/,
-    'no lugar entra o ícone de concluído, o mesmo jogo de ícones dos outros quadradinhos');
-  // e o CSS precisa vencer o .ui-kpi i{background;border-radius} da base (lição da v1077→v1078)
-  assert.match(app, /\.cp1171-ic\{[^}]*position:absolute[^}]*background:none!important[^}]*\}/,
-    'o ícone precisa ficar no canto e sem a bolinha de fundo, com !important pra vencer a regra base');
+  assert.doesNotMatch(app, /cp1171-aro/, 'o aro verde não volta — parecia rodinha de carregando');
+  assert.doesNotMatch(app, /stroke-dasharray/, 'nenhum aro proporcional no lugar dos atendidos');
+  // v1251 — o quadradinho (e o CSS dele) saiu junto; quem mostra os números agora é o painel.
+  assert.doesNotMatch(app, /cp1171-atendidos/, 'o quadradinho "Atendidos" saiu da Home na v1251');
+  assert.match(app, /function cp1251PainelHTML\(/, 'quem mostra os três números agora é o painel "Seu mês"');
 }
 
 console.log('v1183-atendidos-mes-vigente: ok');

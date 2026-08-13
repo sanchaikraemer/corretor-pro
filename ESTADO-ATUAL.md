@@ -57,6 +57,18 @@ ser indentado (seção 2). Na tela: importar conversa virou item do menu da esqu
 do celular, o número da versão parou de aparecer cortado no celular, e o encurtador de produto
 parou de devolver conectivo solto. Ver `NOTAS-v1248.md`._
 
+_**v1251 — "Seus números do mês" na Home.** O quadradinho "Atendidos" (hoje/semana/mês) saiu da
+fileira e virou um painel com as três contagens + as mensagens trocadas no mês (total, enviadas
+pelo corretor, recebidas do cliente) + gráfico de atendimentos dia a dia. **Aberto no computador**
+(na coluna da direita da Home, desligada desde a #810 por repetir indicadores — a regra que a
+matava passou a valer só no celular) e **fechado no celular** (linha de resumo que abre o painel).
+Junto veio um conserto: as "mensagens trocadas" eram contadas no navegador em cima da prévia de 8
+mensagens por lead e saíam muito menores que a realidade — agora `_persistence.js` conta na
+varredura da conversa inteira e devolve `msgMesTotal`/`msgMesCliente`/`msgMesCorretor` prontos
+(`_statsCache` subiu pra **v4**: a primeira carga depois de publicar faz uma varredura completa por
+lead e volta ao regime barato). Tudo do 1º ao último dia do mês, calendário de Brasília. Ver
+`NOTAS-v1251.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

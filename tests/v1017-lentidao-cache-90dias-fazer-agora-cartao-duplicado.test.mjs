@@ -115,7 +115,7 @@ async function parteServidor() {
   // v1136 — o cache gravado agora é v3: carrega a marca d'água da linha (atualizado_em), o último
   // toque e a PRÉVIA de mensagens — é o que permite a listagem nem buscar a conversa quando nada
   // mudou (ver LIST_COLUMNS_SEM_TIMELINE em _persistence.js e o teste v1136).
-  assert.equal(cache1.v, 3, 'o cache gravado precisa ser v3');
+  assert.equal(cache1.v, 4, 'o cache gravado precisa ser v4 (v1251: entraram as mensagens do mês)');
   assert.equal(cache1.marca, rowBase.atualizado_em, 'a marca d\'água precisa ser o atualizado_em da linha lida');
   assert.ok(Array.isArray(cache1.preview) && cache1.preview.length === timeline.length, 'a prévia (até 8 msgs) precisa ir junto no cache');
   assert.equal(cache1.lastTouchIso, timeline[timeline.length - 1].iso, 'o último toque precisa ir junto no cache');
@@ -125,7 +125,7 @@ async function parteServidor() {
   // realmente PULADA (não é coincidência de dar o mesmo número).
   const rowComCachePlantado = {
     ...rowBase,
-    resultado_analise: { _statsCache: { v: 3, marca: rowBase.atualizado_em, len: timeline.length, dia: HOJE_BR, lastIso: null, lastClientIso: null, lastCorretorIso: null, lastTouchIso: null, lastTouchTime: null, preview: [], clientMessageCount: 999, clientQuestionCount: 999, clientMessageDays: 999, messageCount90d: 999, clientMessageCount90d: 999, hasProposal: true } }
+    resultado_analise: { _statsCache: { v: 4, marca: rowBase.atualizado_em, len: timeline.length, dia: HOJE_BR, lastIso: null, lastClientIso: null, lastCorretorIso: null, lastTouchIso: null, lastTouchTime: null, preview: [], clientMessageCount: 999, clientQuestionCount: 999, clientMessageDays: 999, messageCount90d: 999, clientMessageCount90d: 999, hasProposal: true } }
   };
   const writeBacks2 = [];
   const supa2 = fakeSupabaseParaLista([rowComCachePlantado], { onUpdate: (p) => writeBacks2.push(p) });
@@ -140,7 +140,7 @@ async function parteServidor() {
   const rowComMensagemNova = {
     ...rowBase,
     timeline_json: timelineMaior,
-    resultado_analise: { _statsCache: { v: 3, marca: rowBase.atualizado_em, len: timeline.length /* tamanho ANTIGO */, dia: HOJE_BR, clientMessageCount90d: 999 } }
+    resultado_analise: { _statsCache: { v: 4, marca: rowBase.atualizado_em, len: timeline.length /* tamanho ANTIGO */, dia: HOJE_BR, clientMessageCount90d: 999 } }
   };
   const supa3 = fakeSupabaseParaLista([rowComMensagemNova]);
   const r3 = await listRecentProcessings(10, { supabase: supa3, organizationId: 'org-1' });
@@ -151,7 +151,7 @@ async function parteServidor() {
   // envelhece com o tempo mesmo sem mensagem nova) e recalcula de verdade.
   const rowComCacheDeOntem = {
     ...rowBase,
-    resultado_analise: { _statsCache: { v: 3, marca: rowBase.atualizado_em, len: timeline.length, dia: '2020-01-01', clientMessageCount90d: 999 } }
+    resultado_analise: { _statsCache: { v: 4, marca: rowBase.atualizado_em, len: timeline.length, dia: '2020-01-01', clientMessageCount90d: 999 } }
   };
   const supa4 = fakeSupabaseParaLista([rowComCacheDeOntem]);
   const r4 = await listRecentProcessings(10, { supabase: supa4, organizationId: 'org-1' });
@@ -164,7 +164,7 @@ async function parteServidor() {
   const rowTocadaDepois = {
     ...rowBase,
     atualizado_em: isoDiasAtras(1),
-    resultado_analise: { _statsCache: { v: 3, marca: rowBase.atualizado_em /* marca ANTIGA */, len: timeline.length, dia: HOJE_BR, clientMessageCount90d: 999 } }
+    resultado_analise: { _statsCache: { v: 4, marca: rowBase.atualizado_em /* marca ANTIGA */, len: timeline.length, dia: HOJE_BR, clientMessageCount90d: 999 } }
   };
   const supa5 = fakeSupabaseParaLista([rowTocadaDepois]);
   const r5 = await listRecentProcessings(10, { supabase: supa5, organizationId: 'org-1' });
