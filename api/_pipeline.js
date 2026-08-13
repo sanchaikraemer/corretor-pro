@@ -968,14 +968,73 @@ function _proibidaPresente(normalizado, frase) {
   return new RegExp(`${frase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\s+d[aeo]s?\\b)`).test(normalizado);
 }
 
-export function detectarFrasesProibidas(texto = "") {
+// ─── AS FRASES PROIBIDAS SAEM DO CÉREBRO, NÃO DA MINHA CABEÇA (v1245) ────────────────────────
+//
+// O Cérebro do dono tem, escrito por ele, uma lista "LINGUAGEM PROIBIDA (nunca escrever, em
+// nenhuma variação)" com frase entre aspas. A lista dura do código nasceu copiando essa lista à
+// mão — e ficou pra trás: "só passando para saber", "ainda tem interesse?", "ficou alguma
+// dúvida?", "como posso ajudar?", "é só me avisar", "só me chamar" estão proibidas no Cérebro
+// dele e NENHUM código pegava. Pedir de novo pra IA obedecer é a estratégia que já falhou; o que
+// funciona é o corte determinístico — e ele precisa conhecer a lista DELE.
+//
+// Agora a lista é lida do próprio Cérebro. Quando ele acrescentar uma frase lá, o corte aprende
+// na hora: sem versão nova, sem código, sem mim.
+//
+// Uma sutileza que evita estrago: a lista dele tem itens CONDICIONAIS — `"o que achou?" sem
+// contexto específico`, `"conforme conversamos" quando não houve conversa real`. Cortar esses
+// sempre seria errado (o próprio Método dele manda fechar com "o que acha?"). Frase seguida de
+// ressalva entra como SUSPEITA — vai pra releitura, que tem a conversa na mão e decide — e não
+// como corte cego.
+const _MARCADOR_PROIBICAO = /(linguagem proibida|nunca escrever|nunca usar|nunca use|nao escrever|proibid|nao use|nao usar|evite usar)/;
+const _RESSALVA_APOS_ASPAS = /^[\s,]*(sem contexto|quando nao|quando n[ãa]o|salvo|a nao ser|a n[ãa]o ser|se nao|se n[ãa]o|exceto)/i;
+
+export function frasesProibidasDoCerebro(cerebro = null) {
+  const vazio = { proibidas: [], suspeitas: [] };
+  if (!cerebro || typeof cerebro !== "object") return vazio;
+  // Usa o MESMO texto que vai pro pedido (formatCerebroPrompt), pra nunca ler um Cérebro
+  // diferente do que a IA leu — inclusive com regras/objeções em formato antigo já convertidas.
+  let bruto = "";
+  try { bruto = formatCerebroPrompt(cerebro); } catch (_) { return vazio; }
+  if (!bruto) return vazio;
+
+  // Cada item da lista dele é um marcador ("- " ou "1. ") e pode estar quebrado em várias linhas.
+  const itens = bruto.split(/\n(?=\s*(?:[-•*]\s|\d{1,2}[.)]\s))/);
+  const proibidas = new Set();
+  const suspeitas = new Set();
+  for (const item of itens) {
+    const linha = item.replace(/\s+/g, " ").trim();
+    if (!_MARCADOR_PROIBICAO.test(_normalizarParaConferencia(linha))) continue;
+    const aspas = /["“”'']([^"“”]{4,80}?)["“”'']/g;
+    let hit;
+    while ((hit = aspas.exec(linha))) {
+      const frase = _normalizarParaConferencia(hit[1]).replace(/[?!.,;:]+$/, "").trim();
+      if (frase.length < 4 || frase.length > 60) continue;
+      if (frase.split(" ").length < 2) continue;          // palavra solta cortaria meia mensagem
+      const depois = linha.slice(hit.index + hit[0].length);
+      (_RESSALVA_APOS_ASPAS.test(depois) ? suspeitas : proibidas).add(frase);
+      if (proibidas.size + suspeitas.size >= 80) break;
+    }
+  }
+  // Frase que a lista dura do código já trata como sempre errada não é rebaixada por uma ressalva
+  // escrita no Cérebro (é o caso de "conforme conversamos").
+  for (const f of FRASES_PROIBIDAS_MENSAGEM) suspeitas.delete(f);
+  return { proibidas: [...proibidas], suspeitas: [...suspeitas] };
+}
+
+export function detectarFrasesProibidas(texto = "", extras = null) {
   const t = _normalizarParaConferencia(texto);
   if (!t) return { proibidas: [], suspeitas: [] };
-  const proibidas = FRASES_PROIBIDAS_MENSAGEM.filter(f => _proibidaPresente(t, f));
+  const duras = extras?.proibidas?.length
+    ? [...new Set([...FRASES_PROIBIDAS_MENSAGEM, ...extras.proibidas])]
+    : FRASES_PROIBIDAS_MENSAGEM;
+  const proibidas = duras.filter(f => _proibidaPresente(t, f));
   if (CUMPRIMENTO_AUTORRESPONDIDO.test(t)) proibidas.push("cumprimento respondido pelo próprio corretor");
   // Só conta como ação inventada quando o verbo está mesmo em 1ª pessoa do passado nesta mensagem
   // (limite de palavra dos dois lados evita pegar "separei" dentro de outra palavra).
-  const suspeitas = EXPRESSOES_SUSPEITAS_MENSAGEM.filter(f => new RegExp(`(^|[^a-z0-9])${f}([^a-z0-9]|$)`).test(t));
+  const contextuais = extras?.suspeitas?.length
+    ? [...new Set([...EXPRESSOES_SUSPEITAS_MENSAGEM, ...extras.suspeitas])]
+    : EXPRESSOES_SUSPEITAS_MENSAGEM;
+  const suspeitas = contextuais.filter(f => new RegExp(`(^|[^a-z0-9])${f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(t));
   return { proibidas, suspeitas };
 }
 
@@ -1001,11 +1060,11 @@ function _normFrase(texto = "") {
     .replace(/\s+/g, " ");
 }
 
-export function limparFrasesProibidas(texto = "") {
+export function limparFrasesProibidas(texto = "", extras = null) {
   const original = String(texto || "").trim();
   if (!original) return "";
 
-  const temProibida = t => detectarFrasesProibidas(t).proibidas.length > 0;
+  const temProibida = t => detectarFrasesProibidas(t, extras).proibidas.length > 0;
 
   // Corta em FRASES; dentro da frase, corta em ORAÇÕES (vírgula, ponto-e-vírgula, travessão).
   // Cortar palavra por palavra parece mais delicado e é pior: tirar "à disposição" de "Fico à
@@ -1070,12 +1129,12 @@ export function limparFrasesProibidas(texto = "") {
 }
 
 // Roda a conferência nas três de uma vez e devolve o que precisa ser reescrito.
-export function conferirTrioMensagens({ a = "", b = "", c = "" } = {}) {
+export function conferirTrioMensagens({ a = "", b = "", c = "" } = {}, extras = null) {
   const porMensagem = [
     { chave: "recomendada", texto: a },
     { chave: "maisSuave", texto: b },
     { chave: "maisDireta", texto: c }
-  ].map(m => ({ ...m, ...detectarFrasesProibidas(m.texto) }));
+  ].map(m => ({ ...m, ...detectarFrasesProibidas(m.texto, extras) }));
   const comProblema = porMensagem.filter(m => m.proibidas.length || m.suspeitas.length);
   return {
     // "limpo" = nenhuma frase proibida E nenhuma ação suspeita: pode entregar direto.
@@ -3270,6 +3329,8 @@ O número de dias corridos abaixo NÃO pode contradizer isto: prazo que o client
 
 `;
   })();
+  // v1245 — a lista de linguagem proibida escrita no Cérebro DELE alimenta o corte determinístico.
+  const proibidasDoCerebro = frasesProibidasDoCerebro(configCerebro);
   const instrucoesCerebroTexto = formatCerebroPrompt(configCerebro);
   // v1058: número real pro Cérebro comparar quando ele tiver uma regra do tipo "depois de X dias
   // sem interação, reconheça o intervalo antes de retomar" — sem isso a IA não tinha como saber
@@ -3367,18 +3428,19 @@ Responda somente com JSON válido no formato solicitado.`;
 
 Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
 Fuso horário da análise: ${fusoAnalise}
-Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília).
+Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília). Se o Cérebro Comercial tiver regra própria de saudação (por exemplo, abrir só pelo nome perto da virada de período, porque a mensagem pode ser enviada minutos depois), a regra DELE vence esta linha — inclusive para não abrir com saudação nenhuma.
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
-Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
+Dias corridos desde a última mensagem identificada (DADO INTERNO, para o seu raciocínio e para o diagnóstico na tela do corretor — só escreva esse número dentro de uma mensagem ao cliente se o Cérebro Comercial mandar): ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 ${blocoJanelaCombinada}Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação, e SOMENTE quando não houver acima um prazo marcado pelo próprio cliente governando o momento): ${diasParaRetomada} dias corridos.
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
 AS TRÊS MENSAGENS SÃO TRÊS CAMINHOS PARA O MESMO "comoConduzir" — não três assuntos diferentes,
 nem a mesma frase reescrita três vezes. Elas aparecem na tela do corretor nesta ordem e com estes
-nomes: "recomendada" (a que você mandaria se só pudesse mandar uma), "maisSuave" (a de menor
-pressão) e "maisDireta" (a mais objetiva). O QUE cada uma deve fazer comercialmente é decisão do
-Cérebro Comercial deste corretor — siga o que ele escreveu. Antes de entregar, confira uma a uma
+nomes, nesta ordem: "recomendada", "maisSuave" e "maisDireta". Esses nomes são só a POSIÇÃO na
+tela. O PAPEL COMERCIAL de cada uma das três é decisão exclusiva do Cérebro Comercial deste
+corretor: se ele escreveu o que cada posição deve ser (por exemplo, uma consultiva de descoberta e
+uma de avanço concreto), é isso que vale — os nomes dos campos não redefinem o que ele mandou. Antes de entregar, confira uma a uma
 contra "comoConduzir": a que não estiver executando aquela condução está errada, reescreva.
 
 PRODUTO ESPECÍFICO: se o cliente citou identificadores específicos de unidade (lote, quadra,
@@ -3616,7 +3678,7 @@ ${timelineText}`;
     // sem espera a mais. A releitura cabe no MESMO orçamento de tempo da análise (não estica o
     // envelope de 52s travado pelos testes v947/v1140): se não sobrou tempo, entrega o que veio.
     // Nada aqui pode derrubar a análise — em qualquer falha ficam valendo as mensagens originais.
-    const conferencia = conferirTrioMensagens({ a: msgA, b: msgB, c: msgC });
+    const conferencia = conferirTrioMensagens({ a: msgA, b: msgB, c: msgC }, proibidasDoCerebro);
     // v1244 — erro de calendário entra na MESMA conferência. "Passou a semana que tínhamos
     // comentado" não tem nenhum clichê da lista dura, então a conferência antiga dava tudo limpo e
     // entregava — mesmo estando dentro do prazo que o cliente marcou. Agora vira reescrita.
@@ -3691,7 +3753,7 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
               + m.suspeitas.filter(x => /^ERRO TEMPORAL/.test(x)).length * 10
               + m.suspeitas.filter(x => !/^ERRO TEMPORAL/.test(x)).length, 0);
             const conferenciaNova = marcarErroTemporal(
-              conferirTrioMensagens({ a: novaA, b: novaB, c: novaC }),
+              conferirTrioMensagens({ a: novaA, b: novaB, c: novaC }, proibidasDoCerebro),
               { a: novaA, b: novaB, c: novaC }
             );
             if (nota(conferenciaNova) <= nota(conferencia)) {
@@ -3724,11 +3786,11 @@ Responda somente com JSON válido: {"mensagens":{"recomendada":"texto","maisSuav
     // Texto proibido só sai quando NENHUMA versão sobrou limpa — porque mensagem vazia não se entrega.
     const melhorLimpa = (...versoes) => {
       const candidatos = versoes
-        .flatMap(v => [limparFrasesProibidas(v), String(v || "").trim()])
+        .flatMap(v => [limparFrasesProibidas(v, proibidasDoCerebro), String(v || "").trim()])
         .filter(v => v && v.trim())
         .map(v => ({
           texto: v,
-          proibidas: detectarFrasesProibidas(v).proibidas.length,
+          proibidas: detectarFrasesProibidas(v, proibidasDoCerebro).proibidas.length,
           // v1244 — entre duas versões igualmente limpas de clichê, nunca fique com a que diz que
           // o prazo venceu enquanto o combinado do cliente ainda está aberto.
           temporal: _problemaTemporalMensagem(v, marcoTemporalCliente) ? 1 : 0,
