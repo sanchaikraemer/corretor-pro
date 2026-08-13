@@ -1128,8 +1128,13 @@ body.lead-foco-aberto #home .home-right{display:none!important}
    A tela Hoje pode atualizar em segundo plano sem recolocar os cards
    de Ativos/Quentes/Agenda/Reaquecer acima do atendimento aberto.
    ============================================================ */
+/* v1252 — "SEUS NÚMEROS DO MÊS" (a linha "170 atendidos · 1.356 mensagens", criada na v1251)
+   nasceu dentro da mesma coluna da Home e ninguém a somou a esta lista: ela continuava aparecendo
+   POR CIMA do cliente aberto, entre o topo do app e os botões do atendimento. O dono flagrou com
+   print e a regra é clara — número do mês é da tela inicial, não é da tela do cliente. */
 body.lead-foco-aberto #home .home-page-heading,
 body.lead-foco-aberto #home #resumoDia,
+body.lead-foco-aberto #home #cpMesResumo,
 body.lead-foco-aberto #home #top3Area,
 body.lead-foco-aberto #home #filaPrioridade,
 body.lead-foco-aberto #home #homeRight{
