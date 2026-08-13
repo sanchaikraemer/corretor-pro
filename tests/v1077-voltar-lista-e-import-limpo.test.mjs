@@ -25,7 +25,6 @@ for (const [grupo, dono] of [
   ['__fazeragora', 'abrirFazerAgora'],
   ['__aguardando', 'abrirAguardandoCliente'],
   ['__carteiraAtiva', 'abrirCarteiraAtiva'],
-  ['__semAtender30', 'cpAbrirSemAtender30Dias'],
   ['__propostas', 'cpAbrirHistoricoPropostas'],
 ]) {
   assert.match(fn, new RegExp(`"${grupo}": \\(\\) => ${dono}\\(\\)`),

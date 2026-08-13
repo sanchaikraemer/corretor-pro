@@ -95,21 +95,10 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
   // Data ninguém lê errado.
   const DATA = /\b\d{2}\/\d{2}\b/;
 
-  const semAtender = COLUNAS_POR_GRUPO.__semAtender30;
-  assert.equal(semAtender.titulo, 'Sem atender desde', 'o título precisa dizer que o que vem é uma data');
-  const nunca = semAtender.valor(leadNuncaAtendido('x', 1));
-  assert.match(nunca, /nunca respondeu/i,
-    'sem NENHUM contato do corretor (nem marcado, nem mensagem), diz isso com todas as letras');
-  assert.doesNotMatch(nunca, /\b1 dia\b/, 'e não pode mostrar o "1 dia" da última mensagem');
-
-  const velho = semAtender.valor(leadAtendidoHa('y', 53, 12));
-  assert.match(velho, DATA, 'precisa mostrar a DATA do último atendimento');
-  assert.match(velho, /53/, 'e há quantos dias foi, como apoio');
-  // v1126 — este teste passou a quebrar sozinho dependendo do dia do ano: a DATA renderizada pode
-  // cair num dia 12 (rodando em 04/08, 53 dias antes dá "12/06") e batia com a checagem do "12" da
-  // última mensagem. O que precisa ser garantido é o 12 FORA da data — então tira a data antes.
-  assert.doesNotMatch(velho.replace(/\b\d{2}\/\d{2}\b/g, ''), /\b12\b/,
-    'o número da última mensagem não pode aparecer aqui');
+  // v1246 — a coluna "__semAtender30" saiu junto com a lista: o dono mandou apagar o quadradinho
+  // "Sem atender 30d+" ("nao sera mais necessario"), e sem ele não existia mais porta de entrada.
+  assert.equal(COLUNAS_POR_GRUPO.__semAtender30, undefined,
+    'a coluna da lista apagada não pode continuar sozinha no código');
 
   // "Aguardando cliente" — o caso da Silvana: atendida ontem, descanso de 14.
   const aguardando = COLUNAS_POR_GRUPO.__aguardando;

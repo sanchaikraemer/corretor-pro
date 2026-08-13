@@ -57,12 +57,14 @@ assert.equal(
 );
 assert.equal(ultimoAtendimentoTs({}), 0);
 
-// v1075 — a aba "Últimos atendimentos" morava na tela Condução, deletada a pedido do dono
-// (já estava escondida por CSS desde a geração cp788). A ordenação pelo atendimento REAL
-// continua viva na lista "Sem atender 30d+" (mais antigo primeiro).
-// v1102 — a régua da lista virou o último CONTATO REAL do corretor (atendimento marcado OU
-// última mensagem dele na conversa) — caso Jamil: atendido pelo WhatsApp, mas nunca "marcado".
-assert.match(app, /comData\.sort\(\(a,b\) => cpUltimoContatoCorretorTs\(a\) - cpUltimoContatoCorretorTs\(b\)\)/, 'ordenação pelo contato real continua viva');
+// v1075 — a aba "Últimos atendimentos" morava na tela Condução, deletada a pedido do dono.
+// v1102 — a régua virou o último CONTATO REAL do corretor (atendimento marcado OU última mensagem
+// dele na conversa) — caso Jamil: atendido pelo WhatsApp inteiro, mas nunca "marcado".
+// v1246 — a lista "Sem atender 30d+" foi apagada a pedido dele, mas essa ordenação NÃO morreu com
+// ela: quem usa hoje é o resgate da fila "Fazer agora" (quem nunca foi contatado primeiro, depois
+// o contato mais antigo), que é onde ela faz mais diferença no dia dele.
+assert.match(app, /\.sort\(\(a, b\) => \(a\.t - b\.t\) \|\| \(a\.i - b\.i\)\)/,
+  'ordenação pelo contato real continua viva no resgate da fila');
 // Rótulo de tempo relativo (§6.5): "hoje" / "ontem" / "há X dias".
 // v1186 — este item mirava `rotuloTempoAtendimento`, uma função que a v1101 aposentou e ninguém
 // removeu ("CONTAGEM DE DIAS SAIU. VIRAM DATAS" — o dono leu "14 dias" ao lado da Silvana,
