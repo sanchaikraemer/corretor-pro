@@ -43,7 +43,10 @@ const envBlock = app.slice(envStart, envEnd);
 assert.match(envBlock, /tipoManual:"mensagem_enviada"/, 'entra na timeline como mensagem enviada');
 assert.match(envBlock, /registrarAtendimento:true/, 'conta como atendimento');
 assert.doesNotMatch(envBlock, /etapa/, 'copiar nunca altera a etapa comercial');
-assert.match(app, /const done = \(\) => \{[\s\S]*?toast\("Mensagem copiada"\);[\s\S]*?registrarMensagemEnviada\(l\.id, msg\)/, 'o botão Copiar do hero chama o registro');
+// v1248 — o `done` virou async porque as duas gravações passaram a ser EM SEQUÊNCIA (atendimento
+// primeiro, contador depois). Antes eram disparadas juntas e uma apagava a outra — ver
+// tests/v1248-copiar-hero-nao-corre-com-o-atendimento.test.mjs.
+assert.match(app, /const done = async \(\) => \{[\s\S]*?toast\("Mensagem copiada"\);[\s\S]*?await registrarMensagemEnviada\(l\.id, msg\)/, 'o botão Copiar do hero chama o registro');
 assert.match(app, /cp704CopyMsg=async function[\s\S]*?const leadId=state\.lead\?\.id;[\s\S]*?registrarMensagemEnviada\(leadId, msg\)/, 'o botão Copiar do detalhe chama o registro');
 // Backend: copiar registra o evento de atendimento (contato_manual), sem tocar na etapa.
 assert.match(api, /body\?\.registrarAtendimento === true/, 'backend registra atendimento ao copiar');

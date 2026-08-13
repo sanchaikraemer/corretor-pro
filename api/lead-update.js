@@ -11,7 +11,7 @@ import { getSupabaseAdmin, persistProcessingResult, listRecentProcessings, merge
 import { randomUUID } from "node:crypto";
 import {
   getOpenAI, marcarAprendizadoPendente, finalizarAnaliseComercial, corrigirNomeDoCliente,
-  ARQUITETURA_MENSAGENS_ATUAL, aprenderRespostasDaCarteira, invalidarMemoriaComercialCache,
+  ARQUITETURA_MENSAGENS_ATUAL, invalidarMemoriaComercialCache,
   upsertConfigComOrganizacao, invalidarConhecimentoCorretorCache
 } from "./_pipeline.js";
 import { registrarUsoIA } from "./_iaCusto.js";
@@ -1108,11 +1108,20 @@ async function limparAprendizadoDosLeads(supabase, ids, organizationId) {
 
 async function removerVinculosComLeadsApagados(supabase, ids, organizationId) {
   const alvo = new Set(ids.map(String));
-  const { data: rows, error } = await supabase
+  // v1248 — PEDE AO BANCO SÓ QUEM TEM VÍNCULO, em vez de baixar a análise comercial inteira de até
+  // 5.000 clientes pra descobrir que quase nenhum tem. Vínculo entre oportunidades é raro: na
+  // prática isto sai de "megabytes por exclusão" pra algumas linhas. Era esse download (somado ao
+  // outro, já removido) que estourava o tempo do "apagar cliente" em carteira grande.
+  // Se o banco não aceitar o filtro por campo de dentro do JSON, cai na varredura antiga — nunca
+  // deixa de limpar o vínculo por causa disso.
+  const base = () => supabase
     .from("whatsapp_processamentos")
     .select("id,resultado_analise")
-    .eq("organization_id", organizationId)
+    .eq("organization_id", organizationId);
+  let { data: rows, error } = await base()
+    .not("resultado_analise->oportunidadesVinculadas", "is", null)
     .limit(5000);
+  if (error) ({ data: rows, error } = await base().limit(5000));
   if (error) throw new Error(`Vínculos: ${error.message}`);
   let atualizados = 0;
   for (const row of rows || []) {
@@ -1268,8 +1277,18 @@ async function acaoApagar(id, res, ids, organizationId) {
     const { error } = await supabase.from("whatsapp_processamentos").delete().in("id", alvos).eq("organization_id", organizationId);
     if (error) throw new Error(error.message);
 
-    // Recria o banco de exemplos apenas com as conversas que continuam na carteira.
-    const respostas = await aprenderRespostasDaCarteira(organizationId).catch(error => ({ ok: false, error: error?.message || String(error) }));
+    // v1248 — AQUI RODAVA UMA RECONSTRUÇÃO QUE BAIXAVA A CARTEIRA INTEIRA e foi removida.
+    //
+    // Ela chamava aprenderRespostasDaCarteira, que lê `timeline_json` (a CONVERSA COMPLETA) de até
+    // 3.000 clientes pra montar uma lista de exemplos de escrita. Dois problemas graves:
+    //   1. Rodava DEPOIS do apagar já ter sido efetivado. Numa carteira grande o download estourava
+    //      o tempo limite da função (60s) e o corretor via ERRO na tela — mas o cliente JÁ tinha
+    //      sido apagado. Ao tentar de novo, recebia "Lead não encontrado" e ficava sem entender.
+    //   2. A lista produzida (`corretor-respostas`) NÃO É LIDA EM LUGAR NENHUM do sistema: desde a
+    //      v1212 os exemplos de escrita que vão pra IA são tirados da PRÓPRIA conversa analisada
+    //      (exemplosDoCorretor), nunca desta lista. Ou seja: era o trabalho mais pesado da rota,
+    //      feito pra alimentar algo que ninguém consome.
+    // Apagar um cliente voltou a ser o que deve ser: rápido e sem risco de meia-exclusão.
     return json(res, 200, {
       ok: true,
       id,
@@ -1277,8 +1296,7 @@ async function acaoApagar(id, res, ids, organizationId) {
       apagados: alvos.length,
       storage,
       tabelasAuxiliares: auxiliares,
-      vinculosAtualizados,
-      respostasReconstruidas: respostas
+      vinculosAtualizados
     });
   } catch (error) {
     return json(res, 500, {

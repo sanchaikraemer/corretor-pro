@@ -44,6 +44,19 @@ v1240, v1241 (parte de prompt), v1243, v1244 e v1245. O que ficou de tudo isso: 
 correta de quem é a voz do corretor e a regra que proíbe inventar ação/novidade do corretor. Ver
 `NOTAS-v1247.md`._
 
+_**v1248 — auditoria de ponta a ponta (13/08/2026), sem tocar no Cérebro/prompt/análise.** Nesta
+rodada: a ponte preguiçosa da importação (v1195) ganhou tratamento de erro — sem ele, uma falha ao
+baixar `js/importacao.js` deixava o app travado na tela de compartilhamento pra sempre (seção 1); a
+trava otimista de `reanalisar-lead.js` passou a comparar `atualizado_em` (era `updated_at`, coluna
+que a rota nunca escreve — a trava não travava nada) e a releitura antes de salvar deixou de
+descartar erro (seção 2); `acaoApagar` em `lead-update.js` não varre mais a carteira inteira duas
+vezes — `aprenderRespostasDaCarteira` saiu do caminho do apagar (a lista `corretor-respostas` que
+ela produz não é lida por ninguém desde a v1212) e a limpeza de vínculos filtra no banco (seções 2 e
+8); o cache de resposta de `leads-recentes.js` ganhou faxina e teto, e o backup completo deixou de
+ser indentado (seção 2). Na tela: importar conversa virou item do menu da esquerda e botão na Home
+do celular, o número da versão parou de aparecer cortado no celular, e o encurtador de produto
+parou de devolver conectivo solto. Ver `NOTAS-v1248.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

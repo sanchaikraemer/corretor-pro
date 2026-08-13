@@ -132,6 +132,12 @@
     </div>
     <nav class="sb-nav">
       <button type="button" class="sb-item go" data-target="home" data-nav-key="home"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Hoje</button>
+      <!-- v1248 — IMPORTAR CONVERSA VIRA ITEM DE MENU. É a ação mais repetida do produto (é dela
+           que sai toda análise), e mesmo assim o único caminho pra chegar nela era Configurações →
+           Importar conversa: dois toques, dentro da tela de ajustes, que é onde ninguém procura
+           uma tarefa do dia a dia. O atalho que existia na tela Hoje só aparecia pra quem ainda
+           não tinha nenhum cliente — quem já usa o app tinha perdido o caminho curto. -->
+      <button type="button" class="sb-item go" data-target="zip" data-nav-key="importar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>Importar conversa</button>
       <button type="button" class="sb-item go" data-target="carteira" data-nav-key="leads"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.4-4 2.1-6 5-6s4.6 2 5 6M11 20c.4-4 2.1-6 5-6s4.6 2 5 6"/></svg></span>Atendimentos</button>
       <button type="button" class="sb-item go" data-target="agenda" data-nav-key="agenda"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Agenda</button>
       <button type="button" class="sb-item go" data-target="propostas" data-nav-key="propostas"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg></span>Propostas</button>
@@ -182,6 +188,10 @@
       <div id="cpLeadWorkspace" class="cp-lead-workspace">
         <div class="home-page-heading">
           <h2 id="homePageTitle">Hoje</h2>
+          <!-- v1248 — no celular não existe o menu lateral, então o atalho de importar mora aqui,
+               logo abaixo do título da tela Hoje: um toque, sem entrar em "Mais". No computador
+               ele fica escondido (lá o item já está no menu da esquerda). -->
+          <button type="button" id="btnImportarHome" class="cp1248-importar go" data-target="zip" data-nav-key="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Importar conversa do WhatsApp</button>
           <div id="saudacao" class="saudacao" style="display:none"></div>
           <div id="saudacaoDesktop" class="saudacao" style="display:none"></div>
         </div>
