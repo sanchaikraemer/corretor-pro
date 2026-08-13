@@ -11,8 +11,8 @@
     "openai": "4.104.0"
   },
   "name": "corretor-pro",
-  "version": "7.1241.0",
-  "displayVersion": "1241",
+  "version": "7.1242.0",
+  "displayVersion": "1242",
   "devDependencies": {
     "acorn": "^8.15.0"
   }

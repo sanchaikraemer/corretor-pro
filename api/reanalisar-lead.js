@@ -327,10 +327,19 @@ async function reanalisarLeadHandler702(req, res) {
       : [];
     // Tira do texto corrido exatamente a linha desta observação, sem tocar no resto (o campo
     // pode ter linhas antigas que não vieram de observação nenhuma).
+    // v1241 — AUDITORIA DO DONO: observação com MAIS DE UMA LINHA (ditado costuma quebrar linha)
+    // não saía daqui. O corte era linha a linha, comparando cada uma com o bloco inteiro
+    // "[data hora] texto" — que só casa quando o texto cabe numa linha só. Resultado: apagava do
+    // histórico e o texto continuava vivo na memória do lead, que APARECE na tela (busca e
+    // detalhe). Agora o bloco inteiro é removido, com quebras de linha e tudo.
     const linhaAlvo = `[${alvo.date || ""} ${alvo.time || ""}] ${alvo.text || ""}`.trim();
+    const normaliza = (v) => String(v || "").replace(/\s+/g, " ").trim();
+    const alvoNormalizado = normaliza(linhaAlvo);
     const observacoesTexto = String(memAnterior.observacoes || "")
-      .split("\n")
-      .filter(l => l.trim() !== linhaAlvo)
+      // Cada observação começa em "[dd/mm/aaaa hh:mm] " — é por aí que se separa os blocos, e não
+      // por linha, senão texto ditado com parágrafo nunca é encontrado.
+      .split(/\n(?=\[\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\] )/)
+      .filter(bloco => normaliza(bloco) !== alvoNormalizado)
       .join("\n")
       .trim();
     const memoria = { ...memAnterior, observacoes: observacoesTexto, observacoesManuais: obsManuais };
