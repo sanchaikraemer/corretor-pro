@@ -5543,7 +5543,10 @@ function cp1225LinhaDeOndeVeio(a){
   const lida = a.conversaLidaPelaIA;
   if(a.cerebroAplicado == null && !lida) return ""; // análise antiga, de antes deste registro
   const semCerebro = a.cerebroAplicado === false;
-  const quanto = lida?.modo === "resumo+novidade"
+  // v1241 — quando o teto técnico corta conversa gigante, a tela DIZ quantas de quantas foram.
+  const quanto = lida?.modo === "parte da conversa"
+    ? `leu ${Number(lida.mensagensEnviadas) || 0} de ${Number(lida.totalDaConversa) || 0} mensagens (conversa longa demais)`
+    : lida?.modo === "resumo+novidade"
     ? `leu ${Number(lida.mensagensEnviadas)||0} ${pl(Number(lida.mensagensEnviadas)||0, "mensagem", "mensagens")} + resumo de ${Number(lida.mensagensResumidas)||0} antigas`
     : (Number(lida?.mensagensEnviadas) > 0
         ? `leu a conversa inteira (${Number(lida.mensagensEnviadas)} ${pl(Number(lida.mensagensEnviadas), "mensagem", "mensagens")})`

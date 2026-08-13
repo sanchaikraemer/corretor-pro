@@ -72,7 +72,15 @@ assert.match(system, /COMO ESTE CORRETOR ESCREVE \(mensagens reais dele NESTA co
   "as mensagens reais do corretor nesta conversa precisam entrar no prompt");
 assert.match(system, /Conseguiu conferir as informações que enviei\?/,
   "a mensagem real precisa aparecer literalmente como referência de voz");
-assert.doesNotMatch(system, /Obrigada, vou olhar/,
+// v1243 — a fala do CLIENTE passou a ter bloco PRÓPRIO ("COMO ESTA PESSOA FALA COM ELE"), porque
+// tratamento é coisa de dois: sem ver como o cliente fala com ele, o modelo escrevia formal pra
+// quem ele trata por "mano" (print do dono, 13/08/2026). O que este assert protege continua
+// intacto e é o que importa: a fala do cliente não pode CONTAMINAR os exemplos de voz DELE.
+const blocoVozCorretor = system.slice(
+  system.indexOf("=== COMO ESTE CORRETOR ESCREVE"),
+  system.indexOf("=== FIM DOS EXEMPLOS ==="));
+assert.ok(blocoVozCorretor.length > 40, "sanidade: o bloco de voz do corretor existe");
+assert.doesNotMatch(blocoVozCorretor, /Obrigada, vou olhar/,
   "mensagem do CLIENTE não pode entrar como exemplo de voz do corretor");
 assert.match(system, /COPIE A FORMA, NUNCA O CONTEÚDO/,
   "precisa estar escrito que só a forma é copiada");
