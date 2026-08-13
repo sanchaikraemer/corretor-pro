@@ -938,7 +938,7 @@ function cpClearLeadState(){
   state.lead=null; state.focoLeadId=null; state.analysis=null; state.sequencia=null;
 }
 // v1077 — as listas "montadas na hora" pelos cards da Home (Fazer agora, Aguardando cliente,
-// Carteira ativa, Sem atender 30d+, Propostas) não vivem em state.gruposHome — quem VOLTA pra
+// Carteira ativa, Propostas) não vivem em state.gruposHome — quem VOLTA pra
 // elas (botão voltar do Android/navegador) precisa reconstruí-las pela função dona. Sem isso,
 // o voltar mostrava o nome cru ("__fazeragora") com 0 leads (print do dono).
 function cpReabrirGrupoEspecial(grupo){
@@ -946,7 +946,6 @@ function cpReabrirGrupoEspecial(grupo){
     "__fazeragora": () => abrirFazerAgora(),
     "__aguardando": () => abrirAguardandoCliente(),
     "__carteiraAtiva": () => abrirCarteiraAtiva(),
-    "__semAtender30": () => cpAbrirSemAtender30Dias(),
     "__propostas": () => cpAbrirHistoricoPropostas()
   };
   const abrir = donos[String(grupo || "")];
@@ -2398,26 +2397,11 @@ function cpSemAtenderHaDias(l, dias){
   const d = diasCalendarioBR(at);
   return d == null || d >= dias;
 }
-function cpContarSemAtender(items, dias){
-  return (Array.isArray(items) ? items : []).filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, dias)).length;
-}
-// v1071 — abre a lista de quem está sem atender há 30d+, do mais antigo pro mais recente.
-// "Nunca atendido" é sempre mais atrasado que "atendido há muito tempo" — por isso vem primeiro,
-// antes de ordenar quem tem data de atendimento (mais velha primeiro).
-function cpAbrirSemAtender30Dias(){
-  const items = Array.isArray(state.itemsAtivos) ? state.itemsAtivos : [];
-  const alvo = items.filter(l => leadEhAtivo(l) && cpSemAtenderHaDias(l, 30));
-  if(!alvo.length){ toast("Nenhum lead sem atendimento há 30 dias ou mais."); return; }
-  const semData = [], comData = [];
-  for(const l of alvo){ (cpUltimoContatoCorretorTs(l) ? comData : semData).push(l); }
-  comData.sort((a,b) => cpUltimoContatoCorretorTs(a) - cpUltimoContatoCorretorTs(b));
-  const leads = [...semData, ...comData];
-  const sub = `${leads.length} lead${leads.length>1?"s":""} sem atendimento há 30 dias ou mais — do mais antigo pro mais recente.`;
-  abrirGrupoHome("__semAtender30", { meta:{ titulo:"Sem atender 30d+", sub }, leads });
-}
+// v1246 — "Sem atender 30d+" saiu da Home a pedido do dono: "pode deletar tb, nao sera mais
+// necessario". Com o quadradinho fora, esta lista não tinha mais nenhuma porta de entrada — ficaria
+// só ocupando espaço e dando a impressão, pra quem lesse o código depois, de que a tela ainda
+// existe. A régua em si (cpSemAtenderHaDias) CONTINUA, porque a fila "Fazer agora" usa ela.
 window.cpSemAtenderHaDias = cpSemAtenderHaDias;
-window.cpAbrirSemAtender30Dias = cpAbrirSemAtender30Dias;
-window.cpContarSemAtender = cpContarSemAtender;
 const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
 // visita etc.) — NUNCA é uma fala real na conversa, mesmo tendo texto e data.
@@ -3619,9 +3603,9 @@ function abrirGrupoHome(grupo, options={}){
   //
   //   • "Aguardando cliente": o descanso conta do seu último atendimento (regra única, v1052).
   //     Cliente calado há 18 dias que você atendeu há 3 está corretamente em espera.
-  //   • "Sem atender 30d+": entra quem está 30+ dias sem ATENDIMENTO (ou nunca atendido). Um lead
-  //     nunca atendido que mandou mensagem ontem aparecia como "1 dia" — e a ordem, feita pela
-  //     data de atendimento, parecia bagunçada porque o número exibido era outro.
+  //   • A lista "sem atender 30d+" (apagada na v1246) tinha o mesmo defeito: um lead nunca
+  //     atendido que mandou mensagem ontem aparecia como "1 dia", e a ordem, feita pela data de
+  //     atendimento, parecia bagunçada porque o número exibido era outro.
   //
   // Agora cada lista mostra O NÚMERO QUE A DEFINE, com o título certo em cima.
   const COLUNA_PADRAO = {
@@ -3666,18 +3650,6 @@ function abrirGrupoHome(grupo, options={}){
         const volta = dataBRcurta(ts + (prazo + 1) * 86400000);
         const quando = desde === 0 ? "atendido hoje" : desde === 1 ? "atendido ontem" : `atendido há ${desde} dias`;
         return `<small class="lgt-rot">volta dia</small><b>${volta}</b><small class="lgt-sub">${quando}</small>`;
-      }
-    },
-    // DESDE QUANDO está sem atendimento — a mesma régua que monta e ordena a lista.
-    __semAtender30: {
-      titulo: "Sem atender desde",
-      valor: (l) => {
-        // v1102 — o contato REAL: atendimento marcado OU última mensagem que VOCÊ mandou na
-        // conversa, o mais recente. Era o que faltava pro Jamil não aparecer como "nunca".
-        const ts = (typeof cpUltimoContatoCorretorTs === "function") ? cpUltimoContatoCorretorTs(l) : 0;
-        if(!ts) return '<small class="lgt-rot">nunca</small><b>—</b><small class="lgt-sub">você nunca respondeu</small>';
-        const desde = diasCalendarioBR(ts);
-        return `<small class="lgt-rot">sem atender desde</small><b>${dataBRcurta(ts)}</b>${desde != null ? `<small class="lgt-sub">${desde === 1 ? "há 1 dia" : `há ${desde} dias`}</small>` : ""}`;
       }
     }
   };
@@ -4592,8 +4564,8 @@ window.excluirLeadDefinitivo = excluirLeadDefinitivo;
 
 // v1148 — JUNTAR DOIS CADASTROS DO MESMO CLIENTE.
 //
-// Caso do dono (05/08/2026): ele atendeu um cliente e a lista "Sem atender 30d+" seguia mostrando
-// a MESMA pessoa num segundo cadastro, com outro nome. Isso nasce quando o arquivo exportado do
+// Caso do dono (05/08/2026): ele atendeu um cliente e a lista de quem estava sem atender (apagada
+// na v1246) seguia mostrando a MESMA pessoa num segundo cadastro, com outro nome. Isso nasce quando o arquivo exportado do
 // WhatsApp vem com nome diferente em cada importação. Até aqui o app só sabia APAGAR duplicata —
 // e apagar perde a conversa de um dos dois. Agora dá pra juntar: a conversa dos dois vira uma só
 // (sem repetir mensagem), o cadastro escolhido fica, o outro sai.
@@ -10083,9 +10055,10 @@ function cpMetaAtendimentosDia(){
 function cpFazerAgoraDose(items){ return cpFimDeSemana() ? 0 : Math.max(0, cpMetaAtendimentosDia() - cpAtendidosHojeTotal(items)); }
 // v1139 — RESGATE DIÁRIO (aprovado pelo dono junto com a régua de 90 dias): a ordem por
 // probabilidade deixa quem tem conversa rica sempre em cima — numa carteira grande, lead de
-// conversa curta afundava e ficava meses sem aparecer (o card "Sem atender 30d+" só crescia).
+// conversa curta afundava e ficava meses sem aparecer (o card de quem estava sem atender, que
+// existiu até a v1246, só crescia).
 // Agora, dentro da própria dose do dia, as ÚLTIMAS N vagas são de quem está há mais tempo sem
-// atendimento (mesma régua do card "Sem atender 30d+": nunca contatado primeiro, depois o
+// atendimento (mesma régua daquele card: nunca contatado primeiro, depois o
 // contato mais antigo — cpUltimoContatoCorretorTs). N é configurável no Cérebro ("Resgates por
 // dia", 0 desliga; "como tem atendimento por dia, crie resgates por dia" — palavras do dono),
 // padrão 2. Ninguém entra por fora: o resgate só REORDENA a fila elegível (cpFilaFazerAgora),
@@ -10283,8 +10256,9 @@ window.cp1170PendCount = cp1170PendCount;
 // Atualiza a pílula da fileira de números (só o número, sem redesenhar a fileira inteira) e,
 // se o painel estiver aberto, redesenha o corpo dele também.
 function cp1170Rerender(){
-  const b = qs("#kpiNotas b");
-  if(b) b.textContent = cp1170PendCount();
+  // v1246 — o número das notas mora no bloco do topo agora; o quadradinho da fileira da Home foi
+  // removido. Uma conta só, num lugar só (lição das v1215/v1227).
+  cp1246AtualizarBlocoTopo();
   const painel = qs("#cp1170Panel");
   if(painel && _cp1170PainelAberto) painel.innerHTML = cp1170PainelConteudoHTML();
 }
@@ -10346,7 +10320,7 @@ window.cp1170FecharPainel = cp1170FecharPainel;
 function cp1170CliqueFora(ev){
   const painel = qs("#cp1170Panel");
   if(!painel) return;
-  if(!painel.contains(ev.target) && !ev.target.closest("#kpiNotas")) cp1170FecharPainel();
+  if(!painel.contains(ev.target) && !ev.target.closest("#btnNotasTopo")) cp1170FecharPainel();
   else if(_cp1170PainelAberto) setTimeout(() => document.addEventListener("click", cp1170CliqueFora, { once: true }), 0);
 }
 
@@ -10724,14 +10698,10 @@ renderResumoDia = function(items){
   // bloco do topo (calendário + sino, ver atualizarSinoAgenda), sempre visível em qualquer tela.
   const aguardando=ativos.filter(l=>cp786Categoria(l)==='aguardando').length;
   const totalLeads=ativos.length;
-  // v1071 — pedido do dono: quantos leads estão sem atender há 30 dias ou mais (prazo fixo,
-  // separado do "descanso" configurável do Cérebro — ver cpSemAtenderHaDias).
-  const semAtender30=cpContarSemAtender(ativos, 30);
-  // v1124 — pedido do dono: um card com a quantidade de contatos ARQUIVADOS na Home. Ele NÃO sai
-  // de `items`/`ativos` (a Home só recebe a carteira ativa, ver _processarDashboard) — a conta vem
-  // de state.todosLeads, que é a carteira inteira que voltou do servidor. Sem essa lista (ex.: um
-  // render adiantado antes do primeiro carregamento) o card mostra 0 em vez de quebrar a tela.
-  const arquivados=(state.todosLeads||[]).filter(l=>normalizarEtapa(l.etapa)===ETAPA_ARQUIVADO).length;
+  // v1246 — "Sem atender 30d+" foi APAGADO da Home a pedido do dono ("pode deletar tb, nao sera
+  // mais necessario"). "Arquivados" e "Bloco de notas" saíram daqui e subiram pro bloco do topo
+  // (modelo B escolhido por ele) — quem preenche os dois números é cp1246AtualizarBlocoTopo.
+  cp1246AtualizarBlocoTopo();
   // v1171 — pedido do dono: um quadradinho só pra "quantos atendi" — hoje, nesta semana e neste
   // mês, 3 contagens simples (não é meta/dose batida, é só o total concluído em cada período) —,
   // pra fileira ficar parelha no celular junto do Bloco de notas (7 quadradinhos sobrava um
@@ -10750,11 +10720,31 @@ renderResumoDia = function(items){
     <div class="ui-kpi${fazerAgora>0?' active':''}" onclick="abrirFazerAgora()"><span>Fazer agora</span><div>${faB}<i>${ui631Icon('resposta')}</i></div></div>
     <div class="ui-kpi" onclick="abrirCarteiraAtiva()"><span>Total de leads</span><div><b>${totalLeads}</b><i>${ui631Icon('ativos')}</i></div></div>
     <div class="ui-kpi" onclick="abrirAguardandoCliente()"><span>Aguardando cliente</span><div><b>${aguardando}</b><i>${ui631Icon('ativos')}</i></div></div>
-    <div class="ui-kpi" onclick="cpAbrirSemAtender30Dias()" title="Nunca atendido ou sem atendimento há 30 dias ou mais"><span>Sem atender 30d+</span><div><b>${semAtender30}</b><i>${ui631Icon('reaquecer')}</i></div></div>
-    <div class="ui-kpi" onclick="show('arquivados')" title="Contatos que você arquivou — toque para abrir a lista"><span>Arquivados</span><div><b>${arquivados}</b><i>${ui631Icon('conversa')}</i></div></div>
-    <div class="ui-kpi" id="kpiNotas" onclick="cp1170AbrirPainel()" title="Tarefas administrativas — o que não é atendimento de cliente"><span>Bloco de notas</span><div><b>${(typeof cp1170PendCount==='function')?cp1170PendCount():0}</b><i>${ui631Icon('nota')}</i></div></div>
     <div class="ui-kpi cp1171-atendidos" onclick="show('relatorio')" title="Atendimentos concluídos — hoje, nesta semana e neste mês (inclusive quem você arquivou depois)"><span>Atendidos</span><i class="cp1171-ic">${ui631Icon('compromisso')}</i><div class="cp1171-trio"><div class="cp1171-col"><b>${atendidosHoje}</b><small>hoje</small></div><div class="cp1171-col"><b>${atendidosSemana}</b><small>semana</small></div><div class="cp1171-col"><b>${atendidosMes}</b><small>mês</small></div></div></div>`;
 };
+
+// v1246 — os dois números que subiram pro bloco do topo (Bloco de notas e Arquivados).
+//
+// A conta é a MESMA que os quadradinhos faziam, pra não nascer divergência entre a tela velha e a
+// nova (lição das v1215/v1227, quando dois lugares contavam a agenda cada um do seu jeito):
+//   • notas     — cp1170PendCount(), o mesmo contador do painel do Bloco de notas;
+//   • arquivados— state.todosLeads (a carteira INTEIRA), porque a Home só recebe a ativa.
+// Sem a carteira carregada ainda, mostra 0 em vez de quebrar a barra.
+function cp1246AtualizarBlocoTopo(){
+  const notasEl = document.getElementById('cpNotasTopoN');
+  if(notasEl){
+    let n = 0;
+    try{ n = (typeof cp1170PendCount === 'function') ? cp1170PendCount() : 0; }catch(_){}
+    notasEl.textContent = String(n || 0);
+  }
+  const arqEl = document.getElementById('cpArquivadosTopoN');
+  if(arqEl){
+    let n = 0;
+    try{ n = (state.todosLeads||[]).filter(l=>normalizarEtapa(l.etapa)===ETAPA_ARQUIVADO).length; }catch(_){}
+    arqEl.textContent = String(n || 0);
+  }
+}
+window.cp1246AtualizarBlocoTopo = cp1246AtualizarBlocoTopo;
 
 function ui631LeadMotivo(l){
   const mc=cp786Modelo(l), acao=cp786TextoSemJargao(mc?.acao?.descricao||l?.nextAction||'');

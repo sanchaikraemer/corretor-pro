@@ -157,7 +157,14 @@
       <!-- v1232 — modelo C escolhido pelo dono: bloco único no topo (calendário = TOTAL da agenda,
            sino = agenda de HOJE, com a metade de hoje acesa). O tile "Agenda" saiu da fileira da
            Home; este bloco é a casa nova desses números. Os dois lados abrem a tela Agenda. -->
+      <!-- v1246 — modelo B escolhido pelo dono: o Bloco de notas e os Arquivados saíram da fileira
+           de quadradinhos da Home e entraram NESTE mesmo bloco, antes do calendário e do sino. A
+           fileira tinha 7 quadradinhos e passou a 4; "Sem atender 30d+" foi apagado a pedido dele. -->
       <div class="cp-agbloco" id="cpAgendaBloco">
+        <button type="button" class="cp-agbloco-met" id="btnNotasTopo" title="Bloco de notas — tarefas que não são atendimento de cliente" onclick="cp1170AbrirPainel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h11l3 3v15H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><b id="cpNotasTopoN">0</b></button>
+        <span class="cp-agbloco-div" aria-hidden="true"></span>
+        <button type="button" class="cp-agbloco-met" id="btnArquivadosTopo" title="Arquivados — abrir a lista e reativar quando quiser" onclick="show('arquivados')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v3H3z"/><path d="M5 10v10h14V10M9 13h6"/></svg><b id="cpArquivadosTopoN">0</b></button>
+        <span class="cp-agbloco-div" aria-hidden="true"></span>
         <button type="button" class="cp-agbloco-met" id="btnAgendaTotalTopo" title="Abrir a Agenda — total de compromissos e lembretes" onclick="show('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><b id="cpAgTotalN">0</b></button>
         <span class="cp-agbloco-div" aria-hidden="true"></span>
         <button type="button" class="cp-agbloco-met cp-agbloco-hoje" id="topBell" title="Abrir a Agenda" onclick="show('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg><b id="cpAgHojeN">0</b><span class="bell-badge" id="bellBadge" hidden></span></button>

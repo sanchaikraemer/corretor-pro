@@ -194,6 +194,7 @@ console.log("v1170-bloco-de-notas (servidor): ok");
 // Front-end (app.js) — funções puras extraídas de verdade, com um DOM/fetch mínimo de mentira.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const indexHtml = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 function extrairFn(nome, assinatura) {
   const alvo = `function ${nome}(${assinatura ?? ""}`;
@@ -210,15 +211,15 @@ function extrairFn(nome, assinatura) {
   return app.slice(ini, i + 1);
 }
 
-// ── 9. v1171 — o bloco virou um card na fileira de números (não mais a faixa acima da busca) ────
+// ── 9. Onde mora a porta de entrada do bloco de notas ───────────────────────────────────────────
+// v1171: virou card na fileira de números (não mais a faixa acima da busca).
+// v1246: saiu da fileira e virou botão no bloco do topo, junto dos arquivados — modelo B escolhido
+//        pelo dono. A porta mudou de lugar duas vezes; o que não pode é não existir nenhuma.
 {
   assert.doesNotMatch(app, /cp1170BlocoHTML/, "a função antiga (bloco fixo no topo) foi substituída pelo painel — não pode sobrar referência a ela");
-  assert.match(app, /id="kpiNotas"[^>]*onclick="cp1170AbrirPainel\(\)"/,
-    'precisa existir um card "Bloco de notas" na fileira de números que abre o painel flutuante ao tocar');
-  const posKpiNotas = app.indexOf('id="kpiNotas"');
-  const posArquivados = app.indexOf("show('arquivados')");
-  assert.ok(posKpiNotas > 0 && posArquivados > 0 && posArquivados < posKpiNotas,
-    "o card de notas fica na mesma fileira dos outros números, depois de Arquivados");
+  assert.match(indexHtml, /id="btnNotasTopo"[^>]*onclick="cp1170AbrirPainel\(\)"/,
+    'o botão do Bloco de notas precisa existir no topo e abrir o painel flutuante ao tocar');
+  assert.ok(!app.includes('id="kpiNotas"'), 'o card antigo da fileira não pode voltar junto');
   assert.match(app, /if\(typeof cp1170Carregar === 'function'\) cp1170Carregar\(\);/,
     "a Home precisa disparar o carregamento das notas sozinha (sem esperar o corretor abrir o painel) pra a contagem já vir pronta");
 }

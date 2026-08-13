@@ -75,10 +75,14 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   // então agora a regra é mais simples — nenhum aro, proporcional ou não.
   assert.doesNotMatch(rbh, /stroke-dasharray/, 'o quadradinho de Atendidos não pode ter aro nenhum (v1183: parecia carregando)');
 
-  // fica depois do Bloco de notas, os dois juntos fecham 8 quadradinhos (7 sobrava 1 sozinho no celular)
-  const posNotas = rbh.indexOf('id="kpiNotas"');
+  // v1246 — a fileira encolheu de 8 pra 4 (Sem atender 30d+ apagado; Arquivados e Bloco de notas
+  // subiram pro bloco do topo). "Atendidos" continua sendo o ÚLTIMO da fileira, que é o que importa
+  // pra ele: os três números do período fecham a linha, não aparecem no meio dos contadores secos.
   const posAtendidos = rbh.indexOf('cp1171-atendidos');
-  assert.ok(posNotas > 0 && posAtendidos > posNotas, 'o quadradinho de Atendidos precisa vir depois do Bloco de notas, fechando 8 quadradinhos na fileira');
+  const posAguardando = rbh.indexOf('abrirAguardandoCliente()');
+  assert.ok(posAtendidos > 0 && posAtendidos > posAguardando,
+    'o quadradinho de Atendidos precisa fechar a fileira, depois dos contadores simples');
+  assert.equal((rbh.match(/class="ui-kpi/g) || []).length, 4, 'a fileira ficou com quatro quadradinhos');
 }
 
 console.log('v1171-atendidos-hoje-semana-mes: ok');
