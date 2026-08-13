@@ -59,9 +59,13 @@ precisam estar citadas em `ESTADO-ATUAL.md`).
   analisada. Na ausência de informação, a IA deve ficar em "Não identificado" — nunca
   inventar.
 - A análise de uma conversa NUNCA pode ser descartada inteira só porque as 3 sugestões de
-  mensagem não passaram nas regras do Cérebro na primeira tentativa (ver `api/_pipeline.js`,
-  `construirMensagensDeterministicasCerebro` — fallback determinístico adicionado na v827-12
-  depois desse exato bug travar a importação de forma intermitente).
+  mensagem não passaram nas regras do Cérebro na primeira tentativa (bug real da v827-12, que
+  travava a importação de forma intermitente). **ATENÇÃO — isto mudou de forma:** o fallback
+  `construirMensagensDeterministicasCerebro` NÃO EXISTE MAIS e não pode voltar; os testes de hoje
+  exigem que ele não exista (ele substituía o texto real da IA por frase genérica, ver
+  `NOTAS-v827-18.md`). O que garante a regra hoje é outra coisa: a análise sobrevive a qualquer
+  falha das mensagens, e a rede contra clichê é o corte determinístico em `limparFrasesProibidas`
+  + `melhorLimpa` (v1238/v1241), que nunca descarta a análise.
 - `api/_persistence.js`, `_pipeline.js` e as demais rotas de `/api` só podem existir dentro
   de `api/` — `build.js` bloqueia o build se aparecerem duplicadas na raiz.
 

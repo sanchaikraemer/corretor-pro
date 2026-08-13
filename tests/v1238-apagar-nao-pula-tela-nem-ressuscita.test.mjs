@@ -121,8 +121,12 @@ for (const [entrada] of cortes) {
   assert.equal(detectarFrasesProibidas(saida).proibidas.length, 0, "sobrou frase proibida depois do corte");
   assert.ok(saida.trim().length > 0, "o corte nunca pode devolver texto vazio");
 }
-assert.ok(limparFrasesProibidas("Fico à disposição.").trim().length > 0,
-  "mensagem que era SÓ clichê não pode virar vazio (melhor o original que nada)");
+// v1241 — este assert ERA O FURO, e a auditoria do dono pegou: exigir que uma mensagem 100%
+// clichê "voltasse com algum texto" fazia limparFrasesProibidas devolver o ORIGINAL — ou seja,
+// exatamente a frase proibida. Agora o corte devolve vazio e quem decide é melhorLimpa, que só
+// entrega texto proibido se NENHUMA versão limpa existir. Mensagem vazia nunca chega na tela.
+assert.equal(limparFrasesProibidas("Fico à disposição.").trim(), "",
+  "mensagem que era só clichê não pode voltar com o clichê intacto");
 
 // 3b. Ponta a ponta no PIOR caso: a IA insiste no clichê nas duas chamadas.
 {

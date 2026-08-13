@@ -9,6 +9,7 @@
 // IA inventava um terceiro passo pior só pra diferenciar as mensagens.
 //
 // O Cérebro é a autoridade sobre estratégia; o pedido fixo passou a concordar com ele.
+import fs from "node:fs";
 import assert from "node:assert/strict";
 import { analyzeWithBrain } from "../api/_pipeline.js";
 
@@ -53,26 +54,37 @@ assert.doesNotMatch(
 );
 
 // A exceção precisa estar escrita, e precisa dizer que a convergência é por caminhos diferentes.
-assert.match(pedido, /EXCEÇÃO/, "o pedido precisa prever a exceção de convergência");
-assert.match(pedido, /ÚNICO próximo passo adequado/i);
-assert.match(pedido, /PODEM convergir/i);
-assert.match(pedido, /caminho e um enquadramento diferentes/i);
+// v1241 — AUDITORIA DO DONO (13/08/2026): "o Cérebro tem que ser a única autoridade comercial".
+// O bloco que definia o ÂNGULO COMERCIAL de cada uma das três (e a exceção de convergência)
+// é método comercial: saiu do pedido de quem TEM Cérebro e virou ponto de partida da conta
+// nova (METODO_BASE_PREVIA). A regra não sumiu do produto — mudou quem manda nela. O pedido
+// de todo mundo mantém só o que é da TELA: as três são três caminhos pro mesmo comoConduzir.
+const fonte = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
+assert.match(fonte, /EXCEÇÃO/, "a exceção de convergência continua existindo, no ponto de partida da conta nova");
+assert.match(fonte, /ÚNICO próximo passo adequado/i);
+assert.match(fonte, /PODEM convergir/i);
+assert.match(fonte, /caminho e um enquadramento diferentes/i);
+assert.match(pedido, /TRÊS CAMINHOS PARA O MESMO "comoConduzir"/,
+  "o pedido de todo mundo mantém a regra de tela: três caminhos pro mesmo passo");
 
 // E precisa proibir o efeito colateral que a regra antiga provocava.
-assert.match(
-  pedido,
-  /Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens/i,
-  "o pedido precisa proibir diferenciar as mensagens inventando um passo pior"
-);
+// v1241 — mesma mudança de dono: isto é método comercial e mora agora no ponto de partida da
+// conta nova. Continua escrito no produto, só não é mais o código quem impõe a quem tem Cérebro.
+assert.match(fonte, /Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar/,
+  "o pedido precisa proibir diferenciar as mensagens inventando um passo pior");
 
 // Ângulos diferentes continuam sendo o padrão — a exceção não pode virar permissão pra repetir
 // a mesma mensagem três vezes.
-assert.match(pedido, /ÂNGULOS COMERCIAIS DIFERENTES/i);
-assert.match(pedido, /NÃO a mesma ideia reescrita/i);
+// v1241 — método comercial: continua escrito no produto, agora no ponto de partida da conta nova.
+// O que o pedido de TODO MUNDO garante é o que a tela precisa: três caminhos, não três cópias.
+assert.match(fonte, /ÂNGULOS COMERCIAIS DIFERENTES/i);
+assert.match(fonte, /NÃO a mesma ideia reescrita/i);
+assert.match(pedido, /não três assuntos diferentes,\s*\n?nem a mesma frase reescrita três vezes/i,
+  "o pedido continua proibindo entregar a mesma mensagem três vezes");
 
 // "maisDireta" deixou de exigir avanço concreto em conversa que ainda não amadureceu
 // (regra 20 do Cérebro Comercial V3).
-assert.match(pedido, /Quando a conversa ainda NÃO tiver maturidade/i);
-assert.match(pedido, /não\s+força esse avanço/i);
+assert.match(fonte, /Quando a conversa ainda NÃO tiver maturidade/i);
+assert.match(fonte, /não\s+força esse avanço/i);
 
 console.log("v1206-tres-mensagens-podem-convergir: ok");

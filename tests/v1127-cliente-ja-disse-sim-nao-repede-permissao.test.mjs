@@ -83,10 +83,16 @@ const fimPrompt = pipeline.indexOf("CONVERSA COMPLETA:", inicioPrompt);
 assert.ok(fimPrompt > inicioPrompt, "não achei o fim do prompt da análise");
 const corpoPrompt = pipeline.slice(inicioPrompt, fimPrompt);
 
-assert.ok(corpoPrompt.includes("CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO"),
-  "a regra do 'já disse sim' precisa estar DENTRO do prompt enviado na análise");
-assert.ok(corpoPrompt.includes("PERGUNTA DO CORRETOR SEM RESPOSTA:"),
-  "a regra da pergunta sem resposta precisa estar DENTRO do prompt enviado na análise");
+// v1241 — AUDITORIA DO DONO (13/08/2026): o Cérebro passou a ser a única autoridade comercial.
+// Esta regra é método comercial: saiu do pedido de quem TEM Cérebro e virou ponto de partida da
+// conta nova (METODO_BASE_PREVIA). Continua existindo no produto — mudou quem manda nela.
+const previa = pipeline.slice(pipeline.indexOf("const METODO_BASE_PREVIA"), pipeline.indexOf("`;", pipeline.indexOf("const METODO_BASE_PREVIA")));
+assert.ok(previa.includes("CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO"),
+  "a regra do 'já disse sim' precisa continuar no ponto de partida de quem não tem Cérebro");
+assert.ok(previa.includes("PERGUNTA DO CORRETOR SEM RESPOSTA:"),
+  "a regra da pergunta sem resposta precisa continuar no ponto de partida");
+assert.ok(!corpoPrompt.includes("CLIENTE JÁ DISSE SIM"),
+  "quem já escreveu o Cérebro não recebe mais método comercial do código");
 
 // O Cérebro do corretor continua sendo a autoridade — a base nova não pode ter virado uma regra
 // que se declara acima dele.

@@ -29,6 +29,14 @@ _Retoque na v1141: a importação **não pergunta mais o período dos áudios** 
 dos áudios" do Cérebro) e a reimportação passou a reaproveitar o que já está salvo — a seção 2
 descreve como isso funciona em `processar-storage.js`. Ver `NOTAS-v1141.md`._
 
+_**Correção na v1241 (a linha acima envelheceu e estava enganando):** desde a **v1221**,
+reimportar SEMPRE reanalisa, mesmo sem nenhuma mensagem nova — porque as regras do Cérebro podem
+ter mudado desde a última leitura. O reaproveitamento da v1141 vale para o trabalho pesado que não
+precisa repetir (áudio já transcrito não é transcrito de novo), NÃO para a análise. E desde a
+**v1241** a conversa vai **inteira** para a IA em toda análise: o modo incremental (resumo do que
+já foi lido + só a novidade) está desligado por padrão e só volta por
+`DIRECIONA_INCREMENTAL_MIN_CHARS`. Ver `NOTAS-v1221.md` e `NOTAS-v1241.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
