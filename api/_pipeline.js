@@ -2971,6 +2971,7 @@ Responda somente com JSON válido no formato solicitado.`;
 Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
 Fuso horário da análise: ${fusoAnalise}
 Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília).
+NÃO CUMPRIMENTE DUAS VEZES: se a ÚLTIMA mensagem do histórico for do CORRETOR e já for um cumprimento ("boa tarde", "oi", "tudo bem?", "e aí"), a próxima mensagem dele NÃO abre com saudação nenhuma — ele acabou de cumprimentar, repetir soa automático e denuncia mensagem pronta. Nesse caso comece direto pelo assunto, chamando o cliente pelo nome se for natural. A mesma coisa vale quando corretor e cliente já trocaram o cumprimento hoje: o cumprimento já aconteceu, a mensagem seguinte é a que traz o conteúdo.
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.
@@ -3019,6 +3020,11 @@ enviar), preencha "pedidoSemResposta" descrevendo de forma factual o que ainda e
 sem opção pronta equivalente"). Se o pedido já foi atendido ou não há pedido específico em aberto,
 use exatamente "Nenhum". Isso é diferente de "compromissoCorretorNaoCumprido" (uma promessa que o
 CORRETOR fez e não cumpriu) — aqui é sobre um PEDIDO DO CLIENTE que ainda não teve resposta direta.
+E quando "pedidoSemResposta" NÃO for "Nenhum", ele manda na mensagem "recomendada": ela precisa
+ENTREGAR o que o cliente pediu (ou dizer que está enviando agora, emendando o envio), nunca fazer
+uma pergunta no lugar da entrega. Cliente que pediu algo e não recebeu não escolhe, não filtra e
+não responde qualificação — ele está esperando aquilo. Isso vale mesmo que já tenham passado
+semanas ou meses desde o pedido: o tempo parado não cancela o pedido, aumenta a dívida.
 
 CLIENTE JÁ DISSE SIM — NÃO PEÇA A MESMA PERMISSÃO DE NOVO: se a última mensagem do cliente for uma
 resposta afirmativa a algo que o corretor ofereceu ou propôs ("pode sim", "pode mandar", "sim",
@@ -3037,6 +3043,12 @@ qualificação (faixa de valor, perfil, prazo, tipologia) e o cliente nunca resp
 continua DESCONHECIDO — não o trate como sabido e não presuma o valor pelo produto que foi oferecido.
 Retomar essa pergunta em aberto costuma ser o passo que mais destrava a conversa; priorize-a entre as
 três mensagens (respeitando a regra acima: emendada na entrega, não como novo pedido de permissão).
+MAS ELA NUNCA GANHA DE UM PEDIDO DO CLIENTE EM ABERTO: quando existir "pedidoSemResposta" diferente
+de "Nenhum", o pedido do CLIENTE vem primeiro e a pergunta do CORRETOR vai junto da entrega, nunca
+no lugar dela. E se essa mesma pergunta de qualificação JÁ FOI FEITA e o cliente não respondeu,
+refazê-la sozinha (só trocando as palavras) é repetir a mensagem que já falhou — nenhuma das três
+pode ser só isso. O que mudou desde então tem que aparecer na mensagem: entregue primeiro o que
+falta, e aí a pergunta faz sentido pra quem já tem a informação na mão.
 
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
