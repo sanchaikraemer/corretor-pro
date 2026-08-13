@@ -25,7 +25,10 @@ assert.match(cssLimpeza, /@media\(min-width:1000px\)\{\s*\.menu-nav-item\{\s*dis
 
 // Os que NÃO estão na lateral continuam no Menu (em qualquer tela).
 // (v904: o card "Vendas registradas" foi removido — só "Arquivar" existe como desfecho.)
-for(const titulo of ['Importar conversa', 'O que a IA aprendeu', 'Instalar app']){
+// v1249 — o card virou "Enviar conversa": ordem do dono, repetida várias vezes — no produto dele
+// a conversa é EXPORTADA no WhatsApp e ENVIADA/COMPARTILHADA com o app, nunca "importada".
+// O vocabulário da tela é trancado em tests/v1249-a-conversa-e-enviada-nunca-importada.test.mjs.
+for(const titulo of ['Enviar conversa', 'O que a IA aprendeu', 'Instalar app']){
   assert.match(html, new RegExp('menu-card-titulo">' + titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `o card "${titulo}" deve continuar no Menu`);
 }
 

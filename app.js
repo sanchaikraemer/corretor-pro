@@ -1068,7 +1068,7 @@ export function clearAnalysis(){
   if(cpPerguntaTopo){ cpPerguntaTopo.innerHTML=""; cpPerguntaTopo.hidden=true; }
   qs("#analysisBox").className="empty";
   qs("#analysisBox").innerHTML="Aguardando análise.";
-  qs("#timeline").innerHTML='<div class="event"><b>Aguardando importação</b><p>A conversa organizada aparecerá aqui.</p></div>';
+  qs("#timeline").innerHTML='<div class="event"><b>Aguardando a conversa</b><p>A conversa organizada aparecerá aqui.</p></div>';
   qs("#clientName").value="";
   qs("#clientPhone").value="";
   qs("#messageText").value="Importe uma conversa para gerar uma mensagem sugerida.";
@@ -3185,7 +3185,7 @@ function renderBotoesHome(){
     // Fila realmente vazia (fim de semana, ou ninguém elegível agora). Uma linha neutra, sem box.
     // v1091 — em dia sem fila esta caixa NÃO repete o aviso: a saudação, poucos centímetros acima
     // na mesma tela, já explicou. Fica em branco pra tela não ficar dizendo a mesma coisa duas vezes.
-    top3Html = cpFimDeSemana() ? "" : `<div class="cp-hoje-vazio">Nenhum lead pra atender agora. Bom momento pra importar conversas novas.</div>`;
+    top3Html = cpFimDeSemana() ? "" : `<div class="cp-hoje-vazio">Nenhum lead pra atender agora. Bom momento pra enviar conversas novas.</div>`;
   }
 
   foco.innerHTML = `
@@ -3443,7 +3443,7 @@ function abrirMaisAcoes(){
   ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center";
   ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-top-left-radius:20px;border-top-right-radius:20px;padding:16px 16px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px">
     <div style="width:40px;height:4px;border-radius:999px;background:rgba(255,255,255,.2);margin:0 auto 14px"></div>
-    <button type="button" id="maAcImportar" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,98,88,.06);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">⇪ Importar conversa</button>
+    <button type="button" id="maAcImportar" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,98,88,.06);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">⇪ Enviar conversa do WhatsApp</button>
     <button type="button" id="maAcLead" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">＋ Lead manual</button>
     <button type="button" id="maAcAprender" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">🧠 Aprender da carteira <span style="font-weight:600;color:var(--muted);font-size:11px">(sem custo de análise)</span></button>
     <button type="button" id="maAcTelefones" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer">📞 Importar telefones (CSV) <span style="font-weight:600;color:var(--muted);font-size:11px">preenche quem está sem número</span></button>
@@ -4386,7 +4386,7 @@ function abrirEditarLead(id, nome, telefone){
         <button type="button" id="editLeadSalvar" style="width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;font-size:14px;font-weight:950;cursor:pointer;margin-bottom:14px">Salvar</button>
         <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px">
           <button type="button" id="editLeadJuntar" style="width:100%;padding:10px;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:10px;font-size:13px;font-weight:950;cursor:pointer">Juntar com outro cadastro</button>
-          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Só para o caso raro em que a mesma pessoa ficou com dois cadastros de nomes bem diferentes — na importação o app já reconhece e pergunta sozinho.</div>
+          <div class="small" style="color:var(--muted);font-size:10px;margin-top:5px">Só para o caso raro em que a mesma pessoa ficou com dois cadastros de nomes bem diferentes — ao receber a conversa o app já reconhece e pergunta sozinho.</div>
         </div>
         <div style="border-top:1px solid var(--line);padding-top:12px">
           <div style="color:var(--risco);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;margin-bottom:6px">Zona perigosa</div>
@@ -4426,7 +4426,7 @@ function abrirNovoLead(){
   overlay.innerHTML = `
     <div class="ui677-manual-card" role="dialog" aria-modal="true" aria-labelledby="ui677ManualTitle">
       <div class="ui677-manual-head">
-        <div><small>Novo atendimento</small><h3 id="ui677ManualTitle">Incluir lead manualmente</h3><p>Cadastre sem importar uma conversa do WhatsApp.</p></div>
+        <div><small>Novo atendimento</small><h3 id="ui677ManualTitle">Incluir lead manualmente</h3><p>Cadastre sem enviar uma conversa do WhatsApp.</p></div>
         <button type="button" id="novoLeadFechar" aria-label="Fechar">✕</button>
       </div>
       <label for="novoLeadNome">Nome</label>
@@ -8056,7 +8056,7 @@ window.finalizarSharePendente=finalizarSharePendente;
 
 export async function descartarSharePendente(id){
   await finalizarSharePendente(id);
-  toast('Importação descartada.');
+  toast('Envio descartado.');
 }
 window.descartarSharePendente=descartarSharePendente;
 
@@ -8153,7 +8153,7 @@ function religarRecebedorDeConversa(){
 function mostrarRecebimentoShare(){
   show('zip');
   qs('#processingBox')?.classList.add('show');
-  if(qs('#processingText')) qs('#processingText').textContent='Conversa recebida. Preparando a importação…';
+  if(qs('#processingText')) qs('#processingText').textContent='Conversa recebida. Preparando…';
   if(qs('#progressBar')) qs('#progressBar').style.width='4%';
 }
 
@@ -11379,7 +11379,7 @@ function cpRenderDesempenhoMetricas(items, all){
     linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", vendoMesPassado ? `Em ${nomeMes(iniAnt)}` : "Este mês", m.leadsAtendidos),
     linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", `Sugestões da IA que você usou, ${rotuloMes}`, m.mensagensCopiadas),
     linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", `Conversas processadas pela IA, ${rotuloMes}`, m.analisesFeitas),
-    linha(CP_MET_ICONS.importar, "var(--dados)", "Importações", `ZIPs de conversa processados, ${rotuloMes}`, m.importacoes),
+    linha(CP_MET_ICONS.importar, "var(--dados)", "Conversas enviadas", `Conversas do WhatsApp processadas, ${rotuloMes}`, m.importacoes),
   ].join("");
   const propostasRow = `
     <button type="button" class="cp-met-row cp-met-row-btn" onclick="cpAbrirHistoricoPropostas()">
