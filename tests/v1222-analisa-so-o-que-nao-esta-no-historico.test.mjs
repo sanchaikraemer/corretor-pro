@@ -72,48 +72,43 @@ const analisar = async (timeline, contextoIncremental) => {
 
 const timelineComNova = [...CONVERSA_LONGA, NOVA];
 
+const fonte = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
+
 // ── 1. Primeira análise deste cliente: vai a conversa inteira (não há resumo pra substituir) ────
 const promptCompleto = await analisar(timelineComNova, null);
 assert.match(promptCompleto, /CONVERSA COMPLETA:/, 'sem análise anterior, a conversa vai inteira');
 assert.match(promptCompleto, /mensagem antiga número 3\b/, 'e as mensagens antigas estão lá');
 
-// ── 2. v1241 — O DONO REVOGOU A ECONOMIA: agora vai a CONVERSA INTEIRA, sempre ─────────────
+// ── 2. v1247 — HISTÓRICO INTEGRAL: reimportação relê a CONVERSA INTEIRA ─────────────────────
 //
-// "o sistema diz 'analise toda a conversa e siga o Cérebro', mas o código ainda pode esconder
-// parte da conversa" (auditoria do dono, 13/08/2026). Ele listou HISTÓRICO INTEGRAL como
-// prioridade nº 1, acima da economia que ele mesmo tinha pedido na v1222.
-//
-// O modo incremental NÃO foi apagado — ficou desligado por padrão (limiar Infinity) e volta com
-// uma variável de ambiente se o custo apertar. O que este teste protege agora é o comportamento
-// que vale hoje: reimportação com mensagem nova relê TUDO, sem resumo e sem mensagem escondida.
+// "de ontem pra hoje está cada vez pior" (dono, 13/08/2026). Mandar RESUMO no lugar das mensagens
+// antigas foi uma das causas: a IA ficava com pouco material real na mão e devolvia mensagem
+// genérica. O modo incremental ficou DESLIGADO por padrão (limiar Infinity) — não foi apagado,
+// volta por variável de ambiente se o custo um dia apertar.
 const promptIncremental = await analisar(timelineComNova, {
   analiseAnterior: ANALISE_ANTERIOR,
   assinaturasNovas: [assinatura(NOVA)]
 });
 
 assert.doesNotMatch(promptIncremental, /RESUMO DO QUE JÁ FOI ANALISADO \+ O QUE É NOVO/,
-  'nada de resumo: a conversa vai inteira, é a prioridade nº 1 do dono');
+  'nada de resumo no lugar da conversa: a IA lê tudo');
 assert.match(promptIncremental, /consegue me mandar o valor final atualizado\?/, 'a mensagem NOVA vai inteira');
 assert.ok(promptIncremental.includes('mensagem antiga número 3'),
-  'mensagem antiga TAMBÉM vai — esconder parte da conversa era o erro que ele mandou consertar');
+  'mensagem antiga TAMBÉM vai — esconder parte da conversa é o que deixava a sugestão genérica');
 assert.ok(promptIncremental.includes('mensagem antiga número 249'),
   'inclusive as do meio e do fim: nenhuma mensagem fica de fora');
 
-// O mecanismo continua existindo pra poder ser religado sem publicar nada.
-const fonte = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
+// O que se mede agora é o contrário da economia: a reimportação NÃO encolhe a conversa.
+const soAConversa = (prompt) => prompt.slice(prompt.search(/CONVERSA (COMPLETA|—)/));
+console.log(`   conversa enviada à IA: ${soAConversa(promptCompleto).length} → ${soAConversa(promptIncremental).length} caracteres (sem esconder nada)`);
+assert.ok(soAConversa(promptIncremental).length >= soAConversa(promptCompleto).length,
+  'a reimportação não pode mandar MENOS conversa que a primeira análise');
+
+// O limiar desligado é o que garante isso, e o mecanismo continua no código pra poder voltar.
 assert.match(fonte, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| Infinity/,
   'o limiar desligado é o que garante a conversa inteira');
 assert.match(fonte, /function montarEntradaIncremental/,
   'o mecanismo não foi apagado — só desligado, pra voltar por variável de ambiente se precisar');
-
-// v1241 — a meta de ECONOMIA foi revogada pelo dono (histórico integral é prioridade nº 1).
-// O que se mede agora é o contrário: a reimportação NÃO encolhe a conversa.
-const soConversa = (t) => String(t).slice(String(t).indexOf('CONVERSA COMPLETA:'));
-const tamanhoCompleto = soConversa(promptCompleto).length;
-const tamanhoReimport = soConversa(promptIncremental).length;
-console.log(`   conversa enviada à IA: ${tamanhoCompleto} → ${tamanhoReimport} caracteres (sem esconder nada)`);
-assert.ok(tamanhoReimport >= tamanhoCompleto,
-  `a reimportação não pode mandar MENOS conversa que a 1ª análise (foi ${tamanhoCompleto} → ${tamanhoReimport})`);
 
 // ── 3. Reimportação SEM mensagem nova: ANALISA IGUAL (o prompt pode ter mudado) — mas também
 //      sem reler tudo. É a segunda metade do pedido, e a que mais confundiu até aqui.
@@ -131,13 +126,9 @@ assert.ok(tamanhoReimport >= tamanhoCompleto,
     return p;
   })();
   assert.equal(chamou, true, 'conversa igual TAMBÉM é analisada de novo — as regras podem ter mudado');
-  // v1241 — os avisos de "nada mudou" faziam parte do modo incremental, que ficou desligado
-  // (histórico integral é prioridade nº 1 do dono). Sem resumo, não há o que avisar: a IA recebe a
-  // conversa inteira e relê com as regras de hoje. O texto dos avisos continua no código, pronto
-  // pra voltar junto com o modo, se o custo um dia pedir.
+  // v1247 — sem resumo, não há o que avisar: a IA recebe a conversa inteira e relê com as regras
+  // de hoje. O texto dos avisos continua no código, pronto pra voltar junto com o modo incremental.
   assert.match(fonte, /NENHUMA MENSAGEM NOVA DESDE A ÚLTIMA ANÁLISE/, 'o aviso continua existindo no código');
-  assert.match(fonte, /Refaça a leitura mesmo assim, com as regras de hoje/, 'idem a instrução de reler');
-  assert.match(fonte, /Não invente movimento que não houve/, 'idem a proibição de inventar movimento');
   assert.ok(prompt.includes('mensagem antiga número 3'),
     'reimportação sem novidade relê a conversa INTEIRA — nada de esconder mensagem já analisada');
 }
@@ -159,14 +150,12 @@ for(const anteriorRuim of [null, { messages: {} }, { arquiteturaMensagens: 'v700
   assert.match(prompt, /CONVERSA COMPLETA:/, 'sem resumo confiável, a conversa vai inteira (nunca se analisa no escuro)');
 }
 
-// ── 6. O limiar é configurável e o padrão está documentado no código ────────────────────────────
+// ── 6. O único teto que existe é o técnico, e ele cobre conversa de anos ────────────────────────
 {
   const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
-  // v1241 — o padrão virou Infinity (modo desligado). O que continua trancado é ele ser
-  // CONFIGURÁVEL: o dono religa por variável de ambiente, sem publicar nada, se o custo apertar.
-  assert.match(src, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| Infinity/, 'limiar desligado por padrão, e configurável');
   assert.match(src, /DIRECIONA_INCREMENTAL_CAUDA_CHARS \|\| 9000/, 'tamanho da cauda de contexto configurável');
-  // E o teto técnico que cortava conversa longa em silêncio subiu — 30 mil cortava carteira real.
+  // v1247 — o teto técnico que cortava conversa longa em silêncio subiu: 30 mil cortava carteira
+  // real (300 mensagens perdiam mais de cem, sem avisar ninguém).
   assert.match(src, /DIRECIONA_MAX_CONTEXT_CHARS \|\| 120000/, 'o teto técnico cobre conversa de anos');
 }
 

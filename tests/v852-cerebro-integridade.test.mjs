@@ -60,12 +60,7 @@ const semCerebro = await analyzeWithBrain({
 });
 
 // 1. A prévia acontece de verdade — é o que o cliente novo precisa ver no primeiro uso.
-// v1235 — antes este assert exigia exatamente 1 chamada. O que ele protege é que a análise
-// ACONTEÇA (a recusa da v1131 é que era o beco); o número exato deixou de ser o jeito de medir
-// isso: a resposta de exemplo deste mock traz "fico à disposição" e "se você ainda tem interesse",
-// dois clichês da lista dura, então a conferência das três mensagens manda reescrever — que é
-// exatamente o comportamento novo e desejado, inclusive na prévia.
-assert.ok(chamadas >= 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
+assert.equal(chamadas, 1, "sem Cérebro, a análise precisa ACONTECER (modo prévia) — era aqui que o cliente novo travava");
 assert.equal(semCerebro.mode, "openai");
 assert.equal(semCerebro.modoPrevia, true, "o resultado precisa se identificar como prévia, pra a tela convidar a configurar");
 assert.equal(semCerebro.sugestoesPendentes, false, "a prévia é utilizável: não pode voltar marcada como pendente");
@@ -79,11 +74,7 @@ assert.match(systemPromptCapturado, /NUNCA afirme preço, condição de pagament
   "a prévia precisa proibir explicitamente afirmar qualquer dado comercial que não esteja na conversa");
 assert.match(systemPromptCapturado, /Não identificado/,
   "campo sem base na conversa precisa continuar caindo em Não identificado");
-// v1240 — o antigo "INTELIGÊNCIA COMERCIAL BASE" foi partido em dois, a pedido do dono ("a única
-// regra era seguir as ordens do cerebro"): a parte que PROÍBE INVENTAR continua entrando sempre,
-// e o método comercial virou só um ponto de partida pra quem ainda não escreveu o Cérebro. O que
-// este assert protege — a prévia não pode abrir a porta pra invenção — continua igual.
-assert.match(systemPromptCapturado, /NADA DE INVENTAR/,
+assert.match(systemPromptCapturado, /INTELIGÊNCIA COMERCIAL BASE/,
   "o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt");
 
 // 3. Com Cérebro configurado, nada muda: não é prévia.

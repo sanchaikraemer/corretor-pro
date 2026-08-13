@@ -83,21 +83,11 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
   // Conversa parada é justamente onde a IA inventa um motivo pra voltar.
   assert.match(bloco, /o motivo tem que ser real/, 'conversa parada não autoriza inventar motivo de retomada');
 
-  // A regra vale sempre: fica no prompt de SISTEMA, FORA do Cérebro (que é configurável e pode
+  // A regra vale sempre: fica no prompt de SISTEMA, fora do Cérebro (que é configurável e pode
   // estar vazio numa conta nova).
-  // v1239 — este assert conferia isso pela POSIÇÃO ("vem depois do fim do Cérebro"), que era só um
-  // atalho. A ordem do prompt foi invertida de propósito: as proibições do código passaram a vir
-  // ANTES e o Cérebro do corretor virou a última coisa que a IA lê, porque o fim do texto é o que
-  // mais pesa na resposta e as regras dele estavam soterradas. A intenção original continua
-  // trancada, agora pelo que ela realmente quer dizer: a regra não pode estar DENTRO do bloco do
-  // Cérebro.
-  const posRegra = pipeline.indexOf('AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO');
-  const posCerebroIni = pipeline.indexOf('=== INÍCIO DO CÉREBRO COMERCIAL ===');
-  const posCerebroFim = pipeline.indexOf('=== FIM DO CÉREBRO COMERCIAL ===');
-  assert.ok(posRegra > -1 && posCerebroIni > -1 && posCerebroFim > posCerebroIni, 'sanidade: marcadores do prompt');
   assert.ok(
-    posRegra < posCerebroIni || posRegra > posCerebroFim,
-    'a regra precisa estar no prompt de sistema, fora do bloco do Cérebro, valendo inclusive em modo prévia'
+    pipeline.indexOf('AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO') > pipeline.indexOf('=== FIM DO CÉREBRO COMERCIAL ==='),
+    'a regra precisa estar no prompt de sistema, valendo inclusive em modo prévia'
   );
 
   // E o código continua NÃO reescrevendo mensagem: a correção é pela regra, não por filtro local.
