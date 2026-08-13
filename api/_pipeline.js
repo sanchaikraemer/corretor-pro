@@ -2964,6 +2964,17 @@ interesse". Também não escreva no passado o que você quer agora ("quis saber 
 se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto ("o que acha?", "o que
 você prefere?", "consigo separar?"), sem repetir em outras palavras o que a mensagem já disse.
 
+TEMPO PARADO NÃO ENTRA NA MENSAGEM — NUNCA. É PROIBIDO abrir (ou fechar) falando do intervalo desde
+a última conversa, em QUALQUER forma: "faz alguns dias", "faz um tempo", "faz X dias/semanas/meses",
+"passaram alguns dias", "desde nossa última conversa", "há quanto tempo", "você sumiu", "não tive
+retorno", "ainda não me respondeu", "estou aguardando seu retorno", "tentei falar com você". Isso
+NÃO é abertura, é cobrança: coloca o cliente na defensiva e faz a mensagem girar em torno da espera
+do CORRETOR, não do interesse do CLIENTE. E não adianta acertar o número — dizer "faz 42 dias" é
+PIOR do que dizer "faz alguns dias". A régua é simples: o intervalo é dado INTERNO, serve pro
+corretor decidir a hora de chamar; dentro da mensagem ele não aparece de forma nenhuma. Retomada
+boa começa pelo ASSUNTO — um fato novo, o que ficou pendente, o que mudou desde então — e o cliente
+reconhece a conversa sozinho, sem precisar ser lembrado de quanto tempo ficou calado.
+
 Responda somente com JSON válido no formato solicitado.`;
 
   const prompt = `Execute a análise usando o Cérebro Comercial recebido no prompt de sistema e os dados abaixo.
@@ -2996,6 +3007,41 @@ PODEM convergir para ele, cada uma chegando lá por um caminho e um enquadrament
 Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens —
 diferença forçada que não serve ao cliente é pior do que convergência honesta. Todas seguem o
 Cérebro, usam só fatos da conversa e mantêm o jeito de escrever do corretor.
+
+CADA MENSAGEM É UMA CONDUÇÃO, NUNCA UM CHECK-IN. Os três ângulos acima mudam o TOM e o CAMINHO,
+mas as três têm a MESMA espinha obrigatória, nesta ordem:
+ (1) ABRE POR UM FATO CONCRETO DESTA CONVERSA — o prazo real do produto, o que ficou pendente, a
+     unidade/característica que o PRÓPRIO cliente escolheu, a resposta que ele ainda não recebeu.
+     Nunca abra por estado de espírito ("tudo bem por aí?", "tudo certo?") nem por intenção
+     genérica ("queria saber se ainda tem interesse", "vim ver se você ainda pensa no assunto").
+ (2) DESTRAVA O QUE ESTÁ PARADO, com um passo que o CLIENTE consegue executar agora e em poucos
+     segundos (mandar um endereço, escolher entre duas opções, confirmar um dado, dizer qual
+     unidade preferiu). Diga PRA QUE serve aquele passo do ponto de vista DELE, não do corretor
+     ("assim você decide com o valor na mão" é motivo do cliente; "assim eu consigo te atender
+     melhor" é motivo do corretor e não move ninguém).
+ (3) FECHA COM UM PRÓXIMO PASSO QUE TEM DONO E FORMATO. Quando couber encontro/ligação, ofereça
+     DUAS opções concretas ("quinta às 18h ou sábado de manhã?") — "qualquer dia e horário",
+     "quando quiser", "fico à disposição" e "é só me chamar" são o oposto disto: empurram a
+     decisão pro cliente e ele não decide.
+É PROIBIDO que qualquer uma das três seja só um check-in educado. Se a mensagem, tirando a
+saudação, couber em "e aí, tudo bem? qualquer coisa me chama", ela está errada e precisa ser
+reescrita — não importa qual dos três ângulos ela ocupa. O ângulo "maisSuave" é de baixa PRESSÃO,
+não de baixo CONTEÚDO: ela também abre por um fato e também pede um passo, só que um passo menor e
+sem cobrar decisão.
+
+QUEM DECIDE JUNTO: quando a conversa citar outra pessoa que decide com o cliente (esposo, esposa,
+sócio, filho, pai), ela NÃO é obstáculo nem assunto a cobrar. É PROIBIDO transformar isso em
+pergunta de cobrança ("conseguiu falar com seu esposo?", "e aí, o que ele achou?") — isso empurra o
+cliente pra dentro de uma conversa que você não controla e devolve a decisão pra fora. Em vez
+disso, a mensagem entrega ALGO QUE FACILITE essa conversa entre os dois (um número, uma
+comparação, uma simulação, uma unidade separada) ou inclui a pessoa no próximo passo de forma
+natural ("consigo receber vocês dois").
+
+O QUE O CLIENTE ESCOLHEU É O FIO DA CONVERSA: se em algum momento ele apontou uma unidade,
+metragem, posição, planta ou característica específica ("essa aqui", "a da parte mais alta", "a de
+3 dormitórios"), é POR AÍ que a retomada começa. Voltar ao nome genérico do empreendimento depois
+que ele já escolheu dentro dele é andar pra trás — e é o que faz a mensagem parecer disparo em
+massa. Retome pelo que ele escolheu, sem recitar de volta os números/códigos que ele já sabe.
 
 PRODUTO ESPECÍFICO: se o cliente citou identificadores específicos de unidade (lote, quadra,
 apartamento, bloco, torre, metragem exata etc.), "produtoInteresse" PRECISA incluir esses
@@ -3049,6 +3095,21 @@ no lugar dela. E se essa mesma pergunta de qualificação JÁ FOI FEITA e o clie
 refazê-la sozinha (só trocando as palavras) é repetir a mensagem que já falhou — nenhuma das três
 pode ser só isso. O que mudou desde então tem que aparecer na mensagem: entregue primeiro o que
 falta, e aí a pergunta faz sentido pra quem já tem a informação na mão.
+
+PRAZO DO PRODUTO É O MELHOR MOTIVO DE RETOMADA: quando a conversa (ou o Cérebro) trouxer uma DATA
+ou PRAZO REAL do produto — lançamento, início/fim de pré-reserva, entrega, validade de uma tabela
+ou condição, etapa de obra — compare com a data atual da análise informada acima. Se essa data
+chegou, está chegando ou já passou desde a última conversa, ELA é o melhor motivo pra voltar a
+falar com o cliente: é um fato NOVO, é do lado de fora da relação (não é cobrança) e explica
+sozinho por que a mensagem está chegando agora. Prefira esse fato a qualquer abertura genérica do
+tipo "tudo bem por aí?" ou "queria saber se ainda tem interesse" — essas não trazem nada e o
+cliente não tem o que responder.
+LIMITE INEGOCIÁVEL: use SOMENTE prazo, data ou condição que esteja LITERALMENTE na conversa ou no
+Cérebro. É PROIBIDO inventar ou inflar urgência — não escreva "últimas unidades", "os valores vão
+subir", "a condição termina essa semana", "estão acabando" ou qualquer escassez parecida se isso
+não estiver dito de forma explícita na conversa ou no Cérebro. Urgência inventada queima a
+confiança do cliente e é pior do que não mandar mensagem nenhuma. Sem prazo real disponível, a
+retomada se apoia no que ficou pendente na própria conversa.
 
 RECOMENDAÇÃO DE CONTATO: quando os sinais do cliente indicarem que ele pediu espaço/tempo ("vai
 pensar", "ainda não é o momento", "mais pra frente") ou uma recusa clara (não tem mais interesse,
