@@ -2105,27 +2105,11 @@ html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
   .cp-ag-hcol small{margin-top:0}
 }
 
-/* v1248 — ATALHO DE IMPORTAR CONVERSA NA TELA HOJE (celular).
-   Importar a conversa do WhatsApp é a ação de onde sai TODA análise do produto — e era a única
-   que não tinha caminho curto: no celular, só por "Mais" → "Importar conversa", e no computador
-   só por "Configurações". O atalho que existia na Hoje aparecia exclusivamente pra conta sem
-   nenhum cliente, ou seja, sumia justamente pra quem usa o app todo dia.
-   No computador este botão fica escondido: lá o item novo do menu da esquerda já resolve. */
-.cp1248-importar{display:none}
-@media(max-width:999px){
-  .cp1248-importar{
-    display:flex!important;align-items:center;justify-content:center;gap:8px;
-    width:100%;margin:10px 0 2px;padding:12px 14px;
-    border:1px solid var(--cp-border,var(--line));border-radius:14px;
-    background:var(--cp-panel-2,rgba(255,255,255,.04));color:var(--cp-text,var(--text));
-    font:inherit;font-weight:800;font-size:13.5px;line-height:1;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;
-  }
-  .cp1248-importar svg{width:18px;height:18px;flex:none;color:var(--cp-coral,var(--accent))}
-  .cp1248-importar:active{transform:scale(.99)}
-}
-/* Tela de cliente aberta esconde o cabeçalho da Hoje inteiro — o botão vai junto, como o resto. */
-body.lead-foco-aberto .cp1248-importar{display:none!important}
+/* v1252 — o botão "Enviar conversa do WhatsApp" da tela Hoje no celular (criado na v1248) foi
+   REMOVIDO por ordem do dono ("já falei mil vezes que não precisa aí"): ele comia uma faixa
+   inteira no alto da Hoje, jogando a saudação e a lista de clientes pra baixo. Com ele fora,
+   nenhuma regra de estilo sobra aqui — a ação continua em "Mais" e no cartão do Menu (celular) e
+   no item do menu da esquerda (computador). */
 
 /* ── v1251 — SEUS NÚMEROS DO MÊS ───────────────────────────────────────────────────────────────
    Pedido do dono: além de "Atendidos", ver as mensagens trocadas no mês (total, enviadas por ele

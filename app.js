@@ -3169,6 +3169,10 @@ function renderBotoesHome(){
     // reclamação direta do dono ("q bosta no mobile"). Encurtada pro essencial; quem quiser o
     // detalhe fino (ex.: que "há Xd" vem do atendimento marcado, quando existir) continua achando
     // no title de cada linha, que não sumiu.
+    // v1252 — no CELULAR a legenda sai de cena (regra de estilo mais abaixo): mesmo curta ela
+    // virava duas linhas soltas entre a busca e a lista, e o dono não entendia o que ela dizia
+    // ("legenda fora de contexto"). No computador ela continua, colada na lista, onde tem largura
+    // pra caber em uma linha só e o texto fica junto do que explica.
     top3Html = `<div class="cp-hoje-legenda">Barra/número: mensagens do cliente (90 dias). "há Xd": dias sem contato.</div>`
       + `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
       + (disponiveisParaPuxar.length
@@ -3212,6 +3216,9 @@ function renderBotoesHome(){
       /* v1203 — legenda fixa acima da lista, explicando a barra de mensagens e o "há Xd" (antes só
          existia como title, invisível sem passar o mouse — e nem existe hover no celular). */
       .cp-hoje-legenda{font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.4}
+      /* v1252 — some no celular (ordem do dono). Lá ela ficava solta acima da lista, ocupando
+         espaço da tela que é justamente onde os clientes do dia aparecem. */
+      @media(max-width:999px){.cp-hoje-legenda{display:none}}
       /* v942 — lista compacta dos leads do dia (1 coluna, sem quebra lateral) */
       .cp-hoje-list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:8px}
       /* Desktop: 1 linha (nome · produto · barra · dias) via grid-areas. */

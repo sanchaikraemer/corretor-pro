@@ -18,16 +18,17 @@ const semComentarios = (txt) => txt
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/^[ \t]*\/\/.*$/gm, '');
 
-// 1. Os caminhos curtos criados na v1248 falam a língua do dono.
+// 1. Os caminhos que levam à tela falam a língua do dono.
+// v1252 — o botão que ficava na tela Hoje do celular foi removido a pedido dele; sobrou o item do
+// menu da esquerda (computador), o título da tela e o cartão do Menu, todos checados aqui.
 assert.match(html, /<\/svg><\/span>Enviar conversa<\/button>/, 'item do menu da esquerda: "Enviar conversa"');
-assert.match(html, /<\/svg>Enviar conversa do WhatsApp<\/button>/, 'botão da tela Hoje (celular): "Enviar conversa do WhatsApp"');
 assert.match(html, /<div class="label">Enviar conversa do WhatsApp<\/div>/, 'título da tela: "Enviar conversa do WhatsApp"');
 assert.match(html, /<div class="menu-card-titulo">Enviar conversa<\/div>/, 'cartão do Menu: "Enviar conversa"');
 
 // 2. O desenho do ícone aponta pra CIMA (enviar), não pra baixo (baixar/importar).
 const setaEnviar = '<path d="M12 16V4"/><path d="M8 8l4-4 4 4"/>';
-assert.equal((html.match(new RegExp(setaEnviar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length, 2,
-  'os dois atalhos precisam do ícone de ENVIAR (seta pra cima) — seta pra baixo lê como "baixar"');
+assert.equal((html.match(new RegExp(setaEnviar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length, 1,
+  'o atalho precisa do ícone de ENVIAR (seta pra cima) — seta pra baixo lê como "baixar"');
 
 // 3. Nenhum texto visível pode voltar a dizer "importar/importação" pro dono.
 const proibido = /Importar conversa|Importa[çc][ãa]o (descartada|em andamento)|Aguardando importa[çc][ãa]o/i;
