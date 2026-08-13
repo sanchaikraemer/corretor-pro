@@ -5098,6 +5098,9 @@ function cp704Css(){
     document.head.appendChild(css);
   }
   function cp704Text(v, fallback='') { return String(v == null ? fallback : v).trim(); }
+  // v1259 — "Não identificado"/"Nenhum" não vira linha na tela: linha vazia é pior que linha
+  // ausente, porque ocupa espaço dizendo que não sabe.
+  function cp704Semvalor(v){ const t=cp704Text(v); return /^(nenhum|não identificado|nao identificado)$/i.test(t) ? '' : t; }
 
   function cp705FormatDateTime(v){
     const raw=String(v||'').trim();
@@ -5440,6 +5443,15 @@ function cp704Css(){
       ['Último compromisso',mc?.contexto?.ultimoCompromisso || a?.diagnostico?.pendencia],
       ['Impedimento principal',mc?.acao?.motivo || a.risk || a?.diagnostico?.objecaoPrincipal],
       ['Pedido do cliente ainda sem resposta direta',/^(nenhum|não identificado)$/i.test(cp704Text(a?.diagnostico?.pedidoSemResposta))?'':a?.diagnostico?.pedidoSemResposta],
+      // v1259 — o que a CONVERSA já respondeu. Antes isso ficava só dentro da cabeça da IA e ela
+      // mesma esquecia: o dono flagrou as três sugestões pedindo a faixa de valor que a própria
+      // conversa já delimitava. Mostrando na tela ele confere o que foi entendido e cobra o que
+      // faltou. Cada linha só aparece quando tem conteúdo (o filtro logo abaixo).
+      ['Faixa de valor que a conversa já indica',cp704Semvalor(a?.diagnostico?.faixaDeValor)],
+      ['Imóvel do cliente na negociação',cp704Semvalor(a?.diagnostico?.imovelDoCliente)],
+      ['Por que ele quer mudar',cp704Semvalor(a?.diagnostico?.motivoDaMudanca)],
+      ['Quem decide junto',cp704Semvalor(a?.diagnostico?.quemDecide)],
+      ['O cliente já contou',Array.isArray(a?.diagnostico?.jaSabemos)?a.diagnostico.jaSabemos.filter(Boolean).join(' · '):''],
       ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';

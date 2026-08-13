@@ -3188,6 +3188,47 @@ mandei três nessa linha — me diz qual chega mais perto e eu fecho a busca"). 
 melhor reagindo a opções concretas do que respondendo pergunta em abstrato, e a amostra faz o
 número aparecer sozinho.
 
+ANTES DE PERGUNTAR, PROCURE A RESPOSTA NA CONVERSA — ELA QUASE SEMPRE JÁ ESTÁ LÁ. Percorra o
+histórico inteiro e preencha os campos abaixo com o que o cliente JÁ contou, inclusive de forma
+INDIRETA. Depois de preenchidos, é PROIBIDO que qualquer uma das três mensagens pergunte algo que
+esses campos já respondem. Perguntar o que o cliente já disse é o erro que mais irrita: mostra que
+ninguém leu.
+
+- "jaSabemos": lista do que a conversa já respondeu sobre este cliente (objetivo, tipologia,
+  quantidade de dormitórios, região, forma de pagamento, prazo, quem decide, restrições). Um item
+  por informação, factual, com base em fala real dele.
+- "faixaDeValor": DEDUZA da reação do cliente aos valores que JÁ foram citados na conversa, não
+  espere ele declarar um número. Se ele disse que um valor está "muito além", "fora do meu
+  alcance", "caro demais", esse valor é TETO — está acima do que ele pode. Se um valor mais baixo
+  foi apresentado e ele NÃO recusou (seguiu a conversa, mudou de assunto pra outro detalhe,
+  perguntou outra coisa), esse valor é PISO plausível. Escreva a faixa resultante de forma factual
+  (ex.: "abaixo do valor que ele chamou de muito além; não recusou a faixa mais baixa que foi
+  apresentada"). Só use "Não identificado" quando NENHUM valor tiver sido citado na conversa.
+- "imovelDoCliente": quando o cliente tiver um imóvel para entrar no negócio (permuta, troca, dar
+  de entrada, "queremos encaixar o nosso"), reúna TUDO que a conversa disser sobre ele (que existe,
+  que é onde moram, tamanho, quantos dormitórios, região, se está quitado) e termine listando o que
+  AINDA FALTA saber pra avaliar. Esse imóvel é o centro da negociação — sem os dados dele não há
+  proposta possível.
+- "motivoDaMudanca": por que o cliente quer mudar, nas palavras dele ("está grande demais",
+  "vamos aumentar a família", "quero perto do trabalho", "é investimento"). É o que sustenta o
+  argumento de venda; sem isso a conversa vira catálogo.
+- "quemDecide": todas as pessoas citadas que decidem junto (esposo, esposa, filhos, sócio, pais).
+  Copie quem a conversa citou, sem inventar nem generalizar.
+
+Use "Não identificado" (ou lista vazia) só quando a conversa REALMENTE não disser — nunca por
+preguiça de procurar.
+
+O RESUMO QUE O PRÓPRIO CORRETOR JÁ FEZ É FATO ASSENTADO: se em alguma mensagem o corretor resumiu o
+que entendeu do cliente ("entendi que vocês procuram reduzir o tamanho mas manter os 3 quartos",
+"então o foco é a região X") e o cliente NÃO corrigiu depois, esse resumo está CONFIRMADO. É
+PROIBIDO tratar como dúvida, reabrir ou perguntar de novo aquilo que o corretor já resumiu e o
+cliente aceitou em silêncio. Passe esse conteúdo para "jaSabemos" e siga em frente a partir dele.
+
+E ATENÇÃO AO QUE O PRÓPRIO CORRETOR JÁ APRESENTOU: valores, produtos e faixas que ELE citou na
+conversa também são dados assentados e entram na leitura. Se ele já disse de que valor partem as
+opções da carteira dele, esse número existe e não precisa ser perguntado a ninguém — ele é o piso
+com que a próxima mensagem trabalha.
+
 PRAZO DO PRODUTO É O MELHOR MOTIVO DE RETOMADA: quando a conversa (ou o Cérebro) trouxer uma DATA
 ou PRAZO REAL do produto — lançamento, início/fim de pré-reserva, entrega, validade de uma tabela
 ou condição, etapa de obra — compare com a data atual da análise informada acima. Se essa data
@@ -3233,7 +3274,12 @@ Formato JSON obrigatório:
     "ultimoCompromissoCliente":"texto",
     "pedidoSemResposta":"texto",
     "objecaoPrincipal":"texto",
-    "pendenciaFinanceira":"texto"
+    "pendenciaFinanceira":"texto",
+    "jaSabemos":["texto"],
+    "faixaDeValor":"texto",
+    "imovelDoCliente":"texto",
+    "motivoDaMudanca":"texto",
+    "quemDecide":"texto"
   },
   "mensagens":{
     "recomendada":"texto",
@@ -3378,6 +3424,14 @@ ${timelineText}`;
         objecaoPrincipal: clean(d.objecaoPrincipal || d.objecaoIdentificada, "Não identificado"),
         pendenciaPrincipal: clean(d.pendenciaPrincipal || d.pendenciaFinanceira, "Não identificado"),
         pendenciaFinanceira: clean(d.pendenciaFinanceira, "Não identificado"),
+        // v1259 — o que a conversa JÁ respondeu. Existe pra a IA parar de perguntar ao cliente o
+        // que ele já contou (o erro que o dono flagrou: as três sugestões pediam a faixa de valor
+        // que a própria conversa já delimitava).
+        jaSabemos: arr(d.jaSabemos),
+        faixaDeValor: clean(d.faixaDeValor, "Não identificado"),
+        imovelDoCliente: clean(d.imovelDoCliente, "Não identificado"),
+        motivoDaMudanca: clean(d.motivoDaMudanca, "Não identificado"),
+        quemDecide: clean(d.quemDecide, "Não identificado"),
         quemDeveAgirAgora: clean(d.quemDeveAgirAgora, "Não identificado"),
         proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
