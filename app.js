@@ -5321,6 +5321,11 @@ function cp704Css(){
       ['Por que ele quer mudar',cp704Semvalor(a?.diagnostico?.motivoDaMudanca)],
       ['Quem decide junto',cp704Semvalor(a?.diagnostico?.quemDecide)],
       ['O cliente já contou',Array.isArray(a?.diagnostico?.jaSabemos)?a.diagnostico.jaSabemos.filter(Boolean).join(' · '):''],
+      // v1271 — o pedido que partiu do próprio cliente (o critério que ele levantou sozinho, o mais
+      // valioso da conversa) e a pauta que ainda falta levantar — que é assunto do encontro, não
+      // interrogatório por mensagem.
+      ['O que o cliente pediu por conta própria',cp704Semvalor(a?.diagnostico?.pedidoEspontaneo)],
+      ['O que ainda falta descobrir',Array.isArray(a?.diagnostico?.faltaDescobrir)?a.diagnostico.faltaDescobrir.filter(Boolean).join(' · '):''],
       ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
@@ -8428,7 +8433,7 @@ function cpPassosImportar(){
       ? 'Toque no <b>nome do contato</b> (iPhone) ou no <b>“⋮”</b> do canto de cima (Android)'
       : 'Toque no <b>“⋮”</b> no canto de cima da conversa');
   const entregar = cpEhIOS()
-    // v1271 — dizer ONDE o arquivo fica é o que faltava: sem isso o corretor entende que precisa
+    // v1272 — dizer ONDE o arquivo fica é o que faltava: sem isso o corretor entende que precisa
     // mandar a conversa pra alguém e abrir num computador (foi exatamente a leitura do dono).
     ? 'Role a lista <b>para baixo</b>, passando dos ícones dos apps, e toque em <b>“Salvar em Arquivos”</b> → <b>Salvar</b>. O arquivo fica no <b>próprio iPhone</b> — não vai pra ninguém e não precisa de computador. Depois volte aqui e use o botão abaixo: a conversa que você salvou é a primeira da lista.<br><span style="color:var(--muted)">Quem quiser pular esse vai e volta pode montar uma vez o Atalho em <b>Menu → “Compartilhar direto do WhatsApp (iPhone)”</b> — é opcional, o caminho acima já resolve.</span>'
     : (isDesktop()
@@ -8449,7 +8454,7 @@ function cpPassosImportar(){
 function cpTextoAjudaImportar(){
   const passoWhats = 'No WhatsApp: abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → <b>Exportar conversa</b> → <b>Incluir mídia</b>.';
   if(cpEhIOS()){
-    // v1271 — texto reescrito porque a versão anterior abria com a trava da Apple e só depois
+    // v1272 — texto reescrito porque a versão anterior abria com a trava da Apple e só depois
     // dizia o que fazer: quem lia parava na primeira linha ("não deixa") e concluía que o iPhone
     // não servia. Agora abre pelo caminho, que é curto e todo dentro do celular. O Atalho continua
     // existindo, mas como opção avançada — montar um Atalho na mão não é pra todo mundo, e
@@ -8596,7 +8601,7 @@ const CP1149_PASSOS_ANDROID = [
   }
 ];
 
-// v1271 — O PASSO A PASSO DO IPHONE (antes só existia o do Android).
+// v1272 — O PASSO A PASSO DO IPHONE (antes só existia o do Android).
 //
 // Relato do dono: "ninguém vai fazer todo esse processo", e logo depois "ele vai ter que enviar
 // pra alguém pra conseguir salvar no PC e não no cel, pra depois abrir e importar". Essa segunda
@@ -8854,7 +8859,7 @@ window.cp1149ComoEnviar = function(passoInicial){
         ${i>0?`<button type="button" class="btn secondary" id="cp1149Voltar" style="flex:1">Voltar</button>`:`<button type="button" class="btn secondary" id="cp1149Fechar" style="flex:1">Fechar</button>`}
         <button type="button" class="btn" id="cp1149Proximo" style="flex:1.4">${ultimo?'Entendi, vamos lá':'Próximo'}</button>
       </div>`;
-    // v1271 — o último passo do iPhone abre o seletor de arquivo AQUI. Antes o passo a passo
+    // v1272 — o último passo do iPhone abre o seletor de arquivo AQUI. Antes o passo a passo
     // terminava mandando "volte e toque no botão" — e o botão estava atrás do modal, numa tela que
     // a pessoa ainda ia ter que achar. O clique é síncrono de propósito: o Safari só abre o
     // seletor dentro do toque do dedo, então fechar o modal primeiro mataria a abertura.

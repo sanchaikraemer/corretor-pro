@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// v1271 — O PASSO A PASSO ILUSTRADO PASSA A TER VERSÃO DE IPHONE.
+// v1272 — O PASSO A PASSO ILUSTRADO PASSA A TER VERSÃO DE IPHONE.
 //
 // Relato do dono, em duas frases: "ninguém vai fazer todo esse processo" e, logo depois, "ele vai
 // ter que enviar pra alguém pra conseguir salvar no PC e não no cel, pra depois abrir e importar".
@@ -96,4 +96,4 @@ assert.ok(blocoPassos.indexOf("Salvar em Arquivos") < blocoPassos.indexOf("Atalh
 assert.match(blocoPassos, /é opcional, o caminho acima já resolve/,
   "e está escrito que é opcional");
 
-console.log("v1271-passo-a-passo-do-iphone: ok");
+console.log("v1272-passo-a-passo-do-iphone: ok");

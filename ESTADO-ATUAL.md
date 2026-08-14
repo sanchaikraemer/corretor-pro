@@ -69,6 +69,13 @@ varredura da conversa inteira e devolve `msgMesTotal`/`msgMesCliente`/`msgMesCor
 lead e volta ao regime barato). Tudo do 1º ao último dia do mês, calendário de Brasília. Ver
 `NOTAS-v1251.md`._
 
+_**v1271 — a conferência final passou a ter 10 itens** (era 8): entraram a retomada da pausa que o
+próprio cliente marcou ("estamos em viagem, no retorno eu chamo" → puxar o acontecimento, trazer a
+vantagem de decidir na fase atual e propor **dia nomeado** + horário) e o pedido que partiu do
+próprio cliente. Junto, o bloco "Detalhes comerciais" do cliente ganhou duas linhas: **"O que o
+cliente pediu por conta própria"** e **"O que ainda falta descobrir"** (campos `pedidoEspontaneo` e
+`faltaDescobrir` do diagnóstico). Ver `NOTAS-v1271.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

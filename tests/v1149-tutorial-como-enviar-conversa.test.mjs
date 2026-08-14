@@ -12,8 +12,8 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 // ── 1. Os 5 passos existem, na ordem certa e com os nomes REAIS do WhatsApp ────────────────────
-// v1271 — a lista virou DUAS (Android e iPhone), porque o caminho do iPhone é outro. Este teste
-// continua guardando a do Android; a do iPhone tem teste próprio em v1271-*.
+// v1272 — a lista virou DUAS (Android e iPhone), porque o caminho do iPhone é outro. Este teste
+// continua guardando a do Android; a do iPhone tem teste próprio em v1272-*.
 const ini = app.indexOf("const CP1149_PASSOS_ANDROID = [");
 assert.ok(ini > -1, "os passos existem");
 const passos = app.slice(ini, app.indexOf("const CP1149_PASSOS_IOS = ["));

@@ -3264,6 +3264,19 @@ ninguém leu.
   argumento de venda; sem isso a conversa vira catálogo.
 - "quemDecide": todas as pessoas citadas que decidem junto (esposo, esposa, filhos, sócio, pais).
   Copie quem a conversa citou, sem inventar nem generalizar.
+- "pedidoEspontaneo": o que o cliente pediu ou perguntou POR CONTA PRÓPRIA, sem ninguém ter
+  oferecido antes ("e cobertura? algo com espaço externo?", "tem com 3 vagas?", "aceita o meu na
+  troca?", "qual o valor do condomínio?"). Copie a pergunta dele com as palavras dele e diga o que
+  o corretor respondeu — ou que ficou sem resposta. ESTE É O DADO MAIS VALIOSO DA CONVERSA
+  INTEIRA: é o único critério que veio do cliente, não do catálogo. Preferência que o corretor
+  supôs vale menos que isso. É PROIBIDO deixar o pedido espontâneo sumir das mensagens seguintes:
+  ele é a ponte entre o que ele quer e o que o corretor tem.
+- "faltaDescobrir": lista curta do que AINDA falta saber pra montar uma proposta de verdade e a
+  conversa não respondeu (por que querem mudar agora, prazo real da mudança, se moram em casa ou
+  apartamento, tamanho mínimo, vagas, faixa, imóvel que entraria no negócio). Só o que estiver
+  MESMO em aberto — nada que já esteja em "jaSabemos". E deixe claro pra você mesmo: esta lista NÃO
+  é roteiro de perguntas pra despejar no WhatsApp; ela é a PAUTA DO ENCONTRO. Cliente responde três
+  perguntas seguidas por mensagem uma vez; na segunda, some.
 
 Use "Não identificado" (ou lista vazia) só quando a conversa REALMENTE não disser — nunca por
 preguiça de procurar.
@@ -3329,7 +3342,9 @@ Formato JSON obrigatório:
     "faixaDeValor":"texto",
     "imovelDoCliente":"texto",
     "motivoDaMudanca":"texto",
-    "quemDecide":"texto"
+    "quemDecide":"texto",
+    "pedidoEspontaneo":"texto",
+    "faltaDescobrir":["texto"]
   },
   "mensagens":{
     "recomendada":"texto",
@@ -3356,7 +3371,7 @@ ${timelineText}
 CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON.
 As regras acima estão espalhadas por um texto longo, e o que decide a qualidade das três mensagens
 é este punhado de itens. Releia CADA UMA das três e, se qualquer item falhar, REESCREVA a mensagem
-antes de responder. Não devolva nada que não passe nos oito.
+antes de responder. Não devolva nada que não passe nos dez.
 
 ANTES DOS OITO, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
 DE ESCREVER. Releia o próximo passo que você mesmo definiu no diagnóstico e confira se cada uma das
@@ -3371,28 +3386,73 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    aguardo", "quando você me passar" — se aparecer em qualquer das três, está errada. O corretor
    age agora, com o que já tem.
 3. PEDE ALGO QUE A CONVERSA JÁ RESPONDEU? Confira contra "jaSabemos", "faixaDeValor",
-   "motivoDaMudanca" e "quemDecide". O que já foi dito não se pergunta de novo.
+   "motivoDaMudanca" e "quemDecide". O que já foi dito não se pergunta de novo. Isso inclui a
+   PERGUNTA DISFARÇADA DE ESCOLHA entre produtos que o corretor já apresentou: se o cliente já
+   disse que quer conhecer TODOS (ou já disse qual é o foco dele), é PROIBIDO perguntar "prefere o
+   A ou o B?", "quer começar pelo A ou ver também o B?", "o foco é X ou Y?" sobre esses mesmos
+   produtos — a escolha já foi feita, e a mensagem tem que PARTIR dela oferecendo o roteiro que
+   cobre tudo que ele pediu, não devolver a decisão pra ele.
 4. PEDE O QUE O CLIENTE JÁ PROMETEU TRAZER? Se ele disse que ia buscar um dado, nenhuma das três
-   cobra esse dado.
+   cobra esse dado. E o que está em "faltaDescobrir" NÃO vira interrogatório por mensagem: no
+   máximo UMA pergunta por mensagem — a que mais faz a negociação andar — e o resto fica como pauta
+   do encontro. Três perguntas seguidas o cliente responde uma vez; na segunda, ele some.
 5. O FECHO É ESCOLHA, PERGUNTA ÚTIL OU PASSO? "pode ser assim?", "quer que eu faça?", "posso
    seguir?", "te parece bem?" não valem — ninguém responde não. E escolha precisa ter dois caminhos
-   DIFERENTES de verdade (dia, canal ou formato), não o mesmo em dois tempos.
+   DIFERENTES de verdade (dia, canal ou formato), não o mesmo em dois tempos. A escolha também não
+   pode reabrir assunto que a conversa já resolveu (item 3): quando o que ver já está decidido, a
+   escolha que sobra é de DIA, HORÁRIO ou CANAL.
 6. A Nº 1 É A MAIS FORTE? Se outra oferece algo concreto e a nº 1 só pede informação, troque a
    ordem. A recomendada é a que você mandaria se só pudesse mandar uma.
 7. TEM IMÓVEL DO CLIENTE SEM VALOR CONHECIDO? Então pelo menos uma das três oferece a AVALIAÇÃO
    feita pelo corretor, pedindo só dado fácil (endereço, bairro, metragem, foto).
 8. O CLIENTE JÁ RECEBEU MATERIAL E A CONVERSA PAROU? Se a conversa mostra que ele já recebeu
    vídeo/foto/link/tabela/planta e depois disso esfriou (ou só respondeu por educação), MAIS
-   MATERIAL NÃO É O PRÓXIMO PASSO — quem já viu tudo pela tela decide indo ver. Pelo menos uma das
-   três precisa oferecer o presencial (visita ao apartamento/obra/decorado, ou encontro pra ver as
+   MATERIAL NÃO É O PRÓXIMO PASSO — quem já viu tudo pela tela decide indo ver. E essa parte vale
+   SEMPRE, inclusive nas exceções abaixo: nenhuma das três pode oferecer mandar, reunir, agrupar,
+   organizar ou reenviar arquivo/link/apresentação como o passo seguinte. Pelo menos uma das três
+   precisa oferecer o presencial (visita ao apartamento/obra/decorado, ou encontro pra ver as
    opções juntos), com dois dias/horários concretos, dizendo em uma frase por que vale mais ir do
-   que continuar recebendo arquivo. Não vale nas três situações abaixo, e nesses casos deixe as três
-   como estavam:
+   que continuar recebendo arquivo. Nas situações abaixo o que muda é a FORMA do encontro — a
+   proibição de mais material continua de pé:
    • o cliente é de fora ou já disse que não consegue ir agora (aí o presencial vira vídeo-chamada
-     ao vivo, gravado na hora ou visita marcada pra quando ele vier — nunca mais um PDF);
-   • já existe visita marcada, ou ele acabou de receber o material e ainda nem teve tempo de olhar;
+     ao vivo, gravado na hora ou visita marcada pra quando ele vier — nunca mais um PDF). Se o que
+     ele disse foi um MARCO DE VOLTA ("no retorno", "quando voltarmos da viagem", "depois das
+     férias", "quando terminar a obra"), não é exceção nenhuma: vale o item 9;
+   • já existe visita marcada, ou ele acabou de receber o material e ainda nem teve tempo de olhar
+     — só aqui deixe as três como estavam;
    • a conversa parou por um motivo declarado que uma visita não resolve (vender o imóvel dele,
-     aprovar financiamento, esperar alguém decidir). Aí o próximo passo é aquele motivo.`;
+     aprovar financiamento, esperar alguém decidir). Aí o próximo passo é aquele motivo.
+9. O CLIENTE MARCOU UMA PAUSA E ELA VENCEU? Quando foi ELE quem disse que voltaria a falar depois
+   de alguma coisa ("estamos em viagem, no retorno eu chamo", "depois das férias", "quando terminar
+   a obra", "depois do fechamento do mês") e esse momento já chegou ou passou, a mensagem É a
+   retomada dessa pausa — e retomada não é check-in. Ela tem TRÊS partes obrigatórias, nesta ordem:
+   (a) PUXE O QUE ELE MESMO CONTOU: pergunte pelo acontecimento que ele citou ("como foi a
+       viagem?", "conseguiram resolver a mudança?"). É o contrário de falar do tempo parado — é
+       mostrar que ficou guardado o que ELE disse. Continua PROIBIDO o voto genérico ("espero que
+       esteja tudo bem", "espero que tenha corrido tudo bem"): pergunte pelo fato, não deseje bem.
+   (b) TRAGA A VANTAGEM DE VOLTAR AGORA, tirada da conversa ou do Cérebro: o que quem decide NESTA
+       fase leva e quem decide depois não leva — escolher a unidade, o andar, a posição, a vaga,
+       personalizar a planta, a condição de pagamento e o preço da fase atual. É esse ganho que
+       explica sozinho por que a mensagem está chegando hoje. Só o que estiver LITERALMENTE na
+       conversa ou no Cérebro: nada de escassez, prazo ou reajuste inventado.
+   (c) PROPONHA O ENCONTRO COM DIA NA MESA: um encontro concreto (na construtora/escritório, no
+       decorado, na obra) com DIA NOMEADO da semana que vem ("segunda-feira fica bom pra vocês?")
+       ou dois dias concretos, mais a pergunta do horário ("qual horário fica melhor, manhã ou
+       tarde?"). É PROIBIDO deixar em "quando vocês voltarem", "me avisa quando puder", "quando
+       ficar tranquilo pra vocês", "fico à disposição", "qualquer dia dessa semana", "na semana que
+       vem" sem dia — data em aberto é o que faz o atendimento sumir de novo. Quem já mandou muita
+       informação não precisa se colocar à disposição: precisa DAR CONTINUIDADE, e continuidade é
+       dia marcado.
+   A retomada tem UM objetivo só: conseguir a resposta e chegar ao encontro. Não vai preço, tabela,
+   PDF nem vídeo junto — material agora rouba o assunto e devolve a conversa pra tela do celular,
+   que é justamente onde ela já parou uma vez.
+   Se a pausa AINDA NÃO venceu (ele volta daqui a alguns dias), o desenho é o mesmo: o encontro é
+   proposto, com dia, para a semana seguinte à volta dele.
+10. O QUE O CLIENTE PEDIU POR CONTA PRÓPRIA APARECE EM ALGUMA DAS TRÊS? Se "pedidoEspontaneo"
+   estiver preenchido, pelo menos uma das três precisa tocar naquilo com as palavras dele. Foi ELE
+   quem levantou — é o fio mais forte que a conversa tem, e mensagem que ignora o pedido do cliente
+   pra falar do que o corretor quer mostrar é exatamente a que ele lê e não responde. Se aquele
+   pedido nunca foi respondido direito, respondê-lo é o melhor motivo de retomada que existe.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
@@ -3523,6 +3583,11 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
         imovelDoCliente: clean(d.imovelDoCliente, "Não identificado"),
         motivoDaMudanca: clean(d.motivoDaMudanca, "Não identificado"),
         quemDecide: clean(d.quemDecide, "Não identificado"),
+        // v1271 — o pedido que partiu do próprio cliente e a pauta que ainda falta levantar.
+        // Os dois aparecem no bloco "Detalhes comerciais" do cliente (regra da v1145: campo que
+        // não aparece na tela não é pedido à IA).
+        pedidoEspontaneo: clean(d.pedidoEspontaneo, "Não identificado"),
+        faltaDescobrir: arr(d.faltaDescobrir),
         quemDeveAgirAgora: clean(d.quemDeveAgirAgora, "Não identificado"),
         proximoPasso: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),
         proximoPassoDeQuem: clean(d.proximoPasso || d.quemDeveAgirAgora || raw.nextAction, "Não identificado"),

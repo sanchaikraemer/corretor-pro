@@ -46,8 +46,12 @@ assert.match(lista, /motivo declarado que uma visita não resolve/,
   'exceção 3: a conversa parou por um motivo que visita não resolve');
 assert.match(lista, /vender o imóvel dele,\s*aprovar financiamento, esperar alguém decidir/,
   'a exceção 3 precisa dar os exemplos reais (imóvel a vender, financiamento, terceiro decidindo)');
-assert.match(lista, /deixe as três como estavam/,
-  'nas exceções, as três mensagens ficam como estavam — a regra não pode atropelar o diagnóstico');
+// v1271 estreitou isto: "deixar as três como estavam" agora vale SÓ pra exceção 2 (visita já
+// marcada / material recém-enviado). Nas outras duas, o que muda é a forma do encontro — a
+// proibição de mandar mais material continua valendo (era essa brecha que deixava a mensagem
+// oferecer "agrupar os materiais" pra quem já tinha recebido tudo).
+assert.match(lista, /já existe visita marcada, ou ele acabou de receber o material e ainda nem teve tempo de olhar\s*— só aqui deixe as três como estavam/,
+  'a exceção que congela as três mensagens é só a da visita marcada / material recém-enviado');
 
 // ── Nada comercial cravado (regra da casa) ─────────────────────────────────────────────────────
 const bloco = lista.slice(lista.indexOf('O CLIENTE JÁ RECEBEU MATERIAL'));
