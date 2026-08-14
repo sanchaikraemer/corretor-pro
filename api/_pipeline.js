@@ -3065,6 +3065,40 @@ vai fazer agora (mandar o material, preparar a simulação) e coloca UMA escolha
 duas opções de horário, dois caminhos, uma data. "Me avisa e eu mando" não é direta: é pedir
 licença com outro nome.
 
+O CLIENTE JÁ DISSE O QUE QUER — A BUSCA É TRABALHO DO CORRETOR. Quando o cliente já entregou o
+critério dele (o que precisa, o prazo, a fase de vida, o que descartou e por quê), a próxima
+mensagem TRABALHA com aquilo: o corretor assume a busca e conduz — não pede mais critério pra
+começar. Perguntar "tem alguma preferência de bairro?", "que tipo de apartamento devo considerar?"
+ou "tem algum detalhe indispensável?" depois de o cliente ter explicado o que quer é devolver o
+trabalho pra ele, e é o jeito mais rápido de a conversa morrer — pior ainda quando essa mesma
+pergunta já foi feita e ficou sem resposta (foi ignorada uma vez; não será respondida na segunda).
+O desenho certo: o corretor diz o que vai fazer AGORA com o que já sabe e propõe o encontro
+(ligação, visita, reunião) com duas opções concretas de dia ou horário; o que ainda falta saber
+vira PAUTA DESSE ENCONTRO, não questionário no WhatsApp. Quando for apresentar opções, são DUAS OU
+TRÊS bem escolhidas, com uma frase dizendo por que cada uma serve pra ELE — despejar a carteira
+inteira dá sensação de catálogo, não de atendimento. Nada disso autoriza descrever imóvel, valor ou
+prazo que não esteja nas fontes, nem escrever no passado o que ele ainda não fez (a regra da AÇÃO E
+NOVIDADE QUE NÃO EXISTEM continua valendo: "vou separar", nunca "já separei").
+
+OBJEÇÃO QUE O PRODUTO NÃO RESOLVE = TROCAR DE PRODUTO, NÃO INSISTIR. Quando o cliente recusa um
+imóvel por um motivo que aquele imóvel NÃO pode mudar (prazo de entrega longe demais, localização,
+tipologia, tamanho, andar, condição de uso), o lead NÃO está perdido: o que ficou inadequado é o
+produto, não o interesse — e o interesse acabou de ficar MAIS claro, porque ele disse o que
+precisa. É PROIBIDO tentar reverter a objeção com argumento do mesmo imóvel ("a valorização
+compensa a espera", "o prazo pode antecipar") ou fazer as três mensagens girarem de novo em torno
+dele. O assunto passa a ser o que ATENDE o critério novo, dentro do que a conversa e o Cérebro
+mostram que este corretor tem. Sem alternativa escrita nas fontes, a mensagem não inventa nenhuma:
+ela confirma o critério com as palavras dele e leva ao encontro.
+
+O QUE O CLIENTE CONTOU DE SI GUIA A ESCOLHA, MAS NÃO VOLTA COMO ETIQUETA. Idade, saúde, mobilidade,
+aposentadoria, fase da vida, situação familiar ou aperto financeiro que ele contou servem pra você
+ESCOLHER o que oferecer — nunca pra ser dito de volta pra ele como justificativa da oferta. É
+PROIBIDO escrever "pensando na sua faixa de idade", "pela idade de vocês", "por vocês serem
+idosos", "já que estão aposentados", "considerando sua condição". No lugar vai o BENEFÍCIO concreto
+("pronto pra morar, sem obra e sem espera", "tudo no mesmo andar", "perto do que vocês usam no dia
+a dia") ou as palavras que o PRÓPRIO cliente usou ("um lugar adequado pra esta fase"). Ninguém
+gosta de receber a própria limitação escrita de volta.
+
 LINGUAGEM DE IA — PROIBIDO. Estas construções entregam na hora que a mensagem não foi escrita por
 uma pessoa, e o corretor as rejeita uma a uma: "espero que esteja bem/indo bem", "faz sentido",
 "se fizer sentido", "faça sentido", "fico à disposição", "estou à disposição", "me coloco à
@@ -3133,8 +3167,12 @@ Cada uma segue uma estratégia distinta, pra o corretor escolher a abordagem:
 - "recomendada": a melhor jogada para a etapa e o momento REAIS deste lead (decida pelo
   diagnóstico e pelo Cérebro). É a que você mandaria se só pudesse mandar uma.
 - "maisSuave": ângulo consultivo, de baixa pressão. Em vez de empurrar o mesmo passo,
-  QUALIFIQUE ou destrave o que trava — faça a pergunta que falta, trate a objeção/impedimento
-  principal ou ofereça ajuda sem cobrar decisão.
+  QUALIFIQUE ou destrave o que trava — trate a objeção/impedimento principal, adiante o que já dá
+  pra adiantar ou ofereça ajuda sem cobrar decisão. Ela PODE carregar uma pergunta, mas só uma que
+  NUNCA foi feita, que a conversa ainda não responde, e sempre EMENDADA no que a mensagem entrega
+  — nunca solta e nunca no lugar da entrega. Pergunta que o corretor já fez e ficou sem resposta,
+  ou que o cliente já respondeu, é PROIBIDA aqui como em qualquer das três: "baixa pressão" não é
+  licença pra devolver o trabalho pro cliente.
 - "maisDireta": a mais objetiva das três, com UM próximo passo concreto e um convite claro
   (propor o envio, marcar visita/ligação, mandar a simulação). Sem rodeios e sem ser agressiva.
   Quando a conversa ainda NÃO tiver maturidade pra visita/proposta/decisão, "maisDireta" não
@@ -3467,9 +3505,9 @@ ${timelineText}
 CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON.
 As regras acima estão espalhadas por um texto longo, e o que decide a qualidade das três mensagens
 é este punhado de itens. Releia CADA UMA das três e, se qualquer item falhar, REESCREVA a mensagem
-antes de responder. Não devolva nada que não passe nos onze.
+antes de responder. Não devolva nada que não passe nos doze.
 
-ANTES DOS ONZE, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
+ANTES DOS DOZE, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
 DE ESCREVER. Releia o próximo passo que você mesmo definiu no diagnóstico e confira se cada uma das
 três realmente FAZ aquilo. É comum acertar o diagnóstico e escrever mensagem que não o cumpre — o
 corretor lê "o próximo passo é oferecer exemplos e facilitar a avaliação" e logo abaixo recebe três
@@ -3555,7 +3593,15 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    tentativa que já falhou está errada — reescreva. Se a tentativa era pedir licença, a nova
    mensagem ENTREGA em vez de pedir de novo. Com DUAS ou mais tentativas sem resposta, pelo menos
    uma das três propõe pessoa a pessoa (ligação com horário, visita, encontro) com dois dias ou
-   horários concretos. E nenhuma das três conta ao cliente que houve tentativa anterior.`;
+   horários concretos. E nenhuma das três conta ao cliente que houve tentativa anterior.
+12. ALGUMA DAS TRÊS DEVOLVE O TRABALHO PRO CLIENTE? Se ele já disse o que quer, nenhuma pode pedir
+   critério de novo ("tem preferência de bairro?", "que tipo devo considerar?", "algum detalhe
+   indispensável?") — o corretor assume a busca com o que já tem e fecha propondo o encontro com
+   dia e horário; o que falta saber é pauta desse encontro. Se ele recusou o imóvel por um motivo
+   que aquele imóvel não muda (prazo, local, tamanho), nenhuma das três insiste nele nem tenta
+   reverter a objeção: o assunto passa a ser o que atende o critério novo. E nada do que ele contou
+   de si (idade, saúde, fase da vida, condição) volta escrito como justificativa da oferta —
+   aparece o benefício concreto ou a palavra que ele mesmo usou, nunca a etiqueta.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).

@@ -150,10 +150,10 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
   const conferencia = src.slice(src.indexOf('CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON')).replace(/\s+/g, ' ');
   assert.ok(conferencia.includes('11. ESTA MENSAGEM JÁ FOI MANDADA UMA VEZ?'),
     'a conferência final precisa ter o item que compara as três com o que já foi tentado');
-  assert.ok(conferencia.includes('não passe nos onze'),
+  assert.ok(conferencia.includes('não passe nos doze'),
     'a contagem de itens da conferência final precisa acompanhar o item novo');
-  assert.ok(!conferencia.includes('não passe nos dez'),
-    'a contagem antiga não pode ficar para trás, senão a IA para no item 10');
+  assert.ok(!conferencia.includes('não passe nos dez') && !conferencia.includes('não passe nos onze'),
+    'a contagem antiga não pode ficar para trás, senão a IA para antes do último item');
 }
 
 // ── 5. O código continua sem reescrever mensagem nenhuma ────────────────────────────────────
