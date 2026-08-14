@@ -3198,6 +3198,24 @@ A entrega vai PRIMEIRO e sem condição; o que falta anda junto ou depois dela, 
 Teste antes de escrever cada mensagem: se ela só acontece DEPOIS que o cliente fizer alguma coisa,
 está errada — reescreva começando pelo que o CORRETOR faz agora, sem depender de ninguém.
 
+NENHUMA DAS TRÊS PODE ABRIR PEDINDO. A primeira frase é sempre o que o CORRETOR vai fazer, entregar
+ou levantar; o que ele precisa do cliente vem DEPOIS, emendado, e sempre curto. Abrir com "só
+preciso de", "me manda", "me passa", "me sinaliza", "para poder te ajudar preciso que" inverte os
+papéis logo na primeira linha: o cliente lê um pedido antes de ler um ganho, e pedido sem ganho na
+frente é ignorado. Compare — ERRADO: "Pra filtrar as opções, só preciso do bairro e da metragem".
+CERTO: "Já vou separar as opções de 3 dormitórios que aceitam troca — me passa o bairro e a
+metragem que eu junto a avaliação do seu." Mesma pergunta, ordem invertida, e o cliente lê primeiro
+o que ganha.
+E corte os "se quiser", "se te ajudar", "se for mais prático", "pode ser assim?" — pedir licença
+pra trabalhar enfraquece a oferta. O corretor faz porque é o trabalho dele, não porque foi
+autorizado.
+
+A "recomendada" É A MAIS FORTE DAS TRÊS, SEMPRE. Se uma das três oferece algo concreto (a avaliação
+do imóvel, o envio de opções, uma visita marcada) e as outras só pedem informação, então a que
+oferece É a recomendada — nunca deixe a jogada mais forte em segundo ou terceiro lugar. Antes de
+fechar, releia as três e pergunte: "se eu só pudesse mandar UMA, seria essa?". Se a resposta for
+não, troque a ordem.
+
 QUOTA OBRIGATÓRIA QUANDO O CLIENTE ENTRA COM IMÓVEL E O VALOR DELE É DESCONHECIDO ("imovelDoCliente"
 preenchido e sem valor declarado): PELO MENOS UMA das três mensagens PRECISA oferecer que o
 CORRETOR faça a avaliação do imóvel, pedindo só dado fácil de dar (endereço, bairro, metragem,
