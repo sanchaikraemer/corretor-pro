@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
-// v1275 — "quero ver o histórico do mes todo e nao da semana nessa parte... todos q atendi a cada
+// v1276 — "quero ver o histórico do mes todo e nao da semana nessa parte... todos q atendi a cada
 // dia desde dia 1" (dono, 14/08/2026, com print da tela Atendimentos).
 //
 // A tela mostrava só os ÚLTIMOS 7 DIAS. O resto do mês estava registrado no banco e não tinha
@@ -46,4 +46,4 @@ assert.match(rend, /cp788PredioSVG\(n, CP788_META_DIA\)/, 'cada dia continua com
 assert.match(rend, /class="cp788-day-name"/, 'os clientes do dia continuam clicáveis pelo nome');
 assert.match(rend, /i===0\?'Hoje':i===1\?'Ontem'/, 'Hoje e Ontem continuam nomeados');
 
-console.log('v1275-atendimentos-mes-inteiro: ok');
+console.log('v1276-atendimentos-mes-inteiro: ok');

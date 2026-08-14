@@ -1,4 +1,4 @@
-# v1275 — Atendimentos mostra o mês inteiro, não só a semana
+# v1276 — Atendimentos mostra o mês inteiro, não só a semana
 
 Dono, 14/08/2026, com print da tela Atendimentos:
 
@@ -51,8 +51,13 @@ Regra do CLAUDE.md: mudança que altera o que aparece na tela não sobe só com 
 
 - `app.js` — a tela passa a montar o mês inteiro e a esconder só o fim de semana vazio.
 - `styles.css` — a faixa por dia virou o formato único (a grade de 7 colunas saiu).
-- `tests/v1275-atendimentos-mes-inteiro.test.mjs` — teste novo (período, fim de semana e layout).
+- `tests/v1276-atendimentos-mes-inteiro.test.mjs` — teste novo (período, fim de semana e layout).
 - `tests/v867-predio-atendimentos.test.mjs`, `tests/v908-acoes-topo-e-atendimentos-dia.test.mjs`,
   `tests/v910-atendimentos-limpo.test.mjs`, `tests/v914-fazer-agora-dose-e-fds.test.mjs` — guardas
   que travavam os 7 dias e as 7 colunas, atualizadas pro formato novo.
-- `package.json` / `package-lock.json` — versão 1275.
+- `package.json` / `package-lock.json` — versão 1276.
+
+## Por que 1276 e não 1275
+
+Outra sessão publicou uma v1275 (o app instalado voltando a procurar versão nova sozinho) enquanto
+esta mudança estava em preparo. As duas foram juntadas e esta ficou com o número seguinte.

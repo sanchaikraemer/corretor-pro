@@ -74,7 +74,7 @@ assert.match(app, /Final de semana/, 'card mostra "Final de semana"');
 assert.match(css, /\.cp-atender-mais\{/, 'CSS do botão Atender +1');
 
 // 3. Atendimentos: nomes finos (sem negrito) e fonte menor que o resto da faixa.
-// v1275 — a grade de 7 colunas do PC saiu: a tela mostra o MÊS INTEIRO (até 31 dias), e cada dia
+// v1276 — a grade de 7 colunas do PC saiu: a tela mostra o MÊS INTEIRO (até 31 dias), e cada dia
 // virou uma faixa na vertical, no celular e no computador. Sem rolagem horizontal do mesmo jeito.
 assert.match(css, /\.cp788-days\{display:flex;flex-direction:column/, 'os dias ficam um embaixo do outro (sem rolagem lateral)');
 assert.match(css, /\.cp788-day-name\{[^}]*font-weight:600/, 'nomes sem negrito');

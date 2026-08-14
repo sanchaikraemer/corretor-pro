@@ -12975,7 +12975,7 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     // v908 — tela reorganizada POR DIA: cada dia tem o prediozinho da meta e, junto, os clientes
     // atendidos naquele dia (só o nome — sem "atendido há X" nem produto, porque o dia já é a linha).
     //
-    // v1275 — O MÊS INTEIRO, NÃO A SEMANA. Pedido do dono: "quero ver o histórico do mês todo e não
+    // v1276 — O MÊS INTEIRO, NÃO A SEMANA. Pedido do dono: "quero ver o histórico do mês todo e não
     // da semana nessa parte... todos q atendi a cada dia desde dia 1". A tela mostrava só os últimos
     // 7 dias — o resto do mês existia no banco e não tinha onde ser visto.
     // Fim de semana segue a MESMA régua do gráfico do mês (v1273): sábado/domingo SEM atendimento

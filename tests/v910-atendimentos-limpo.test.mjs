@@ -11,7 +11,7 @@ assert.doesNotMatch(day, /background:rgba\(7,52,64/, 'a coluna do dia não tem m
 assert.doesNotMatch(day, /border:1px solid rgba\(255,255,255,\.10\);border-radius:16px/, 'sem borda de card ao redor da coluna');
 assert.match(css, /\.cp788-day:not\(:last-child\)\{border-bottom:1px solid/, 'só uma divisória fina entre os dias');
 
-// v1275 — a tela passou a mostrar o mês inteiro (até 31 dias) e a pilha vertical que só existia no
+// v1276 — a tela passou a mostrar o mês inteiro (até 31 dias) e a pilha vertical que só existia no
 // CELULAR virou o formato único: uma faixa por dia, no celular e no computador. Não há mais grade
 // de 7 colunas pra desfazer em media query.
 assert.match(css, /\.cp788-days\{display:flex;flex-direction:column/, 'os dias ficam um embaixo do outro, sempre');

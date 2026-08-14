@@ -32,7 +32,7 @@ assert.match(app, /perDay\[d\]\.itens\.push\(x\)/, 'agrupa atendimentos por dia'
 assert.doesNotMatch(app, /function cp788LinhaAtendimento/, 'linha antiga (com "atendido há X" + produto) removida');
 assert.doesNotMatch(app, /function cp788TempoAtendimento/, '"atendido há X" removido');
 assert.match(css, /\.cp788-days\{display:flex/, 'CSS: os dias, um embaixo do outro');
-// v1275 — a tela virou o MÊS INTEIRO (até 31 dias), então a coluna larga por dia deu lugar à
+// v1276 — a tela virou o MÊS INTEIRO (até 31 dias), então a coluna larga por dia deu lugar à
 // faixa por dia (o formato que o celular já usava): prédio pequeno na ponta esquerda.
 assert.match(css, /\.cp788-day \.cp788-predio\{order:-2;width:46px/, 'prédio pequeno na faixa do dia');
 

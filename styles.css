@@ -1268,7 +1268,7 @@ button,.card,.menu-card,.top3-mini,.resumo-dia .item,.dash-card,.sb-brand{
 .cp788-predio.cheio{filter:drop-shadow(0 0 12px rgba(255,98,88,.55))}
 
 /* v910 — Atendimentos por dia: dias LIMPOS (sem caixa/fundo), divisória sutil.
-   v1275 — a tela passou a mostrar o MÊS INTEIRO (até 31 dias), então a grade de 7 colunas do
+   v1276 — a tela passou a mostrar o MÊS INTEIRO (até 31 dias), então a grade de 7 colunas do
    computador deixou de fazer sentido: com 31 dias ela viraria 5 fileiras de colunas estreitas,
    sem nenhuma leitura de "um dia embaixo do outro". A pilha vertical que o CELULAR já usava desde
    a v910 virou o formato ÚNICO — uma faixa por dia (prédio + dia + contagem, nomes em chips),
@@ -1286,7 +1286,7 @@ button,.card,.menu-card,.top3-mini,.resumo-dia .item,.dash-card,.sb-brand{
 /* "Final de semana" no lugar do número do card, e o botão "Atender +1" */
 .cp-atender-mais{display:block;margin:16px auto 4px;padding:12px 22px;border:1px solid var(--accent);background:rgba(255,98,88,.12);color:var(--accent);border-radius:12px;font-weight:900;font-size:14px;cursor:pointer}
 .cp-atender-mais:hover{background:rgba(255,98,88,.2)}
-/* (v1275) O bloco que aqui transformava as 7 colunas em pilha no celular saiu: a pilha virou o
+/* (v1276) O bloco que aqui transformava as 7 colunas em pilha no celular saiu: a pilha virou o
    formato único, então não existe mais o "layout de colunas" que precisava ser desfeito. */
 
 /* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno.
