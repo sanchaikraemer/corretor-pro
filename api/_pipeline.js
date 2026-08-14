@@ -3356,9 +3356,9 @@ ${timelineText}
 CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON.
 As regras acima estão espalhadas por um texto longo, e o que decide a qualidade das três mensagens
 é este punhado de itens. Releia CADA UMA das três e, se qualquer item falhar, REESCREVA a mensagem
-antes de responder. Não devolva nada que não passe nos sete.
+antes de responder. Não devolva nada que não passe nos oito.
 
-ANTES DOS SETE, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
+ANTES DOS OITO, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
 DE ESCREVER. Releia o próximo passo que você mesmo definiu no diagnóstico e confira se cada uma das
 três realmente FAZ aquilo. É comum acertar o diagnóstico e escrever mensagem que não o cumpre — o
 corretor lê "o próximo passo é oferecer exemplos e facilitar a avaliação" e logo abaixo recebe três
@@ -3380,7 +3380,19 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
 6. A Nº 1 É A MAIS FORTE? Se outra oferece algo concreto e a nº 1 só pede informação, troque a
    ordem. A recomendada é a que você mandaria se só pudesse mandar uma.
 7. TEM IMÓVEL DO CLIENTE SEM VALOR CONHECIDO? Então pelo menos uma das três oferece a AVALIAÇÃO
-   feita pelo corretor, pedindo só dado fácil (endereço, bairro, metragem, foto).`;
+   feita pelo corretor, pedindo só dado fácil (endereço, bairro, metragem, foto).
+8. O CLIENTE JÁ RECEBEU MATERIAL E A CONVERSA PAROU? Se a conversa mostra que ele já recebeu
+   vídeo/foto/link/tabela/planta e depois disso esfriou (ou só respondeu por educação), MAIS
+   MATERIAL NÃO É O PRÓXIMO PASSO — quem já viu tudo pela tela decide indo ver. Pelo menos uma das
+   três precisa oferecer o presencial (visita ao apartamento/obra/decorado, ou encontro pra ver as
+   opções juntos), com dois dias/horários concretos, dizendo em uma frase por que vale mais ir do
+   que continuar recebendo arquivo. Não vale nas três situações abaixo, e nesses casos deixe as três
+   como estavam:
+   • o cliente é de fora ou já disse que não consegue ir agora (aí o presencial vira vídeo-chamada
+     ao vivo, gravado na hora ou visita marcada pra quando ele vier — nunca mais um PDF);
+   • já existe visita marcada, ou ele acabou de receber o material e ainda nem teve tempo de olhar;
+   • a conversa parou por um motivo declarado que uma visita não resolve (vender o imóvel dele,
+     aprovar financiamento, esperar alguém decidir). Aí o próximo passo é aquele motivo.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
