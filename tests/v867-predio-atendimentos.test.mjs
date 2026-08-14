@@ -47,7 +47,8 @@ const rend = app.slice(fim, fim + 4000);
 assert.match(rend, /class="cp788-days"/, 'a tela usa colunas por dia');
 assert.match(rend, /cp788PredioSVG\(n, CP788_META_DIA\)/, 'cada dia tem o prédio da meta');
 assert.match(rend, /class="cp788-day-name"/, 'os clientes do dia aparecem como nomes clicáveis');
-assert.match(rend, /for\(let i=0;i<7;i\+\+\)/, 'cobre os 7 dias');
+// v1276 — deixou de ser "últimos 7 dias": agora cobre do dia 1 do mês até hoje.
+assert.match(rend, /for\(let i=0;i<diasDoMesAteHoje;i\+\+\)/, 'cobre o mês inteiro, do dia 1 até hoje');
 assert.match(rend, /CP788_DIAS_SEM/, 'usa os nomes dos dias da semana');
 assert.match(rend, /i===1\?'Ontem'/, 'rotula Hoje/Ontem');
 

@@ -1267,33 +1267,27 @@ button,.card,.menu-card,.top3-mini,.resumo-dia .item,.dash-card,.sb-brand{
 .cp788-predio{display:block;margin:2px 0}
 .cp788-predio.cheio{filter:drop-shadow(0 0 12px rgba(255,98,88,.55))}
 
-/* v910 — Atendimentos por dia: colunas LIMPAS (sem caixa/fundo), prédio maior, divisória sutil */
-.cp788-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;padding-bottom:4px;align-items:start}
-.cp788-day{min-width:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 10px 10px}
-.cp788-day:not(:last-child){border-right:1px solid rgba(255,255,255,.07)}
-.cp788-day-head{text-align:center;line-height:1.2}.cp788-day-head b{display:block;font-size:13px;color:var(--text)}.cp788-day-head span{font-size:11px;color:var(--muted)}
-.cp788-day .cp788-predio{width:100%;max-width:110px;height:auto;display:block}
-.cp788-day-count{font-size:14px;font-weight:900;color:var(--muted)}.cp788-day-count b{color:var(--text)}.cp788-day.done .cp788-day-count,.cp788-day.done .cp788-day-count b{color:var(--accent)}
-.cp788-day-list{width:100%;display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.cp788-day-name{width:100%;text-align:center;padding:6px 7px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:rgba(255,255,255,.04);color:var(--text);font:inherit;font-size:11px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* v910 — Atendimentos por dia: dias LIMPOS (sem caixa/fundo), divisória sutil.
+   v1276 — a tela passou a mostrar o MÊS INTEIRO (até 31 dias), então a grade de 7 colunas do
+   computador deixou de fazer sentido: com 31 dias ela viraria 5 fileiras de colunas estreitas,
+   sem nenhuma leitura de "um dia embaixo do outro". A pilha vertical que o CELULAR já usava desde
+   a v910 virou o formato ÚNICO — uma faixa por dia (prédio + dia + contagem, nomes em chips),
+   igual no celular e no computador. */
+.cp788-days{display:flex;flex-direction:column;gap:0;padding-bottom:4px}
+.cp788-day{width:100%;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 2px}
+.cp788-day:not(:last-child){border-bottom:1px solid rgba(255,255,255,.08)}
+.cp788-day-head{order:-1;text-align:left;line-height:1.2}.cp788-day-head b{display:block;font-size:15px;color:var(--text)}.cp788-day-head span{font-size:12px;color:var(--muted)}
+.cp788-day .cp788-predio{order:-2;width:46px;max-width:46px;height:auto;display:block}
+.cp788-day-count{margin-left:auto;font-size:15px;font-weight:900;color:var(--muted)}.cp788-day-count b{color:var(--text)}.cp788-day.done .cp788-day-count,.cp788-day.done .cp788-day-count b{color:var(--accent)}
+.cp788-day-list{flex-basis:100%;display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:2px}
+.cp788-day-name{max-width:100%;flex:0 1 auto;text-align:center;padding:6px 9px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:rgba(255,255,255,.04);color:var(--text);font:inherit;font-size:12px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp788-day-name:hover{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08)}
-.cp788-day-empty{color:var(--muted);font-size:12px;padding:6px 0;opacity:.55}
-/* v910 — no CELULAR as 7 colunas lado a lado forçavam rolagem horizontal (feio). Vira uma pilha
-   vertical: cada dia é uma faixa (prédio pequeno + dia + contagem em cima; nomes em chips embaixo). */
+.cp788-day-empty{flex-basis:100%;text-align:left;color:var(--muted);font-size:12px;padding:6px 0;opacity:.55}
 /* "Final de semana" no lugar do número do card, e o botão "Atender +1" */
 .cp-atender-mais{display:block;margin:16px auto 4px;padding:12px 22px;border:1px solid var(--accent);background:rgba(255,98,88,.12);color:var(--accent);border-radius:12px;font-weight:900;font-size:14px;cursor:pointer}
 .cp-atender-mais:hover{background:rgba(255,98,88,.2)}
-@media(max-width:720px){
-  .cp788-days{display:flex;flex-direction:column;gap:0;overflow-x:visible;grid-template-columns:none}
-  .cp788-day{flex:none;width:100%;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 2px;border-right:0}
-  .cp788-day:not(:last-child){border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
-  .cp788-day .cp788-predio{order:-2;width:46px;max-width:46px}
-  .cp788-day-head{order:-1;text-align:left}.cp788-day-head b{font-size:15px}.cp788-day-head span{font-size:12px}
-  .cp788-day-count{margin-left:auto;font-size:15px}
-  .cp788-day-list{flex-basis:100%;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:2px}
-  .cp788-day-name{width:auto;max-width:100%;flex:0 1 auto}
-  .cp788-day-empty{flex-basis:100%;text-align:left}
-}
+/* (v1276) O bloco que aqui transformava as 7 colunas em pilha no celular saiu: a pilha virou o
+   formato único, então não existe mais o "layout de colunas" que precisava ser desfeito. */
 
 /* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno.
    v1251 — A COLUNA VOLTOU, e por um motivo diferente do que a #810 matou. Ela foi desligada
