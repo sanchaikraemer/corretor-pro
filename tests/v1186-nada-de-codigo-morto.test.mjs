@@ -53,6 +53,25 @@ function declaracoesDeTopo(src) {
 // auditoria não enxergou, gerando 225 falsos positivos antes de ser corrigida.
 const vezes = (texto, nome) => (texto.match(new RegExp('\\b' + nome.replace(/\$/g, '\\$') + '\\b', 'g')) || []).length;
 
+// ── Exceções documentadas (v1268) ────────────────────────────────────────────────────────────
+// Funções que existem, têm ponte pro HTML e NINGUÉM chama. Cada uma com o motivo de continuar
+// aqui. A lista é curta de propósito: nome novo nesta situação faz o teste falhar (é o alarme),
+// e nome que voltou a ser usado tem de sair daqui (conferido no fim do bloco).
+const SEM_PORTA_CONHECIDAS = {
+  aprenderDaCarteira: 'v1268: só era alcançável pelo menu do "+" que saiu na faxina; aguarda decisão do dono (religar num botão ou apagar)',
+  importarTelefonesCSV: 'v1268: idem — e a v905 registrou que esta importação deveria continuar existindo',
+  reanalisarEmSegundoPlano: 'v1268: refinava as 3 sugestões em segundo plano; perdeu o chamador em alguma versão anterior',
+  renderRespostaCliente: 'v1268: a pergunta "o cliente respondeu?" (evento cliente_respondeu) perdeu a tela; a v1189 diz que ela continua valendo',
+  auditarDadosV681: 'ferramenta de apoio, chamada pelo console quando o dono pede diagnóstico (como restaurarLeadsAntigos)',
+  // ── Achadas quando a régua acima foi corrigida (v1268). Todas ANTERIORES à faxina. ──
+  excluirLeadDefinitivo: 'era o botão discreto no fim da tela do cliente; a exclusão continua existindo pelo modal de editar ("Excluir este lead" → excluirLeadDoModal), então o recurso não sumiu — sumiu esta porta',
+  cpNotaPrioridade: 'nota antiga de prioridade; a fila usa cpProbabilidadeFechamento desde a v943. Fica exposta porque quatro testes de calibragem a executam',
+  cpPrecisaAcaoHoje: 'atalho de leitura (categoria === "agora") exposto pro teste da v884',
+  cp786PrecisaAcao: 'idem — atalho de leitura da categoria "agora"',
+  cp786AguardandoCliente: 'idem — atalho de leitura da categoria "aguardando"',
+  cp786MetaConducao: 'junta categoria + modelo + badge de um cliente; sobrou de quando a tela Condução existia (apagada na v1075)'
+};
+
 const mortas = [];
 
 // ── app.js ────────────────────────────────────────────────────────────────────────────────────
@@ -62,8 +81,23 @@ const mortas = [];
     const dentro = vezes(src, nome);
     const temPonte = new RegExp('window\\.' + nome + '\\s*=').test(src);
     const foraDoApp = new RegExp('\\b' + nome + '\\b').test(acompanhantes);
-    // 1 = só a declaração. Com ponte window, 2 = declaração + ponte, e ninguém usa de fato.
-    if (!foraDoApp && dentro <= (temPonte ? 2 : 1)) mortas.push(`app.js: ${nome}`);
+    // 1 = só a declaração. Com ponte, a LINHA da ponte cita o nome duas vezes
+    // (`window.x = x`), então declaração + ponte = 3 — era aqui que a régua deixava passar:
+    // com o limite em 2, nenhuma função com ponte jamais era apontada (v1268).
+    const limite = temPonte ? 3 : 1;
+    if (!foraDoApp && dentro <= limite && !SEM_PORTA_CONHECIDAS[nome]) mortas.push(`app.js: ${nome}`);
+  }
+}
+
+// ── A lista de exceções não pode virar depósito ───────────────────────────────────────────────
+{
+  const src = ler('app.js');
+  for (const [nome, motivo] of Object.entries(SEM_PORTA_CONHECIDAS)) {
+    const existe = new RegExp('function\\s+' + nome + '\\s*\\(').test(src);
+    const temPonte = new RegExp('window\\.' + nome + '\\s*=').test(src);
+    const usada = vezes(src, nome) > (temPonte ? 3 : 1) || new RegExp('\\b' + nome + '\\b').test(acompanhantes);
+    assert.ok(existe, `${nome} não existe mais — tire da lista de exceções deste teste.`);
+    assert.ok(!usada, `${nome} voltou a ser chamada de algum lugar — tire da lista de exceções. Motivo que estava registrado: ${motivo}`);
   }
 }
 

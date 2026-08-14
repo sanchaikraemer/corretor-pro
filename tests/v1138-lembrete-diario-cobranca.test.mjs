@@ -33,8 +33,16 @@ assert.doesNotMatch(app, /function cpLeadsAguardandoResposta\s*\(/,
 // lastCorretorMsgIso continua existindo e pode: cpUltimoContatoCorretorTs o usa pra medir há
 // quanto tempo O CORRETOR não fala com o cliente (régua dos resgates), o que é fato, não palpite.
 // O que não pode é ele voltar a decidir quem entra na cobrança do lembrete diário.
-const blocoLembrete = app.slice(app.indexOf('CP_LEMBRETE_DIARIO_KEY'), app.indexOf('function leadEhQuente'));
-assert.ok(blocoLembrete.length > 500, 'não achei o bloco do lembrete diário em app.js');
+// v1268 — o fim do bloco era marcado por 'function leadEhQuente', que foi apagada na faxina (era
+// usada só por um filtro de tela que já não existia). Com o marcador ausente, o indexOf devolvia
+// -1 e a fatia passava a ser o ARQUIVO QUASE INTEIRO — o teste falhava sem nada estar errado.
+// Agora o marcador é o fim real do bloco, e a fatia é conferida antes de valer.
+const iniLembrete = app.indexOf('CP_LEMBRETE_DIARIO_KEY');
+const fimLembrete = app.indexOf('window.cpLembreteDiario = cpLembreteDiario;', iniLembrete);
+assert.ok(iniLembrete > -1 && fimLembrete > iniLembrete, 'não achei o bloco do lembrete diário em app.js');
+const blocoLembrete = app.slice(iniLembrete, fimLembrete);
+assert.ok(blocoLembrete.length > 500, 'o bloco do lembrete diário encolheu demais — confira o marcador');
+assert.ok(blocoLembrete.length < app.length / 3, 'a fatia pegou muito mais que o bloco do lembrete');
 assert.doesNotMatch(blocoLembrete.replace(/\/\/[^\n]*/g, ''), /lastCorretorMsgIso|daysSinceClientReply|lastInteractionAt/,
   'o lembrete diário não pode voltar a deduzir pendência de quem falou por último');
 

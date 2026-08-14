@@ -934,7 +934,7 @@ function cpConsumeTransientRoute(kind){
 }
 function cpClearLeadState(){
   if(typeof ui667ModoDetalheLead === "function") ui667ModoDetalheLead(false);
-  state.lead=null; state.focoLeadId=null; state.analysis=null; state.sequencia=null;
+  state.lead=null; state.focoLeadId=null; state.analysis=null;
 }
 // v1077 — as listas "montadas na hora" pelos cards da Home (Fazer agora, Aguardando cliente,
 // Carteira ativa, Propostas) não vivem em state.gruposHome — quem VOLTA pra
@@ -3134,7 +3134,6 @@ function renderBotoesHome(){
   document.body.classList.remove("lead-foco-aberto");
   state.focoLeadId = null; // mostrando os botões iniciais = nenhum lead em foco
   state.grupoAtivo = null;
-  state.sequencia = null; // voltar pra home encerra o modo sequência
   const saud = qs("#saudacao");
   if(saud && saud.innerHTML.trim()) saud.style.display = "";
   const grupos = state.gruposHome || { "acao-hoje": [], "pode-aguardar": [], "tratado-hoje": [] };
@@ -3356,82 +3355,9 @@ function cpAtenderMaisUmHoje(){
 }
 window.cpAtenderMaisUmHoje = cpAtenderMaisUmHoje;
 
-// Mostra QUEM entrou como "tratado hoje", com a HORA (Brasília) e o que marcou
-// (copiou a mensagem / registrou atendimento). Serve pra conferir de onde vem o
-// número da saudação e da meta — abre clicando no KPI "contatos hoje".
-function mostrarTratadosHoje(){
-  const items = state.itemsAtivos || [];
-  const fmtHora = (iso) => {
-    try{ return new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false }).format(new Date(iso)); }
-    catch(_){ return "—"; }
-  };
-  const origem = (de) => ({
-    copiar_msg: "copiou a mensagem",
-    novoAtendimento: "registrou atendimento",
-    listaPrioridade: "marcou na lista",
-    leadFoco: "no lead"
-  })[de] || (de || "contato");
-  const linhas = [];
-  for(const l of items){
-    const e = ehContatadoHoje(l);
-    if(!e) continue;
-    linhas.push({ nome: l.name || "Cliente sem nome", hora: e.quando ? fmtHora(e.quando) : "—", de: origem(e.detalhes?.de) });
-  }
-  linhas.sort((a, b) => (a.hora < b.hora ? -1 : 1));
-  qs("#tratadosHojeModal")?.remove();
-  const ov = document.createElement("div");
-  ov.id = "tratadosHojeModal";
-  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-  const corpo = linhas.length
-    ? linhas.map(x => `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
-        <div style="min-width:0"><div style="font-weight:950;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(x.nome)}</div><div class="small" style="color:var(--muted);font-size:11px">${escapeHtml(x.de)}</div></div>
-        <div style="font-weight:950;color:var(--dados);font-size:13px;white-space:nowrap">${escapeHtml(x.hora)}</div>
-      </div>`).join("")
-    : `<div class="small" style="color:var(--muted);padding:14px 0">Ninguém marcado como tratado hoje.</div>`;
-  ov.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:16px;font-weight:950">Tratados hoje (${linhas.length})</div>
-        <button type="button" id="tratadosHojeFechar" style="border:0;background:transparent;color:var(--muted);font-size:22px;font-weight:950;cursor:pointer;line-height:1">×</button>
-      </div>
-      <div class="small" style="color:var(--soft);margin-bottom:10px">Hora de Brasília. É isso que entra no número da saudação e da meta.</div>
-      ${corpo}
-    </div>`;
-  document.body.appendChild(ov);
-  qs("#tratadosHojeFechar").addEventListener("click", () => ov.remove(), { once:true });
-  ov.addEventListener("click", (ev) => { if(ev.target === ov) ov.remove(); });
-}
-window.mostrarTratadosHoje = mostrarTratadosHoje;
 
-function buildDesempenhoInsightsHTML(items){
-  items=items||state.itemsAtivos||[];
-  const ativos=items.filter(leadEhAtivo);
-  const categorias=new Map(ativos.map(l=>[l,cp786Categoria(l)]));
-  const categoriaDe=l=>categorias.get(l)||cp786Categoria(l);
-  const agora=ativos.filter(l=>categoriaDe(l)==='agora').length;
-  const programados=ativos.filter(l=>categoriaDe(l)==='programados').length;
-  const aguardando=ativos.filter(l=>categoriaDe(l)==='aguardando').length;
-  const atendidosHoje=ativos.filter(ehAtendidoHoje).length;
-  const atendidosSemana=ativos.filter(ehAtendidoNaSemana).length;
-  const pedemAcao=agora;
-  const ringPct=ativos.length?Math.max(6,Math.min(100,Math.round((pedemAcao/ativos.length)*100))):0;
-  return `
-    <div class="dash-card">
-      <div class="dh"><h4>📊 Seu ritmo de atendimento</h4><span class="dash-sub">Esta semana ▾</span></div>
-      <div class="dash-desemp">
-        <div class="gauge" style="--p:${ringPct}"><div class="gv"><b>${ativos.length}</b><span>clientes ativos</span></div></div>
-        <div class="dash-stats">
-          <div class="st" style="cursor:pointer" onclick="show('home')"><b>${atendidosHoje}</b><span>Atendidos hoje</span></div>
-          <div class="st"><b>${atendidosSemana}</b><span>Atendidos na semana</span></div>
-        </div>
-      </div>
-      <button type="button" class="dash-btn" onclick="show('relatorio')">Ver desempenho completo</button>
-    </div>
-    <div class="dash-card">
-      <div class="dh"><h4>✨ Leitura do Corretor Pro</h4></div>
-      <div class="ins-item"><div class="ins-ic">↗</div><div style="min-width:0"><div class="it"><b style="color:var(--lime)">${pedemAcao}</b> atendimento${pedemAcao===1?' pede':'s pedem'} sua ação agora; <b>${programados}</b> programado${programados===1?'':'s'}; <b>${aguardando}</b> aguardando cliente.</div>${pedemAcao?`<a onclick="abrirFazerAgora()">Abrir prioridades →</a>`:''}</div></div>
-    </div>`;
-}
+// v1268 (2ª passada) — buildDesempenhoInsightsHTML saiu junto com o modal de insights que ela
+// montava (abrirDesempenhoInsights, acima). Era o último pedaço daquela tela.
 function renderHomeRight(items){
   // Atualização #810: a coluna lateral repetia indicadores já exibidos nos cards
   // principais e podia ficar presa no skeleton quando o dashboard caía no fallback.
@@ -3583,120 +3509,6 @@ function cp1251AbrirPainel(){
   ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
 }
 window.cp1251AbrirPainel = cp1251AbrirPainel;
-// Mobile: abre desempenho + insights num modal (pelo menu / item Insights da lateral).
-function abrirDesempenhoInsights(){
-  const items = state.itemsAtivos || [];
-  qs("#desempInsModal")?.remove();
-  const ov = document.createElement("div");
-  ov.id = "desempInsModal";
-  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow-y:auto";
-  ov.innerHTML = `<div style="max-width:460px;width:100%;margin:auto 0">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button type="button" id="desempInsFechar" style="border:0;background:transparent;color:#fff;font-size:24px;font-weight:950;cursor:pointer;line-height:1">×</button></div>
-    <div style="display:flex;flex-direction:column;gap:14px">${buildDesempenhoInsightsHTML(items)}</div>
-  </div>`;
-  document.body.appendChild(ov);
-  qs("#desempInsFechar").addEventListener("click", () => ov.remove(), { once:true });
-  ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
-}
-window.abrirDesempenhoInsights = abrirDesempenhoInsights;
-// ➕ central da barra de baixo (mobile): Importar / Lead manual / Aprender da carteira / Telefones.
-// v1114 — "Reanalisar todos" saiu daqui (e do Menu) por decisão do dono: queimava o limite de
-// análises do plano inteiro num toque, sem ganho real.
-function abrirMaisAcoes(){
-  qs("#maisAcoesSheet")?.remove();
-  const ov = document.createElement("div");
-  ov.id = "maisAcoesSheet";
-  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center";
-  ov.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line);border-top-left-radius:20px;border-top-right-radius:20px;padding:16px 16px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px">
-    <div style="width:40px;height:4px;border-radius:999px;background:rgba(255,255,255,.2);margin:0 auto 14px"></div>
-    <button type="button" id="maAcImportar" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,98,88,.06);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">⇪ Enviar conversa do WhatsApp</button>
-    <button type="button" id="maAcLead" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">＋ Lead manual</button>
-    <button type="button" id="maAcAprender" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer;margin-bottom:10px">🧠 Aprender da carteira <span style="font-weight:600;color:var(--muted);font-size:11px">(sem custo de análise)</span></button>
-    <button type="button" id="maAcTelefones" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);color:var(--text);font-weight:900;font-size:14px;cursor:pointer">📞 Importar telefones (CSV) <span style="font-weight:600;color:var(--muted);font-size:11px">preenche quem está sem número</span></button>
-  </div>`;
-  document.body.appendChild(ov);
-  const close = () => ov.remove();
-  ov.addEventListener("click", (e) => { if(e.target === ov) close(); });
-  qs("#maAcImportar").onclick = () => { close(); show("zip"); };
-  qs("#maAcLead").onclick = () => { close(); if(window.abrirNovoLead) abrirNovoLead(); };
-  qs("#maAcAprender").onclick = () => { close(); if(window.aprenderDaCarteira) aprenderDaCarteira(); };
-  qs("#maAcTelefones").onclick = () => { close(); if(window.importarTelefonesCSV) importarTelefonesCSV(); };
-}
-
-// Reprocessa a carteira pelo mesmo motor automático v808. O aprendizado normal
-// já acontece sozinho; este atalho serve apenas para uma nova varredura intencional.
-async function aprenderDaCarteira(){
-  toast("Reprocessando suas conversas reais em segundo plano…");
-  const iniciou = await iniciarAprendizadoContinuoAutomatico({ forcar:true, mostrarToast:true });
-  if(!iniciou) toast("O aprendizado já está rodando em outra aba ou dispositivo.");
-}
-window.aprenderDaCarteira = aprenderDaCarteira;
-
-// Importa telefones de um CSV (colunas NOME + TELEFONE) e preenche os leads que estão SEM número,
-// casando pelo nome exato. NÃO mexe em quem já tem telefone, e só preenche quando há UM único lead
-// com aquele nome (evita atribuir número errado a homônimo). Mostra quantos vai preencher antes.
-async function importarTelefonesCSV(){
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".csv,text/csv,text/plain"; inp.style.display = "none";
-  document.body.appendChild(inp);
-  inp.onchange = async () => {
-    const file = inp.files && inp.files[0];
-    inp.remove();
-    if(!file) return;
-    try{
-      toast("Lendo arquivo…");
-      let texto = await file.text();
-      if(texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);
-      const rows = parseCsvDireciona(texto);
-      if(rows.length < 2){ toast("Arquivo vazio ou sem dados."); return; }
-      const head = rows[0].map(h => semAcento(h));
-      const iNome = head.findIndex(h => h.includes("nome"));
-      const iTel = head.findIndex(h => h.includes("telefone") || h === "tel" || h.startsWith("tel"));
-      if(iNome < 0 || iTel < 0){ toast("O arquivo precisa ter colunas NOME e TELEFONE."); return; }
-      const mapa = new Map(); // nomeNorm -> telefone
-      for(const r of rows.slice(1)){
-        const nome = (r[iNome]||"").trim(), tel = (r[iTel]||"").trim();
-        if(nome && tel) mapa.set(semAcento(nome), tel);
-      }
-      if(!mapa.size){ toast("Nenhum nome+telefone no arquivo."); return; }
-      toast("Carregando seus leads…");
-      const data = await getLeadsData(true);
-      const leads = (data?.items||[]).map(limparLead);
-      const porNome = new Map();
-      for(const ld of leads){ const k = semAcento(ld.name||""); if(!k) continue; if(!porNome.has(k)) porNome.set(k, []); porNome.get(k).push(ld); }
-      const aplicar = [];
-      for(const [nomeNorm, tel] of mapa){
-        const cand = porNome.get(nomeNorm);
-        if(!cand || cand.length !== 1) continue;            // exige 1 lead único com esse nome
-        const ld = cand[0];
-        if(String(ld.phone||"").replace(/\D/g,"").length >= 8) continue; // já tem número — não mexe
-        aplicar.push({ id: ld.id, telefone: tel });
-      }
-      if(!aplicar.length){ toast("Nada pra preencher — esses leads já têm número ou não bateram pelo nome."); return; }
-      const msgTel = `Vou preencher o telefone de ${aplicar.length} ${pl(aplicar.length, "lead", "leads")} que ${pl(aplicar.length, "estava", "estavam")} sem número. Confirmar?`;
-      const okTel = (typeof cp903Confirm === "function")
-        ? await cp903Confirm({ titulo: "Preencher telefones", mensagem: msgTel, ok: "Preencher" })
-        : confirm(msgTel);
-      if(!okTel) return;
-      let ok = 0, erro = 0;
-      for(let i=0;i<aplicar.length;i++){
-        const a = aplicar[i];
-        toast(`Preenchendo ${i+1}/${aplicar.length}…`);
-        try{
-          const r = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, action:"editar-dados", telefone: a.telefone }) });
-          const d = await r.json().catch(()=>({ok:false}));
-          if(r.ok && d?.ok) ok++; else erro++;
-        }catch(_){ erro++; }
-      }
-      if(typeof invalidarLeadsCache === "function") invalidarLeadsCache();
-      toast(`✓ ${ok} ${pl(ok, "telefone preenchido", "telefones preenchidos")}${erro?` · ${erro} ${pl(erro, "falhou", "falharam")}`:""}.`);
-      if(typeof loadRecentLeads === "function") loadRecentLeads();
-    }catch(err){ toast("Erro ao importar: " + (err?.message||err)); }
-  };
-  inp.click();
-}
-window.importarTelefonesCSV = importarTelefonesCSV;
-window.abrirMaisAcoes = abrirMaisAcoes;
 
 // Avatar com a(s) inicial(is) do lead.
 function avatarInicial(name, pctClass){
@@ -3920,14 +3732,6 @@ window.renderBotoesHome = renderBotoesHome;
 // (v931) botão duplicado removido da Home: era o mesmo destino do Menu →
 // "Condução do atendimento" — porta redundante pro mesmo lugar.
 
-// "Ver lista de hoje" (insight) abre EXATAMENTE a mesma fila priorizada da tela inicial
-// (grupo "ação hoje", mesma ordem) — não a lista por %. Assim não há dois rankings de "hoje".
-function verListaHoje(){
-  document.querySelector("#desempInsModal")?.remove(); // fecha o modal de insights no mobile
-  const temUrg = (state.gruposHome && state.gruposHome["acao-hoje"] && state.gruposHome["acao-hoje"].length) > 0;
-  if(temUrg) abrirGrupoHome("acao-hoje"); else renderBotoesHome();
-}
-window.verListaHoje = verListaHoje;
 
 
 function renderTop3(top3){
@@ -4798,7 +4602,6 @@ export async function abrirLead(id, options={}){
   state.timelineVisibleCount = 4;
   state.cp704HistoryFull = false;
   document.body.classList.add("lead-foco-aberto");
-  garantirIntelCarregado().catch(()=>{});
 
   const emMemoria = () => {
     for(const lista of [state.todosLeads, state.itemsAtivos, state.leads]){
@@ -5005,39 +4808,103 @@ function voltarDoLead(){
 }
 window.voltarDoLead = voltarDoLead;
 
-// ===== Atender em sequência (esteira) =====
-// Abre a fila de hoje 1 lead por vez: você manda/marca e clica "Próximo" — sem voltar e
-// escolher de novo. O corretor conduz; o app só tira a fricção entre um lead e outro.
-function iniciarSequenciaAtendimento(){
-  const fila = (state.gruposHome?.hoje || []).map(l => String(l.id||"")).filter(Boolean);
-  if(!fila.length){ toast("Sua fila de hoje está vazia."); return; }
-  state.grupoAtivo = null;
-  state.sequencia = { ids: fila, idx: 0 };
-  abrirLead(fila[0]);
+// v1268 (2ª passada) — DUAS FUNCIONALIDADES QUE FICARAM SEM BOTÃO (e continuam aqui, de propósito).
+//
+// "Aprender da carteira" e "Importar telefones (CSV)" só eram alcançáveis pelo menu do "+" da barra
+// de baixo (abrirMaisAcoes), que saiu nesta faxina por estar órfão — o "+" abre o cadastro manual
+// direto há versões. Ou seja: as duas estão sem porta de entrada na tela.
+//
+// NÃO foram apagadas porque isso é decisão do dono, não minha: são recursos de verdade (um lê a
+// carteira pra alimentar o aprendizado, o outro traz telefones de uma planilha), e a v905 registrou
+// que a importação de telefones deveria continuar existindo. Estão aqui esperando a resposta dele:
+// religar num botão, ou apagar de vez.
+async function aprenderDaCarteira(){
+  toast("Reprocessando suas conversas reais em segundo plano…");
+  const iniciou = await iniciarAprendizadoContinuoAutomatico({ forcar:true, mostrarToast:true });
+  if(!iniciou) toast("O aprendizado já está rodando em outra aba ou dispositivo.");
 }
-window.iniciarSequenciaAtendimento = iniciarSequenciaAtendimento;
+window.aprenderDaCarteira = aprenderDaCarteira;
 
-function proximoDaSequencia(){
-  if(!state.sequencia) return;
-  if(state.sequencia.idx >= state.sequencia.ids.length - 1){ finalizarSequencia(); return; }
-  state.sequencia.idx++;
-  abrirLead(state.sequencia.ids[state.sequencia.idx]);
+// Importa telefones de um CSV (colunas NOME + TELEFONE) e preenche os leads que estão SEM número,
+// casando pelo nome exato. NÃO mexe em quem já tem telefone, e só preenche quando há UM único lead
+// com aquele nome (evita atribuir número errado a homônimo). Mostra quantos vai preencher antes.
+async function importarTelefonesCSV(){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".csv,text/csv,text/plain"; inp.style.display = "none";
+  document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    inp.remove();
+    if(!file) return;
+    try{
+      toast("Lendo arquivo…");
+      let texto = await file.text();
+      if(texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);
+      const rows = parseCsvDireciona(texto);
+      if(rows.length < 2){ toast("Arquivo vazio ou sem dados."); return; }
+      const head = rows[0].map(h => semAcento(h));
+      const iNome = head.findIndex(h => h.includes("nome"));
+      const iTel = head.findIndex(h => h.includes("telefone") || h === "tel" || h.startsWith("tel"));
+      if(iNome < 0 || iTel < 0){ toast("O arquivo precisa ter colunas NOME e TELEFONE."); return; }
+      const mapa = new Map(); // nomeNorm -> telefone
+      for(const r of rows.slice(1)){
+        const nome = (r[iNome]||"").trim(), tel = (r[iTel]||"").trim();
+        if(nome && tel) mapa.set(semAcento(nome), tel);
+      }
+      if(!mapa.size){ toast("Nenhum nome+telefone no arquivo."); return; }
+      toast("Carregando seus leads…");
+      const data = await getLeadsData(true);
+      const leads = (data?.items||[]).map(limparLead);
+      const porNome = new Map();
+      for(const ld of leads){ const k = semAcento(ld.name||""); if(!k) continue; if(!porNome.has(k)) porNome.set(k, []); porNome.get(k).push(ld); }
+      const aplicar = [];
+      for(const [nomeNorm, tel] of mapa){
+        const cand = porNome.get(nomeNorm);
+        if(!cand || cand.length !== 1) continue;            // exige 1 lead único com esse nome
+        const ld = cand[0];
+        if(String(ld.phone||"").replace(/\D/g,"").length >= 8) continue; // já tem número — não mexe
+        aplicar.push({ id: ld.id, telefone: tel });
+      }
+      if(!aplicar.length){ toast("Nada pra preencher — esses leads já têm número ou não bateram pelo nome."); return; }
+      const msgTel = `Vou preencher o telefone de ${aplicar.length} ${pl(aplicar.length, "lead", "leads")} que ${pl(aplicar.length, "estava", "estavam")} sem número. Confirmar?`;
+      const okTel = (typeof cp903Confirm === "function")
+        ? await cp903Confirm({ titulo: "Preencher telefones", mensagem: msgTel, ok: "Preencher" })
+        : confirm(msgTel);
+      if(!okTel) return;
+      let ok = 0, erro = 0;
+      for(let i=0;i<aplicar.length;i++){
+        const a = aplicar[i];
+        toast(`Preenchendo ${i+1}/${aplicar.length}…`);
+        try{
+          const r = await fetch("./api/lead-update", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, action:"editar-dados", telefone: a.telefone }) });
+          const d = await r.json().catch(()=>({ok:false}));
+          if(r.ok && d?.ok) ok++; else erro++;
+        }catch(_){ erro++; }
+      }
+      if(typeof invalidarLeadsCache === "function") invalidarLeadsCache();
+      toast(`✓ ${ok} ${pl(ok, "telefone preenchido", "telefones preenchidos")}${erro?` · ${erro} ${pl(erro, "falhou", "falharam")}`:""}.`);
+      if(typeof loadRecentLeads === "function") loadRecentLeads();
+    }catch(err){ toast("Erro ao importar: " + (err?.message||err)); }
+  };
+  inp.click();
 }
-window.proximoDaSequencia = proximoDaSequencia;
+window.importarTelefonesCSV = importarTelefonesCSV;
 
-function sairDaSequencia(){
-  state.sequencia = null;
-  voltarDoLead();
-}
-window.sairDaSequencia = sairDaSequencia;
-
-function finalizarSequencia(){
-  state.sequencia = null;
-  state.lead = null; state.focoLeadId = null; state.analysis = null;
-  toast("Mandou bem! Você passou por toda a fila de hoje.");
-  renderBotoesHome();
-}
-window.finalizarSequencia = finalizarSequencia;
+// v1268 (2ª passada) — SEIS FUNÇÕES ÓRFÃS DE TELA TAMBÉM SAÍRAM:
+//   · mostrarTratadosHoje — abria a lista de quem foi "tratado hoje" a partir de um quadradinho da Home que não existe mais.
+//   · abrirMaisAcoes — era o menu do "+" da barra de baixo; hoje o "+" abre direto o cadastro manual (abrirNovoLead).
+//   · abrirDesempenhoInsights — modal de "Desempenho + Insights" chamado por um item de menu que saiu.
+//   · verListaHoje — botão do modal de insights (que saiu junto); apontava pro grupo "acao-hoje", que também não existe mais.
+//   · toggleAgendar — abria/fechava a caixa #agendarbox_<id>, que nenhuma tela desenha desde que o painel de agendar foi refeito.
+//   · abrirAtendimentosFiltro — filtro da Carteira acionado por botões que saíram da tela.
+// Todas tinham "ponte" pro HTML (window.x = x) e nenhuma era chamada por botão, menu ou código —
+// a ponte sozinha não é uso: é só o que permitiria um onclick existir.
+//
+// v1268 (2ª passada) — "ATENDER EM SEQUÊNCIA (ESTEIRA)" REMOVIDO (5 funções, ~35 linhas).
+// Abria a fila do dia um cliente por vez, com "Próximo" entre um e outro. Os botões que
+// chamavam isso saíram da tela em versões passadas (a Home foi refeita) e sobraram só as funções
+// e as pontes pro HTML — nada no app publicado as chama. O modo de trabalho hoje é a lista do
+// "Fazer agora" com o "Atender +1".
 
 
 /* ============================================================
@@ -6179,13 +6046,6 @@ function toggleReagendar(id){
   box.style.display = (box.style.display === "flex") ? "none" : "flex";
 }
 window.toggleReagendar = toggleReagendar;
-// Abre/fecha o painel de agendar lembrete (linha de ações do lead).
-function toggleAgendar(id){
-  const box = qs("#agendarbox_"+id);
-  if(!box) return;
-  box.style.display = (box.style.display === "flex") ? "none" : "flex";
-}
-window.toggleAgendar = toggleAgendar;
 // Reagenda por atalho (N dias a partir de hoje), salvando na hora.
 // v1208 — os chips do painel NÃO usam mais isto: lá eles só preenchem o dia, porque salvar na
 // hora fechava o painel antes do dono conseguir escolher o horário. Fica disponível pra quem
@@ -6594,25 +6454,19 @@ function payloadComCerebro(obj = {}) { return { ...obj, cerebroConfig: obterCere
 window.payloadComCerebro = payloadComCerebro;
 
 
-// Cache leve da inteligenciaAprendida, pra não refazer a busca a cada cliente aberto.
-let _ultimoIntelCarregado = 0;
-async function garantirIntelCarregado(){
-  if(state.intelCache && (Date.now() - _ultimoIntelCarregado) < 60_000) return state.intelCache;
-  try{
-    const res = await fetch("./api/cerebro-config", { cache:"no-store" });
-    const data = await res.json();
-    state.intelCache = data?.config?.inteligenciaAprendida || {};
-    _ultimoIntelCarregado = Date.now();
-  }catch(_){ state.intelCache = state.intelCache || {}; }
-  return state.intelCache;
-}
+// v1268 (2ª passada) — garantirIntelCarregado REMOVIDA. Ela buscava a inteligência aprendida do
+// Cérebro (uma chamada de rede) TODA VEZ que um cliente era aberto, guardava num cache… e o único
+// consumidor era renderLeadsParecidos, a seção que já estava desligada e saiu nesta mesma faxina.
+// Ou seja: pedido de rede no caminho crítico de abrir cliente, pra alimentar um cache que ninguém
+// lia. O aprendizado em si continua intacto — quem o usa de verdade é a tela do Cérebro
+// (cerebroIntel, mais abaixo) e a análise, no servidor.
 
 // v1268 — renderLeadsParecidos REMOVIDA na faxina (eram ~75 linhas).
 // A seção "Você já trabalhou clientes parecidos" foi ocultada a pedido do corretor ("confundia
 // mais que ajudava"), e o jeito de ocultar foi pôr um `return ""` na primeira linha — o resto do
 // desenho ficou ali, inalcançável, e nem a função era mais chamada por alguém. O aprendizado por
-// trás (inteligenciaAprendida) não muda: quem o carrega é garantirIntelCarregado, acima, que
-// segue viva e em uso.
+// trás (inteligenciaAprendida) não muda: quem o usa de verdade é a tela do Cérebro e a análise,
+// no servidor.
 
 async function carregarUsoAprendizado(){
   const card = qs("#aprendizadoCard");
@@ -9890,20 +9744,7 @@ async function cpLembreteDiario(){
 }
 window.cpLembreteDiario = cpLembreteDiario;
 try{ cpLembreteDiarioRender(); }catch(_){ }
-function leadEhQuente(l){
-  if(!leadEhAtivo(l)) return false;
-  const tipo = String(l?.analysis?.tipoRetomada||"").toLowerCase();
-  const interesse = String(l?.analysis?.diagnostico?.interesse||"").toLowerCase();
-  return tipo === "quente-fechar" || interesse === "alto";
-}
-function abrirAtendimentosFiltro(filtro="todos"){
-  state.carteiraFiltro=filtro;
-  state.carteiraVisibleCount=CARTEIRA_PAGE_SIZE;
-  show("carteira",{navKey:"leads"});
-  cpReplaceRoute(cpRouteForScreen("carteira"));
-}
-window.leadEhQuente=leadEhQuente;
-window.abrirAtendimentosFiltro=abrirAtendimentosFiltro;
+// v1268 (2ª passada) — leadEhQuente saiu junto com abrirAtendimentosFiltro, a única que a usava.
 
 function cp786Modelo(l){
   try{return ui670ModeloComercial(l)||{};}catch(_){return {};}
@@ -10719,21 +10560,11 @@ function cpCompromissosVencidosDoLead(l){
   return out;
 }
 window.cpCompromissosVencidosDoLead=cpCompromissosVencidosDoLead;
-function cp786CompararConducao(a,b){
-  const ordem={agora:0,programados:1,aguardando:2,'sem-acao':3};
-  const ca=cp786Categoria(a),cb=cp786Categoria(b);
-  const oa=ordem[ca]??9,ob=ordem[cb]??9;
-  if(oa!==ob) return oa-ob;
-  if(ca==='programados'){
-    const d=cp786CompromissoOrdemTs(a)-cp786CompromissoOrdemTs(b);
-    if(Number.isFinite(d)&&d!==0) return d;
-  }
-  try{
-    const d=compararPrioridadeAtendimento(a,b);
-    if(Number.isFinite(d)&&d!==0) return d;
-  }catch(_){ }
-  return String(a?.name||'').localeCompare(String(b?.name||''),'pt-BR');
-}
+// v1268 (2ª passada) — cp786CompararConducao REMOVIDA. Era uma SEGUNDA ordenação de lista de
+// clientes, sobrevivente da tela "Condução" (apagada na v1075), que ninguém chamava — e pior:
+// ordenava por uma régua diferente da que vale (cp786OrdenarConducao, logo abaixo, tem o
+// comparador dela própria embutido). Dois relógios contando diferente é a doença que este projeto
+// já pagou caro várias vezes; o que não roda, mas contradiz o que roda, é o pior tipo de resto.
 function cp786OrdenarConducao(lista,metaPronto=null){
   const arr=Array.isArray(lista)?lista.slice():[];
   const ordem={agora:0,programados:1,aguardando:2,'sem-acao':3};
@@ -10799,7 +10630,6 @@ window.cp786TemCompromisso=cp786TemCompromisso;
 window.cp786AguardandoCliente=cp786AguardandoCliente;
 window.cp786Categoria=cp786Categoria;
 window.cp786CategoriaLabel=cp786CategoriaLabel;
-window.cp786CompararConducao=cp786CompararConducao;
 window.cp786OrdenarConducao=cp786OrdenarConducao;
 window.cp786MetaConducao=cp786MetaConducao;
 window.cp786ResumoAcao=cp786ResumoAcao;
