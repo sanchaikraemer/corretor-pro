@@ -9575,14 +9575,25 @@ qs("#openWhatsapp").addEventListener("click",()=>{
 });
 // Camada EXTRA de atualização (além do service worker): compara a versão CARREGADA (no topo
 // da tela) com a versão real do index.html no servidor. Se o servidor já tem uma maior, limpa
-// os caches e recarrega UMA vez (trava em sessionStorage impede qualquer loop). Cobre o caso
-// em que o service worker não detecta a troca sozinho.
+// os caches e recarrega. Cobre o caso em que o service worker não detecta a troca sozinho.
+//
+// v1275 — a trava era "1x por sessão" (sessionStorage "vchk"), e a checagem só acontecia no
+// carregamento da página. No app INSTALADO isso significava nunca mais: o aplicativo fica vivo
+// em segundo plano por dias, a sessão nunca termina, então a única checagem tinha acontecido na
+// primeira vez que ele abriu — e todas as atualizações publicadas depois disso passavam batido.
+// Era por isso que o dono continuava vendo uma correção antiga na tela mesmo com a nova no ar.
+// Agora a trava é de TEMPO (nunca mais de uma checagem por CP_VCHK_INTERVALO), o que continua
+// impedindo qualquer laço, e a checagem volta a rodar quando ele traz o app pra frente ou quando
+// a internet volta.
+const CP_VCHK_INTERVALO = 5 * 60 * 1000;
+function cpVchkAgora(){ return Date.now(); }
 async function checarVersaoServidor(){
   try{
     // Nunca recarrega enquanto um ZIP recebido do WhatsApp estiver pendente/processando.
     // No cold start, um reload aqui era suficiente para perder a primeira tentativa.
     if(window.__cpShareImportActive || state?.processing || state?.pendingSharedRecordId) return;
-    if(sessionStorage.getItem("vchk")) return;
+    const ultima = parseInt(sessionStorage.getItem("vchk") || "0", 10) || 0;
+    if(ultima && (cpVchkAgora() - ultima) < CP_VCHK_INTERVALO) return;
     const elv = document.querySelector(".mob-ver, .sb-ver-top");
     const attr = document.documentElement.dataset.appVersion || document.body?.dataset?.appVersion || "";
     const atual = parseInt(attr,10) || (elv ? (parseInt((String(elv.textContent).match(/#(\d+)/)||[])[1], 10) || 0) : 0);
@@ -9592,7 +9603,7 @@ async function checarVersaoServidor(){
     const html = await r.text();
     const m = html.match(/Atualiza[çc][ãa]o #(\d+)/);
     const servidor = m ? (parseInt(m[1], 10) || 0) : 0;
-    sessionStorage.setItem("vchk", "1"); // só tenta 1x por sessão — nunca entra em loop
+    sessionStorage.setItem("vchk", String(cpVchkAgora())); // no máximo 1 checagem a cada 5 min
     if(servidor > atual){
       // v1107 — só apaga as caches ESTÁTICAS versionadas. A cache do compartilhamento
       // (direciona-sharetarget-stable) pode guardar um ZIP compartilhado ainda não processado
@@ -9634,14 +9645,23 @@ if("serviceWorker" in navigator){
       });
       try{ await reg.update(); }catch(e){}
       try{ await navigator.serviceWorker.ready; }catch(e){}
-      // Não força checagem/reload quando a aba volta do segundo plano.
-      // Isso causava tela branca e atraso ao alternar abas, porque o app reiniciava
-      // e precisava reler/renderizar a base antes de responder.
       if ("requestIdleCallback" in window) {
         requestIdleCallback(() => checarVersaoServidor(), { timeout: 8000 });
       } else {
         setTimeout(checarVersaoServidor, 4000);
       }
+      // v1275 — o app volta a procurar versão nova quando é trazido pra frente e quando a
+      // internet volta. O medo antigo (anotado aqui até a v1274) era de recarregar a tela toda
+      // vez que ele trocasse de aba: não é o que acontece. Quem checa é a função acima, que só
+      // recarrega quando o servidor REALMENTE tem um número maior — e no máximo uma vez a cada
+      // cinco minutos. Sem isso, o app instalado ficava preso na versão do dia em que foi aberto.
+      const revisar = () => {
+        if(document.visibilityState !== "visible") return;
+        reg.update().catch(() => {});
+        checarVersaoServidor();
+      };
+      addEventListener("visibilitychange", revisar);
+      addEventListener("online", revisar);
       setTimeout(async () => {
         await limparSharesLocaisAntigos();
         limparImportacoesRemotasAntigas();
