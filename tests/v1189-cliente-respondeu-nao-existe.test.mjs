@@ -46,16 +46,20 @@ assert.match(filaSrc, /return !ehContatadoHoje\(l\) && !cp786TemCompromisso\(l\)
 const catSrc = app.match(/function cp786Categoria\(l,modelo=null,ultimaReal=null\)\{[\s\S]*?\n\}/)[0];
 {
   const fn = new Function(
-    'cp786TemCompromisso','cpAguardandoResposta','emJanelaDeEspera','mensagensDoCliente',
+    'cp786TemCompromisso','emJanelaDeEspera','mensagensDoCliente',
     'CP_MIN_MSGS_PRIORIDADE','entraEmRetomada','leadEhAtivo',
     `${catSrc}\nreturn cp786Categoria;`
   );
-  // Atendido ontem (dentro da janela) e o cliente falou depois → cpAguardandoResposta é false
-  // (a última fala é dele) e entraEmRetomada é false (descanso). Resultado: 'sem-acao' — o lead
-  // descansa em "Total de leads", sem virar cobrança.
-  const categoria = fn(()=>false, ()=>false, ()=>true, ()=>10, 5, ()=>false, ()=>true)({});
-  assert.equal(categoria, 'sem-acao',
+  // Atendido ontem (dentro da janela) e o cliente falou depois. O que a v1188 fazia de errado era
+  // promover isso a PRIORIDADE ('agora'). Continua proibido — o lead fica descansando.
+  //
+  // v1266 — a categoria virou 'aguardando' (era 'sem-acao'): "quem está esperando quem" saiu da
+  // conta por ordem do dono, então "atendido e dentro do descanso" é tudo o que o app afirma. As
+  // duas são caixas de espera, nenhuma cobra o corretor; o que este teste protege é o 'agora'.
+  const categoria = fn(()=>false, ()=>true, ()=>10, 5, ()=>false, ()=>true)({});
+  assert.notEqual(categoria, 'agora',
     'cliente que falou por último dentro do descanso NÃO vira prioridade — o corretor já respondeu no WhatsApp');
+  assert.equal(categoria, 'aguardando', 'dentro do descanso o lead fica na espera, sem cobrança');
 }
 
 console.log('v1189-cliente-respondeu-nao-existe: ok');

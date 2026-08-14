@@ -16,7 +16,8 @@ assert.doesNotMatch(app, /function renderHomeFallbackSeguro\(items\)\{[\s\S]*?\.
 // "esperar a resposta do cliente", não um prazo cego de 5 dias.
 // v1071: só vale enquanto ainda está dentro do prazo de descanso (emJanelaDeEspera) — passado
 // o prazo, ele "vence" e sai de "aguardando" (ver v906-aguardando-cliente-real.test.mjs).
-assert.match(app, /if\(cpAguardandoResposta\(l\) && emJanelaDeEspera\(l\)\) return 'aguardando'/,
-  'lead atendido sem resposta do cliente, ainda dentro do prazo, fica em aguardando (não em Fazer agora)');
+// v1266 — sem a metade "o cliente não respondeu" (ver NOTAS-v1266.md).
+assert.match(app, /if\(emJanelaDeEspera\(l\)\) return 'aguardando'/,
+  'lead atendido, ainda dentro do prazo, fica em aguardando (não em Fazer agora)');
 
 console.log('v824-fallback-prioridade: ok');

@@ -18,12 +18,13 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const iniFoco = app.indexOf('function renderLeadFoco(lead){');
 const fimFoco = app.indexOf('\nfunction ', app.indexOf('cp7ObsStatus', iniFoco));
 const foco = app.slice(iniFoco, fimFoco);
-// v1265 — a fonte mudou de cp786UltimaMensagemReal pra cp1265UltimaMensagemExibida (que também
-// considera a mensagem que o corretor mandou pelo app, pro cabeçalho não divergir do histórico
-// logo abaixo). O que este teste protege continua igual: a linha tem que ser calculada e aparecer.
-assert.match(foco, /const ultimaMsgReal=\(typeof cp1265UltimaMensagemExibida==='function'\)\?cp1265UltimaMensagemExibida\(lead\):null;/,
-  'deve calcular a última mensagem exibida de novo');
-assert.match(foco, /Última mensagem — \$\{ultimaMsgEm\}/, '"Última mensagem" precisa voltar a aparecer');
+// v1266 — a linha continua existindo, mas agora mostra o ÚLTIMO ATENDIMENTO quando ele existe
+// ("último contato é último atendimento", ordem do dono) e só cai pra última mensagem da conversa
+// quando não há atendimento nenhum. O que este teste protege continua igual: a linha tem que ser
+// calculada e aparecer no cabeçalho.
+assert.match(foco, /const ultimaMsgReal=\(typeof cp786UltimaMensagemReal==='function'\)\?cp786UltimaMensagemReal\(lead\):null;/,
+  'deve calcular a última mensagem real (usada quando não há atendimento)');
+assert.match(foco, /\$\{ultimaMsgRotulo\} — \$\{ultimaMsgEm\}/, 'a metalinha de data precisa continuar aparecendo');
 assert.match(foco, /Última análise — \$\{analiseEm\}/, '"Última análise" continua aparecendo (não foi tocada)');
 
 // 2. renderSaudacao mostra o número real da lista (naLista = min(meta, fila)) e não promete mais

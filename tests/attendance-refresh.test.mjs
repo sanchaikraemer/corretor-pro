@@ -26,10 +26,14 @@ assert.doesNotMatch(apiBlock, /observacoes:/, 'atendimento não deve duplicar in
 assert.match(apiBlock, /eventos\[indiceHoje\] = eventoAtual/, 'nova marcação no mesmo dia deve atualizar o horário anterior');
 assert.doesNotMatch(apiBlock, /jaMarcado:\s*true/, 'API não pode devolver o horário antigo como se a nova marcação não existisse');
 assert.doesNotMatch(mark, /Atendido\.\`|Atendido\."/, 'frontend não deve inserir observação redundante');
-// v887: "Última mensagem" no cabeçalho do lead puxa a hora da própria última mensagem real
-// (mesma do histórico), pra não divergir por fuso; cai no lastInteractionAt só como fallback.
+// v887: a metalinha do cabeçalho do lead puxa a hora da própria última mensagem real (mesma do
+// histórico), pra não divergir por fuso; cai no lastInteractionAt só como fallback.
 // (a v934 tinha removido essa metalinha, a v937 trouxe de volta — o dono sentiu falta dela.)
-assert.match(app, /const ultimaMsgEm=\(ultimaMsgReal&&ultimaMsgReal\.m\)\?cp704DataHora\(ultimaMsgReal\.m\):cp705FormatDateTime\(lead\.lastInteractionAt/, 'Última mensagem deve usar a hora da mensagem real da timeline');
+// v1266 — "último contato é último atendimento" (ordem do dono): quando existe atendimento
+// registrado, a linha mostra ELE. A régua da mensagem real continua valendo pro caso sem
+// atendimento nenhum, que é o que esta linha protege desde a v887.
+assert.match(app, /: \(\(ultimaMsgReal&&ultimaMsgReal\.m\)\?cp704DataHora\(ultimaMsgReal\.m\):cp705FormatDateTime\(lead\.lastInteractionAt/, 'sem atendimento, a linha usa a hora da mensagem real da timeline');
+assert.match(app, /const ultimaMsgRotulo=ultimoAtTs\?'Último atendimento':'Última mensagem';/, 'com atendimento registrado, a linha vira "Último atendimento"');
 assert.doesNotMatch(app, /lastInteraction \|\| a\.reanalisadoEm/, 'data da análise não pode ser exibida como data da última mensagem');
 assert.match(persistence, /source === "corretor-pro-manual"/, 'observação manual não pode substituir a data da última mensagem real');
 assert.match(persistence, /"observacao_manual"/, 'tipo de observação manual deve ser excluído da última mensagem real');
