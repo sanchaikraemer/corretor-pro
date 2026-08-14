@@ -41,11 +41,12 @@ const lista = depois.replace(/\s+/g, ' ');
 // ── 2. Os itens, cada um amarrado a um erro real que apareceu nas reanálises ─────────────────
 // v1267 — entrou o oitavo (chamar pra ver em vez de mandar mais material).
 // v1271 — entraram o nono (retomar a pausa que o próprio cliente marcou) e o décimo (o pedido que
-// partiu do próprio cliente). O número é conferido de propósito: a lição da v1263 é que esta lista
+// partiu do próprio cliente). v1277 — entrou o décimo primeiro (a oferta que o cliente já ignorou
+// não pode voltar reescrita). O número é conferido de propósito: a lição da v1263 é que esta lista
 // só funciona enquanto for CURTA. Se um dia ela passar de uma dúzia, o problema voltou a ser o
 // paredão, não a regra que falta.
 const itens = depois.match(/^\s*\d{1,2}\. /gm) || [];
-assert.equal(itens.length, 10, `a conferência precisa ter os 10 itens — achei ${itens.length}`);
+assert.equal(itens.length, 11, `a conferência precisa ter os 11 itens — achei ${itens.length}`);
 
 // 1) Abertura: a nº 1 das 21:55 abria com "Assim que você tiver".
 assert.match(lista, /COMEÇA PELO QUE O CORRETOR FAZ\?/, 'item 1: abertura pela ação do corretor');
@@ -91,7 +92,7 @@ assert.match(lista, /Diagnóstico e mensagem têm que contar a MESMA história/,
 // Conferência que não manda corrigir vira enfeite: a IA marca tudo como ok e devolve igual.
 assert.match(lista, /se qualquer item falhar, REESCREVA a mensagem/,
   'a conferência precisa mandar reescrever, não só verificar');
-assert.match(lista, /Não devolva nada que não passe nos dez/,
+assert.match(lista, /Não devolva nada que não passe nos onze/,
   'e precisa fechar a porta: nada sai sem passar');
 assert.match(lista, /Releia CADA UMA das três/,
   'a conferência vale mensagem por mensagem, não pro conjunto');
@@ -100,4 +101,9 @@ assert.match(lista, /Releia CADA UMA das três/,
 assert.doesNotMatch(lista, /R\$|Personalité|Marina|430\.000|1\.450\.000/,
   'a conferência não pode carregar valor, empreendimento ou nome de cliente');
 
-console.log('v1263-conferencia-final: ok (10 itens, depois da conversa)');
+// 11) A mensagem que o cliente já ignorou não pode voltar com outras palavras (print da v1277).
+assert.match(lista, /ESTA MENSAGEM JÁ FOI MANDADA UMA VEZ\?/, 'item 11');
+assert.match(lista, /TENTATIVAS DO CORRETOR AINDA SEM\s*RESPOSTA/,
+  'item 11 precisa mandar olhar a contagem real de tentativas sem resposta');
+
+console.log('v1263-conferencia-final: ok (11 itens, depois da conversa)');

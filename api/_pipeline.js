@@ -568,6 +568,39 @@ function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
   return [...new Set(out)].slice(-8).map(t => `- ${t}`).join("\n");
 }
 
+// v1277 — AS TENTATIVAS DO CORRETOR QUE O CLIENTE NÃO RESPONDEU.
+//
+// Caso real do dono (print de 14/08/2026): o corretor apresentou o
+// empreendimento e perguntou "posso seguir com a apresentação?"; sem resposta, mandou um segundo
+// contato oferecendo a mesma apresentação; também sem resposta. As três sugestões que o app
+// devolveu ofereciam, pela TERCEIRA vez, exatamente a mesma apresentação. "Cadê a retomada?" — a
+// retomada não existia porque a IA não tinha como saber que aquilo já tinha sido tentado e falhado.
+//
+// Aqui o código só CONTA um fato objetivo (quantas mensagens do corretor estão no fim da conversa
+// sem nenhuma resposta do cliente, e em quantos dias diferentes) e devolve o texto delas. Nenhuma
+// regra comercial é aplicada, nada é reescrito: o fato entra no pedido e quem decide o que fazer
+// com ele é a IA, seguindo as regras do prompt e do Cérebro.
+export function tentativasSemRespostaDoCorretor(timeline, corretorNome = "", lead = {}) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const encontradas = [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const m = arr[i];
+    const lado = _ladoDaMensagem(m, corretorNome, lead);
+    if (lado === "cliente") break;
+    // Sistema, anotação do app e autor indefinido não contam como tentativa nem interrompem a
+    // sequência: só a fala do CLIENTE fecha a conta.
+    if (lado !== "corretor") continue;
+    const texto = String(m.text || "").replace(/\s+/g, " ").trim();
+    if (!texto) continue;
+    encontradas.push({ dia: String(m?.date || m?.data || m?.iso || "").slice(0, 10), texto: texto.slice(0, 400) });
+  }
+  encontradas.reverse();
+  // "Tentativa" é DIA de contato, não mensagem solta: três mensagens seguidas do mesmo dia são uma
+  // tentativa só. Sem data legível, a conta fica conservadora (tudo vira uma tentativa).
+  const dias = new Set(encontradas.map(e => e.dia).filter(Boolean));
+  const tentativas = encontradas.length ? Math.max(1, dias.size) : 0;
+  return { tentativas, textos: encontradas.map(e => e.texto) };
+}
 
 
 function _regrasLegadasParaTextoPipeline(arr) {
@@ -2896,6 +2929,15 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // qual prazo o corretor quis dizer. Reaproveita o mesmo "descanso pós-atendimento" que o corretor
   // já configura pra fila Fazer agora, em vez de criar um segundo número pra manter sincronizado.
   const diasParaRetomada = Number(configCerebro?.diasDescansoPosAtendimento) || 5;
+  // v1277 — quantas mensagens o corretor já mandou no fim da conversa sem NENHUMA resposta, e o
+  // texto delas. Sem esse fato no pedido, a IA não tinha como saber que a oferta que ela ia
+  // escrever era a mesma que o cliente já ignorou duas vezes (print do dono de 14/08/2026).
+  const semResposta = tentativasSemRespostaDoCorretor(timelineArr, corretorNome, lead || {});
+  const blocoTentativasSemResposta = semResposta.tentativas > 0
+    ? `TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: ${semResposta.tentativas}. O cliente não respondeu nenhuma delas.
+TEXTO DO QUE JÁ FOI TENTADO (isto o cliente já recebeu e não respondeu — NENHUMA das três pode ser isto de novo com outras palavras):
+${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
+    : "TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: nenhuma (a última palavra da conversa é do cliente).";
 
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
@@ -2987,6 +3029,35 @@ tal:
 - Nada de comentário sobre o estado mental do cliente ("vi que você está com X na cabeça"): você
   não sabe o que ele está pensando; você sabe o que ele ESCREVEU.
 
+A MENSAGEM QUE JÁ FOI IGNORADA NÃO VOLTA COM OUTRAS PALAVRAS — REGRA DURA. Quando o fim da conversa
+for uma sequência de mensagens do CORRETOR sem NENHUMA resposta do cliente, você recebe abaixo, no
+pedido, quantas tentativas foram e o TEXTO delas. Esse texto é a prova do que NÃO funciona com este
+cliente: ele recebeu aquilo e não respondeu. Reescrever a mesma oferta, a mesma pergunta ou o mesmo
+próximo passo com outras palavras é mandar pela terceira vez a mensagem que já falhou duas — e é
+exatamente isso que faz o corretor ler as três sugestões e não usar nenhuma.
+- É PROIBIDO que qualquer uma das três, tirando a saudação, diga a MESMA COISA da última tentativa:
+  mesma oferta (oferecer a apresentação/o material depois de já ter oferecido), mesma pergunta
+  ("tem alguma dúvida?" depois de já ter perguntado isso), mesmo próximo passo. Repetir não é
+  retomar — retomar é chegar com algo que a mensagem anterior não tinha.
+- PEDIR LICENÇA JÁ FOI TENTADO E NÃO COLOU: se a tentativa sem resposta era um pedido de
+  autorização ("posso seguir com a apresentação?", "posso te enviar o material?", "quer que eu
+  mande?"), a licença DEIXOU de ser o próximo passo — quem não respondeu "pode" da primeira vez não
+  vai responder "pode" da segunda. A mensagem ENTREGA: o corretor anuncia o que está mandando
+  agora, sem perguntar se pode, e o fecho é uma escolha que NÃO é sobre autorização (dia, horário,
+  canal, formato).
+- DUAS OU MAIS TENTATIVAS SEM RESPOSTA = MUDAR DE CAMINHO, NÃO SÓ DE PALAVRAS. Insistir no mesmo
+  canal com a mesma oferta é justamente o que já falhou. Pelo menos UMA das três precisa colocar na
+  mesa um passo de PESSOA PRA PESSOA — ligação com horário nomeado, visita ao apartamento/decorado/
+  obra, encontro — com duas opções concretas de dia ou horário. Se a conversa ou o Cérebro disserem
+  que o cliente é de fora ou não consegue ir agora, o presencial vira chamada de vídeo ao vivo com
+  horário nomeado; nunca vira mais um arquivo.
+  E se a conversa mostrar que o material JÁ foi enviado, vale o item 8 da conferência final: o que
+  falta não é mais material, é o encontro.
+- NADA DISSO APARECE ESCRITO PRO CLIENTE: é PROIBIDO contar as tentativas ("já te mandei mensagem",
+  "não tive retorno", "tentei falar com você", "essa é minha segunda tentativa", "como não obtive
+  resposta"). O número de tentativas é dado INTERNO, igual ao tempo parado. O que o cliente percebe
+  é só uma mensagem diferente — e melhor — do que a anterior.
+
 AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA. Se o cliente já demonstrou querer algo na conversa,
 perguntar de novo "quer que eu te mande?" devolve o trabalho pra ele e é o jeito mais fácil de a
 mensagem ser ignorada. Pelo menos a "maisDireta" tem que AVANÇAR SOZINHA: anuncia o que o corretor
@@ -3043,6 +3114,7 @@ NÃO CUMPRIMENTE DUAS VEZES — SÓ VALE PARA CONVERSA QUE CONTINUA HOJE: se a �
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.
+${blocoTentativasSemResposta}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -3395,9 +3467,9 @@ ${timelineText}
 CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON.
 As regras acima estão espalhadas por um texto longo, e o que decide a qualidade das três mensagens
 é este punhado de itens. Releia CADA UMA das três e, se qualquer item falhar, REESCREVA a mensagem
-antes de responder. Não devolva nada que não passe nos dez.
+antes de responder. Não devolva nada que não passe nos onze.
 
-ANTES DOS OITO, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
+ANTES DOS ONZE, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
 DE ESCREVER. Releia o próximo passo que você mesmo definiu no diagnóstico e confira se cada uma das
 três realmente FAZ aquilo. É comum acertar o diagnóstico e escrever mensagem que não o cumpre — o
 corretor lê "o próximo passo é oferecer exemplos e facilitar a avaliação" e logo abaixo recebe três
@@ -3476,7 +3548,14 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    estiver preenchido, pelo menos uma das três precisa tocar naquilo com as palavras dele. Foi ELE
    quem levantou — é o fio mais forte que a conversa tem, e mensagem que ignora o pedido do cliente
    pra falar do que o corretor quer mostrar é exatamente a que ele lê e não responde. Se aquele
-   pedido nunca foi respondido direito, respondê-lo é o melhor motivo de retomada que existe.`;
+   pedido nunca foi respondido direito, respondê-lo é o melhor motivo de retomada que existe.
+11. ESTA MENSAGEM JÁ FOI MANDADA UMA VEZ? Olhe o número em "TENTATIVAS DO CORRETOR AINDA SEM
+   RESPOSTA" e releia o texto do que já foi tentado. Compare com as três, tirando a saudação:
+   qualquer uma que faça a MESMA oferta, a MESMA pergunta ou proponha o MESMO passo de uma
+   tentativa que já falhou está errada — reescreva. Se a tentativa era pedir licença, a nova
+   mensagem ENTREGA em vez de pedir de novo. Com DUAS ou mais tentativas sem resposta, pelo menos
+   uma das três propõe pessoa a pessoa (ligação com horário, visita, encontro) com dois dias ou
+   horários concretos. E nenhuma das três conta ao cliente que houve tentativa anterior.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
