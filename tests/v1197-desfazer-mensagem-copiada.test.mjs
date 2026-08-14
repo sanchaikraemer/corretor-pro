@@ -170,14 +170,13 @@ assert.match(bloco, /atendimento de hoje também é desfeito/,
   "a pergunta precisa avisar, em português de gente, que o atendimento pode ser desfeito junto");
 assert.match(bloco, /recarregarLeadFoco/, "a tela do cliente precisa se redesenhar depois de desfazer");
 
-// ── 7. o X precisa aparecer NOS DOIS TEMAS ────────────────────────────────────────────────────
-// O botão nasce com borda e fundo em branco transparente — ótimo no tema escuro, invisível no
-// fundo branco do tema claro. Foi flagrado em print antes de publicar; a regra abaixo é o
-// conserto, e este assert impede que ela suma numa faxina de CSS futura.
+// ── 7. o X precisa continuar visível ──────────────────────────────────────────────────────────
+// v1268 — este trecho conferia a regra extra que o X tinha no TEMA CLARO (ele nasce com borda e
+// fundo em branco transparente: ótimo no escuro, invisível no fundo branco). O tema claro foi
+// removido do sistema por ordem do dono, então a regra saiu junto — não havia mais fundo branco
+// pra corrigir. O que fica travado aqui é o estilo do tema único, que é o que existe hoje.
 const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
-assert.match(css, /html\[data-theme="light"\]\s*\.cp704-tmsg-undo\s*\{/,
-  'o X precisa de regra própria no tema claro — sem ela ele some no fundo branco');
-assert.match(css, /html\[data-theme="light"\]\s*\.cp704-tmsg-undo:hover\s*\{/,
-  'no tema claro, passar o dedo/mouse no X precisa mostrar que aquilo remove algo');
+assert.doesNotMatch(css, /data-theme="light"/, "o tema claro não pode voltar ao CSS (v1268)");
+assert.match(app, /\.cp704-tmsg-undo\{/, "o X precisa continuar tendo estilo próprio");
 
-console.log("v1197-desfazer-mensagem-copiada: tela ok (X só na mensagem certa, pergunta antes, redesenha depois, visível nos dois temas)");
+console.log("v1197-desfazer-mensagem-copiada: tela ok (X só na mensagem certa, pergunta antes, redesenha depois)");

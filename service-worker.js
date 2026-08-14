@@ -13,10 +13,11 @@ const CORE_ASSETS = [
   // dali em diante. Colocá-lo aqui desfaria justamente a economia da divisão.
   '/', '/index.html', '/styles.css?v=__VERSION__', '/app.js?v=__VERSION__',
   '/js/state.js?v=__VERSION__', '/js/dom.js?v=__VERSION__', '/js/proposta.js?v=__VERSION__', '/js/pwa-install.js?v=__VERSION__',
-  // v1107 — faltavam no pacote offline: tema.js e commercial-schema.js são imports estáticos do
-  // app.js (sem eles o módulo inteiro não executa), supabase.js e contas-config.js são <script>
-  // do index.html. Sem os 4, o app instalado abria offline mas travava em "Carregando os leads...".
-  '/js/tema.js?v=__VERSION__', '/js/commercial-schema.js?v=__VERSION__', '/js/dados-locais.js?v=__VERSION__',
+  // v1107 — faltavam no pacote offline: commercial-schema.js é import estático do app.js (sem ele
+  // o módulo inteiro não executa), supabase.js e contas-config.js são <script> do index.html. Sem
+  // eles, o app instalado abria offline mas travava em "Carregando os leads...".
+  // (tema.js estava nesta lista até a v1268, quando o tema claro foi removido do sistema.)
+  '/js/commercial-schema.js?v=__VERSION__', '/js/dados-locais.js?v=__VERSION__',
   // v1218 — js/saudacao.js também é import estático do app.js (a régua da saudação): fora daqui,
   // o app instalado abriria offline sem executar o módulo inteiro.
   '/js/saudacao.js?v=__VERSION__',

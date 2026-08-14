@@ -1,7 +1,9 @@
 // v875 — Identidade Visual v2.0 (Etapa 2: componentes / boot theme-aware)
 // Garante que os gradientes decorativos que o documento manda remover não voltem
 // (coral+azul e coral+verde em botões, "mancha" de seleção, banner, brilho ambiente)
-// e que o boot no-flash respeita o tema salvo (sem flash escuro no tema claro).
+// e que o boot no-flash pinta o fundo oficial antes de qualquer coisa aparecer.
+// v1268 — o tema claro saiu do sistema: o boot deixou de escolher paleta (e as variáveis
+// --boot-* deixaram de existir, já que só serviam pra essa troca). Fica a cor oficial, direta.
 
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
@@ -15,10 +17,11 @@ const styles = ler("styles.css");
 const app = ler("app.js");
 const index = ler("index.html");
 
-// 1. Boot no-flash coerente com o tema (Identidade v2.0, seção 33).
-assert.ok(index.includes("--boot-bg"), "Boot não define --boot-bg (deveria pintar conforme o tema)");
-assert.ok(/tema === "light"[\s\S]*?#F3F6F7/.test(index), "Boot light não pinta o branco-gelo oficial #F3F6F7");
-assert.ok(index.includes("var(--boot-bg,#052B36)"), "html/body do boot não usa var(--boot-bg)");
+// 1. Boot no-flash com o fundo oficial (Identidade v2.0, seção 33).
+assert.ok(/html,body\{[^}]*background:#052B36/.test(index), "html/body do boot não pinta o petróleo oficial #052B36");
+assert.ok(index.includes('id="bootPaint"'), "a tela de boot (que evita o branco ao abrir) sumiu");
+assert.ok(!index.includes("--boot-bg"), "v1268: a variável de boot não volta — o tema é um só");
+assert.ok(!/#F3F6F7/.test(index), "v1268: o branco-gelo do tema claro não pode voltar ao boot");
 
 // 2. Botões não podem ter gradiente coral+azul nem coral+verde (seções 5, 10, 12).
 assert.ok(!/linear-gradient\([^)]*var\(--lime\)[^)]*var\(--cyan\)/.test(app), "Sobrou gradiente coral+azul em botão (app.js)");

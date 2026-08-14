@@ -2,7 +2,6 @@ import { state } from './js/state.js?v=__VERSION__';
 import { COMMERCIAL_SCHEMA_VERSION, COMMERCIAL_SCHEMA_MINOR } from './js/commercial-schema.js?v=__VERSION__';
 import { qs, qsa, isDesktop, escapeHtml, safeJson, toast } from './js/dom.js?v=__VERSION__';
 window.toast = toast; // precisa estar em window: atributos inline (onclick/onchange) rodam fora do escopo do módulo
-import { configurarEscolhaTema } from './js/tema.js?v=__VERSION__';
 import { corrigirSaudacaoAbertura, saudacaoAgora } from './js/saudacao.js?v=__VERSION__';
 import { garantirDonoDosDadosLocais, aoSairDaConta } from './js/dados-locais.js?v=__VERSION__';
 import './js/proposta.js?v=__VERSION__';
@@ -1506,9 +1505,8 @@ function sinaisPrioridadeComercial682(l){
   return { compradorReal, curioso, urgencia, objecao, pendencia, quenteEscondido, diasDistintos, motivos };
 }
 
-function scoreLead(l){
-  return scorePrioridadeAtendimento(l);
-}
+// v1268 — scoreLead (apelido de scorePrioridadeAtendimento) removido na faxina: ninguém
+// chamava, e um apelido sem uso só cria dúvida sobre qual das duas é a de verdade.
 // v826 §6.6 — PRECEDÊNCIA DETERMINÍSTICA DA FILA (função pura, sem estado).
 // Recebe só FATOS (booleanos) e devolve o nível (2..7), o grupo e o título. Não há
 // pesos nem notas subjetivas: a posição é decidida pela ordem dos fatos. Isolada
@@ -4036,59 +4034,16 @@ function renderSaudacao(items){
   setAll("block", html);
 }
 
-function renderResumoDia(items){
-  const box = qs("#resumoDia");
-  if(!box) return;
-  if(!items?.length){
-    box.style.display = "none"; box.innerHTML = "";
-    const bh = qs("#navBadgeHoje"); if(bh) bh.style.display = "none";
-    const ba = qs("#navBadgeAgenda"); if(ba) ba.style.display = "none";
-    return;
-  }
-  // Contadores
-  let compHoje = 0, compAmanha = 0;
-  let quentes = 0, mornos = 0, frios = 0;
-  let esfriando = 0; // interesse/etapa avançada + 3-7 dias sem retorno
-  let aguardandoAcao = 0; // pra agenda: 3+ dias parado
-  let lembretesVenceram = 0;
-  // "Do dia" = lembrete com data de HOJE (não conta atrasado de dias atrás nem futuro).
-  const iniHojeTs = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
-  const fimHojeTs = (() => { const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); })();
-  for(const l of items){
-    const lem = l.analysis?.lembrete;
-    if(lem?.quando){
-      const t = new Date(lem.quando).getTime();
-      if(!isNaN(t) && t >= iniHojeTs && t <= fimHojeTs) lembretesVenceram++;
-    }
-    const aps = l.analysis?.confirmedAppointments;
-    if(Array.isArray(aps)){
-      for(const ap of aps){
-        const q = String(ap.quando||"").toLowerCase();
-        if(/\bhoje\b/.test(q)) compHoje++;
-        else if(/amanh[ãa]/.test(q)) compAmanha++;
-      }
-    }
-    const t = l.analysis?.tipoRetomada;
-    if(t === "quente-fechar") quentes++;
-    else if(t === "morno-confirmar" || t === "informacao-enviar" || t === "objecao-tratar") mornos++;
-    else if(t === "frio-reaquecer" || t === "stand-by") frios++;
-    const dias = Number(l.daysSinceLastInteraction) || 0;
-    if(ehEsfriando(l)) esfriando++;
-    if(dias >= 3 && !ehContatadoHoje(l)) aguardandoAcao++;
-  }
-  // Atualiza badges no bottom-nav
-  const ba = qs("#navBadgeAgenda");
-  if(ba){
-    const totalAgenda = aguardandoAcao + lembretesVenceram;
-    if(totalAgenda > 0){ ba.style.display = "inline-block"; ba.textContent = totalAgenda; }
-    else ba.style.display = "none";
-  }
-  // v1227 — o contador do título da aba saiu daqui e foi pra atualizarSinoAgenda: aqui ele fazia
-  // a própria conta (lembrete de hoje SEM descontar quem já foi atendido) e divergia do sino —
-  // a aba ficava "(1) Corretor Pro" com o sino zerado, a mesma doença de dois relógios da v1215.
-  // Agora o título usa a MESMA fonte única (cpAgendaDoDia) e se atualiza junto com o sino,
-  // inclusive quando um lembrete é excluído/reagendado fora da Home.
-}
+// v1268 — AQUI EXISTIA UMA PRIMEIRA VERSÃO DE renderResumoDia, MORTA HÁ MUITO TEMPO (47 linhas).
+//
+// Ela era declarada aqui e SUBSTITUÍDA mais abaixo no próprio arquivo (`renderResumoDia = function`
+// …), que é a versão que a Home usa de verdade. O corpo antigo nunca chegava a rodar — e ainda
+// assim varria TODOS os leads a cada carregamento somando seis contadores (quentes, mornos,
+// frios, esfriando, aguardando ação, lembretes do dia) que ninguém lia: os elementos que os
+// mostravam saíram da tela em versões anteriores. Trabalho puro à toa numa carteira de 200 leads.
+//
+// A declaração `let renderResumoDia` abaixo mantém o nome existindo antes da atribuição real.
+let renderResumoDia = () => {};
 
 // v1215 — FONTE ÚNICA da agenda do dia. O número do sino e as listas da tela Agenda saíam de dois
 // pedidos de código diferentes e por isso divergiam: a Agenda deixou de mostrar quem já foi
@@ -4301,8 +4256,6 @@ async function _processarDashboard(data){
     const badgeGel = qs("#arquivadosRevisitarBadge");
     if(badgeGel) badgeGel.style.display = "none";
     // Total de leads ativos no pill do topo (mobile).
-    const pillTotal = qs("#pillTotalLeads");
-    if(pillTotal) pillTotal.textContent = `${items.length} lead${items.length===1?"":"s"}`;
     const pillTotalD = qs("#pillTotalLeadsDesktop");
     if(pillTotalD) pillTotalD.textContent = `${items.length} lead${items.length===1?"":"s"}`;
     // Onboarding: ensina o ritual diário pra quem ainda tem poucos leads (1-4) e
@@ -4325,7 +4278,6 @@ async function _processarDashboard(data){
     // Vendido no app — só Arquivar, decisão da v904 — então isso nunca refletia a realidade).
     // Alimentava só #kpiVendas/#kpiVendasValor/state.resumoSemana, nenhum dos três lido em
     // lugar nenhum da tela: dado morto calculado à toa em todo carregamento do dashboard.
-    if(qs("#kpiAtivos")) qs("#kpiAtivos").textContent = String(items.length);
     const etapasUsadas = new Set(items.map(l => normalizarEtapa(l.etapa)));
 
     // Home = 3 listas pra você decidir quem atacar (nenhum lead pré-aberto).
@@ -6642,7 +6594,7 @@ function payloadComCerebro(obj = {}) { return { ...obj, cerebroConfig: obterCere
 window.payloadComCerebro = payloadComCerebro;
 
 
-// Cache leve da inteligenciaAprendida pra usar em renderLeadsParecidos sem refetch a cada lead.
+// Cache leve da inteligenciaAprendida, pra não refazer a busca a cada cliente aberto.
 let _ultimoIntelCarregado = 0;
 async function garantirIntelCarregado(){
   if(state.intelCache && (Date.now() - _ultimoIntelCarregado) < 60_000) return state.intelCache;
@@ -6655,79 +6607,12 @@ async function garantirIntelCarregado(){
   return state.intelCache;
 }
 
-// "Esse lead parece com..." — usa o banco aprendido (produtoVsPerfil) pra sugerir
-// match com perfis que já geraram interesse. Render síncrono (cache); se vazio,
-// dispara o load e re-renderiza quando chegar.
-function renderLeadsParecidos(lead){
-  // Seção "Você já trabalhou clientes parecidos" OCULTA a pedido do corretor (confundia mais que ajudava).
-  // O aprendizado continua acontecendo por trás (inteligenciaAprendida); só não é exibido aqui.
-  return "";
-  const intel = state.intelCache;
-  if(!intel){
-    // Dispara carregamento e re-renderiza quando vier
-    garantirIntelCarregado().then(() => { if(state.lead?.id === lead.id) renderLeadFoco(lead); }).catch(()=>{});
-    return "";
-  }
-  const matches = Array.isArray(intel.produtoVsPerfil) ? intel.produtoVsPerfil : [];
-  if(!matches.length) return "";
-  const a = lead.analysis || {};
-  const produtoAtual = String(a.produtoInteresse || lead.product || "").toLowerCase().trim();
-  const perfilAtual = [
-    a.clientProfile || "",
-    a.memoria?.preferencias || "",
-    a.memoria?.observacoes || "",
-    a.memoriaSugerida?.momentoDeVida || "",
-    a.memoriaSugerida?.faixaValor || "",
-    a.tipoContato || ""
-  ].join(" ").toLowerCase();
-  // Usa o PRIMEIRO nome do lead pra comparar — o nome completo dele pode ter
-  // produtos colados (convenção do corretor), mas o perfil aprendido sempre cita só o primeiro.
-  const primeiroNomeLead = String(lead.name || "").toLowerCase().trim().split(/\s+/)[0] || "";
-  // Dedupe + filtrar próprio lead atual
-  const seen = new Set();
-  const matchesUnicos = [];
-  for(const m of matches){
-    const prod = String(m.produto||"").toLowerCase().trim();
-    const perfil = String(m.perfilCliente||"").toLowerCase().trim();
-    const chave = prod + "||" + perfil;
-    if(seen.has(chave)) continue;
-    seen.add(chave);
-    // Pula entradas que citam o primeiro nome do lead aberto (é a própria observação dele)
-    if(primeiroNomeLead && primeiroNomeLead.length >= 3 && perfil.includes(primeiroNomeLead)) continue;
-    matchesUnicos.push(m);
-  }
-  if(!matchesUnicos.length) return "";
-  // Score: produto igual = +50, palavras do perfil em comum = +6 cada (max +50)
-  const score = (m) => {
-    let s = 0;
-    const prod = String(m.produto||"").toLowerCase().trim();
-    if(prod && produtoAtual && (prod === produtoAtual || prod.includes(produtoAtual) || produtoAtual.includes(prod))) s += 50;
-    const perfilMatch = String(m.perfilCliente||"").toLowerCase();
-    const palavras = perfilMatch.split(/[\s,·;]+/).filter(p => p.length >= 4);
-    let comuns = 0;
-    for(const p of palavras){ if(perfilAtual.includes(p)) comuns++; }
-    s += Math.min(50, comuns * 6);
-    return s;
-  };
-  // Score mínimo MAIS ALTO (60) — só mostra match REAL, não trivialidade.
-  const scorados = matchesUnicos.map(m => ({ m, s: score(m) })).filter(x => x.s >= 60).sort((a,b) => b.s - a.s).slice(0,2);
-  if(!scorados.length) return "";
-  const itens = scorados.map(({ m }) => {
-    const reacaoTag = /interesse|marcou|engajou|gostou|pediu mais|avançou/i.test(m.reacao||"") ? `<span style="color:var(--acao);font-weight:950">${escapeHtml(m.reacao||"")}</span>` : escapeHtml(m.reacao||"");
-    return `<div style="padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(155,140,255,.04);margin-bottom:6px">
-      <div style="font-size:12px;line-height:1.5">
-        <b style="color:var(--cerebro);font-size:10px;letter-spacing:.08em;text-transform:uppercase">Perfil parecido aprendido:</b>
-        <span style="color:var(--soft)">${escapeHtml(m.perfilCliente||"")}</span>
-      </div>
-      <div class="small" style="margin-top:4px;font-size:11px;color:var(--muted)">→ produto <b style="color:var(--text)">${escapeHtml(m.produto||"")}</b> · reação: ${reacaoTag}</div>
-    </div>`;
-  }).join("");
-  return `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
-    <div style="color:var(--cerebro);text-transform:uppercase;letter-spacing:.14em;font-weight:950;font-size:11px;margin-bottom:8px">Você já trabalhou clientes parecidos</div>
-    ${itens}
-    <div class="small" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Baseado no que o Corretor Pro já aprendeu com você. Considere replicar a abordagem que gerou interesse.</div>
-  </div>`;
-}
+// v1268 — renderLeadsParecidos REMOVIDA na faxina (eram ~75 linhas).
+// A seção "Você já trabalhou clientes parecidos" foi ocultada a pedido do corretor ("confundia
+// mais que ajudava"), e o jeito de ocultar foi pôr um `return ""` na primeira linha — o resto do
+// desenho ficou ali, inalcançável, e nem a função era mais chamada por alguém. O aprendizado por
+// trás (inteligenciaAprendida) não muda: quem o carrega é garantirIntelCarregado, acima, que
+// segue viva e em uso.
 
 async function carregarUsoAprendizado(){
   const card = qs("#aprendizadoCard");
@@ -9209,10 +9094,6 @@ function buscaLeadInline(termo, boxId){
 }
 window.buscaLeadInline = buscaLeadInline;
 
-qs("#agendaRefresh")?.addEventListener("click", carregarAgenda);
-qs("#dashboardRefresh")?.addEventListener("click", carregarDashboard);
-qs("#arquivadosRefresh")?.addEventListener("click", () => window.carregarArquivados());
-qs("#carteiraRefresh")?.addEventListener("click", () => carregarCarteira(true));
 qs("#memoriaSalvar")?.addEventListener("click", salvarMemoria);
 qs("#memoriaReanalisar")?.addEventListener("click", async ()=>{
   const id = state.lead?.id;
@@ -11282,7 +11163,6 @@ window.ui667DesmarcarAtendido=async function(btn){
    - Ativos exclui Geladeira em todas as telas
    ============================================================ */
 
-configurarEscolhaTema();
 // v1016 — este placeholder escrevia "Bom dia, corretor!" (nome genérico) no instante em que a
 // página abre, antes de saber o nome de verdade — o corretor via um nome errado piscando na tela
 // por um instante a cada troca de conta/carregamento. Removido: o título fica no "Hoje" estático
@@ -12552,109 +12432,14 @@ window.ui670ScheduleHtml = ui670ScheduleHtml;
 })();
 
 
-/* ============================================================
-   V684-FINAL — IA COMERCIAL 2.0
-   - mostra raciocínio comercial proativo no lead
-   - perfil do cliente, risco de perda, mudança de comportamento
-   - próxima ação ideal, produto adequado, estratégia e sinais
-   ============================================================ */
-(function(){
-  if(window.__cp684IAComercialFinal) return;
-  window.__cp684IAComercialFinal = true;
-
-  function ui684InjectStyles(){
-    if(document.getElementById('ui684Styles')) return;
-    const st=document.createElement('style'); st.id='ui684Styles';
-    st.textContent=`
-      .ui684-card{margin:14px 0;padding:16px;border:1px solid rgba(86,199,242,.28);border-radius:18px;background:linear-gradient(135deg,rgba(86,199,242,.075),rgba(255,98,88,.04));box-shadow:0 12px 36px rgba(0,0,0,.14)}
-      .ui684-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.ui684-head h3{margin:0;font-size:17px;color:#fff}.ui684-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.ui684-badge{border:1px solid rgba(86,199,242,.42);color:var(--dados);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
-      .ui684-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ui684-item{padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.028)}.ui684-item.full{grid-column:1/-1}.ui684-lab{display:block;margin-bottom:5px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:950}.ui684-val{font-size:13px;line-height:1.45;color:var(--text);white-space:pre-wrap}.ui684-details{margin-top:10px}.ui684-details summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--soft);font-size:12px;font-weight:950}.ui684-details[open] summary{color:var(--dados);border-color:rgba(86,199,242,.35)}.ui684-list{margin:0;padding-left:16px;color:var(--soft);font-size:12px;line-height:1.45}.ui684-list li{margin:3px 0}.ui684-empty{padding:12px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}.ui684-action-reason{margin:10px 0 0;padding:10px 12px;border:1px solid rgba(86,199,242,.22);border-radius:13px;background:rgba(86,199,242,.045);color:var(--soft);font-size:12px;line-height:1.45}.ui684-action-reason b{color:var(--text)}
-      #btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:92px!important}.lead-acts button{border-radius:999px!important} @media(max-width:760px){.ui684-grid{grid-template-columns:1fr}.ui684-card{padding:14px}.ui684-badge{display:none}.ui684-card{margin-top:12px}#btnTopo,#btnSubir,.scroll-top,.back-to-top{bottom:104px!important}}
-    `;
-    document.head.appendChild(st);
-  }
-  function ui684Esc(v){ return typeof escapeHtml==='function' ? escapeHtml(String(v||'')) : String(v||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-  function ui684List(arr){ arr=Array.isArray(arr)?arr.filter(Boolean):[]; return arr.length ? `<ul class="ui684-list">${arr.slice(0,4).map(x=>`<li>${ui684Esc(x)}</li>`).join('')}</ul>` : `<div class="ui684-empty">Nenhum sinal forte registrado ainda.</div>`; }
-  function ui684TextoAcaoPratica(txt){
-    txt = String(txt||'').trim();
-    if(!txt) return 'Definir o próximo passo comercial com base no histórico antes de responder.';
-    const low = txt.toLowerCase();
-    if(low.includes('parâmetro') || low.includes('parametro') || low.includes('financeir')) return 'Solicitar entrada disponível, renda aproximada e parcela ideal para montar a simulação correta.';
-    if(low.includes('visita')) return 'Propor dois horários objetivos para visita e confirmar quem participa da decisão.';
-    if(low.includes('proposta')) return 'Enviar ou revisar a proposta e combinar claramente o próximo retorno.';
-    if(low.includes('retomar')) return 'Retomar a conversa usando o último compromisso do cliente como gancho, sem mensagem genérica.';
-    if(/^receber\b/i.test(txt)) return 'Pedir os dados que faltam para avançar: ' + txt.replace(/^receber\s*/i,'').trim();
-    return txt;
-  }
-  function ui684Data(lead){
-    const a=lead?.analysis||{};
-    const ia=(a.iaComercialV2&&typeof a.iaComercialV2==='object')?a.iaComercialV2:null;
-    if(ia) return ia;
-    const diag=(a.diagnostico&&typeof a.diagnostico==='object')?a.diagnostico:{};
-    const lc=(a.leituraComercial&&typeof a.leituraComercial==='object')?a.leituraComercial:{};
-    return {
-      versao:COMMERCIAL_SCHEMA_VERSION,
-      perfilCliente:a.clientProfile||'Perfil ainda em leitura; reanalise para a IA Comercial 2.0 aprofundar.',
-      etapaComercial:diag.etapa||lc.etapa||normalizarEtapa(lead?.etapa)||'Não definida',
-      mudancaComportamento:'Reanalise este lead para detectar mudança de comportamento com mais precisão.',
-      riscoPerda:{nivel:'qualitativo',motivo:'leitura comercial baseada no histórico e nas pendências abertas'},
-      proximaAcaoIdeal:a.nextAction||lc.oQueDestravar||a.melhorPergunta||'Reanalisar para definir próxima ação ideal.',
-      produtoMaisAdequado:lead?.product||a.product||'Produto ainda não definido',
-      estrategiaAbordagem:'Retomar pelo último ponto concreto da conversa e fazer uma pergunta principal.',
-      sinaisPositivos:[],alertas:[],raciocinioComercial:''
-    };
-  }
-  function ui684RenderCard(lead){
-    const ia=ui684Data(lead);
-    const risco=ia.riscoPerda||{};
-    const fatoresRisco=Array.isArray(risco.fatores)?risco.fatores:[];
-    const fatoresProtecao=Array.isArray(risco.fatoresProtecao)?risco.fatoresProtecao:[];
-    const proximaPratica = ui684TextoAcaoPratica(ia.proximaAcaoIdeal);
-    return `<section id="ui684IAComercial" class="ui684-card">
-      <div class="ui684-head"><div><h3>IA Comercial 2.0</h3><p>Leitura proativa: perfil, estratégia e próxima ação para este lead.</p></div><span class="ui684-badge">v${COMMERCIAL_SCHEMA_VERSION}</span></div>
-      <div class="ui684-grid">
-        <div class="ui684-item"><span class="ui684-lab">Perfil do cliente</span><div class="ui684-val">${ui684Esc(ia.perfilCliente)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Próxima ação ideal</span><div class="ui684-val">${ui684Esc(proximaPratica)}</div></div>
-        <div class="ui684-item"><span class="ui684-lab">Produto mais adequado</span><div class="ui684-val">${ui684Esc(ia.produtoMaisAdequado)}</div></div>
-      </div>
-      <details class="ui684-details">
-        <summary>Ver análise completa</summary>
-        <div class="ui684-grid" style="margin-top:10px">
-          <div class="ui684-item full"><span class="ui684-lab">Mudança de comportamento</span><div class="ui684-val">${ui684Esc(ia.mudancaComportamento)}</div></div>
-          <div class="ui684-item full"><span class="ui684-lab">Estratégia de abordagem</span><div class="ui684-val">${ui684Esc(ia.estrategiaAbordagem)}</div></div>
-          <div class="ui684-item"><span class="ui684-lab">Sinais positivos</span>${ui684List(ia.sinaisPositivos)}</div>
-          <div class="ui684-item"><span class="ui684-lab">Alertas</span>${ui684List(ia.alertas)}</div>
-          ${fatoresRisco.length||fatoresProtecao.length?`<div class="ui684-item full"><span class="ui684-lab">Fatores comerciais</span>${fatoresRisco.length?`<div class="ui684-val"><b>Pontos de atenção:</b></div>${ui684List(fatoresRisco)}`:''}${fatoresProtecao.length?`<div class="ui684-val" style="margin-top:8px"><b>Sinais favoráveis:</b></div>${ui684List(fatoresProtecao)}`:''}</div>`:''}
-          <div class="ui684-item full"><span class="ui684-lab">Raciocínio comercial</span><div class="ui684-val">${ui684Esc(ia.raciocinioComercial||'Reanalise para gerar o raciocínio comercial completo.')}</div></div>
-        </div>
-      </details>
-    </section>`;
-  }
-
-  function ui684MotivoProximaAcao(lead){
-    const ia=ui684Data(lead);
-    const risco=ia.riscoPerda||{};
-    const motivo=ia.motivoProximaAcao||ia.porqueProximaAcao||ia.explicacaoProximaAcao||risco.motivo||'';
-    if(motivo) return motivo;
-    const acao=String(ia.proximaAcaoIdeal||'').toLowerCase();
-    if(/simula|par[aâ]metro|financeir|entrada|parcela/.test(acao)) return 'porque a pendência principal é financeira e a próxima conversa precisa destravar viabilidade.';
-    if(/visita|café|conhecer|decorado/.test(acao)) return 'porque o lead já tem sinais de interesse e precisa de um compromisso prático.';
-    if(/responder|retomar/.test(acao)) return 'porque existe pendência aberta e a retomada deve usar o último ponto concreto da conversa.';
-    return 'porque esta é a ação com maior chance de avançar o lead sem gerar pressão desnecessária.';
-  }
-  function ui684EnhanceActionCard(lead){
-    const action=document.querySelector('.ui670-action-card');
-    if(!action) return;
-    action.querySelector('.ui684-action-reason')?.remove();
-    const div=document.createElement('div');
-    div.className='ui684-action-reason';
-    div.innerHTML=`<b>Por que:</b> ${ui684Esc(ui684MotivoProximaAcao(lead))}`;
-    const h3=action.querySelector('h3');
-    if(h3 && h3.parentNode) h3.parentNode.insertBefore(div,h3.nextSibling); else action.appendChild(div);
-  }
-// Atualização #724-2: wrapper antigo de renderLeadFoco removido.
-  window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
-})();
+/* v1268 — O BLOCO "V684-FINAL — IA COMERCIAL 2.0" FOI REMOVIDO (faxina pedida pelo dono).
+   Eram ~100 linhas que montavam um cartão de "raciocínio comercial" dentro do cliente: estilo
+   próprio injetado na página, o cartão em si e um "Por que:" grudado no card de ação. NADA disso
+   rodava desde que o wrapper antigo de renderLeadFoco saiu (a #724-2) — as três funções não eram
+   chamadas por ninguém, nem pelo HTML, nem por outro módulo. Código que não roda não é feature
+   guardada: é peso morto que ainda aparece em toda busca e confunde a próxima leitura.
+   A única linha viva do bloco era a versão do esquema comercial, que continua logo abaixo. */
+window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
 
 
 

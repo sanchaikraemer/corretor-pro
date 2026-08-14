@@ -74,7 +74,8 @@ lead e volta ao regime barato). Tudo do 1º ao último dia do mês, calendário 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
   `manifest.json`, instalável no celular). Tela principal em `index.html` + `app.js` (arquivo
   grande — ver seção 8, "Pendências conhecidas") mais os módulos de `js/` (`state.js`, `dom.js`,
-  `tema.js`, `proposta.js`, `pwa-install.js`, `dados-locais.js`, `commercial-schema.js` e o
+  `proposta.js`, `pwa-install.js`, `dados-locais.js`, `commercial-schema.js`, `saudacao.js`,
+  `envio-retentativa.js` e o
   `importacao.js`, este último baixado sob demanda). A biblioteca do Supabase que vai pro navegador
   é montada no build a partir da oficial, com os módulos não usados (tempo real, Storage no
   navegador, Edge Functions) trocados por peças vazias em `vendor-enxuto/` — 200 KB viraram 124 KB;
@@ -280,7 +281,7 @@ passo. Está aqui porque é o caminho mais importante do sistema e o mais fácil
    **antes** de o app abrir: Cérebro em cópia local, importação pendente, ZIP compartilhado
    (IndexedDB `direciona-share`), retrato do lembrete diário com nomes de clientes (IndexedDB
    `corretor-pro-notif`) e os caches `direciona-sharetarget-*`. Sair da conta apaga o dado
-   comercial e o carimbo. Preferência neutra do aparelho (tema) nunca é apagada, e os contadores de
+   comercial e o carimbo. Preferência neutra do aparelho nunca é apagada, e os contadores de
    uso do próprio corretor (`cpAtividade_*`, `cpTempoAppPorDia`) só somem quando o dono muda —
    sair e voltar na mesma conta não pode tomar dele o histórico da tela Desempenho.
 2. **Cria a conta** → entra na hora, sem confirmar e-mail (decisão do dono, v1128). A proteção

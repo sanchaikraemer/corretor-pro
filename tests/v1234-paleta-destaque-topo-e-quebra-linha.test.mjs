@@ -72,8 +72,9 @@ const importacao = ler('js/importacao.js');
   assert.match(css, /#topBell\.cp-hoje-atraso\{[^}]*animation:cpAgPulsa/, 'o atraso pulsa pra puxar o olho');
   assert.match(css, /prefers-reduced-motion: reduce\)\{ #topBell\.cp-hoje-atraso\{animation:none/,
     'quem pediu menos movimento na tela não é obrigado a ver o pulso');
-  assert.match(css, /html\[data-theme="light"\] #topBell\.cp-hoje-alerta\{color:#fff!important\}/,
-    'no tema claro o texto sobre o ciano é branco (contraste conferido no navegador)');
+  // v1268 — havia aqui a regra de contraste do TEMA CLARO (texto branco sobre o ciano). O tema
+  // claro foi removido do sistema por ordem do dono, e a regra saiu junto com ele.
+  assert.doesNotMatch(css, /data-theme="light"/, 'o tema claro não pode voltar ao CSS (v1268)');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

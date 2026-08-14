@@ -88,13 +88,12 @@ const persistencia = fs.readFileSync(new URL("../api/_persistence.js", import.me
     "a opção copiada fica destacada em coral");
   assert.match(app, /\.cp704-msg-item\.cp704-msg-copiada \.cp704-copy\{border-color:transparent;background:var\(--lime\);color:#fff\}/,
     "e o botão dela fica coral cheio");
-  // Lição da v1078 (registrada em CLAUDE.md): no tema claro existem blocos antigos com !important
-  // que forçam branco nesses mesmos elementos. Sem a mesma força, o coral não apareceria lá.
+  // v1268 — as duas linhas que existiam aqui cuidavam do TEMA CLARO (a lição da v1078: lá havia
+  // blocos antigos com !important forçando branco nesses mesmos elementos). O tema claro foi
+  // removido do sistema por ordem do dono, então elas saíram junto com as regras que verificavam.
+  // O que sobra é o que vale hoje: a marca coral do tema único, conferida logo acima.
   const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
-  assert.match(css, /html\[data-theme="light"\] \.cp704-msg-item\.cp704-msg-copiada\{background:rgba\(255,98,88,\.10\)!important;border-color:var\(--cp-coral\)!important\}/,
-    "no tema claro a marca vem com !important, senão o bloco antigo a atropela");
-  assert.match(css, /html\[data-theme="light"\] \.cp704-msg-item\.cp704-msg-copiada \.cp704-copy\{background:var\(--cp-coral\)!important/,
-    "e o botão também");
+  assert.doesNotMatch(css, /data-theme="light"/, "o tema claro não pode voltar ao CSS (v1268)");
 }
 
 console.log("v1146-carteira-nao-trava-e-copia-marcada: ok");

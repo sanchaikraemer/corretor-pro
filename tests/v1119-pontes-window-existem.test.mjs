@@ -10,7 +10,7 @@
 // (Handlers com expressão composta — ex.: onclick="event.stop();x()" — são deixados de fora de
 // propósito: melhor não checar do que dar falso positivo.)
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -20,8 +20,12 @@ const ler = (f) => readFileSync(path.join(raiz, f), "utf8");
 
 const app = ler("app.js");
 const index = ler("index.html");
-const modulos = ["js/state.js", "js/commercial-schema.js", "js/dom.js", "js/tema.js", "js/proposta.js", "js/pwa-install.js"]
-  .map(ler).join("\n");
+// v1268 — a lista era escrita à mão e quebrou quando js/tema.js foi apagado (o tema claro saiu do
+// sistema). Agora lê a pasta js/ inteira: módulo novo entra sozinho, módulo apagado sai sozinho —
+// mesma ideia que o executor da suíte já usa pra descobrir os testes desde a v1092.
+const modulos = readdirSync(path.join(raiz, "js"))
+  .filter(f => f.endsWith(".js")).sort()
+  .map(f => ler(path.join("js", f))).join("\n");
 
 // Handlers on*="nome(...)" — valor da atributo COMEÇA com um identificador simples seguido de "(".
 const handlerRe = /\son[a-z]+\s*=\s*"([A-Za-z_$][\w$]*)\s*\(/g;
