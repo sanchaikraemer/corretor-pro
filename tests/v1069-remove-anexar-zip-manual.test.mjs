@@ -43,8 +43,15 @@ assert.doesNotMatch(clear, /qs\("#zipInput"\)/, 'clearAnalysis não referencia m
 
 // 6. Os botões que abriam o seletor manual (".pickZipShortcut", "Mais ações" → Importar) agora
 // só navegam pra tela de instruções (show("zip")), nunca abrem um <input type="file">.
+//
+// v1268 — o menu "Mais ações" (abrirMaisAcoes) foi REMOVIDO na faxina: era o antigo menu do "+" da
+// barra de baixo, e o "+" abre o cadastro manual direto (abrirNovoLead) há versões — nenhuma tela
+// chamava aquele menu. A regra que este teste protege (nada abre seletor de arquivo) continua, e
+// agora vale pelo caminho que sobrou: ninguém no app pode abrir o #zipInput.
 assert.doesNotMatch(app, /pickZipShortcut.*click.*qs\("#zipInput"\)/, 'pickZipShortcut não abre mais o seletor de arquivo');
-assert.match(app, /qs\("#maAcImportar"\)\.onclick = \(\) => \{ close\(\); show\("zip"\); \};/,
-  '"Mais ações" → Importar navega pra tela de instruções, não abre seletor de arquivo');
+assert.doesNotMatch(app, /qs\("#zipInput"\)\??\.click\(\)/, 'nenhum botão do app abre o seletor de arquivo');
+// (o comentário do código cita o menu removido de propósito — a varredura olha o código)
+const semComentarios = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+assert.doesNotMatch(semComentarios, /abrirMaisAcoes/, 'o menu "Mais ações" saiu na v1268 (órfão: nenhuma tela o chamava)');
 
 console.log('v1069-remove-anexar-zip-manual: ok');
