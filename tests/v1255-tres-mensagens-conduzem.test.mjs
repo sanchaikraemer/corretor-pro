@@ -71,11 +71,15 @@ assert.match(blocoPrazo, /pior do que não mandar mensagem nenhuma/,
 // com o valor na mão") e fechava com duas datas — em vez de "fico à disposição".
 const iniCond = src.indexOf('CADA MENSAGEM É UMA CONDUÇÃO, NUNCA UM CHECK-IN');
 assert.ok(iniCond > -1, 'precisa existir a regra que obriga as três mensagens a conduzir');
-const blocoCond = src.slice(iniCond, iniCond + 2200).replace(/\s+/g, ' ');
+const blocoCond = src.slice(iniCond, iniCond + 3400).replace(/\s+/g, ' ');
 
 assert.match(blocoCond, /as três têm a MESMA espinha obrigatória/,
   'a espinha precisa valer pras TRÊS, não só pra recomendada');
-assert.match(blocoCond, /ABRE POR UM FATO CONCRETO DESTA CONVERSA/, 'passo 1: abrir por fato concreto');
+// v1274 — o passo 1 ganhou o cumprimento na frente do fato (o dono: "cadê a saudação?"). O fato
+// concreto continua obrigatório, só que agora ele vem LOGO DEPOIS da saudação com o nome.
+assert.match(blocoCond, /CUMPRIMENTA E EMENDA UM FATO CONCRETO DESTA CONVERSA/, 'passo 1: cumprimentar e abrir por fato concreto');
+assert.match(blocoCond, /LOGO DEPOIS da saudação vem o FATO/,
+  'o fato concreto não pode ter sumido do passo 1 — ele só passou a vir depois do cumprimento');
 assert.match(blocoCond, /DESTRAVA O QUE ESTÁ PARADO/, 'passo 2: destravar com um passo executável');
 assert.match(blocoCond, /FECHA COM UM PRÓXIMO PASSO QUE TEM DONO E FORMATO/, 'passo 3: fechar com passo concreto');
 assert.match(blocoCond, /DUAS opções concretas/,

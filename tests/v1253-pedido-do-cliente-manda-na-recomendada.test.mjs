@@ -67,8 +67,15 @@ assert.match(blocoPergunta, /repetir a mensagem que já falhou/,
 const blocoSaudacao = src.slice(src.indexOf('Saudação correta para este horário'));
 assert.match(blocoSaudacao, /NÃO CUMPRIMENTE DUAS VEZES/,
   'precisa existir a regra que impede o segundo "boa tarde" seguido');
-assert.match(blocoSaudacao, /ÚLTIMA mensagem do histórico for do CORRETOR e já for um cumprimento/,
+assert.match(blocoSaudacao, /ÚLTIMA mensagem do histórico for do CORRETOR, for do DIA DE HOJE .+ e já for um cumprimento/,
   'a regra precisa olhar se a ÚLTIMA mensagem foi um cumprimento do próprio corretor');
+// v1274 — a exceção é SÓ pra conversa que continua hoje (o caso da Milena: 17h01 do mesmo dia).
+// Cumprimento de dias atrás não vale como "já cumprimentei": aí a conversa está sendo retomada e
+// a saudação volta a ser obrigatória.
+assert.match(blocoSaudacao, /Cumprimento de ONTEM ou de dias\/semanas atrás NÃO conta/,
+  'cumprimento antigo não pode servir de desculpa pra sugestão sair sem saudação');
+assert.match(blocoSaudacao, /AS TRÊS MENSAGENS ABREM COM ELA seguida do primeiro nome do cliente/,
+  'fora dessa exceção, as três abrem cumprimentando o cliente pelo nome');
 
 // ── 4. As regras moram no prompt de quem TEM Cérebro, não no modo prévia (regra da v1247) ────
 // O prompt principal é montado em `const prompt = ...` e recebe o Cérebro pelo prompt de sistema.

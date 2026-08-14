@@ -91,7 +91,9 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
   );
 
   // E o código continua NÃO reescrevendo mensagem: a correção é pela regra, não por filtro local.
-  assert.match(pipeline, /Nenhuma sugestão de mensagem é reinterpretada, corrigida ou substituída pelo código\./,
+  // (v1274: a única coisa que o código acrescenta é a saudação que faltou numa retomada — nada
+  // do conteúdo comercial escrito pela IA é apagado, trocado ou reescrito.)
+  assert.match(pipeline, /Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo\n\s*\/\/ código/,
     'a decisão de não mexer no conteúdo das sugestões continua valendo');
 }
 
