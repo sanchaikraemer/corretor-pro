@@ -160,8 +160,15 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
     return { cp1168ItensDeHoje, cp1168HoraDoTexto };
   `)();
 
-  const hoje = new Date(); hoje.setHours(15, 0, 0, 0);
-  const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+  // v1260 — este teste falhava TODA NOITE entre 21h e meia-noite (horário de Brasília), e não
+  // tinha nada a ver com o que estava sendo mexido. O servidor onde a suíte roda usa UTC, então
+  // "new Date()" já virou o dia enquanto no Brasil ainda é ontem. O código testado
+  // (inicioDoDiaBR) trabalha no calendário de BRASÍLIA, de propósito — quem estava errado era o
+  // teste, que montava as datas no fuso da máquina. Agora as datas são ancoradas no dia de
+  // Brasília, igual ao código. (O Brasil não tem mais horário de verão, então -03:00 é fixo.)
+  const diaBR = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const hoje = new Date(`${diaBR}T15:00:00-03:00`);
+  const amanha = new Date(hoje.getTime() + 86400000);
 
   // Lembrete de hoje entra.
   const leadLembreteHoje = { id: 'l1', name: 'Cliente A', etapa: 'Ativo', analysis: { lembrete: { quando: hoje.toISOString(), motivo: 'Ligar de volta' } } };
@@ -186,7 +193,9 @@ const ler = (arq) => fs.readFileSync(new URL(arq, raiz), 'utf8');
   // (mesmo com hora extraída, tipo "17h") caía no INÍCIO da lista, porque a primeira versão
   // sempre usava "início do dia" como critério de ordenação pra qualquer compromisso confirmado,
   // ignorando a hora que ela mesma tinha acabado de extrair do texto.
-  const leadCedo = { id: 'cedo', name: 'Lembrete 12:30', etapa: 'Ativo', analysis: { lembrete: { quando: (() => { const d = new Date(); d.setHours(12, 30, 0, 0); return d.toISOString(); })() } } };
+  // v1260 — mesma armadilha de fuso da parte de cima: a hora tem que ser montada no dia de
+  // Brasília, senão o lembrete cai no dia seguinte quando a suíte roda depois das 21h.
+  const leadCedo = { id: 'cedo', name: 'Lembrete 12:30', etapa: 'Ativo', analysis: { lembrete: { quando: new Date(`${diaBR}T12:30:00-03:00`).toISOString() } } };
   const leadTarde = { id: 'tarde', name: 'Compromisso 17h', etapa: 'Ativo', analysis: { confirmedAppointments: [{ quando: 'hoje às 17h', oQue: 'Visita' }] } };
   const leadSemHora = { id: 'semhora', name: 'Sem hora dita', etapa: 'Ativo', analysis: { confirmedAppointments: [{ quando: 'hoje', oQue: 'Ligar' }] } };
   const ordem = sandbox.cp1168ItensDeHoje([leadTarde, leadSemHora, leadCedo]).map(x => x.lead.id);

@@ -3188,6 +3188,23 @@ mandei três nessa linha — me diz qual chega mais perto e eu fecho a busca"). 
 melhor reagindo a opções concretas do que respondendo pergunta em abstrato, e a amostra faz o
 número aparecer sozinho.
 
+CONSTRUÇÃO PROIBIDA — "ASSIM QUE VOCÊ TIVER X, EU TE MANDO Y". Esta é a forma disfarçada de segurar
+a entrega, e NENHUMA das três mensagens pode usá-la em nenhuma variação: "assim que você
+tiver/conseguir/souber o valor, eu te mando as opções", "me avisa quando souber que eu já envio",
+"me sinaliza assim que conseguir", "quando você tiver esse número eu separo", "assim que vocês
+tiverem uma ideia, eu adianto". Todas deixam DEVER DE CASA com o cliente e o corretor parado
+esperando — a conversa morre exatamente aí, porque quem tem que agir é quem menos quer agir.
+A entrega vai PRIMEIRO e sem condição; o que falta anda junto ou depois dela, nunca como pedágio.
+Teste antes de escrever cada mensagem: se ela só acontece DEPOIS que o cliente fizer alguma coisa,
+está errada — reescreva começando pelo que o CORRETOR faz agora, sem depender de ninguém.
+
+QUOTA OBRIGATÓRIA QUANDO O CLIENTE ENTRA COM IMÓVEL E O VALOR DELE É DESCONHECIDO ("imovelDoCliente"
+preenchido e sem valor declarado): PELO MENOS UMA das três mensagens PRECISA oferecer que o
+CORRETOR faça a avaliação do imóvel, pedindo só dado fácil de dar (endereço, bairro, metragem,
+número de dormitórios, uma foto) — e nenhuma das três pode ficar esperando o cliente descobrir esse
+valor sozinho. Levantar valor de imóvel é ofício do corretor: o cliente não tem como fazer isso bem
+e, enquanto ele tenta, a negociação fica parada por semanas. Quem chega com o número é o corretor.
+
 ANTES DE PERGUNTAR, PROCURE A RESPOSTA NA CONVERSA — ELA QUASE SEMPRE JÁ ESTÁ LÁ. Percorra o
 histórico inteiro e preencha os campos abaixo com o que o cliente JÁ contou, inclusive de forma
 INDIRETA. Depois de preenchidos, é PROIBIDO que qualquer uma das três mensagens pergunte algo que
