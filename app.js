@@ -3787,13 +3787,24 @@ function abrirGrupoHome(grupo, options={}){
   //     atendimento, parecia bagunçada porque o número exibido era outro.
   //
   // Agora cada lista mostra O NÚMERO QUE A DEFINE, com o título certo em cima.
+  // v1265 — "Parado há" passou a contar o ÚLTIMO TOQUE REAL, não só a última mensagem do WhatsApp.
+  //
+  // Caso do dono (Carteira ativa): "Dani De Sm — PARADO HÁ 100 dias", quando o próprio histórico
+  // do cliente mostra uma mensagem que ELE mandou em 28/07 (17 dias antes). A coluna usava
+  // daysSinceLastInteraction, que só enxerga mensagem importada do WhatsApp e ignora o que o app
+  // registra quando o corretor copia a sugestão e manda ("Mensagem enviada (você)"). Ou seja: o
+  // app sabia do toque, mostrava esse toque no histórico logo abaixo, e mesmo assim dizia 100 dias.
+  //
+  // diasParado já é a régua certa e já existia — é a que o ranking usa desde sempre ("desde o
+  // último toque REAL: mensagem OU atendimento marcado"). A coluna só não a usava. O caso
+  // "atendido hoje" continua com o texto de sempre.
   const COLUNA_PADRAO = {
     titulo: "Parado há",
     valor: (l) => {
-      const d = l.daysSinceLastInteraction;
-      return ehContatadoHoje(l)
-        ? '<i>atendido hoje</i>'
-        : (d != null ? `<small class="lgt-rot">parado há</small><b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—");
+      if(ehContatadoHoje(l)) return '<i>atendido hoje</i>';
+      const dp = (typeof diasParado === "function") ? diasParado(l) : Infinity;
+      const d = Number.isFinite(dp) ? dp : (l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction : null);
+      return d != null ? `<small class="lgt-rot">parado há</small><b>${d}</b> ${d === 1 ? "dia" : "dias"}` : "—";
     }
   };
   const diasDesdeAtendimento = (l) => {
@@ -5770,8 +5781,14 @@ function renderLeadFoco(lead){
     // São Paulo deslocava 3h. Fallback pro campo antigo quando não há msg (regra da v887,
     // restaurada — a v934 tinha removido essa metalinha a pedido, mas ela é informação que o
     // corretor precisa pra saber se o cliente respondeu depois da análise).
-    const ultimaMsgReal=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(lead):null;
+    // v1265 — usa a última mensagem EXIBIDA (inclui a que o corretor mandou pelo app). Antes esta
+    // linha dizia "Última mensagem — 05/05" enquanto o histórico logo abaixo mostrava uma mensagem
+    // de 28/07 no topo — duas datas diferentes na mesma tela, pro mesmo cliente.
+    const ultimaMsgReal=(typeof cp1265UltimaMensagemExibida==='function')?cp1265UltimaMensagemExibida(lead):null;
     const ultimaMsgEm=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
+    // De quem foi essa última mensagem — sem isso, ver a data da PRÓPRIA mensagem no lugar onde ele
+    // procura "o cliente respondeu?" seria trocar uma confusão por outra.
+    const ultimaMsgQuem=(ultimaMsgReal&&ultimaMsgReal.m)?(ultimaMsgReal.falante==='contato'?' (do cliente)':' (sua)'):'';
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -5826,7 +5843,7 @@ function renderLeadFoco(lead){
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
-          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgEm}`)}</div>`:''}
+          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgEm}${ultimaMsgQuem}`)}</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
@@ -10044,6 +10061,35 @@ function cp786UltimaMensagemReal(l){
   }
   return {m:null,i:-1,ts:0,falante:'desconhecido'};
 }
+// v1265 — a última mensagem MOSTRADA no cabeçalho do cliente tem que ser a mesma que aparece no
+// topo do histórico logo abaixo dela.
+//
+// cp786UltimaMensagemReal (acima) ignora tudo que tem source "manual" — o que está certo pra
+// observação, ligação e visita (não são mensagens), mas errado pra "Mensagem enviada (você)": essa
+// é uma mensagem que o corretor REALMENTE mandou, criada quando ele copia a sugestão. Resultado no
+// caso da "Dani De Sm": o cabeçalho dizia "Última mensagem — 05/05" e o histórico logo abaixo abria
+// com a mensagem de 28/07. Aqui a mensagem enviada volta pra conta — e só aqui, de propósito: a
+// CATEGORIA do cliente (quem está esperando quem) continua olhando só conversa do WhatsApp, que é
+// a regra da casa desde a v1189.
+function cp1265UltimaMensagemExibida(l){
+  const base=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(l):{m:null,i:-1,ts:0,falante:'desconhecido'};
+  const msgs=Array.isArray(l?.recentMessages)?l.recentMessages:[];
+  let enviada=null;
+  for(let i=msgs.length-1;i>=0;i--){
+    const m=msgs[i];
+    if(String(m?.type||'').toLowerCase()!=='mensagem_enviada') continue;
+    if(!String(m?.text||'').trim()) continue;
+    enviada={m,i,ts:(typeof cp786MensagemTs==='function')?cp786MensagemTs(m):0,falante:'corretor'};
+    break;
+  }
+  if(!enviada) return base;
+  if(!base?.m) return enviada;
+  // Sem data confiável dos dois lados, vale a ordem do histórico (é a ordem que a tela mostra).
+  const tb=Number(base.ts)||0, te=Number(enviada.ts)||0;
+  if(tb && te) return te>=tb ? enviada : base;
+  return (Number(enviada.i)||0) >= (Number(base.i)||0) ? enviada : base;
+}
+window.cp1265UltimaMensagemExibida=cp1265UltimaMensagemExibida;
 // v1189 — AQUI MORAVA O DETECTOR "CLIENTE RESPONDEU" (e três ajudantes que só serviam a ele).
 // Saiu DE VEZ, por ordem do dono — e a v1188 é a prova de por que não bastava deixá-lo dormindo.
 //
