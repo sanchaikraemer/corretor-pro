@@ -5321,6 +5321,11 @@ function cp704Css(){
       ['Por que ele quer mudar',cp704Semvalor(a?.diagnostico?.motivoDaMudanca)],
       ['Quem decide junto',cp704Semvalor(a?.diagnostico?.quemDecide)],
       ['O cliente já contou',Array.isArray(a?.diagnostico?.jaSabemos)?a.diagnostico.jaSabemos.filter(Boolean).join(' · '):''],
+      // v1271 — o pedido que partiu do próprio cliente (o critério que ele levantou sozinho, o mais
+      // valioso da conversa) e a pauta que ainda falta levantar — que é assunto do encontro, não
+      // interrogatório por mensagem.
+      ['O que o cliente pediu por conta própria',cp704Semvalor(a?.diagnostico?.pedidoEspontaneo)],
+      ['O que ainda falta descobrir',Array.isArray(a?.diagnostico?.faltaDescobrir)?a.diagnostico.faltaDescobrir.filter(Boolean).join(' · '):''],
       ['Preferências',mem.preferencias]
     ].filter(r=>cp704Text(r[1]));
     return rows.map(([k,v])=>`<div class="cp704-row"><small>${escapeHtml(k)}</small><div>${escapeHtml(cp704Text(v))}</div></div>`).join('') || '<div class="empty">Sem detalhes comerciais consolidados.</div>';
