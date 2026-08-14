@@ -10407,9 +10407,12 @@ function cp1168HoraDoTexto(texto){
 function cp1168TsDeHojeComHora(horaStr){
   const m = /^(\d{1,2})(?::(\d{2}))?h?$/.exec(String(horaStr || ""));
   if(!m) return null;
-  const d = new Date();
-  d.setHours(Number(m[1]), Number(m[2] || 0), 0, 0);
-  return d.getTime();
+  // v1260 — a hora escrita no compromisso ("17h") é hora de BRASÍLIA, igual ao resto desta faixa
+  // (que usa inicioDoDiaBR desde a v1248). Aqui tinha ficado o relógio do APARELHO: com o celular
+  // em outro fuso, o compromisso das 17h caía fora da janela de hoje e ia parar no fim da lista —
+  // depois até dos itens que não têm hora nenhuma, que é justamente o contrário do que a v1168
+  // quis fazer. Achado pela suíte, que quebrava toda noite depois das 21h por causa disso.
+  return inicioDoDiaBR().getTime() + Number(m[1]) * 3600000 + Number(m[2] || 0) * 60000;
 }
 function cp1168FaixaHomeHTML(items){
   const lista = cp1168ItensDeHoje(items).slice(0, 8);
