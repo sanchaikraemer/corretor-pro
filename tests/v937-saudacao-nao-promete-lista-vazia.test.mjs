@@ -18,8 +18,11 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const iniFoco = app.indexOf('function renderLeadFoco(lead){');
 const fimFoco = app.indexOf('\nfunction ', app.indexOf('cp7ObsStatus', iniFoco));
 const foco = app.slice(iniFoco, fimFoco);
-assert.match(foco, /const ultimaMsgReal=\(typeof cp786UltimaMensagemReal==='function'\)\?cp786UltimaMensagemReal\(lead\):null;/,
-  'deve calcular a última mensagem real de novo');
+// v1265 — a fonte mudou de cp786UltimaMensagemReal pra cp1265UltimaMensagemExibida (que também
+// considera a mensagem que o corretor mandou pelo app, pro cabeçalho não divergir do histórico
+// logo abaixo). O que este teste protege continua igual: a linha tem que ser calculada e aparecer.
+assert.match(foco, /const ultimaMsgReal=\(typeof cp1265UltimaMensagemExibida==='function'\)\?cp1265UltimaMensagemExibida\(lead\):null;/,
+  'deve calcular a última mensagem exibida de novo');
 assert.match(foco, /Última mensagem — \$\{ultimaMsgEm\}/, '"Última mensagem" precisa voltar a aparecer');
 assert.match(foco, /Última análise — \$\{analiseEm\}/, '"Última análise" continua aparecendo (não foi tocada)');
 
