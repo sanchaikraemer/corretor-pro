@@ -8428,7 +8428,9 @@ function cpPassosImportar(){
       ? 'Toque no <b>nome do contato</b> (iPhone) ou no <b>“⋮”</b> do canto de cima (Android)'
       : 'Toque no <b>“⋮”</b> no canto de cima da conversa');
   const entregar = cpEhIOS()
-    ? 'Role a lista <b>para baixo</b>, passando dos ícones dos apps, e toque em <b>“Salvar em Arquivos”</b>. Depois volte aqui e use o botão abaixo pra escolher o arquivo.<br><span style="color:var(--muted)">Pra pular esse vai e volta, configure uma vez o Atalho em <b>Menu → “Compartilhar direto do WhatsApp (iPhone)”</b> — aí o Corretor Pro passa a aparecer direto na lista.</span>'
+    // v1271 — dizer ONDE o arquivo fica é o que faltava: sem isso o corretor entende que precisa
+    // mandar a conversa pra alguém e abrir num computador (foi exatamente a leitura do dono).
+    ? 'Role a lista <b>para baixo</b>, passando dos ícones dos apps, e toque em <b>“Salvar em Arquivos”</b> → <b>Salvar</b>. O arquivo fica no <b>próprio iPhone</b> — não vai pra ninguém e não precisa de computador. Depois volte aqui e use o botão abaixo: a conversa que você salvou é a primeira da lista.<br><span style="color:var(--muted)">Quem quiser pular esse vai e volta pode montar uma vez o Atalho em <b>Menu → “Compartilhar direto do WhatsApp (iPhone)”</b> — é opcional, o caminho acima já resolve.</span>'
     : (isDesktop()
       ? 'Na lista que abrir, toque no <b>ícone do Corretor Pro</b>. Se preferir fazer pelo computador, salve o arquivo e use o botão abaixo.'
       : 'Na lista que abrir, toque no <b>ícone do Corretor Pro</b> — é aqui que a conversa chega.');
@@ -8447,10 +8449,15 @@ function cpPassosImportar(){
 function cpTextoAjudaImportar(){
   const passoWhats = 'No WhatsApp: abra a conversa → toque no nome do contato (iPhone) ou em "⋮" (Android) → <b>Exportar conversa</b> → <b>Incluir mídia</b>.';
   if(cpEhIOS()){
-    return `${passoWhats}<br><br><b>No iPhone</b> a Apple não deixa mandar o arquivo direto pro Corretor Pro. Faça assim:<br>
-      1. Na tela de compartilhar que abrir, <b>role para baixo</b> (passando dos ícones dos apps) e toque em <b>“Salvar em Arquivos”</b>.<br>
-      2. Volte aqui e toque em <b>“Escolher o arquivo da conversa”</b> acima.<br><br>
-      Pra pular esses passos, configure uma vez o <b>Atalho</b> em <b>Mais → “Compartilhar direto do WhatsApp (iPhone)”</b>: aí o Corretor Pro passa a aparecer na lista de compartilhar do iPhone.`;
+    // v1271 — texto reescrito porque a versão anterior abria com a trava da Apple e só depois
+    // dizia o que fazer: quem lia parava na primeira linha ("não deixa") e concluía que o iPhone
+    // não servia. Agora abre pelo caminho, que é curto e todo dentro do celular. O Atalho continua
+    // existindo, mas como opção avançada — montar um Atalho na mão não é pra todo mundo, e
+    // oferecer isso como o jeito normal era o que fazia o caminho parecer grande.
+    return `${passoWhats}<br><br><b>No iPhone</b>, mais dois toques e acabou — tudo no próprio celular:<br>
+      1. Na tela de compartilhar que abrir, <b>role para baixo</b> (passando dos ícones dos apps) e toque em <b>“Salvar em Arquivos”</b> → <b>Salvar</b>.<br>
+      2. Volte aqui, toque em <b>“Escolher o arquivo da conversa”</b> acima e pegue o <b>primeiro da lista</b>.<br><br>
+      O arquivo fica guardado dentro do seu iPhone: não vai pra ninguém, não passa por e-mail e não precisa de computador. Toque em <b>“Como enviar sua conversa”</b> pra ver isso com desenho, passo por passo.`;
   }
   return `${passoWhats}<br><br>Depois é só <b>compartilhar o ZIP com o Corretor Pro</b> — ou, se você já salvou o arquivo no aparelho, tocar em <b>“Escolher o arquivo da conversa”</b> acima. Em 30-60 segundos ele mostra quem atender, por que, quando e o que falar.`;
 }
@@ -8502,7 +8509,7 @@ function cp1149Telinha(conteudo){
     ${conteudo}
   </svg>`;
 }
-const CP1149_PASSOS = [
+const CP1149_PASSOS_ANDROID = [
   {
     titulo: "1. Abra a conversa do cliente",
     texto: "No WhatsApp, entre na conversa que você quer analisar. Pode ser qualquer conversa — nova ou antiga.",
@@ -8588,6 +8595,111 @@ const CP1149_PASSOS = [
       <rect x="34" y="203" width="60" height="7" rx="3.5" fill="rgba(255,255,255,.45)"/>`)
   }
 ];
+
+// v1271 — O PASSO A PASSO DO IPHONE (antes só existia o do Android).
+//
+// Relato do dono: "ninguém vai fazer todo esse processo", e logo depois "ele vai ter que enviar
+// pra alguém pra conseguir salvar no PC e não no cel, pra depois abrir e importar". Essa segunda
+// frase é a prova do estrago: o caminho do iPhone termina DENTRO do próprio iPhone — "Salvar em
+// Arquivos" guarda o ZIP no aparelho, não manda pra ninguém e não precisa de computador. Quem
+// entendeu o contrário entendeu porque o app estava ensinando o caminho ERRADO pra ele.
+//
+// Até aqui este passo a passo era um só, escrito em cima dos prints do Android: mandava tocar nos
+// "três pontinhos" (não existem no iPhone) e depois "escolher o Corretor Pro na lista de
+// compartilhar" (a Apple não deixa aparecer — ver v1126). Ou seja, o iPhone abria a ajuda, seguia
+// à risca e batia numa parede duas vezes. Daí a conclusão de que só dava por fora, com PC.
+//
+// Agora o aparelho decide qual passo a passo ver. O do iPhone tem os toques que existem no iPhone,
+// diz com todas as letras que o arquivo fica no próprio celular, e termina abrindo o seletor de
+// arquivo direto do último passo — sem mandar procurar botão nenhum depois de fechar.
+const CP1149_PASSOS_IOS = [
+  {
+    titulo: "1. Abra a conversa do cliente",
+    texto: "No WhatsApp, entre na conversa que você quer analisar. Pode ser qualquer conversa — nova ou antiga.",
+    desenho: cp1149Telinha(`
+      <circle cx="34" cy="16" r="7" fill="rgba(255,255,255,.5)"/>
+      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.55)"/>
+      <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,255,255,.3)"/>
+      <rect x="24" y="40" width="110" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
+      <rect x="66" y="76" width="110" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="24" y="106" width="90" height="26" rx="8" fill="rgba(255,255,255,.10)"/>
+      <rect x="86" y="142" width="90" height="20" rx="8" fill="rgba(255,98,88,.28)"/>
+      <rect x="24" y="248" width="152" height="18" rx="9" fill="rgba(255,255,255,.08)"/>`)
+  },
+  {
+    titulo: "2. Toque no nome do cliente",
+    texto: "Lá em cima, no topo da conversa. No iPhone é por aí que se abre a ficha do contato — <b>não existe “⋮”</b> como no Android.",
+    desenho: cp1149Telinha(`
+      <rect x="46" y="11" width="60" height="5" rx="2.5" fill="#FF6258"/>
+      <rect x="46" y="20" width="34" height="4" rx="2" fill="rgba(255,98,88,.55)"/>
+      <circle cx="34" cy="16" r="7" fill="rgba(255,98,88,.45)"/>
+      <rect x="20" y="2" width="100" height="28" rx="9" fill="none" stroke="#FF6258" stroke-width="2.5"/>
+      <rect x="24" y="50" width="110" height="26" rx="8" fill="rgba(255,255,255,.08)"/>
+      <rect x="66" y="86" width="110" height="20" rx="8" fill="rgba(255,255,255,.08)"/>`)
+  },
+  {
+    titulo: "3. Role até “Exportar conversa”",
+    texto: "A ficha do contato abre. <b>Role até o fim</b> — “Exportar conversa” fica bem lá embaixo, depois das fotos e dos ajustes.",
+    desenho: cp1149Telinha(`
+      <circle cx="100" cy="60" r="22" fill="rgba(255,255,255,.12)"/>
+      <rect x="70" y="92" width="60" height="6" rx="3" fill="rgba(255,255,255,.40)"/>
+      <rect x="26" y="120" width="148" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="26" y="140" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="26" y="160" width="134" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="22" y="182" width="156" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="32" y="192" width="102" height="6" rx="3" fill="#FF6258"/>
+      <path d="M100 226 v18 M92 236 l8 8 l8 -8" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>`)
+  },
+  {
+    titulo: "4. Toque em “Anexar mídia”",
+    texto: "O iPhone pergunta se quer anexar as mídias. Escolha <b>Anexar mídia</b> — é o que traz <b>os áudios</b>, e áudio é onde o cliente diz o que ele realmente quer.",
+    desenho: cp1149Telinha(`
+      <rect x="22" y="96" width="156" height="76" rx="12" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <rect x="34" y="110" width="120" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
+      <rect x="34" y="122" width="96" height="5" rx="2.5" fill="rgba(255,255,255,.40)"/>
+      <rect x="34" y="142" width="58" height="20" rx="6" fill="rgba(255,255,255,.06)"/>
+      <rect x="102" y="142" width="66" height="20" rx="6" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="110" y="149" width="50" height="6" rx="3" fill="#FF6258"/>`)
+  },
+  {
+    titulo: "5. Toque em “Salvar em Arquivos”",
+    texto: "Abre a tela de compartilhar. <b>Passe direto dos ícones dos apps</b> e role a lista de baixo até <b>“Salvar em Arquivos”</b>. Toque, depois em <b>Salvar</b>.<br><br>O arquivo fica guardado <b>dentro do seu próprio iPhone</b> — não vai pra ninguém, não passa por e-mail e não precisa de computador.",
+    desenho: cp1149Telinha(`
+      <rect x="18" y="110" width="164" height="160" rx="14" fill="rgba(20,20,20,.95)" stroke="rgba(255,255,255,.18)"/>
+      <circle cx="46" cy="146" r="14" fill="rgba(255,255,255,.10)"/>
+      <circle cx="84" cy="146" r="14" fill="rgba(255,255,255,.10)"/>
+      <circle cx="122" cy="146" r="14" fill="rgba(255,255,255,.10)"/>
+      <circle cx="160" cy="146" r="14" fill="rgba(255,255,255,.10)"/>
+      <rect x="28" y="176" width="144" height="1.5" fill="rgba(255,255,255,.14)"/>
+      <rect x="30" y="188" width="86" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="30" y="206" width="70" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="24" y="222" width="152" height="26" rx="7" fill="rgba(255,98,88,.20)" stroke="#FF6258" stroke-width="2"/>
+      <rect x="34" y="232" width="96" height="6" rx="3" fill="#FF6258"/>
+      <rect x="148" y="228" width="16" height="13" rx="3" fill="none" stroke="#FF6258" stroke-width="2"/>
+      <path d="M100 62 v22 M92 76 l8 8 l8 -8" fill="none" stroke="#FF6258" stroke-width="2.5" stroke-linecap="round"/>`)
+  },
+  {
+    titulo: "6. Volte aqui e escolha o arquivo",
+    texto: "Último passo: toque no botão abaixo. O iPhone abre a lista de arquivos e <b>a conversa que você acabou de salvar é a primeira da lista</b>. Toque nela.<br><br>Em 30 a 60 segundos o Corretor Pro mostra quem atender, por quê, quando e o que falar.<br><br><button type=\"button\" id=\"cp1149EscolherArquivo\" class=\"btn\" style=\"width:100%;margin:10px 0 2px\">Escolher o arquivo da conversa</button>",
+    desenho: cp1149Telinha(`
+      <rect x="22" y="40" width="156" height="40" rx="10" fill="rgba(255,255,255,.06)"/>
+      <rect x="34" y="54" width="90" height="6" rx="3" fill="rgba(255,255,255,.40)"/>
+      <rect x="34" y="66" width="60" height="5" rx="2.5" fill="rgba(255,255,255,.22)"/>
+      <rect x="22" y="96" width="156" height="30" rx="10" fill="rgba(255,98,88,.22)" stroke="#FF6258" stroke-width="2.5"/>
+      <rect x="42" y="108" width="116" height="7" rx="3.5" fill="#FF6258"/>
+      <rect x="22" y="146" width="156" height="26" rx="8" fill="rgba(255,255,255,.05)"/>
+      <rect x="32" y="156" width="24" height="7" rx="3.5" fill="rgba(255,98,88,.65)"/>
+      <rect x="66" y="156" width="86" height="6" rx="3" fill="rgba(255,255,255,.35)"/>
+      <rect x="22" y="180" width="156" height="26" rx="8" fill="rgba(255,255,255,.04)"/>
+      <rect x="32" y="190" width="24" height="7" rx="3.5" fill="rgba(255,255,255,.18)"/>
+      <rect x="66" y="190" width="70" height="6" rx="3" fill="rgba(255,255,255,.20)"/>`)
+  }
+];
+// O aparelho decide: no iPhone os toques são outros, e mandar seguir o caminho do Android é o que
+// fazia o corretor concluir que "não dá" (ver bloco acima).
+function cp1149Passos(){
+  return cpEhIOS() ? CP1149_PASSOS_IOS : CP1149_PASSOS_ANDROID;
+}
 
 // v1155 — "COMO INSTALAR" COM DESENHO.
 //
@@ -8712,7 +8824,8 @@ window.cpMostrarComoInstalar = function(){
 };
 
 window.cp1149ComoEnviar = function(passoInicial){
-  let i = Math.min(Math.max(Number(passoInicial)||0, 0), CP1149_PASSOS.length-1);
+  const passos = cp1149Passos();
+  let i = Math.min(Math.max(Number(passoInicial)||0, 0), passos.length-1);
   document.querySelector("#cp1149Modal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "cp1149Modal";
@@ -8725,21 +8838,30 @@ window.cp1149ComoEnviar = function(passoInicial){
     overlay.remove();
   };
   const desenhar = () => {
-    const p = CP1149_PASSOS[i];
-    const ultimo = i === CP1149_PASSOS.length - 1;
+    const p = passos[i];
+    const ultimo = i === passos.length - 1;
     const textoPasso = (typeof p.texto === "function") ? p.texto() : p.texto;
+    const desenhoPasso = (typeof p.desenho === "function") ? p.desenho() : p.desenho;
     card.innerHTML = `
       <div class="small" style="color:var(--muted);font-weight:900;letter-spacing:.04em;text-transform:uppercase">Como enviar sua conversa</div>
       <div style="font-size:19px;font-weight:950;margin:6px 0 6px">${p.titulo}</div>
       <div class="small" style="color:var(--soft);line-height:1.55;margin-bottom:12px">${textoPasso}</div>
-      <div style="display:flex;justify-content:center;margin-bottom:12px">${p.desenho}</div>
+      <div style="display:flex;justify-content:center;margin-bottom:12px">${desenhoPasso}</div>
       <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
-        ${CP1149_PASSOS.map((_,k)=>`<span style="width:${k===i?18:7}px;height:7px;border-radius:9px;background:${k===i?'var(--lime)':'rgba(255,255,255,.22)'};display:inline-block"></span>`).join("")}
+        ${passos.map((_,k)=>`<span style="width:${k===i?18:7}px;height:7px;border-radius:9px;background:${k===i?'var(--lime)':'rgba(255,255,255,.22)'};display:inline-block"></span>`).join("")}
       </div>
       <div style="display:flex;gap:8px">
         ${i>0?`<button type="button" class="btn secondary" id="cp1149Voltar" style="flex:1">Voltar</button>`:`<button type="button" class="btn secondary" id="cp1149Fechar" style="flex:1">Fechar</button>`}
         <button type="button" class="btn" id="cp1149Proximo" style="flex:1.4">${ultimo?'Entendi, vamos lá':'Próximo'}</button>
       </div>`;
+    // v1271 — o último passo do iPhone abre o seletor de arquivo AQUI. Antes o passo a passo
+    // terminava mandando "volte e toque no botão" — e o botão estava atrás do modal, numa tela que
+    // a pessoa ainda ia ter que achar. O clique é síncrono de propósito: o Safari só abre o
+    // seletor dentro do toque do dedo, então fechar o modal primeiro mataria a abertura.
+    card.querySelector("#cp1149EscolherArquivo")?.addEventListener("click", () => {
+      try{ qs("#zipFileInput")?.click(); }catch(_){}
+      fechar();
+    });
     card.querySelector("#cp1149Instalar")?.addEventListener("click", async () => {
       try{ await window.cpInstalarApp?.(); }catch(_){}
       desenhar(); // depois de instalar (ou recusar), o texto se ajusta ao novo estado do aparelho
