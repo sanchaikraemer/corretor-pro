@@ -1,58 +1,72 @@
-# v1275 — Atendimentos mostra o mês inteiro, não só a semana
+# v1275 — o app instalado voltou a procurar versão nova sozinho
 
-Dono, 14/08/2026, com print da tela Atendimentos:
+Dono, 14/08/2026, mandando de novo o print do painel **Seu mês** — com o gráfico ainda mostrando
+sábado e domingo e o título ainda "Clientes atendidos por dia":
 
-> "quero ver o histórico do mes todo e nao da semana nessa parte... todos q atendi a cada dia
-> desde dia 1"
+> "vc ainda nao fez o q mandei"
 
-## O problema
+## O que estava acontecendo
 
-A tela era fixa em **últimos 7 dias**. No dia 14 ele enxergava do dia 8 pra cá e mais nada — o
-resto do mês estava registrado no banco e não tinha onde ser visto. O cabeçalho ("Últimos 7 dias ·
-83 atendimentos") também media a semana, não o mês.
+**A correção estava feita e estava no ar.** A v1273 tirou sábado e domingo do gráfico e mudou o
+título pra "Clientes atendidos por dia útil"; a v1274 saiu depois dela; as duas estavam publicadas.
+O print, porém, mostrava o gráfico antigo — inclusive a legenda "dia 1", que a v1273 já não escreve
+neste mês (agosto de 2026 começa num sábado, então o gráfico abre no dia 3).
+
+Ou seja: o aparelho dele estava rodando uma versão antiga do app e nunca chegava na nova.
+
+## A causa
+
+O app tem duas redes pra se atualizar sozinho. A segunda delas — a que compara o número da versão
+que está na tela com o número que está no servidor — tinha duas limitações que, juntas, viravam
+"nunca mais":
+
+1. ela só era disparada **no carregamento da página**;
+2. ela tinha uma trava de **uma checagem por sessão**.
+
+No navegador isso funciona, porque a pessoa fecha e abre a aba. **No app instalado, não:** o
+aplicativo fica vivo em segundo plano por dias, a sessão nunca termina, e o único carregamento
+aconteceu no dia em que ele abriu o app. Toda atualização publicada depois disso passava batido.
+Ele podia ficar semanas numa versão antiga sem nada avisar — e foi exatamente o que aconteceu.
 
 ## O que mudou
 
-**A lista começa no dia 1 do mês e vai até hoje**, do mais recente pro mais antigo, do mesmo jeito
-de antes: cada dia com o prediozinho da meta, a contagem do dia (`17/20`) e os nomes de todos os
-clientes atendidos naquele dia, clicáveis.
+**A trava deixou de ser "uma vez e pronto" e virou uma trava de tempo:** no máximo uma checagem a
+cada 5 minutos. Isso continua impedindo qualquer recarregamento em cadeia (o motivo de a trava
+existir), mas para de congelar a versão pra sempre.
 
-O cabeçalho passou a nomear o período de verdade: **"Agosto, do dia 1 até hoje · 111 atendimentos ·
-meta 20/dia"**.
+**E a procura voltou a acontecer nos dois momentos que existem num app instalado:** quando ele traz
+o app pra frente (sai do WhatsApp e volta pro Corretor Pro) e quando a internet volta. Nos dois
+casos o app também pede ao service worker que se atualize.
 
-**Fim de semana segue a mesma régua do gráfico do mês (v1273):** sábado ou domingo **sem**
-atendimento não aparece — senão a lista vira um serrote de zeros e parece queda de produção. Fim de
-semana em que ele **trabalhou** continua na lista, porque apagá-lo seria justamente esconder
-trabalho feito.
+Detalhe importante: **nada disso recarrega a tela à toa.** Quem recarrega é a checagem, e só quando
+o servidor realmente tem um número maior que o da tela. O comentário antigo no código dizia que
+checar ao voltar pra aba "causava tela branca" — o que causava aquilo era reiniciar o app toda vez,
+não a comparação em si. A checagem custa uma consulta ao `index.html` e não mexe em nada quando a
+versão já é a atual.
 
-## Por que o layout mudou junto
+As guardas que já existiam continuam intactas e vêm antes de tudo: **nunca** recarrega com uma
+conversa do WhatsApp sendo importada, com uma análise em andamento ou com um compartilhamento na
+fila — perder um ZIP recebido pela metade seria pior do que ficar um pouco na versão anterior.
 
-No computador a tela era uma **grade de 7 colunas** — uma coluna por dia da semana. Com o mês
-inteiro isso viraria 5 fileiras de colunas estreitas, sem nenhuma leitura de "um dia embaixo do
-outro". O formato que o **celular** já usava desde a v910 (uma faixa por dia: prédio pequeno + dia +
-contagem, e os nomes em chips embaixo) virou o formato **único**, igual nos dois.
+## Como o dono vê a diferença
 
-No celular nada mudou de aparência — é exatamente o que o print dele já mostrava, só que agora
-descendo até o dia 1.
+Da próxima publicação em diante, ele não precisa fazer nada: sai do app, volta, e o número lá em
+cima (**Atualização #1275**) já é o novo. Se ainda estiver vendo um número antigo agora, é a versão
+velha ainda rodando — fechar o app de vez e abrir de novo uma última vez resolve, e a partir daí
+esta correção passa a cuidar disso sozinha.
 
 ## Conferência antes de publicar
 
-Regra do CLAUDE.md: mudança que altera o que aparece na tela não sobe só com a suíte verde.
-
-- Chromium headless com o CSS publicado, nos dois tamanhos (celular 393px e computador 1280px),
-  desenhando 14 dias de agosto com dados de teste — inclusive um sábado trabalhado (fica) e dois
-  domingos vazios (somem).
-- Resultado computado conferido: 12 dias desenhados dos 14, `display:flex` em coluna nos dois
-  tamanhos, **nenhuma rolagem horizontal** (`scrollWidth === clientWidth` em 393 e em 1280), prédio
-  de 46px na ponta de cada faixa e os nomes quebrando linha em chips.
-- Suíte completa verde: 23 arquivos + 430 testes.
+- Suíte completa verde: 23 arquivos checados + 430 testes.
+- `tests/v1275-app-instalado-procura-versao-nova.test.mjs` (novo) — trava a trava de tempo (nem
+  curta demais a ponto de recarregar em cadeia, nem longa demais a ponto de perder a atualização do
+  dia), exige a procura ao voltar pra frente e ao voltar a internet, e garante que a guarda da
+  importação em andamento continue vindo antes de qualquer checagem.
+- Sem mudança de layout, CSS ou tela nesta versão — o que mudou é quando o app procura versão nova.
 
 ## Arquivos alterados
 
-- `app.js` — a tela passa a montar o mês inteiro e a esconder só o fim de semana vazio.
-- `styles.css` — a faixa por dia virou o formato único (a grade de 7 colunas saiu).
-- `tests/v1275-atendimentos-mes-inteiro.test.mjs` — teste novo (período, fim de semana e layout).
-- `tests/v867-predio-atendimentos.test.mjs`, `tests/v908-acoes-topo-e-atendimentos-dia.test.mjs`,
-  `tests/v910-atendimentos-limpo.test.mjs`, `tests/v914-fazer-agora-dose-e-fds.test.mjs` — guardas
-  que travavam os 7 dias e as 7 colunas, atualizadas pro formato novo.
+- `app.js` — trava de tempo no lugar da trava de sessão; procura ao voltar pra frente e ao voltar a
+  internet.
+- `tests/v1275-app-instalado-procura-versao-nova.test.mjs` — teste novo.
 - `package.json` / `package-lock.json` — versão 1275.
