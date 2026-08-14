@@ -56,7 +56,9 @@ assert.doesNotMatch(app, /ajustar padrão/, "sem atalho pra um campo que não ex
 // Áudio do WhatsApp já é comprimido: passar DEFLATE de novo gastava segundos de processador do
 // aparelho antes de a importação começar, sem economizar espaço.
 {
-  const fonte = app.match(/async function slimZipKeepingTextAndAudio\(file, onProgress\)\{[\s\S]*?\n\}/)[0];
+  // v1270 — a função ganhou um terceiro argumento (o período, pra escolher o áudio que vai no
+  // envio); o que este bloco guarda continua sendo a compressão, não a assinatura.
+  const fonte = app.match(/async function slimZipKeepingTextAndAudio\(file, onProgress[^)]*\)\{[\s\S]*?\n\}/)[0];
   assert.match(fonte, /compression: \/\\\.txt\$\/i\.test\(path\) \? "DEFLATE" : "STORE"/, "só o texto é compactado");
   assert.match(fonte, /generateAsync\(\{type:"blob", compression:"STORE"\}\)/, "o pacote final não recompacta o áudio");
 }

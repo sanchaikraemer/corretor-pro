@@ -36,7 +36,9 @@ assert.match(bloco, /Teto de áudios do dia atingido/, "explica o teto do dia");
 assert.match(bloco, /Transcrição de áudio indisponível agora/, "explica transcrição indisponível");
 assert.match(bloco, /não pôde ser transcrito|não puderam ser transcritos/, "explica erro na transcrição");
 assert.match(bloco, /primeiroErroAudio/, "e mostra o motivo do primeiro erro quando existe");
-assert.match(app, /janelaHtml \+ semMidiaHtml \+ audioSemTextoHtml \+ incrementalHtml/, "o aviso entra no corpo do resultado da importação");
+// v1270 — entrou o corteZipHtml no meio (aviso de áudio que ficou de fora pra a conversa caber
+// no envio); o que este teste guarda é o aviso de áudio sem transcrição continuar no corpo.
+assert.match(app, /janelaHtml \+ corteZipHtml \+ semMidiaHtml \+ audioSemTextoHtml \+ incrementalHtml/, "o aviso entra no corpo do resultado da importação");
 
 // ── 5. A linha final ("Concluído") — a única que muitas vezes dá tempo de ler — também avisa ───
 assert.match(app, /function cpResumoAudioSemTexto\(result\)/, "existe o resumo curto pra linha final");
