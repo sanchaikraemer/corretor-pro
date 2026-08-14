@@ -73,9 +73,11 @@ assert.match(app, /Atender \+1/, 'botão "Atender +1"');
 assert.match(app, /Final de semana/, 'card mostra "Final de semana"');
 assert.match(css, /\.cp-atender-mais\{/, 'CSS do botão Atender +1');
 
-// 3. Atendimentos no PC: grid de 7 colunas (sem rolagem horizontal) e nomes finos (sem negrito).
-assert.match(css, /\.cp788-days\{display:grid;grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/, 'PC: 7 colunas preenchem a largura (sem rolagem)');
+// 3. Atendimentos: nomes finos (sem negrito) e fonte menor que o resto da faixa.
+// v1275 — a grade de 7 colunas do PC saiu: a tela mostra o MÊS INTEIRO (até 31 dias), e cada dia
+// virou uma faixa na vertical, no celular e no computador. Sem rolagem horizontal do mesmo jeito.
+assert.match(css, /\.cp788-days\{display:flex;flex-direction:column/, 'os dias ficam um embaixo do outro (sem rolagem lateral)');
 assert.match(css, /\.cp788-day-name\{[^}]*font-weight:600/, 'nomes sem negrito');
-assert.match(css, /\.cp788-day-name\{[^}]*font-size:11px/, 'nomes com fonte menor');
+assert.match(css, /\.cp788-day-name\{[^}]*font-size:12px/, 'nomes com fonte menor que o cabeçalho do dia');
 
 console.log('v914-fazer-agora-dose-e-fds: ok');

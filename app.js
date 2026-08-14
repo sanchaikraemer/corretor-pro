@@ -12952,30 +12952,41 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
       if(ultimo) registros.push({lead,evento:ultimo.evento,ts:ultimo.ts});
     }
     registros.sort((a,b)=>b.ts-a.ts||String(a.lead?.name||'').localeCompare(String(b.lead?.name||''),'pt-BR'));
-    // v908 — tela reorganizada POR DIA (últimos 7 dias): cada coluna tem o prediozinho da meta em
-    // cima e, embaixo, os clientes atendidos naquele dia (só o nome — sem "atendido há X" nem produto,
-    // porque o dia já está na coluna).
+    // v908 — tela reorganizada POR DIA: cada dia tem o prediozinho da meta e, junto, os clientes
+    // atendidos naquele dia (só o nome — sem "atendido há X" nem produto, porque o dia já é a linha).
+    //
+    // v1275 — O MÊS INTEIRO, NÃO A SEMANA. Pedido do dono: "quero ver o histórico do mês todo e não
+    // da semana nessa parte... todos q atendi a cada dia desde dia 1". A tela mostrava só os últimos
+    // 7 dias — o resto do mês existia no banco e não tinha onde ser visto.
+    // Fim de semana segue a MESMA régua do gráfico do mês (v1273): sábado/domingo SEM atendimento
+    // não aparece (senão o mês vira um serrote e parece queda de produção); fim de semana em que ele
+    // TRABALHOU continua na lista, porque apagá-lo seria justamente esconder trabalho feito.
     const CP788_DIAS_SEM=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     const hoje0=(typeof inicioDoDiaBR==='function')?inicioDoDiaBR():new Date(new Date().setHours(0,0,0,0));
+    const diasDoMesAteHoje=Math.max(1, hoje0.getDate());
     const perDay=[];
-    for(let i=0;i<7;i++){
+    for(let i=0;i<diasDoMesAteHoje;i++){
       const d=new Date(hoje0); d.setDate(d.getDate()-i);
       const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0');
       const label=i===0?'Hoje':i===1?'Ontem':CP788_DIAS_SEM[d.getDay()];
-      perDay.push({ label, data:`${dd}/${mm}`, itens:[] });
+      perDay.push({ label, data:`${dd}/${mm}`, fds:(d.getDay()===0||d.getDay()===6), itens:[] });
     }
     for(const x of registros){
       let d=null; try{ d = (typeof diasCalendarioBR==='function') ? diasCalendarioBR(new Date(x.ts)) : null; }catch(_){ d=null; }
-      if(d!=null && d>=0 && d<7) perDay[d].itens.push(x);
+      if(d!=null && d>=0 && d<diasDoMesAteHoje) perDay[d].itens.push(x);
     }
-    const totalSemana=perDay.reduce((s,p)=>s+p.itens.length,0);
+    const totalMes=perDay.reduce((s,p)=>s+p.itens.length,0);
+    const diasVisiveis=perDay.filter(p=>p.itens.length>0||!p.fds);
+    let nomeDoMes='';
+    try{ nomeDoMes=hoje0.toLocaleDateString('pt-BR',{ month:'long', timeZone:'America/Sao_Paulo' }); }catch(_){ nomeDoMes=''; }
+    const tituloPeriodo=nomeDoMes?`${nomeDoMes.charAt(0).toUpperCase()}${nomeDoMes.slice(1)}, do dia 1 até hoje`:'Do dia 1 do mês até hoje';
     const CP788_META_DIA = cp788MetaDia();
     box.innerHTML=`<section class="cp788-att-page">
       <header class="cp788-att-head">
-        <div><h2>Atendimentos</h2><p>Últimos 7 dias · ${totalSemana} atendimento${totalSemana===1?'':'s'} · meta ${CP788_META_DIA}/dia</p></div>
+        <div><h2>Atendimentos</h2><p>${esc(tituloPeriodo)} · ${totalMes} atendimento${totalMes===1?'':'s'} · meta ${CP788_META_DIA}/dia</p></div>
       </header>
-      ${totalSemana?`<div class="cp788-days">
-        ${perDay.map((p)=>{
+      ${totalMes?`<div class="cp788-days">
+        ${diasVisiveis.map((p)=>{
           const n=p.itens.length, bateu=n>=CP788_META_DIA;
           const nomes=n?p.itens.map(x=>`<button type="button" class="cp788-day-name" onclick='abrirLead(${JSON.stringify(String(x.lead?.id||''))})'>${esc(x.lead?.name||'Cliente')}</button>`).join(''):'<div class="cp788-day-empty">—</div>';
           return `<div class="cp788-day${bateu?' done':''}">
