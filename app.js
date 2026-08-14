@@ -3418,12 +3418,23 @@ function cp1251Dados(){
       if(idx >= 0 && idx < porDia.length) porDia[idx].add(String(l.id));
     }
   }
+  // v1273 — o gráfico deixa de mostrar sábado e domingo (print do dono, com as barras do fim de
+  // semana circuladas em vermelho): "senão parece q não trabalhei, e realmente, pq é final de
+  // semana, mas então não considere final de semana". Um vale de zeros toda semana lia como queda
+  // de produção — quando é só o fim de semana existindo. Cada dia passa a carregar a data pra que
+  // o desenho saiba o que é fim de semana; a filtragem acontece só na hora de desenhar, então os
+  // números do painel (atendidos no mês, mensagens) continuam contando tudo, inclusive sábado e
+  // domingo — quem trabalhou no fim de semana não perde o atendimento da conta.
+  const diaSemanaBR = new Intl.DateTimeFormat("en-US", { timeZone:"America/Sao_Paulo", weekday:"short" });
   return {
     atendidosHoje: base.filter(ehAtendidoHoje).length,
     atendidosSemana: base.filter(ehAtendidoNaSemana).length,
     atendidosMes: base.filter(ehAtendidoNoMes).length,
     total, enviadas, recebidas,
-    porDia: porDia.map(s => s.size),
+    porDia: porDia.map((s, i) => {
+      const sigla = diaSemanaBR.format(new Date(iniMes + i * 86400000));
+      return { qtd: s.size, dia: i + 1, fds: sigla === "Sat" || sigla === "Sun", hoje: i === porDia.length - 1 };
+    }),
     mesNome: new Intl.DateTimeFormat("pt-BR", { timeZone:"America/Sao_Paulo", month:"long" }).format(new Date()),
     diasNoMes: new Date(new Date(iniMes).getUTCFullYear(), new Date(iniMes).getUTCMonth() + 1, 0).getDate()
   };
@@ -3431,18 +3442,27 @@ function cp1251Dados(){
 
 function cp1251Num(n){ return Number(n || 0).toLocaleString("pt-BR"); }
 
+// v1273 — só dia útil entra no desenho. Sábado e domingo sem atendimento saem: eles não medem
+// produção, medem fim de semana, e o vale de zeros semanal fazia o mês parecer parado. Fim de
+// semana em que o corretor ATENDEU alguém continua aparecendo — apagar isso seria apagar trabalho
+// que existiu, exatamente o contrário do que o dono pediu.
 function cp1251GraficoHTML(porDia){
-  const maior = Math.max(1, ...porDia);
-  const barras = porDia.map((q, i) => {
-    const alt = Math.max(4, Math.round((q / maior) * 100));
+  const dias = porDia.filter(d => !d.fds || d.qtd > 0);
+  if(!dias.length) return "";
+  const maior = Math.max(1, ...dias.map(d => d.qtd));
+  const barras = dias.map((d) => {
+    const alt = Math.max(4, Math.round((d.qtd / maior) * 100));
     // O dia de hoje só acende em coral quando REALMENTE teve atendimento — senão a barrinha
     // mínima (que existe só pra marcar o dia no gráfico) daria a entender que houve movimento.
-    const ultima = i === porDia.length - 1 && q > 0;
-    return `<i class="${ultima ? "cp1251-hoje" : ""}" style="height:${alt}%" title="dia ${i + 1}: ${q} atendido${q === 1 ? "" : "s"}"></i>`;
+    const ultima = d.hoje && d.qtd > 0;
+    return `<i class="${ultima ? "cp1251-hoje" : ""}" style="height:${alt}%" title="dia ${d.dia}: ${d.qtd} atendido${d.qtd === 1 ? "" : "s"}"></i>`;
   }).join("");
+  // A ponta direita só pode dizer "hoje" se hoje estiver DESENHADO. Quando hoje é sábado ou
+  // domingo sem atendimento, ele sai do gráfico — e a legenda passa a nomear o último dia útil.
+  const fim = dias[dias.length - 1];
   return `<div class="cp1251-gr" aria-hidden="true">${barras}</div>
-    <div class="cp1251-gr-leg"><span>dia 1</span><span>hoje</span></div>
-    <p class="cp1251-gr-tit">Clientes atendidos por dia</p>`;
+    <div class="cp1251-gr-leg"><span>dia ${dias[0].dia}</span><span>${fim.hoje ? "hoje" : "dia " + fim.dia}</span></div>
+    <p class="cp1251-gr-tit">Clientes atendidos por dia útil</p>`;
 }
 
 function cp1251LinhaHTML(cor, icone, titulo, sub, valor){

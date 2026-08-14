@@ -61,7 +61,9 @@ assert.match(app, /do dia 1 ao dia \$\{d\.diasNoMes\}/, 'a tela precisa dizer o 
 
 // O gráfico que ele aprovou: um risco por dia do mês, com hoje destacado só se houve atendimento.
 assert.match(app, /function cp1251GraficoHTML\(porDia\)/, 'o gráfico dia a dia precisa existir');
-assert.match(app, /const ultima = i === porDia\.length - 1 && q > 0;/,
+// v1273 — cada dia virou um objeto (carrega a data pra saber o que é fim de semana), então a
+// marca de "hoje" deixou de ser "o último do array" e passou a ser o próprio dia.
+assert.match(app, /const ultima = d\.hoje && d\.qtd > 0;/,
   'o dia de hoje só acende quando REALMENTE teve atendimento — senão a barrinha mínima engana');
 
 // ── 3. ABERTO NO COMPUTADOR, FECHADO NO CELULAR ─────────────────────────────────────────────
