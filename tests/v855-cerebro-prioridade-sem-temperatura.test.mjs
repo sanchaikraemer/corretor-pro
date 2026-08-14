@@ -32,10 +32,20 @@ assert.match(
   /=== INÍCIO DO CÉREBRO COMERCIAL ===\s*\$\{modoPrevia[\s\S]*?MODO PRÉVIA[\s\S]*?:\s*instrucoesCerebroTexto\}/,
   'sem Cérebro, o mesmo lugar precisa receber as instruções de modo prévia — nunca ficar vazio e solto'
 );
+// v1263 — este trecho exigia que o prompt TERMINASSE exatamente em ${timelineText}. A conferência
+// final (7 itens, criada na v1263) entrou DEPOIS da conversa de propósito: ela é a última coisa que
+// a IA lê antes de escrever, e é isso que a faz valer mais que as regras espalhadas no meio do
+// texto. O que este teste protege de verdade continua igual — horário e conversa ficam no conteúdo
+// de entrada, separados do Cérebro, que mora no prompt de sistema.
 assert.match(
   pipeline,
-  /const prompt = `Execute a análise[\s\S]*Data e hora atuais da análise no Brasil:[\s\S]*CONVERSA COMPLETA:[\s\S]*\$\{timelineText\}`/,
+  /const prompt = `Execute a análise[\s\S]*Data e hora atuais da análise no Brasil:[\s\S]*CONVERSA COMPLETA:[\s\S]*\$\{timelineText\}/,
   'Horário e conversa devem permanecer no conteúdo de entrada, separados do Cérebro'
 );
+// E a conferência final tem que ser mesmo a ÚLTIMA coisa do prompt, depois da conversa.
+const posTimeline = pipeline.indexOf('${timelineText}');
+const posConferencia = pipeline.indexOf('CONFERÊNCIA FINAL');
+assert.ok(posConferencia > posTimeline,
+  'a conferência final precisa vir DEPOIS da conversa — é o último item lido antes de a IA escrever');
 
 console.log('v855-cerebro-prioridade-sem-temperatura: ok');
