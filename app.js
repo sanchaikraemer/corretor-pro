@@ -2678,10 +2678,41 @@ function ultimaMsgClientePedeResposta(l){
 function limiarRetomada(l){
   return cpDiasDescansoPosAtendimento();
 }
+// v1264 — quando a análise deste lead foi gerada (mesmos carimbos que o cabeçalho "Última
+// análise" mostra, via cp865UltimaAnaliseISO). Serve pra saber se um compromisso escrito EM
+// TEXTO na análise ("hoje", "amanhã") já foi tratado por um atendimento posterior.
+function cpTsUltimaAnalise(l){
+  try{
+    const iso = (typeof cp865UltimaAnaliseISO === 'function') ? cp865UltimaAnaliseISO(l, l?.analysis) : '';
+    const t = iso ? Date.parse(iso) : NaN;
+    return Number.isFinite(t) ? t : 0;
+  }catch(_){ return 0; }
+}
 function emJanelaDeEspera(l){
-  if(lembreteVencido(l)) return false;
+  // v1264 — COMPROMISSO JÁ CUMPRIDO NÃO FURA MAIS O DESCANSO (caso real do dono: "Bocorni").
+  //
+  // Estas duas linhas existem pra um motivo legítimo: compromisso marcado vence o descanso (não
+  // faz sentido segurar um cliente que combinou algo pra hoje só porque foi atendido anteontem).
+  // O problema é que elas nunca perguntavam se aquele compromisso JÁ TINHA SIDO ATENDIDO — e um
+  // lembrete com data passada fica "vencido" pra sempre. Resultado no Bocorni: lembrete de 10/08,
+  // atendido em 10/08 (cópia da sugestão), descanso configurado em 7 dias — e mesmo assim ele
+  // voltava pro "Fazer agora" no dia seguinte, e todo dia depois disso, porque o lembrete velho
+  // furava o descanso antes de a regra dos 7 dias sequer ser consultada.
+  //
+  // É exatamente o mesmo defeito que a v1213 corrigiu na Agenda ("atendi no dia marcado; por que
+  // ainda está atrasado?") — só que lá o remendo entrou apenas em cp786CompromissoAtrasado, e o
+  // descanso ficou com a régua antiga. Agora as duas telas usam a MESMA peça (cpCompromissoJaAtendido:
+  // atendimento registrado no dia do compromisso ou depois = compromisso cumprido).
+  const lemTs = lembreteTs(l);
+  const jaAtendido = (ts) => (typeof cpCompromissoJaAtendido === 'function') ? cpCompromissoJaAtendido(l, ts) : false;
+  if(lembreteVencido(l) && !jaAtendido(lemTs)) return false;
   const aps = l.analysis?.confirmedAppointments;
-  if(Array.isArray(aps) && aps.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando||"").toLowerCase()))) return false;
+  // v1264 — mesma correção pro "hoje/amanhã". Esse texto vem da ANÁLISE e não envelhece sozinho:
+  // "amanhã" escrito numa análise de 10/08 continuava dizendo "amanhã" uma semana depois, furando
+  // o descanso pra sempre. Se existe atendimento registrado no dia daquela análise ou depois, o
+  // compromisso dela já foi tratado.
+  if(Array.isArray(aps) && aps.some(ap => /\b(hoje|amanh[ãa])\b/.test(String(ap.quando||"").toLowerCase()))
+     && !jaAtendido(cpTsUltimaAnalise(l))) return false;
   // v1018 — pedido explícito e repetido do dono, com casos reais (ex.: "Adão — marquei
   // atendimento quarta dia 22, ainda sim apresenta 26 dias"): a espera conta a partir do ÚLTIMO
   // ATENDIMENTO MARCADO (botão "Marcar atendimento", observação, ligação, visita, proposta —
