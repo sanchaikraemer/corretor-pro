@@ -39,14 +39,18 @@ assert.ok(soTexto.length <= 90, `legenda passou de 90 caracteres (tem ${soTexto.
   const trecho = appSrc.slice(iniTrecho, fimTrecho);
 
   const cpHomeLeadRow = (l) => `<button class="cp-hoje-row" data-id="${l.id}"></button>`;
+  // v1278 — a lista da fila que vem abaixo (filaAbaixoHtml) é montada logo antes deste trecho;
+  // aqui ela entra como stub, porque o que este teste guarda é a ORDEM legenda → lista do dia.
   const fn = new Function(
     "dose", "disponiveisParaPuxar", "metaHoje", "filaRanqueada", "items",
     "cpHomeLeadRow", "mensagensDoClienteRecente", "cpAtendidosHojeTotal", "cpFimDeSemana", "CP_DOSE_DIA",
+    "filaAbaixoHtml",
     `${trecho}\nreturn top3Html;`
   );
   const html = fn(
     [{ id: "1" }, { id: "2" }], [], 2, [{ id: "1" }, { id: "2" }], [],
-    cpHomeLeadRow, () => 3, () => 0, () => false, 10
+    cpHomeLeadRow, () => 3, () => 0, () => false, 10,
+    () => ""
   );
   const posLegenda = html.indexOf("cp-hoje-legenda");
   const posLista = html.indexOf("cp-hoje-list");

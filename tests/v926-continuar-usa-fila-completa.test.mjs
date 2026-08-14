@@ -22,6 +22,8 @@ const trecho = app.slice(ini, fim);
 
 function rodar({ fila, meta, extra }){
   const state = { fazerAgoraExtra: extra };
+  // v1278 — a Home lista o resto da fila embaixo, em blocos (CP1278_FILA_PASSO por vez).
+  const CP1278_FILA_PASSO = 20;
   const cpFilaFazerAgora = () => fila;
   const cpFazerAgoraDose = () => meta;
   const CP_DOSE_DIA = 10;
@@ -39,15 +41,18 @@ assert.equal(r1.disponiveisParaPuxar.length, 2, 'o resto da fila fica disponíve
 assert.match(r1.top3Html, /cp-hoje-list/, 'renderiza a lista compacta dos leads do dia');
 assert.doesNotMatch(r1.top3Html, /Nenhum lead prioritário|Meta de hoje batida/, 'nunca mais o card amarelo que o dono mandou tirar');
 
-// "Atender mais um" (extra=1) puxa o próximo da fila além da meta.
+// O extra da outra tela ("Atender +1" do card "Fazer agora") puxa o próximo da fila além da meta.
 const r2 = rodar({ fila, meta: 3, extra: 1 });
 assert.deepEqual(r2.dose.map(l=>l.id), ['a','b','c','d'], 'o extra puxa o próximo da fila ranqueada');
-assert.match(r2.top3Html, /cp-atender-mais[\s\S]*cpAtenderMaisUmHoje\(\)/, 'mostra o botão "Atender mais um" quando ainda há fila');
+// v1278 — sobrando fila, ela vem LISTADA embaixo (antes era um botão que revelava um por clique).
+assert.match(r2.top3Html, /cp-fila-titulo[\s\S]*<row id="e">/, 'o resto da fila aparece listado embaixo da lista do dia');
+assert.doesNotMatch(r2.top3Html, /cpAtenderMaisUmHoje/, 'sem o botão "Atender mais um" (removido na v1278)');
 
-// Meta já batida (0), mas ainda há gente elegível → convite discreto, sem card grande.
+// Meta já batida (0), mas ainda há gente elegível → parabéns + a fila inteira listada abaixo.
 const r3 = rodar({ fila, meta: 0, extra: 0 });
 assert.equal(r3.dose.length, 0, 'meta 0 = dose vazia');
-assert.match(r3.top3Html, /cp-hoje-done[\s\S]*cpAtenderMaisUmHoje/, 'meta batida mostra convite discreto, não card amarelo');
+assert.match(r3.top3Html, /cp-hoje-done/, 'meta batida mostra o convite discreto, não card amarelo');
+fila.forEach(l => assert.match(r3.top3Html, new RegExp(`<row id="${l.id}">`), `com a meta batida, ${l.id} precisa aparecer na lista da fila`));
 
 // Fila realmente vazia → linha neutra, sem box amarelo.
 const r4 = rodar({ fila: [], meta: 5, extra: 0 });
