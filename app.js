@@ -3128,6 +3128,10 @@ window.copiarMensagemLead = function(id){
 // dados que o app não sabe de verdade — pra montar diagnóstico. insightFocoHTML/temVisitaLead/
 // leadsRaioX/abrirRaioX apagados junto.
 
+// v1278 — quantos clientes da fila a Home mostra por vez embaixo da lista do dia (e quantos
+// entram a cada clique em "Mostrar mais").
+const CP1278_FILA_PASSO = 20;
+
 function renderBotoesHome(){
   const foco = qs("#leadFocoArea");
   if(!foco) return;
@@ -3183,11 +3187,29 @@ function renderBotoesHome(){
   let filaRanqueada = typeof cpFilaFazerAgoraComResgates === 'function' ? cpFilaFazerAgoraComResgates(items)
     : (typeof cpFilaFazerAgora === 'function' ? cpFilaFazerAgora(items) : []);
   const metaHoje = typeof cpFazerAgoraDose === 'function' ? cpFazerAgoraDose(items) : (typeof cpMetaAtendimentosDia==='function'?cpMetaAtendimentosDia():10);
-  // "Atender mais um" (state.fazerAgoraExtra) puxa além da meta, sem esperar o dia seguinte.
+  // "Atender +1" da lista do card "Fazer agora" (state.fazerAgoraExtra) puxa além da meta, sem
+  // esperar o dia seguinte — a Home respeita esse contador pra as duas telas mostrarem o mesmo.
   const extraHoje = Math.max(0, Number(state.fazerAgoraExtra||0));
   const quantosMostrar = Math.max(0, metaHoje) + extraHoje;
   const dose = filaRanqueada.slice(0, quantosMostrar);
   const disponiveisParaPuxar = filaRanqueada.slice(dose.length);
+  // v1278 — pedido do dono, olhando a Home com a meta do dia já batida: no lugar do botão
+  // "Atender mais um" (que revelava UM cliente por clique e deixava o resto da tela vazio), o
+  // RESTO DA FILA aparece listado logo abaixo, no mesmo formato da lista do dia — é só clicar em
+  // quem ele quiser atender. O botão que sobrou não puxa mais "um": ele mostra o próximo BLOCO da
+  // fila (CP1278_FILA_PASSO por vez), pra Home não nascer com 100 linhas no celular.
+  const limiteFila = Math.max(CP1278_FILA_PASSO, Number(state.cp1278FilaLimite||CP1278_FILA_PASSO));
+  const filaAbaixoHtml = (lista) => {
+    if(!lista.length) return "";
+    const visiveis = lista.slice(0, limiteFila);
+    const maxMsgsFila = visiveis.reduce((m,l)=>Math.max(m, (typeof mensagensDoClienteRecente==='function'?mensagensDoClienteRecente(l):0)), 1);
+    const restam = lista.length - visiveis.length;
+    return `<div class="cp-fila-titulo">Na fila · ${lista.length} ${lista.length===1?"cliente":"clientes"} · por prioridade</div>`
+      + `<div class="cp-hoje-list">${visiveis.map(l => cpHomeLeadRow(l, maxMsgsFila)).join("")}</div>`
+      + (restam
+          ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpMostrarMaisFilaHoje()">Mostrar mais ${Math.min(restam, CP1278_FILA_PASSO)} · faltam ${restam}</button></div>`
+          : "");
+  };
   let top3Html;
   if(dose.length){
     // Lista compacta: um lead embaixo do outro, 1 coluna, sem quebra lateral (opção 1 + lista
@@ -3211,16 +3233,18 @@ function renderBotoesHome(){
     // pra caber em uma linha só e o texto fica junto do que explica.
     top3Html = `<div class="cp-hoje-legenda">Barra/número: mensagens do cliente (90 dias). "há Xd": dias sem contato.</div>`
       + `<div class="cp-hoje-list">${dose.map(l => cpHomeLeadRow(l, maxMsgsDose)).join("")}</div>`
-      + (disponiveisParaPuxar.length
-          ? `<div class="cp-hoje-mais-wrap"><button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um · ${disponiveisParaPuxar.length} na fila</button></div>`
-          : "");
+      + filaAbaixoHtml(disponiveisParaPuxar);
   } else if(metaHoje === 0 && filaRanqueada.length){
     // Já atendeu a dose de hoje, mas ainda tem gente elegível. Sem card grande — convite discreto.
     // v981 — mostrava sempre CP_DOSE_DIA (fixo em "10"), então quem passava da meta (atendia 11,
     // 12...) continuava vendo "você já atendeu os 10 de hoje" parado, como se tivesse travado.
     // Mostra o total real de hoje (mesma contagem do banner da Home, cpAtendidosHojeTotal).
     const atendidosHojeReal = typeof cpAtendidosHojeTotal === 'function' ? cpAtendidosHojeTotal(items) : CP_DOSE_DIA;
-    top3Html = `<div class="cp-hoje-done">Você já atendeu ${atendidosHojeReal} hoje. 👏 <button type="button" class="cp-atender-mais" onclick="cpAtenderMaisUmHoje()">Atender mais um</button></div>`;
+    // v1278 — a frase de parabéns continua, mas embaixo dela vem a FILA listada (era só um botão
+    // "Atender mais um" e um tampão de tela vazia): com a meta batida, quem quiser seguir escolhe
+    // o próximo cliente na lista, sem clicar pra revelar de um em um.
+    top3Html = `<div class="cp-hoje-done">Você já atendeu ${atendidosHojeReal} hoje. 👏 Quer seguir? É só escolher na lista abaixo.</div>`
+      + filaAbaixoHtml(disponiveisParaPuxar);
   } else {
     // Fila realmente vazia (fim de semana, ou ninguém elegível agora). Uma linha neutra, sem box.
     // v1091 — em dia sem fila esta caixa NÃO repete o aviso: a saudação, poucos centímetros acima
@@ -3277,6 +3301,8 @@ function renderBotoesHome(){
       /* v945 introduziu uma 2ª linha (data-exp) pro motivo do ranking, reformatada em v972/v974 —
          v975 tirou o motivo da Home de vez (pedido do dono: já existe dentro do lead, repetir
          aqui só poluía). Linha voltou a ser sempre de 1 linha só; sem essas regras. */
+      /* v1278 — título da fila que agora vem listada embaixo da lista do dia. */
+      .cp-fila-titulo{font-size:10.5px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
       .cp-hoje-mais-wrap{text-align:center;margin:2px 0 6px}
       .cp-atender-mais{border:1px solid rgba(255,98,88,.4);background:rgba(255,98,88,.07);color:var(--accent);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;cursor:pointer}
       .cp-atender-mais:hover{background:rgba(255,98,88,.13)}
@@ -3349,11 +3375,15 @@ function renderBotoesHome(){
 // v925 — "Atender mais um": puxa mais um lead da fila além da meta batida de hoje (mesma
 // variável de sessão do botão "Atender +1" de abrirFazerAgora — clicar em qualquer um dos dois
 // lugares soma no mesmo contador, então ficam sempre em sincronia).
-function cpAtenderMaisUmHoje(){
-  state.fazerAgoraExtra = Math.max(0, Number(state.fazerAgoraExtra||0)) + 1;
+// v1278 — cpAtenderMaisUmHoje (o "Atender mais um" da Home, que revelava UM cliente por clique)
+// foi REMOVIDA: a Home agora lista o resto da fila embaixo, e o botão que sobrou só abre o
+// próximo BLOCO dessa lista. O botão "Atender +1" da lista do card "Fazer agora"
+// (abrirFazerAgora) segue existindo com o contador dele (state.fazerAgoraExtra), intocado.
+function cpMostrarMaisFilaHoje(){
+  state.cp1278FilaLimite = Math.max(CP1278_FILA_PASSO, Number(state.cp1278FilaLimite||CP1278_FILA_PASSO)) + CP1278_FILA_PASSO;
   renderBotoesHome();
 }
-window.cpAtenderMaisUmHoje = cpAtenderMaisUmHoje;
+window.cpMostrarMaisFilaHoje = cpMostrarMaisFilaHoje;
 
 
 // v1268 (2ª passada) — buildDesempenhoInsightsHTML saiu junto com o modal de insights que ela

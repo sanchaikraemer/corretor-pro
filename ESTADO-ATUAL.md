@@ -86,7 +86,7 @@ pessoa com dois dias/horários concretos; e é proibido contar as tentativas pro
 11 da conferência final**. O código só conta e informa — nenhuma mensagem é reescrita. Ver
 `NOTAS-v1277.md`._
 
-_**v1278 — quando o cliente já disse o que quer, a busca é trabalho do corretor.** O ângulo
+_**v1279 — quando o cliente já disse o que quer, a busca é trabalho do corretor.** O ângulo
 "maisSuave" (a sugestão nº 2 da tela) deixou de mandar "faça a pergunta que falta" — ele só pode
 carregar pergunta inédita e emendada na entrega. Entraram três regras no pedido enviado à IA: o
 cliente que já entregou o critério recebe condução e encontro (o que falta vira pauta do encontro,
@@ -94,7 +94,7 @@ e opções são duas ou três escolhidas, nunca a carteira inteira); **objeção
 resolve** (prazo de entrega, local, tipologia) troca o produto em vez de insistir nele; e o que o
 cliente contou de si (idade, saúde, fase da vida) guia a escolha mas **não volta escrito como
 etiqueta** ("pensando na sua faixa de idade"). Junto veio o **item 12 da conferência final**. Ver
-`NOTAS-v1278.md`._
+`NOTAS-v1279.md`._
 
 ## 1. Arquitetura
 

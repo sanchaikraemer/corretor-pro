@@ -42,11 +42,10 @@ const lista = depois.replace(/\s+/g, ' ');
 // v1267 — entrou o oitavo (chamar pra ver em vez de mandar mais material).
 // v1271 — entraram o nono (retomar a pausa que o próprio cliente marcou) e o décimo (o pedido que
 // partiu do próprio cliente). v1277 — entrou o décimo primeiro (a oferta que o cliente já ignorou
-// não pode voltar reescrita). v1278 — entrou o décimo segundo (devolver o trabalho pro cliente:
+// não pode voltar reescrita). v1279 — entrou o décimo segundo (devolver o trabalho pro cliente:
 // pedir critério que ele já deu, insistir no imóvel que ele recusou por um motivo que o imóvel não
 // muda, ou devolver a idade dele como etiqueta). O número é conferido de propósito: a lição da
-// v1263 é que esta lista
-// só funciona enquanto for CURTA. Se um dia ela passar de uma dúzia, o problema voltou a ser o
+// v1263 é que esta lista só funciona enquanto for CURTA. Se um dia ela passar de uma dúzia, o problema voltou a ser o
 // paredão, não a regra que falta.
 const itens = depois.match(/^\s*\d{1,2}\. /gm) || [];
 assert.equal(itens.length, 12, `a conferência precisa ter os 12 itens — achei ${itens.length}`);

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { analyzeWithBrain } from '../api/_pipeline.js';
 
-// v1278 — o print do dono de 14/08/2026 (lead Leila, Renaissance), comparado com o que outra IA
+// v1279 — o print do dono de 14/08/2026 (lead Leila, Renaissance), comparado com o que outra IA
 // sugeriu para a MESMA conversa.
 //
 // A conversa:
@@ -169,4 +169,4 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 assert.ok(!/limparFrasesProibidas|melhorLimpa|construirMensagensDeterministicasCerebro/.test(src),
   'nenhuma cirurgia no texto da IA pode ter voltado junto com estas regras');
 
-console.log('v1278-cliente-ja-disse-o-que-quer: ok');
+console.log('v1279-cliente-ja-disse-o-que-quer: ok');
