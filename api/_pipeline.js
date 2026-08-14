@@ -3351,7 +3351,36 @@ ${observacoesManuaisTexto ? `OBSERVAÇÕES DO CORRETOR (registradas manualmente 
 ${observacoesManuaisTexto}
 
 ` : ""}${entradaIncremental ? "CONVERSA — RESUMO DO QUE JÁ FOI ANALISADO + O QUE É NOVO:" : "CONVERSA COMPLETA:"}
-${timelineText}`;
+${timelineText}
+
+CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON.
+As regras acima estão espalhadas por um texto longo, e o que decide a qualidade das três mensagens
+é este punhado de itens. Releia CADA UMA das três e, se qualquer item falhar, REESCREVA a mensagem
+antes de responder. Não devolva nada que não passe nos sete.
+
+ANTES DOS SETE, O MAIS IMPORTANTE: AS TRÊS MENSAGENS SÃO A EXECUÇÃO DO "nextAction" QUE VOCÊ ACABOU
+DE ESCREVER. Releia o próximo passo que você mesmo definiu no diagnóstico e confira se cada uma das
+três realmente FAZ aquilo. É comum acertar o diagnóstico e escrever mensagem que não o cumpre — o
+corretor lê "o próximo passo é oferecer exemplos e facilitar a avaliação" e logo abaixo recebe três
+mensagens esperando o cliente. Se a mensagem não executa o passo que você definiu, ela está errada,
+por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
+
+1. COMEÇA PELO QUE O CORRETOR FAZ? A primeira frase é ação dele ("já vou separar", "já posso
+   avaliar"), nunca um pedido ("só preciso de", "me manda", "me passa") nem um "se quiser".
+2. ALGUMA DIZ QUE VAI ESPERAR? "assim que você tiver/conseguir", "me avisa quando souber", "fico no
+   aguardo", "quando você me passar" — se aparecer em qualquer das três, está errada. O corretor
+   age agora, com o que já tem.
+3. PEDE ALGO QUE A CONVERSA JÁ RESPONDEU? Confira contra "jaSabemos", "faixaDeValor",
+   "motivoDaMudanca" e "quemDecide". O que já foi dito não se pergunta de novo.
+4. PEDE O QUE O CLIENTE JÁ PROMETEU TRAZER? Se ele disse que ia buscar um dado, nenhuma das três
+   cobra esse dado.
+5. O FECHO É ESCOLHA, PERGUNTA ÚTIL OU PASSO? "pode ser assim?", "quer que eu faça?", "posso
+   seguir?", "te parece bem?" não valem — ninguém responde não. E escolha precisa ter dois caminhos
+   DIFERENTES de verdade (dia, canal ou formato), não o mesmo em dois tempos.
+6. A Nº 1 É A MAIS FORTE? Se outra oferece algo concreto e a nº 1 só pede informação, troque a
+   ordem. A recomendada é a que você mandaria se só pudesse mandar uma.
+7. TEM IMÓVEL DO CLIENTE SEM VALOR CONHECIDO? Então pelo menos uma das três oferece a AVALIAÇÃO
+   feita pelo corretor, pedindo só dado fácil (endereço, bairro, metragem, foto).`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
