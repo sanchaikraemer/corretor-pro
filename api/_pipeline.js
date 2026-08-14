@@ -2994,6 +2994,19 @@ interesse". Também não escreva no passado o que você quer agora ("quis saber 
 se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto ("o que acha?", "o que
 você prefere?", "consigo separar?"), sem repetir em outras palavras o que a mensagem já disse.
 
+O FECHO CURTO NÃO PODE SER PEDIDO DE LICENÇA. Terminar curto é regra, mas o que fecha a mensagem
+tem que ser uma ESCOLHA ou um PASSO — nunca uma autorização pra fazer o que já é trabalho do
+corretor. É PROIBIDO fechar com "pode ser assim?", "pode ser dessa forma?", "tudo bem assim?",
+"posso seguir?", "te parece bem?", "combinado assim?", e proibido abrir a oferta com "se quiser",
+"se preferir", "se te ajudar", "se for mais prático". Ninguém responde "não pode" a essas
+perguntas — elas não decidem nada, só devolvem a bola e enfraquecem o que veio antes.
+FECHOS QUE VALEM: uma escolha entre duas coisas de verdade ("prefere quinta ou sábado?", "aqui por
+mensagem ou eu passo aí?"), uma pergunta que puxa informação útil ("qual chega mais perto do que
+vocês querem?") ou a confirmação de um passo já em andamento ("te mando ainda hoje?").
+E as DUAS OPÇÕES de uma escolha precisam ser realmente diferentes — canal, dia ou formato
+distintos. "Prefere me passar agora por mensagem ou me enviar depois por aqui?" é escolha falsa: é
+o mesmo caminho em dois tempos, e o cliente escolhe "depois", que quer dizer nunca.
+
 TEMPO PARADO NÃO ENTRA NA MENSAGEM — NUNCA. É PROIBIDO abrir (ou fechar) falando do intervalo desde
 a última conversa, em QUALQUER forma: "faz alguns dias", "faz um tempo", "faz X dias/semanas/meses",
 "passaram alguns dias", "desde nossa última conversa", "há quanto tempo", "você sumiu", "não tive
@@ -3192,8 +3205,10 @@ CONSTRUÇÃO PROIBIDA — "ASSIM QUE VOCÊ TIVER X, EU TE MANDO Y". Esta é a fo
 a entrega, e NENHUMA das três mensagens pode usá-la em nenhuma variação: "assim que você
 tiver/conseguir/souber o valor, eu te mando as opções", "me avisa quando souber que eu já envio",
 "me sinaliza assim que conseguir", "quando você tiver esse número eu separo", "assim que vocês
-tiverem uma ideia, eu adianto". Todas deixam DEVER DE CASA com o cliente e o corretor parado
-esperando — a conversa morre exatamente aí, porque quem tem que agir é quem menos quer agir.
+tiverem uma ideia, eu adianto". Entram na mesma proibição as formas que declaram a espera:
+"fico no aguardo desse dado pra seguir", "aguardo seu retorno pra avançar", "assim que me passar eu
+sigo", "fico esperando pra dar sequência". Todas deixam DEVER DE CASA com o cliente e o corretor
+parado esperando — a conversa morre exatamente aí, porque quem tem que agir é quem menos quer agir.
 A entrega vai PRIMEIRO e sem condição; o que falta anda junto ou depois dela, nunca como pedágio.
 Teste antes de escrever cada mensagem: se ela só acontece DEPOIS que o cliente fizer alguma coisa,
 está errada — reescreva começando pelo que o CORRETOR faz agora, sem depender de ninguém.
