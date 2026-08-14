@@ -34,12 +34,20 @@ assert.equal(
   'sem atendimento, usa daysSinceClientReply'
 );
 
-// 3. Atendimento ANTIGO não zera um lead que voltou a esfriar: pega o toque mais recente.
+// 3. v1266 — "último contato é último atendimento" (ordem do dono, 13/08/2026). Antes esta função
+// devolvia o MENOR entre mensagem e atendimento, então uma mensagem recente do cliente fazia o
+// número despencar mesmo com o corretor sem tocar no cliente há anos. Agora, havendo atendimento
+// registrado, é ele que conta — o número diz há quanto tempo o CORRETOR não trabalha esse cliente.
 const antigo = {
   daysSinceClientReply: 3,
   analysis: { aprendizado: { eventos: [{ evento: 'contato_manual', quando: '2020-01-01T12:00:00Z' }] } }
 };
-assert.equal(diasParado(antigo), 3, 'com mensagem mais recente que o atendimento, usa a mensagem');
+// Contado no calendário de Brasília, que é o fuso do app inteiro (perto da meia-noite em UTC a
+// data civil daqui e a de lá são dias diferentes — foi assim que este teste pegou um "off by one").
+const hojeBR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+const esperado = Math.round((Date.parse(hojeBR) - Date.parse('2020-01-01')) / 86400000);
+assert.equal(diasParado(antigo), esperado,
+  'com atendimento registrado, o número é o do atendimento — mensagem do cliente não zera o contador');
 
 // 4. Lead sem nenhum sinal de data → Infinity (nunca tocado), ainda tratável pelo >=7.
 assert.equal(diasParado({}), Infinity, 'sem dado de data nenhum, retorna Infinity');

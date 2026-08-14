@@ -2228,15 +2228,23 @@ function ultimoAtendimentoTs(l){
 // lead atendido HOJE continuava aparecendo "parado 144d" e caindo em "Oportunidades
 // esquecidas"/Raio-X, porque só a idade da última mensagem era levada em conta. Retorna
 // Infinity quando não há nenhum sinal de data (nunca tocado).
+// v1266 — ÚLTIMO CONTATO É O ÚLTIMO ATENDIMENTO (palavras do dono, 13/08/2026).
+//
+// Antes esta função devolvia o MENOR entre "dias desde a última mensagem" e "dias desde o último
+// atendimento". Parece inofensivo, mas fazia o contrário do que ele pediu: cliente que ele atendeu
+// há 10 dias e que mandou uma mensagem ontem aparecia como "parado há 1 dia" — a conversa mandando
+// no número, não o trabalho dele. Agora existe UMA fonte: se há atendimento registrado, o número é
+// dele, ponto. Só quando NÃO existe atendimento nenhum é que a conversa entra — porque aí é a única
+// data que existe. É a mesma régua que a linha do cliente já usa desde a v1053 ("há Xd"), e a mesma
+// do descanso desde a v1052.
 function diasParado(l){
-  let dias = Number(l?.daysSinceClientReply != null ? l.daysSinceClientReply : l?.daysSinceLastInteraction);
-  if(!Number.isFinite(dias)) dias = Infinity;
   const atTs = ultimoAtendimentoTs(l);
   if(atTs){
     const dAt = diasCalendarioBR(atTs);
-    if(dAt != null && Number.isFinite(dAt)) dias = Math.min(dias, dAt);
+    if(dAt != null && Number.isFinite(dAt)) return dAt;
   }
-  return dias;
+  const dias = Number(l?.daysSinceClientReply != null ? l.daysSinceClientReply : l?.daysSinceLastInteraction);
+  return Number.isFinite(dias) ? dias : Infinity;
 }
 
 // ─── v1113 — CADÊNCIA DO CLIENTE QUE NUNCA RESPONDEU (10 retomadas em 6 meses) ────────────────
@@ -5781,14 +5789,18 @@ function renderLeadFoco(lead){
     // São Paulo deslocava 3h. Fallback pro campo antigo quando não há msg (regra da v887,
     // restaurada — a v934 tinha removido essa metalinha a pedido, mas ela é informação que o
     // corretor precisa pra saber se o cliente respondeu depois da análise).
-    // v1265 — usa a última mensagem EXIBIDA (inclui a que o corretor mandou pelo app). Antes esta
-    // linha dizia "Última mensagem — 05/05" enquanto o histórico logo abaixo mostrava uma mensagem
-    // de 28/07 no topo — duas datas diferentes na mesma tela, pro mesmo cliente.
-    const ultimaMsgReal=(typeof cp1265UltimaMensagemExibida==='function')?cp1265UltimaMensagemExibida(lead):null;
-    const ultimaMsgEm=(ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || '');
-    // De quem foi essa última mensagem — sem isso, ver a data da PRÓPRIA mensagem no lugar onde ele
-    // procura "o cliente respondeu?" seria trocar uma confusão por outra.
-    const ultimaMsgQuem=(ultimaMsgReal&&ultimaMsgReal.m)?(ultimaMsgReal.falante==='contato'?' (do cliente)':' (sua)'):'';
+    // v1266 — ÚLTIMO CONTATO É O ÚLTIMO ATENDIMENTO (ordem do dono). Esta linha era "Última
+    // mensagem" e vinha da conversa: na cliente "Dani De Sm" ela dizia 05/05 enquanto o histórico
+    // logo abaixo abria com a mensagem de 28/07 que ele mesmo mandou pelo app. Agora a linha mostra
+    // o ÚLTIMO ATENDIMENTO registrado — a data que manda em todo o resto do app (descanso, fila,
+    // "parado há"). Cliente que nunca foi atendido não tem essa data: aí, e só aí, a linha mostra a
+    // última mensagem da conversa, que é a única que existe.
+    const ultimoAtTs=(typeof ultimoAtendimentoTs==='function')?ultimoAtendimentoTs(lead):0;
+    const ultimaMsgReal=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(lead):null;
+    const ultimaMsgEm=ultimoAtTs
+      ? cp705FormatDateTime(new Date(ultimoAtTs).toISOString())
+      : ((ultimaMsgReal&&ultimaMsgReal.m)?cp704DataHora(ultimaMsgReal.m):cp705FormatDateTime(lead.lastInteractionAt || lead.lastActivityAt || lead.lastInteraction || ''));
+    const ultimaMsgRotulo=ultimoAtTs?'Último atendimento':'Última mensagem';
     const analiseEm=cp705FormatDateTime(cp865UltimaAnaliseISO(lead, a));
     const rel=cp704Text(mc?.relacionamento?.status || 'Ativo');
     const urg=cp704Text(mc?.acao?.urgencia || mc?.acao?.prioridade || 'Média');
@@ -5843,7 +5855,7 @@ function renderLeadFoco(lead){
           <h1>${escapeHtml(lead.name||'Contato')}</h1>
           <div class="cp704-mainrow"><div class="cp704-situation">${cp704BarraInteresse(lead)}<p>${escapeHtml(cp705SanitizeFactText(imped,lead))}</p></div></div>
           ${analiseEm?`<div class="cp704-metaline">${escapeHtml(`Última análise — ${analiseEm}`)}</div>`:`<div class="cp704-metaline">Sem data registrada</div>`}
-          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`Última mensagem — ${ultimaMsgEm}${ultimaMsgQuem}`)}</div>`:''}
+          ${ultimaMsgEm?`<div class="cp704-metaline">${escapeHtml(`${ultimaMsgRotulo} — ${ultimaMsgEm}`)}</div>`:''}
         </section>
         <section class="cp704-card cp704-obscard">
           <div class="cp704-card-title"><h2>Registrar observação</h2></div>
@@ -10061,35 +10073,11 @@ function cp786UltimaMensagemReal(l){
   }
   return {m:null,i:-1,ts:0,falante:'desconhecido'};
 }
-// v1265 — a última mensagem MOSTRADA no cabeçalho do cliente tem que ser a mesma que aparece no
-// topo do histórico logo abaixo dela.
-//
-// cp786UltimaMensagemReal (acima) ignora tudo que tem source "manual" — o que está certo pra
-// observação, ligação e visita (não são mensagens), mas errado pra "Mensagem enviada (você)": essa
-// é uma mensagem que o corretor REALMENTE mandou, criada quando ele copia a sugestão. Resultado no
-// caso da "Dani De Sm": o cabeçalho dizia "Última mensagem — 05/05" e o histórico logo abaixo abria
-// com a mensagem de 28/07. Aqui a mensagem enviada volta pra conta — e só aqui, de propósito: a
-// CATEGORIA do cliente (quem está esperando quem) continua olhando só conversa do WhatsApp, que é
-// a regra da casa desde a v1189.
-function cp1265UltimaMensagemExibida(l){
-  const base=(typeof cp786UltimaMensagemReal==='function')?cp786UltimaMensagemReal(l):{m:null,i:-1,ts:0,falante:'desconhecido'};
-  const msgs=Array.isArray(l?.recentMessages)?l.recentMessages:[];
-  let enviada=null;
-  for(let i=msgs.length-1;i>=0;i--){
-    const m=msgs[i];
-    if(String(m?.type||'').toLowerCase()!=='mensagem_enviada') continue;
-    if(!String(m?.text||'').trim()) continue;
-    enviada={m,i,ts:(typeof cp786MensagemTs==='function')?cp786MensagemTs(m):0,falante:'corretor'};
-    break;
-  }
-  if(!enviada) return base;
-  if(!base?.m) return enviada;
-  // Sem data confiável dos dois lados, vale a ordem do histórico (é a ordem que a tela mostra).
-  const tb=Number(base.ts)||0, te=Number(enviada.ts)||0;
-  if(tb && te) return te>=tb ? enviada : base;
-  return (Number(enviada.i)||0) >= (Number(base.i)||0) ? enviada : base;
-}
-window.cp1265UltimaMensagemExibida=cp1265UltimaMensagemExibida;
+// v1266 — cp1265UltimaMensagemExibida (que juntava a mensagem enviada pelo app à última mensagem da
+// conversa, pra o cabeçalho do cliente) foi REMOVIDA no dia seguinte, por ordem do dono: "último
+// contato é último atendimento". O cabeçalho não procura mais a última MENSAGEM quando existe
+// atendimento registrado — mostra o atendimento, e pronto. Sem atendimento nenhum, cai em
+// cp786UltimaMensagemReal (logo acima), que é a régua de sempre.
 // v1189 — AQUI MORAVA O DETECTOR "CLIENTE RESPONDEU" (e três ajudantes que só serviam a ele).
 // Saiu DE VEZ, por ordem do dono — e a v1188 é a prova de por que não bastava deixá-lo dormindo.
 //
@@ -10715,23 +10703,20 @@ window.cp1170Remover = cp1170Remover;
 // v906 — "Aguardando cliente" passou a ter UM significado só (pedido do dono): VOCÊ já atendeu
 // (copiou a mensagem ou marcou atendimento) e o cliente AINDA NÃO respondeu — a bola está com
 // ele. Antes era um balde de sobra (caía todo lead raso/parado) e o número não dizia nada.
-function ultimaMsgClienteTs(l){
-  const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
-  const pn = String(l?.name||"").toLowerCase().trim().split(/\s+/)[0] || "";
-  let max = 0;
-  for(const m of msgs){
-    if(!String(m?.text||"").trim()) continue;
-    if(!ehMsgDoCliente(m, pn)) continue;
-    const t = Date.parse(m?.iso || "");
-    if(!isNaN(t) && t > max) max = t;
-  }
-  return max;
-}
-function cpAguardandoResposta(l){
-  const at = (typeof ultimoAtendimentoTs === 'function') ? ultimoAtendimentoTs(l) : 0;
-  if(!at) return false;                 // nunca atendido pelo app → não é "aguardando cliente"
-  return ultimaMsgClienteTs(l) <= at;   // cliente não respondeu DEPOIS do meu atendimento
-}
+//
+// v1266 — SAIU A PARTE DO "CLIENTE AINDA NÃO RESPONDEU". Ordem do dono, 13/08/2026: "não interessa
+// quem está esperando quem, já te disse q não tem como saber sem estar integrado com whats".
+//
+// `cpAguardandoResposta` e `ultimaMsgClienteTs` foram REMOVIDAS e não podem voltar: as duas
+// comparavam a data da última fala do cliente com a do atendimento pra afirmar de quem era a bola —
+// exatamente o palpite que a v1158 tirou da ordem da fila, que a v1189 tirou da categoria e que a
+// v1199 tirou da faixa "ficaram de te dar uma resposta". O app lê o retrato exportado da conversa,
+// não o WhatsApp ao vivo: "o cliente não falou depois" só quer dizer "ainda não reimportei".
+//
+// "Aguardando cliente" passa a ter o único significado que o app tem como sustentar: VOCÊ atendeu e
+// ainda está dentro do descanso configurado no Cérebro (emJanelaDeEspera — que já exige atendimento
+// registrado, então cliente nunca atendido continua fora daqui). Passado o descanso, ele sai
+// daqui e volta pro fluxo normal, como antes.
 function cp786Categoria(l,modelo=null,ultimaReal=null){
   if(!leadEhAtivo(l)) return '';
   if(cp786TemCompromisso(l)) return 'programados';
@@ -10747,7 +10732,7 @@ function cp786Categoria(l,modelo=null,ultimaReal=null){
   // depois de já ter passado do prazo (quando ele já reaparece em "Fazer agora") — os dois
   // números diziam coisas opostas sobre o mesmo cliente. Passado o prazo, ele "vence" aqui e
   // cai no fluxo normal (agora/sem-acao) — deixa de contar como espera legítima.
-  if(cpAguardandoResposta(l) && emJanelaDeEspera(l)) return 'aguardando'; // atendi, cliente não respondeu e ainda está no prazo
+  if(emJanelaDeEspera(l)) return 'aguardando'; // v1266: atendi e ainda estou dentro do descanso
   if(mensagensDoCliente(l) < CP_MIN_MSGS_PRIORIDADE) return 'sem-acao'; // lead raso: prospecção, fora dos cards de destaque
   return entraEmRetomada(l) ? 'agora' : 'sem-acao';                    // vale um toque? Fazer agora; senão, só em "Total de leads"
 }
