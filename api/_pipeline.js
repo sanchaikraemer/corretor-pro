@@ -4,6 +4,7 @@ import os from "os";
 import JSZip from "jszip";
 import OpenAI from "openai";
 import { registrarUsoIA } from "./_iaCusto.js";
+import { garantirSaudacaoAbertura } from "../js/saudacao.js";
 
 const ATTACHED_SUFFIX_RE = /\s*\((arquivo anexado|file attached)\)\s*$/i;
 const AUDIO_INLINE_RE = /\.(opus|ogg|mp3|m4a|wav|aac)\b/i;
@@ -2965,9 +2966,17 @@ RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA. Você recebe abaixo, no ped
 desde a última mensagem". Quando esse número for relevante (a partir do prazo de retomada do
 corretor, e sempre que passar de uma semana), a mensagem É uma retomada e precisa se comportar como
 tal:
-- RECONHEÇA o tempo, com naturalidade e sem drama ("faz um tempo que a gente não se falava",
-  "voltando aqui depois desses dias"). Escrever como se a conversa tivesse parado ontem é o erro
-  que faz o corretor parecer desatento — o cliente sabe quantos dias passaram.
+- ABRA COMO QUEM VOLTA A FALAR COM UMA PESSOA: saudação do horário + o primeiro nome do cliente,
+  do jeito que o corretor cumprimenta nas mensagens reais dele. Depois de dias em silêncio, entrar
+  direto no assunto sem cumprimentar é o que faz a mensagem parecer disparo automático — quem
+  retoma uma conversa parada cumprimenta primeiro. (A saudação certa vai pronta no pedido abaixo.)
+- A VOLTA APARECE NO CONTEÚDO, NUNCA NO RELÓGIO: o que mostra que vocês já se falaram é RETOMAR o
+  fio — o material que já foi enviado, a unidade/opção que ele escolheu, a pergunta dele que ficou
+  sem resposta, o passo que vocês combinaram. É por aí que a mensagem começa depois da saudação.
+  Continua PROIBIDO citar o intervalo em qualquer forma ("faz um tempo", "faz X dias", "desde nossa
+  última conversa") — a regra que proíbe falar do tempo parado, mais abaixo, vale inteira aqui.
+  Não confunda as duas coisas: a mensagem tem que SOAR como retomada (retomando
+  assunto real) sem NUNCA falar do tempo parado.
 - TRAGA UM MOTIVO REAL pra estar voltando, tirado do que ficou pendente NA CONVERSA (o que ele
   pediu e não recebeu, a dúvida que ficou no ar, o passo que vocês combinaram). Sem motivo real,
   a retomada vira "oi, sumiu?" — e é isso que faz o cliente não responder.
@@ -3017,6 +3026,11 @@ PIOR do que dizer "faz alguns dias". A régua é simples: o intervalo é dado IN
 corretor decidir a hora de chamar; dentro da mensagem ele não aparece de forma nenhuma. Retomada
 boa começa pelo ASSUNTO — um fato novo, o que ficou pendente, o que mudou desde então — e o cliente
 reconhece a conversa sozinho, sem precisar ser lembrado de quanto tempo ficou calado.
+O QUE ESTA REGRA NÃO AUTORIZA: ela proíbe FALAR do tempo parado, e só isso. Ela NÃO manda tirar a
+saudação (o cumprimento com o nome do cliente continua obrigatório, ver a espinha das mensagens) e
+NÃO manda escrever como se nada tivesse acontecido entre uma conversa e outra. Se o corretor mandou
+material e o assunto morreu ali, a mensagem PARTE desse material — ele é o fio da conversa, e
+retomá-lo é o contrário de citar o calendário.
 
 Responda somente com JSON válido no formato solicitado.`;
 
@@ -3024,8 +3038,8 @@ Responda somente com JSON válido no formato solicitado.`;
 
 Data e hora atuais da análise no Brasil: ${dataHoraAtualAnalise}${hojeSemana ? ` (${hojeSemana})` : ""}
 Fuso horário da análise: ${fusoAnalise}
-Saudação correta para este horário: "${saudacaoDoHorario}". Se a mensagem abrir com saudação, use EXATAMENTE esta — nunca outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília).
-NÃO CUMPRIMENTE DUAS VEZES: se a ÚLTIMA mensagem do histórico for do CORRETOR e já for um cumprimento ("boa tarde", "oi", "tudo bem?", "e aí"), a próxima mensagem dele NÃO abre com saudação nenhuma — ele acabou de cumprimentar, repetir soa automático e denuncia mensagem pronta. Nesse caso comece direto pelo assunto, chamando o cliente pelo nome se for natural. A mesma coisa vale quando corretor e cliente já trocaram o cumprimento hoje: o cumprimento já aconteceu, a mensagem seguinte é a que traz o conteúdo.
+Saudação correta para este horário: "${saudacaoDoHorario}". AS TRÊS MENSAGENS ABREM COM ELA seguida do primeiro nome do cliente (ex.: "${saudacaoDoHorario} <primeiro nome>," ou "${saudacaoDoHorario} <primeiro nome>, tudo bem?", conforme o jeito do corretor). Nunca use outra faixa do dia (a régua é: bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00, horário de Brasília). Mensagem que começa direto no assunto, sem cumprimentar o cliente pelo nome, está ERRADA e precisa ser reescrita — a única exceção é a regra da linha seguinte.
+NÃO CUMPRIMENTE DUAS VEZES — SÓ VALE PARA CONVERSA QUE CONTINUA HOJE: se a ÚLTIMA mensagem do histórico for do CORRETOR, for do DIA DE HOJE (a data atual da análise informada acima) e já for um cumprimento ("boa tarde", "oi", "tudo bem?", "e aí"), a próxima mensagem dele NÃO abre com saudação — ele acabou de cumprimentar, repetir soa automático. Nesse caso comece pelo nome do cliente e emende o assunto. A mesma coisa quando corretor e cliente trocaram o cumprimento HOJE. Cumprimento de ONTEM ou de dias/semanas atrás NÃO conta: dia novo, conversa retomada, a saudação volta obrigatoriamente.
 Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo configurado pelo corretor para reconhecer intervalo/retomada (use este número quando o Cérebro Comercial tiver uma regra de retomada baseada em dias sem interação): ${diasParaRetomada} dias corridos.
@@ -3063,10 +3077,20 @@ Cérebro, usam só fatos da conversa e mantêm o jeito de escrever do corretor.
 
 CADA MENSAGEM É UMA CONDUÇÃO, NUNCA UM CHECK-IN. Os três ângulos acima mudam o TOM e o CAMINHO,
 mas as três têm a MESMA espinha obrigatória, nesta ordem:
- (1) ABRE POR UM FATO CONCRETO DESTA CONVERSA — o prazo real do produto, o que ficou pendente, a
+ (1) CUMPRIMENTA E EMENDA UM FATO CONCRETO DESTA CONVERSA. A mensagem começa pela saudação do
+     horário com o primeiro nome do cliente ("<Saudação> <Nome>," / "<Saudação> <Nome>, tudo
+     bem?" — do jeito que ESTE corretor cumprimenta nas mensagens reais dele). Mensagem de
+     WhatsApp que começa sem cumprimentar entrega na hora que não foi uma pessoa que escreveu.
+     A ÚNICA exceção é a regra "NÃO CUMPRIMENTE DUAS VEZES" do pedido abaixo: conversa que
+     continua HOJE, com o cumprimento já trocado hoje — só nesse caso começa pelo nome, sem
+     saudação.
+     LOGO DEPOIS da saudação vem o FATO — o prazo real do produto, o que ficou pendente, a
      unidade/característica que o PRÓPRIO cliente escolheu, a resposta que ele ainda não recebeu.
-     Nunca abra por estado de espírito ("tudo bem por aí?", "tudo certo?") nem por intenção
-     genérica ("queria saber se ainda tem interesse", "vim ver se você ainda pensa no assunto").
+     A saudação é cumprimento, não é o assunto: o que está proibido é o ASSUNTO da mensagem ser
+     estado de espírito ("tudo bem por aí?", "tudo certo?" como conteúdo) ou intenção genérica
+     ("queria saber se ainda tem interesse", "vim ver se você ainda pensa no assunto"). Um "tudo
+     bem?" colado na saudação é cortesia normal e pode ficar; o que não pode é a mensagem não ter
+     mais nada além disso.
  (2) DESTRAVA O QUE ESTÁ PARADO, com um passo que o CLIENTE consegue executar agora e em poucos
      segundos (mandar um endereço, escolher entre duas opções, confirmar um dado, dizer qual
      unidade preferiu). Diga PRA QUE serve aquele passo do ponto de vista DELE, não do corretor
@@ -3509,10 +3533,9 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
     const raw = (parsedRaw && typeof parsedRaw === "object") ? parsedRaw : {};
     const d = (raw.diagnostico && typeof raw.diagnostico === "object") ? raw.diagnostico : {};
     const mensagensRaw = (raw.mensagens && typeof raw.mensagens === "object") ? raw.mensagens : {};
-    const msgA = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
-    const msgB = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
-    const msgC = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
-    const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
+    const msgARaw = pickMsg(mensagensRaw, ["recomendada", "a", "opcao1", "opção1", "sugestao1", "sugestão1"]);
+    const msgBRaw = pickMsg(mensagensRaw, ["maisSuave", "suave", "b", "opcao2", "opção2", "sugestao2", "sugestão2"]);
+    const msgCRaw = pickMsg(mensagensRaw, ["maisDireta", "direta", "c", "opcao3", "opção3", "sugestao3", "sugestão3"]);
     // v827 §7.1: o produto vem só do que a IA leu na conversa. Sem catálogo fixo para
     // "completar" — na ausência, fica "Não identificado" (cautela, não invenção).
     const produtoAtual = clean(raw.produtoInteresse || d.produtoPrincipal, "Não identificado");
@@ -3524,8 +3547,27 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
       .map(m => m?.author).filter(Boolean).filter(a => a !== "Sistema" && a !== "Áudio sem referência exata"))];
     const clienteConfirmado = nomeClienteConfirmadoPelaConversa(clean(raw.quemEhOCliente, ""), autoresDaConversa, corretorNome);
 
-    // Nenhuma sugestão de mensagem é reinterpretada, corrigida ou substituída pelo código.
-    // A única validação local é técnica: presença das três sugestões.
+    // v1274 — REDE DE SEGURANÇA DA SAUDAÇÃO (print do dono de 14/08: as três sugestões de um lead
+    // parado havia dias começavam direto no assunto, sem cumprimentar ninguém — "cadê a saudação?").
+    // A obrigação de cumprimentar virou regra escrita no pedido que vai pra IA; aqui fica a rede
+    // pro caso de ela esquecer. Só entra quando a conversa ESTÁ parada (retomada, pelo prazo que o
+    // próprio corretor configurou): numa conversa que continua hoje o código não encosta em nada —
+    // lá quem manda é a regra "não cumprimente duas vezes". Nenhuma palavra escrita pela IA é
+    // apagada, trocada ou reescrita: no máximo a saudação entra NA FRENTE do que ela escreveu.
+    const conversaEmRetomada = Number.isFinite(Number(contextoTemporal?.dias))
+      && Number(contextoTemporal.dias) >= diasParaRetomada;
+    const nomeParaSaudar = clienteConfirmado || leadIA.nomeContato;
+    const comSaudacao = (texto) => (conversaEmRetomada
+      ? garantirSaudacaoAbertura(texto, { nome: nomeParaSaudar, agora: _agoraDt })
+      : texto);
+    const msgA = comSaudacao(msgARaw);
+    const msgB = comSaudacao(msgBRaw);
+    const msgC = comSaudacao(msgCRaw);
+    const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
+
+    // Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo
+    // código — a única coisa que ele acrescenta é a saudação de abertura quando ela faltou numa
+    // retomada (v1274, acima). A única validação local é técnica: presença das três sugestões.
     const trioOk = validacaoMensagens.ok;
     // v1174 — sem as três mensagens, a rota devolve erro e o app joga a análise fora: pro corretor
     // isso NÃO foi uma análise, então não pode consumir uma unidade do teto do dia dele.

@@ -18,7 +18,19 @@ const bloco = pipeline.slice(
   pipeline.indexOf('LINGUAGEM DE IA — PROIBIDO')
 );
 assert.ok(bloco.length > 400, 'a regra da retomada precisa existir no pedido enviado à IA');
-assert.match(bloco, /RECONHEÇA o tempo/, 'a mensagem tem que reconhecer que passaram dias');
+// v1274 — ATENÇÃO, ISTO MUDOU DE FORMA. Até aqui a regra mandava "RECONHEÇA o tempo" ("faz um
+// tempo que a gente não se falava"). Na v1255 o dono proibiu falar do intervalo em QUALQUER forma
+// ("não quero q use os dias") — e as duas regras ficaram no mesmo pedido, uma mandando reconhecer
+// o tempo e a outra proibindo. A IA resolvia a contradição do pior jeito: largava a retomada
+// inteira e escrevia como se a conversa nunca tivesse parado, sem nem cumprimentar o cliente
+// (print do dono em 14/08: "cadê a saudação? a retomada?").
+// Agora a retomada continua sendo regra dura, só que ela aparece no CONTEÚDO (cumprimento + o fio
+// da conversa), nunca no relógio.
+assert.match(bloco, /ABRA COMO QUEM VOLTA A FALAR/, 'a retomada abre cumprimentando o cliente pelo nome');
+assert.match(bloco, /A VOLTA APARECE NO CONTEÚDO, NUNCA NO RELÓGIO/,
+  'o que mostra que já se falaram é retomar o fio da conversa, não citar os dias');
+assert.ok(!/RECONHEÇA o tempo/.test(bloco),
+  'a ordem de reconhecer o tempo foi revogada na v1255 e não pode voltar');
 assert.match(bloco, /TRAGA UM MOTIVO REAL/, 'e trazer um motivo real, tirado do que ficou pendente');
 
 // As frases exatas que ele apontou como imbecilidade ficam proibidas, com nome e sobrenome.
