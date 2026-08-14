@@ -396,7 +396,10 @@ montar isso:
   importa (a ponte é a função `processFile`, a única porta de entrada; ver `NOTAS-v1195.md` e a
   guarda `tests/v1195-pedaco-importacao-fechado.test.mjs`). A v1217 tirou de lá a **regra de
   repetição do envio do ZIP** (`js/envio-retentativa.js`): sem tela e sem rede, é o único jeito de
-  o teste executá-la de verdade em vez de conferir o código por leitura. A parte do **compartilhamento** (o ZIP
+  o teste executá-la de verdade em vez de conferir o código por leitura. A v1270 tirou pelo mesmo
+  motivo a **escolha do que entra no envio** (`js/enxugar-zip.js`): o aparelho manda o texto inteiro
+  e só o áudio que o servidor vai transcrever de fato (o de fora do período era enviado e
+  descartado do outro lado, e sozinho estourava o limite de 150 MB numa conversa de anos). A parte do **compartilhamento** (o ZIP
   que chega do WhatsApp) continua no `app.js` de propósito: ela roda em toda abertura, então
   movê-la anularia a economia. O grafo de chamadas mostrou que as demais telas (Agenda, Cérebro,
   Carteira, cliente) **não** rendem divisão — compartilham quase todo o código de desenho.

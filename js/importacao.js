@@ -23,6 +23,11 @@ import {
   passouDoTempoParado
 } from './envio-retentativa.js?v=__VERSION__';
 import {
+  LIMITE_ENVIO_BYTES,
+  fraseDoCorte,
+  planejarConteudoDoZip
+} from './enxugar-zip.js?v=__VERSION__';
+import {
   CP_IMPORT_PENDENTE_KEY,
   CP_IMPORT_PENDENTE_VALIDADE_MS,
   KEEP_RE,
@@ -56,34 +61,56 @@ import {
   userFriendlyError
 } from '../app.js?v=__VERSION__';
 
-async function slimZipKeepingTextAndAudio(file, onProgress){
+// Quanto uma entrada do ZIP ocupa de verdade. Áudio do WhatsApp entra sem recompressão (STORE),
+// então os dois números batem; quando o JSZip não informa nenhum, devolve 0 e o plano trata
+// aquele áudio como "tamanho desconhecido" (ver planejarConteudoDoZip).
+function tamanhoDaEntrada(entry){
+  return Number(entry?._data?.uncompressedSize || entry?._data?.compressedSize || 0);
+}
+
+async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
   const JSZip = await ensureJSZip();
   const zip = await JSZip.loadAsync(file);
 
   const entries = [];
   zip.forEach((path, entry)=>{ if(!entry.dir) entries.push([path, entry]); });
 
+  // Imagem, vídeo e documento saem sempre (nunca entram na análise). Do que sobra, o texto é
+  // obrigatório e o áudio passa pela escolha da v1270 — ver js/enxugar-zip.js.
+  const uteis = entries.filter(([path]) => KEEP_RE.test(path));
+  const textos = uteis.filter(([path]) => /\.txt$/i.test(path));
+  const audios = uteis.filter(([path]) => !/\.txt$/i.test(path));
+
+  let txt = "";
+  try{ if(textos[0]) txt = await textos[0][1].async("string"); }catch(_){ }
+
+  const plano = planejarConteudoDoZip({
+    txt,
+    audios: audios.map(([path, entry]) => ({ caminho: path, bytes: tamanhoDaEntrada(entry) })),
+    diasJanela: opcoes.diasJanela,
+    bytesTexto: textos.reduce((soma, [, entry]) => soma + tamanhoDaEntrada(entry), 0)
+  });
+  const audiosQueVao = new Set(plano.manter);
+  const selecionadas = uteis.filter(([path]) => /\.txt$/i.test(path) || audiosQueVao.has(path));
+
   const newZip = new JSZip();
-  let kept=0, dropped=0;
-  for(let i=0;i<entries.length;i++){
-    const [path, entry] = entries[i];
-    if(KEEP_RE.test(path)){
-      const data = await entry.async("uint8array");
-      // v1141 — áudio do WhatsApp (.opus/.m4a/.mp3) JÁ É COMPRIMIDO: passar DEFLATE nele de novo
-      // gasta segundos de processador do celular pra economizar quase nada (às vezes o arquivo até
-      // cresce). Só o texto da conversa compensa compactar. Numa conversa com dezenas de áudios,
-      // isso era parte do "por que demora tanto antes de sequer começar a subir".
-      newZip.file(path, data, { compression: /\.txt$/i.test(path) ? "DEFLATE" : "STORE" });
-      kept++;
-    } else {
-      dropped++;
-    }
-    if(onProgress) onProgress({processed:i+1, total:entries.length, kept, dropped});
+  let kept=0;
+  const dropped = entries.length - selecionadas.length;
+  for(let i=0;i<selecionadas.length;i++){
+    const [path, entry] = selecionadas[i];
+    const data = await entry.async("uint8array");
+    // v1141 — áudio do WhatsApp (.opus/.m4a/.mp3) JÁ É COMPRIMIDO: passar DEFLATE nele de novo
+    // gasta segundos de processador do celular pra economizar quase nada (às vezes o arquivo até
+    // cresce). Só o texto da conversa compensa compactar. Numa conversa com dezenas de áudios,
+    // isso era parte do "por que demora tanto antes de sequer começar a subir".
+    newZip.file(path, data, { compression: /\.txt$/i.test(path) ? "DEFLATE" : "STORE" });
+    kept++;
+    if(onProgress) onProgress({processed:i+1, total:selecionadas.length, kept, dropped});
   }
 
   const blob = await newZip.generateAsync({type:"blob", compression:"STORE"});
   const slim = new File([blob], file.name.replace(/\.zip$/i,"")+"-enxuto.zip", {type:"application/zip"});
-  return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size };
+  return { file: slim, kept, dropped, originalSize: file.size, slimSize: blob.size, plano };
 }
 
 // v1132 — convite que aparece na análise de quem ainda não configurou a Inteligência Comercial.
@@ -742,6 +769,14 @@ async function renderProcessedResult(data, meta){
   const janelaHtml = (j && (j.tipo === "audio" || j.aplicado || j.todoPeriodo)) ?
     `<div style="margin-top:10px;padding:10px 12px;background:rgba(86,199,242,.06);border:1px solid rgba(86,199,242,.22);border-radius:10px;font-size:13px"><b style="color:var(--dados)">Período dos áudios:</b> ${j.todoPeriodo ? "todo o período" : `últimos ${j.dias} dias (${escapeHtml(j.janelaDe||"")} → ${escapeHtml(j.janelaAte||"")})`}. As mensagens escritas foram importadas completas. Áudios dentro do período: ${Number(j.totalAudiosNoPeriodo ?? (data.audioFiles||[]).length)} · fora do período: ${Number(data.audiosDescartadosPorJanela||j.totalAudiosForaDoPeriodo||0)}.</div>` : "";
 
+  // v1270 — quando o aparelho precisou deixar áudio de fora pra a conversa caber no envio, isso
+  // fica ESCRITO na tela. Antes o corretor recebia a análise sem saber que alguns áudios antigos
+  // não entraram — e a alternativa velha era pior ainda: a importação inteira barrada.
+  const corte = state.ultimoCorteZip;
+  const corteZipHtml = (corte && corte.cortouPorTamanho)
+    ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(255,180,80,.10);border:1px solid rgba(255,180,80,.42);border-radius:10px;font-size:13px;color:#ffd9a8">⚠️ ${escapeHtml(fraseDoCorte(corte))}</div>`
+    : "";
+
   const sm = data.metrics || {};
   const semMidiaHtml = sm.exportadoSemMidia ? `<div style="margin-top:10px;padding:11px 13px;background:rgba(184,194,201,.1);border:1px solid var(--morno);border-radius:10px;font-size:13px;color:var(--soft)"><b>⚠️ Conversa exportada SEM mídia.</b> ${Number(sm.midiasOcultas)||0} ${(Number(sm.midiasOcultas)||0) === 1 ? "mídia ficou oculta" : "mídias ficaram ocultas"} — os <b>áudios não vieram no arquivo</b> e não dá pra transcrever. Pra incluir os áudios (importantes pra análise), reexporte a conversa no WhatsApp escolhendo <b>"Incluir mídia"</b> e importe de novo.</div>` : "";
   // v1178 — ÁUDIO QUE NÃO VIROU TEXTO AGORA DIZ POR QUÊ.
@@ -849,7 +884,7 @@ async function renderProcessedResult(data, meta){
     `<b>Áudios no histórico:</b> ${(data.audioFiles || []).length} · <b>transcritos:</b> ${data.audiosTranscritos || 0} · <b>com erro:</b> ${data.audiosComErro || 0}<br>` +
     `<b>Arquivos ignorados:</b> ${data.ignoredFilesCount || 0}<br>` +
     `<b>Resumo:</b> ${escapeHtml(analysis.summary || "Conversa processada.")}<br>` +
-    janelaHtml + semMidiaHtml + audioSemTextoHtml + incrementalHtml +
+    janelaHtml + corteZipHtml + semMidiaHtml + audioSemTextoHtml + incrementalHtml +
     `</div>` +
     cpPreviaCerebroHTML(analysis) +
     cpUpgradeProHTML(analysis) +
@@ -1368,21 +1403,36 @@ async function processFile(file, options = {}){
     const audioWindowDays = janelaAudioDaImportacao();
     renderEtapas(0, "áudios: " + rotuloJanelaAudio(audioWindowDays) + "; textos completos");
 
-    // Enxuga o ZIP no celular: mantém só .txt e áudio, joga fora imagem/vídeo/doc.
+    // Enxuga o ZIP no celular: mantém o texto inteiro e só o áudio que o servidor vai usar de
+    // verdade (v1270 — ver js/enxugar-zip.js). É o que faz uma conversa de anos caber no envio.
     let slimInfo = null;
     let working = file;
+    state.ultimoCorteZip = null;
     try{
       renderEtapas(0, "preparando uma única cópia útil do ZIP");
       slimInfo = await slimZipKeepingTextAndAudio(file, ({processed,total,kept,dropped})=>{
         renderEtapas(0, "preparando ZIP: "+processed+"/"+total+" · mantidos "+kept+", descartados "+dropped);
-      });
+      }, { diasJanela: audioWindowDays });
       working = slimInfo.file;
+      state.ultimoCorteZip = slimInfo.plano?.resumo || null;
       const oMb = (slimInfo.originalSize/1024/1024).toFixed(1);
       const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
       renderEtapas(0, "ZIP preparado: "+oMb+" MB → "+sMb+" MB");
     }catch(err){
       renderEtapas(0, "usando o ZIP original");
       working = file;
+    }
+
+    // Rede de segurança: se MESMO ASSIM não couber (só acontece se o texto sozinho for gigante,
+    // ou se o preparo acima falhou e o ZIP original é enorme), o app diz o que fazer em vez de
+    // mandar pro servidor recusar com "ZIP maior que o limite permitido" e um "Tentar novamente"
+    // que dá sempre o mesmo erro — foi exatamente esse beco sem saída do print do dono.
+    if(working.size > LIMITE_ENVIO_BYTES){
+      const mb = (working.size/1024/1024).toFixed(1);
+      throw new Error(
+        `Esta conversa tem ${mb} MB e não coube no envio nem depois de tirar fotos, vídeos e áudios antigos. `+
+        `No WhatsApp, exporte essa conversa de novo escolhendo "Sem mídia" — o texto entra inteiro e a análise sai igual.`
+      );
     }
 
     const ok = await uploadLargeZipToSupabase(working, { audioWindowDays, importId });

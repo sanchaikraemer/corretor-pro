@@ -166,7 +166,11 @@ async function criarUploadUrl(req, res, organizationId, body) {
   if (!body?.probe && declaredSize > BUCKET_MAX_BYTES) {
     return json(res, 413, {
       ok: false,
-      error: `ZIP maior que o limite permitido de ${Math.round(BUCKET_MAX_BYTES / 1024 / 1024)} MB.`,
+      // v1270 — a recusa precisa dizer O QUE FAZER. A frase antiga ("ZIP maior que o limite
+      // permitido de 150 MB.") deixava o corretor com um "Tentar novamente" que dava sempre o
+      // mesmo erro. Desde a v1270 o próprio aparelho corta áudio antigo pra caber, então chegar
+      // aqui virou exceção — quando chega, a saída é reexportar sem mídia.
+      error: `Esta conversa passou do limite de ${Math.round(BUCKET_MAX_BYTES / 1024 / 1024)} MB por envio. No WhatsApp, exporte a conversa de novo escolhendo "Sem mídia" — o texto entra inteiro e a análise sai igual.`,
       maxBytes: BUCKET_MAX_BYTES
     });
   }
