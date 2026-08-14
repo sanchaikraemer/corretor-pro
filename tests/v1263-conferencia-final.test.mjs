@@ -38,9 +38,12 @@ assert.ok(fimPrompt > i, 'não achei o fim do prompt depois da conferência');
 
 const lista = depois.replace(/\s+/g, ' ');
 
-// ── 2. Os sete itens, cada um amarrado a um erro real que apareceu nas reanálises ────────────
+// ── 2. Os itens, cada um amarrado a um erro real que apareceu nas reanálises ─────────────────
+// v1267 — entrou o oitavo (chamar pra ver em vez de mandar mais material). O número é conferido de
+// propósito: a lição da v1263 é que esta lista só funciona enquanto for CURTA. Se um dia ela passar
+// de uma dúzia, o problema voltou a ser o paredão, não a regra que falta.
 const itens = depois.match(/^\s*\d\. /gm) || [];
-assert.equal(itens.length, 7, `a conferência precisa ter os 7 itens — achei ${itens.length}`);
+assert.equal(itens.length, 8, `a conferência precisa ter os 8 itens — achei ${itens.length}`);
 
 // 1) Abertura: a nº 1 das 21:55 abria com "Assim que você tiver".
 assert.match(lista, /COMEÇA PELO QUE O CORRETOR FAZ\?/, 'item 1: abertura pela ação do corretor');
@@ -86,7 +89,7 @@ assert.match(lista, /Diagnóstico e mensagem têm que contar a MESMA história/,
 // Conferência que não manda corrigir vira enfeite: a IA marca tudo como ok e devolve igual.
 assert.match(lista, /se qualquer item falhar, REESCREVA a mensagem/,
   'a conferência precisa mandar reescrever, não só verificar');
-assert.match(lista, /Não devolva nada que não passe nos sete/,
+assert.match(lista, /Não devolva nada que não passe nos oito/,
   'e precisa fechar a porta: nada sai sem passar');
 assert.match(lista, /Releia CADA UMA das três/,
   'a conferência vale mensagem por mensagem, não pro conjunto');
@@ -95,4 +98,4 @@ assert.match(lista, /Releia CADA UMA das três/,
 assert.doesNotMatch(lista, /R\$|Personalité|Marina|430\.000|1\.450\.000/,
   'a conferência não pode carregar valor, empreendimento ou nome de cliente');
 
-console.log('v1263-conferencia-final: ok (7 itens, depois da conversa)');
+console.log('v1263-conferencia-final: ok (8 itens, depois da conversa)');
