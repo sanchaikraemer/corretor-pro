@@ -28,8 +28,13 @@ publicada só com a suíte verde: abra o app publicado (`public/`) num Chromium 
 (playwright-core + executablePath /opt/pw-browsers/chromium, servindo `public/` com
 `python3 -m http.server`) e confira o RESULTADO COMPUTADO no(s) tamanho(s) de tela
 relevantes. Lição da v1077→v1078: uma regra nova de CSS pode ser atropelada por blocos
-antigos com `!important` (ex.: o bloco de tema #664 do desktop, que manda em `#home`) e a
+antigos com `!important` (ex.: o bloco #664 do desktop, que manda em `#home`) e a
 suíte estática não enxerga isso — o dono flagrou com print o que o teste não pegou.
+
+**O app tem UM tema só (escuro), desde a v1268.** O tema claro foi removido a pedido do dono —
+CSS, módulo `js/tema.js`, o seletor da tela e o script de boot que lia a preferência salva. O
+`data-theme="dark"` é fixo no `<html>`. Não recrie tema claro, nem `@media (prefers-color-scheme)`,
+nem seletor de aparência: a suíte falha de propósito se `data-theme="light"` voltar ao CSS.
 
 ## Como rodar a suíte antes de finalizar
 

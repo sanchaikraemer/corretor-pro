@@ -1,40 +1,12 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-app-version="__VERSION__">
+<html lang="pt-BR" data-theme="dark" style="color-scheme:dark" data-app-version="__VERSION__">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" id="themeColorMeta" content="#052B36">
+<meta name="theme-color" content="#052B36">
 <title>Corretor Pro</title>
 <link rel="manifest" href="/manifest.json">
-<script>
-  // Aplica somente o tema escolhido pelo usuário antes da pintura da tela.
-  // As opções disponíveis são claro e escuro.
-  (function(){
-    var tema = "dark";
-    try{
-      var salvo = localStorage.getItem("direciona_tema");
-      if(salvo === "light" || salvo === "dark") tema = salvo;
-    }catch(_){ }
-    var r = document.documentElement;
-    r.dataset.theme = tema;
-    r.style.colorScheme = tema;
-    // Boot no-flash coerente com o tema salvo (paleta oficial v2.0):
-    // dark = petróleo #052B36, light = branco-gelo #F3F6F7. Evita flash escuro no tema claro.
-    var boot = tema === "light"
-      ? { bg:"#F3F6F7", fg:"#102A34", sub:"#5E7A85" }
-      : { bg:"#052B36", fg:"#F4F7FB", sub:"#8FB1BF" };
-    r.style.setProperty("--boot-bg", boot.bg);
-    r.style.setProperty("--boot-fg", boot.fg);
-    r.style.setProperty("--boot-sub", boot.sub);
-    r.style.background = boot.bg;
-    try{
-      var m = document.getElementById("themeColorMeta");
-      if(m) m.setAttribute("content", boot.bg);
-    }catch(_){ }
-    window.__bootPalette = boot;
-  })();
-</script>
 <script>
   // v1224 — QUEM CHEGA COMPARTILHANDO UMA CONVERSA NÃO PODE VER MAIS NADA ANTES DA RODINHA.
   //
@@ -80,19 +52,20 @@
 <link rel="icon" type="image/png" href="/favicon.png?v=__VERSION__">
 <link rel="apple-touch-icon" href="/icon-192.png?v=__VERSION__">
 <style>
-  html,body{margin:0;min-height:100%;background:var(--boot-bg,#052B36);color:var(--boot-fg,#F4F7FB);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-  body::before{content:"";position:fixed;inset:0;background:var(--boot-bg,#052B36);z-index:-1;}
+  html,body{margin:0;min-height:100%;background:#052B36;color:#F4F7FB;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  body::before{content:"";position:fixed;inset:0;background:#052B36;z-index:-1;}
 </style>
 <link rel="stylesheet" href="/styles.css?v=__VERSION__">
 
 <script>
-  // v682: pinta o fundo do tema imediatamente e remove qualquer branco ao reabrir aba descartada.
-  try{ document.documentElement.style.background=(window.__bootPalette&&window.__bootPalette.bg)||"#052B36"; }catch(_){}
+  // v682: pinta o fundo imediatamente e remove qualquer branco ao reabrir aba descartada.
+  // v1268 — cor fixa: o tema claro deixou de existir, então não há paleta a consultar.
+  try{ document.documentElement.style.background="#052B36"; }catch(_){}
 </script>
 </head>
 <body data-app-version="__VERSION__">
-<div id="bootPaint" style="position:fixed;inset:0;background:var(--boot-bg,#052B36);color:var(--boot-fg,#F4F7FB);z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
-  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:var(--boot-sub,#8FB1BF);font-size:14px">Carregando os leads...</div></div>
+<div id="bootPaint" style="position:fixed;inset:0;background:#052B36;color:#F4F7FB;z-index:0;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;pointer-events:none">
+  <div style="text-align:center;opacity:.9"><div style="font-weight:900;font-size:22px">Corretor <span style="color:#FF6258">Pro</span></div><div style="margin-top:8px;color:#8FB1BF;font-size:14px">Carregando os leads...</div></div>
 </div>
 <script>requestAnimationFrame(function(){setTimeout(function(){var b=document.getElementById('bootPaint'); if(b) b.remove();}, 900);});</script>
 <script>
@@ -258,7 +231,7 @@
       <div class="card hidden-empty" id="analysisCard"><div class="label">Análise do Cérebro</div><div id="analysisBox" class="empty">Aguardando análise.</div></div>
       <div class="card hidden-empty" id="msgCard">
         <div class="label">Resposta pronta pra enviar</div>
-        <div id="msgStyleTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <button type="button" class="msg-tab active" data-style="direta">Direta</button>
           <button type="button" class="msg-tab" data-style="consultiva">Consultiva</button>
           <button type="button" class="msg-tab" data-style="retomada">Retomada</button>
@@ -298,7 +271,7 @@
     </section>
 
     <section id="arquivados" class="screen">
-      <div id="arqArquivados">
+      <div>
         <div class="card compact">
           <div class="label" style="margin-bottom:6px">Arquivados</div>
           <div class="small" style="color:var(--muted);margin-bottom:8px">Contatos pausados ficam guardados aqui sem ocupar as prioridades do dia. Toque em "Reativar" para devolvê-los aos atendimentos ativos.</div>
@@ -378,7 +351,7 @@
         <div class="label" style="margin-bottom:12px">O que a IA já aprendeu com você</div>
         <div id="aprendizadoIABox"><div class="empty">Carregando…</div></div>
       </div>
-      <div class="card compact" id="relatorioSemanaCard">
+      <div class="card compact">
         <div class="label">Esta semana</div>
         <div class="small" style="color:var(--muted);margin-bottom:12px">Resumo dos últimos 7 dias.</div>
         <div id="relatorioSemanaBox"></div>
@@ -388,7 +361,7 @@
         <div class="small" style="color:var(--muted);margin-bottom:12px">O que você mais usa, o que está funcionando.</div>
         <div id="aprendizadoBox"></div>
       </div>
-      <div class="card compact" id="estadoIACard">
+      <div class="card compact">
         <div class="label">Estado do aprendizado da IA</div>
         <!-- v1137 — o texto antigo mandava tocar num botão de aprender a carteira inteira que não
              existe mais: o aprendizado virou automático e roda em segundo plano. -->
@@ -764,29 +737,7 @@
         <div class="small" id="lembreteDiarioStatus" style="color:var(--muted);margin-top:8px;line-height:1.5"></div>
       </div>
 
-      <div class="card theme-settings-card" id="themeSettingsCard">
-        <div class="label">Aparência</div>
-        <div class="theme-settings-head">
-          <div>
-            <h3>Escolha o tema</h3>
-            <p>Use a versão clara ou a versão escura azul-marinho do Corretor Pro.</p>
-          </div>
-          <div class="theme-current" id="themeCurrentLabel">Tema escuro</div>
-        </div>
-        <div class="theme-options" role="group" aria-label="Escolha do tema">
-          <button type="button" class="theme-option" data-theme-choice="light" aria-pressed="false">
-            <span class="theme-preview theme-preview-light" aria-hidden="true"><i></i><b></b><em></em></span>
-            <span><strong>Claro</strong><small>Fundo branco-gelo e cards claros</small></span>
-            <span class="theme-check">✓</span>
-          </button>
-          <button type="button" class="theme-option" data-theme-choice="dark" aria-pressed="false">
-            <span class="theme-preview theme-preview-dark" aria-hidden="true"><i></i><b></b><em></em></span>
-            <span><strong>Escuro</strong><small>Azul-marinho e petróleo predominantes</small></span>
-            <span class="theme-check">✓</span>
-          </button>
-        </div>
-      </div>
-      <div class="card compact" id="performanceDiagCard">
+      <div class="card compact">
         <div class="label">Diagnóstico de performance</div>
         <div class="small" style="color:var(--muted);margin-bottom:10px">Mede carregamento, cache e renderização para manter o app rápido com bases grandes.</div>
         <button class="btn secondary" type="button" onclick="atualizarDiagnosticoPerformance()" style="width:100%">Atualizar diagnóstico</button>

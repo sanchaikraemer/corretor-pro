@@ -202,10 +202,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
   .lgt-row{grid-template-columns:26px minmax(0,1fr) 74px 14px;gap:10px;padding:12px 12px}
   .lgt-row .lgt-passo{display:none}
 }
-html[data-theme="light"] .lgt{background:#ffffff;border-color:var(--cp-border)}
-html[data-theme="light"] .lgt-th{background:#f2f5f7}
-html[data-theme="light"] .lgt-row:nth-child(odd){background:#fafcfd}
-html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
 @media(min-width:900px){
   body{padding-bottom:0}.app{max-width:1320px;padding:24px}.desktop-layout{display:block}.bottom-nav{display:none}.desktop-only{display:block !important}.screen{display:block}.title{font-size:32px}.card{margin-bottom:18px}.sticky{position:sticky;top:18px;background:#11151d;z-index:5;max-height:calc(100vh - 36px);overflow:auto}.mobile-only{display:none}
   /* Desktop: saudação + ações ficam no cabeçalho; some a versão do corpo. */
@@ -223,11 +219,6 @@ html[data-theme="light"] .lgt-row:hover{background:rgba(255,98,88,.06)}
   .lead-foco{display:flex;flex-direction:column;gap:14px}
   textarea,input{max-width:100%}
 }
-
-/* === Fila inteligente (porte do layout-alvo #298) === */
-/* Ações do lead (Gerar proposta, Agendar, Arquivar): preenchem por igual, sem botão órfão no meio */
-.lead-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.lead-acts>button{flex:1 1 150px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 
 /* === Hero do lead nº1 na Home (porte do layout-alvo #298) === */
 
@@ -490,48 +481,6 @@ html[data-theme="dark"]{
   --shadow-soft:0 10px 30px rgba(0,0,0,.15);
   color-scheme:dark;
 }
-html[data-theme="light"]{
-  /* LIGHT PREMIUM — Identidade Visual v2.0 (doc pág. 4 e 15). Branco-gelo, sem branco agressivo. */
-  --bg:#F3F6F7;             /* Fundo oficial */
-  --sidebar-bg:#FFFFFF;     /* Superfície */
-  --panel:#FFFFFF;          /* Superfície */
-  --panel2:#EEF3F5;         /* Superfície suave */
-  --card:#FFFFFF;           /* Superfície */
-  --input:#F7FAFB;          /* Campo levemente off-white */
-  --line:rgba(215,224,228,.75);  /* hairline suave derivada da borda oficial #D7E0E4 */
-  --line2:#D7E0E4;          /* Borda oficial */
-  --text:#102A34;           /* Texto */
-  --soft:#33454E;
-  --secondary:#596A72;      /* Secundário */
-  --dim:#6B7B82;
-  --muted:#7E8D94;          /* Auxiliar */
-  --accent:#FF6258;         /* Coral oficial — igual nos dois temas */
-  --accent-soft:#FFF0EE;    /* Coral suave (seleção light) */
-  --accent-line:rgba(255,98,88,.34);
-  --dados:#278FB3;
-  --lime:#FF6258;
-  --wa:#1FB65B;
-  --green:#1FB65B;
-  --acao:#238AB3;           /* v1214 — confirmado/agenda em ciano (era verde #218B5B) */
-  --acao-soft:rgba(35,138,179,.10);
-  --acao-line:rgba(35,138,179,.34);
-  --timing:#238AB3;         /* v1214 — lembrete/timing (era rosa #B85A7D) */
-  --cerebro:#6D5EC8;
-  --morno:#6E7A82;
-  --risco:#C9453C;          /* v1214 — vermelho do sistema (era o vinho-rosado #CC4E61) */
-  --risco-soft:rgba(201,69,60,.10);
-  --risco-line:rgba(201,69,60,.34);
-  --pink:#238AB3;
-  --red:#C9453C;
-  --on-accent:#FFFFFF;
-  --surface-soft:rgba(12,29,36,.035);
-  --surface-hover:rgba(12,29,36,.06);
-  --surface-strong:rgba(12,29,36,.085);
-  --overlay:rgba(12,29,36,.38);
-  --shadow:0 18px 48px rgba(21,48,58,.10);
-  --shadow-soft:0 8px 24px rgba(21,48,58,.075);
-  color-scheme:light;
-}
 
 html{background:var(--bg);transition:background-color .2s ease,color .2s ease}
 body{
@@ -563,7 +512,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   box-shadow:none !important;
 }
 html[data-theme="dark"] .logo{background-image:url("/logo-cp.png?v=__VERSION__") !important}
-html[data-theme="light"] .logo{background-image:url("/logo-cp.png?v=__VERSION__") !important}
 .logo{width:48px;height:48px;border-radius:14px;background-size:78% 78% !important;background-color:var(--panel) !important}
 .sb-brand{gap:12px;padding:3px 6px 13px;border-bottom:1px solid var(--line)}
 .sb-ver-top{color:var(--muted);font-size:9px;margin-top:6px;letter-spacing:.025em}
@@ -642,27 +590,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 }
 #pillTotalLeadsDesktop{background:var(--accent-soft) !important;color:var(--accent) !important;border-color:var(--accent-line) !important}
 
-/* Escolha de tema — apenas Claro e Escuro */
-.theme-settings-card{overflow:hidden}
-.theme-settings-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
-.theme-settings-head h3{margin:0;color:var(--text);font-size:19px}
-.theme-settings-head p{margin:5px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
-.theme-current{flex:none;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800}
-.theme-options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.theme-option{display:grid;grid-template-columns:72px 1fr 24px;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:var(--surface-soft);color:var(--text);padding:12px;border-radius:15px;cursor:pointer;transition:border-color .15s,transform .15s,background .15s}
-.theme-option:hover{transform:translateY(-1px);border-color:var(--line2)}
-.theme-option[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
-.theme-option strong{display:block;font-size:14px}
-.theme-option small{display:block;color:var(--muted);font-size:11px;margin-top:3px;line-height:1.35}
-.theme-check{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);color:transparent;font-size:12px;font-weight:900}
-.theme-option[aria-pressed="true"] .theme-check{background:var(--accent);border-color:var(--accent);color:#fff}
-.theme-preview{width:72px;height:48px;border-radius:9px;border:1px solid rgba(12,29,36,.13);position:relative;overflow:hidden;display:block;box-shadow:0 5px 13px rgba(12,29,36,.12)}
-.theme-preview i{position:absolute;left:0;top:0;bottom:0;width:19px}
-.theme-preview b{position:absolute;left:25px;right:6px;top:7px;height:12px;border-radius:4px}
-.theme-preview em{position:absolute;left:25px;right:13px;top:25px;height:5px;border-radius:99px;background:#FF6258}
-.theme-preview-light{background:#F3F7F8}.theme-preview-light i{background:#fff;border-right:1px solid rgba(12,29,36,.08)}.theme-preview-light b{background:#fff}
-.theme-preview-dark{background:#08171D;border-color:rgba(230,238,240,.17)}.theme-preview-dark i{background:#0C1D24;border-right:1px solid rgba(230,238,240,.12)}.theme-preview-dark b{background:#102A34}
-
 /* Mobile */
 .bottom-nav{background:color-mix(in srgb,var(--sidebar-bg) 94%,transparent);border-color:var(--line);box-shadow:0 -10px 32px rgba(12,29,36,.10)}
 .nav{color:var(--muted)}
@@ -675,8 +602,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 @media(max-width:620px){
   .app{padding:14px 12px}
   .card{padding:16px;border-radius:16px}
-  .theme-options{grid-template-columns:1fr}
-  .theme-settings-head{flex-direction:column}
   .title{font-size:27px}
   .brand .sub{display:none}
   .logo{width:43px;height:43px}
@@ -693,18 +618,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
   .card{margin-bottom:16px}
 }
 
-/* Correções específicas no tema claro para resíduos do layout escuro antigo */
-html[data-theme="light"] .sticky{background:var(--bg)}
-html[data-theme="light"] .analysis-row{border-color:var(--line)}
-html[data-theme="light"] details.bloco-recolhe>summary{background:var(--panel2)}
-html[data-theme="light"] .gauge{background:conic-gradient(var(--accent) calc(var(--p)*3.6deg),var(--surface-strong) 0)}
-html[data-theme="light"] .menu-card{background:var(--panel)}
-html[data-theme="light"] .menu-card:hover{box-shadow:var(--shadow-soft)}
-html[data-theme="light"] .diag-card{background:color-mix(in srgb,var(--dados) 7%,var(--panel));border-color:color-mix(in srgb,var(--dados) 27%,transparent)}
-html[data-theme="light"] .toast{background:#0C1D24;color:#F4F8F9;border-color:rgba(255,255,255,.14)}
-html[data-theme="light"] .prop-form{background:var(--panel) !important}
-
-@media(prefers-reduced-motion:reduce){html,body,.btn,.theme-option{transition:none}}
+@media(prefers-reduced-motion:reduce){html,body,.btn{transition:none}}
 
 /* ============================================================
    ATUALIZAÇÃO #631 — NOVO FORMATO DAS TELAS
@@ -719,7 +633,7 @@ html[data-theme="light"] .prop-form{background:var(--panel) !important}
 .menu-grid-primary{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:12px!important}.menu-grid-primary .menu-card{min-height:88px;padding:15px}.menu-grid-primary .menu-card-ico{width:36px;height:36px;border-radius:10px;color:var(--secondary);font-size:14px;letter-spacing:-.08em}.menu-grid-primary .menu-card-titulo{font-size:13px}.menu-grid-primary .menu-card-desc{font-size:10px}
 @media(min-width:1000px){.home-page-heading{margin-top:4px}.home-grid{grid-template-columns:minmax(0,1fr) 290px!important}.ui-home-content{grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr)}.ui-priority-card{grid-column:1/-1}.main-col{min-width:0}.top .brand{display:none}.top{justify-content:flex-start}.busca-global{margin-left:0!important}.sidebar{width:230px!important}.main-col{max-width:calc(100% - 252px)!important}.sb-nav{gap:1px}.sb-item{padding:9px 12px;font-size:12px}.menu-grid-primary{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 @media(max-width:999px){.home-page-heading{margin-top:4px}.resumo-dia{grid-template-columns:repeat(4,minmax(92px,1fr));overflow-x:auto;padding-bottom:3px}.ui-kpi{min-width:108px}.ui-home-content{grid-template-columns:1fr}.ui-priority-card{grid-column:auto}.menu-grid-primary{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
-@media(max-width:620px){body{background:var(--bg)}.top{margin-bottom:8px}.brand{width:100%}.brand h1{font-size:22px}.home-page-heading{margin:2px 0 8px}.home-page-heading h2{font-size:23px}.saudacao{font-size:12px}.resumo-dia{grid-template-columns:repeat(4,100px);margin-left:-2px;margin-right:-2px}.ui-kpi{min-height:82px;padding:11px}.ui-kpi b{font-size:24px}.ui-home-content{gap:12px}.ui-priority-card{padding:15px}.ui-priority-row{grid-template-columns:minmax(0,1fr) auto 10px;gap:8px}.ui-row-action{padding:4px 7px;font-size:9px;max-width:80px;overflow:hidden;text-overflow:ellipsis}.ui-row-copy small{max-width:none}.menu-grid-primary{grid-template-columns:1fr!important}.menu-grid-primary .menu-card{min-height:72px}.theme-settings-card{order:99}.bottom-nav{padding-top:6px}.nav{min-height:54px}.nav .ic svg{width:20px;height:20px}}
+@media(max-width:620px){body{background:var(--bg)}.top{margin-bottom:8px}.brand{width:100%}.brand h1{font-size:22px}.home-page-heading{margin:2px 0 8px}.home-page-heading h2{font-size:23px}.saudacao{font-size:12px}.resumo-dia{grid-template-columns:repeat(4,100px);margin-left:-2px;margin-right:-2px}.ui-kpi{min-height:82px;padding:11px}.ui-kpi b{font-size:24px}.ui-home-content{gap:12px}.ui-priority-card{padding:15px}.ui-priority-row{grid-template-columns:minmax(0,1fr) auto 10px;gap:8px}.ui-row-action{padding:4px 7px;font-size:9px;max-width:80px;overflow:hidden;text-overflow:ellipsis}.ui-row-copy small{max-width:none}.menu-grid-primary{grid-template-columns:1fr!important}.menu-grid-primary .menu-card{min-height:72px}.bottom-nav{padding-top:6px}.nav{min-height:54px}.nav .ic svg{width:20px;height:20px}}
 /* Skeleton de carregamento */
 @keyframes skel-pulse{0%,100%{opacity:.35}50%{opacity:.7}}
 .skel-loading{display:flex;flex-direction:column;gap:12px;padding:4px 0}
@@ -754,7 +668,7 @@ body.lead-foco-aberto .home-page-heading,body.lead-foco-aberto #resumoDia,body.l
 
 /* =============================================================
    ATUALIZAÇÃO #657 — CORRETOR PRO / OPÇÃO A — CAMADA FINAL
-   Uma única camada visual para desktop, mobile, tema claro e escuro.
+   Uma única camada visual para desktop e mobile (tema único desde a v1268).
    ============================================================= */
 :root,
 html[data-theme="dark"]{
@@ -792,43 +706,6 @@ html[data-theme="dark"]{
   --accent:var(--cp-coral);
   --accent-soft:rgba(255,98,88,.14);
   --accent-line:rgba(255,98,88,.42);
-  --lime:var(--cp-coral);
-}
-html[data-theme="light"]{
-  /* LIGHT PREMIUM oficial (Identidade v2.0, doc pág. 4 e 15) */
-  --cp-bg:#F3F6F7;          /* Fundo */
-  --cp-shell:#F3F6F7;       /* mesma base; cards em branco destacam */
-  --cp-sidebar:#082F3B;     /* sidebar petróleo mantida (identidade) */
-  --cp-panel:#FFFFFF;       /* Superfície */
-  --cp-panel-2:#EEF3F5;     /* Superfície suave */
-  --cp-card:#FFFFFF;        /* Superfície */
-  --cp-border:#D7E0E4;      /* Borda oficial */
-  --cp-border-strong:#C8D4DA;
-  --cp-text:#102A34;        /* Texto */
-  --cp-soft:#33454E;
-  --cp-muted:#7E8D94;       /* Auxiliar */
-  --cp-coral:#FF6258;
-  --cp-coral-2:#FF6258;
-  --cp-green:#238AB3;   /* v1214 — era verde */
-  --cp-orange:#ffa32d;
-  --cp-blue:#4aa8dd;
-  --cp-slate:#cad5da;
-  --cp-shadow:0 14px 38px rgba(14,39,52,.10);
-  --cp-card-shadow:0 4px 15px rgba(20,49,62,.045);
-  --bg:var(--cp-bg);
-  --sidebar-bg:var(--cp-sidebar);
-  --panel:var(--cp-panel);
-  --panel2:var(--cp-panel-2);
-  --card:var(--cp-card);
-  --input:#F7FAFB;
-  --line:var(--cp-border);
-  --line2:var(--cp-border-strong);
-  --text:var(--cp-text);
-  --soft:var(--cp-soft);
-  --muted:var(--cp-muted);
-  --accent:var(--cp-coral);
-  --accent-soft:#FFF0EE;    /* Coral suave (seleção) */
-  --accent-line:rgba(255,98,88,.34);
   --lime:var(--cp-coral);
 }
 html,body{min-height:100%;background:var(--cp-bg)!important;color:var(--cp-text)!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif!important}
@@ -969,11 +846,6 @@ input,textarea,select{background:var(--cp-panel-2)!important;color:var(--cp-text
 /* BOTTOM NAV */
 .cp-bottom-nav{display:none!important}
 
-/* LIGHT */
-html[data-theme="light"] .main-col,html[data-theme="light"] .desktop-layout,html[data-theme="light"] body{background:var(--cp-shell)!important}
-html[data-theme="light"] .cp-card,html[data-theme="light"] .cp-topbar{background:#fff!important}
-html[data-theme="light"] .cp-stage-track,html[data-theme="light"] .cp-search{background:#f8fafb!important}
-
 /* MOBILE */
 @media(max-width:999px){
   html,body{background:var(--cp-shell)!important}
@@ -1092,8 +964,7 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 
 /* ===== Atualização #670 — detalhe do lead enxuto e coerente ===== */
 .lead-ui670{display:flex;flex-direction:column;gap:14px;width:100%;padding-bottom:12px}
-.ui670-action-card h3{font-family:var(--font-display);font-size:18px;line-height:1.35;margin:0;color:#fff;max-width:920px}
-.ui670-inline-panel{margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--input)}.ui670-inline-panel>b{display:block;font-size:11px;color:var(--text);margin-bottom:8px}.ui670-quick-dates{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.ui670-quick-dates button{border:1px solid var(--line);background:transparent;color:var(--soft);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;cursor:pointer}.ui670-inline-panel input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.ui670-inline-panel{margin-top:13px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--input)}.ui670-inline-panel>b{display:block;font-size:11px;color:var(--text);margin-bottom:8px}.ui670-inline-panel input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
 /* ===== v1208 — Painel de agendamento (o mesmo no lead e na Agenda) =====
    Print do dono: duas caixas pretas vazias com uma setinha, impossíveis de ler, e o painel
    fechando quando ele ia escolher a hora. O fechar era o salvamento automático (corrigido no
@@ -1118,7 +989,7 @@ body.lead-foco-aberto #home .home-right{display:none!important}
 .cp1208-caixa{margin-top:6px;background:var(--input);border:1px solid var(--line);border-radius:12px;padding:11px;flex-direction:column;min-width:min(280px,100%);flex:1 1 100%}
 
 @media(max-width:700px){
-  .lead-ui670{gap:11px}.ui670-action-card h3{font-size:16px}
+  .lead-ui670{gap:11px}
 }
 
 /* ===== Atualização #671 — nova oportunidade vinculada ===== */
@@ -1216,12 +1087,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .cp-search input,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
 .cp-search input:focus,.ui677-search-wrap>input:focus{background:rgba(255,255,255,.045)!important;box-shadow:0 0 0 3px rgba(255,98,88,.14)!important}
 .home-page-heading h2,#home h1,#home h2,.screen>h1,.screen>h2{letter-spacing:-.04em}.home-center{gap:18px}.resumo-dia{border-radius:18px!important}.resumo-dia .item,.dash-card{border-radius:16px!important;transition:transform .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.resumo-dia .item:hover,.dash-card:hover{transform:translateY(-2px);box-shadow:var(--cp687-shadow)}
-#leadFocoArea .lead-ui670{max-width:100%}.ui670-action-card{background:var(--accent-soft)!important;border-color:rgba(255,98,88,.22)!important}.ui670-action-card h3{letter-spacing:-.025em}.btn,.btn.secondary{border-radius:13px!important}.btn:hover{box-shadow:var(--cp687-glow)}
+#leadFocoArea .lead-ui670{max-width:100%}.btn,.btn.secondary{border-radius:13px!important}.btn:hover{box-shadow:var(--cp687-glow)}
 #carteira table{border-collapse:separate;border-spacing:0}tr{transition:background .14s var(--cp687-ease),transform .14s var(--cp687-ease)}
 #relatorio .card,#agenda .card,#arquivados .card,#menu .card,#propostas .card{border-radius:19px!important}#icTabCerebro[style*="255"]{box-shadow:var(--cp687-glow)}
 .empty,.vazio,[class*="empty"],.small:only-child{line-height:1.5}.cp-empty-premium{display:flex;align-items:center;gap:12px;padding:18px;border:1px dashed rgba(151,197,211,.22);border-radius:16px;background:rgba(255,255,255,.025);color:var(--muted)}.cp-empty-premium b{color:var(--text);display:block;margin-bottom:2px}.cp-empty-premium .cp-empty-icon{width:38px;height:38px;border-radius:13px;background:rgba(255,98,88,.12);color:var(--accent);display:grid;place-items:center;font-weight:900;flex:none}
 .cp687-toast-wrap{position:fixed;right:18px;bottom:18px;z-index:120000;display:flex;flex-direction:column;gap:10px;pointer-events:none}.cp687-toast{min-width:min(360px,calc(100vw - 36px));max-width:420px;padding:13px 15px;border:1px solid rgba(151,197,211,.18);border-radius:15px;background:rgba(2,36,50,.96);box-shadow:0 20px 60px rgba(0,0,0,.42);color:var(--text);display:flex;gap:10px;align-items:flex-start;opacity:0;transform:translateY(10px);animation:cp687ToastIn .18s var(--cp687-ease) forwards}.cp687-toast.ok{border-color:var(--acao-line)}.cp687-toast.warn{border-color:rgba(245,158,11,.36)}.cp687-toast.err{border-color:rgba(255,98,88,.42)}.cp687-toast i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(255,98,88,.14);color:var(--accent);font-style:normal;font-weight:900;flex:none}.cp687-toast.ok i{background:var(--acao-soft);color:var(--acao)}.cp687-toast b{display:block;font-size:13px}.cp687-toast small{display:block;margin-top:3px;color:var(--muted);font-size:11px;line-height:1.35}@keyframes cp687ToastIn{to{opacity:1;transform:translateY(0)}}
-.cp687-notify-panel{position:fixed;right:18px;top:78px;z-index:110000;width:min(390px,calc(100vw - 36px));max-height:min(620px,calc(100vh - 100px));overflow:auto;padding:14px;border:1px solid rgba(151,197,211,.18);border-radius:18px;background:rgba(1,33,47,.98);box-shadow:0 28px 80px rgba(0,0,0,.52);display:none}.cp687-notify-panel.open{display:block;animation:cp687Panel .16s var(--cp687-ease)}@keyframes cp687Panel{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}.cp687-notify-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}.cp687-notify-head h3{margin:0;font-size:17px;letter-spacing:-.02em}.cp687-notify-head small{display:block;color:var(--muted);margin-top:3px}.cp687-notify-close{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);border-radius:10px;width:32px;height:32px;cursor:pointer}.cp687-notify-item{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:12px;border:1px solid rgba(151,197,211,.12);border-radius:14px;background:rgba(255,255,255,.028);margin-top:8px;cursor:pointer}.cp687-notify-item:hover{border-color:rgba(255,98,88,.30);background:rgba(255,98,88,.055)}.cp687-notify-item i{width:34px;height:34px;border-radius:12px;background:rgba(255,98,88,.13);color:var(--accent);display:grid;place-items:center;font-style:normal;font-weight:900}.cp687-notify-item b{display:block;font-size:12px}.cp687-notify-item span{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:2px}.bell-badge:not([hidden]){display:block!important;position:absolute;top:5px;right:5px;min-width:8px;height:8px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 3px rgba(255,98,88,.18)}@keyframes cp687Sk{to{background-position:-240% 0}}
+.cp687-notify-panel{position:fixed;right:18px;top:78px;z-index:110000;width:min(390px,calc(100vw - 36px));max-height:min(620px,calc(100vh - 100px));overflow:auto;padding:14px;border:1px solid rgba(151,197,211,.18);border-radius:18px;background:rgba(1,33,47,.98);box-shadow:0 28px 80px rgba(0,0,0,.52);display:none}.cp687-notify-panel.open{display:block;animation:cp687Panel .16s var(--cp687-ease)}@keyframes cp687Panel{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}.cp687-notify-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}.cp687-notify-head h3{margin:0;font-size:17px;letter-spacing:-.02em}.cp687-notify-head small{display:block;color:var(--muted);margin-top:3px}.cp687-notify-close{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);border-radius:10px;width:32px;height:32px;cursor:pointer}.bell-badge:not([hidden]){display:block!important;position:absolute;top:5px;right:5px;min-width:8px;height:8px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 3px rgba(255,98,88,.18)}@keyframes cp687Sk{to{background-position:-240% 0}}
 .cp687-screen-polish{animation:cp687Screen .18s var(--cp687-ease)}@keyframes cp687Screen{from{opacity:.96;transform:translateY(3px)}to{opacity:1;transform:none}}
 @media(max-width:900px){.cp687-toast-wrap{left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));}.cp687-toast{min-width:0;width:100%;box-sizing:border-box}.cp687-notify-panel{left:12px;right:12px;top:70px;width:auto}.lead-ui670{padding-bottom:calc(78px + env(safe-area-inset-bottom))}.cp-topbar{position:sticky;top:0;z-index:90}.screen>h1,.screen>h2{font-size:clamp(25px,8vw,36px)!important}.card,.compact{border-radius:17px!important}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
@@ -1263,397 +1134,23 @@ button,.card,.menu-card,.top3-mini,.resumo-dia .item,.dash-card,.sb-brand{
 #importCard.cp-import-rodando>.small,
 #importCard.cp-import-rodando>#fileName,
 #importCard.cp-import-rodando>.btns{display:none!important}
-
-/* ============================================================
-   ATUALIZAÇÃO #751 — TEMA CLARO LEGÍVEL + HOME LIMPA
-   Correção visual apenas. Não altera IA, prompt ou regras comerciais.
-   ============================================================ */
-html[data-theme="light"]{
-  /* LIGHT PREMIUM oficial (Identidade v2.0) — camada que renderiza o tema claro */
-  --cp-bg:#F3F6F7;          /* Fundo */
-  --cp-shell:#F3F6F7;
-  --cp-sidebar:#082F3B;     /* sidebar petróleo mantida (identidade) */
-  --cp-panel:#FFFFFF;       /* Superfície */
-  --cp-panel-2:#EEF3F5;     /* Superfície suave */
-  --cp-card:#FFFFFF;        /* Superfície */
-  --cp-border:#D7E0E4;      /* Borda oficial */
-  --cp-border-strong:#C8D4DA;
-  --cp-text:#102A34;        /* Texto */
-  --cp-soft:#33454E;
-  --cp-muted:#7E8D94;       /* Auxiliar */
-  --cp-slate:#d7e2e6;
-  --cp-shadow:0 14px 34px rgba(16,45,58,.08);
-  --cp-card-shadow:0 8px 22px rgba(15,45,60,.06);
-  --bg:var(--cp-shell);
-  --panel:var(--cp-panel);
-  --panel2:var(--cp-panel-2);
-  --card:var(--cp-card);
-  --input:#F7FAFB;
-  --line:var(--cp-border);
-  --line2:var(--cp-border-strong);
-  --text:var(--cp-text);
-  --soft:var(--cp-soft);
-  --muted:var(--cp-muted);
-  --surface-soft:rgba(16,42,52,.035);
-  --surface-hover:rgba(16,42,52,.06);
-  --surface-strong:rgba(16,42,52,.09);
-}
-html[data-theme="light"] body,
-html[data-theme="light"] .app,
-html[data-theme="light"] .main-col,
-html[data-theme="light"] .desktop-layout,
-html[data-theme="light"] .screen,
-html[data-theme="light"] #home,
-html[data-theme="light"] #carteira{
-  background:#f5f8fa!important;
-  color:var(--cp-text)!important;
-}
-html[data-theme="light"] .cp-topbar,
-html[data-theme="light"] .top,
-html[data-theme="light"] .sticky{
-  background:rgba(255,255,255,.94)!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-  box-shadow:0 1px 0 rgba(16,38,49,.04)!important;
-}
-html[data-theme="light"] .sidebar{
-  background:#002c3c!important;
-  color:#eaf3f6!important;
-}
-html[data-theme="light"] .sb-item,
-html[data-theme="light"] .nav,
-html[data-theme="light"] .sidebar small,
-html[data-theme="light"] .sidebar span{color:#c9d9de!important}
-html[data-theme="light"] .sb-item.active{background:rgba(255,98,88,.18)!important;color:#fff!important}
-
 /* Cards e blocos principais no claro */
-html[data-theme="light"] .card,
-html[data-theme="light"] .cp-card,
-html[data-theme="light"] .ui-kpi,
-html[data-theme="light"] .ui-priority-card,
-html[data-theme="light"] .menu-card,
-html[data-theme="light"] .prop-form{
-  background:#ffffff!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-  box-shadow:var(--cp-card-shadow)!important;
-}
-html[data-theme="light"] .cp-card-head h3,
-html[data-theme="light"] .ui-section-head h3,
-html[data-theme="light"] .label,
-html[data-theme="light"] h1,
-html[data-theme="light"] h2,
-html[data-theme="light"] h3,
-html[data-theme="light"] h4,
-html[data-theme="light"] strong,
-html[data-theme="light"] b{color:var(--cp-text)!important}
-html[data-theme="light"] p,
-html[data-theme="light"] small,
-html[data-theme="light"] .small,
-html[data-theme="light"] .sub,
-html[data-theme="light"] .muted{color:var(--cp-muted)!important}
 
 /* Home e Pipeline */
-html[data-theme="light"] .ui-row-copy strong,
-html[data-theme="light"] .ui-row-chevron{color:var(--cp-text)!important}
-html[data-theme="light"] .ui-row-copy small,
-html[data-theme="light"] .ui-row-copy em,
-html[data-theme="light"] .ui-row-copy em.ui-row-motivo{color:var(--cp-soft)!important;opacity:1!important}
-html[data-theme="light"] .ui-priority-row,
-html[data-theme="light"] .cp-running-row,
-html[data-theme="light"] .cp-appointment{
-  background:#ffffff!important;
-  color:var(--cp-text)!important;
-  border-color:var(--cp-border)!important;
-}
-html[data-theme="light"] .ui-priority-row:hover,
-html[data-theme="light"] .cp-running-row:hover,
-html[data-theme="light"] .cp-appointment:hover{background:#f8fbfc!important}
-html[data-theme="light"] .ui-row-action,
-html[data-theme="light"] .cp-status,
-html[data-theme="light"] .cp-priority,
-html[data-theme="light"] .cp-chip{
-  background:rgba(255,98,88,.08)!important;
-  border-color:rgba(255,98,88,.30)!important;
-  color:#d83e36!important;
-}
-html[data-theme="light"] .cp-card-link{background:var(--cp-coral)!important;border-color:var(--cp-coral)!important;color:#fff!important}
-html[data-theme="light"] .cp-stage-track{background:#e7eef1!important}
-html[data-theme="light"] .cp-table-head{color:var(--cp-muted)!important;border-color:var(--cp-border)!important}
 
-/* Listas antigas/virtuais que ainda eram escuras no tema claro */
-html[data-theme="light"] .cp695-list,
-html[data-theme="light"] .ui-priority-list{
-  background:#ffffff!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-}
-
-/* Detalhe do lead: remover cartões escuros dentro do tema claro */
-html[data-theme="light"] .cp704-lead{color:var(--cp-text)!important}
-html[data-theme="light"] .cp704-hero,
-html[data-theme="light"] .cp704-card,
-html[data-theme="light"] .cp704-details,
-html[data-theme="light"] .cp704-msg-item,
-html[data-theme="light"] .cp704-accordions,
-html[data-theme="light"] .cp704-empty-analysis{
-  background:#ffffff!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-  box-shadow:var(--cp-card-shadow)!important;
-}
-html[data-theme="light"] .cp704-hero{background:linear-gradient(180deg,#ffffff,#f7fafb)!important}
-html[data-theme="light"] .cp704-hero h1,
-html[data-theme="light"] .cp704-card-title h2,
-html[data-theme="light"] .cp704-msg-head b,
-html[data-theme="light"] .cp704-tmsg b,
-html[data-theme="light"] .cp704-row div,
-html[data-theme="light"] .cp704-last b{color:var(--cp-text)!important}
-html[data-theme="light"] .cp704-situation p,
-html[data-theme="light"] .cp704-step p,
-html[data-theme="light"] .cp704-msg-item p,
-html[data-theme="light"] .cp704-body,
-html[data-theme="light"] .cp704-ai li,
-html[data-theme="light"] .cp704-last,
-html[data-theme="light"] .cp704-tmsg p{color:var(--cp-soft)!important}
-/* v1239 — bloco "Como conduzir este atendimento". O texto da condução é a conclusão da análise:
-   precisa do contraste FORTE do tema claro (--cp-text), não do cinza de corpo de texto. Sem esta
-   regra ele herdava um cinza médio sobre o cartão branco — flagrado na conferência no navegador,
-   não no código. */
-html[data-theme="light"] .cp704-conducao-txt{color:var(--cp-text)!important}
-html[data-theme="light"] .cp704-tag,
-html[data-theme="light"] .cp704-card-title small,
-html[data-theme="light"] .cp704-last span,
-html[data-theme="light"] .cp704-details summary:after,
-html[data-theme="light"] .cp704-row small,
-html[data-theme="light"] .cp704-tmsg small{color:var(--cp-muted)!important}
-html[data-theme="light"] .cp704-tag{background:#f7fafb!important;border-color:var(--cp-border)!important}
-html[data-theme="light"] .cp704-metrics,
-html[data-theme="light"] .cp704-tmsg,
-html[data-theme="light"] .cp704-row{border-color:var(--cp-border)!important}
-html[data-theme="light"] .cp704-metric{color:var(--cp-soft)!important}
-html[data-theme="light"] .cp704-copy,
-html[data-theme="light"] .cp704-full-btn,
-html[data-theme="light"] .cp704-reanalyse,
-html[data-theme="light"] .cp704-actions-grid button,
-html[data-theme="light"] .cp704-quickbar{
-  background:#ffffff!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-}
 /* v1197 — o X de "não enviei essa mensagem" (histórico do cliente) nasce com borda e fundo
    branquinhos (rgba de branco), o que funciona no tema escuro e some no fundo BRANCO do tema
    claro — conferido em print, mesma armadilha da regra logo abaixo. Aqui ele ganha borda e
    texto com contraste real, e fica vermelho ao passar o dedo/mouse, porque é uma remoção. */
-html[data-theme="light"] .cp704-tmsg-undo{
-  border-color:var(--cp-border-strong)!important;
-  background:#fff!important;
-  color:var(--cp-soft)!important;
-}
-html[data-theme="light"] .cp704-tmsg-undo:hover{
-  border-color:rgba(214,58,45,.75)!important;
-  background:#fff5f4!important;
-  color:#c0392b!important;
-}
-/* v1186 — "Excluir definitivamente" precisa PARECER perigoso nos dois temas. A regra acima
-   (`.cp704-actions-grid button` no tema claro) tem especificidade maior que `.cp704-danger` e
-   estava deixando o botão de apagar para sempre com a mesma cara de um botão comum. Isso só
-   apareceu agora porque o painel onde ele mora ficou anos sem ser desenhado (ver v1186): sem tela,
-   ninguém enxerga o defeito de estilo. Conferido em print nos dois temas. */
-html[data-theme="light"] .cp704-actions-grid button.cp704-danger{
-  background:#fff5f4!important;
-  border-color:rgba(214,58,45,.55)!important;
-  color:#c0392b!important;
-}
-html[data-theme="light"] .cp704-actions-grid button.cp704-danger:hover{
-  background:#ffe9e7!important;
-  border-color:rgba(214,58,45,.85)!important;
-}
-html[data-theme="light"] .cp704-copy:hover,
-html[data-theme="light"] .cp704-full-btn:hover,
-html[data-theme="light"] .cp704-reanalyse:hover{background:#f8fbfc!important;border-color:var(--cp-border-strong)!important}
-/* v1146 — a opção COPIADA fica coral nos dois temas. No tema claro, os blocos acima forçam branco
-   com !important (lição registrada na v1078: regra nova pode ser atropelada por bloco antigo com
-   !important), então a marca da cópia precisa vir com a mesma força — senão o dono toca em Copiar
-   e nada muda de cor, que foi exatamente o que ele relatou. */
-html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada{background:rgba(255,98,88,.10)!important;border-color:var(--cp-coral)!important}
-html[data-theme="light"] .cp704-msg-item.cp704-msg-copiada .cp704-copy{background:var(--cp-coral)!important;border-color:transparent!important;color:#ffffff!important}
-html[data-theme="light"] .cp704-attended:disabled{background:var(--acao-soft)!important;border-color:var(--acao-line)!important;color:var(--acao)!important}
-html[data-theme="light"] .cp704-pill{background:rgba(255,163,45,.12)!important;border-color:rgba(255,163,45,.42)!important;color:#9b5b00!important}
-html[data-theme="light"] .cp704-pill.green{background:var(--acao-soft)!important;border-color:var(--acao-line)!important;color:var(--acao)!important}
-html[data-theme="light"] .cp704-pill.red{background:rgba(255,98,88,.10)!important;border-color:rgba(255,98,88,.38)!important;color:#c93a32!important}
-html[data-theme="light"] .cp704-ai i{color:var(--acao)!important}
-html[data-theme="light"] .cp704-dot.you{background:var(--cp-coral)!important}
 
 /* Formulários e botões no claro */
-html[data-theme="light"] input,
-html[data-theme="light"] textarea,
-html[data-theme="light"] select,
-html[data-theme="light"] .cp-search,
-html[data-theme="light"] .busca-global{
-  background:#ffffff!important;
-  border-color:var(--cp-border)!important;
-  color:var(--cp-text)!important;
-}
-html[data-theme="light"] input::placeholder,
-html[data-theme="light"] textarea::placeholder{color:#8b9da5!important}
-html[data-theme="light"] .btn.secondary,
-html[data-theme="light"] button.secondary{
-  background:#ffffff!important;
-  color:var(--cp-text)!important;
-  border-color:var(--cp-border)!important;
-}
-html[data-theme="light"] .empty,
-html[data-theme="light"] .notice{background:#ffffff!important;border-color:var(--cp-border)!important;color:var(--cp-soft)!important}
-
-/* ============================================================
-   ATUALIZAÇÃO #752 — TEMA CLARO REVISADO + REANÁLISE LEGÍVEL
-   Corrige contraste de telas geradas via JS/inlines e remove blocos escuros remanescentes.
-   ============================================================ */
-html[data-theme="light"] #carteiraBody{
-  background:#ffffff!important;
-  color:#102631!important;
-  border-color:#d9e4e8!important;
-  box-shadow:0 8px 22px rgba(15,45,60,.06)!important;
-}
-/* Atendimentos (cp788) no tema claro: superfícies claras em vez do petróleo translúcido
-   (rgba(7,52,64,.58)), que virava um véu cinza sobre o fundo branco — corrige o contraste (seção 26). */
-html[data-theme="light"] .cp788-att-empty,
-html[data-theme="light"] .cp788-att-loading{
-  background:#FFFFFF!important;
-  border-color:#D7E0E4!important;
-  box-shadow:0 8px 22px rgba(15,45,60,.06)!important;
-}
-html[data-theme="light"] .cp788-att-empty span{color:#596A72!important;opacity:1!important}
-
-html[data-theme="light"] .ui682-analysis-progress{
-  background:#fff8eb!important;
-  border-color:#f0c978!important;
-  color:#102631!important;
-}
-html[data-theme="light"] .ui682-analysis-progress *,
-html[data-theme="light"] #ui682ProgressText,
-html[data-theme="light"] #ui682ProgressPct{color:#102631!important}
-html[data-theme="light"] .ui682-analysis-progress div[style*="background"]{background:#eadfca!important}
-html[data-theme="light"] .cp704-empty-analysis,
-html[data-theme="light"] .cp704-empty-analysis b,
-html[data-theme="light"] .cp704-empty-analysis span{
-  color:#102631!important;
-}
-html[data-theme="light"] .cp704-empty-analysis{
-  background:#fffaf1!important;
-  border-color:#f0c978!important;
-}
-html[data-theme="light"] .cp704-empty-analysis button,
-html[data-theme="light"] .cp704-reanalyse,
-html[data-theme="light"] button[onclick*="ui670Reanalisar"]{
-  background:#ffffff!important;
-  color:#102631!important;
-  border-color:#c4d2d8!important;
-  box-shadow:0 4px 14px rgba(15,45,60,.06)!important;
-}
-html[data-theme="light"] .cp704-empty-analysis button:hover,
-html[data-theme="light"] .cp704-reanalyse:hover,
-html[data-theme="light"] button[onclick*="ui670Reanalisar"]:hover{
-  background:#f8fbfc!important;
-  border-color:#FF6258!important;
-  color:#d83e36!important;
-}
-html[data-theme="light"] .notice,
-html[data-theme="light"] .toast,
-html[data-theme="light"] [style*="color:var(--muted)"]{
-  color:#526b76!important;
-}
-html[data-theme="light"] [style*="color:#fff"],
-html[data-theme="light"] [style*="color: #fff"]{
-  color:#102631!important;
-}
-
-/* ============================================================
-   ATUALIZAÇÃO #753 — TEMA CLARO: CONTRASTE REAL E HOVER VISÍVEL
-   Corrige blocos remanescentes do tema escuro que eram injetados via JS.
-   ============================================================ */
-html[data-theme="light"]{
-  --cp-hover:#e6eef2;
-  --cp-hover-strong:#dbe8ed;
-}
 
 /* Linha/lista no claro: destaque visível no mouse, sem virar bloco escuro. */
-html[data-theme="light"] .ui-priority-row:hover,
-html[data-theme="light"] .cp-running-row:hover,
-html[data-theme="light"] .cp-appointment:hover,
-html[data-theme="light"] .lead:hover,
-html[data-theme="light"] .top3-mini:hover{
-  background:var(--cp-hover)!important;
-  border-color:#b7cad2!important;
-  color:#102631!important;
-}
-html[data-theme="light"] .ui-priority-row:hover *,
-html[data-theme="light"] .cp-running-row:hover *,
-html[data-theme="light"] .cp-appointment:hover *,
-html[data-theme="light"] .lead:hover *,
-html[data-theme="light"] .top3-mini:hover *{
-  opacity:1!important;
-}
-html[data-theme="light"] .ui-priority-row:hover strong,
-html[data-theme="light"] .cp-running-row:hover strong,
-html[data-theme="light"] .cp-appointment:hover strong,
-html[data-theme="light"] .lead:hover strong,
-html[data-theme="light"] .top3-mini:hover strong{
-  color:#102631!important;
-}
-html[data-theme="light"] .ui-priority-row:hover small,
-html[data-theme="light"] .ui-priority-row:hover em,
-html[data-theme="light"] .cp-running-row:hover small,
-html[data-theme="light"] .cp-appointment:hover small,
-html[data-theme="light"] .lead:hover .small,
-html[data-theme="light"] .top3-mini:hover .small{
-  color:#314a55!important;
-}
 
 /* Reanálise e mensagens vazias no claro: sempre legível. */
-html[data-theme="light"] .cp704-reanalyse,
-html[data-theme="light"] .cp704-empty-analysis button,
-html[data-theme="light"] button[onclick*="reanalis"],
-html[data-theme="light"] button[onclick*="Reanalis"],
-html[data-theme="light"] button[onclick*="ui670Reanalisar"]{
-  background:#ffffff!important;
-  color:#102631!important;
-  border:1px solid #b7cad2!important;
-  box-shadow:0 4px 14px rgba(15,45,60,.06)!important;
-  opacity:1!important;
-}
-html[data-theme="light"] .cp704-reanalyse:hover,
-html[data-theme="light"] .cp704-empty-analysis button:hover,
-html[data-theme="light"] button[onclick*="reanalis"]:hover,
-html[data-theme="light"] button[onclick*="Reanalis"]:hover,
-html[data-theme="light"] button[onclick*="ui670Reanalisar"]:hover{
-  background:#fff3f1!important;
-  color:#d83e36!important;
-  border-color:rgba(255,98,88,.42)!important;
-}
-html[data-theme="light"] .cp704-empty-analysis,
-html[data-theme="light"] .cp704-empty-analysis *{
-  color:#102631!important;
-  opacity:1!important;
-}
-html[data-theme="light"] .cp704-empty-analysis small,
-html[data-theme="light"] .cp704-empty-analysis span,
-html[data-theme="light"] .cp704-empty-analysis p{
-  color:#526b76!important;
-}
 
 /* Notas/avisos inline que estavam rosa claro e ilegíveis. */
-html[data-theme="light"] .notice,
-html[data-theme="light"] [style*="color:pink"],
-html[data-theme="light"] [style*="color: pink"],
-html[data-theme="light"] [style*="color:#ffc"],
-html[data-theme="light"] [style*="color: #ffc"]{
-  color:#526b76!important;
-  background:#ffffff!important;
-  border-color:#d9e4e8!important;
-  opacity:1!important;
-}
+
 
 /* v785 — bloco "Preparação da carteira" removido da Home */
 
@@ -1781,8 +1278,6 @@ html[data-theme="light"] [style*="color: #ffc"]{
 .cp788-day-name{width:100%;text-align:center;padding:6px 7px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:rgba(255,255,255,.04);color:var(--text);font:inherit;font-size:11px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp788-day-name:hover{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08)}
 .cp788-day-empty{color:var(--muted);font-size:12px;padding:6px 0;opacity:.55}
-html[data-theme="light"] .cp788-day:not(:last-child){border-right-color:#E4EBEE}
-html[data-theme="light"] .cp788-day-name{background:#F4F8F9!important;border-color:#E4EBEE!important;color:#102A34!important}
 /* v910 — no CELULAR as 7 colunas lado a lado forçavam rolagem horizontal (feio). Vira uma pilha
    vertical: cada dia é uma faixa (prédio pequeno + dia + contagem em cima; nomes em chips embaixo). */
 /* "Final de semana" no lugar do número do card, e o botão "Atender +1" */
@@ -1798,7 +1293,6 @@ html[data-theme="light"] .cp788-day-name{background:#F4F8F9!important;border-col
   .cp788-day-list{flex-basis:100%;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:2px}
   .cp788-day-name{width:auto;max-width:100%;flex:0 1 auto}
   .cp788-day-empty{flex-basis:100%;text-align:left}
-  html[data-theme="light"] .cp788-day:not(:last-child){border-bottom-color:#E4EBEE}
 }
 
 /* Atualização #810 — Home sem coluna lateral redundante ou skeleton eterno.
@@ -2026,9 +1520,6 @@ body.cpio-aberto{overflow:hidden}
 #topBell.cp-hoje-alerta{background:var(--acao)!important;color:#052B36!important}
 #topBell.cp-hoje-alerta svg{opacity:1!important}
 #topBell.cp-hoje-alerta:hover{background:var(--acao)!important;filter:brightness(1.06)!important}
-/* No tema claro o ciano é mais escuro (#238AB3): ali quem lê melhor é o texto branco (conferido
-   no navegador — com o azul-petróleo o contraste caía abaixo do aceitável). */
-html[data-theme="light"] #topBell.cp-hoje-alerta{color:#fff!important}
 #topBell.cp-hoje-atraso{background:var(--risco)!important;color:#fff!important;animation:cpAgPulsa 1.6s ease-in-out infinite!important}
 #topBell.cp-hoje-atraso svg{opacity:1!important}
 #topBell.cp-hoje-atraso:hover{background:var(--risco)!important;filter:brightness(1.06)!important}

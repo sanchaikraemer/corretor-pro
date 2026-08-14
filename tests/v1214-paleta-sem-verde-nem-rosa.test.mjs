@@ -37,14 +37,17 @@ for (const [arquivo, src] of fontes) {
   }
 }
 
-// Os tokens existem nos DOIS temas (senão um deles herda a cor antiga do :root e volta a destoar).
+// Os tokens existem no tema do app.
+// v1268 — eram DOIS temas até aqui; o tema claro foi removido do sistema por ordem do dono, então
+// a varredura passou a valer só pro escuro, que é o único que existe. A checagem em si não mudou.
 const styles = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+assert.doesNotMatch(styles, /data-theme="light"/, 'o tema claro não pode voltar ao CSS (v1268)');
 function bloco(seletor, fim = 'color-scheme'){
   const i = styles.indexOf(seletor);
   assert.ok(i > -1, `não achei o bloco ${seletor}`);
   return styles.slice(i, styles.indexOf(fim, i));
 }
-for (const [nome, seletor] of [['escuro', 'html[data-theme="dark"]{'], ['claro', 'html[data-theme="light"]{']]) {
+for (const [nome, seletor] of [['escuro', 'html[data-theme="dark"]{']]) {
   const b = bloco(seletor);
   for (const token of ['--acao:', '--acao-soft:', '--acao-line:', '--timing:', '--risco:', '--risco-soft:', '--risco-line:']) {
     assert.ok(b.includes(token), `tema ${nome} precisa definir ${token}`);

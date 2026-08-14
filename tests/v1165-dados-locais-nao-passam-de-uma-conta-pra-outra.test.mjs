@@ -85,7 +85,7 @@ const semearContaA = (ls) => {
   ls.setItem('corretor_pro_api_key_v679', 'chave-antiga');
   ls.setItem('cpAtividade_analises', '["2026-08-01T10:00:00Z"]');
   ls.setItem('cpTempoAppPorDia', '{"2026-08-01":600}');
-  ls.setItem('cp-tema', 'escuro'); // preferência NEUTRA do aparelho: não pode sumir nunca
+  ls.setItem('cp-preferencia-do-aparelho', 'x'); // chave NEUTRA do aparelho: não pode sumir nunca
 };
 
 // ── 1. Trocou de dono: o que era da conta A não sobrevive ─────────────────────────────────────
@@ -106,7 +106,7 @@ const semearContaA = (ls) => {
   assert.deepEqual(bancos['corretor-pro-notif'], undefined, 'os nomes de cliente do lembrete precisam sumir');
   assert.deepEqual(nomesDeCache, ['direciona-static-v1'],
     'os caches de compartilhamento somem; o cache do app (static) continua, senão o app deixaria de abrir sem internet');
-  assert.equal(ls.getItem('cp-tema'), 'escuro', 'preferência neutra do aparelho (tema) não pode ser apagada');
+  assert.equal(ls.getItem('cp-preferencia-do-aparelho'), 'x', 'chave neutra do aparelho não pode ser apagada');
   assert.equal(ls.getItem(DONO_KEY), 'usuario-B', 'o aparelho precisa ficar carimbado com o dono novo');
 }
 
@@ -159,7 +159,7 @@ const semearContaA = (ls) => {
   // Sair e voltar na MESMA conta não pode tomar do corretor o histórico que só existe aqui.
   assert.equal(ls.getItem('cpAtividade_analises'), '["2026-08-01T10:00:00Z"]',
     'contador de atividade é do próprio corretor e não sobe pro servidor — sair e voltar não pode apagar');
-  assert.equal(ls.getItem('cp-tema'), 'escuro', 'preferência neutra do aparelho continua');
+  assert.equal(ls.getItem('cp-preferencia-do-aparelho'), 'x', 'chave neutra do aparelho continua');
 }
 
 // ── 5. Sem sessão (caminho antigo por chave compartilhada): não mexe em nada ───────────────────
