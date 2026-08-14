@@ -76,6 +76,16 @@ próprio cliente. Junto, o bloco "Detalhes comerciais" do cliente ganhou duas li
 cliente pediu por conta própria"** e **"O que ainda falta descobrir"** (campos `pedidoEspontaneo` e
 `faltaDescobrir` do diagnóstico). Ver `NOTAS-v1271.md`._
 
+_**v1277 — a oferta que o cliente já ignorou não volta com outras palavras.** O pedido enviado à IA
+passou a levar um fato objetivo novo: **quantas mensagens o corretor mandou no fim da conversa sem
+nenhuma resposta** (contadas por DIA de contato, não por balão) e o **texto delas**
+(`tentativasSemRespostaDoCorretor`, em `_pipeline.js`). Com isso entraram a regra dura "a mensagem
+que já foi ignorada não volta com outras palavras" (licença já pedida e não respondida vira
+entrega; duas ou mais tentativas sem resposta obrigam pelo menos uma das três a propor pessoa a
+pessoa com dois dias/horários concretos; e é proibido contar as tentativas pro cliente) e o **item
+11 da conferência final**. O código só conta e informa — nenhuma mensagem é reescrita. Ver
+`NOTAS-v1277.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
