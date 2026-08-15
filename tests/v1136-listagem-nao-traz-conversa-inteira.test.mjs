@@ -40,13 +40,15 @@ function linhaBase(id, extras = {}) {
   };
 }
 
-// v1251 — o cache virou v4 (entraram as mensagens do mês). O nome da função fica como está pra
-// não espalhar renomeação por um teste que já é longo; o que importa é a versão de dentro.
+// v1251 — o cache virou v4 (entraram as mensagens do mês); v1281 — virou v5 (as mesmas contagens
+// do mês anterior). O nome da função fica como está pra não espalhar renomeação por um teste que
+// já é longo; o que importa é a versão de dentro.
 function cacheV3De(linha, previewLimit = 8) {
   const t = linha.timeline_json;
   return {
-    v: 4, len: t.length, dia: HOJE_BR, marca: linha.atualizado_em,
+    v: 5, len: t.length, dia: HOJE_BR, marca: linha.atualizado_em,
     msgMesTotal: 3, msgMesCliente: 2, msgMesCorretor: 1,
+    msgMesAntTotal: 0, msgMesAntCliente: 0, msgMesAntCorretor: 0,
     lastIso: t[t.length - 1].iso, lastClientIso: t[t.length - 1].iso, lastCorretorIso: t[1].iso,
     lastTouchIso: t[t.length - 1].iso, lastTouchTime: t[t.length - 1].time,
     clientMessageCount: 2, clientQuestionCount: 2, clientMessageDays: 2,
@@ -136,7 +138,7 @@ function fakeSupabaseHonesto(linhas, { falharSegundaConsulta = false } = {}) {
 
   assert.equal(supa.registro.writebacks.length, 1, 'a linha recalculada grava o cache v3 novo');
   const wb = supa.registro.writebacks[0].payload.resultado_analise._statsCache;
-  assert.equal(wb.v, 4); // v1251 — subiu de 3 pra 4 com as mensagens do mês
+  assert.equal(wb.v, 5); // v1251 subiu 3→4 (mensagens do mês); v1281 subiu 4→5 (mês anterior)
   assert.equal(wb.marca, mexida.atualizado_em, 'a marca nova é o atualizado_em atual da linha');
   assert.equal(wb.dia, HOJE_BR);
   assert.ok(Array.isArray(wb.preview) && wb.preview.length === 3, 'o cache novo leva a prévia junto');

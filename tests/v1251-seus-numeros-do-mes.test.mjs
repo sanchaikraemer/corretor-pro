@@ -44,8 +44,11 @@ assert.match(enviada, /tp === "sugestao-ia" \|\| src === "assistant"/,
   'sugestão da IA guardada não é mensagem enviada — só vira quando é copiada e mandada');
 
 // O cache por lead subiu de versão: sem isso, cache antigo devolveria mensagens do mês zeradas.
-assert.match(persistence, /v: 4,/, 'o _statsCache precisa subir pra v4 com os campos novos');
-assert.match(persistence, /if \(!c \|\| c\.v !== 4 \|\| c\.dia !== hoje\) return false;/,
+// v1281 — a versão subiu de novo (4 → 5, entraram as contagens do mês anterior). O que este teste
+// guarda é a REGRA: campo novo no cache obriga versão nova, senão o cache de ontem continua
+// valendo e o número volta zerado.
+assert.match(persistence, /v: 5,/, 'o _statsCache precisa subir de versão com os campos novos');
+assert.match(persistence, /if \(!c \|\| c\.v !== 5 \|\| c\.dia !== hoje\) return false;/,
   'a validade do cache precisa exigir a versão nova');
 
 // ── 2. O QUADRADINHO SAIU E O PAINEL ENTROU ─────────────────────────────────────────────────
