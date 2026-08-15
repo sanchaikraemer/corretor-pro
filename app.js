@@ -11396,7 +11396,18 @@ function cpDesempenhoMetricas(items, all, periodo){
   const fimPeriodo = periodo?.fim ?? null; // null = até agora (mês corrente)
   const dentro = (t) => Number.isFinite(t) && t >= cutoffPeriodo && (!fimPeriodo || t < fimPeriodo);
 
-  let mensagensTrocadas = 0, mensagensCopiadas = 0;
+  // v1281 — "Mensagens trocadas" desta tela era contada em cima da PRÉVIA de mensagens que a
+  // listagem manda (as últimas ~8 de cada cliente). Numa carteira de conversas de verdade isso
+  // sai MUITO abaixo da realidade — e, desde a v1251, o painel "Seu mês" da tela inicial mostra o
+  // número certo (contado no servidor, sobre a conversa inteira). Resultado: as duas telas
+  // respondiam a MESMA pergunta com números bem diferentes no mesmo mês, e foi o que o dono
+  // estranhou no print de 15/08/2026. Agora as duas leem a mesma fonte: os campos que o servidor
+  // manda prontos por cliente — msgMes* (mês corrente) e msgMesAnt* (mês fechado anterior).
+  // Se a carteira ainda vier sem esses campos (cache antigo, resposta velha em cache), cai na
+  // contagem antiga em vez de mostrar zero.
+  const vendoMesAnterior = !!fimPeriodo;
+  let msgServidor = 0, temMsgServidor = false, msgPrevia = 0;
+  let mensagensCopiadas = 0;
   const leadsAtendidosIds = new Set();
   const propostas = [];
   // v1182 — "Análises feitas" e "Importações" vinham SÓ do registro de uso deste aparelho
@@ -11413,10 +11424,15 @@ function cpDesempenhoMetricas(items, all, periodo){
   const CP_MESMA_ANALISE_MS = 10 * 60 * 1000; // carimbos a menos de 10min = a MESMA análise
   let importacoesCarteira = 0, analisesCarteira = 0;
   for(const l of todos){
+    const campoServidor = vendoMesAnterior ? l?.msgMesAntTotal : l?.msgMesTotal;
+    if(campoServidor !== undefined && campoServidor !== null){
+      temMsgServidor = true;
+      msgServidor += Number(campoServidor) || 0;
+    }
     const msgs = Array.isArray(l?.recentMessages) ? l.recentMessages : [];
     for(const m of msgs){
       const t = Date.parse(m?.iso || "");
-      if(dentro(t)) mensagensTrocadas++;
+      if(dentro(t)) msgPrevia++;
       if(m?.type === "proposta" && (!fimPeriodo ? true : dentro(t))) propostas.push({ lead:l, ts: Number.isFinite(t)?t:0 });
     }
     const eventos = l?.analysis?.aprendizado?.eventos || [];
@@ -11455,7 +11471,7 @@ function cpDesempenhoMetricas(items, all, periodo){
   return {
     tempoHojeSeg: typeof cpTempoAppSegundosHoje === "function" ? cpTempoAppSegundosHoje() : 0,
     tempoMedia7dSeg: typeof cpTempoAppMediaSegundos7d === "function" ? cpTempoAppMediaSegundos7d() : 0,
-    mensagensTrocadas,
+    mensagensTrocadas: temMsgServidor ? msgServidor : msgPrevia,
     empreendimentos,
     leadsAtendidos: leadsAtendidosIds.size,
     mensagensCopiadas,
@@ -11498,7 +11514,9 @@ function cpRenderDesempenhoMetricas(items, all){
     : linha(CP_MET_ICONS.tempo, "var(--timing)", "Tempo no app", `Hoje · média de ${cpFormatarDuracao(m.tempoMedia7dSeg)} nos últimos 7 dias`, cpFormatarDuracao(m.tempoHojeSeg));
   const rows = [
     linhaTempo,
-    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", `Com clientes, ${rotuloMes}`, m.mensagensTrocadas),
+    // v1281 — com a contagem certa (conversa inteira, não a prévia) este número passa dos mil:
+    // separador de milhar, igual ao painel "Seu mês" da tela inicial.
+    linha(CP_MET_ICONS.msg, "var(--dados)", "Mensagens trocadas", `Com clientes, ${rotuloMes}`, Number(m.mensagensTrocadas || 0).toLocaleString("pt-BR")),
     linha(CP_MET_ICONS.leads, "var(--acao)", "Leads atendidos", vendoMesPassado ? `Em ${nomeMes(iniAnt)}` : "Este mês", m.leadsAtendidos),
     linha(CP_MET_ICONS.copiar, "var(--morno)", "Mensagens copiadas", `Sugestões da IA que você usou, ${rotuloMes}`, m.mensagensCopiadas),
     linha(CP_MET_ICONS.analise, "var(--cerebro)", "Análises feitas", `Conversas processadas pela IA, ${rotuloMes}`, m.analisesFeitas),

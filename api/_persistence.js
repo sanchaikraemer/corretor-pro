@@ -1593,6 +1593,14 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   // "do primeiro ao último dia do mês", não dos últimos 30 dias). Brasília é UTC-3 fixo desde o
   // fim do horário de verão em 2019 — a mesma conta que inicioDoDiaBR já faz no app.
   const inicioDoMesBRMs = Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)) - 1, 1, 3, 0, 0, 0);
+  // v1281 — o mesmo primeiro instante, só que do MÊS PASSADO: a tela de resultados tem o botão
+  // "mês anterior" (v1106) e precisa das mensagens daquele mês contadas do mesmo jeito. Deriva do
+  // mês corrente pra não depender do fuso do servidor (mesma lição da v1106 no app).
+  const inicioDoMesAntBRMs = Date.UTC(
+    Number(hoje.slice(5, 7)) === 1 ? Number(hoje.slice(0, 4)) - 1 : Number(hoje.slice(0, 4)),
+    Number(hoje.slice(5, 7)) === 1 ? 11 : Number(hoje.slice(5, 7)) - 2,
+    1, 3, 0, 0, 0
+  );
 
   // v1136 — o cache v3 vale quando: mesma versão, mesmo dia (os números de 90 dias envelhecem) e
   // a MESMA marca d'água de alteração da linha (atualizado_em — é a mesma marca que a gravação de
@@ -1601,7 +1609,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
   // conferido — cinto e suspensório. Quando NÃO está (o caminho novo, sem egress), o cache ainda
   // precisa carregar a prévia e o total de mensagens, senão não há o que mostrar.
   const cacheV3Valido = (row, c, timelineOuNull) => {
-    if (!c || c.v !== 4 || c.dia !== hoje) return false;
+    if (!c || c.v !== 5 || c.dia !== hoje) return false;
     const marcaRow = String(row.atualizado_em || row.updated_at || "");
     if (String(c.marca || "") !== marcaRow) return false;
     if (timelineOuNull) return c.len === timelineOuNull.length;
@@ -1773,6 +1781,8 @@ export async function listRecentProcessings(limit = 12, options = {}) {
     let lastReal, lastClient, lastCorretor, clientMessageCount, clientQuestionCount, clientMessageDays, messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal;
     // v1251 — mensagens DESTE MÊS (total, do cliente, minhas). Ver o comentário na varredura.
     let msgMesTotal, msgMesCliente, msgMesCorretor;
+    // v1281 — as mesmas três contagens do MÊS PASSADO (ver inicioDoMesAntBRMs).
+    let msgMesAntTotal, msgMesAntCliente, msgMesAntCorretor;
     if (cacheValido) {
       lastReal = cacheStats.lastIso ? { iso: cacheStats.lastIso } : null;
       lastClient = cacheStats.lastClientIso ? { iso: cacheStats.lastClientIso } : null;
@@ -1792,6 +1802,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       msgMesTotal = Number(cacheStats.msgMesTotal) || 0;
       msgMesCliente = Number(cacheStats.msgMesCliente) || 0;
       msgMesCorretor = Number(cacheStats.msgMesCorretor) || 0;
+      msgMesAntTotal = Number(cacheStats.msgMesAntTotal) || 0;
+      msgMesAntCliente = Number(cacheStats.msgMesAntCliente) || 0;
+      msgMesAntCorretor = Number(cacheStats.msgMesAntCorretor) || 0;
     } else if (!temTimeline) {
       // v1136 — cache frio E a segunda consulta falhou (rede/banco): melhor esforço. Usa o último
       // cache conhecido, mesmo vencido — números de ontem na tela são melhores que zerar tudo e
@@ -1815,6 +1828,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       msgMesTotal = Number(c.msgMesTotal) || 0;
       msgMesCliente = Number(c.msgMesCliente) || 0;
       msgMesCorretor = Number(c.msgMesCorretor) || 0;
+      msgMesAntTotal = Number(c.msgMesAntTotal) || 0;
+      msgMesAntCliente = Number(c.msgMesAntCliente) || 0;
+      msgMesAntCorretor = Number(c.msgMesAntCorretor) || 0;
     } else {
       // Procura de trás pra frente. Antes eram criados arrays completos com filter(),
       // aumentando muito memória e CPU quando havia centenas de mensagens por lead.
@@ -1862,6 +1878,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // PRÉVIA de 8 mensagens por lead — ou seja, saía errado (muito menor) pra qualquer cliente
       // com conversa de verdade. Sai na MESMA varredura, sem custo extra de loop.
       msgMesTotal = 0; msgMesCliente = 0; msgMesCorretor = 0;
+      msgMesAntTotal = 0; msgMesAntCliente = 0; msgMesAntCorretor = 0;
       for (let i = timeline.length - 1; i >= 0; i--) {
         const m = timeline[i];
         const tMs = m?.iso ? Date.parse(m.iso) : NaN;
@@ -1871,6 +1888,13 @@ export async function listRecentProcessings(limit = 12, options = {}) {
             msgMesTotal++; msgMesCliente++;
           } else if (ehEnviadaPeloCorretor(m)) {
             msgMesTotal++; msgMesCorretor++;
+          }
+        } else if (Number.isFinite(tMs) && tMs >= inicioDoMesAntBRMs) {
+          // v1281 — mês fechado anterior (o botão do mês passado na tela de resultados).
+          if (ehClienteMsg(m) && String(m?.text || "").trim()) {
+            msgMesAntTotal++; msgMesAntCliente++;
+          } else if (ehEnviadaPeloCorretor(m)) {
+            msgMesAntTotal++; msgMesAntCorretor++;
           }
         }
         if (dentro90d) messageCount90d++;
@@ -1924,7 +1948,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
             // versão obriga UMA varredura completa por lead na primeira carga depois de publicar
             // — depois disso volta ao regime barato de sempre (o cache já vence e é regravado
             // todo dia, então o custo extra real é só o dessa primeira vez).
-            v: 4,
+            // v1281 — versão 5: as mesmas contagens do MÊS PASSADO, pra tela de resultados parar
+            // de contar mensagem em cima da prévia de 8 por cliente (ver o comentário lá).
+            v: 5,
             len: timeline.length,
             dia: hoje,
             // v1136 — a marca d'água que faz a listagem confiar neste cache SEM buscar a conversa:
@@ -1940,6 +1966,7 @@ export async function listRecentProcessings(limit = 12, options = {}) {
             clientMessageCount, clientQuestionCount, clientMessageDays,
             messageCount90d, clientMessageCount90d, clientQuestionCount90d, clientMessageDays90d, hasProposal,
             msgMesTotal, msgMesCliente, msgMesCorretor,
+            msgMesAntTotal, msgMesAntCliente, msgMesAntCorretor,
             // A prévia que o celular recebe (as mesmas ~8 mensagens de sempre) — guardada pronta
             // pra lista não precisar da conversa inteira só pra montar isto.
             preview: timeline.slice(-8).map(mapearMsgLista)
@@ -2024,6 +2051,9 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       msgMesTotal: Number(msgMesTotal) || 0,
       msgMesCliente: Number(msgMesCliente) || 0,
       msgMesCorretor: Number(msgMesCorretor) || 0,
+      msgMesAntTotal: Number(msgMesAntTotal) || 0,
+      msgMesAntCliente: Number(msgMesAntCliente) || 0,
+      msgMesAntCorretor: Number(msgMesAntCorretor) || 0,
       recentMessages,
       historyLoaded: includeFullTimeline,
       analyzed,
