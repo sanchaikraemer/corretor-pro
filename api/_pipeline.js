@@ -444,6 +444,19 @@ function autorCorrespondente(authors = [], nomeProcurado = "") {
 // mesmo quando o WhatsApp mostra ele com uma palavra a mais ou a menos. Antes só valia igualdade
 // exata ou o rótulo CONTENDO o nome inteiro do Cérebro — quem configurou nome e sobrenome mas
 // aparece só com o primeiro nome nas mensagens não era reconhecido, e podia virar "o cliente".
+// v1282 — separado de ehLadoDaEmpresa sem mudar o que ela faz: é a parte que reconhece o PRÓPRIO
+// corretor (rótulo do sistema ou o nome configurado no Cérebro), sem a lista de palavras de função.
+// pickClientName precisa exatamente disso: quando o nome do arquivo exportado prova quem é o
+// contato, a única coisa que ainda pode desqualificar esse autor é ele ser o próprio corretor.
+function ehOProprioCorretor(autor = "", corretorNome = "") {
+  const s = String(autor || "").trim();
+  if (!s) return false;
+  if (/^(?:sistema|atendimento\s*\(corretor\))$/i.test(s)) return true;
+  const corretor = String(corretorNome || "").trim();
+  if (!corretor) return false;
+  return _mesmaPessoaTexto(s, corretor) || s.toLowerCase().includes(corretor.toLowerCase());
+}
+
 function ehLadoDaEmpresa(autor = "", corretorNome = "") {
   const s = String(autor || "").trim();
   if (!s) return false;
@@ -485,9 +498,33 @@ function pickClientName(authors = [], corretorNome = "", nomeArquivo = "") {
   // Só excluímos autores inequivocamente pertencentes ao lado da empresa; não corrigimos,
   // abreviamos nem retiramos palavras que possam fazer parte do nome salvo no WhatsApp.
   // corretorNome vem do Cérebro configurado por organização — nunca cravado no código.
-  const candidatos = (Array.isArray(authors) ? authors : [])
-    .filter(a => String(a || "").trim() && !ehLadoDaEmpresa(a, corretorNome));
-  const doArquivo = autorCorrespondente(candidatos, contatoDoArquivoExportado(nomeArquivo));
+  const todosOsAutores = (Array.isArray(authors) ? authors : []).filter(a => String(a || "").trim());
+  const contatoDoArquivo = contatoDoArquivoExportado(nomeArquivo);
+  // v1282 — O NOME DO ARQUIVO EXPORTADO É PROVA, E PROVA VENCE PALPITE.
+  //
+  // A lista de palavras de função de ehLadoDaEmpresa (construtora, imobiliária, corretor,
+  // plantão, incorporadora) existe pra reconhecer o rótulo do PRÓPRIO corretor — e ela continua
+  // valendo. O problema é que ela era aplicada ANTES de olhar a prova: um contato salvo como
+  // "Anderson Corretor" ou "Imobiliária Central" (nome de gente de verdade — o corretor parceiro,
+  // que o sistema atende de propósito) era eliminado da lista de candidatos, sobravam zero, e o
+  // cadastro nascia "Cliente não identificado".
+  //
+  // O estrago não parava no nome. Sem clientName, _ladoDaMensagem perde a primeira regra dela
+  // ("autor que contém o primeiro nome do contato é o cliente") e classifica as falas DELE como
+  // sendo do corretor. Daí as falas do cliente entravam em dois blocos que vão direto pra IA:
+  // "TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA" (o pedido do cliente virava oferta que ele
+  // mesmo ignorou, e as três sugestões ficavam proibidas de tratar justo aquilo) e "COMO ESTE
+  // CORRETOR ESCREVE" (o jeito de escrever do cliente virava a régua da voz do corretor).
+  // Reproduzido rodando guessLeadData/tentativasSemRespostaDoCorretor com o mesmo texto e três
+  // nomes de contato diferentes — ver tests/v1282-contato-com-corretor-no-nome.test.mjs.
+  //
+  // A exportação do WhatsApp nomeia o arquivo com o CONTATO da conversa, nunca com o dono do
+  // aparelho: se o autor bate com esse nome, ele é o contato, ponto. A única coisa que ainda pode
+  // desqualificá-lo é ser o próprio corretor (nome do Cérebro), o que a guarda abaixo cobre.
+  const provaDoArquivo = autorCorrespondente(todosOsAutores, contatoDoArquivo);
+  if (provaDoArquivo && !ehOProprioCorretor(provaDoArquivo, corretorNome)) return String(provaDoArquivo).trim();
+  const candidatos = todosOsAutores.filter(a => !ehLadoDaEmpresa(a, corretorNome));
+  const doArquivo = autorCorrespondente(candidatos, contatoDoArquivo);
   if (doArquivo) return String(doArquivo).trim();
   if (candidatos.length === 1) return String(candidatos[0]).trim();
   // v1180 — 2 ou mais candidatos e nenhuma prova de quem é o contato exportado: o app NÃO escolhe.
