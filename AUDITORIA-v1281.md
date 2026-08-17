@@ -212,6 +212,7 @@ do prompt e o primeiro trecho variável entra já na linha 29 do bloco de sistem
 nada mais é reaproveitado. Todo o miolo fixo (as regras comerciais, a conferência de 12 itens) vem
 **depois** de conteúdo que muda a cada conversa.
 
+<<<<<<< HEAD
 **MEDIDO EM 17/08/2026, E O RESULTADO DERRUBOU A IDEIA.** Eu tinha escrito aqui que isso cortaria
 "perto da metade" da conta. **Está errado — refiz a conta antes de mexer no código:**
 
@@ -256,6 +257,15 @@ As três saídas técnicas foram medidas e as três não servem. **A alavanca aq
 comercial:** o preço e os limites dos planos precisam refletir os R$ 0,20 a R$ 0,40 que uma análise
 custa de verdade. É o achado A3 voltando ao começo — só que agora com todas as alternativas
 eliminadas com número, em vez de suposição.
+=======
+Juntar todo o texto fixo na frente e empurrar o que varia para o fim pode cortar perto da metade do
+item que responde por 79% da conta — **sem reescrever uma única regra**.
+
+**Mas isso não pode ser feito no escuro:** mudar a ordem de um prompt muda o comportamento do
+modelo, e foi exatamente esse tipo de mexida sem medição que estragou as análises em agosto. Ou
+seja, esta economia depende da bateria de conversas de teste (achado A6) existir antes. É mais um
+motivo para ela ser a primeira coisa a ser construída.
+>>>>>>> origin/main
 
 ### Higiene
 
