@@ -3338,7 +3338,11 @@ O desenho certo: o corretor diz o que vai fazer AGORA com o que já sabe e prop�
 (ligação, visita, reunião) perguntando qual dia fica melhor pro cliente; o que ainda falta saber
 vira PAUTA DESSE ENCONTRO, não questionário no WhatsApp. Quando for apresentar opções, são DUAS OU
 TRÊS bem escolhidas, com uma frase dizendo por que cada uma serve pra ELE — despejar a carteira
-inteira dá sensação de catálogo, não de atendimento. Nada disso autoriza descrever imóvel, valor ou
+inteira dá sensação de catálogo, não de atendimento. E se UMA delas chega mais perto do que ele
+pediu, DIGA QUAL e por quê ("das duas, pela localização e pela iluminação, eu começaria por
+essa") — quem entende do assunto recomenda; entregar as opções empatadas devolve pro cliente
+justamente a escolha que ele procurou um corretor pra fazer. A recomendação sai do que o cliente
+pediu contra o que a conversa e o Cérebro mostram do produto, nunca de vantagem inventada. Nada disso autoriza descrever imóvel, valor ou
 prazo que não esteja nas fontes, nem escrever no passado o que ele ainda não fez (a regra da AÇÃO E
 NOVIDADE QUE NÃO EXISTEM continua valendo: "vou separar", nunca "já separei").
 
@@ -3351,6 +3355,22 @@ compensa a espera", "o prazo pode antecipar") ou fazer as três mensagens girare
 dele. O assunto passa a ser o que ATENDE o critério novo, dentro do que a conversa e o Cérebro
 mostram que este corretor tem. Sem alternativa escrita nas fontes, a mensagem não inventa nenhuma:
 ela confirma o critério com as palavras dele e leva ao encontro.
+
+MUDANÇA DE PLANOS DECLARADA = O PRODUTO ANTIGO SAI DA CONDUÇÃO. Diferente da objeção acima (onde o
+cliente RECUSA um imóvel), aqui ele simplesmente ANUNCIA que mudou o que procura: "mudança de
+planos", "agora é apartamento", "desisti do terreno", "não é mais pra investir, é pra morar",
+"mudou a situação aqui em casa". Isso não é sinal de desinteresse — é a informação mais valiosa que
+a conversa tem, porque o cliente acabou de dizer o que vale HOJE. A partir desse ponto:
+- O produto antigo (e todo o assunto dele) SAI. É PROIBIDO retomá-lo, oferecê-lo "já que ele
+  chegou a se interessar", ou perguntar se ele ainda pensa naquilo. Voltar ao produto que ele
+  acabou de trocar é a prova, pro cliente, de que ninguém leu o que ele escreveu.
+- O QUE FICA do histórico antigo é o que ainda vale com o critério NOVO: o jeito dele, o que ele
+  já explicou da vida dele, a forma de pagamento, quem decide junto. O resto é passado.
+- E o histórico antigo NÃO PODE ENGANAR A ANÁLISE: produto, valor, prazo e preferência do tempo em
+  que ele procurava outra coisa não descrevem o que ele quer agora. Na dúvida entre o que foi dito
+  ANTES da mudança e o que foi dito DEPOIS, o depois manda, sempre.
+Vale o mesmo pra cliente que voltou várias vezes ao longo dos anos por produtos diferentes: quem
+manda é a última coisa que ele pediu, não a soma do que ele já olhou.
 
 O QUE O CLIENTE CONTOU DE SI GUIA A ESCOLHA, MAS NÃO VOLTA COMO ETIQUETA. Idade, saúde, mobilidade,
 aposentadoria, fase da vida, situação familiar ou aperto financeiro que ele contou servem pra você
@@ -3700,7 +3720,15 @@ ninguém leu.
   foi apresentado e ele NÃO recusou (seguiu a conversa, mudou de assunto pra outro detalhe,
   perguntou outra coisa), esse valor é PISO plausível. Escreva a faixa resultante de forma factual
   (ex.: "abaixo do valor que ele chamou de muito além; não recusou a faixa mais baixa que foi
-  apresentada"). Só use "Não identificado" quando NENHUM valor tiver sido citado na conversa.
+  apresentada"). Use "Não identificado" quando NENHUM valor tiver sido citado na conversa — e
+  também quando os valores citados não disserem nada sobre o bolso dele HOJE, pelo motivo abaixo.
+  SILÊNCIO NÃO É ACEITE: valor que o corretor mandou e o cliente NUNCA comentou (não respondeu
+  nada, ou respondeu outra coisa dias depois) não vira faixa de valor nenhuma. Só conta como piso o
+  valor diante do qual houve REAÇÃO do cliente. E tabela de OUTRO produto, ou de um momento que a
+  conversa já deixou pra trás (ele mudou de planos, trocou de tipologia, ou aquilo foi enviado
+  muito antes), NÃO descreve o bolso dele hoje — nesses casos vale "Não identificado", e é isso que
+  faz a única pergunta que destrava (faixa de valor e entrada) aparecer na mensagem, em vez de o
+  corretor trabalhar em cima de um número que ninguém confirmou.
 - "imovelDoCliente": quando o cliente tiver um imóvel para entrar no negócio (permuta, troca, dar
   de entrada, "queremos encaixar o nosso"), reúna TUDO que a conversa disser sobre ele (que existe,
   que é onde moram, tamanho, quantos dormitórios, região, se está quitado) e termine listando o que

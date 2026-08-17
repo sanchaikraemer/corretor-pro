@@ -39,7 +39,7 @@ assert.match(gravacao, /jaSabemos: arr\(/, '"jaSabemos" é uma lista — precisa
 // ── 3. A regra que manda procurar a resposta antes de perguntar ──────────────────────────────
 const i = src.indexOf('ANTES DE PERGUNTAR, PROCURE A RESPOSTA NA CONVERSA');
 assert.ok(i > -1, 'precisa existir a regra que manda procurar na conversa antes de perguntar');
-const regra = src.slice(i, i + 2600).replace(/\s+/g, ' ');
+const regra = src.slice(i, i + 3400).replace(/\s+/g, ' ');
 
 assert.match(regra, /Percorra o histórico inteiro/, 'a regra precisa mandar percorrer o histórico inteiro');
 assert.match(regra, /inclusive de forma INDIRETA/,
@@ -52,8 +52,14 @@ assert.match(regra, /esse valor é TETO/, '"muito além" precisa virar teto');
 assert.match(regra, /é PISO plausível/, 'valor mais baixo não recusado precisa virar piso');
 assert.match(regra, /não espere ele declarar um número/,
   'a faixa se deduz da reação; esperar o cliente declarar foi exatamente o que travou a conversa');
-assert.match(regra, /Só use "Não identificado" quando NENHUM valor tiver sido citado/,
-  'só pode dizer que não sabe quando nenhum valor foi citado na conversa');
+assert.match(regra, /Use "Não identificado" quando NENHUM valor tiver sido citado na conversa/,
+  'sem valor citado, a faixa fica em "Não identificado"');
+// v1289 — e silêncio diante de uma tabela antiga não é aceite: foi assim que uma tabela de 2024,
+// de um produto que a cliente já tinha trocado, virou "faixa de valor" dela no print do dono.
+assert.match(regra, /SILÊNCIO NÃO É ACEITE/,
+  'valor que o cliente nunca comentou não pode virar faixa de valor');
+assert.match(regra, /tabela de OUTRO produto, ou de um momento que a conversa já deixou pra trás/,
+  'tabela de outro produto/outra época não descreve o bolso do cliente hoje');
 
 // O imóvel do cliente é o centro quando existe permuta.
 assert.match(regra, /queremos encaixar o nosso/i, 'a frase real da cliente precisa estar entre os sinais de permuta');

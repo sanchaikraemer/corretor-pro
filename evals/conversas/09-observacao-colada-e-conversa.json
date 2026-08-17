@@ -6,10 +6,30 @@
   "corretorNome": "Sanchai",
   "nomeArquivo": "Conversa do WhatsApp com Marina Doring.txt",
   "conversa": [
-    { "date": "06/06/2026", "time": "15:47", "author": "Marina Doring", "text": "É um conjunto de fatores, mas quero muito comprar um imóvel" },
-    { "date": "17/07/2026", "time": "10:48", "author": "Sanchai", "text": "Bom dia Marina, tudo bem? Conseguiu analisar as opções de terreno que te enviei?" },
-    { "date": "27/07/2026", "time": "17:41", "author": "Sanchai", "text": "Boa tarde Marina, tudo bem? Posso esclarecer algum ponto do material dos terrenos?" },
-    { "date": "14/08/2026", "time": "16:34", "author": "Sanchai", "text": "Boa tarde Marina, tudo bem? Existe algum critério ou detalhe que ainda está pesando para você decidir avançar?" },
+    {
+      "date": "06/06/2026",
+      "time": "15:47",
+      "author": "Marina Doring",
+      "text": "É um conjunto de fatores, mas quero muito comprar um imóvel"
+    },
+    {
+      "date": "17/07/2026",
+      "time": "10:48",
+      "author": "Sanchai",
+      "text": "Bom dia Marina, tudo bem? Conseguiu analisar as opções de terreno que te enviei?"
+    },
+    {
+      "date": "27/07/2026",
+      "time": "17:41",
+      "author": "Sanchai",
+      "text": "Boa tarde Marina, tudo bem? Posso esclarecer algum ponto do material dos terrenos?"
+    },
+    {
+      "date": "14/08/2026",
+      "time": "16:34",
+      "author": "Sanchai",
+      "text": "Boa tarde Marina, tudo bem? Existe algum critério ou detalhe que ainda está pesando para você decidir avançar?"
+    },
     {
       "date": "17/08/2026",
       "time": "08:49",
@@ -37,19 +57,22 @@
     "aIaPrecisaPerceber": [
       "a cliente trocou terreno por apartamento e já entregou o critério inteiro",
       "quem falou por último foi a cliente — o corretor é quem está devendo resposta",
-      "nada foi enviado depois do pedido dela"
+      "nada foi enviado depois do pedido dela",
+      "a mudança de planos declarada tira o terreno da condução — vale o que ela pediu depois"
     ],
     "asMensagensNaoPodem": [
       "dizer que já foram enviadas ou reunidas opções depois do pedido dela",
       "nomear dia da semana, data ou hora de visita",
       "perguntar de novo quantos dormitórios, se é pronto ou planta, ou o que é importante pra ela",
-      "voltar a falar de terreno"
+      "voltar a falar de terreno",
+      "tratar valor de tabela antiga, que ela nunca comentou, como o orçamento dela"
     ],
     "asMensagensPrecisam": [
       "partir do que ela pediu, com as palavras dela",
       "dizer no futuro o que o corretor vai fazer agora com esse critério",
       "trazer a única pergunta que falta — faixa de valor e entrada — emendada na entrega",
-      "quando propuserem encontro, perguntar qual dia fica melhor pra ela"
+      "quando propuserem encontro, perguntar qual dia fica melhor pra ela",
+      "se apresentarem opções, dizer qual chega mais perto do que ela pediu e por quê"
     ]
   }
 }
