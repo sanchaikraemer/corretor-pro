@@ -57,18 +57,19 @@ await com({ rpc: { permitido: true, usado_dia: 8, usado_mes: 40, motivo: null } 
 });
 
 // 2) Função nova EXISTE e bloqueia por mês: o app respeita o bloqueio sem gravar nada.
-await com({ rpc: { permitido: false, usado_dia: 3, usado_mes: 150, motivo: "mes" } }, "org-2", (r, c) => {
+await com({ rpc: { permitido: false, usado_dia: 3, usado_mes: 50, motivo: "mes" } }, "org-2", (r, c) => {
   assert.equal(r.permitido, false, "reserva atômica bloqueou");
   assert.equal(r.motivo, "mes");
   assert.equal(c.configPost, 0, "bloqueio atômico não grava contador antigo");
 });
 
-// 3) Função NÃO existe (404): cai no jeito antigo e ainda decide certo (Pro, 15/dia).
-await com({ rpc: null, diario: 15 }, "org-3", (r, c) => {
+// 3) Função NÃO existe (404): cai no jeito antigo e ainda decide certo (Pro — v1284: o fusível
+// técnico do dia é 40; o pacote do mês, 50).
+await com({ rpc: null, diario: 40 }, "org-3", (r, c) => {
   assert.equal(c.rpc, 1, "tentou a função atômica primeiro");
   assert.equal(r.permitido, false, "sem a função, o jeito antigo bloqueia a 16ª do Pro");
   assert.equal(r.motivo, "dia");
-  assert.equal(r.limite, 15);
+  assert.equal(r.limite, 40);
 });
 
 console.log("v1120-contador-atomico: ok");

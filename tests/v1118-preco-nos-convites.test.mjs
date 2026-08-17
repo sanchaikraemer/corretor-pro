@@ -23,7 +23,10 @@ assert.match(pipeline, /export function precoPlanoBR/, "helper precoPlanoBR prec
 // o preço entra no convite do teste e no convite do Pro→Pro Master
 assert.match(pipeline, /Pro por \$\{precoPlanoBR\("pro"\)\}\/mês ou Pro Master por \$\{precoPlanoBR\("pro-master"\)\}\/mês/,
   "convite do teste precisa mostrar os dois preços");
-assert.match(pipeline, /O Pro Master tem o dobro por \$\{precoPlanoBR\("pro-master"\)\}\/mês/,
+// v1284 — o convite do Pro mudou de forma: quem estoura o MÊS recebe as duas saídas na mesma
+// frase (pacote extra agora, ou Pro Master pro mês inteiro), em vez de só "suba de plano". O preço
+// do Pro Master continua tendo que aparecer ali — é o que este teste guarda.
+assert.match(pipeline, /ou o Pro Master \(\$\{planoComercial\("pro-master"\)\.mes\}\/mês\) por \$\{precoPlanoBR\("pro-master"\)\}\/mês/,
   "convite do Pro precisa mostrar o preço do Pro Master");
 
 // --- tela de teste vencido (entrar.html): preço + botão de WhatsApp ---

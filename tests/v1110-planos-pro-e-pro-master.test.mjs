@@ -9,10 +9,17 @@ import { verificarLimiteAnalises, planoComercial, PLANO_CONTRATADO_KEY } from ".
 const _hojeSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 
 // v1110 — planos comerciais (decisão do dono, estratégia de chamariz tipo "pipoca de cinema");
-// v1111 — recalibrado pela régua do uso real do dono (70–80 análises/mês com 200+ clientes):
-// Teste 5/dia · Pro 15/dia + 150/mês · Pro Master 30/dia + 300/mês (o dobro em tudo, preço
-// próximo — o preço nunca aparece no app). Acima disso, plano personalizado no WhatsApp.
-// A conta original fica FORA dos planos (só o fusível técnico de 200/dia).
+// v1111 — recalibrado pela régua do uso real do dono: Pro 15/dia + 150/mês, Pro Master 30/dia +
+// 300/mês.
+//
+// v1284 — RECALIBRADO DE NOVO, agora com o custo REAL medido no painel da OpenAI (17/08/2026):
+// uma análise custa de R$ 0,20 a R$ 0,40, então 150 análises custavam até R$ 60 num plano de
+// R$ 49,90 — margem NEGATIVA. O preço ficou igual e o volume desceu: Pro 50/mês, Pro Master
+// 120/mês. E o teto DIÁRIO deixou de ser régua comercial ("independente de limite diário", dono):
+// virou fusível técnico de 40/dia, alto de propósito, só pra um erro em laço não queimar o mês
+// numa hora. A trava econômica desses números vive em v1284-planos-novos-margem-e-bonus.test.mjs;
+// aqui continua a mecânica (dia, mês, teste, conta original, painel).
+// A conta original fica FORA dos planos (só o fusível técnico dela).
 
 const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
 const adminContas = fs.readFileSync(new URL("../api/admin-contas.js", import.meta.url), "utf8");
@@ -26,8 +33,8 @@ const mesSP = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }
 // ── 1. Os números dos planos (com env mandando) ───────────────────────────────────────────────
 {
   for (const nome of ["CORRETOR_PRO_LIMITE_DIA_PRO", "CORRETOR_PRO_LIMITE_MES_PRO", "CORRETOR_PRO_LIMITE_DIA_PROMASTER", "CORRETOR_PRO_LIMITE_MES_PROMASTER"]) delete process.env[nome];
-  assert.deepEqual({ ...planoComercial("pro") }, { tipo: "pro", nome: "Pro", dia: 15, mes: 150 }, "Pro: 15/dia e 150/mês (v1111)");
-  assert.deepEqual({ ...planoComercial("pro-master") }, { tipo: "pro-master", nome: "Pro Master", dia: 30, mes: 300 }, "Pro Master: 30/dia e 300/mês (o dobro, v1111)");
+  assert.deepEqual({ ...planoComercial("pro") }, { tipo: "pro", nome: "Pro", dia: 40, mes: 50 }, "Pro: 50/mês, fusível de 40/dia (v1284)");
+  assert.deepEqual({ ...planoComercial("pro-master") }, { tipo: "pro-master", nome: "Pro Master", dia: 40, mes: 120 }, "Pro Master: 120/mês, mesmo fusível de 40/dia (v1284)");
   assert.equal(planoComercial("qualquer-coisa").tipo, "pro", "tipo desconhecido cai no plano de entrada (Pro)");
   assert.equal(planoComercial("").tipo, "pro", "conta ativa sem plano registrado = Pro");
   process.env.CORRETOR_PRO_LIMITE_MES_PRO = "999";
@@ -73,29 +80,30 @@ async function comServidor(opts, orgId, fn) {
   } finally { await new Promise(r => server.close(r)); }
 }
 
-// Conta ativa sem plano registrado → régua do Pro; 15ª do dia ainda passa, 16ª bloqueia.
-await comServidor({ diario: 14 }, "org-pro", (r) => {
-  assert.equal(r.permitido, true, "14 usadas: a 15ª ainda entra");
+// Conta ativa sem plano registrado → régua do Pro. O fusível técnico (40/dia) não pode encostar
+// em quem está usando o produto normalmente: 39 no dia ainda entra.
+await comServidor({ diario: 39 }, "org-pro", (r) => {
+  assert.equal(r.permitido, true, "39 usadas no dia: a 40ª ainda entra (o fusível é alto de propósito)");
   assert.equal(r.plano?.tipo, "pro");
 });
-await comServidor({ diario: 15 }, "org-pro", (r) => {
-  assert.equal(r.permitido, false, "15 usadas: bloqueia a 16ª");
+await comServidor({ diario: 40 }, "org-pro", (r) => {
+  assert.equal(r.permitido, false, "40 usadas no mesmo dia: o fusível técnico segura");
   assert.equal(r.motivo, "dia");
-  assert.equal(r.limite, 15);
+  assert.equal(r.limite, 40);
 });
-// Teto MENSAL do Pro segura mesmo com o dia folgado.
-await comServidor({ diario: 3, mensal: 150 }, "org-pro", (r) => {
-  assert.equal(r.permitido, false, "150 no mês bloqueia mesmo com só 3 no dia");
+// Teto MENSAL do Pro segura mesmo com o dia folgado — é ele que protege o dinheiro.
+await comServidor({ diario: 3, mensal: 50 }, "org-pro", (r) => {
+  assert.equal(r.permitido, false, "50 no mês bloqueia mesmo com só 3 no dia");
   assert.equal(r.motivo, "mes");
-  assert.equal(r.limiteMes, 150);
+  assert.equal(r.limiteMes, 50);
 });
-// Pro Master: o dobro (30/dia, 300/mês).
-await comServidor({ plano: "pro-master", diario: 29, mensal: 299 }, "org-master", (r) => {
-  assert.equal(r.permitido, true, "29/dia e 299/mês: a próxima ainda entra no Pro Master");
+// Pro Master: mesmo fusível diário, mais do que o dobro no mês.
+await comServidor({ plano: "pro-master", diario: 29, mensal: 119 }, "org-master", (r) => {
+  assert.equal(r.permitido, true, "29/dia e 119/mês: a próxima ainda entra no Pro Master");
   assert.equal(r.plano?.nome, "Pro Master");
 });
-await comServidor({ plano: "pro-master", diario: 30 }, "org-master", (r) => {
-  assert.equal(r.permitido, false); assert.equal(r.motivo, "dia"); assert.equal(r.limite, 30);
+await comServidor({ plano: "pro-master", mensal: 120 }, "org-master", (r) => {
+  assert.equal(r.permitido, false); assert.equal(r.motivo, "mes"); assert.equal(r.limiteMes, 120);
 });
 // Conta em teste: 5/dia, com a marca emTeste (liga o convite).
 await comServidor({ status: "teste", diario: 5 }, "org-teste", (r) => {
@@ -111,6 +119,12 @@ await comServidor({ diario: 149, mensal: 5000 }, EMPRESA_PRINCIPAL, (r, chamadas
 await comServidor({ diario: 150 }, EMPRESA_PRINCIPAL, (r) => {
   assert.equal(r.permitido, false, "o fusível de 150 vale pra conta original");
 });
+// v1284 — a conta com plano NÃO pode ser barrada pelo dia enquanto o pacote do mês tem saldo:
+// 39 no dia com 10 no mês segue liberado (era 15/dia antes, e isso atrapalhava quem senta num
+// sábado pra pôr a carteira em dia).
+await comServidor({ diario: 39, mensal: 10 }, "org-pro", (r) => {
+  assert.equal(r.permitido, true, "39 no dia e 10 no mês: o pacote do mês é que manda");
+});
 // A análise que passa grava os DOIS contadores (dia e mês) pra conta com plano.
 await comServidor({ diario: 1, mensal: 10 }, "org-pro", (r, chamadas) => {
   assert.equal(r.permitido, true);
@@ -121,10 +135,18 @@ await comServidor({ diario: 1, mensal: 10 }, "org-pro", (r, chamadas) => {
 
 // ── 3. Cada degrau tem a sua mensagem e o seu botão (montados no servidor) ────────────────────
 {
-  assert.match(pipeline, /do plano Pro\. O Pro Master tem o dobro/, "Pro esbarrando → convite pro Pro Master");
-  assert.match(pipeline, /do plano Pro Master\. Precisa de mais\?/, "Pro Master esbarrando → convite pra plano maior");
-  assert.match(pipeline, /motivo: "upgrade-pro-master"/, "upgrade do Pro identificado");
-  assert.match(pipeline, /motivo: "plano-personalizado"/, "upgrade do Pro Master identificado");
+  // v1284 — estourar o MÊS deixou de ser parede: as duas saídas (pacote extra agora, ou subir de
+  // plano) aparecem na mesma mensagem. Bloquear no dia 20 quem está usando muito é perder o
+  // melhor cliente.
+  assert.match(pipeline, /análises deste mês do plano Pro\. Para continuar hoje/, "Pro estourando o mês → pacote extra + Pro Master");
+  assert.match(pipeline, /análises deste mês do plano Pro Master\. Para continuar hoje/, "Pro Master estourando o mês → pacote extra");
+  assert.match(pipeline, /motivo: "pacote-ou-upgrade"/, "saída do Pro identificada");
+  assert.match(pipeline, /motivo: "pacote-ou-personalizado"/, "saída do Pro Master identificada");
+  // E o fusível técnico não pode se passar por régua comercial: quem esbarra nele não recebe
+  // oferta de upgrade, recebe aviso de segurança.
+  assert.match(pipeline, /motivo: "fusivel-tecnico"/, "o fusível diário tem aviso próprio");
+  assert.match(pipeline, /por segurança, o sistema pausou por hoje/, "o aviso do fusível fala de segurança, não de plano pequeno");
+  assert.ok(!/análises por dia do plano Pro/.test(pipeline), "não pode mais existir mensagem dizendo que o PLANO tem teto diário");
   assert.match(pipeline, /Tente novamente amanhã\./, "conta original mantém o aviso neutro, sem botão");
   // O app usa o rótulo/mensagem que o servidor manda (não fixa mais um texto único).
   assert.match(app, /a\?\.upgrade\?\.botao/, "o botão da tela usa o rótulo vindo do servidor");
