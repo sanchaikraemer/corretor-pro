@@ -87,6 +87,7 @@ const emOrdem = fs.readdirSync(pastaMigracoes).filter(f => f.endsWith(".sql")).s
 assert.equal(emOrdem[0], "0000_baseline.sql",
   "o baseline precisa ser o primeiro arquivo na ordem alfabética das migrações");
 
+<<<<<<< HEAD
 // ── v1286: conferir contra o formato REAL de produção ────────────────────────────────────────
 //
 // A primeira versão do baseline (v1285) foi DERIVADA DO CÓDIGO e errava: faltavam `lead_id`,
@@ -131,3 +132,6 @@ for (const coluna of ["lead_id", "nome_cliente", "nome"]) {
 }
 
 console.log(`v1285-banco-nasce-do-repositorio: ok (${tabelasUsadas.size} tabelas em uso, todas com migração; ${linhas.length} colunas da produção real cobertas; baseline seguro e na frente da fila)`);
+=======
+console.log(`v1285-banco-nasce-do-repositorio: ok (${tabelasUsadas.size} tabelas em uso, todas com migração; baseline seguro e na frente da fila)`);
+>>>>>>> origin/main
