@@ -96,6 +96,23 @@ cliente contou de si (idade, saúde, fase da vida) guia a escolha mas **não vol
 etiqueta** ("pensando na sua faixa de idade"). Junto veio o **item 12 da conferência final**. Ver
 `NOTAS-v1279.md`._
 
+_**v1287 — a observação que É conversa colada vira conversa, e acabou o chute de data.** Duas
+mudanças que vieram do mesmo print (17/08/2026). (1) **Observação colada**: quando o corretor cola
+no campo de Observação um trecho no formato do WhatsApp, `expandirObservacoesColadas`
+(`_pipeline.js`) separa cada fala, atribui o lado e encaixa na ordem certa do histórico ANTES de
+qualquer conta — sem isso, a fala mais recente do CLIENTE valia como recado do corretor e o pedido
+enviado à IA dizia "tentativas do corretor ainda sem resposta: 4" para uma cliente que tinha
+respondido quatro vezes em três dias (daí a sugestão marcar visita e afirmar envios que nunca
+houve). Nada é reescrito e nada muda no banco: é leitura de FORMATO, e anotação comum continua
+anotação. Junto, anotação do corretor deixou de contar como mensagem no cálculo de tempo parado.
+(2) **REGRA DA DATA**: os dez trechos que mandavam a IA cravar dia e hora ("quinta às 18h ou sábado
+de manhã") foram substituídos pela **pergunta do dia ao cliente** — nomear dia da semana, data ou
+hora só é permitido quando já está escrito na conversa ou no Cérebro. O vago ("fico à disposição")
+continua proibido. Também entrou, dentro do item 4 da conferência, a **única pergunta que
+destrava** (faixa de valor + entrada) quando o cliente já deu o critério do imóvel e o dinheiro
+nunca foi perguntado. Guardas: `tests/v1287-observacao-colada-vira-conversa.test.mjs`,
+`tests/v1287-nenhuma-data-chutada.test.mjs` e a 9ª conversa da bateria. Ver `NOTAS-v1287.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
@@ -307,7 +324,7 @@ de 16/08/2026 mediu por quê: dos 437 arquivos de teste da época, **356 apenas 
 procurando se um trecho estava lá. Foi por isso que o erro do contato salvo como "Anderson
 Corretor" (v1282) passou por todos eles.
 
-`evals/` são **8 conversas** escritas a partir de situações reais já registradas nas notas de
+`evals/` são **9 conversas** escritas a partir de situações reais já registradas nas notas de
 versão, com a régua do que se espera escrita em português (`aIaPrecisaPerceber`,
 `asMensagensNaoPodem`, `asMensagensPrecisam`). Nenhuma tem dado de cliente real.
 

@@ -48,7 +48,10 @@ assert.match(licenca, /Ninguém responde "não pode" a essas\s*perguntas/,
 
 // Não basta proibir: precisa dizer o que ENTRA no lugar, senão a IA fica sem fecho.
 assert.match(licenca, /FECHOS QUE VALEM/, 'precisa listar os fechos que valem, não só os proibidos');
-assert.match(licenca, /prefere quinta ou sábado\?/, 'escolha entre duas coisas de verdade');
+// v1287 — o exemplo era "prefere quinta ou sábado?", ou seja, a própria IA cravando os dias.
+assert.match(licenca, /qual dia da semana costuma ser\s*melhor pra você\?/,
+  'o fecho de dia passa a ser pergunta ao cliente, não dia cravado pela IA');
+assert.match(licenca, /aqui por mensagem ou eu passo aí\?/, 'escolha entre duas coisas de verdade');
 assert.match(licenca, /qual chega mais perto do que\s*vocês querem\?/, 'pergunta que puxa informação útil');
 assert.match(licenca, /te mando ainda hoje\?/, 'confirmação de um passo já em andamento');
 

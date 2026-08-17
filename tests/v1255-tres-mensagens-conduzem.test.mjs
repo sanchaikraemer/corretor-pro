@@ -82,8 +82,14 @@ assert.match(blocoCond, /LOGO DEPOIS da saudação vem o FATO/,
   'o fato concreto não pode ter sumido do passo 1 — ele só passou a vir depois do cumprimento');
 assert.match(blocoCond, /DESTRAVA O QUE ESTÁ PARADO/, 'passo 2: destravar com um passo executável');
 assert.match(blocoCond, /FECHA COM UM PRÓXIMO PASSO QUE TEM DONO E FORMATO/, 'passo 3: fechar com passo concreto');
-assert.match(blocoCond, /DUAS opções concretas/,
-  'encontro precisa vir com duas opções — "qualquer dia e horário" foi o erro real da conversa');
+// v1287 — o fecho deixou de nomear dia/hora (o corretor recebia cliente aceitando horário em que
+// ele não podia). Continua PROIBIDO o vago; o que entra é PERGUNTAR o dia ao cliente.
+assert.match(blocoCond, /PERGUNTE\s+QUAL DIA FICA MELHOR PRO CLIENTE/,
+  'encontro fecha perguntando o dia ao cliente, nunca cravando um dia');
+assert.match(blocoCond, /é PROIBIDO nomear você mesmo o dia ou a hora/,
+  'a proibição de chutar data precisa estar na espinha das três mensagens');
+assert.match(blocoCond, /"qualquer dia e horário"/,
+  'e o vago continua reprovado — perguntar o dia não é "fico à disposição"');
 assert.match(blocoCond, /baixa PRESSÃO,\s*não de baixo CONTEÚDO/,
   'a "maisSuave" não pode virar desculpa pra mensagem vazia — foi a sugestão 2 do print');
 assert.match(blocoCond, /couber em "e aí, tudo bem\? qualquer coisa me chama", ela está errada/,

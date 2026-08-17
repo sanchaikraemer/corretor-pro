@@ -31,8 +31,11 @@ assert.match(lista, /Pelo menos uma das três precisa oferecer o presencial/,
   'pelo menos uma das três mensagens precisa oferecer o presencial');
 
 // O presencial precisa ser executável: nada de "vamos marcar uma visita qualquer hora".
-assert.match(lista, /dois dias\/horários concretos/,
-  'a oferta de visita precisa vir com dois dias/horários concretos (senão vira intenção vaga)');
+// v1287 — era "dois dias/horários concretos" (a IA cravava a agenda do corretor). Agora o dia
+// vem do cliente, mas a oferta continua tendo que pedir resposta.
+assert.match(lista, /perguntando qual dia fica melhor pro cliente/,
+  'a oferta de visita fecha perguntando o dia ao cliente');
+assert.match(lista, /REGRA DA DATA/, 'e aponta pra regra que proíbe inventar dia/hora');
 assert.match(lista, /por que vale mais ir do que continuar recebendo arquivo/,
   'a mensagem precisa dizer em uma frase por que ir vale mais que receber arquivo');
 

@@ -50,8 +50,8 @@ assert.match(lista, /a mensagem tem que PARTIR dela oferecendo o roteiro que cob
 // O item 5 não pode continuar empurrando pra escolha falsa que o item 3 acabou de proibir.
 assert.match(lista, /A escolha também não pode reabrir assunto que a conversa já resolveu \(item 3\)/,
   'o item 5 precisa apontar pro item 3 — era ele que legitimava a pergunta repetida');
-assert.match(lista, /a escolha que sobra é de DIA, HORÁRIO ou CANAL/,
-  'e precisa dizer qual escolha sobra quando o assunto já está decidido');
+assert.match(lista, /o\s*que sobra é perguntar QUAL DIA fica melhor pro cliente/,
+  'e precisa dizer o que sobra quando o assunto já está decidido — perguntar o dia, não cravá-lo');
 
 // ── Defeito 2: a retomada da pausa que o cliente marcou (item 9, novo) ─────────────────────────
 assert.match(lista, /9\. O CLIENTE MARCOU UMA PAUSA E ELA VENCEU\?/,
@@ -75,13 +75,15 @@ assert.match(lista, /nada de escassez, prazo ou reajuste inventado/,
   'parte (b) não pode virar urgência inventada — o limite da v1225 continua valendo');
 
 // (c) o encontro com dia na mesa
-assert.match(lista, /PROPONHA O ENCONTRO COM DIA NA MESA/, 'parte (c): encontro com dia concreto');
-assert.match(lista, /DIA NOMEADO da semana que vem/, 'parte (c) precisa exigir dia nomeado');
-assert.match(lista, /mais a pergunta do horário/, 'parte (c) precisa pedir o horário');
+// v1287 — a parte (c) exigia dia nomeado pela IA ("segunda-feira fica bom pra vocês?"). O dono
+// mandou acabar com o chute de data: o encontro continua obrigatório, quem dá o dia é o cliente.
+assert.match(lista, /PROPONHA O ENCONTRO E PEÇA O DIA A ELE/, 'parte (c): encontro com o dia pedido ao cliente');
+assert.match(lista, /qual dia fica melhor pra vocês\?/, 'parte (c) precisa trazer a pergunta do dia');
+assert.match(lista, /igualmente PROIBIDO nomear o dia você mesmo/, 'parte (c) não pode voltar a cravar dia');
 assert.match(lista, /É PROIBIDO deixar em "quando vocês voltarem", "me avisa quando puder"/,
   'parte (c) precisa proibir as formas vagas que apareceram no print');
-assert.match(lista, /Se a pausa AINDA NÃO venceu .* o encontro é\s*proposto, com dia, para a semana seguinte à volta dele/,
-  'quando a pausa ainda não venceu, o desenho é o mesmo — só muda a semana');
+assert.match(lista, /Se a pausa AINDA NÃO venceu .* o encontro é\s*proposto do mesmo jeito, com o dia perguntado a ele/,
+  'quando a pausa ainda não venceu, o desenho é o mesmo — e o dia continua vindo do cliente');
 
 // ── Defeito 3: a exceção não pode mais desligar a proibição de mandar material ─────────────────
 assert.match(lista, /E essa parte vale\s*SEMPRE, inclusive nas exceções abaixo/,
@@ -98,7 +100,7 @@ assert.match(lista, /Se o que\s*ele disse foi um MARCO DE VOLTA .* não é exce�
 // passei bastante informações, agora é necessário dar continuidade, e não (ficar a disposição)".
 assert.match(lista, /"quando\s*ficar tranquilo pra vocês", "fico à disposição"/,
   'as saídas de "à disposição" precisam estar proibidas na proposta de encontro');
-assert.match(lista, /Quem já mandou muita\s*informação não precisa se colocar à disposição: precisa DAR CONTINUIDADE, e continuidade é\s*dia marcado/,
+assert.match(lista, /Quem já mandou muita\s*informação não precisa se colocar à disposição: precisa DAR CONTINUIDADE, e continuidade é\s*perguntar o dia/,
   'precisa estar dito que continuidade é dia marcado, não disponibilidade');
 assert.match(lista, /A retomada tem UM objetivo só: conseguir a resposta e chegar ao encontro/,
   'a retomada precisa ter objetivo único declarado');

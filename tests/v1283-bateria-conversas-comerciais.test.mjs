@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import {
   guessLeadData,
   tentativasSemRespostaDoCorretor,
+  expandirObservacoesColadas,
   exemplosDoCorretor
 } from "../api/_pipeline.js";
 
@@ -61,7 +62,10 @@ for (const arquivo of arquivos) {
       `${onde}: "esperado.${campo}" precisa ter pelo menos um item — é o que a camada 2 confere`);
   }
 
-  const timeline = caso.conversa.map(m => ({ ...m, type: m.type || "text" }));
+  // v1287 — a observação que É conversa colada vira mensagem de verdade antes de qualquer conta,
+  // exatamente como acontece na análise. Sem isso, a fala mais recente do cliente conta como
+  // recado do corretor e tudo o que é medido abaixo sai errado.
+  const timeline = expandirObservacoesColadas(caso.conversa.map(m => ({ ...m, type: m.type || "text" })));
   const lead = guessLeadData(timeline, caso.corretorNome, caso.nomeArquivo);
   const esperado = caso.esperado;
 
@@ -72,7 +76,8 @@ for (const arquivo of arquivos) {
 
   // ── 2. Quem falou por último ────────────────────────────────────────────────
   // Decide "aguardando o cliente" x "responder agora" na fila do dia.
-  const ultima = timeline[timeline.length - 1];
+  const mensagensReais = timeline.filter(m => m.type !== "observacao_manual" && m.source !== "corretor-pro-manual");
+  const ultima = mensagensReais[mensagensReais.length - 1];
   const ultimaEhDoCorretor = String(ultima.author).trim() === String(caso.corretorNome).trim();
   const falouPorUltimo = ultimaEhDoCorretor ? "corretor" : "cliente";
   assert.equal(falouPorUltimo, esperado.quemFalouPorUltimo,

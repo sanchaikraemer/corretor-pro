@@ -1,0 +1,55 @@
+{
+  "id": "observacao-colada-e-conversa",
+  "titulo": "O corretor colou o trecho novo da conversa no campo de Observação",
+  "veioDe": "NOTAS-v1287.md",
+  "porQueImporta": "O WhatsApp nem sempre já foi reexportado quando o corretor precisa da análise. Ele cola o pedaço novo na Observação — e ali está justamente a mensagem em que a cliente diz o que procura. Se esse texto continuar valendo como recado do corretor, o sistema conclui que ela está calada, dispara a regra de 'cliente que te ignorou' e devolve sugestão marcando visita e dizendo que já foram enviadas opções que nunca saíram.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Marina Doring.txt",
+  "conversa": [
+    { "date": "06/06/2026", "time": "15:47", "author": "Marina Doring", "text": "É um conjunto de fatores, mas quero muito comprar um imóvel" },
+    { "date": "17/07/2026", "time": "10:48", "author": "Sanchai", "text": "Bom dia Marina, tudo bem? Conseguiu analisar as opções de terreno que te enviei?" },
+    { "date": "27/07/2026", "time": "17:41", "author": "Sanchai", "text": "Boa tarde Marina, tudo bem? Posso esclarecer algum ponto do material dos terrenos?" },
+    { "date": "14/08/2026", "time": "16:34", "author": "Sanchai", "text": "Boa tarde Marina, tudo bem? Existe algum critério ou detalhe que ainda está pesando para você decidir avançar?" },
+    {
+      "date": "17/08/2026",
+      "time": "08:49",
+      "author": "Observação do corretor",
+      "type": "observacao_manual",
+      "source": "corretor-pro-manual",
+      "text": "[17:06, 14/08/2026] Marina Doring: Oi. Boa tarde, mudança de planos\n[17:06, 14/08/2026] Marina Doring: Apartamento\n[17:10, 14/08/2026] Sanchai: Perfeito, temos opções de apartamentos prontos e na planta\n[17:10, 14/08/2026] Sanchai: Gostaria de ver algumas de nossas opções?\n[20:49, 14/08/2026] Marina Doring: Oi. Sim\n[13:15, 15/08/2026] Sanchai: Bom dia! Perfeito. Você busca um apartamento de 2 ou 3 dormitórios? E prefere algo na planta ou pronto para morar?\n[18:12, 15/08/2026] Marina Doring: Oi. Boa tarde, procuro apartamento de 2 dormitórios, sacada e boa iluminação, próximo ao hospital, com financiamento"
+    },
+    {
+      "date": "17/08/2026",
+      "time": "08:50",
+      "author": "Observação do corretor",
+      "type": "observacao_manual",
+      "source": "corretor-pro-manual",
+      "text": "não quis responder importunando ela no domingo, vamos retomar agora"
+    }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Marina Doring",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": [
+      "procuro apartamento de 2 dormitórios, sacada e boa iluminação"
+    ],
+    "aIaPrecisaPerceber": [
+      "a cliente trocou terreno por apartamento e já entregou o critério inteiro",
+      "quem falou por último foi a cliente — o corretor é quem está devendo resposta",
+      "nada foi enviado depois do pedido dela"
+    ],
+    "asMensagensNaoPodem": [
+      "dizer que já foram enviadas ou reunidas opções depois do pedido dela",
+      "nomear dia da semana, data ou hora de visita",
+      "perguntar de novo quantos dormitórios, se é pronto ou planta, ou o que é importante pra ela",
+      "voltar a falar de terreno"
+    ],
+    "asMensagensPrecisam": [
+      "partir do que ela pediu, com as palavras dela",
+      "dizer no futuro o que o corretor vai fazer agora com esse critério",
+      "trazer a única pergunta que falta — faixa de valor e entrada — emendada na entrega",
+      "quando propuserem encontro, perguntar qual dia fica melhor pra ela"
+    ]
+  }
+}
