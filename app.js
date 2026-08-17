@@ -7559,9 +7559,40 @@ function cpioPintarPct(valor){
 // nunca prender ninguém. É folgado de propósito: uma conversa cheia de áudio pode demorar.
 const CPIO_VIGIA_MS = 120000;
 let _cpioVigia = null;
+// v1290 — O TEMPO COM O APP EM SEGUNDO PLANO NÃO CONTA PRO VIGIA.
+//
+// Print do dono (17/08/2026, 12h43): ele mandou a conversa, saiu do app pra fazer outra coisa e,
+// ao voltar, viu a TELA VELHA da importação — a lista "Recebendo / Enviando / Extraindo…" parada
+// em "Extraindo (48%)" —, e só uns segundos depois a tela cheia certa voltou, em 87% "Analisando".
+// Nada tinha travado: enquanto o celular fica com o app atrás, o navegador CONGELA os relógios da
+// página; o relógio de 1 segundo que dá prova de vida para de rodar, e o vigia de 2 minutos (que
+// existe pra ninguém ficar preso numa tela morta) dispara sozinho na volta, fechando a tela cheia
+// e deixando à mostra a tela de baixo, congelada no último passo que ela chegou a desenhar.
+//
+// Agora o vigia mede tempo PARADO COM O APP NA FRENTE. O que se passa em segundo plano é
+// descontado, e voltar pro app reinicia a contagem — a tela cheia só cai se, com o corretor
+// olhando, a importação passar 2 minutos sem dar nenhum sinal.
+let _cpioSinal = 0;      // quando a importação deu o último sinal de vida
+let _cpioForaDesde = 0;  // desde quando o app está em segundo plano (0 = está na frente)
+function cpioParadoHaMs(){
+  const fora = _cpioForaDesde ? Date.now() - _cpioForaDesde : 0;
+  return Math.max(0, Date.now() - _cpioSinal - fora);
+}
+function cpioAgendarVigia(ms){
+  clearTimeout(_cpioVigia);
+  _cpioVigia = setTimeout(cpioVigiaBateu, Math.max(1000, ms));
+}
+function cpioVigiaBateu(){
+  const falta = CPIO_VIGIA_MS - cpioParadoHaMs();
+  // Dormiu em segundo plano (ou o relógio disparou atrasado): ainda não é hora de desistir.
+  if(falta > 0){ cpioAgendarVigia(falta); return; }
+  _cpioUltimoEstado = null; // desistiu de vez: voltar pro app não ressuscita esta tela
+  try{ cpImportOverlayVisivel(false); }catch(_){}
+}
 function cpioRearmarVigia(){
   clearTimeout(_cpioVigia);
-  _cpioVigia = setTimeout(() => { try{ cpImportOverlayVisivel(false); }catch(_){} }, CPIO_VIGIA_MS);
+  _cpioSinal = Date.now();
+  cpioAgendarVigia(CPIO_VIGIA_MS);
 }
 
 function cpioPararAnimacao(){
@@ -7582,7 +7613,11 @@ function cpioPararAnimacao(){
 // fechar tudo aos 2 minutos com o servidor ainda trabalhando, e aí o corretor via a tela sumir sem
 // resposta nenhuma. Passados 4 minutos o rearme para, e o vigia volta a poder encerrar (ninguém
 // pode ficar preso pra sempre numa tela).
-const CPIO_RELOGIO_ETAPAS = [3, 4];
+// v1290 — "Abrindo o arquivo" (2) entrou na lista. Numa conversa grande (a do print tinha quase
+// 1 GB), o servidor fica minutos abrindo o ZIP sem nada pra dizer: a tela ficava congelada em
+// "Abrindo o arquivo · 48%" e era justamente aí que o vigia derrubava a tela cheia. Com o
+// contador de segundos, a etapa mostra que está viva e segura o vigia como as outras duas.
+const CPIO_RELOGIO_ETAPAS = [2, 3, 4];
 const CPIO_RELOGIO_LIMITE_S = 240;
 let _cpioRelogio = null, _cpioRelogioBase = "", _cpioRelogioInicio = 0;
 
@@ -7662,7 +7697,14 @@ function cpImportOverlayAtualizar(idx, sub){
 // idx 7 = falha recuperável (sai na hora, pro corretor ver o erro e os botões).
 // opts.pausar = ponto em que o app ESPERA uma decisão dele (salvar/atualizar): a tela cheia sai
 // de cena, senão os botões ficariam cobertos e a importação travaria de vez.
+let _cpioUltimoEstado = null; // v1290 — o que a tela cheia mostra agora (null = não há importação de pé)
 function cpImportOverlaySincronizar(idx, sub, opts){
+  // v1290 — memória do passo atual, pra tela cheia poder voltar exatamente como estava quando o
+  // corretor volta pro app. Só vale enquanto a importação está trabalhando sozinha (0..5): num
+  // ponto de espera pela resposta dele, ao concluir ou ao falhar, não há nada pra ressuscitar.
+  _cpioUltimoEstado = (idx >= 0 && idx <= 5 && !(opts && (opts.pausar || opts.aguardando)))
+    ? { idx, sub }
+    : null;
   // v1223 — `aguardando` (a espera pela resposta do corretor, criada na v1219) precisa fazer a
   // MESMA coisa que `pausar`: tirar a tela cheia da frente. Faltava esta linha, e o efeito foi o
   // print do dono às 19h32 — "travou aqui": a tela cheia dizia "Salvando na carteira · 98% ·
@@ -7689,6 +7731,32 @@ function cpImportOverlaySincronizar(idx, sub, opts){
 }
 
 window.cpImportOverlaySincronizar = cpImportOverlaySincronizar;
+
+// v1290 — VOLTAR PRO APP NUNCA MAIS MOSTRA A TELA VELHA DA IMPORTAÇÃO.
+// Sair do app não interrompe a importação (o envio e a análise continuam), então, ao voltar, o
+// corretor tem que reencontrar a MESMA tela cheia que deixou, no passo em que a conversa está —
+// e não a lista antiga de etapas, congelada no último passo que ela chegou a desenhar.
+function cpioAppFoiProSegundoPlano(){
+  if(!_cpioForaDesde) _cpioForaDesde = Date.now();
+}
+function cpioAppVoltouDoSegundoPlano(){
+  _cpioForaDesde = 0;
+  if(!_cpioUltimoEstado) return;   // nenhuma importação de pé: não há nada pra trazer de volta
+  _cpioSinal = Date.now();         // o tempo fora não conta: a contagem do vigia recomeça agora
+  const relogioComecouEm = _cpioRelogioInicio;
+  try{
+    cpImportOverlayAtualizar(_cpioUltimoEstado.idx, _cpioUltimoEstado.sub);
+    // O contador de segundos da etapa não volta pro zero: ele conta desde que a etapa começou de
+    // verdade, senão a tela mentiria dizendo que a análise acabou de começar.
+    if(relogioComecouEm && _cpioRelogio) _cpioRelogioInicio = relogioComecouEm;
+    cpImportOverlayVisivel(true);
+  }catch(_){}
+}
+if(typeof document !== "undefined"){
+  document.addEventListener("visibilitychange", () => {
+    if(document.hidden) cpioAppFoiProSegundoPlano(); else cpioAppVoltouDoSegundoPlano();
+  });
+}
 
 // Bloqueia/reabilita os botões "Nova análise" e "Diagnóstico" da tela de
 // importação. Durante o processamento (Recebendo…Salvando) eles não podem ser
