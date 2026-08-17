@@ -7,7 +7,7 @@
 // GET ?relatorio=uso-ia devolve o relatório; POST {action:"excluir-conta"} continua igual.
 import { resolveOrganizationId, getSupabaseAdmin, EMPRESA_PRINCIPAL_ID, requirePlatformAdmin, emptyBucket } from "./_persistence.js";
 import { invalidarMemoriaComercialCache, upsertConfigComOrganizacao, PLANO_CONTRATADO_KEY, resumoLimiteAnalises, zerarContagemAnalises, limiteAnalisesIADoDia, limiteAnalisesIADoDiaTeste, planoComercial } from "./_pipeline.js";
-import { estimarCustoUsd, cotacaoUsdBrl } from "./_iaCusto.js";
+import { estimarCustoUsd, cotacaoUsdBrl, modeloTemPrecoConhecido } from "./_iaCusto.js";
 
 function json(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -76,7 +76,15 @@ function categoriaDoEvento(evento) {
 
 // Lê a tabela em páginas de 1000 (mesmo padrão de api/leads-recentes.js) — os últimos N dias de
 // telemetria de uma plataforma nova não devem passar disso tão cedo, mas não é seguro assumir.
-async function lerEventosUsoIA(supabase, desdeISO) {
+//
+// v1288 — a leitura agora tem TETO de data (`ateISO`), não só piso. Sem isso, a paginação contava
+// errado a partir da 2ª página: a ordem é por data decrescente, então uma análise gravada no meio
+// da leitura entrava no TOPO e empurrava todas as linhas uma casa pra baixo — a linha 1000 virava
+// a 1001 e era lida DE NOVO como primeira da página 2 (chamada contada em dobro). Congelando a
+// janela no instante em que o relatório começou, o que chega depois simplesmente fica pra próxima
+// atualização. O desempate por `id` existe pelo mesmo motivo: duas linhas com a mesma data não
+// podem sair em ordem imprevisível entre uma página e outra.
+async function lerEventosUsoIA(supabase, desdeISO, ateISO) {
   const pageSize = 1000;
   const rows = [];
   for (let from = 0; from < 200000; from += pageSize) {
@@ -84,7 +92,9 @@ async function lerEventosUsoIA(supabase, desdeISO) {
       .from("ai_usage_events")
       .select("organization_id,kind,model,rota,prompt_tokens,completion_tokens,audio_seconds,criado_em")
       .gte("criado_em", desdeISO)
+      .lte("criado_em", ateISO)
       .order("criado_em", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) return { ok: false, error: error.message, rows };
     if (!Array.isArray(data) || !data.length) break;
@@ -117,7 +127,7 @@ async function relatorioUsoIA(req, res, supabase) {
 
   const [{ data: organizacoes, error: orgErro }, eventos] = await Promise.all([
     supabase.from("organizations").select("id,nome"),
-    lerEventosUsoIA(supabase, inicioPeriodo.toISOString())
+    lerEventosUsoIA(supabase, inicioPeriodo.toISOString(), agora.toISOString())
   ]);
   if (orgErro) return json(res, 500, { ok: false, error: orgErro.message });
   if (!eventos.ok) return json(res, 500, { ok: false, error: eventos.error });
@@ -161,10 +171,21 @@ async function relatorioUsoIA(req, res, supabase) {
 
   const totalHoje = novoAcumuladorUsoIA();
   const totalPeriodo = novoAcumuladorUsoIA();
+  // v1288 — quantas chamadas foram cobradas pelo preço EXAGERADO de reserva (modelo sem preço
+  // mapeado em api/_iaCusto.js). Enquanto isso não era mostrado, o painel exibia um total inflado
+  // sem nenhuma pista de que o número era um chute pra cima.
+  const chamadasPorModeloSemPreco = new Map();
   for (const evento of eventos.rows) {
     somarUsoIA(totalPeriodo, evento);
     if (ehDeHoje(evento)) somarUsoIA(totalHoje, evento);
+    if (!modeloTemPrecoConhecido(evento)) {
+      const nome = String(evento.model || "desconhecido");
+      chamadasPorModeloSemPreco.set(nome, (chamadasPorModeloSemPreco.get(nome) || 0) + 1);
+    }
   }
+  const modelosSemPreco = [...chamadasPorModeloSemPreco.entries()]
+    .map(([model, chamadas]) => ({ model, chamadas }))
+    .sort((a, b) => b.chamadas - a.chamadas);
 
   return json(res, 200, {
     ok: true,
@@ -172,6 +193,7 @@ async function relatorioUsoIA(req, res, supabase) {
     diasNoPeriodo: dias,
     cotacaoUsdBrl: cotacaoUsdBrl(),
     aviso: "Custo estimado a partir de tabela de preço de referência (api/_iaCusto.js) — não é nota fiscal.",
+    modelosSemPreco,
     totalGeral: { hoje: formatarAcumuladorUsoIA(totalHoje), periodo: formatarAcumuladorUsoIA(totalPeriodo) },
     empresas
   });

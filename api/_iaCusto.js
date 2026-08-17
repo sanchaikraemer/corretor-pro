@@ -15,14 +15,48 @@ import { getSupabaseAdmin } from "./_persistence.js";
 const PRECO_USD_POR_1M_TOKENS = {
   "gpt-4.1": { entrada: 2.00, saida: 8.00 },
   "gpt-4.1-mini": { entrada: 0.40, saida: 1.60 },
+  "gpt-4.1-nano": { entrada: 0.10, saida: 0.40 },
   "gpt-4o": { entrada: 2.50, saida: 10.00 },
   "gpt-4o-mini": { entrada: 0.15, saida: 0.60 },
   "_padrao": { entrada: 5.00, saida: 15.00 }
 };
 const PRECO_USD_POR_MINUTO_WHISPER = 0.006;
 
+// v1288 — O NOME GRAVADO NÃO É O NOME DO MAPA, E ISSO INFLAVA O CUSTO DO PAINEL.
+//
+// A telemetria grava de propósito o modelo que a OpenAI DE FATO usou (`completion.model`, ver o
+// teste v1038 "precisa gravar o modelo que a OpenAI de fato usou") — e a OpenAI devolve o nome
+// COM a data da versão: pede-se "gpt-4o-mini" e vem "gpt-4o-mini-2024-07-18". O mapa acima só
+// tem os nomes curtos, e a busca era por chave exata: logo, praticamente TODA chamada caía no
+// "_padrao" ($5/$15), que existe pra ser um exagero deliberado. Efeito no painel: gpt-4.1 cobrado
+// ~2,3x mais caro do que é, e gpt-4o-mini (o aprendizado automático) até ~30x mais caro.
+// Correção: antes de desistir, tira o sufixo de data e tenta de novo.
+//
+// De propósito NÃO se tenta "adivinhar" além disso (ex.: cair de "gpt-9-turbo" pra "gpt-9"): um
+// palpite errado pode SUBESTIMAR o custo, que é o único erro que engana de verdade quem está
+// definindo preço. Modelo que continuar sem preço mapeado segue no "_padrao" — e agora aparece
+// nomeado como aviso no painel administrativo, em vez de sumir dentro do número.
+const SUFIXO_DE_VERSAO = /-(\d{4})-(\d{2})-(\d{2})$/;
+
+export function chavePrecoDoModelo(model) {
+  const nome = String(model || "").trim();
+  if (PRECO_USD_POR_1M_TOKENS[nome] && nome !== "_padrao") return nome;
+  const semData = nome.replace(SUFIXO_DE_VERSAO, "");
+  if (semData !== nome && PRECO_USD_POR_1M_TOKENS[semData] && semData !== "_padrao") return semData;
+  return null;
+}
+
+// Um evento de chat cujo modelo não está no mapa está sendo cobrado pelo preço exagerado do
+// "_padrao" — o painel precisa poder DIZER isso, com o nome do modelo, em vez de mostrar um total
+// inflado sem explicação (foi exatamente a desconfiança do dono em 17/08/2026: "esses valores
+// estão certos? tem certeza?").
+export function modeloTemPrecoConhecido({ kind, model }) {
+  if (kind === "whisper") return true;
+  return chavePrecoDoModelo(model) !== null;
+}
+
 function precoDoModelo(model) {
-  return PRECO_USD_POR_1M_TOKENS[String(model || "").trim()] || PRECO_USD_POR_1M_TOKENS._padrao;
+  return PRECO_USD_POR_1M_TOKENS[chavePrecoDoModelo(model) || "_padrao"];
 }
 
 // Configurável pelo dono via variável de ambiente (a cotação muda; não faz sentido cravar no
