@@ -113,6 +113,17 @@ destrava** (faixa de valor + entrada) quando o cliente já deu o critério do im
 nunca foi perguntado. Guardas: `tests/v1287-observacao-colada-vira-conversa.test.mjs`,
 `tests/v1287-nenhuma-data-chutada.test.mjs` e a 9ª conversa da bateria. Ver `NOTAS-v1287.md`._
 
+_**v1288 — o histórico antigo não manda mais na análise.** Três regras que faltavam, todas do mesmo
+buraco (o passado da conversa pesando mais que o presente): **mudança de planos DECLARADA** ("agora
+é apartamento", "desisti do terreno") tira o produto antigo da condução — antes só a *recusa*
+estava escrita (v1279), e anúncio de mudança não é recusa; **silêncio não é aceite** — valor que o
+cliente nunca comentou, ou tabela de outro produto/outra época, não vira `faixaDeValor` (foi assim
+que uma tabela de 2024 virou "o orçamento" de uma cliente que trocou de produto), e a faixa em
+"Não identificado" é justamente o que faz aparecer a pergunta do dinheiro do item 4; e **quando uma
+das opções chega mais perto do que o cliente pediu, a mensagem diz qual e por quê** — entregar duas
+ou três empatadas devolve pro cliente a escolha que ele procurou um corretor pra fazer. Guarda:
+`tests/v1288-historico-antigo-nao-manda.test.mjs`. Ver `NOTAS-v1288.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
