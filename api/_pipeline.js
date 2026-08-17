@@ -934,10 +934,72 @@ export function limiteAnalisesIADoDiaTeste() {
 // v1111 — dono recalibrou (usando o próprio uso real como régua: 70–80 análises/MÊS com 200+
 // clientes na carteira): Pro 15/dia + 150/mês; Pro Master 30/dia + 300/mês (sempre o dobro).
 // Acima disso é plano personalizado, negociado no WhatsApp (o convite do Pro Master já leva lá).
+// v1284 — DECISÃO DO DONO (17/08/2026), depois de medir o custo real de IA no painel da OpenAI.
+//
+// Os limites antigos (Pro 150/mês, Pro Master 300/mês) davam MARGEM NEGATIVA: uma análise custa de
+// R$ 0,20 a R$ 0,40 (medido — 79% da conta de IA é a entrada do modelo de análise), então 150
+// análises custavam até R$ 60 num plano de R$ 49,90. O preço fica igual e o volume desce:
+//   Pro        R$ 49,90 →  50 análises/mês → custo até R$ 20 → margem 60% no pior caso
+//   Pro Master R$ 99,90 → 120 análises/mês → custo até R$ 48 → margem 52% no pior caso
+//
+// O TETO DIÁRIO DEIXOU DE SER REGRA COMERCIAL (decisão do dono: "independente de limite diário").
+// Quem quiser sentar num sábado e colocar a carteira em dia não pode ser barrado. O que sobrou no
+// campo `dia` é só um FUSÍVEL TÉCNICO, alto de propósito: ele não existe pra limitar o corretor,
+// existe pra um erro em laço não queimar o mês inteiro numa hora. Ninguém deve encostar nele —
+// se alguém encostar, é sinal de defeito, não de uso intenso (o teto do mês já protege o dinheiro).
+const FUSIVEL_TECNICO_DIA = 40;
 const PLANOS_COMERCIAIS = {
-  "pro": { tipo: "pro", nome: "Pro", dia: 15, mes: 150, envDia: "CORRETOR_PRO_LIMITE_DIA_PRO", envMes: "CORRETOR_PRO_LIMITE_MES_PRO" },
-  "pro-master": { tipo: "pro-master", nome: "Pro Master", dia: 30, mes: 300, envDia: "CORRETOR_PRO_LIMITE_DIA_PROMASTER", envMes: "CORRETOR_PRO_LIMITE_MES_PROMASTER" }
+  "pro": { tipo: "pro", nome: "Pro", dia: FUSIVEL_TECNICO_DIA, mes: 50, envDia: "CORRETOR_PRO_LIMITE_DIA_PRO", envMes: "CORRETOR_PRO_LIMITE_MES_PRO" },
+  "pro-master": { tipo: "pro-master", nome: "Pro Master", dia: FUSIVEL_TECNICO_DIA, mes: 120, envDia: "CORRETOR_PRO_LIMITE_DIA_PROMASTER", envMes: "CORRETOR_PRO_LIMITE_MES_PROMASTER" }
 };
+
+// v1284 — BÔNUS DE CARGA INICIAL.
+//
+// O problema que ele resolve: a promessa do produto é "de toda a minha carteira, quem eu atendo
+// agora" — e isso exige a carteira DENTRO. Um corretor com 150 conversas gasta 3 pacotes mensais
+// só na primeira importação, e bateria no bloqueio na primeira semana, justo quando ia se
+// convencer. Custa de R$ 40 a R$ 80 uma única vez por cliente novo: é custo de aquisição, e é
+// muito mais barato que perder o cliente antes de ele ver o produto funcionando.
+//
+// É por TEMPO (dias desde a criação da conta), não por saldo guardado: assim não precisa de
+// tabela nova nem de contador próprio, não dá pra acumular pra usar daqui a um ano, e não abre
+// disputa de concorrência — o teto mensal continua sendo um número só, calculado na hora.
+// A janela cobre com folga os 7 dias de teste + as semanas até a pessoa decidir e pagar.
+const BONUS_ENTRADA_ANALISES = 200;
+const BONUS_ENTRADA_DIAS = 45;
+export function bonusEntradaDisponivel(criadoEm) {
+  const extra = Number(process.env.CORRETOR_PRO_BONUS_ENTRADA);
+  const total = Number.isFinite(extra) && extra >= 0 ? extra : BONUS_ENTRADA_ANALISES;
+  if (!total || !criadoEm) return 0;
+  const nascimento = new Date(criadoEm).getTime();
+  if (!Number.isFinite(nascimento)) return 0;
+  const dias = (Date.now() - nascimento) / 86400000;
+  return dias >= 0 && dias <= BONUS_ENTRADA_DIAS ? total : 0;
+}
+
+// v1284 — PACOTE EXTRA: quem estoura o mês compra mais em vez de bater numa parede.
+// Bloquear no dia 20 quem está usando muito é perder justamente o melhor cliente. Não há meio de
+// pagamento automático ainda (decisão do dono), então a compra é pelo WhatsApp e o dono libera
+// pelo painel (ação "zerar-limite-analises" com zerarMes) — o texto abaixo é o convite.
+// O preço por análise do pacote (R$ 1,30) fica ACIMA do preço por análise de dentro do plano
+// (R$ 49,90 ÷ 50 = R$ 1,00) de propósito, e isso não é ganância: é o que faz a conta do cliente
+// apontar pro lugar certo. Um Pro no limite que compra o pacote paga R$ 1,30 por análise; se subir
+// pro Pro Master, ganha 70 análises a mais por R$ 50 — R$ 0,71 cada. Ou seja, o pacote resolve o
+// aperto de hoje e o upgrade resolve o mês inteiro, mais barato. A primeira versão desta linha
+// tinha R$ 29 e o teste de margem (v1284) reprovou: saía mais barato que a assinatura.
+const PACOTE_EXTRA = { analises: 30, preco: 39 };
+export function pacoteExtra() {
+  const n = Number(process.env.CORRETOR_PRO_PACOTE_EXTRA_ANALISES);
+  const p = Number(process.env.CORRETOR_PRO_PACOTE_EXTRA_PRECO);
+  return {
+    analises: Number.isFinite(n) && n > 0 ? n : PACOTE_EXTRA.analises,
+    preco: Number.isFinite(p) && p > 0 ? p : PACOTE_EXTRA.preco
+  };
+}
+export function pacoteExtraBR() {
+  const p = pacoteExtra();
+  return { ...p, precoBR: `R$ ${p.preco.toFixed(2).replace(".", ",")}` };
+}
 // Chave em direciona_config onde fica o plano contratado da conta: valor { tipo: "pro"|"pro-master" }.
 // Conta ativa sem registro = Pro (plano de entrada). Definido pelo painel administrativo.
 export const PLANO_CONTRATADO_KEY = "plano-contratado";
@@ -979,11 +1041,14 @@ export async function obterPlanoAtual(organizationId) {
     const supabase = getSupabaseAdmin();
     if (!supabase || !organizationId) return aberto;
     if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return { principal: true, emTeste: false, plano: null };
-    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+    const { data: org } = await supabase.from("organizations").select("status, criado_em").eq("id", organizationId).maybeSingle();
     if (org?.status === "teste") return { principal: false, emTeste: true, plano: null };
     const { data } = await supabase.from("direciona_config").select("valor").eq("chave", PLANO_CONTRATADO_KEY).eq("organization_id", organizationId).maybeSingle();
     const tipo = data?.valor && typeof data.valor === "object" ? data.valor.tipo : null;
-    return { principal: false, emTeste: false, plano: planoComercial(tipo) };
+    // v1284 — a tela "Planos" precisa saber se a conta ainda está na janela do bônus de carga
+    // inicial, pra mostrar o teto REAL do mês (plano + bônus) em vez do teto do plano sozinho.
+    // Só leitura: nunca reserva nem gasta análise (mesma promessa desta função desde a v1199).
+    return { principal: false, emTeste: false, plano: planoComercial(tipo), bonusEntrada: bonusEntradaDisponivel(org?.criado_em) };
   } catch (_) { return aberto; }
 }
 
@@ -1040,21 +1105,28 @@ export async function verificarLimiteAnalises(organizationId) {
     const gravar = (chave, valor) => upsertConfigComOrganizacao(supabase, organizationId, { chave, valor, atualizado_em: new Date().toISOString() }).catch(() => ({}));
 
     // 1) Descobre o contexto: teto do dia, teto do mês (null = sem teto mensal), teste e plano.
-    let emTeste = false, plano = null, limiteDia, limiteMes = null;
+    let emTeste = false, plano = null, limiteDia, limiteMes = null, bonus = 0;
     if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) {
       // Conta original (dono da plataforma): fora dos planos — só o fusível técnico diário.
       limiteDia = limiteAnalisesIADoDia();
     } else {
-      const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+      const { data: org } = await supabase.from("organizations").select("status, criado_em").eq("id", organizationId).maybeSingle();
       if (org?.status === "teste") {
         emTeste = true; limiteDia = limiteAnalisesIADoDiaTeste();
       } else {
         const contratado = await lerValor(PLANO_CONTRATADO_KEY);
         plano = planoComercial(contratado?.tipo);
-        limiteDia = plano.dia; limiteMes = plano.mes;
+        limiteDia = plano.dia;
+        // v1284 — bônus de carga inicial: nos primeiros dias da conta o teto do mês vem maior, pra
+        // a primeira importação da carteira caber. Entra como UM número (teto do mês já somado),
+        // então a reserva atômica da migração 0012 continua fazendo todo o trabalho sozinha e a
+        // devolução em caso de falha (v1174) continua valendo igual. Sem estado novo em lugar
+        // nenhum: passada a janela, o bônus simplesmente deixa de ser somado.
+        bonus = bonusEntradaDisponivel(org?.criado_em);
+        limiteMes = plano.mes + bonus;
       }
     }
-    const meta = { ...aberto, emTeste, plano, limite: limiteDia, limiteMes };
+    const meta = { ...aberto, emTeste, plano, limite: limiteDia, limiteMes, bonusEntrada: bonus, limiteMesDoPlano: plano ? plano.mes : null };
 
     // 2) Reserva atômica (0012). Se a função não existir/der erro, cai no jeito antigo abaixo.
     const rpc = await reservarAnaliseViaRPC(supabase, organizationId, hojeStr, mesStr, limiteDia, limiteMes);
@@ -2915,20 +2987,30 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
       upgrade = { motivo: "limite-teste", limite: limiteDiario.limite, whatsapp: zap,
         botao: `Assinar pelo WhatsApp — Pro ${precoPlanoBR("pro")}/mês`,
         mensagemWhats: "Olá! Atingi o limite de análises do teste grátis do Corretor Pro e quero contratar um plano." };
+    } else if (limiteDiario.plano && limiteDiario.motivo === "dia") {
+      // v1284 — O TETO DIÁRIO NÃO É MAIS REGRA COMERCIAL. Quem chega aqui bateu no fusível técnico
+      // (40/dia), que existe só pra um erro em laço não queimar o mês numa hora. Não faz sentido
+      // vender upgrade pra quem está usando o produto direito — e muito menos dizer que "o plano
+      // dele é pequeno", porque o pacote do mês continua inteiro à disposição amanhã.
+      aviso = `Muitas análises em pouco tempo — por segurança, o sistema pausou por hoje. Seu pacote do mês continua valendo e amanhã volta ao normal. Se isso aconteceu sem você ter feito tudo isso, fale com a gente.`;
+      upgrade = { motivo: "fusivel-tecnico", whatsapp: zap,
+        botao: "Avisar no WhatsApp",
+        mensagemWhats: "Olá! O Corretor Pro pausou minhas análises por segurança e eu não fiz esse tanto de importação." };
     } else if (limiteDiario.plano?.tipo === "pro") {
-      aviso = limiteDiario.motivo === "mes"
-        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro. O Pro Master tem o dobro por ${precoPlanoBR("pro-master")}/mês — fale com a gente pelo WhatsApp abaixo.`
-        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro. O Pro Master tem o dobro por ${precoPlanoBR("pro-master")}/mês — fale com a gente pelo WhatsApp abaixo.`;
-      upgrade = { motivo: "upgrade-pro-master", whatsapp: zap,
-        botao: "Conhecer o Pro Master no WhatsApp",
-        mensagemWhats: "Olá! Atingi o limite do meu plano Pro no Corretor Pro e quero conhecer o Pro Master." };
+      // v1284 — estourou o MÊS: em vez de parede, duas saídas — mais análises agora (pacote
+      // extra) ou subir de plano. Bloquear no dia 20 quem está usando muito é perder justamente
+      // o melhor cliente.
+      const pac = pacoteExtraBR();
+      aviso = `Você usou as ${limiteDiario.limiteMes} análises deste mês do plano Pro. Para continuar hoje: mais ${pac.analises} análises por ${pac.precoBR}, ou o Pro Master (${planoComercial("pro-master").mes}/mês) por ${precoPlanoBR("pro-master")}/mês. É só chamar no WhatsApp abaixo.`;
+      upgrade = { motivo: "pacote-ou-upgrade", whatsapp: zap, pacote: pac,
+        botao: `Continuar hoje — +${pac.analises} análises por ${pac.precoBR}`,
+        mensagemWhats: `Olá! Usei as análises do meu plano Pro no Corretor Pro e quero mais ${pac.analises} análises (ou saber do Pro Master).` };
     } else if (limiteDiario.plano?.tipo === "pro-master") {
-      aviso = limiteDiario.motivo === "mes"
-        ? `Você atingiu o limite de ${limiteDiario.limiteMes} análises deste mês do plano Pro Master. Precisa de mais? Fale com a gente pelo WhatsApp abaixo.`
-        : `Você atingiu o limite de ${limiteDiario.limite} análises por dia do plano Pro Master. Precisa de mais? Fale com a gente pelo WhatsApp abaixo.`;
-      upgrade = { motivo: "plano-personalizado", whatsapp: zap,
-        botao: "Falar no WhatsApp sobre um plano maior",
-        mensagemWhats: "Olá! Atingi o limite do meu plano Pro Master no Corretor Pro e preciso de um limite maior." };
+      const pac = pacoteExtraBR();
+      aviso = `Você usou as ${limiteDiario.limiteMes} análises deste mês do plano Pro Master. Para continuar hoje: mais ${pac.analises} análises por ${pac.precoBR}. Se todo mês for assim, vale montar um pacote sob medida — fale com a gente pelo WhatsApp abaixo.`;
+      upgrade = { motivo: "pacote-ou-personalizado", whatsapp: zap, pacote: pac,
+        botao: `Continuar hoje — +${pac.analises} análises por ${pac.precoBR}`,
+        mensagemWhats: `Olá! Usei as análises do meu plano Pro Master no Corretor Pro e quero mais ${pac.analises} análises.` };
     } else {
       aviso = `Limite diário de ${limiteDiario.limite} análises de IA foi atingido para esta conta. Tente novamente amanhã.`;
     }

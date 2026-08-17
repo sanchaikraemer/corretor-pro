@@ -99,8 +99,12 @@ const indexSrc = fs.readFileSync(new URL("../index.html", import.meta.url), "utf
     assert.equal(r.principal, false);
     assert.equal(r.emTeste, false);
     assert.equal(r.plano?.tipo, "pro-master", "precisa reconhecer o plano contratado de verdade");
-    assert.equal(r.plano?.dia, 30);
-    assert.equal(r.plano?.mes, 300);
+    // v1284 — Pro Master: 120/mês, e o campo `dia` virou fusível técnico (40), igual pros dois
+    // planos. A tela mostra o pacote do MÊS; o diário não é mais régua comercial.
+    assert.equal(r.plano?.dia, 40);
+    assert.equal(r.plano?.mes, 120);
+    // A tela precisa saber do bônus de carga inicial pra mostrar o teto real do primeiro mês.
+    assert.ok("bonusEntrada" in r, "obterPlanoAtual precisa informar o bônus de carga inicial");
 
     console.log("v1199-tela-planos: ok");
   } finally {

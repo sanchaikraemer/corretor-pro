@@ -7179,6 +7179,9 @@ async function carregarPlanos(){
     if(!d?.ok) throw new Error(d?.error || "falha ao carregar");
     const { planoAtual, catalogoPlanos } = d;
     const zap = '5554999013331';
+    // v1284 — o bônus de carga inicial (as análises de boas-vindas dos primeiros dias) só aparece
+    // no cartão do plano que a conta realmente tem, e some sozinho quando a janela acaba.
+    const bonus = Number(catalogoPlanos?.bonusEntrada) || 0;
     const cardHTML = (tipo, dados) => {
       const ehAtual = !planoAtual?.principal && !planoAtual?.emTeste && planoAtual?.plano?.tipo === tipo;
       const precoBR = "R$ " + Number(dados.preco).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -7187,9 +7190,9 @@ async function carregarPlanos(){
         <h3>${escapeHtml(dados.nome)}</h3>
         <div class="plano-preco">${precoBR}<small> /mês</small></div>
         <ul>
-          <li>Até <b>${dados.dia}</b> análises de conversa por dia</li>
-          <li>Até <b>${dados.mes}</b> análises de conversa por mês</li>
-          <li>Fila "Fazer agora", Agenda, Cérebro Comercial e Desempenho sem limite</li>
+          <li><span><b>${dados.mes}</b> análises de conversa por mês, <b>sem limite por dia</b></span></li>
+          ${ehAtual && bonus > 0 ? `<li class="plano-bonus"><span>Mais <b>${bonus}</b> análises de boas-vindas, pra trazer a carteira inteira agora</span></li>` : ""}
+          <li><span>Fila "Fazer agora", Agenda, Cérebro Comercial e Desempenho sem limite</span></li>
         </ul>
       </div>`;
     };
@@ -7201,8 +7204,9 @@ async function carregarPlanos(){
     box.innerHTML = `
       ${seloTopo}
       <div class="small" style="color:var(--soft);line-height:1.6;margin-top:${seloTopo ? "10px" : "0"}">
-        Cada análise é uma conversa importada (ou reimportada com novidade de verdade) lida pelo Cérebro Comercial.
-        O limite diário segura um pico num dia só; o mensal é o que realmente protege o custo — os dois juntos, nunca um sozinho.
+        Cada análise é uma conversa importada (ou reimportada) lida pelo Cérebro Comercial.
+        Você usa como quiser dentro do mês — pode colocar a carteira inteira em dia num sábado, se preferir.
+        Se acabar antes do fim do mês, dá pra comprar mais ${Number(catalogoPlanos?.pacoteExtra?.analises) || 30} análises por ${escapeHtml(catalogoPlanos?.pacoteExtra?.precoBR || "R$ 39,00")} sem trocar de plano.
       </div>
       <div class="plano-cards">
         ${cardHTML("pro", catalogoPlanos.pro)}

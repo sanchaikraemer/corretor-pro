@@ -654,6 +654,10 @@
         .plano-card ul{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
         .plano-card li{font-size:13px;color:var(--soft);display:flex;gap:8px;align-items:flex-start}
         .plano-card li:before{content:"✓";color:var(--lime);font-weight:950;flex:0 0 auto}
+        /* v1284 — as análises de boas-vindas dos primeiros dias: é oferta temporária, então se
+           distingue das linhas fixas do plano (marca de presente no lugar do ✓). */
+        .plano-card li.plano-bonus{color:var(--lime)}
+        .plano-card li.plano-bonus:before{content:"★"}
         .plano-selo-atual{display:inline-block;margin-bottom:8px;font-size:10.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:var(--lime);background:var(--acao-soft);border:1px solid var(--acao-line);border-radius:999px;padding:4px 10px}
       </style>
       <div class="card">

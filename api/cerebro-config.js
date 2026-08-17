@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { resolveOrganizationId, getSupabaseAdmin } from "./_persistence.js";
-import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, lerPrintDaConversa, limitePrintDoDia, limitePrintDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano } from "./_pipeline.js";
+import { getOpenAI, transcreverBuffer, aprenderComHistoricoReal, obterStatusAprendizadoAutomatico, obterExportacaoAprendizado, marcarBootstrapAprendizadoConcluido, upsertConfigComOrganizacao, APRENDIZADO_PENDENTE_V2_PREFIX, verificarLimiteDiario, limiteTranscricaoVozDoDia, limiteTranscricaoVozDoDiaTeste, lerPrintDaConversa, limitePrintDoDia, limitePrintDoDiaTeste, obterPlanoAtual, planoComercial, precoPlano, pacoteExtraBR } from "./_pipeline.js";
 
 const CONFIG_KEY = "direciona-cerebro";
 
@@ -220,9 +220,14 @@ export default async function handler(req, res) {
     // dos dois planos comerciais (limites e preço), pra nunca precisar cravar esses números de
     // novo numa quarta cópia — server, entrar.html e agora esta tela leem da mesma fonte.
     const planoAtual = await obterPlanoAtual(organizationId).catch(() => ({ principal: false, emTeste: false, plano: null }));
+    // v1284 — o catálogo passa a levar também o pacote extra (o que fazer ao estourar o mês, em
+    // vez de bater numa parede) e o bônus de carga inicial, pela mesma razão de sempre: um número
+    // desses só pode existir num lugar. A tela lê daqui.
     const catalogoPlanos = {
       pro: { ...planoComercial("pro"), preco: precoPlano("pro") },
-      "pro-master": { ...planoComercial("pro-master"), preco: precoPlano("pro-master") }
+      "pro-master": { ...planoComercial("pro-master"), preco: precoPlano("pro-master") },
+      pacoteExtra: pacoteExtraBR(),
+      bonusEntrada: planoAtual?.bonusEntrada ?? null
     };
     return json(res, 200, { ok: true, config: r.valor ? sanitizeCerebroConfig(r.valor) : DEFAULTS, usingDefaults: !r.found, aprendizadoAutomatico, notas: notasR.itens, planoAtual, catalogoPlanos });
   }
