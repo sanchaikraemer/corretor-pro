@@ -3372,6 +3372,32 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
 
+LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
+marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
+que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
+"estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
+"não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
+saber se você teria interesse". Também não escreva no passado o que você quer agora ("quis saber
+se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
+sem repetir em outras palavras o que a mensagem já disse.
+
+PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
+com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
+elas. É PROIBIDO escrever "overview", "insight", "feedback", "budget", "call", "briefing",
+"follow-up", "case", "timing", "mindset", "expertise", "know-how", "player", "target", "deal",
+"lead", "prospect", "pipeline", "background", "update", "board", "meeting" — e qualquer outra
+palavra em inglês que tenha equivalente óbvio em português. Escreva em português: overview = uma
+ideia geral / um resumo; feedback = retorno; call = ligação; budget = quanto pretende investir;
+follow-up = retomar o contato; timing = momento; update = novidade; meeting = reunião. Jargão
+corporativo em português cai na mesma regra: "alinhar expectativas", "validar com você",
+"estruturar o processo", "mapear as possibilidades", "de forma assertiva", "agregar valor",
+"solução personalizada", "análise detalhada do seu perfil". Palavra que o cliente teria que
+traduzir na cabeça denuncia na hora que quem escreveu não foi o corretor.
+A EXCEÇÃO, e só ela: nome próprio (empreendimento, construtora, bairro, rua) e o vocabulário que
+já é assim no mercado imobiliário brasileiro — studio, loft, duplex, garden, closet, playground,
+home office, coworking, hall, fitness — continuam escritos como são, quando a conversa ou o Cérebro
+usarem essas palavras. Isso não abre a porta pro resto do inglês.
+
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
 
@@ -3386,7 +3412,9 @@ Antes de devolver o JSON, confirme:
 7. Alguma mensagem força visita/encontro/proposta sem maturidade?
 8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
 9. A análise considerou o começo, o meio e o fim do histórico fornecido?
-10. A resposta está fiel ao Cérebro Comercial atual?`;
+10. A resposta está fiel ao Cérebro Comercial atual?
+11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).

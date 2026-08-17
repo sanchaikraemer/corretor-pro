@@ -79,18 +79,21 @@ assert.doesNotMatch(system, /Obrigada, vou olhar/,
 assert.match(system, /Use apenas a forma de escrever; não copie fatos ou promessas/,
   "precisa estar escrito que só a forma é copiada");
 
-// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA, E É A MUDANÇA MAIS ARRISCADA DESTA VERSÃO.
-// Até a v1290 as instruções traziam a lista "LINGUAGEM DE IA — PROIBIDO" com as frases que o dono
-// rejeitou uma a uma nos prints de 11/08/2026 ("fico à disposição", "espero que esteja bem", "não
-// hesite em", "sinta-se à vontade", "quis saber se", "faz sentido"). Na reescrita das instruções
-// que ele entregou pronta na v1291, essa lista saiu — e não sobrou nenhum substituto escrito.
-// Ou seja: hoje quem segura o clichê de IA é o tom que o Cérebro do corretor descrever, mais os
-// exemplos de voz real conferidos logo acima. Se as frases voltarem a aparecer nas sugestões, é
-// aqui que a lista precisa ser recolocada.
+// A lista negra de jargão precisa estar nas instruções, item por item — são as frases que o dono
+// rejeitou uma a uma nos prints de 11/08/2026.
+// (Ela chegou a sair na v1291, junto com a reescrita das instruções que o dono entregou pronta, e
+// ele mandou recolocar no mesmo dia: "1 - entao recoloque".)
+// Espaços normalizados: as instruções são texto formatado, e uma quebra de linha no meio de
+// "sinta-se à vontade" não pode fazer a checagem passar batido.
 const instrucoes = `${system}\n${pedido}`.replace(/\s+/g, " ");
-assert.ok(!instrucoes.includes("LINGUAGEM DE IA — PROIBIDO"),
-  "se a lista de jargão voltar, este teste precisa voltar a cobrar as frases uma a uma (ver NOTAS-v1291.md)");
+for (const proibido of [
+  "espero que esteja", "faz sentido", "fico à disposição", "não hesite em",
+  "sinta-se à vontade", "quis saber se"
+]) {
+  assert.ok(instrucoes.toLowerCase().includes(proibido.toLowerCase()), `o jargão proibido "${proibido}" precisa estar listado nas instruções`);
+}
+assert.match(instrucoes, /LINGUAGEM DE IA — PROIBIDO/);
 assert.match(instrucoes, /Use apenas a forma de escrever/,
-  "sem a lista, o exemplo de voz real do corretor é o que resta segurando o tom — não pode sumir também");
+  "junto com a lista, o exemplo de voz real do corretor continua sendo a referência de tom");
 
 console.log("v1212-voz-real-do-corretor-no-prompt: ok");
