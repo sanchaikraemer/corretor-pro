@@ -1,0 +1,31 @@
+{
+  "id": "oferta-ja-ignorada",
+  "titulo": "A mesma apresentação foi oferecida duas vezes e o cliente não respondeu nenhuma",
+  "veioDe": "NOTAS-v1277.md — print do dono de 14/08/2026",
+  "porQueImporta": "O app devolvia, pela terceira vez, exatamente a mesma oferta que o cliente já tinha ignorado duas vezes. 'Cadê a retomada?'",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Marcos Pereira.txt",
+  "conversa": [
+    { "date": "28/07/2026", "time": "14:20", "author": "Sanchai", "text": "Boa tarde, Marcos! Tudo bem? Lançou o empreendimento aqui do centro, ficou muito bom." },
+    { "date": "28/07/2026", "time": "15:05", "author": "Marcos Pereira", "text": "Oi! Que bom. Estou olhando algumas opções ainda." },
+    { "date": "05/08/2026", "time": "09:30", "author": "Sanchai", "text": "Marcos, posso seguir com a apresentação do empreendimento pra você?" },
+    { "date": "11/08/2026", "time": "10:10", "author": "Sanchai", "text": "Bom dia! Consigo te mandar aquela apresentação hoje?" }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Marcos Pereira",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 2,
+    "vozDoCorretorNaoPodeConter": ["Estou olhando algumas opções"],
+    "aIaPrecisaPerceber": [
+      "a apresentação já foi oferecida duas vezes e ficou sem resposta"
+    ],
+    "asMensagensNaoPodem": [
+      "oferecer a mesma apresentação pela terceira vez, mesmo com outras palavras",
+      "contar para o cliente quantas vezes ele foi procurado"
+    ],
+    "asMensagensPrecisam": [
+      "trocar de abordagem em vez de repetir o pedido de licença",
+      "pelo menos uma delas propor um encontro com dia e horário concretos"
+    ]
+  }
+}

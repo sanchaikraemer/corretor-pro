@@ -1,0 +1,30 @@
+{
+  "id": "cliente-ja-disse-o-que-quer",
+  "titulo": "O cliente já entregou o critério — a busca agora é trabalho do corretor",
+  "veioDe": "NOTAS-v1279.md",
+  "porQueImporta": "Quando o cliente já disse o que quer, perguntar de novo é perder o timing. O que falta vira pauta do encontro, não questionário.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Juliana Prado.txt",
+  "conversa": [
+    { "date": "10/08/2026", "time": "19:40", "author": "Sanchai", "text": "Boa noite, Juliana! Recebi seu contato pelo anúncio. Como posso ajudar?" },
+    { "date": "10/08/2026", "time": "20:02", "author": "Juliana Prado", "text": "Boa noite! Procuro 2 dormitórios perto do centro, até 480 mil, com uma vaga. Precisa ser pronto pra morar, porque meu aluguel vence em novembro." }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Juliana Prado",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["Procuro 2 dormitórios perto do centro"],
+    "aIaPrecisaPerceber": [
+      "o cliente já informou tipologia, região, valor, vaga e prazo",
+      "existe um prazo real: o aluguel vence em novembro"
+    ],
+    "asMensagensNaoPodem": [
+      "perguntar de novo quantos dormitórios, qual bairro ou qual valor",
+      "mandar a carteira inteira de opções"
+    ],
+    "asMensagensPrecisam": [
+      "levar duas ou três opções escolhidas que encaixem no que ela pediu",
+      "propor um próximo passo concreto de visita ou encontro"
+    ]
+  }
+}

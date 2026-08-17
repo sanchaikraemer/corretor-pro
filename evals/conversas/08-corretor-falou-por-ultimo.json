@@ -1,0 +1,29 @@
+{
+  "id": "corretor-falou-por-ultimo",
+  "titulo": "A última mensagem é do corretor — o cliente não está esperando resposta",
+  "veioDe": "ESTADO-ATUAL.md seção 7 e NOTAS-v1190.md",
+  "porQueImporta": "A conversa importada é um retrato de um momento. Se a última fala é do corretor, dizer que 'o cliente está esperando' é inventar estado que o app não tem como saber.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Fernando Klein.txt",
+  "conversa": [
+    { "date": "08/08/2026", "time": "17:00", "author": "Fernando Klein", "text": "Boa tarde! Recebi o material, obrigado. Vou conversar com minha esposa e te retorno." },
+    { "date": "08/08/2026", "time": "17:05", "author": "Sanchai", "text": "Perfeito, Fernando! Fico à disposição pra qualquer dúvida de vocês dois." }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Fernando Klein",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 1,
+    "vozDoCorretorNaoPodeConter": ["Vou conversar com minha esposa"],
+    "aIaPrecisaPerceber": [
+      "quem decide não é só o cliente: a esposa participa da decisão",
+      "a bola está com o cliente, que ficou de retornar"
+    ],
+    "asMensagensNaoPodem": [
+      "afirmar que o cliente está esperando uma resposta do corretor",
+      "cobrar o retorno como se o prazo combinado já tivesse estourado"
+    ],
+    "asMensagensPrecisam": [
+      "levar em conta que a decisão é do casal"
+    ]
+  }
+}

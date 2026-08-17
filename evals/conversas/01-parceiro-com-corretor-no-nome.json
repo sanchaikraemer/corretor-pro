@@ -1,0 +1,31 @@
+{
+  "id": "parceiro-com-corretor-no-nome",
+  "titulo": "O contato é um corretor parceiro e está salvo com a palavra 'Corretor' no nome",
+  "veioDe": "AUDITORIA-v1281.md (achado A1) e NOTAS-v1282.md",
+  "porQueImporta": "O parceiro é um tipo de contato que o sistema atende de propósito. Com a palavra 'Corretor' no nome ele era confundido com o dono da conta: o cadastro nascia 'Cliente não identificado' e as falas dele iam para a IA como se fossem do corretor.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Anderson Corretor.txt",
+  "conversa": [
+    { "date": "01/08/2026", "time": "09:00", "author": "Sanchai", "text": "Bom dia, Anderson! Abriu uma unidade de 3 dormitórios com vista livre no Jardim Sul." },
+    { "date": "01/08/2026", "time": "09:12", "author": "Anderson Corretor", "text": "Bom dia! Meu cliente procura 3 dormitórios até 700 mil, de preferência com duas vagas." },
+    { "date": "02/08/2026", "time": "10:00", "author": "Sanchai", "text": "Posso seguir com a apresentação do empreendimento pra ele?" },
+    { "date": "03/08/2026", "time": "11:00", "author": "Sanchai", "text": "Consigo te mandar a apresentação ainda hoje?" }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Anderson Corretor",
+    "quemFalouPorUltimo": "corretor",
+    "tentativasSemResposta": 2,
+    "vozDoCorretorNaoPodeConter": ["Meu cliente procura 3 dormitórios"],
+    "aIaPrecisaPerceber": [
+      "o contato é um corretor parceiro, não o comprador final",
+      "o comprador do parceiro quer 3 dormitórios até 700 mil, com duas vagas"
+    ],
+    "asMensagensNaoPodem": [
+      "tratar o contato como se ele fosse o comprador do imóvel",
+      "perguntar de novo o que o comprador procura, já que ele acabou de dizer"
+    ],
+    "asMensagensPrecisam": [
+      "conduzir como parceria, falando do cliente DELE"
+    ]
+  }
+}
