@@ -1,31 +1,78 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
+// v1280 — "overview???" (dono, 14/08/2026, com print das três sugestões do lead Claudia/Renaissance).
+//
+// A sugestão 2 saía assim: "...Assim posso te dar um overview mais prático do que faz sentido para
+// você." Corretor nenhum escreve "overview" pra um cliente no WhatsApp — a palavra em inglês
+// entrega na primeira linha que quem escreveu foi um robô, exatamente como as frases da lista
+// "LINGUAGEM DE IA — PROIBIDO".
+//
+// v1291 — as duas listas saíram na reescrita das instruções entregue pelo dono, e ele mandou
+// RECOLOCAR ("1 - entao recoloque", 17/08/2026). Elas voltaram no mesmo lugar em que as regras das
+// três mensagens ficam, e a revisão final ganhou um item conferindo se sobrou alguma delas.
+//
+// A rede é o prompt (a v1247 tirou o corte determinístico de frase proibida de propósito, e ele não
+// pode voltar). Então o teste guarda o texto da regra.
+
 const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
 
-// v1280 — "overview???" (dono, 14/08/2026). A sugestão saiu com palavra em inglês, e a correção da
-// época foi o bloco "PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO", com a lista de palavras
-// (overview, insight, feedback, budget, call, follow-up, timing, update), as traduções e a exceção
-// do vocabulário real do mercado (studio, duplex, garden, closet).
-//
-// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA, E É UMA DAS PERDAS DESTA VERSÃO. Na reescrita das
-// instruções entregue pelo dono esse bloco saiu inteiro, junto com a lista "LINGUAGEM DE IA —
-// PROIBIDO". Hoje não existe nenhuma lista de palavra proibida no pedido: quem segura o tom é o
-// Cérebro do corretor e os exemplos de mensagem real dele que vão junto na análise.
-// Se "overview" voltar a aparecer nas sugestões, é este bloco que precisa ser recolocado.
+const ini = src.indexOf('PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO');
+assert.ok(ini > -1, 'a regra contra palavra em inglês precisa existir no pedido enviado à IA');
+const bloco = src.slice(ini, ini + 2600).replace(/\s+/g, ' ');
 
-assert.ok(!/PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO/.test(src),
-  'se a lista voltar, este teste precisa voltar a cobrar as palavras uma a uma (ver NOTAS-v1291.md)');
-assert.ok(!/LINGUAGEM DE IA — PROIBIDO/.test(src),
-  'idem para a lista de clichê em português');
+// ── 1. A palavra do print está nomeada, junto com o resto do jargão ──────────────────────────
+for (const palavra of ['overview', 'insight', 'feedback', 'budget', 'call', 'follow-up', 'timing', 'update']) {
+  assert.ok(bloco.includes(`"${palavra}"`), `"${palavra}" precisa estar na lista de palavras proibidas`);
+}
 
-// O que resta segurando o tom: os exemplos de escrita real do corretor e o tom do Cérebro.
-assert.match(src, /COMO ESTE CORRETOR ESCREVE — EXEMPLOS REAIS DESTA CONVERSA/,
-  'os exemplos de voz real do corretor não podem sumir também — são a última rede contra o texto de robô');
-assert.match(src, /O conteúdo atual do Cérebro Comercial abaixo é a autoridade máxima sobre método, análise, estratégia,\s*\n?tom/,
-  'e o tom continua sendo assunto do Cérebro');
+// ── 2. A regra não é só proibição: manda o que escrever no lugar ─────────────────────────────
+assert.ok(bloco.includes('overview = uma ideia geral'),
+  'a tradução de "overview" precisa estar escrita, senão a IA só troca por outro anglicismo');
+assert.ok(bloco.includes('feedback = retorno') && bloco.includes('call = ligação'),
+  'as trocas em português precisam estar explícitas');
 
-// Nada de cirurgia no texto da IA (regra da v1247, que continua valendo).
+// ── 3. Jargão corporativo em português cai junto ─────────────────────────────────────────────
+assert.ok(bloco.includes('alinhar expectativas') && bloco.includes('agregar valor'),
+  '"alinhar expectativas"/"agregar valor" são o mesmo problema em português e precisam estar citados');
+
+// ── 4. A exceção do vocabulário real do mercado está escrita ─────────────────────────────────
+// Sem isto, a regra proibiria a IA de escrever "studio" ou "duplex" — palavras que o próprio
+// Cérebro e as conversas usam, e que são o nome da coisa no mercado brasileiro.
+for (const permitida of ['studio', 'duplex', 'garden', 'closet', 'playground', 'home office']) {
+  assert.ok(bloco.includes(permitida), `"${permitida}" precisa continuar liberada pela exceção`);
+}
+assert.ok(bloco.includes('nome próprio'),
+  'nome de empreendimento/construtora/bairro não pode ser traduzido');
+assert.ok(bloco.includes('Isso não abre a porta pro resto do inglês'),
+  'a exceção precisa deixar claro que é exceção, não licença geral');
+
+// ── 5. A lista de clichê em português voltou junto ───────────────────────────────────────────
+const cliche = src.slice(src.indexOf('LINGUAGEM DE IA — PROIBIDO'), ini).replace(/\s+/g, ' ');
+assert.ok(cliche.length > 200, 'a lista de clichê em português precisa existir');
+for (const frase of [
+  'espero que esteja bem/indo bem', 'faz sentido', 'fico à disposição', 'não hesite em',
+  'sinta-se à vontade para', 'quis saber se', 'espero ter ajudado'
+]) {
+  assert.ok(cliche.includes(frase), `a frase "${frase}" precisa estar proibida por escrito`);
+}
+// A lista não pode brigar com o Cérebro: ela trata de marca de robô, não de tom.
+assert.ok(cliche.includes('O Cérebro define o tom'),
+  'a lista precisa deixar claro que quem define o tom continua sendo o Cérebro do corretor');
+
+// ── 6. A revisão final confere se sobrou alguma ──────────────────────────────────────────────
+const revisao = src.slice(src.indexOf('REVISÃO FINAL SILENCIOSA')).replace(/\s+/g, ' ');
+assert.ok(revisao.includes('Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês'),
+  'a revisão final precisa conferir as duas listas antes de devolver as três mensagens');
+
+// ── 7. As duas regras valem pra TODO corretor, não só pra quem está em modo prévia ───────────
+// (v1240 tirou o piso comercial de quem TEM Cérebro e o dono ficou sem ele — não repetir.)
+const fimCerebro = src.indexOf('=== FIM DO CÉREBRO COMERCIAL ===');
+assert.ok(fimCerebro > -1 && ini > fimCerebro,
+  'a regra precisa estar no trecho comum do pedido, fora do bloco de modo prévia');
+
+// ── 8. Nada de cirurgia no texto da IA (v1247) ───────────────────────────────────────────────
 assert.ok(!/limparFrasesProibidas|melhorLimpa/.test(src),
   'o corte determinístico de frase proibida foi removido na v1247 e não pode voltar');
+
 console.log('v1280-nada-de-palavra-em-ingles: ok');
