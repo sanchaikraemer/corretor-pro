@@ -301,6 +301,137 @@ export function findReferencedAudio(messageText, audioNames) {
 }
 
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// v1287 — OBSERVAÇÃO QUE É CONVERSA COLADA VIRA CONVERSA DE VERDADE.
+//
+// Caso real do dono (17/08/2026, lead Geovana): o WhatsApp dele ainda não tinha sido reexportado,
+// então ele colou no campo de Observação o pedaço novo da conversa — inclusive a mensagem em que a
+// cliente diz exatamente o que procura ("2 dormitórios, sacada, boa iluminação, próximo ao HCC,
+// com financiamento"). Como TODA observação entra na análise como um recado DO CORRETOR, o sistema
+// continuou achando que a última palavra da conversa era dele: mandou pra IA "TENTATIVAS DO
+// CORRETOR AINDA SEM RESPOSTA: 4. O cliente não respondeu nenhuma delas" — quando ela tinha
+// respondido quatro vezes em três dias. A IA obedeceu ao fato errado e escreveu o que a regra
+// manda escrever pra quem foi ignorado: trocar de caminho e chamar pra um encontro com dia e hora
+// ("quarta à tarde ou sábado de manhã"), além de dizer que já tinham sido enviadas opções que
+// nunca saíram. Nenhuma dessas três coisas era erro de redação: era consequência de o sistema não
+// reconhecer que aquele texto ERA a conversa continuando.
+//
+// Aqui o código só faz uma leitura de FORMATO — se o texto colado tem cara de conversa exportada/
+// copiada do WhatsApp (hora, autor e fala), cada linha vira uma mensagem com o seu lado e a sua
+// data. Nada é interpretado comercialmente, nada é reescrito.
+//
+// Formatos aceitos (os dois primeiros são o que o WhatsApp gera no "copiar mensagens" do celular,
+// que é justamente o que o corretor cola):
+//   [16:34, 14/08/2026] Fulano: texto        ← hora antes da data
+//   [17:06] Fulano: texto                    ← só hora (herda a data da linha anterior)
+//   [14/08/2026, 16:34] Fulano: texto        ← data antes da hora (export .txt)
+//   14/08/2026 16:34 - Fulano: texto         ← export .txt antigo
+const LINHA_COLADA_PATTERNS = [
+  // [16:34, 14/08/2026] Autor: texto   (o ano é opcional: "15/08" também aparece nas cópias)
+  { re: /^\[(\d{1,2}:\d{2})(?::\d{2})?,?\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\]\s*([^:]{1,80}?):\s*([\s\S]*)$/, time: 1, date: 2, author: 3, text: 4 },
+  // [14/08/2026, 16:34] Autor: texto
+  { re: /^\[(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?),?\s+(\d{1,2}:\d{2})(?::\d{2})?\]\s*([^:]{1,80}?):\s*([\s\S]*)$/, date: 1, time: 2, author: 3, text: 4 },
+  // 14/08/2026 16:34 - Autor: texto
+  { re: /^(\d{1,2}\/\d{1,2}\/\d{2,4}),?\s+(\d{1,2}:\d{2})(?::\d{2})?\s*-\s*([^:]{1,80}?):\s*([\s\S]*)$/, date: 1, time: 2, author: 3, text: 4 },
+  // [17:06] Autor: texto  (sem data — herda a da linha anterior)
+  { re: /^\[(\d{1,2}:\d{2})(?::\d{2})?\]\s*([^:]{1,80}?):\s*([\s\S]*)$/, time: 1, author: 2, text: 3 }
+];
+
+export function parseConversaColada(texto, dataPadrao = "") {
+  const linhas = String(texto || "").split(/\r?\n/);
+  const msgs = [];
+  const anoPadrao = (String(dataPadrao || "").match(/\/(\d{4})$/) || [])[1] || String(new Date().getFullYear());
+  // "15/08" (sem ano) herda o ano da observação em que o corretor colou o trecho.
+  const comAno = (d) => {
+    const t = String(d || "").trim();
+    if (!t) return "";
+    return /^\d{1,2}\/\d{1,2}$/.test(t) ? `${t}/${anoPadrao}` : t;
+  };
+  let ultimaData = String(dataPadrao || "").trim();
+  let cobertos = 0;
+  for (const raw of linhas) {
+    const linha = raw.trim();
+    if (!linha) continue;
+    let achou = null;
+    for (const p of LINHA_COLADA_PATTERNS) {
+      const m = linha.match(p.re);
+      if (!m) continue;
+      achou = {
+        date: p.date ? comAno(m[p.date]) : ultimaData,
+        time: (m[p.time] || "").slice(0, 5),
+        author: String(m[p.author] || "").trim(),
+        text: String(m[p.text] || "").trim()
+      };
+      break;
+    }
+    if (achou && achou.author) {
+      if (achou.date) ultimaData = achou.date;
+      cobertos += linha.length;
+      msgs.push(achou);
+    } else if (msgs.length) {
+      // Linha de continuação da mensagem anterior (fala quebrada em várias linhas).
+      msgs[msgs.length - 1].text = `${msgs[msgs.length - 1].text}\n${linha}`.trim();
+      cobertos += linha.length;
+    }
+  }
+  const total = linhas.reduce((s, l) => s + l.trim().length, 0);
+  // Só é "conversa colada" quando o texto é MAJORITARIAMENTE conversa. Uma anotação comum do
+  // corretor ("já mandei outra opção por imagem") não casa com nenhum formato e continua
+  // observação, como sempre foi.
+  const ehConversa = msgs.length > 0 && total > 0 && cobertos / total >= 0.5;
+  return ehConversa ? msgs.filter(m => m.text) : [];
+}
+
+// Expande, DENTRO DA ANÁLISE, as observações que na verdade são conversa colada. O que estava
+// guardado no banco não muda: a observação continua lá, inteira, do jeito que o corretor salvou.
+export function expandirObservacoesColadas(timeline) {
+  const arr = Array.isArray(timeline) ? timeline : [];
+  const chaveDe = (m) => `${String(m?.date || "").trim()}|${String(m?.time || "").trim()}|${String(m?.text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 120)}`;
+  const jaExistem = new Set(arr.filter(m => String(m?.type || "") !== "observacao_manual").map(chaveDe));
+  const saida = [];
+  let expandiu = 0;
+  for (const item of arr) {
+    const ehObs = item?.type === "observacao_manual" || item?.source === "corretor-pro-manual";
+    const coladas = ehObs ? parseConversaColada(item?.text, item?.date) : [];
+    if (!coladas.length) { saida.push(item); continue; }
+    let ordem = 0;
+    for (const c of coladas) {
+      const nova = {
+        id: `${item?.id || "obs"}-c${++ordem}`,
+        order: Number(item?.order || 0) + ordem / 1000,
+        date: c.date || item?.date || "",
+        time: c.time || item?.time || "",
+        iso: toIsoSafe(c.date || item?.date, c.time || item?.time, ordem),
+        author: c.author,
+        text: c.text,
+        type: "text",
+        source: "observacao-colada"
+      };
+      if (jaExistem.has(chaveDe(nova))) continue; // já veio na importação: não duplica
+      jaExistem.add(chaveDe(nova));
+      saida.push(nova);
+      expandiu++;
+    }
+  }
+  if (!expandiu) return arr;
+  // Ordena pelo tempo real das mensagens (o trecho colado é quase sempre ANTERIOR ao momento em
+  // que o corretor colou). Toda mensagem ganha uma chave de tempo antes de ordenar — mensagem sem
+  // data legível herda a chave da anterior, pra continuar exatamente onde estava.
+  let ultimaChave = 0;
+  const comChave = saida.map((m, i) => {
+    let t = Date.parse(String(m?.iso || ""));
+    if (!Number.isFinite(t) || String(m?.iso || "").startsWith("9999")) {
+      const alt = Date.parse(toIsoSafe(m?.date, m?.time, i));
+      t = Number.isFinite(alt) && !toIsoSafe(m?.date, m?.time, i).startsWith("9999") ? alt : ultimaChave;
+    }
+    ultimaChave = t;
+    return { m, i, t };
+  });
+  return comChave
+    .sort((a, b) => (a.t === b.t ? a.i - b.i : a.t - b.t))
+    .map(x => x.m);
+}
+
 export function describeOpenAIError(error) {
   if (!error) return "Erro desconhecido no provedor de análise.";
   const status = error.status || error.statusCode || error?.response?.status;
@@ -785,6 +916,10 @@ function ehMensagemRealParaTempo(m) {
   const author = String(m.author || "").toLowerCase();
   if (/^(sistema|system)$/.test(author.trim())) return false;
   if (/atendimento\s*\(corretor\)|anota[cç][aã]o|proposta gerada/.test(author)) return false;
+  // v1287 — anotação do corretor NÃO é mensagem: salvar uma observação hoje zerava o "dias sem
+  // falar" como se o cliente tivesse escrito hoje. (Quando o texto colado É conversa, ele já virou
+  // mensagem de verdade antes de chegar aqui, em expandirObservacoesColadas.)
+  if (type === "observacao_manual" || source === "corretor-pro-manual") return false;
   if (source === "manual" && !/(print-whatsapp|whatsapp|mensagem)/.test(type)) return false;
   if (/(nota|lembrete|proposta|atendimento)/.test(type) && source === "manual") return false;
   return true;
@@ -2821,7 +2956,11 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   }
 
   const linhaDe = (m) => `[${m?.date || ""} ${m?.time || ""}] ${m?.author || ""}: ${m?.text || ""}`;
-  const timelineArr = Array.isArray(timeline) ? timeline : [];
+  // v1287 — antes de qualquer conta, o trecho de conversa que o corretor colou no campo de
+  // Observação passa a valer como conversa (ver expandirObservacoesColadas). Sem isso, a fala mais
+  // recente do CLIENTE ficava contando como recado do corretor, e tudo o que é medido daqui pra
+  // baixo saía errado: quem falou por último, dias parados e tentativas sem resposta.
+  const timelineArr = expandirObservacoesColadas(Array.isArray(timeline) ? timeline : []);
   const timelineTextFull = timelineArr.map(linhaDe).join("\n");
 
   // v986 — observação manual (registrada pelo corretor, ex.: "já enviei outra opção por
@@ -3170,10 +3309,10 @@ exatamente isso que faz o corretor ler as três sugestões e não usar nenhuma.
   canal, formato).
 - DUAS OU MAIS TENTATIVAS SEM RESPOSTA = MUDAR DE CAMINHO, NÃO SÓ DE PALAVRAS. Insistir no mesmo
   canal com a mesma oferta é justamente o que já falhou. Pelo menos UMA das três precisa colocar na
-  mesa um passo de PESSOA PRA PESSOA — ligação com horário nomeado, visita ao apartamento/decorado/
-  obra, encontro — com duas opções concretas de dia ou horário. Se a conversa ou o Cérebro disserem
-  que o cliente é de fora ou não consegue ir agora, o presencial vira chamada de vídeo ao vivo com
-  horário nomeado; nunca vira mais um arquivo.
+  mesa um passo de PESSOA PRA PESSOA — ligação, visita ao apartamento/decorado/obra, encontro —
+  perguntando ao cliente qual dia fica melhor pra ele (ver a REGRA DA DATA: quem dá o dia é o
+  cliente). Se a conversa ou o Cérebro disserem que o cliente é de fora ou não consegue ir agora, o
+  presencial vira chamada de vídeo ao vivo; nunca vira mais um arquivo.
   E se a conversa mostrar que o material JÁ foi enviado, vale o item 8 da conferência final: o que
   falta não é mais material, é o encontro.
 - NADA DISSO APARECE ESCRITO PRO CLIENTE: é PROIBIDO contar as tentativas ("já te mandei mensagem",
@@ -3185,8 +3324,8 @@ AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA. Se o cliente já demonstrou q
 perguntar de novo "quer que eu te mande?" devolve o trabalho pra ele e é o jeito mais fácil de a
 mensagem ser ignorada. Pelo menos a "maisDireta" tem que AVANÇAR SOZINHA: anuncia o que o corretor
 vai fazer agora (mandar o material, preparar a simulação) e coloca UMA escolha concreta na mesa —
-duas opções de horário, dois caminhos, uma data. "Me avisa e eu mando" não é direta: é pedir
-licença com outro nome.
+dois caminhos de verdade, ou a pergunta de qual dia fica melhor pro cliente.
+"Me avisa e eu mando" não é direta: é pedir licença com outro nome.
 
 O CLIENTE JÁ DISSE O QUE QUER — A BUSCA É TRABALHO DO CORRETOR. Quando o cliente já entregou o
 critério dele (o que precisa, o prazo, a fase de vida, o que descartou e por quê), a próxima
@@ -3196,7 +3335,7 @@ ou "tem algum detalhe indispensável?" depois de o cliente ter explicado o que q
 trabalho pra ele, e é o jeito mais rápido de a conversa morrer — pior ainda quando essa mesma
 pergunta já foi feita e ficou sem resposta (foi ignorada uma vez; não será respondida na segunda).
 O desenho certo: o corretor diz o que vai fazer AGORA com o que já sabe e propõe o encontro
-(ligação, visita, reunião) com duas opções concretas de dia ou horário; o que ainda falta saber
+(ligação, visita, reunião) perguntando qual dia fica melhor pro cliente; o que ainda falta saber
 vira PAUTA DESSE ENCONTRO, não questionário no WhatsApp. Quando for apresentar opções, são DUAS OU
 TRÊS bem escolhidas, com uma frase dizendo por que cada uma serve pra ELE — despejar a carteira
 inteira dá sensação de catálogo, não de atendimento. Nada disso autoriza descrever imóvel, valor ou
@@ -3249,12 +3388,32 @@ corretor. É PROIBIDO fechar com "pode ser assim?", "pode ser dessa forma?", "tu
 "posso seguir?", "te parece bem?", "combinado assim?", e proibido abrir a oferta com "se quiser",
 "se preferir", "se te ajudar", "se for mais prático". Ninguém responde "não pode" a essas
 perguntas — elas não decidem nada, só devolvem a bola e enfraquecem o que veio antes.
-FECHOS QUE VALEM: uma escolha entre duas coisas de verdade ("prefere quinta ou sábado?", "aqui por
-mensagem ou eu passo aí?"), uma pergunta que puxa informação útil ("qual chega mais perto do que
-vocês querem?") ou a confirmação de um passo já em andamento ("te mando ainda hoje?").
-E as DUAS OPÇÕES de uma escolha precisam ser realmente diferentes — canal, dia ou formato
+FECHOS QUE VALEM: a pergunta de qual dia fica melhor pro cliente ("qual dia da semana costuma ser
+melhor pra você?"), uma escolha entre duas coisas de verdade ("aqui por mensagem ou eu passo aí?"),
+uma pergunta que puxa informação útil ("qual chega mais perto do que vocês querem?") ou a
+confirmação de um passo já em andamento ("te mando ainda hoje?").
+E as DUAS OPÇÕES de uma escolha precisam ser realmente diferentes — canal ou formato
 distintos. "Prefere me passar agora por mensagem ou me enviar depois por aqui?" é escolha falsa: é
 o mesmo caminho em dois tempos, e o cliente escolhe "depois", que quer dizer nunca.
+
+REGRA DA DATA — QUEM DÁ O DIA É O CLIENTE, NUNCA VOCÊ. PROIBIDO, SEM EXCEÇÃO.
+A agenda do corretor não está nesta conversa: você não sabe o que ele já tem marcado em nenhum dia
+nem em nenhum horário. Escrever "quarta à tarde ou sábado de manhã?", "quinta às 18h", "segunda-
+feira fica bom?", "dia 22", "amanhã de manhã" é marcar compromisso na agenda de outra pessoa a
+partir de um chute — e o corretor recebe a resposta do cliente aceitando um horário em que ele não
+pode. É o erro que mais atrapalha a rotina dele, e ele o rejeita sempre.
+É PROIBIDO em qualquer das três mensagens: nomear dia da semana (segunda, terça, quarta, quinta,
+sexta, sábado, domingo), data do calendário ("dia 22", "22/08"), hora ("às 18h", "às 10 da manhã")
+ou faixa do dia como oferta do corretor ("de manhã ou à tarde?" proposto por ele) — salvo quando
+aquele dia/hora exato JÁ ESTIVER ESCRITO na conversa (o cliente pediu, ou o encontro já foi
+combinado ali) ou no Cérebro (horário de plantão, dia fixo de visita que o corretor cadastrou).
+Fora esses dois casos, a data não existe e não pode ser inventada.
+O QUE ENTRA NO LUGAR, e é mais forte: PERGUNTAR o dia. "Qual dia da semana costuma ser melhor pra
+você?", "Que dia fica bom pra você essa semana?", "Qual dia funciona melhor pra vocês dois?" — o
+cliente responde com um dia que ele PODE, o corretor confirma em cima da agenda real dele, e o
+encontro nasce marcado de verdade. Isso NÃO é "ficar à disposição": pergunta fechada pede resposta
+objetiva; "quando quiser", "me avisa", "fico à disposição" e "é só me chamar" continuam PROIBIDOS,
+porque não pedem resposta nenhuma. Perguntar o dia é conduzir; chutar o dia é atrapalhar.
 
 PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
 com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
@@ -3358,10 +3517,12 @@ mas as três têm a MESMA espinha obrigatória, nesta ordem:
      unidade preferiu). Diga PRA QUE serve aquele passo do ponto de vista DELE, não do corretor
      ("assim você decide com o valor na mão" é motivo do cliente; "assim eu consigo te atender
      melhor" é motivo do corretor e não move ninguém).
- (3) FECHA COM UM PRÓXIMO PASSO QUE TEM DONO E FORMATO. Quando couber encontro/ligação, ofereça
-     DUAS opções concretas ("quinta às 18h ou sábado de manhã?") — "qualquer dia e horário",
-     "quando quiser", "fico à disposição" e "é só me chamar" são o oposto disto: empurram a
-     decisão pro cliente e ele não decide.
+ (3) FECHA COM UM PRÓXIMO PASSO QUE TEM DONO E FORMATO. Quando couber encontro/ligação, PERGUNTE
+     QUAL DIA FICA MELHOR PRO CLIENTE ("qual dia da semana costuma ser melhor pra você?", "que dia
+     fica bom pra você essa semana?") — é uma pergunta fechada, que pede uma resposta objetiva, e
+     é diferente de "qualquer dia e horário", "quando quiser", "fico à disposição" e "é só me
+     chamar", que não pedem resposta nenhuma e por isso não recebem nenhuma. E é PROIBIDO nomear
+     você mesmo o dia ou a hora — ver a REGRA DA DATA logo abaixo.
 É PROIBIDO que qualquer uma das três seja só um check-in educado. Se a mensagem, tirando a
 saudação, couber em "e aí, tudo bem? qualquer coisa me chama", ela está errada e precisa ser
 reescrita — não importa qual dos três ângulos ela ocupa. O ângulo "maisSuave" é de baixa PRESSÃO,
@@ -3682,11 +3843,22 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    cobra esse dado. E o que está em "faltaDescobrir" NÃO vira interrogatório por mensagem: no
    máximo UMA pergunta por mensagem — a que mais faz a negociação andar — e o resto fica como pauta
    do encontro. Três perguntas seguidas o cliente responde uma vez; na segunda, ele some.
+   E QUAL É essa única pergunta, quando o cliente JÁ entregou o critério do imóvel (tipologia,
+   característica, região, forma de pagamento) mas a conversa nunca trouxe a FAIXA DE VALOR que ele
+   pretende investir nem a ENTRADA de que dispõe: é a do dinheiro. Sem ela não dá pra escolher DUAS
+   OU TRÊS unidades certas — só dá pra despejar catálogo, que é o que já não funcionou antes. Ela
+   entra EMENDADA no que o corretor está fazendo agora ("vou separar só o que atende isso; pra
+   fechar a seleção, em que faixa de valor você pretende investir e quanto imagina usar de
+   entrada?"), nunca solta e nunca no lugar da entrega — e não conta como devolver trabalho pro
+   cliente (item 12), porque critério do imóvel ele já deu e o filtro financeiro só ele tem.
+   Continua PROIBIDO perguntar renda, e continua PROIBIDO refazer essa pergunta se ela JÁ foi feita
+   e ficou sem resposta (aí entregue primeiro sem o número e deixe o valor aparecer da reação).
 5. O FECHO É ESCOLHA, PERGUNTA ÚTIL OU PASSO? "pode ser assim?", "quer que eu faça?", "posso
    seguir?", "te parece bem?" não valem — ninguém responde não. E escolha precisa ter dois caminhos
-   DIFERENTES de verdade (dia, canal ou formato), não o mesmo em dois tempos. A escolha também não
-   pode reabrir assunto que a conversa já resolveu (item 3): quando o que ver já está decidido, a
-   escolha que sobra é de DIA, HORÁRIO ou CANAL.
+   DIFERENTES de verdade (canal ou formato), não o mesmo em dois tempos. A escolha também não
+   pode reabrir assunto que a conversa já resolveu (item 3): quando o que ver já está decidido, o
+   que sobra é perguntar QUAL DIA fica melhor pro cliente — sem nomear o dia você mesmo (REGRA DA
+   DATA).
 6. A Nº 1 É A MAIS FORTE? Se outra oferece algo concreto e a nº 1 só pede informação, troque a
    ordem. A recomendada é a que você mandaria se só pudesse mandar uma.
 7. TEM IMÓVEL DO CLIENTE SEM VALOR CONHECIDO? Então pelo menos uma das três oferece a AVALIAÇÃO
@@ -3697,8 +3869,8 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    SEMPRE, inclusive nas exceções abaixo: nenhuma das três pode oferecer mandar, reunir, agrupar,
    organizar ou reenviar arquivo/link/apresentação como o passo seguinte. Pelo menos uma das três
    precisa oferecer o presencial (visita ao apartamento/obra/decorado, ou encontro pra ver as
-   opções juntos), com dois dias/horários concretos, dizendo em uma frase por que vale mais ir do
-   que continuar recebendo arquivo. Nas situações abaixo o que muda é a FORMA do encontro — a
+   opções juntos), perguntando qual dia fica melhor pro cliente (REGRA DA DATA: o dia é ELE quem
+   dá) e dizendo em uma frase por que vale mais ir do que continuar recebendo arquivo. Nas situações abaixo o que muda é a FORMA do encontro — a
    proibição de mais material continua de pé:
    • o cliente é de fora ou já disse que não consegue ir agora (aí o presencial vira vídeo-chamada
      ao vivo, gravado na hora ou visita marcada pra quando ele vier — nunca mais um PDF). Se o que
@@ -3721,19 +3893,21 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
        personalizar a planta, a condição de pagamento e o preço da fase atual. É esse ganho que
        explica sozinho por que a mensagem está chegando hoje. Só o que estiver LITERALMENTE na
        conversa ou no Cérebro: nada de escassez, prazo ou reajuste inventado.
-   (c) PROPONHA O ENCONTRO COM DIA NA MESA: um encontro concreto (na construtora/escritório, no
-       decorado, na obra) com DIA NOMEADO da semana que vem ("segunda-feira fica bom pra vocês?")
-       ou dois dias concretos, mais a pergunta do horário ("qual horário fica melhor, manhã ou
-       tarde?"). É PROIBIDO deixar em "quando vocês voltarem", "me avisa quando puder", "quando
-       ficar tranquilo pra vocês", "fico à disposição", "qualquer dia dessa semana", "na semana que
-       vem" sem dia — data em aberto é o que faz o atendimento sumir de novo. Quem já mandou muita
-       informação não precisa se colocar à disposição: precisa DAR CONTINUIDADE, e continuidade é
-       dia marcado.
+   (c) PROPONHA O ENCONTRO E PEÇA O DIA A ELE: um encontro concreto (na construtora/escritório, no
+       decorado, na obra) fechando com a pergunta do dia ("qual dia fica melhor pra vocês?", "que
+       dia da semana costuma dar pra vocês?"). É PROIBIDO deixar em "quando vocês voltarem", "me
+       avisa quando puder", "quando ficar tranquilo pra vocês", "fico à disposição", "é só me
+       chamar" — isso não pede resposta nenhuma e é o que faz o atendimento sumir de novo. E é
+       igualmente PROIBIDO nomear o dia você mesmo (REGRA DA DATA). A diferença entre as duas
+       coisas: "me avisa quando puder" deixa em aberto e não cobra nada; "qual dia fica melhor pra
+       vocês?" é pergunta fechada, que pede uma resposta objetiva e marca a agenda de quem
+       responde. Quem já mandou muita informação não precisa se colocar à disposição: precisa DAR
+       CONTINUIDADE, e continuidade é perguntar o dia.
    A retomada tem UM objetivo só: conseguir a resposta e chegar ao encontro. Não vai preço, tabela,
    PDF nem vídeo junto — material agora rouba o assunto e devolve a conversa pra tela do celular,
    que é justamente onde ela já parou uma vez.
    Se a pausa AINDA NÃO venceu (ele volta daqui a alguns dias), o desenho é o mesmo: o encontro é
-   proposto, com dia, para a semana seguinte à volta dele.
+   proposto do mesmo jeito, com o dia perguntado a ele, para depois da volta.
 10. O QUE O CLIENTE PEDIU POR CONTA PRÓPRIA APARECE EM ALGUMA DAS TRÊS? Se "pedidoEspontaneo"
    estiver preenchido, pelo menos uma das três precisa tocar naquilo com as palavras dele. Foi ELE
    quem levantou — é o fio mais forte que a conversa tem, e mensagem que ignora o pedido do cliente
@@ -3744,12 +3918,13 @@ por melhor que soe. Diagnóstico e mensagem têm que contar a MESMA história.
    qualquer uma que faça a MESMA oferta, a MESMA pergunta ou proponha o MESMO passo de uma
    tentativa que já falhou está errada — reescreva. Se a tentativa era pedir licença, a nova
    mensagem ENTREGA em vez de pedir de novo. Com DUAS ou mais tentativas sem resposta, pelo menos
-   uma das três propõe pessoa a pessoa (ligação com horário, visita, encontro) com dois dias ou
-   horários concretos. E nenhuma das três conta ao cliente que houve tentativa anterior.
+   uma das três propõe pessoa a pessoa (ligação, visita, encontro) perguntando qual dia fica melhor
+   pro cliente. E nenhuma das três conta ao cliente que houve tentativa anterior.
 12. ALGUMA DAS TRÊS DEVOLVE O TRABALHO PRO CLIENTE? Se ele já disse o que quer, nenhuma pode pedir
    critério de novo ("tem preferência de bairro?", "que tipo devo considerar?", "algum detalhe
-   indispensável?") — o corretor assume a busca com o que já tem e fecha propondo o encontro com
-   dia e horário; o que falta saber é pauta desse encontro. Se ele recusou o imóvel por um motivo
+   indispensável?") — o corretor assume a busca com o que já tem e fecha propondo o encontro e
+   perguntando qual dia fica melhor pro cliente; o que falta saber é pauta desse encontro (fora a
+   ÚNICA pergunta que destrava, do item 4). Se ele recusou o imóvel por um motivo
    que aquele imóvel não muda (prazo, local, tamanho), nenhuma das três insiste nele nem tenta
    reverter a objeção: o assunto passa a ser o que atende o critério novo. E nada do que ele contou
    de si (idade, saúde, fase da vida, condição) volta escrito como justificativa da oferta —
