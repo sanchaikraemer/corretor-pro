@@ -132,25 +132,46 @@ de texto como **suspeita**, não como decisão; só rebaixar o cliente quando a 
 | Resposta, teto (linha 3652) | 3.600 unidades de texto |
 | Chamadas de IA por análise | **1** (linha 3656), com uma repetição se falhar |
 
-### O que isso custa
+### O que isso custa — **CORRIGIDO COM DADO REAL (17/08/2026)**
 
-Usando a própria tabela de preços do sistema (`api/_iaCusto.js`) e a cotação padrão de R$ 5,50:
+O dono mandou o painel da OpenAI. **A estimativa que estava aqui era alta demais e foi substituída
+pelos números de verdade.**
 
-| Situação | Custo estimado por análise |
+| Medida real (30 dias) | Valor |
 |---|---|
-| Conversa curta (~20 mil letras) | **~R$ 0,34** |
-| Conversa longa (no teto de 120 mil letras) | **~R$ 0,67** |
+| Chamadas de IA | 1.770 |
+| Unidades de texto consumidas | 12.643.082 |
+| Média por chamada | 7.143 |
+| Gasto em agosto, até o dia 16 | US$ 13,65 |
+| **Projeção de 30 dias** | **US$ 25,59 ≈ R$ 141** |
+| **Custo médio por chamada** | **US$ 0,0145 ≈ R$ 0,08** |
 
-O plano Pro (R$ 49,90 por 150 análises) deixa **R$ 0,33 por análise** para pagar tudo.
+**O que eu errei:** estimei ~R$ 0,34 por análise. A média real por chamada é **R$ 0,08** — quatro
+vezes menor. A conta de letras estava certa, a tradução para custo não: parte do trabalho roda em
+modelo mais barato e nem toda chamada carrega o bloco inteiro de instrução.
 
-Ou seja: **mesmo a conversa curta já bate no limite**, e a culpa não é da conversa — são os 59 mil
-caracteres de instrução que vão junto toda vez. Some a transcrição de áudio (US$ 0,006 por minuto,
-~R$ 0,33 a cada 10 minutos) e o plano fica negativo com facilidade.
+**O que continua valendo, e agora com número em vez de estimativa:** no ritmo de uso do dono, a
+conta de IA de **uma única pessoa** custa **~R$ 141 por mês**. Contra os planos vendidos hoje:
 
-**Ressalva honesta:** a conversão de letras para unidades de cobrança é estimativa (uso ~4 letras
-por unidade, típico do português), e a cotação é a variável padrão do código. O número exato está
-no seu painel — o relatório de uso de IA por conta grava consumo real desde a v1038. **Puxe 30 dias
-de lá antes de mexer em preço.** É a única fonte que não é estimativa.
+| Plano | Preço | Resultado nesse nível de uso |
+|---|---|---|
+| Pro | R$ 49,90 | **faltam R$ 91 por mês** |
+| Pro Master | R$ 99,90 | **faltam R$ 41 por mês** |
+
+**Duas ressalvas que impedem de sair mudando preço agora:**
+
+1. As 1.770 chamadas **não são 1.770 análises** — entram tarefas auxiliares (resumo de observação,
+   conhecimento, extrações), que são baratas e puxam a média para baixo. O custo de **uma análise**
+   ainda não está medido. Quem separa isso é o relatório por rota do próprio painel administrativo
+   do Corretor Pro (`?relatorio=uso-ia`), que grava rota e modelo desde a v1038.
+2. **O dono não é um cliente típico.** Ele testa, reimporta, reanalisa e desenvolve em cima da
+   própria conta. Um corretor comum provavelmente consome bem menos — e ninguém sabe quanto,
+   porque hoje só existe uma conta em uso real.
+
+**Conclusão prática:** o preço não deve ser mexido com a amostra de um usuário só, e ainda por cima
+o mais pesado que existe. O que resolve isso é o teste com 8 a 10 corretores — é ele que produz a
+faixa de consumo real de quem compra. Até lá, o número acima serve como **teto conhecido**: o pior
+caso hoje custa R$ 141/mês, e nenhum dos dois planos cobre isso.
 
 ---
 
