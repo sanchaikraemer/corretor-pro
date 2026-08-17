@@ -328,3 +328,17 @@ button.pequeno.btn-perigo svg{ width:11px; height:11px; flex:0 0 auto; }
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px;
   background:rgba(255,255,255,.06); border-radius:6px; padding:2px 6px;
 }
+
+/* v1288 — aviso do cartão "Uso de IA por empresa": algum modelo de IA usado não tem preço na
+   tabela de referência, então o custo em reais está sendo estimado PRA CIMA. Amarelo de atenção
+   (não é erro vermelho: o painel funciona, o número é que está por cima). */
+.aviso-preco-ia{
+  margin-top:12px; font-size:14px; line-height:1.6;
+  color:#ffd479; background:var(--cp-sidebar);
+  border:1px solid rgba(255,212,121,.45); border-radius:14px; padding:14px 16px;
+}
+.aviso-preco-ia b{ color:#ffd479; }
+.aviso-preco-ia code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px;
+  background:rgba(255,255,255,.06); border-radius:6px; padding:2px 6px;
+}

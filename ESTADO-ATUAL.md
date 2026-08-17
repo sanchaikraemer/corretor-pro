@@ -449,6 +449,12 @@ montar isso:
   (`NOTAS-v1040.md`).
 - Teto de uso de IA bem menor durante o teste grátis (`NOTAS-v1041.md`).
 - Telemetria de custo de IA por empresa, visível no painel administrativo (`NOTAS-v1038.md`).
+- **(v1288)** O custo em reais desse painel estava **inflado** (até ~30x no aprendizado automático):
+  a OpenAI devolve o modelo com a data da versão (`gpt-4o-mini-2024-07-18`) e a tabela de preços de
+  `api/_iaCusto.js` só tinha o nome curto, então quase toda chamada caía no preço de reserva
+  exagerado. Agora o nome com data acha o preço certo, a tela mostra **qual cotação do dólar** foi
+  usada, e modelo que continuar sem preço mapeado aparece **nomeado numa tarja de aviso** ("custo
+  estimado por cima") em vez de sumir dentro do total (`NOTAS-v1288.md`).
 - **(v1190)** Acesso antigo por chave compartilhada **desligado por padrão em produção** — a
   segurança deixou de depender de alguém lembrar de marcar uma variável (`NOTAS-v1190.md`).
 - **(v1190)** Cadastro **falha fechado** sem a migração `0018`: código novo sobre banco velho não

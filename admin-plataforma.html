@@ -64,9 +64,13 @@
 
     <div class="cartao painel-largo" id="areaUsoIA" style="display:none">
       <div class="rodape-conta">
-        <div><b>Uso de IA por empresa</b><div class="tag-empresa">Estimativa de custo (últimos 30 dias) — não é nota fiscal</div></div>
+        <div><b>Uso de IA por empresa</b><div class="tag-empresa" id="usoIaLegenda">Estimativa de custo (últimos 30 dias) — não é nota fiscal</div></div>
         <button class="secundario pequeno" onclick="carregarUsoIA()">Atualizar</button>
       </div>
+      <!-- v1288 — quando algum modelo de IA não tem preço na tabela de referência, o valor em reais
+           é um chute PRA CIMA. Isso tem que aparecer escrito na tela: o dono usa esse número pra
+           decidir mensalidade, e um total inflado sem aviso é pior que nenhum total. -->
+      <div id="usoIaAvisoPreco" class="aviso-preco-ia" style="display:none"></div>
       <div class="stats-admin">
         <div class="stat-tile"><span>Chamadas hoje (todas as empresas)</span><b id="usoIaChamadasHoje">0</b></div>
         <div class="stat-tile"><span>Custo estimado hoje</span><b id="usoIaCustoHoje">R$ 0,00</b></div>
@@ -572,9 +576,33 @@ async function carregarBanco() {
   }
 }
 
+// v1288 — DE ONDE VEM O NÚMERO EM REAIS, quando ele não é confiável.
+//
+// A conta de custo usa uma tabela de preços por modelo de IA. Modelo que não está nessa tabela é
+// cobrado por um preço de reserva PROPOSITALMENTE ALTO — melhor superestimar que iludir. O problema
+// é que isso era invisível: o painel mostrava o total inflado como se fosse a estimativa real. Foi o
+// caso descoberto em 17/08/2026 (a IA devolve o nome do modelo com a data da versão, e nenhum nome
+// com data batia com a tabela). Agora, se sobrar qualquer chamada sem preço mapeado, a tela diz
+// quantas são e qual o nome do modelo, pra dar pra corrigir a tabela em vez de adivinhar.
+function mostrarAvisoPrecoIA(modelosSemPreco, chamadasTotal) {
+  const caixa = document.getElementById('usoIaAvisoPreco');
+  if (!caixa) return;
+  const lista = Array.isArray(modelosSemPreco) ? modelosSemPreco.filter(m => m && m.chamadas > 0) : [];
+  if (!lista.length) { caixa.style.display = 'none'; caixa.innerHTML = ''; return; }
+  const semPreco = lista.reduce((s, m) => s + Number(m.chamadas || 0), 0);
+  const fatia = chamadasTotal ? Math.round((semPreco / chamadasTotal) * 100) : 100;
+  const nomes = lista.slice(0, 6).map(m => `<code>${escapeHtml(m.model)}</code> (${m.chamadas})`).join(', ');
+  caixa.innerHTML = `<b>⚠️ Atenção: o custo abaixo está estimado por cima.</b><br>
+    ${semPreco} de ${chamadasTotal} chamadas (${fatia}%) usaram um modelo de IA que não está na
+    tabela de preços do sistema, então entraram por um preço de reserva mais alto que o real —
+    o valor em reais é o teto, não o gasto provável. Modelo(s): ${nomes}.`;
+  caixa.style.display = '';
+}
+
 async function carregarUsoIA() {
   const msg = document.getElementById('msgUsoIA');
   msg.className = ''; msg.textContent = '';
+  mostrarAvisoPrecoIA([], 0);
   const { data } = await supabaseClient.auth.getSession();
   const token = data?.session?.access_token;
   if (!token) return;
@@ -590,6 +618,13 @@ async function carregarUsoIA() {
     document.getElementById('usoIaCustoHoje').textContent = formatarReais(r.totalGeral.hoje.custoEstimadoBRL);
     document.getElementById('usoIaChamadas30d').textContent = r.totalGeral.periodo.chamadas;
     document.getElementById('usoIaCusto30d').textContent = formatarReais(r.totalGeral.periodo.custoEstimadoBRL);
+    // v1288 — a legenda passa a dizer EM QUE DÓLAR a conta foi feita. Sem isso, "R$ 314,32" era um
+    // número sem origem: o dólar usado é configurável e não aparecia em lugar nenhum da tela.
+    const cotacao = Number(r.cotacaoUsdBrl) || 0;
+    document.getElementById('usoIaLegenda').textContent = cotacao
+      ? `Estimativa de custo (últimos 30 dias) — não é nota fiscal · convertido a R$ ${cotacao.toFixed(2).replace('.', ',')} por dólar`
+      : 'Estimativa de custo (últimos 30 dias) — não é nota fiscal';
+    mostrarAvisoPrecoIA(r.modelosSemPreco, r.totalGeral.periodo.chamadas);
     // v1172 — alimenta o selinho de custo direto no card de cada conta (celulaUsoIA), não só a
     // tabela separada mais abaixo — reaproveita o mesmo dado, sem pedir de novo ao servidor.
     usoIaPorConta = {};
