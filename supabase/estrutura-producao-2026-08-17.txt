@@ -1,0 +1,45 @@
+# Estrutura REAL das duas tabelas base, exportada do Supabase de produção em 17/08/2026.
+#
+# Foi o dono quem rodou a consulta de leitura do README e colou o resultado — esta é a única
+# fonte não-inferida do formato dessas tabelas. Serve pra duas coisas:
+#   1. a `0000_baseline.sql` foi reescrita a partir daqui (antes era derivada do código, e errava);
+#   2. `tests/v1285-banco-nasce-do-repositorio.test.mjs` confere que toda coluna listada aqui é
+#      criada por alguma migração — se produção ganhar coluna nova sem migração, o teste acende.
+#
+# As colunas 24 (organization_id) e 25-27 (dedupe_*) de whatsapp_processamentos, e a 4
+# (organization_id) de direciona_config, NÃO entram no baseline: quem as cria são as migrações
+# 0001 e 0010. O baseline recria o formato anterior a elas.
+#
+# Pra atualizar este arquivo, rode de novo a consulta que está em supabase/migrations/README.md.
+table_name,ordinal_position,column_name,data_type,is_nullable,column_default
+direciona_config,1,chave,text,NO,null
+direciona_config,2,valor,jsonb,YES,null
+direciona_config,3,atualizado_em,timestamp with time zone,YES,now()
+direciona_config,4,organization_id,uuid,NO,null
+whatsapp_processamentos,1,id,uuid,NO,gen_random_uuid()
+whatsapp_processamentos,2,lead_id,uuid,YES,null
+whatsapp_processamentos,3,nome_arquivo,text,YES,null
+whatsapp_processamentos,4,arquivo_nome,text,YES,null
+whatsapp_processamentos,5,nome,text,YES,null
+whatsapp_processamentos,6,nome_cliente,text,YES,null
+whatsapp_processamentos,7,telefone,text,YES,null
+whatsapp_processamentos,8,status,text,YES,'pronto'::text
+whatsapp_processamentos,9,etapa,text,YES,'Novo'::text
+whatsapp_processamentos,10,progresso,integer,YES,100
+whatsapp_processamentos,11,erro,text,YES,null
+whatsapp_processamentos,12,texto_extraido,text,YES,null
+whatsapp_processamentos,13,timeline_json,jsonb,YES,'[]'::jsonb
+whatsapp_processamentos,14,audios_encontrados,integer,YES,0
+whatsapp_processamentos,15,audios_transcritos,integer,YES,0
+whatsapp_processamentos,16,resultado_analise,jsonb,YES,null
+whatsapp_processamentos,17,storage_bucket,text,YES,null
+whatsapp_processamentos,18,storage_path,text,YES,null
+whatsapp_processamentos,19,file_size,bigint,YES,null
+whatsapp_processamentos,20,criado_em,timestamp with time zone,YES,now()
+whatsapp_processamentos,21,created_at,timestamp with time zone,YES,now()
+whatsapp_processamentos,22,atualizado_em,timestamp with time zone,YES,now()
+whatsapp_processamentos,23,updated_at,timestamp with time zone,YES,now()
+whatsapp_processamentos,24,organization_id,uuid,NO,null
+whatsapp_processamentos,25,dedupe_fone8,text,YES,null
+whatsapp_processamentos,26,dedupe_arquivo,text,YES,null
+whatsapp_processamentos,27,dedupe_nome,text,YES,null
