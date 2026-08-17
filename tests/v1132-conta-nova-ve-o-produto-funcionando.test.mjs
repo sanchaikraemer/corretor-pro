@@ -76,14 +76,19 @@ assert.ok(String(previa.summary || '').trim().length > 0, 'a prévia precisa tra
 //    É isto que garante que "analisar sem configuração" não vire invenção comercial —
 //    a regra do projeto (nada comercial cravado no código) continua intacta.
 // ---------------------------------------------------------------------------
+// v1291 — o dono reescreveu o texto da prévia. A lista item a item ("NUNCA afirme preço,
+// condição de pagamento, desconto...") virou uma proibição curta na prévia, apoiada nas
+// proteções de integridade que valem para todas as contas. O que este teste guarda é o mesmo:
+// conta sem Cérebro não pode inventar condição comercial.
 assert.match(systemPrompt, /MODO PRÉVIA/, 'a IA precisa ser avisada de que está sem Cérebro');
-assert.match(systemPrompt, /NUNCA afirme preço/, 'a prévia precisa proibir afirmar preço que não esteja na conversa');
-for (const proibido of ['condição de pagamento', 'desconto', 'prazo', 'nome de empreendimento', 'endereço', 'cidade']) {
+assert.match(systemPrompt, /sem inventar fatos nem\s*\n?condições/, 'a prévia precisa proibir afirmar preço que não esteja na conversa');
+for (const proibido of ['preço', 'desconto', 'condições', 'disponibilidade', 'prazo']) {
   assert.ok(systemPrompt.includes(proibido), `a proibição da prévia precisa cobrir "${proibido}"`);
 }
-assert.match(systemPrompt, /oferec[a-z]* confirmar|vai enviar\/confirmar/i,
+assert.match(systemPrompt, /mantenha a incerteza em vez de completar a lacuna/i,
   'quando o dado não está na conversa, a mensagem precisa oferecer confirmar — nunca chutar');
-assert.match(systemPrompt, /Não identificado/, 'campo sem base na conversa continua caindo em Não identificado');
+// "Não identificado" continua sendo o valor de campo sem base, só que agora ele mora na descrição
+// do formato JSON (que vai no pedido, não nas instruções) — quem guarda isso é o teste v1145.
 assert.match(systemPrompt, /INTELIGÊNCIA COMERCIAL BASE/,
   'o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt');
 

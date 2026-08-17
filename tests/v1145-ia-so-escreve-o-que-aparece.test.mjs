@@ -19,7 +19,10 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 // O bloco do formato JSON que a IA precisa devolver.
 const inicio = pipeline.indexOf("Formato JSON obrigatório:");
 assert.ok(inicio > -1, "sanidade: o formato pedido à IA existe");
-const formato = pipeline.slice(inicio, pipeline.indexOf("CONVERSA COMPLETA:", inicio));
+// v1291 — o dono reescreveu o pedido e o bloco da conversa deixou de ser sempre "CONVERSA
+// COMPLETA:" (agora o título muda conforme o que a IA recebeu). O recorte do formato vai até as
+// regras das três mensagens, que é o que vem logo depois do JSON.
+const formato = pipeline.slice(inicio, pipeline.indexOf("REGRAS PARA AS TRÊS MENSAGENS", inicio));
 
 // ── 1. O que a IA ESCREVE é só o que chega à tela ──────────────────────────────────────────────
 const PEDIDOS = [

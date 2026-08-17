@@ -57,7 +57,8 @@ assert.doesNotMatch(systemVivo, /congela o preço|pega desconto/,
   "o piso comercial não pode afirmar condição de venda (isso vem do Cérebro ou da conversa)");
 assert.match(systemVivo, /Quer dar imóvel na troca \(permuta\)/,
   "o roteiro de permuta continua no prompt — o que saiu foi a promessa, não a situação");
-assert.match(systemVivo, /só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa/,
+// v1291 — redação nova do dono para a mesma proibição.
+assert.match(systemVivo, /só podem ser afirmados quando estiverem\s*\n?\s*confirmados na conversa, nas observações factuais do corretor, no Cérebro ou em fonte factual/,
   "o piso precisa deixar explícito que condição comercial nunca é inventada");
 
 // ---------------------------------------------------------------------------

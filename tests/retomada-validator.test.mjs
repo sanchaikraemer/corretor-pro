@@ -45,8 +45,11 @@ const resultado = await analyzeWithBrain({
 });
 assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
 const system = chamadas[0].messages.find(m => m.role === "system")?.content || "";
-assert.match(system, /única autoridade/i);
-assert.match(system, /Respeite integralmente todas as regras do Cérebro Comercial/i);
+// v1291 — o dono reescreveu o texto das instruções: o Cérebro passou de "única autoridade" para
+// "autoridade máxima sobre método, análise, estratégia, tom, objeções e condução". A garantia
+// checada aqui é a mesma de sempre: o Cérebro manda, e nada monta um segundo manual por fora dele.
+assert.match(system, /autoridade máxima/i);
+assert.match(system, /Não crie um segundo playbook por fora dele/i);
 assert.match(system, /Não use "faz x dias que conversamos"; então diga "faz alguns dias que conversamos"\./);
 assert.equal(resultado.messages.a, resposta.mensagens.recomendada);
 assert.equal(resultado.messages.b, resposta.mensagens.maisSuave);

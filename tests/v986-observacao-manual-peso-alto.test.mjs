@@ -41,16 +41,20 @@ await analyzeWithBrain({
 
 const userPrompt = ultimaChamada.messages.find(m => m.role === "user")?.content || "";
 
-assert.match(userPrompt, /OBSERVAÇÕES DO CORRETOR/, "precisa existir um bloco dedicado pra observações manuais no prompt");
+// v1291 — o dono reescreveu o pedido: o bloco virou "OBSERVAÇÕES MANUAIS DO CORRETOR" e a
+// instrução de peso alto ficou em uma frase, distinguindo o que ele registrou como FEITO (peso
+// alto) do que ele apenas interpretou sobre o cliente (continua sendo interpretação).
+assert.match(userPrompt, /OBSERVAÇÕES MANUAIS DO CORRETOR/, "precisa existir um bloco dedicado pra observações manuais no prompt");
 assert.match(userPrompt, /Enviei outra opção mas ele nao respondeu mais/, "o texto da observação precisa chegar no prompt");
-assert.match(userPrompt, /VERDADE CONFIRMADA/i, "precisa instruir a IA a tratar a observação como fato, não como algo a duvidar");
-assert.match(userPrompt, /NÃO PODEM ignorar uma observação nem oferecer de novo algo que ela já diz ter sido feito/,
+assert.match(userPrompt, /Fatos e ações que o corretor registrou como realizados têm peso alto/i, "precisa instruir a IA a tratar a observação como fato, não como algo a duvidar");
+assert.match(userPrompt, /Já interpretações sobre intenção,\s+motivação, objeção ou estado do cliente continuam sendo interpretação/,
   "precisa proibir explicitamente que as mensagens repitam/ignorem o que a observação já registrou");
-// A observação continua também na CONVERSA COMPLETA (contexto cronológico) — o bloco novo é
-// reforço, não substituição.
-assert.match(userPrompt, /CONVERSA COMPLETA:[\s\S]*Enviei outra opção mas ele nao respondeu mais/, "a observação também deve continuar na timeline cronológica");
+// A observação continua também na conversa cronológica — o bloco dedicado é reforço, não
+// substituição.
+assert.match(userPrompt, /CONVERSA [\s\S]*Enviei outra opção mas ele nao respondeu mais/, "a observação também deve continuar na timeline cronológica");
 
-// Sem nenhuma observação manual na timeline, o bloco não deve aparecer (não polui o prompt à toa).
+// Sem nenhuma observação manual na timeline, o bloco precisa dizer isso com todas as letras — a
+// IA não pode ficar achando que existe observação que ela não recebeu.
 ultimaChamada = null;
 await analyzeWithBrain({
   lead: { clientName: "Cliente" },
@@ -59,6 +63,6 @@ await analyzeWithBrain({
   cerebroConfig: { metodo: "método do corretor", tom: "tom normal" }
 });
 const userPromptSemObs = ultimaChamada.messages.find(m => m.role === "user")?.content || "";
-assert.doesNotMatch(userPromptSemObs, /OBSERVAÇÕES DO CORRETOR/, "sem observação manual na timeline, o bloco não deve aparecer");
+assert.match(userPromptSemObs, /Nenhuma observação manual registrada\./, "sem observação manual na timeline, o prompt precisa dizer que não há nenhuma");
 
 console.log("v986-observacao-manual-peso-alto: ok");

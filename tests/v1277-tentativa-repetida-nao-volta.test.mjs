@@ -93,8 +93,13 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
     'o pedido precisa dizer quantas tentativas do corretor ficaram sem resposta');
   assert.ok(pedidoEnviado.includes('posso seguir com a apresentação'),
     'o texto da tentativa que já falhou tem que ir junto, senão a IA repete ela');
-  assert.ok(pedidoEnviado.includes('NENHUMA das três pode ser isto de novo'),
+  // v1291 — o dono reescreveu essa linha: o pedido continua entregando o texto do que já falhou,
+  // mas em vez de proibir a repetição na marra, manda o Cérebro decidir o que muda (pergunta,
+  // abordagem, canal ou próximo passo) e proíbe presumir o motivo do silêncio.
+  assert.ok(pedidoEnviado.includes('não presuma o motivo do silêncio'),
     'o pedido precisa dizer, ali mesmo, que aquilo não pode voltar');
+  assert.ok(pedidoEnviado.includes('Use o Cérebro para decidir se deve mudar pergunta, abordagem, canal ou próximo passo'),
+    'e precisa mandar o Cérebro decidir o que muda na próxima tentativa');
 }
 
 // ── 3. Conversa em que o cliente respondeu por último: o pedido diz isso ─────────────────────
@@ -129,31 +134,17 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
     'quando o cliente falou por último, o pedido precisa dizer que não há tentativa pendente');
 }
 
-// ── 4. A regra escrita: repetir a tentativa que falhou é proibido ────────────────────────────
+// ── 4. ATENÇÃO, ISTO MUDOU DE FORMA NA v1291 ────────────────────────────────────────────────
+// O bloco "A MENSAGEM QUE JÁ FOI IGNORADA NÃO VOLTA COM OUTRAS PALAVRAS" (com "PEDIR LICENÇA JÁ
+// FOI TENTADO E NÃO COLOU", "DUAS OU MAIS TENTATIVAS = MUDAR DE CAMINHO" e a proibição de cobrar
+// o cliente) saiu na reescrita das instruções entregue pelo dono, junto com a conferência final de
+// 12 itens. O que sobrou escrito no pedido é uma linha só — e é ela que este teste guarda agora.
 {
-  const ini = src.indexOf('A MENSAGEM QUE JÁ FOI IGNORADA NÃO VOLTA COM OUTRAS PALAVRAS');
-  assert.ok(ini > -1, 'a regra da tentativa repetida precisa existir no pedido enviado à IA');
-  const bloco = src.slice(ini, src.indexOf('AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA')).replace(/\s+/g, ' ');
-
-  assert.ok(bloco.includes('PEDIR LICENÇA JÁ FOI TENTADO E NÃO COLOU'),
-    'oferta já ignorada não pode voltar como novo pedido de permissão — foi o erro do print');
-  assert.ok(bloco.includes('DUAS OU MAIS TENTATIVAS SEM RESPOSTA = MUDAR DE CAMINHO'),
-    'com duas tentativas sem resposta, a saída é mudar o caminho, não as palavras');
-  assert.ok(/PESSOA PRA PESSOA/.test(bloco),
-    'pelo menos uma das três precisa propor ligação/visita/encontro nesse caso');
-  assert.ok(bloco.includes('NADA DISSO APARECE ESCRITO PRO CLIENTE'),
-    'contar as tentativas pro cliente é cobrança — continua proibido, igual ao tempo parado');
-  assert.ok(/não tive retorno/.test(bloco),
-    'as cobranças típicas precisam estar nomeadas como proibidas');
-
-  // A conferência final precisa checar isso item por item, senão a regra se perde no meio do texto.
-  const conferencia = src.slice(src.indexOf('CONFERÊNCIA FINAL — FAÇA ISTO ANTES DE DEVOLVER O JSON')).replace(/\s+/g, ' ');
-  assert.ok(conferencia.includes('11. ESTA MENSAGEM JÁ FOI MANDADA UMA VEZ?'),
-    'a conferência final precisa ter o item que compara as três com o que já foi tentado');
-  assert.ok(conferencia.includes('não passe nos doze'),
-    'a contagem de itens da conferência final precisa acompanhar o item novo');
-  assert.ok(!conferencia.includes('não passe nos dez') && !conferencia.includes('não passe nos onze'),
-    'a contagem antiga não pode ficar para trás, senão a IA para antes do último item');
+  assert.ok(/Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil\./.test(src),
+    'a regra da tentativa repetida precisa existir no pedido enviado à IA');
+  // A revisão final continua existindo (10 itens) e continua sendo a última coisa lida.
+  assert.ok(src.indexOf('REVISÃO FINAL SILENCIOSA') > src.indexOf('${timelineText}'),
+    'a revisão final precisa vir depois da conversa');
 }
 
 // ── 5. O código continua sem reescrever mensagem nenhuma ────────────────────────────────────

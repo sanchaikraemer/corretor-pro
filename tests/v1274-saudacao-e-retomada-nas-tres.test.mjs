@@ -22,41 +22,19 @@ import { garantirSaudacaoAbertura, primeiroNomeDoCliente } from '../js/saudacao.
 
 const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
 
-// ── 1. A contradição não existe mais ─────────────────────────────────────────────────────────
+// ── 1 e 2. ATENÇÃO, ISTO MUDOU DE FORMA NA v1291 ─────────────────────────────────────────────
+// O dono entregou pronta uma reescrita das instruções. Nela saíram do produto: o bloco "RETOMADA
+// DEPOIS DE DIAS SEM CONVERSA — REGRA DURA", a ordem de as três abrirem com saudação + primeiro
+// nome, e o bloco "TEMPO PARADO NÃO ENTRA NA MENSAGEM". Quem decide saudação e retomada passou a
+// ser o Cérebro do corretor, e o sistema passou a entregar só o insumo. É isso que se confere
+// aqui — se as sugestões voltarem a chegar sem cumprimentar, é no Cérebro que a regra entra.
 {
-  const ini = src.indexOf('RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA');
-  assert.ok(ini > -1, 'a regra da retomada precisa continuar existindo');
-  const bloco = src.slice(ini, src.indexOf('LINGUAGEM DE IA — PROIBIDO')).replace(/\s+/g, ' ');
-
-  assert.ok(!bloco.includes('RECONHEÇA o tempo'),
-    'mandar reconhecer o tempo brigava com a proibição de falar do intervalo — não pode voltar');
-  assert.ok(bloco.includes('A VOLTA APARECE NO CONTEÚDO, NUNCA NO RELÓGIO'),
-    'a retomada tem que aparecer pelo assunto retomado, não pela contagem de dias');
-  assert.ok(bloco.includes('Não confunda as duas coisas'),
-    'as duas regras precisam estar explicitamente conciliadas, pra IA não escolher uma e largar a outra');
-  assert.ok(bloco.includes('ABRA COMO QUEM VOLTA A FALAR'),
-    'retomada abre cumprimentando a pessoa');
-}
-
-// ── 2. Cumprimentar virou obrigação escrita, com a exceção certa ─────────────────────────────
-{
-  const blocoSaud = src.slice(src.indexOf('Saudação correta para este horário')).slice(0, 2000).replace(/\s+/g, ' ');
-  assert.ok(blocoSaud.includes('AS TRÊS MENSAGENS ABREM COM ELA seguida do primeiro nome do cliente'),
-    'as três precisam abrir com a saudação do horário + o primeiro nome');
-  assert.ok(blocoSaud.includes('Mensagem que começa direto no assunto, sem cumprimentar o cliente pelo nome, está ERRADA'),
-    'o erro do print precisa estar nomeado como erro');
-  // A exceção continua sendo a da v1253 (Milena): cumprimento trocado NO MESMO DIA.
-  assert.ok(blocoSaud.includes('SÓ VALE PARA CONVERSA QUE CONTINUA HOJE'),
-    'não cumprimentar duas vezes só vale pra conversa que continua hoje');
-  assert.ok(blocoSaud.includes('Cumprimento de ONTEM ou de dias/semanas atrás NÃO conta'),
-    'cumprimento antigo não pode ser desculpa pra sugestão sair sem saudação');
-
-  // E a regra do tempo parado não pode ser lida como "então não cumprimente".
-  const blocoTempo = src.slice(src.indexOf('TEMPO PARADO NÃO ENTRA NA MENSAGEM')).slice(0, 2200).replace(/\s+/g, ' ');
-  assert.ok(blocoTempo.includes('O QUE ESTA REGRA NÃO AUTORIZA'),
-    'a regra do tempo parado precisa dizer o que ela NÃO autoriza');
-  assert.ok(blocoTempo.includes('NÃO manda tirar a saudação'),
-    'proibir falar dos dias nunca quis dizer proibir cumprimentar');
+  assert.match(src, /Saudação correspondente ao horário neste instante: \$\{saudacaoDoHorario\}/,
+    'a saudação certa do horário continua indo pronta pra IA');
+  assert.match(src, /Dias corridos desde a última mensagem identificada/,
+    'e o tempo parado continua indo como informação');
+  assert.match(src, /A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro\./,
+    'quem manda na saudação e na retomada agora é o Cérebro do corretor');
 }
 
 // ── 3. A rede de segurança: só acrescenta a saudação, nunca reescreve ────────────────────────
@@ -102,54 +80,16 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
   assert.ok(saida.includes(semSaudacao), 'o texto escrito pela IA continua inteiro, letra por letra');
 }
 
-// ── 4. Ponta a ponta: conversa parada há dias sai com as três cumprimentando ─────────────────
+// ── 4. ATENÇÃO, ISTO MUDOU DE COMPORTAMENTO NA v1291 ─────────────────────────────────────────
+// Até a v1290, quando a IA devolvia uma sugestão SEM cumprimento e a conversa estava parada havia
+// dias, o próprio sistema colocava "Bom dia, Gabriel! " na frente antes de mostrar na tela. Na
+// reescrita entregue pelo dono, essa rede saiu: a análise não chama mais a função que acrescentava
+// a saudação. Agora o texto que a IA escreveu é exibido exatamente como veio — quem garante o
+// cumprimento é o Cérebro do corretor. (A correção da FAIXA do dia, quando a IA escreve "boa
+// noite" às 17h, continua valendo: ela mora no app e é conferida pelo teste v1218.)
 {
-  const diasAtras = (n) => {
-    const d = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  };
-  const timeline = [
-    { date: diasAtras(20), time: '07:29', author: 'Construtora Senger', text: 'Bom dia Gabriel, tudo bem? Sobre o Evolutti, o de dois dormitórios mais acessível está avaliado no valor que te passei.' },
-    { date: diasAtras(20), time: '07:30', author: 'Gabriel Quality', text: 'Bom dia. Ok' },
-    { date: diasAtras(20), time: '07:31', author: 'Construtora Senger', text: 'Separei as opções pra você ver as fotos e plantas.' }
-  ];
-  const semSaudacaoNenhuma = {
-    recomendada: 'Das opções que você conferiu no material, ficou alguma dúvida ou prefere conhecer pessoalmente?',
-    maisSuave: 'Sobre as opções que te passei, quer que eu detalhe planta ou condições?',
-    maisDireta: 'Consigo agendar a visita: prefere sexta à tarde ou sábado de manhã?'
-  };
-  const openaiMock = {
-    chat: { completions: { create: async () => ({
-      model: 'mock-gpt',
-      choices: [{ message: { content: JSON.stringify({
-        summary: 'Resumo',
-        diagnostico: { produtoPrincipal: 'Evolutti', etapaFunil: 'Atendimento' },
-        mensagens: semSaudacaoNenhuma,
-        quemEhOCliente: 'Gabriel Quality',
-        produtoInteresse: 'Evolutti',
-        produtosInteresse: ['Evolutti'],
-        etapaSugerida: 'Atendimento',
-        clientProfile: 'Perfil',
-        nextAction: 'Ação'
-      }) } }]
-    }) } }
-  };
-  const resultado = await analyzeWithBrain({
-    lead: { clientName: 'Gabriel Quality' },
-    timeline,
-    openai: openaiMock,
-    cerebroConfig: { metodo: 'Método do corretor.', tom: 'Tom do corretor.', regras: [{ texto: 'Regra de teste.' }] }
-  });
-
-  const tres = [resultado.messages.a, resultado.messages.b, resultado.messages.c];
-  for (const [i, msg] of tres.entries()) {
-    assert.match(msg, /^(Bom dia|Boa tarde|Boa noite), Gabriel! /,
-      `a sugestão ${i + 1} precisa sair cumprimentando o cliente pelo nome — foi o que faltou no print`);
-  }
-  // E o texto que a IA escreveu continua inteiro em cada uma: a rede acrescenta, não reescreve.
-  assert.ok(tres[0].includes(semSaudacaoNenhuma.recomendada), 'a recomendada não pode ter sido reescrita');
-  assert.ok(tres[1].includes(semSaudacaoNenhuma.maisSuave), 'a alternativa não pode ter sido reescrita');
-  assert.ok(tres[2].includes(semSaudacaoNenhuma.maisDireta), 'a direta ao ponto não pode ter sido reescrita');
+  assert.ok(!/garantirSaudacaoAbertura/.test(src),
+    'a análise não acrescenta mais saudação nenhuma; se voltar a acrescentar, este teste volta a cobrar as três cumprimentando');
 }
 
 // ── 5. Conversa que continua HOJE: o código não encosta na saudação ──────────────────────────

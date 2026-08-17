@@ -91,8 +91,10 @@ const userVivo = chamadas.at(-1).messages.find(m => m.role === "user")?.content 
 // se perdeu do produto.
 assert.match(pipeline, /CUIDADO com a palavra "investir"/, "o aviso do 'investir' precisa continuar no ponto de partida de quem não tem Cérebro");
 assert.doesNotMatch(systemVivo, /Reserva só com negociação avançada/, "reserva não pode chegar no prompt vivo");
-assert.match(userVivo, /Prazo configurado pelo corretor para reconhecer intervalo\/retomada.*: 7 dias corridos/, "o prazo configurado (7, igual ao Descanso após atender) precisa chegar no prompt vivo");
-assert.match(userVivo, /"pedidoSemResposta":"texto"/, "o formato JSON pedido à IA precisa incluir pedidoSemResposta");
+// v1291 — o dono reescreveu o texto do contexto técnico ("Prazo de retomada configurado pelo
+// corretor: N dias corridos"). O número continua chegando na IA, que é o que este teste guarda.
+assert.match(userVivo, /Prazo de retomada configurado pelo corretor: 7 dias corridos/, "o prazo configurado (7, igual ao Descanso após atender) precisa chegar no prompt vivo");
+assert.match(userVivo, /"pedidoSemResposta":"texto/, "o formato JSON pedido à IA precisa incluir pedidoSemResposta");
 // v1241 — AUDITORIA DO DONO (13/08/2026): o Cérebro passou a ser a única autoridade comercial.
 // Esta regra é método comercial: saiu do pedido de quem TEM Cérebro e virou ponto de partida da
 // conta nova (METODO_BASE_PREVIA). Continua existindo no produto — mudou quem manda nela.

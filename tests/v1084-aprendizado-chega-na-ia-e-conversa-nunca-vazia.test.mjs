@@ -48,7 +48,8 @@ const promptDeUsuario = () => chamadas.at(-1).messages.find(m => m.role === "use
   assert.match(sys, /SEU JEITO/, "o aprendizado do corretor precisa entrar no prompt enviado à IA");
   assert.match(sys, /fala curta, direta e sem formalidade/, "o tom aprendido precisa chegar na IA");
   assert.match(sys, /mostro o custo por mês/, "a objeção que já funcionou precisa chegar na IA");
-  assert.match(sys, /as regras do Cérebro Comercial acima continuam prevalecendo/,
+  // v1291 — redação nova do dono para a mesma garantia: o aprendizado é auxiliar, o Cérebro manda.
+  assert.match(sys, /Nunca supera o Cérebro nem cria fatos/,
     "o aprendizado nunca pode passar por cima das regras que o corretor escreveu no Cérebro");
 }
 

@@ -12,47 +12,34 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // em três tons, nenhuma reconhecendo que a conversa estava parada havia dias, uma delas dando a
 // desculpa pronta pro cliente e outra dizendo o que o cliente tinha "na cabeça".
 
-// ── 1. Retomada depois de dias sem conversa vira regra dura, não sugestão ──────────────────────
-const bloco = pipeline.slice(
-  pipeline.indexOf('RETOMADA DEPOIS DE DIAS SEM CONVERSA — REGRA DURA'),
-  pipeline.indexOf('LINGUAGEM DE IA — PROIBIDO')
-);
-assert.ok(bloco.length > 400, 'a regra da retomada precisa existir no pedido enviado à IA');
-// v1274 — ATENÇÃO, ISTO MUDOU DE FORMA. Até aqui a regra mandava "RECONHEÇA o tempo" ("faz um
-// tempo que a gente não se falava"). Na v1255 o dono proibiu falar do intervalo em QUALQUER forma
-// ("não quero q use os dias") — e as duas regras ficaram no mesmo pedido, uma mandando reconhecer
-// o tempo e a outra proibindo. A IA resolvia a contradição do pior jeito: largava a retomada
-// inteira e escrevia como se a conversa nunca tivesse parado, sem nem cumprimentar o cliente
-// (print do dono em 14/08: "cadê a saudação? a retomada?").
-// Agora a retomada continua sendo regra dura, só que ela aparece no CONTEÚDO (cumprimento + o fio
-// da conversa), nunca no relógio.
-assert.match(bloco, /ABRA COMO QUEM VOLTA A FALAR/, 'a retomada abre cumprimentando o cliente pelo nome');
-assert.match(bloco, /A VOLTA APARECE NO CONTEÚDO, NUNCA NO RELÓGIO/,
-  'o que mostra que já se falaram é retomar o fio da conversa, não citar os dias');
-assert.ok(!/RECONHEÇA o tempo/.test(bloco),
-  'a ordem de reconhecer o tempo foi revogada na v1255 e não pode voltar');
-assert.match(bloco, /TRAGA UM MOTIVO REAL/, 'e trazer um motivo real, tirado do que ficou pendente');
-
-// As frases exatas que ele apontou como imbecilidade ficam proibidas, com nome e sobrenome.
-for(const frase of ['sei que a vida corre', 'imagino que esteja\n  corrido', 'sei que a correria é grande', 'se ainda tiver interesse', 'desculpa incomodar']){
-  assert.ok(bloco.includes(frase.replace('\n  ', ' ')) || bloco.includes(frase),
-    `a desculpa pronta "${frase.replace('\n  ',' ')}" precisa estar proibida`);
-}
-assert.match(bloco, /NUNCA dê a desculpa pronta pro cliente/, 'e a razão precisa estar escrita, não só a lista');
-
-// "Vi que você está com o Renaissance na cabeça" — adivinhar o que o cliente pensa.
-assert.match(bloco, /você\n  não sabe o que ele está pensando; você sabe o que ele ESCREVEU/,
-  'a IA não pode dizer o que o cliente tem "na cabeça"');
-
-// ── 2. As três não podem ser três pedidos de licença ───────────────────────────────────────────
-const trio = pipeline.slice(
-  pipeline.indexOf('AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA'),
-  pipeline.indexOf('LINGUAGEM DE IA — PROIBIDO')
-);
-assert.ok(trio.length > 200, 'a regra dos três pedidos de licença precisa existir');
-assert.match(trio, /a "maisDireta" tem que AVANÇAR SOZINHA/, 'a direta executa em vez de pedir licença');
-assert.match(trio, /UMA escolha concreta na mesa/, 'e coloca uma escolha concreta (horário, caminho, data)');
-assert.match(trio, /"Me avisa e eu mando" não é direta/, 'com o exemplo do print, pra não sobrar dúvida');
+// ── 1. O que a IA recebe pra saber que a conversa parou ───────────────────────────────────────
+// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O dono reescreveu as instruções: o bloco longo "RETOMADA
+// DEPOIS DE DIAS SEM CONVERSA — REGRA DURA" (com a lista de desculpas prontas proibidas: "sei que
+// a vida corre", "se ainda tiver interesse", e a proibição de adivinhar o que o cliente pensa)
+// saiu do produto. Quem decide como retomar passou a ser o Cérebro do corretor. O que o sistema
+// garante é o INSUMO: dias parados, data da última mensagem, saudação do horário e prazo de
+// retomada continuam chegando na IA — sem eles, nem o Cérebro consegue decidir.
+assert.match(pipeline, /Dias corridos desde a última mensagem identificada: \$\{contextoTemporal\.dias/,
+  'os dias parados precisam continuar chegando na IA');
+assert.match(pipeline, /Data da última mensagem identificada: \$\{contextoTemporal\.ultimaData\}/,
+  'e a data da última mensagem também');
+assert.match(pipeline, /A saudação, o reconhecimento ou não do intervalo e o tipo de próximo passo devem seguir o Cérebro\./,
+  'quem manda na retomada agora é o Cérebro do corretor');
+assert.match(pipeline, /Os dados acima são contexto, não ordens para forçar visita, pergunta, encontro ou retomada\./,
+  'e o contexto técnico não pode virar ordem de forçar retomada');
+// A proibição de transformar silêncio em diagnóstico ("vi que você está com X na cabeça")
+// sobreviveu à reescrita, dentro das proteções de integridade.
+assert.match(pipeline, /não transforme silêncio em confirmação, aceite, objeção ou diagnóstico psicológico/,
+  'a IA continua proibida de dizer o que o cliente tem "na cabeça"');
+// ── 2. As três continuam nascendo da mesma leitura, sem virar três pedidos de licença ─────────
+// v1291 — o bloco "AS TRÊS NÃO PODEM SER TRÊS PEDIDOS DE LICENÇA" também saiu na reescrita do
+// dono. O que continua escrito, em forma curta, é o papel de cada uma das três.
+const trio = pipeline.slice(pipeline.indexOf('REGRAS PARA AS TRÊS MENSAGENS'), pipeline.indexOf('CONVERSA ${'));
+assert.ok(trio.length > 200, 'a regra das três mensagens precisa existir');
+assert.match(trio, /RECOMENDADA é a que você enviaria se só pudesse enviar uma/, 'a recomendada continua sendo a melhor de todas');
+assert.match(trio, /MAIS DIRETA é objetiva/, 'a direta continua sendo a objetiva');
+assert.match(trio, /As três nascem da mesma verdade factual e da mesma leitura comercial/,
+  'e as três continuam saindo da mesma leitura, não de três diagnósticos diferentes');
 
 // ── 3. A IA voltou a receber CONVERSA DE VERDADE (resumo demais gera mensagem genérica) ────────
 // v1247 — deixou de ser "conversa média vai inteira": TODA conversa vai inteira (limiar

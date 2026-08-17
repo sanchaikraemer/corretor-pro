@@ -62,31 +62,33 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 // melhores opções disponíveis hoje". Nada disso aconteceu — o corretor não conferiu nada e não
 // há novidade nenhuma. As regras já proibiam inventar FATO (preço, endereço, prazo); faltava
 // proibir inventar AÇÃO DO CORRETOR e NOVIDADE, que é o que apareceu aqui.
+// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O dono reescreveu as instruções inteiras: o bloco longo
+// "AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO", com a lista de verbos e de frases flagradas nos
+// prints, saiu do produto. A garantia que sobrou (e que este teste passa a guardar) está escrita
+// em duas linhas curtas: nas proteções de integridade do prompt de sistema e na regra das três
+// mensagens. É menos texto para o mesmo objetivo — se a invenção de ação/novidade voltar a
+// aparecer nas sugestões, é aqui que precisa engrossar de novo.
 {
-  const bloco = pipeline.slice(
-    pipeline.indexOf('AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO'),
-    pipeline.indexOf('LINGUAGEM DE IA — PROIBIDO')
+  const integridade = pipeline.slice(
+    pipeline.indexOf('Aplique sempre estas proteções de integridade'),
+    pipeline.indexOf('=== INÍCIO DO CÉREBRO COMERCIAL ===')
   );
-  assert.ok(bloco.length > 200, 'a regra precisa existir no pedido enviado à IA');
+  assert.ok(integridade.length > 200, 'a regra precisa existir no pedido enviado à IA');
+  assert.match(integridade, /não invente fatos, datas, autoria, materiais, valores, condições, disponibilidade, promessas ou ações/,
+    'inventar ação do corretor continua proibido');
+  assert.match(integridade, /não transforme silêncio em confirmação, aceite, objeção ou diagnóstico psicológico/,
+    'e continua proibido adivinhar o que o cliente pensa a partir do silêncio');
 
-  // Ação que o corretor não fez.
-  for(const verbo of ['conferiu', 'pesquisou', 'separou', 'verificou', 'aproveitou pra ver']){
-    assert.ok(bloco.includes(verbo), `a regra precisa citar "${verbo}" — é o tipo de ação inventada do print`);
-  }
-  // Novidade que não existe (as frases exatas que o dono flagrou).
-  for(const frase of ['surgiram opções novas', 'as melhores opções disponíveis hoje', 'tenho novidades']){
-    assert.ok(bloco.includes(frase), `a regra precisa citar a frase inventada "${frase}"`);
-  }
-  // A saída permitida: oferecer fazer AGORA, em vez de dizer que já fez.
-  assert.match(bloco, /O QUE É PERMITIDO no lugar: OFERECER fazer agora/, 'a regra precisa dizer o que fazer no lugar');
-  assert.match(bloco, /Verbo no futuro ou no\ncondicional — nunca no passado/, 'a regra precisa fixar o tempo verbal');
-  // Conversa parada é justamente onde a IA inventa um motivo pra voltar.
-  assert.match(bloco, /o motivo tem que ser real/, 'conversa parada não autoriza inventar motivo de retomada');
+  const tresMensagens = pipeline.slice(pipeline.indexOf('REGRAS PARA AS TRÊS MENSAGENS'), pipeline.indexOf('CONVERSA ${'));
+  assert.match(tresMensagens, /Não invente ação já realizada, novidade, disponibilidade, prazo, condição, urgência ou escassez/,
+    'novidade inventada — o relato do print — continua proibida nas três sugestões');
+  assert.match(tresMensagens, /Diferencie "vou verificar" de "verifiquei"/,
+    'e o tempo verbal continua travado: oferecer fazer, nunca dizer que já fez');
 
   // A regra vale sempre: fica no prompt de SISTEMA, fora do Cérebro (que é configurável e pode
   // estar vazio numa conta nova).
   assert.ok(
-    pipeline.indexOf('AÇÃO E NOVIDADE QUE NÃO EXISTEM — PROIBIDO') > pipeline.indexOf('=== FIM DO CÉREBRO COMERCIAL ==='),
+    pipeline.indexOf('Aplique sempre estas proteções de integridade') < pipeline.indexOf('=== INÍCIO DO CÉREBRO COMERCIAL ==='),
     'a regra precisa estar no prompt de sistema, valendo inclusive em modo prévia'
   );
 
