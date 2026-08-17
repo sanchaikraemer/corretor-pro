@@ -212,13 +212,50 @@ do prompt e o primeiro trecho variável entra já na linha 29 do bloco de sistem
 nada mais é reaproveitado. Todo o miolo fixo (as regras comerciais, a conferência de 12 itens) vem
 **depois** de conteúdo que muda a cada conversa.
 
-Juntar todo o texto fixo na frente e empurrar o que varia para o fim pode cortar perto da metade do
-item que responde por 79% da conta — **sem reescrever uma única regra**.
+**MEDIDO EM 17/08/2026, E O RESULTADO DERRUBOU A IDEIA.** Eu tinha escrito aqui que isso cortaria
+"perto da metade" da conta. **Está errado — refiz a conta antes de mexer no código:**
 
-**Mas isso não pode ser feito no escuro:** mudar a ordem de um prompt muda o comportamento do
-modelo, e foi exatamente esse tipo de mexida sem medição que estragou as análises em agosto. Ou
-seja, esta economia depende da bateria de conversas de teste (achado A6) existir antes. É mais um
-motivo para ela ser a primeira coisa a ser construída.
+| | |
+|---|---|
+| Texto fixo antes do primeiro trecho que varia, hoje | 1.817 letras ≈ **454 unidades** |
+| Mínimo que a OpenAI exige para reaproveitar | **1.024 unidades** |
+| → Conclusão | **hoje não há reaproveitamento nenhum** |
+| Teto se TODO o texto fixo virasse prefixo | 9.528 unidades reaproveitáveis |
+| Economia por análise, no melhor caso | R$ 0,05 |
+| Em 500 análises/mês | US$ 4,76 de US$ 25,59 → **19% da conta** |
+
+E 19% é o **teto teórico**, que só valeria com o desconto sempre ativo. O desconto da OpenAI expira
+em poucos minutos sem uso, e o dono faz cerca de 17 análises por dia, espalhadas — a maior parte
+delas pegaria o desconto frio. Na prática sobra bem menos que 19%.
+
+Contra isso: mexer na ordem do prompt muda o comportamento do modelo, e é exatamente a parte que
+estragou as análises em agosto. **Risco alto, ganho pequeno — a reorganização não vale a pena
+agora.** Volta a valer quando houver muitos corretores usando ao mesmo tempo, porque aí o desconto
+fica quente o tempo todo.
+
+### E não existe gordura para cortar no prompt — **MEDIDO**
+
+A hipótese seguinte era que o prompt tivesse inchado com repetição, depois de centenas de versões
+de remendo. Medi: **558 linhas de regra, apenas 12 trechos de 8 palavras que aparecem duas vezes
+(todos citações propositais na conferência final), e nenhuma frase longa repetida.**
+
+O prompt é caro porque é **denso**, não porque é desleixado. Não há o que cortar sem tirar regra —
+e tirar regra é o que o dono proibiu e o que quebrou agosto.
+
+### Nem dá para reaproveitar análise na reimportação
+
+Terceira hipótese, também descartada: reaproveitar a análise quando a reimportação não traz
+mensagem nova. Isso existiu (v1141) e foi **removido por decisão explícita e repetida do dono**
+(v1177 e v1221: *"exportou uma conversa tem que fazer análise e ponto final"*) — era o que fazia a
+exportação parecer que não tinha feito nada, e o que devolveu texto escrito sob regras já
+corrigidas.
+
+### Conclusão: o custo por análise é praticamente irredutível sem estragar a qualidade
+
+As três saídas técnicas foram medidas e as três não servem. **A alavanca aqui não é técnica, é
+comercial:** o preço e os limites dos planos precisam refletir os R$ 0,20 a R$ 0,40 que uma análise
+custa de verdade. É o achado A3 voltando ao começo — só que agora com todas as alternativas
+eliminadas com número, em vez de suposição.
 
 ### Higiene
 
