@@ -1,0 +1,30 @@
+{
+  "id": "pausa-marcada-pelo-cliente",
+  "titulo": "O próprio cliente marcou a pausa: 'estamos em viagem, no retorno eu chamo'",
+  "veioDe": "NOTAS-v1271.md — item 9 da conferência final",
+  "porQueImporta": "Retomar antes da hora queima o contato; esperar para sempre perde a venda. O certo é puxar o acontecimento e propor dia nomeado.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Roberto Lemos.txt",
+  "conversa": [
+    { "date": "20/07/2026", "time": "11:15", "author": "Sanchai", "text": "Bom dia, Roberto! Consegui segurar a unidade do 8º andar até sexta." },
+    { "date": "20/07/2026", "time": "12:40", "author": "Roberto Lemos", "text": "Show! Mas estamos em viagem com a família até o fim do mês. No retorno eu te chamo pra fechar os detalhes." }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Roberto Lemos",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["estamos em viagem com a família"],
+    "aIaPrecisaPerceber": [
+      "o cliente pediu para ser procurado depois do fim do mês",
+      "a viagem já terminou, considerando a data de hoje"
+    ],
+    "asMensagensNaoPodem": [
+      "cobrar o cliente por não ter chamado",
+      "retomar como se nada tivesse sido combinado"
+    ],
+    "asMensagensPrecisam": [
+      "puxar o acontecimento: perguntar como foi a viagem",
+      "propor um dia nomeado e um horário, não um 'me avisa quando puder'"
+    ]
+  }
+}

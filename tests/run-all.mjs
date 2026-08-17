@@ -32,7 +32,13 @@ function arquivosParaChecarSintaxe() {
   const api = existsSync(path.join(raiz, "api"))
     ? readdirSync(path.join(raiz, "api")).filter(f => f.endsWith(".js")).sort().map(f => `api/${f}`)
     : [];
-  return [...fixos, ...api];
+  // v1283 — a bateria de conversas (evals/) também entra na checagem. Ela não roda na suíte (fala
+  // com a IA de verdade e gasta dinheiro), então sem isto um erro de digitação lá só apareceria
+  // no dia em que o dono fosse comparar um prompt antes/depois — justo a hora errada.
+  const evals = existsSync(path.join(raiz, "evals"))
+    ? readdirSync(path.join(raiz, "evals")).filter(f => f.endsWith(".mjs")).sort().map(f => `evals/${f}`)
+    : [];
+  return [...fixos, ...api, ...evals];
 }
 
 function rodar(comando, args, rotulo) {

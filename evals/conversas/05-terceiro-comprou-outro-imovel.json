@@ -1,0 +1,30 @@
+{
+  "id": "terceiro-comprou-outro-imovel",
+  "titulo": "Quem comprou outro imóvel foi um terceiro citado na conversa, não o cliente",
+  "veioDe": "AUDITORIA-v1281.md (achado A2)",
+  "porQueImporta": "A busca de palavras do navegador marca a oportunidade como perdida ao ver 'comprou outro apartamento' — mesmo quando a frase é sobre outra pessoa. O cliente cai para o fim da fila sem a IA participar.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Patrícia Nunes.txt",
+  "conversa": [
+    { "date": "12/08/2026", "time": "16:00", "author": "Sanchai", "text": "Boa tarde, Patrícia! Como ficou a conversa com seu marido sobre a unidade do 12º?" },
+    { "date": "12/08/2026", "time": "16:30", "author": "Patrícia Nunes", "text": "Gostamos muito! Meu irmão comprou outro apartamento no mesmo prédio semana passada e ficou super satisfeito. Só quero entender a entrada antes de decidir." }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Patrícia Nunes",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["Meu irmão comprou outro apartamento"],
+    "aIaPrecisaPerceber": [
+      "o cliente continua interessado e a oportunidade está viva",
+      "quem comprou outro imóvel foi o irmão, não o cliente",
+      "há um pedido em aberto: entender a entrada"
+    ],
+    "asMensagensNaoPodem": [
+      "tratar a oportunidade como perdida",
+      "se despedir ou agradecer como se o atendimento tivesse acabado"
+    ],
+    "asMensagensPrecisam": [
+      "tratar a dúvida da entrada, que é o que trava a decisão"
+    ]
+  }
+}

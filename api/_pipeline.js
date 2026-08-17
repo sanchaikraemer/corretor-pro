@@ -592,7 +592,11 @@ function _ladoDaMensagem(m, corretorNome = "", lead = {}) {
 
 // Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
 // o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
-function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
+// v1283 — exportada (só isso: nenhuma linha do corpo mudou) pra a bateria de conversas de
+// `evals/` conseguir conferir, sem gastar IA, que os exemplos de voz do corretor não contêm fala
+// do cliente. Era exatamente esse bloco que recebia as mensagens do cliente quando o contato
+// estava salvo com "Corretor"/"Imobiliária" no nome (ver v1282).
+export function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
   if (!Array.isArray(timeline)) return "";
   const out = [];
   for (const m of timeline) {

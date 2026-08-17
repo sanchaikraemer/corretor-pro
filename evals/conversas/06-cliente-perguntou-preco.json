@@ -1,0 +1,28 @@
+{
+  "id": "cliente-perguntou-preco",
+  "titulo": "O cliente fez uma pergunta direta e ela ficou sem resposta",
+  "veioDe": "Regra do prompt: PEDIDO DO CLIENTE vem antes de estratégia de retomada",
+  "porQueImporta": "Responder outra coisa que não o que foi perguntado é a forma mais rápida de perder o cliente — e o sistema tem regra escrita para isso.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Diego Fontana.txt",
+  "conversa": [
+    { "date": "13/08/2026", "time": "08:50", "author": "Sanchai", "text": "Bom dia, Diego! Mandei as fotos da cobertura no seu e-mail." },
+    { "date": "13/08/2026", "time": "09:20", "author": "Diego Fontana", "text": "Vi sim, ficou linda. Qual o valor dela e como fica a forma de pagamento?" }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Diego Fontana",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["Qual o valor dela"],
+    "aIaPrecisaPerceber": [
+      "existe uma pergunta do cliente sem resposta: valor e forma de pagamento"
+    ],
+    "asMensagensNaoPodem": [
+      "ignorar a pergunta e propor outro assunto",
+      "inventar um valor ou uma condição de pagamento que não está na conversa"
+    ],
+    "asMensagensPrecisam": [
+      "tratar a pergunta do valor e da forma de pagamento antes de qualquer outra coisa"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "objecao-que-o-produto-nao-resolve",
+  "titulo": "A objeção é do produto, não do cliente: o prazo de entrega não serve",
+  "veioDe": "NOTAS-v1279.md",
+  "porQueImporta": "Insistir num produto que não atende o prazo do cliente queima a conversa. O certo é trocar o produto, não convencer o cliente.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Helena Vasques.txt",
+  "conversa": [
+    { "date": "14/08/2026", "time": "10:00", "author": "Sanchai", "text": "Bom dia, Helena! A torre nova entrega em dezembro de 2028, com condição especial de lançamento." },
+    { "date": "14/08/2026", "time": "10:25", "author": "Helena Vasques", "text": "Bom dia! O problema é que preciso me mudar até março do ano que vem, meu contrato de aluguel encerra. 2028 não me serve." }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Helena Vasques",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["preciso me mudar até março"],
+    "aIaPrecisaPerceber": [
+      "o prazo de entrega do produto oferecido não atende o cliente",
+      "a data limite do cliente é março do ano seguinte"
+    ],
+    "asMensagensNaoPodem": [
+      "insistir no mesmo empreendimento tentando contornar o prazo",
+      "prometer antecipação de entrega"
+    ],
+    "asMensagensPrecisam": [
+      "oferecer troca de produto: algo pronto ou com entrega dentro do prazo dela"
+    ]
+  }
+}
