@@ -146,9 +146,34 @@ pelos números de verdade.**
 | **Projeção de 30 dias** | **US$ 25,59 ≈ R$ 141** |
 | **Custo médio por chamada** | **US$ 0,0145 ≈ R$ 0,08** |
 
-**O que eu errei:** estimei ~R$ 0,34 por análise. A média real por chamada é **R$ 0,08** — quatro
-vezes menor. A conta de letras estava certa, a tradução para custo não: parte do trabalho roda em
-modelo mais barato e nem toda chamada carrega o bloco inteiro de instrução.
+### Detalhamento por modelo (15/07 a 15/08) — **o que fecha a conta**
+
+| Modelo | Entrada consumida | Custo | Para que serve no sistema |
+|---|---|---|---|
+| gpt-4.1 | 10,098 milhões | US$ 20,20 (R$ 111) | **a análise** |
+| gpt-4o-mini | 3,730 milhões | US$ 1,49 (R$ 8) | tarefas auxiliares e importação |
+| gpt-4o | 5,5 mil | US$ 0,01 | visão (praticamente parado) |
+| Respostas geradas (saída) | — | US$ 3,89 (R$ 21) | |
+
+**79% da conta é entrada do gpt-4.1 — ou seja, é a análise.** Todo o resto somado dá 21%.
+
+### Quanto custa UMA análise
+
+Sabendo que só o bloco de instrução tem ~15 mil unidades de texto, dá para cercar o número:
+
+| Se cada análise usa | Isso dá, no mês | Custo por análise |
+|---|---|---|
+| 15 mil (conversa curtíssima) | 673 análises | R$ 0,20 |
+| 20 mil | 505 análises | R$ 0,26 |
+| 25 mil | 404 análises | **R$ 0,33** |
+| 30 mil | 337 análises | R$ 0,40 |
+
+O plano Pro deixa **R$ 0,33** por análise (R$ 49,90 ÷ 150).
+
+**Duas correções minhas, nesta ordem:** a estimativa original (R$ 0,34) estava **certa**; a
+"correção" que eu fiz em seguida (R$ 0,08) estava **errada** — ela era a média de todas as
+chamadas, e as auxiliares em modelo barato puxavam o número para baixo. Separando por modelo, a
+análise custa entre **R$ 0,20 e R$ 0,40**, exatamente em cima do que o plano cobre.
 
 **O que continua valendo, e agora com número em vez de estimativa:** no ritmo de uso do dono, a
 conta de IA de **uma única pessoa** custa **~R$ 141 por mês**. Contra os planos vendidos hoje:
@@ -168,10 +193,37 @@ conta de IA de **uma única pessoa** custa **~R$ 141 por mês**. Contra os plano
    própria conta. Um corretor comum provavelmente consome bem menos — e ninguém sabe quanto,
    porque hoje só existe uma conta em uso real.
 
-**Conclusão prática:** o preço não deve ser mexido com a amostra de um usuário só, e ainda por cima
-o mais pesado que existe. O que resolve isso é o teste com 8 a 10 corretores — é ele que produz a
-faixa de consumo real de quem compra. Até lá, o número acima serve como **teto conhecido**: o pior
-caso hoje custa R$ 141/mês, e nenhum dos dois planos cobre isso.
+**Conclusão prática — os planos estão precificados NO CUSTO.** Um cliente que usar o pacote inteiro
+consome, só de IA:
+
+| Plano | Preço | Análises | Custo de IA no limite | Sobra |
+|---|---|---|---|---|
+| Pro | R$ 49,90 | 150/mês | R$ 30 a R$ 60 | de R$ 20 a **negativo** |
+| Pro Master | R$ 99,90 | 300/mês | R$ 60 a R$ 120 | de R$ 40 a **negativo** |
+
+Não sobra nada para servidor, banco, suporte e lucro. E o dono, sozinho, fez entre **340 e 670
+análises no mês** — de 2 a 4 vezes o teto do Pro Master.
+
+### A economia que existe sem tocar numa palavra do prompt
+
+O bloco de instrução é **idêntico em toda análise**, e a OpenAI cobra metade do preço por trecho
+repetido que ela reconheça no **começo** do pedido. Hoje isso quase não acontece: conferi a ordem
+do prompt e o primeiro trecho variável entra já na linha 29 do bloco de sistema — a partir dali,
+nada mais é reaproveitado. Todo o miolo fixo (as regras comerciais, a conferência de 12 itens) vem
+**depois** de conteúdo que muda a cada conversa.
+
+Juntar todo o texto fixo na frente e empurrar o que varia para o fim pode cortar perto da metade do
+item que responde por 79% da conta — **sem reescrever uma única regra**.
+
+**Mas isso não pode ser feito no escuro:** mudar a ordem de um prompt muda o comportamento do
+modelo, e foi exatamente esse tipo de mexida sem medição que estragou as análises em agosto. Ou
+seja, esta economia depende da bateria de conversas de teste (achado A6) existir antes. É mais um
+motivo para ela ser a primeira coisa a ser construída.
+
+### Higiene
+
+O painel mostra **duas chaves de acesso** à OpenAI (`fechou` e `OPENAI_API_KEY`). Se a primeira não
+estiver em uso, apague — chave parada é porta aberta sem dono.
 
 ---
 
