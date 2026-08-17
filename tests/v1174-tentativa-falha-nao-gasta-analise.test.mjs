@@ -73,8 +73,16 @@ assert.ok(posFechar < posTexto, 'fechar a tela cheia vem antes de escrever o err
 // ─── 4. Etapa longa mostra prova de vida (o 92% parado) ───────────────────────
 
 assert.match(app, /function cpioIniciarRelogioEtapa\(/, 'precisa existir o relógio da etapa longa');
-assert.match(app, /const CPIO_RELOGIO_ETAPAS = \[3, 4\];/,
-  'as duas etapas demoradas são ouvir os áudios (3) e analisar (4)');
+// v1290 — a lista ganhou a etapa 2 (abrir o arquivo), que numa conversa de quase 1 GB fica
+// minutos parada. O que este teste garante continua igual: ouvir os áudios (3) e analisar (4)
+// NUNCA podem sair da lista — são as etapas em que o dono viu a tela parecer travada.
+{
+  const lista = app.match(/const CPIO_RELOGIO_ETAPAS = \[([^\]]+)\];/);
+  assert.ok(lista, 'a lista de etapas com prova de vida precisa existir');
+  const numeros = lista[1].split(',').map(n => Number(n.trim()));
+  assert.ok(numeros.includes(3) && numeros.includes(4),
+    'as duas etapas demoradas são ouvir os áudios (3) e analisar (4)');
+}
 assert.match(app, /if\(CPIO_RELOGIO_ETAPAS\.includes\(idx\)\) cpioIniciarRelogioEtapa\(textoDetalhe\);/,
   'o relógio precisa começar junto com a etapa');
 assert.match(app, /seg >= 5 \? `\$\{_cpioRelogioBase\} · \$\{seg\}s` : _cpioRelogioBase/,
