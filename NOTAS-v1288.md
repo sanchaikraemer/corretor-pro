@@ -1,81 +1,102 @@
-# v1288 — o histórico antigo não manda mais na análise
+# v1288 — o custo de IA do painel estava inflado (e agora a tela diz quando não dá pra confiar)
 
-Dono, 17/08/2026, logo depois da v1287. Ele trouxe a leitura que outra IA fez da MESMA conversa da
-Geovana e perguntou: **"resolvido então sobre a análise? prestou atenção nisso?"**
+Dono, 17/08/2026, 08:58, com o print do painel administrativo (aba "Uso de IA por empresa") aberto:
 
-A resposta honesta era "quase". A v1279 e a v1287 já cobriam a maior parte daquela leitura — não
-devolver o trabalho pro cliente, não mandar a carteira inteira, não repetir pergunta já respondida,
-não chutar data, e a pergunta do dinheiro emendada na entrega. Mas três pontos daquela análise não
-estavam escritos em lugar nenhum do pedido, e os três vinham do mesmo lugar: **o histórico antigo
-enganando a leitura do presente.**
+> *"esses valores do painel administrativo do corretorpro estao certos, coerentes? tem certeza?"*
 
-## 1. Mudança de planos declarada ≠ objeção
+## Resposta curta
 
-A regra que existia (v1279) começa assim: *"quando o cliente RECUSA um imóvel por um motivo que
-aquele imóvel não pode mudar…"*. A Geovana não recusou nada — ela **anunciou**: *"mudança de
-planos"* / *"Apartamento"*. Mudança declarada não estava escrita em canto nenhum, então o terreno
-(e todo o assunto dele) continuava liberado para voltar à condução, junto com tudo o que ela já
-tinha olhado desde 2024.
+**As contas fechavam. O preço unitário não.** O painel mostrava
+**"R$ 314,32 nos últimos 30 dias"** — e esse número estava por cima do real, muito por cima. A
+estimativa mais próxima da verdade, com o mesmo uso, é da ordem de **R$ 130–140**.
 
-Entrou a regra **MUDANÇA DE PLANOS DECLARADA = O PRODUTO ANTIGO SAI DA CONDUÇÃO**:
+O que ESTAVA certo no print (conferido linha por linha):
 
-- os sinais estão escritos com as palavras do cliente ("mudança de planos", "agora é apartamento",
-  "desisti do terreno", "não é mais pra investir, é pra morar");
-- mudança declarada **não é desinteresse** — é a informação mais valiosa que a conversa tem, porque
-  o cliente acabou de dizer o que vale hoje;
-- o produto antigo **sai**: proibido retomá-lo, oferecê-lo "já que ele chegou a se interessar" ou
-  perguntar se ele ainda pensa naquilo;
-- o histórico **não é jogado fora inteiro**: fica o que ainda vale com o critério novo (o jeito
-  dele, a forma de pagamento, quem decide junto, o que ele contou da vida dele);
-- na dúvida entre o que foi dito antes e depois da mudança, **o depois manda, sempre**;
-- e vale o mesmo para o cliente que voltou várias vezes ao longo dos anos por produtos diferentes:
-  manda a última coisa que ele pediu, não a soma do que ele já olhou.
+- 1422 + 66 + 13 = **1501 chamadas** — bate exatamente com o cartão do total.
+- R$ 300,46 + R$ 11,61 + R$ 2,25 = **R$ 314,32** — bate exatamente com o cartão do total.
+- "Chamadas hoje 0", "R$ 0,00 hoje", os três traços de hoje na tabela e o "Sem uso hoje" no card da
+  conta: todos concordam entre si (era 8h58 da manhã e ninguém tinha analisado nada ainda).
+- "0/150 hoje" na conta principal: é o teto próprio dela, correto.
 
-## 2. Silêncio de dois anos virou orçamento
+Ou seja: nada de soma errada, nada de coluna trocada. O problema era o **preço por chamada**.
 
-No print, o diagnóstico dizia: **"faixa de valor que a conversa já indica: recebeu e não refutou
-opções apresentadas entre R$ 322.000 e R$ 498.000"**. Aquilo era uma **tabela de agosto de 2024**,
-de um produto que ela já trocou, que ela **nunca comentou** — nem para aceitar, nem para recusar.
+## O que estava errado
 
-A causa estava na própria instrução do campo (v1259): *"se um valor mais baixo foi apresentado e ele
-NÃO recusou, esse valor é PISO plausível"*. A regra foi escrita para um caso em que a cliente
-**reagiu** — e virou, aqui, "silêncio = aceite".
+O sistema não guarda o valor em reais de cada chamada. Ele guarda quanto foi consumido (qual modelo
+de IA, quantas palavras entraram e saíram, quantos segundos de áudio) e faz a conta em reais **no
+momento em que você abre o painel**, usando uma tabelinha de preços por modelo.
 
-A dedução legítima continua de pé (reação do cliente ainda vira teto e piso), mas agora com trava:
+Nessa tabelinha, os modelos estão pelo nome curto: `gpt-4.1`, `gpt-4o-mini`. Mas a IA, quando
+responde, devolve o nome **com a data da versão dela**: você pede `gpt-4o-mini` e ela assina
+`gpt-4o-mini-2024-07-18`. O sistema grava o nome assinado (de propósito — a gente quer saber a
+versão exata que rodou) e depois ia procurar esse nome na tabelinha… e não achava, porque o nome com
+data não é igual ao nome curto.
 
-- **silêncio não é aceite** — só conta como piso o valor diante do qual houve REAÇÃO do cliente;
-- tabela de **outro produto**, ou de um momento que a conversa já deixou pra trás, **não descreve o
-  bolso dele hoje**;
-- nesses casos a faixa fica em "Não identificado" — e é isso que faz aparecer, na mensagem, a
-  **única pergunta que destrava** (faixa de valor e entrada, do item 4 da conferência, v1287) em vez
-  de o corretor trabalhar em cima de um número que ninguém confirmou.
+E quando não achava, ele usava um **preço de reserva propositalmente alto** — a ideia original era
+boa (na dúvida, é melhor superestimar o custo do que se enganar achando que é baratinho), só que
+esse "na dúvida" passou a valer para **praticamente toda chamada**, sem nunca avisar na tela.
 
-As duas coisas se encaixam: sem orçamento inventado, o sistema pergunta o orçamento.
+O tamanho do estrago depende do modelo:
 
-## 3. Entregar opções empatadas é devolver a escolha
+| Modelo que rodou de verdade | Preço de reserva cobrava | Quanto inflava |
+|---|---|---|
+| `gpt-4.1` (análise de conversa) | US$ 5 / US$ 15 por milhão | ~**2,3x** o real |
+| `gpt-4o-mini` (aprendizado automático, o que roda em volume) | US$ 5 / US$ 15 por milhão | até ~**30x** o real |
 
-A leitura trazida pelo dono terminava com um passo que o pedido não tinha: *"se houver uma opção
-claramente superior, dizer isso"*. O prompt mandava escolher duas ou três opções e explicar por que
-cada uma serve — e parava aí.
+O aprendizado automático — aquele que lê a carteira sozinho, uma chamada por conversa — é justamente
+o que faz volume. Era o mais distorcido de todos.
 
-Agora, quando UMA delas chega mais perto do que o cliente pediu, a mensagem **diz qual e por quê**
-("das duas, pela localização e pela iluminação, eu começaria por essa"). Quem entende do assunto
-recomenda; entregar as opções empatadas devolve pro cliente justamente a escolha que ele procurou um
-corretor para fazer. A recomendação sai do que o cliente pediu contra o que a conversa e o Cérebro
-mostram do produto — **nunca de vantagem inventada** (a regra de não inventar fato continua acima
-desta).
+Isso importa porque esse painel existe pra uma decisão específica: **definir a mensalidade**. Um
+custo inflado leva a cobrar mais caro do que precisa, ou a achar que uma conta não se paga quando
+ela se paga.
 
-## Como isto fica protegido
+## O que mudou
 
-- `tests/v1288-historico-antigo-nao-manda.test.mjs` — as três regras, cada uma com o motivo escrito,
-  e a conferência de que a dedução legítima de teto/piso (v1259) não caiu junto.
-- `evals/conversas/09-observacao-colada-e-conversa.json` ganhou três linhas de régua: a mudança de
-  planos tira o produto antigo da condução, tabela antiga não vira orçamento, e opção apresentada
-  vem com recomendação.
-- `tests/v1259-usar-o-que-a-conversa-ja-disse.test.mjs` passou a cobrar também a trava do silêncio.
+1. **Nome com data da versão passa a achar o preço certo.** `gpt-4o-mini-2024-07-18` agora é
+   cobrado como `gpt-4o-mini`. O valor em reais do painel cai pro patamar real.
+
+2. **O painel diz em que dólar a conta foi feita.** A linha embaixo do título agora termina com
+   *"convertido a R$ 5,50 por dólar"*. Antes o número em reais dependia de uma cotação que não
+   aparecia em lugar nenhum da tela — impossível conferir. (Essa cotação é configurável; se quiser
+   trocar, é a variável `CORRETOR_PRO_COTACAO_USD_BRL`, sem precisar de atualização de código.)
+
+3. **Se ainda sobrar algum modelo sem preço mapeado, a tela grita.** Aparece uma tarja amarela
+   dizendo, com nome e contagem: *"Atenção: o custo abaixo está estimado por cima. 332 de 1501
+   chamadas (22%) usaram um modelo de IA que não está na tabela de preços do sistema…"*. Nunca mais
+   um total inflado se passando por estimativa real — quando a IA lançar um modelo novo e ele entrar
+   no sistema, você vê na hora que a tabela precisa ser atualizada, em vez de olhar um número
+   estranho e não saber se pode acreditar.
+
+4. **Uma chamada não pode mais ser contada em dobro.** A leitura da telemetria vem em páginas de mil
+   linhas e a sua conta já passou de mil (1501). Como a ordem é da mais nova pra mais velha, uma
+   análise gravada **no meio** da leitura entrava no topo, empurrava tudo uma casa pra baixo, e a
+   linha 1000 era lida outra vez como primeira da página 2 — uma chamada a mais no total. Agora a
+   leitura congela o instante em que começou: o que chegar depois entra na próxima atualização.
 
 ## O que NÃO mudou
 
-- Nenhuma informação comercial entrou no código, e nenhuma mensagem é reescrita por código.
-- A regra de não inventar fato continua acima de tudo: recomendar uma opção não autoriza descrever
-  vantagem, valor ou característica que não esteja na conversa ou no Cérebro.
+- Nenhum dado histórico foi alterado. O sistema nunca gravou reais no banco — só consumo. Por isso
+  os últimos 30 dias inteiros já aparecem recalculados no preço certo, sem precisar refazer nada.
+- A separação por categoria da v1173 (análise pedida × aprendizado automático × outros) continua
+  igual — só os valores em reais que ficaram honestos.
+- O preço de reserva alto **continua existindo** para modelo desconhecido. Ele estava certo em
+  conceito; o que faltava era não cair nele por engano e avisar quando cai.
+
+## Um detalhe que puxa pro outro lado (pra não dizer que o número é o "certo definitivo")
+
+A telemetria só registra chamada que **deu certo**. Quando a análise estoura o tempo e o sistema
+tenta de novo num modelo mais rápido (é o que ele faz pra você não ficar sem análise), a tentativa
+que falhou já consumiu na OpenAI e **não** fica registrada. Ou seja: o novo número é bem mais
+próximo do real, mas ainda é uma estimativa — por baixo nesse ponto específico. Continua valendo o
+que está escrito no painel: **não é nota fiscal**. A conta oficial é a fatura da OpenAI.
+
+## Testes
+
+`tests/v1288-preco-do-modelo-com-data.test.mjs` — 4 blocos: nome com data acha o preço certo (e o
+nome curto continua funcionando); modelo desconhecido não é "chutado" como parente de outro (chute
+errado poderia SUBESTIMAR, o único erro que engana de verdade quem define preço) e aparece nomeado
+no relatório; a leitura da telemetria exige piso e teto de data mais desempate por id; e a tela tem
+a tarja de aviso e a cotação escrita.
+
+Suíte completa verde: 24 arquivos + 444 testes. Conferido também no navegador (Chromium), no
+desktop e no celular: a tarja amarela aparece legível nos dois, sem estourar a largura da tela.

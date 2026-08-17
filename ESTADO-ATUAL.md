@@ -113,7 +113,7 @@ destrava** (faixa de valor + entrada) quando o cliente já deu o critério do im
 nunca foi perguntado. Guardas: `tests/v1287-observacao-colada-vira-conversa.test.mjs`,
 `tests/v1287-nenhuma-data-chutada.test.mjs` e a 9ª conversa da bateria. Ver `NOTAS-v1287.md`._
 
-_**v1288 — o histórico antigo não manda mais na análise.** Três regras que faltavam, todas do mesmo
+_**v1289 — o histórico antigo não manda mais na análise.** Três regras que faltavam, todas do mesmo
 buraco (o passado da conversa pesando mais que o presente): **mudança de planos DECLARADA** ("agora
 é apartamento", "desisti do terreno") tira o produto antigo da condução — antes só a *recusa*
 estava escrita (v1279), e anúncio de mudança não é recusa; **silêncio não é aceite** — valor que o
@@ -122,7 +122,7 @@ que uma tabela de 2024 virou "o orçamento" de uma cliente que trocou de produto
 "Não identificado" é justamente o que faz aparecer a pergunta do dinheiro do item 4; e **quando uma
 das opções chega mais perto do que o cliente pediu, a mensagem diz qual e por quê** — entregar duas
 ou três empatadas devolve pro cliente a escolha que ele procurou um corretor pra fazer. Guarda:
-`tests/v1288-historico-antigo-nao-manda.test.mjs`. Ver `NOTAS-v1288.md`._
+`tests/v1289-historico-antigo-nao-manda.test.mjs`. Ver `NOTAS-v1289.md`._
 
 ## 1. Arquitetura
 
@@ -285,11 +285,7 @@ Supabase — nenhuma ferramenta de migração automática está configurada). Li
 
 | Arquivo | O que faz |
 |---|---|
-<<<<<<< HEAD
 | `0000_baseline.sql` | **O PONTO DE PARTIDA (v1285).** Cria `whatsapp_processamentos` (a tabela dos leads: conversa + análise de cada cliente) e `direciona_config` (Cérebro, plano contratado, contadores, chave do Atalho). Essas duas foram feitas **à mão** no começo do projeto e **nunca existiram em migração nenhuma** — da `0001` em diante elas só eram ALTERADAS, e `alter table if exists` num banco vazio não faz nada, em silêncio. Era o achado A5 da auditoria de 16/08/2026: **o repositório não conseguia reconstruir o banco** (banco perdido = sem volta; e impossível montar ambiente de teste igual ao de produção). Cria o formato **anterior à `0001`** — sem `organization_id`, sem as colunas de deduplicação — pra a corrente `0001 → 0019` continuar contando a mesma história. **É seguro rodar em produção e lá não faz nada** (tudo `create table if not exists`). Conferido num Postgres 16 de verdade: banco vazio + as 20 na ordem → `conferir_migracoes()` devolve tudo como "aplicada"; rodar a `0000` de novo num banco pronto = 28 colunas antes, 28 depois. **Corrigida na v1286 com o formato REAL de produção.** A primeira versão (v1285) foi derivada do código e errava: faltavam `lead_id`, `nome` e `nome_cliente` (o código só encosta nelas pelo caminho adaptativo, então ler o código não as revelava) e quase todos os valores padrão. O dono rodou a consulta de leitura do README no Supabase e o resultado ficou guardado em `supabase/estrutura-producao-2026-08-17.txt` — a única fonte não-inferida do formato dessas tabelas. **Reconferido num Postgres 16: banco vazio + as 20 migrações produz EXATAMENTE as 31 colunas da produção, mesmos tipos, mesma ordem, mesmos padrões, mesma obrigatoriedade.** Guarda: `tests/v1285-banco-nasce-do-repositorio.test.mjs`. |
-=======
-| `0000_baseline.sql` | **O PONTO DE PARTIDA (v1285).** Cria `whatsapp_processamentos` (a tabela dos leads: conversa + análise de cada cliente) e `direciona_config` (Cérebro, plano contratado, contadores, chave do Atalho). Essas duas foram feitas **à mão** no começo do projeto e **nunca existiram em migração nenhuma** — da `0001` em diante elas só eram ALTERADAS, e `alter table if exists` num banco vazio não faz nada, em silêncio. Era o achado A5 da auditoria de 16/08/2026: **o repositório não conseguia reconstruir o banco** (banco perdido = sem volta; e impossível montar ambiente de teste igual ao de produção). Cria o formato **anterior à `0001`** — sem `organization_id`, sem as colunas de deduplicação — pra a corrente `0001 → 0019` continuar contando a mesma história. **É seguro rodar em produção e lá não faz nada** (tudo `create table if not exists`). Conferido num Postgres 16 de verdade: banco vazio + as 20 na ordem → `conferir_migracoes()` devolve tudo como "aplicada"; rodar a `0000` de novo num banco pronto = 28 colunas antes, 28 depois. **Foi derivada do código, não exportada do banco** — os nomes das colunas vêm do que o código grava, os tipos são inferência; `supabase/migrations/README.md` traz a consulta pra trocar pelo formato real de produção. Guarda: `tests/v1285-banco-nasce-do-repositorio.test.mjs`. |
->>>>>>> origin/main
 | `0001_contas_e_empresas.sql` | `organizations`, `memberships`, coluna `organization_id`, RLS inicial. |
 | `0002_migrar_dados_existentes.sql` | Cria a "Empresa 1" e atribui a ela todo dado sem organização. |
 | `0003_teste_e_administracao.sql` | Teste de 7 dias, status da conta, `platform_admins`, `criar_empresa_e_dono`, painel administrativo. |
@@ -460,6 +456,12 @@ montar isso:
   (`NOTAS-v1040.md`).
 - Teto de uso de IA bem menor durante o teste grátis (`NOTAS-v1041.md`).
 - Telemetria de custo de IA por empresa, visível no painel administrativo (`NOTAS-v1038.md`).
+- **(v1288)** O custo em reais desse painel estava **inflado** (até ~30x no aprendizado automático):
+  a OpenAI devolve o modelo com a data da versão (`gpt-4o-mini-2024-07-18`) e a tabela de preços de
+  `api/_iaCusto.js` só tinha o nome curto, então quase toda chamada caía no preço de reserva
+  exagerado. Agora o nome com data acha o preço certo, a tela mostra **qual cotação do dólar** foi
+  usada, e modelo que continuar sem preço mapeado aparece **nomeado numa tarja de aviso** ("custo
+  estimado por cima") em vez de sumir dentro do total (`NOTAS-v1288.md`).
 - **(v1190)** Acesso antigo por chave compartilhada **desligado por padrão em produção** — a
   segurança deixou de depender de alguém lembrar de marcar uma variável (`NOTAS-v1190.md`).
 - **(v1190)** Cadastro **falha fechado** sem a migração `0018`: código novo sobre banco velho não

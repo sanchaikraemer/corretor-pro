@@ -54,7 +54,7 @@ assert.match(regra, /não espere ele declarar um número/,
   'a faixa se deduz da reação; esperar o cliente declarar foi exatamente o que travou a conversa');
 assert.match(regra, /Use "Não identificado" quando NENHUM valor tiver sido citado na conversa/,
   'sem valor citado, a faixa fica em "Não identificado"');
-// v1288 — e silêncio diante de uma tabela antiga não é aceite: foi assim que uma tabela de 2024,
+// v1289 — e silêncio diante de uma tabela antiga não é aceite: foi assim que uma tabela de 2024,
 // de um produto que a cliente já tinha trocado, virou "faixa de valor" dela no print do dono.
 assert.match(regra, /SILÊNCIO NÃO É ACEITE/,
   'valor que o cliente nunca comentou não pode virar faixa de valor');

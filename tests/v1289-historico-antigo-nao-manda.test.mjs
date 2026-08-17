@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// v1288 — o dono trouxe a leitura que outra IA fez da MESMA conversa da Geovana e perguntou se o
+// v1289 — o dono trouxe a leitura que outra IA fez da MESMA conversa da Geovana e perguntou se o
 // sistema já cobria aquilo. Cobria quase tudo (v1279 e v1287), menos três coisas — e as três vinham
 // do mesmo lugar: **o histórico antigo enganando a análise**.
 //
@@ -65,4 +65,4 @@ assert.match(opcoes, /devolve pro cliente justamente a escolha que ele procurou 
 assert.match(opcoes, /nunca de vantagem inventada/,
   "recomendar não abre porta pra inventar vantagem que não está nas fontes");
 
-console.log("v1288-historico-antigo-nao-manda: ok (mudança de planos, silêncio ≠ orçamento, recomendar uma)");
+console.log("v1289-historico-antigo-nao-manda: ok (mudança de planos, silêncio ≠ orçamento, recomendar uma)");
