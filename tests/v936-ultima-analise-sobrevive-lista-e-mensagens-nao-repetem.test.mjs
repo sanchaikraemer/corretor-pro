@@ -45,9 +45,13 @@ const fn = app.slice(iniFn, fimFn);
 assert.doesNotMatch(fn, /lead\?\.criadoEm/, 'campo errado (criadoEm) não pode mais aparecer no fallback');
 assert.match(fn, /lead\?\.createdAt/, 'fallback precisa usar o campo real do lead (createdAt)');
 
-// 2. O prompt de análise proíbe explicitamente listar de volta pro cliente os identificadores
-// específicos que ele mesmo já informou.
-assert.match(pipeline, /NÃO PODEM listar de volta os\nnúmeros\/identificadores específicos/,
+// 2. O prompt de análise continua proibindo devolver ao cliente o que ele mesmo já disse.
+// v1291 — o dono reescreveu o pedido: a proibição específica de repetir os identificadores
+// (lote/quadra/apartamento) virou a regra geral de não repetir o que já foi resolvido e de
+// procurar a resposta na conversa antes de perguntar.
+assert.match(pipeline, /Não repita pergunta já respondida nem transforme falta de dado em interrogatório/,
   'prompt precisa proibir as mensagens de repetirem os números específicos que o cliente já disse');
+assert.match(pipeline, /ANTES DE PERGUNTAR, PROCURE A RESPOSTA NA CONVERSA/,
+  'e precisa mandar procurar na conversa antes de perguntar de novo');
 
 console.log('v936-ultima-analise-sobrevive-lista-e-mensagens-nao-repetem: ok');

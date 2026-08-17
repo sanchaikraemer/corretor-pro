@@ -37,14 +37,18 @@ assert.match(
 // a IA lê antes de escrever, e é isso que a faz valer mais que as regras espalhadas no meio do
 // texto. O que este teste protege de verdade continua igual — horário e conversa ficam no conteúdo
 // de entrada, separados do Cérebro, que mora no prompt de sistema.
+// v1291 — o dono reescreveu o pedido: os rótulos mudaram ("Data e hora atuais no Brasil", e o
+// título da conversa agora varia conforme o que a IA recebeu) e a "CONFERÊNCIA FINAL" de 7 itens
+// virou "REVISÃO FINAL SILENCIOSA", de 10. O que este teste protege continua igual: horário e
+// conversa ficam no conteúdo de entrada, separados do Cérebro, que mora no prompt de sistema.
 assert.match(
   pipeline,
-  /const prompt = `Execute a análise[\s\S]*Data e hora atuais da análise no Brasil:[\s\S]*CONVERSA COMPLETA:[\s\S]*\$\{timelineText\}/,
+  /const prompt = `Execute a análise[\s\S]*Data e hora atuais no Brasil:[\s\S]*CONVERSA \$\{[\s\S]*\$\{timelineText\}/,
   'Horário e conversa devem permanecer no conteúdo de entrada, separados do Cérebro'
 );
-// E a conferência final tem que ser mesmo a ÚLTIMA coisa do prompt, depois da conversa.
+// E a revisão final tem que ser mesmo a ÚLTIMA coisa do prompt, depois da conversa.
 const posTimeline = pipeline.indexOf('${timelineText}');
-const posConferencia = pipeline.indexOf('CONFERÊNCIA FINAL');
+const posConferencia = pipeline.indexOf('REVISÃO FINAL SILENCIOSA');
 assert.ok(posConferencia > posTimeline,
   'a conferência final precisa vir DEPOIS da conversa — é o último item lido antes de a IA escrever');
 

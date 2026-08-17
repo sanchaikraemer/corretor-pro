@@ -70,9 +70,11 @@ assert.ok([semCerebro.messages.a, semCerebro.messages.b, semCerebro.messages.c].
 // 2. E a prévia precisa ir pra IA AMARRADA: sem Cérebro, a única fonte de fato é a conversa.
 //    Estas instruções são o que impede a prévia de virar invenção comercial.
 assert.match(systemPromptCapturado, /MODO PRÉVIA/, "o prompt precisa avisar a IA de que está sem Cérebro");
-assert.match(systemPromptCapturado, /NUNCA afirme preço, condição de pagamento, desconto, prazo, nome de empreendimento, endereço/,
+// v1291 — o dono reescreveu o texto da prévia: a lista item a item virou proibição curta, apoiada
+// nas proteções de integridade que valem para toda conta. A garantia checada é a mesma.
+assert.match(systemPromptCapturado, /sem inventar fatos nem\s*\n?condições/,
   "a prévia precisa proibir explicitamente afirmar qualquer dado comercial que não esteja na conversa");
-assert.match(systemPromptCapturado, /Não identificado/,
+assert.match(systemPromptCapturado, /quando uma fonte não sustentar uma afirmação, mantenha a incerteza em vez de completar a lacuna/,
   "campo sem base na conversa precisa continuar caindo em Não identificado");
 assert.match(systemPromptCapturado, /INTELIGÊNCIA COMERCIAL BASE/,
   "o piso comercial (que já proíbe inventar) precisa continuar entrando no prompt");

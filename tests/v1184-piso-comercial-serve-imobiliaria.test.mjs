@@ -30,7 +30,8 @@ assert.doesNotMatch(pipeline, /\(a construtora aceita\?/i, "permuta não pode as
 // ---------------------------------------------------------------------------
 assert.match(pipeline, /IMÓVEL DE TERCEIRO \/ CARTEIRA COMPARTILHADA/, "o piso precisa cobrir carteira de imóveis de proprietários");
 assert.match(pipeline, /quem aprova é o proprietário/i, "o corretor apresenta a proposta; quem aprova é o proprietário");
-assert.match(pipeline, /Visita só está agendada depois de confirmada com quem tem a chave/i, "visita só vale depois de confirmada com quem tem a chave");
+// v1291 — a reescrita do dono manteve a frase, só mudou onde quebra a linha.
+assert.match(pipeline, /Visita só está agendada depois\s+de confirmada com quem tem a chave/i, "visita só vale depois de confirmada com quem tem a chave");
 assert.match(pipeline, /condomínio, IPTU/i, "despesas mensais entram na lista do que não pode ser afirmado sem confirmação");
 
 // ---------------------------------------------------------------------------

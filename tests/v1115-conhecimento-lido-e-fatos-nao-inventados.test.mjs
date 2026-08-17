@@ -61,9 +61,12 @@ const leadUpdate = fs.readFileSync(new URL("../api/lead-update.js", import.meta.
 {
   // v1184: "do empreendimento" virou "do imóvel ou empreendimento" — a regra passou a valer
   // também para quem trabalha carteira de imóveis de terceiros, não só lançamento.
-  assert.match(pipeline, /DADOS DE FATO do imóvel ou empreendimento — endereço, rua, bairro, CIDADE/,
+  // v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O parágrafo que nomeava endereço, rua, bairro e CIDADE
+  // um a um saiu na reescrita das instruções feita pelo dono. A proibição continua, agora em
+  // forma geral: nada de inventar fato, e lacuna sem fonte continua sendo lacuna.
+  assert.match(pipeline, /não invente fatos, datas, autoria, materiais, valores, condições, disponibilidade, promessas ou ações/,
     "o piso comercial precisa proibir afirmar endereço/cidade sem fonte");
-  assert.match(pipeline, /PROIBIDO afirmar uma localização, cidade ou característica que não conste nas fontes/,
+  assert.match(pipeline, /quando uma fonte não sustentar uma afirmação, mantenha a incerteza em vez de completar a lacuna/,
     "sem fonte, a mensagem se oferece pra confirmar — nunca afirma");
   // v1190 — o extrator do aprendizado foi reescrito (fonte só do corretor, JSON validado,
   // condição comercial volátil barrada). O que ele continua capturando de propósito é endereço /

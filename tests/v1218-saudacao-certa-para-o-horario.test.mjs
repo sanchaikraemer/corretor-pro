@@ -70,9 +70,11 @@ import { corrigirSaudacaoAbertura, saudacaoAgora, saudacaoParaHora } from '../js
     'a régua não pode continuar duplicada na saudação da Home');
 
   const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
-  assert.match(pipeline, /Saudação correta para este horário/, 'o pedido à IA precisa levar a saudação pronta');
-  assert.match(pipeline, /bom dia até 11h59, boa tarde das 12h00 às 17h59, boa noite a partir das 18h00/,
-    'a régua precisa ir escrita pra IA, não só a hora');
+  // v1291 — o dono reescreveu o pedido: a saudação continua indo pronta ("Saudação correspondente
+  // ao horário neste instante: Boa tarde"), mas a régua escrita por extenso (bom dia até 11h59...)
+  // saiu. Ir pronta é o que resolve o print das 17h37 — a IA não precisa calcular a faixa, ela
+  // recebe a palavra certa já decidida pelo sistema.
+  assert.match(pipeline, /Saudação correspondente ao horário neste instante/, 'o pedido à IA precisa levar a saudação pronta');
   assert.match(pipeline, /timeZone: fusoAnalise, hour: "2-digit", hour12: false/,
     'a hora da saudação precisa ser a do Brasil, não a do servidor');
   const cortes = pipeline.match(/horaAnalise < 12 \? "Bom dia" : horaAnalise < 18 \? "Boa tarde" : "Boa noite"/);

@@ -22,7 +22,8 @@ for (const nome of [
 ]) {
   assert.doesNotMatch(pipeline, new RegExp(nome), `${nome} deve ter sido removida`);
 }
-assert.match(pipeline, /Respeite integralmente todas as regras do Cérebro Comercial/);
+// v1291 — redação nova do dono para a mesma ordem: o Cérebro manda, e nada monta manual por fora.
+assert.match(pipeline, /Não crie um segundo playbook por fora dele/);
 assert.match(pipeline, /validarFormatoMensagens/);
 assert.doesNotMatch(app + configApi, /CEREBRO_PROMPT_MINIMO/);
 assert.doesNotMatch(app + configApi, /cerebroTextoEhLegado|isLegacyCerebroText/);

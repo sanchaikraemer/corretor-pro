@@ -24,67 +24,35 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
 // ── 1. Os campos novos existem no formato pedido à IA ────────────────────────────────────────
-const schema = src.slice(src.indexOf('Formato JSON obrigatório:'), src.indexOf('Formato JSON obrigatório:') + 900);
+const schema = src.slice(src.indexOf('Formato JSON obrigatório:'), src.indexOf('REGRAS PARA AS TRÊS MENSAGENS'));
 for (const campo of ['jaSabemos', 'faixaDeValor', 'imovelDoCliente', 'motivoDaMudanca', 'quemDecide']) {
   assert.ok(schema.includes(`"${campo}"`), `o formato JSON precisa pedir "${campo}" à IA`);
 }
 
 // ── 2. E são gravados junto do resto do diagnóstico (senão a tela nunca os vê) ───────────────
-const gravacao = src.slice(src.indexOf('pendenciaFinanceira: clean('), src.indexOf('pendenciaFinanceira: clean(') + 900);
+const gravacao = src.slice(src.indexOf('pendenciaFinanceira: clean('), src.indexOf('pendenciaFinanceira: clean(') + 1400);
 for (const campo of ['jaSabemos', 'faixaDeValor', 'imovelDoCliente', 'motivoDaMudanca', 'quemDecide']) {
   assert.ok(gravacao.includes(`${campo}:`), `"${campo}" precisa ser gravado no diagnóstico`);
 }
 assert.match(gravacao, /jaSabemos: arr\(/, '"jaSabemos" é uma lista — precisa ser tratada como lista');
 
 // ── 3. A regra que manda procurar a resposta antes de perguntar ──────────────────────────────
+// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O dono reescreveu o pedido inteiro: o bloco longo (com o
+// TETO/PISO deduzidos da reação do cliente, "SILÊNCIO NÃO É ACEITE", os sinais de permuta e a lista
+// de quem decide) saiu do produto. Ficou a ordem curta — procurar antes de perguntar, inclusive
+// quando a resposta apareceu de forma indireta — e a proibição de virar interrogatório.
 const i = src.indexOf('ANTES DE PERGUNTAR, PROCURE A RESPOSTA NA CONVERSA');
 assert.ok(i > -1, 'precisa existir a regra que manda procurar na conversa antes de perguntar');
-const regra = src.slice(i, i + 3400).replace(/\s+/g, ' ');
+const regra = src.slice(i, i + 1200).replace(/\s+/g, ' ');
 
-assert.match(regra, /Percorra o histórico inteiro/, 'a regra precisa mandar percorrer o histórico inteiro');
-assert.match(regra, /inclusive de forma INDIRETA/,
-  'o que o cliente disse de forma indireta também conta — foi o caso da faixa de valor');
-assert.match(regra, /é PROIBIDO que qualquer uma das três mensagens pergunte algo que esses campos já respondem/,
-  'as três ficam proibidas de perguntar o que os campos já respondem');
-
-// A dedução da faixa a partir da reação a valores citados — o miolo do caso real.
-assert.match(regra, /esse valor é TETO/, '"muito além" precisa virar teto');
-assert.match(regra, /é PISO plausível/, 'valor mais baixo não recusado precisa virar piso');
-assert.match(regra, /não espere ele declarar um número/,
-  'a faixa se deduz da reação; esperar o cliente declarar foi exatamente o que travou a conversa');
-assert.match(regra, /Use "Não identificado" quando NENHUM valor tiver sido citado na conversa/,
-  'sem valor citado, a faixa fica em "Não identificado"');
-// v1289 — e silêncio diante de uma tabela antiga não é aceite: foi assim que uma tabela de 2024,
-// de um produto que a cliente já tinha trocado, virou "faixa de valor" dela no print do dono.
-assert.match(regra, /SILÊNCIO NÃO É ACEITE/,
-  'valor que o cliente nunca comentou não pode virar faixa de valor');
-assert.match(regra, /tabela de OUTRO produto, ou de um momento que a conversa já deixou pra trás/,
-  'tabela de outro produto/outra época não descreve o bolso do cliente hoje');
-
-// O imóvel do cliente é o centro quando existe permuta.
-assert.match(regra, /queremos encaixar o nosso/i, 'a frase real da cliente precisa estar entre os sinais de permuta');
-assert.match(regra, /o que AINDA FALTA saber pra avaliar/,
-  'o campo precisa terminar apontando o que falta levantar — é o trabalho do corretor');
-
-// Motivo da mudança e quem decide.
-assert.match(regra, /está grande demais/, 'o motivo real da cliente precisa estar entre os exemplos');
-assert.match(regra, /esposo, esposa, filhos/, 'quem decide precisa incluir filhos, não só o cônjuge');
-
-// ── 3b. O que o PRÓPRIO corretor já resumiu e já apresentou também é fato ────────────────────
-// Em 10/07 o corretor escreveu "Entendi que vocês procuram reduzir o tamanho, mas manter os 3
-// quartos" — e a cliente não corrigiu. Estava fechado. Mesmo assim as sugestões seguiram tratando
-// o perfil como desconhecido. E em 09/07 ele mesmo disse "temos outras opções a partir de
-// 430.000": esse piso existe na conversa e não precisava ser perguntado a ninguém.
-const assentado = src.slice(src.indexOf('O RESUMO QUE O PRÓPRIO CORRETOR JÁ FEZ É FATO ASSENTADO'), src.indexOf('O RESUMO QUE O PRÓPRIO CORRETOR JÁ FEZ É FATO ASSENTADO') + 1500).replace(/\s+/g, ' ');
-assert.ok(assentado.length > 50, 'precisa existir a regra do resumo do corretor como fato assentado');
-assert.match(assentado, /reduzir o tamanho mas manter os 3 quartos/,
-  'o resumo real que o corretor escreveu precisa estar como exemplo');
-assert.match(assentado, /o cliente NÃO corrigiu depois, esse resumo está CONFIRMADO/,
-  'silêncio do cliente depois do resumo do corretor precisa valer como confirmação');
-assert.match(assentado, /valores, produtos e faixas que ELE citou/,
-  'o que o próprio corretor apresentou também é dado assentado');
-assert.match(assentado, /não precisa ser perguntado a ninguém/,
-  'o piso que o corretor já informou não pode virar pergunta');
+assert.match(regra, /inclusive quando ela apareceu de forma indireta/,
+  'a resposta indireta continua contando como resposta');
+assert.match(src, /Não repita pergunta já respondida nem transforme falta de dado em interrogatório/,
+  'e as três mensagens continuam proibidas de perguntar o que a conversa já respondeu');
+assert.match(src, /Silêncio não confirma resumo, interpretação, preço, orçamento ou objeção\./,
+  'silêncio continua não valendo como aceite — é o que evitava inventar a faixa de valor');
+assert.match(src, /"faixaDeValor":"somente faixa sustentada por declaração ou reação inequívoca do cliente; silêncio não conta"/,
+  'a faixa de valor só vale quando o cliente sustentou — a régua do caso Marina');
 
 // ── 4. Nada disso vale se ficar escondido: aparece na tela do cliente ────────────────────────
 for (const rotulo of [

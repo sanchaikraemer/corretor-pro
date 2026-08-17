@@ -18,10 +18,14 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 // 1. O prompt de análise agora instrui a IA a capturar identificadores específicos de unidade
 // (lote/quadra/apartamento/bloco/torre) em vez de só o nome genérico do empreendimento, e a
 // listar cada unidade específica separadamente em "produtosInteresse" quando houver mais de uma.
-assert.match(pipeline, /PRODUTO ESPECÍFICO:/, 'prompt precisa ter a instrução de produto específico');
-assert.match(pipeline, /"produtoInteresse" PRECISA incluir esses\nidentificadores/,
+// v1291 — ATENÇÃO, ISTO MUDOU DE FORMA. O bloco "PRODUTO ESPECÍFICO:", que mandava a IA capturar
+// lote/quadra/apartamento/bloco/torre e listar cada unidade separadamente, saiu na reescrita das
+// instruções feita pelo dono. Os dois campos continuam sendo pedidos, agora com descrição curta;
+// a instrução detalhada de identificador de unidade não tem mais texto próprio no pedido.
+assert.match(pipeline, /"produtoInteresse":"produto\/necessidade atual/, 'prompt precisa ter a instrução de produto específico');
+assert.match(pipeline, /sem ressuscitar produto superado/,
   '"produtoInteresse" deve ser instruído a incluir os identificadores específicos citados pelo cliente');
-assert.match(pipeline, /liste cada uma como um\nitem separado em "produtosInteresse"/,
+assert.match(pipeline, /"produtosInteresse":\["produtos\/unidades atuais realmente relevantes"\]/,
   '"produtosInteresse" deve listar cada unidade específica separadamente');
 
 // 2. cp704DetailRows (a lista de "Detalhes comerciais" do lead) ganha uma linha nova que só

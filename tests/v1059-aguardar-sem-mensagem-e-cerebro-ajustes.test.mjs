@@ -27,14 +27,19 @@ assert.match(pipeline, /retome com leveza/, "o ponto do decorado precisa continu
 // afirmada sem estar no Cérebro ou na conversa; o que sobrou é só o roteiro de para onde olhar.
 assert.doesNotMatch(pipeline, /congela o preço/, "o texto fixo não pode afirmar congelamento de preço");
 assert.doesNotMatch(pipeline, /mais barato e maior o prazo/, "o texto fixo não pode afirmar condição de lançamento");
-assert.match(pipeline, /Toda condição \(congelamento de preço, desconto, prazo, forma de pagamento, valorização, aceitação de permuta\) só pode ser mencionada se estiver escrita no Cérebro Comercial ou tiver sido dita na própria conversa/,
+// v1291 — o dono reescreveu o piso comercial. A frase mudou de redação, a proibição continua:
+// condição comercial só pode ser afirmada com confirmação em fonte real.
+assert.match(pipeline, /Condição comercial, preço, desconto, disponibilidade, prazo, valorização, forma de pagamento,\s*\n?\s*financiamento, condomínio, IPTU e demais fatos voláteis só podem ser afirmados quando estiverem\s*\n?\s*confirmados na conversa/,
   "o piso comercial precisa proibir explicitamente afirmar condição que não veio do Cérebro nem da conversa");
 
 // ---------------------------------------------------------------------------
 // 2) Schema: recomendacaoContato precisa estar no formato pedido à IA, com instrução própria.
 // ---------------------------------------------------------------------------
-assert.match(pipeline, /"recomendacaoContato":\{\s*"aguardar":false,\s*"motivo":"texto"\s*\}/, "o formato JSON precisa incluir recomendacaoContato");
-assert.match(pipeline, /RECOMENDAÇÃO DE CONTATO/, "precisa haver instrução explicando quando marcar aguardar=true");
+assert.match(pipeline, /"recomendacaoContato":\{\s*\n?\s*"aguardar":false,\s*\n?\s*"motivo":"[^"]+"\s*\n?\s*\}/, "o formato JSON precisa incluir recomendacaoContato");
+// v1291 — o título "RECOMENDAÇÃO DE CONTATO" saiu na reescrita do dono; a explicação de quando
+// marcar "aguardar" passou a viver dentro da descrição do próprio campo, no formato JSON.
+assert.match(pipeline, /preencher somente quando o cliente pediu espaço\/tempo ou houver razão concreta para não contatar agora/,
+  "precisa haver instrução explicando quando marcar aguardar=true");
 
 // ---------------------------------------------------------------------------
 // 3) Comportamento fim a fim: aguardar=true chega no resultado com o motivo; sem o campo (ou

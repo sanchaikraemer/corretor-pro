@@ -43,7 +43,13 @@ await analyzeWithBrain({
 });
 
 assert.equal(chamadas.length, 1, "a análise deve usar uma única chamada à IA");
-const pedido = chamadas[0].messages.find(m => m.role === "user")?.content || "";
+// v1291 — parte das regras das três mensagens mora nas instruções (system) e parte no pedido
+// (user). O que importa é que a IA receba tudo isso na mesma execução, então a checagem é feita
+// sobre os dois juntos.
+const pedido = [
+  chamadas[0].messages.find(m => m.role === "system")?.content || "",
+  chamadas[0].messages.find(m => m.role === "user")?.content || ""
+].join("\n");
 
 // A ordem antiga, absoluta, não pode voltar: era ela que brigava com o Cérebro.
 assert.doesNotMatch(
@@ -52,27 +58,27 @@ assert.doesNotMatch(
   "o pedido não pode mais exigir três próximos passos diferentes em qualquer situação"
 );
 
-// A exceção precisa estar escrita, e precisa dizer que a convergência é por caminhos diferentes.
-assert.match(pedido, /EXCEÇÃO/, "o pedido precisa prever a exceção de convergência");
-assert.match(pedido, /ÚNICO próximo passo adequado/i);
-assert.match(pedido, /PODEM convergir/i);
-assert.match(pedido, /caminho e um enquadramento diferentes/i);
+// v1291 — o dono reescreveu o pedido inteiro; a exceção deixou de ser um bloco em caixa alta e
+// virou uma linha da lista de regras das três mensagens. A garantia é a mesma: quando só existe
+// um próximo passo adequado, as três podem convergir por abordagens diferentes.
+assert.match(pedido, /Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes/i,
+  "o pedido precisa prever a exceção de convergência");
 
-// E precisa proibir o efeito colateral que a regra antiga provocava.
+// E precisa continuar proibindo o efeito colateral que a regra antiga provocava: diferenciar as
+// mensagens inventando diferença que não existe.
 assert.match(
   pedido,
-  /Nunca invente um próximo passo pior, prematuro ou artificial só pra diferenciar as mensagens/i,
+  /podendo ter ângulos diferentes sem\s*\n?inventar diferenças artificiais/i,
   "o pedido precisa proibir diferenciar as mensagens inventando um passo pior"
 );
 
-// Ângulos diferentes continuam sendo o padrão — a exceção não pode virar permissão pra repetir
-// a mesma mensagem três vezes.
-assert.match(pedido, /ÂNGULOS COMERCIAIS DIFERENTES/i);
-assert.match(pedido, /NÃO a mesma ideia reescrita/i);
+// A convergência não pode virar permissão pra repetir a mesma mensagem três vezes: cada uma
+// continua tendo o seu papel escrito.
+assert.match(pedido, /MAIS SUAVE explora\/resolve o ponto mais importante com menor pressão/i);
+assert.match(pedido, /MAIS DIRETA é objetiva/i);
 
-// "maisDireta" deixou de exigir avanço concreto em conversa que ainda não amadureceu
+// "maisDireta" continua sem poder forçar avanço em conversa que ainda não amadureceu
 // (regra 20 do Cérebro Comercial V3).
-assert.match(pedido, /Quando a conversa ainda NÃO tiver maturidade/i);
-assert.match(pedido, /não\s+força esse avanço/i);
+assert.match(pedido, /nunca força visita, proposta ou decisão antes da maturidade/i);
 
 console.log("v1206-tres-mensagens-podem-convergir: ok");

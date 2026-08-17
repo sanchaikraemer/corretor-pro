@@ -20,12 +20,13 @@ assert.match(
 );
 assert.match(
   pipeline,
-  /Data e hora atuais da análise no Brasil: \$\{dataHoraAtualAnalise\}/,
+  // v1291 — mesma informação, rótulo mais curto na reescrita do dono.
+  /Data e hora atuais no Brasil: \$\{dataHoraAtualAnalise\}/,
   'o prompt deve receber data e hora atuais, não apenas a data'
 );
 assert.match(
   pipeline,
-  /Fuso horário da análise: \$\{fusoAnalise\}/,
+  /Fuso: \$\{fusoAnalise\}/,
   'o prompt deve informar o fuso da hora atual'
 );
 assert.doesNotMatch(

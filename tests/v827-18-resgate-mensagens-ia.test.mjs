@@ -21,6 +21,9 @@ assert.equal((bloco.match(/systemPrompt: systemPromptAnalise,[\s\S]{0,40}prompt,
 assert.match(bloco, /if \(!r\) \{/, "o fallback só roda quando a 1ª tentativa falhou por inteiro");
 assert.doesNotMatch(bloco, /while\s*\(!validacaoMensagens/);
 assert.doesNotMatch(bloco, /promptRetry|modeloAnaliseRapida|correção automática/i);
-assert.match(bloco, /Antes de entregar o resultado, revise silenciosamente/);
+// v1291 — a revisão silenciosa continua existindo, com outro título ("REVISÃO FINAL SILENCIOSA",
+// no fim do pedido). O que este teste guarda é que ela é revisão da própria IA, não uma segunda
+// rodada de chamadas corrigindo a primeira.
+assert.match(bloco, /REVISÃO FINAL SILENCIOSA/);
 
 console.log("v827-18-resgate-mensagens-ia: ok");
