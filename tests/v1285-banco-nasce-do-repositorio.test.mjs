@@ -87,4 +87,47 @@ const emOrdem = fs.readdirSync(pastaMigracoes).filter(f => f.endsWith(".sql")).s
 assert.equal(emOrdem[0], "0000_baseline.sql",
   "o baseline precisa ser o primeiro arquivo na ordem alfabética das migrações");
 
-console.log(`v1285-banco-nasce-do-repositorio: ok (${tabelasUsadas.size} tabelas em uso, todas com migração; baseline seguro e na frente da fila)`);
+// ── v1286: conferir contra o formato REAL de produção ────────────────────────────────────────
+//
+// A primeira versão do baseline (v1285) foi DERIVADA DO CÓDIGO e errava: faltavam `lead_id`,
+// `nome` e `nome_cliente` (o código só encosta nelas pelo caminho adaptativo, então ler o código
+// não as revelava) e quase todos os valores padrão. O dono rodou a consulta de leitura no Supabase
+// e colou o resultado — ele está em `supabase/estrutura-producao-2026-08-17.txt` e é a única fonte
+// não-inferida que existe.
+//
+// Conferido num Postgres 16 de verdade em 17/08/2026: banco vazio + as 20 migrações na ordem
+// produz EXATAMENTE essas 31 colunas — mesmos tipos, mesma ordem, mesmos padrões, mesma
+// obrigatoriedade. Aqui fica a parte que dá pra checar sem banco nenhum: nenhuma coluna da
+// produção pode ficar sem quem a crie.
+const referencia = path.join(raiz, "supabase", "estrutura-producao-2026-08-17.txt");
+assert.ok(fs.existsSync(referencia),
+  "supabase/estrutura-producao-2026-08-17.txt precisa existir — é a única fonte não-inferida do formato das tabelas base");
+
+const linhas = fs.readFileSync(referencia, "utf8").split("\n")
+  .map(l => l.trim())
+  .filter(l => l && !l.startsWith("#") && !l.startsWith("table_name,"));
+
+assert.ok(linhas.length >= 31,
+  `a referência de produção tem ${linhas.length} colunas — esperava pelo menos 31; o arquivo foi truncado?`);
+
+const semQuemCrie = [];
+for (const linha of linhas) {
+  const [tabela, , coluna] = linha.split(",");
+  if (!tabela || !coluna) continue;
+  // A coluna precisa aparecer em alguma migração: ou dentro do create table do baseline, ou num
+  // "add column" posterior (organization_id vem da 0001, os dedupe_* vêm da 0010).
+  const aparece = new RegExp(`\\b${coluna}\\b`).test(sqlDeTodasAsMigracoes);
+  if (!aparece) semQuemCrie.push(`${tabela}.${coluna}`);
+}
+assert.deepEqual(semQuemCrie, [],
+  `estas colunas existem em produção mas nenhuma migração as cria: ${semQuemCrie.join(", ")}. ` +
+  `Um banco reconstruído a partir do repositório sairia diferente do real.`);
+
+// As três colunas que a versão derivada do código tinha perdido: ficam nomeadas aqui pra ninguém
+// "limpar" o baseline achando que são sobra.
+for (const coluna of ["lead_id", "nome_cliente", "nome"]) {
+  assert.match(baseline, new RegExp(`^\\s+${coluna}\\s`, "m"),
+    `o baseline precisa criar a coluna "${coluna}" — ela existe em produção e foi justamente uma das que a derivação por leitura de código não enxergou`);
+}
+
+console.log(`v1285-banco-nasce-do-repositorio: ok (${tabelasUsadas.size} tabelas em uso, todas com migração; ${linhas.length} colunas da produção real cobertas; baseline seguro e na frente da fila)`);
