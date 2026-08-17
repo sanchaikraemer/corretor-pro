@@ -199,14 +199,35 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
   inteira no mesmo Wi-Fi cabe, e um script numa máquina só trava na sexta tentativa. Vale de
   verdade só com a migração `0013` aplicada (ela é que tira do navegador o direito de criar empresa
   por fora). Ver `NOTAS-v1128.md`.
-- **Planos comerciais (v1110, recalibrados na v1111)** — Pro: 15/dia + 150/mês; Pro Master:
-  30/dia + 300/mês (acima disso, plano personalizado negociado no WhatsApp). O plano
-  de cada conta fica em `direciona_config` (chave `plano-contratado`), definido pelos botões
-  "Pago · Pro" / "Pago · Pro Master" do painel administrativo (que também marcam a conta como
-  ativa). Conta ativa sem registro = Pro. A conta original fica FORA dos planos (só o fusível
-  técnico de `CORRETOR_PRO_LIMITE_ANALISES_DIA`, padrão 50/dia desde a v1112). Overrides:
+- **Planos comerciais (v1110 → recalibrados na v1284)** — **Pro: 50 análises/mês por R$ 49,90;
+  Pro Master: 120/mês por R$ 99,90.** Os números antigos (150 e 300) davam **margem negativa**: o
+  painel da OpenAI mostrou, em 17/08/2026, que uma análise custa de R$ 0,20 a R$ 0,40 e que **79%
+  de toda a conta de IA é a entrada do modelo de análise**. Decisão do dono: o preço fica, o volume
+  desce.
+  - **Não existe mais teto diário comercial** ("independente de limite diário", dono). O campo
+    `dia` dos planos virou **fusível técnico de 40/dia**, igual nos dois: existe só pra um erro em
+    laço não queimar o mês numa hora, e quem esbarra nele recebe aviso de **segurança**, nunca
+    oferta de upgrade. No Pro o fusível fica abaixo do pacote mensal de propósito.
+  - **Bônus de carga inicial**: conta nova recebe **200 análises a mais nos primeiros 45 dias**
+    (`bonusEntradaDisponivel`), pra a primeira importação da carteira caber — sem ele, quem tem 150
+    conversas gastaria 3 pacotes só pra começar. É por TEMPO, somado ao teto do mês, então continua
+    sendo **um número só**: a reserva atômica da `0012` e a devolução da v1174 seguem valendo, sem
+    tabela nem contador novo.
+  - **Estourar o mês não bloqueia seco**: a mensagem oferece o **pacote extra (30 análises por
+    R$ 39)** ou o upgrade. O avulso a R$ 1,30 fica acima do R$ 1,00 de dentro do plano de propósito
+    — o Pro Master sai a R$ 0,71/análise, então a conta do cliente aponta pro upgrade. A liberação
+    do pacote é manual (painel → `zerar-limite-analises` com `zerarMes`).
+  - A trava econômica desses números vive em `tests/v1284-planos-novos-margem-e-bonus.test.mjs`:
+    **subir volume sem subir preço faz o teste falhar mostrando a conta.**
+
+  O plano de cada conta fica em `direciona_config` (chave `plano-contratado`), definido pelos
+  botões "Pago · Pro" / "Pago · Pro Master" do painel administrativo (que também marcam a conta
+  como ativa). Conta ativa sem registro = Pro. A conta original fica FORA dos planos (só o fusível
+  técnico de `CORRETOR_PRO_LIMITE_ANALISES_DIA`, padrão 150/dia desde a v1174). Overrides:
   `CORRETOR_PRO_LIMITE_DIA_PRO`, `CORRETOR_PRO_LIMITE_MES_PRO`,
-  `CORRETOR_PRO_LIMITE_DIA_PROMASTER`, `CORRETOR_PRO_LIMITE_MES_PROMASTER`.
+  `CORRETOR_PRO_LIMITE_DIA_PROMASTER`, `CORRETOR_PRO_LIMITE_MES_PROMASTER`,
+  `CORRETOR_PRO_BONUS_ENTRADA`, `CORRETOR_PRO_PACOTE_EXTRA_ANALISES`,
+  `CORRETOR_PRO_PACOTE_EXTRA_PRECO`.
 - `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA` / `CORRETOR_PRO_LIMITE_TRANSCRICAO_VOZ_DIA_TESTE` —
   mesmo tipo de teto, pra transcrição de voz avulsa (observação por voz do lead, `cp7Obs`) —
   padrão 100/dia (20/dia em teste, ver `NOTAS-v1068.md`). As 3 ações de visão (extrair print,
@@ -271,6 +292,31 @@ regra global de antes das contas separadas; o cadastro criava a empresa pelo nav
 `0013` não era encontrada; e a rota do Cérebro sugeria recriar `direciona_config` no esquema
 pré-multiempresa. Os três foram retirados e trocados por aviso claro. Quem for mexer nisso: **não
 reintroduza reserva que contorne migração faltando** — o teste da v1185 falha de propósito.
+
+## 4-A. Bateria de conversas comerciais (`evals/`) — v1283
+
+A suíte de `tests/` protege o **código**; ela não sabe dizer se a **análise** está boa. A auditoria
+de 16/08/2026 mediu por quê: dos 437 arquivos de teste da época, **356 apenas liam o código-fonte**
+procurando se um trecho estava lá. Foi por isso que o erro do contato salvo como "Anderson
+Corretor" (v1282) passou por todos eles.
+
+`evals/` são **8 conversas** escritas a partir de situações reais já registradas nas notas de
+versão, com a régua do que se espera escrita em português (`aIaPrecisaPerceber`,
+`asMensagensNaoPodem`, `asMensagensPrecisam`). Nenhuma tem dado de cliente real.
+
+- **Camada 1** — `tests/v1283-bateria-conversas-comerciais.test.mjs`, dentro do `npm test`, custo
+  zero: confere o que o sistema decide **antes** da IA (nome do cliente, quem falou por último,
+  contagem **e textos** das tentativas sem resposta, exemplos de voz do corretor). Falha se uma
+  fala do cliente entrar em qualquer um dos dois blocos que vão ao prompt.
+- **Camada 2** — `evals/executar.mjs`, **não roda na suíte nem na publicação**: exige
+  `OPENAI_API_KEY` e comando explícito (~R$ 3 a 5 por rodada). Manda as conversas para a análise
+  real e usa uma segunda leitura da IA como juiz da régua, exigindo justificativa por item.
+
+**O uso que importa é o antes/depois** (`--salvar=antes` … `--comparar=antes`): é a regra do
+`CLAUDE.md` ("alteração de prompt entra com antes e depois na mesma conversa real") virada em
+ferramenta. **Pendência conhecida: a camada 2 nunca foi executada** — falta a rodada de referência,
+que depende da chave da OpenAI do dono. Enquanto ela não existir, toda mexida em prompt continua
+sem rede.
 
 ## 5. Processo de publicação
 
