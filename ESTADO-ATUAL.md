@@ -157,6 +157,7 @@ reescrever como pergunta que permite selecionar. Mecanismo é o mesmo das v1295/
 percebe, a IA reescreve inteira, nada é cortado nem descartado. Guarda:
 `tests/v1302-sugestao-que-nao-responde-e-inventa.test.mjs`. Ver `NOTAS-v1302.md`._
 
+<<<<<<< HEAD
 _**v1303 — o Cérebro passou a ir junto na reescrita da mensagem.** Print de 18/08/2026, 20h40 ("não
 sei pra que serve todas aquelas regras do cérebro se não são usadas"). Quando uma sugestão é barrada
 pela rede (v1295/v1299/v1302), ela volta pra IA reescrever — e é essa segunda escrita que aparece na
@@ -171,6 +172,8 @@ sobre o que o CORRETOR faz cai; sobre o que o CLIENTE precisa ("2 ou 3 dormitór
 horários continuam livres. Guarda: `tests/v1303-cerebro-na-reescrita-e-um-caminho-so.test.mjs`. Ver
 `NOTAS-v1303.md`._
 
+=======
+>>>>>>> origin/main
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
