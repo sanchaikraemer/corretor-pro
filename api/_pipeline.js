@@ -1161,7 +1161,11 @@ const PEDIR_LICENCA = [
   // "tudo bem?" fica FORA de propósito: é saudação de WhatsApp ("Boa tarde, Ana Paula, tudo bem?"),
   // não pedido de licença. Entrou aqui na primeira tentativa e derrubou mensagem boa no teste.
   { rotulo: "pede licença em vez de entregar", re: /,?\s*(pode ser|posso)\s*\?/i },
-  { rotulo: "pede licença em vez de entregar", re: /\bposso (te |lhe )?(mandar|enviar|passar|detalhar|explicar|separar|adiantar)\b[^.?!]{0,60}\?/i }
+  // v1303 — print de 18/08/2026, 20h40: "Posso te passar as opções disponíveis... incluindo valores
+  // e condições." A licença não precisa terminar em "?" pra ser licença: começar a frase com "posso
+  // te passar" já entrega ao cliente a decisão de deixar o corretor trabalhar. Sem exigir o "?",
+  // porque no print o ponto de interrogação vinha só duas frases depois.
+  { rotulo: "pede licença em vez de entregar", re: /\bposso (te |lhe )?(mandar|enviar|passar|detalhar|explicar|separar|adiantar|mostrar)\b/i }
 ];
 
 // A última frase da mensagem — é ela que decide se o fim devolve a bola pro cliente.
@@ -1238,8 +1242,21 @@ const ELOGIO_SEM_FONTE = [
 // O verbo precisa vir COLADO no substantivo e o substantivo precisa vir seguido da especificação
 // ("de 3 suítes", "com 2 dormitórios"). Sem essa exigência, "passando pra saber se você tem
 // interesse nas unidades" caía aqui — e isso não descreve catálogo nenhum.
-const DESCREVE_CATALOGO = /\b(?:conta com|possui|disp[õo]e de|oferece|tem)\s+(apartamentos?|unidades?|op[çc][õo]es|plantas?|tipologias?)\s+(?:de|com|a partir)\b/i;
+const DESCREVE_CATALOGO = /\b(?:conta com|possui|disp[õo]e de|disp[oõ]e|dispomos de|oferece|oferecemos|trabalhamos com|tem|temos|h[áa]|existem)\s+(apartamentos?|unidades?|op[çc][õo]es|plantas?|tipologias?)\s+(?:de|com|a partir)\b/i;
 const CATALOGO_NA_CONVERSA = /(apartamentos?|unidades?|op[çc][õo]es|plantas?|tipologias?)\s+(de|com|a partir)/i;
+
+// v1303 — DUAS OPÇÕES DE CAMINHO. A regra "UM CAMINHO SÓ" está escrita no pedido desde a v1296 e o
+// print de 18/08/2026, 20h40, trouxe as duas sugestões desobedecendo:
+//   "Você tem preferência por andar ou gostaria de ver todas as possibilidades?"
+//   "Prefere que eu te envie primeiro os valores ou gostaria de saber mais detalhes?"
+// Escolher o caminho é trabalho do corretor. Duas opções de FORMATO dão ao cliente uma chance a
+// mais de adiar — e ele responde "pode mandar tudo", que é onde a conversa morre.
+//
+// Pergunta com "ou" sobre o que o CLIENTE quer ("prefere 2 ou 3 dormitórios?") continua livre: essa
+// é qualificação, é justamente o que precisa acontecer. O que cai aqui é o "ou" sobre o que o
+// CORRETOR vai fazer. Dia e hora também continuam livres — oferecer dois horários fecha agenda.
+const CAMINHO_DO_CORRETOR = /\b(?:(?:eu )?te (?:envio|envie|mando|mande|passo|passe|explico|explique|detalho|detalhe|mostro|mostre)|todas as (?:op[çc][õo]es|possibilidades|unidades|informa[çc][õo]es))\b/i;
+const TEM_DIA_OU_HORA = /\b(?:segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|manh[ãa]|tarde|noite|hoje|amanh[ãa]|\d{1,2}\s?h|hor[áa]rio)\b/i;
 
 // Prometer mandar "as informações" e não perguntar nada: a mensagem não entrega e não pede
 // resposta. O cliente fica sem ter o que responder.
@@ -1306,6 +1323,13 @@ export function problemasNaMensagem(texto, contextoConhecido = null) {
   for (const f of FECHOS_QUE_DEVOLVEM_A_BOLA) if (f.re.test(fecho)) { achados.push(f.rotulo); break; }
   for (const f of PEDIR_LICENCA) if (f.re.test(t)) { achados.push(f.rotulo); break; }
   if (PROMESSA_VAZIA.test(t) && !t.includes("?")) achados.push("promete mandar informação e não pergunta nada");
+  for (const frase of t.split(/(?<=[.!?…])\s+/)) {
+    if (!frase.includes("?") || !/\bou\b/i.test(frase)) continue;
+    if (TEM_DIA_OU_HORA.test(frase)) continue;
+    if (!CAMINHO_DO_CORRETOR.test(frase)) continue;
+    achados.push("manda o cliente escolher o caminho");
+    break;
+  }
   achados.push(...fatosInventadosNaMensagem(t, contextoConhecido));
   return [...new Set(achados)];
 }
@@ -1313,10 +1337,17 @@ export function problemasNaMensagem(texto, contextoConhecido = null) {
 // Uma única chamada à IA pedindo que ela mesma reescreva as sugestões em que a frase de robô
 // escapou. Devolve { a?, b?, c? } só com as mensagens que voltaram melhores; qualquer falha vira
 // objeto vazio e a análise segue com o texto original.
-async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model, contextoConhecido = null }) {
+async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model, contextoConhecido = null, cerebroTexto = "", conversaTexto = "" }) {
   const lista = (itens || []).filter(i => i?.texto);
   if (!lista.length || !openai) return {};
-  const pedido = `Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
+  // v1303 — O CÉREBRO ENTRA NA REESCRITA. Buraco encontrado depois do print de 18/08/2026, 20h40
+  // ("não sei pra que serve todas aquelas regras do cérebro se não são usadas"): esta segunda
+  // chamada — a que escreve o texto FINAL que aparece na tela — não recebia o Cérebro nem a
+  // conversa. Recebia só a mensagem furada e regras genéricas. Ou seja: quanto mais a rede pegava,
+  // mais o corretor lia mensagem escrita SEM as regras dele. Agora a reescrita recebe o mesmo
+  // Cérebro da análise e o fim da conversa, pra não trocar o assunto nem o tom.
+  const fimDaConversa = String(conversaTexto || "").slice(-4000);
+  const pedido = `${cerebroTexto ? `=== CÉREBRO COMERCIAL DESTE CORRETOR (autoridade sobre tom, método e regras) ===\n${cerebroTexto}\n=== FIM DO CÉREBRO ===\n\n` : ""}${fimDaConversa ? `CONVERSA COM ESTE CLIENTE (fim do histórico, só para você não mudar o assunto):\n${fimDaConversa}\n\n` : ""}Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
 e têm dentro delas alguma coisa que ESTE corretor proíbe.
 
 ${lista.map(i => `MENSAGEM "${i.chave}" (o que precisa sair: ${i.frases.join(", ")}):\n"${i.texto}"`).join("\n\n")}
@@ -1350,14 +1381,19 @@ passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
   responder. Reescreva fazendo UMA pergunta concreta que permita ao corretor selecionar o que
   mandar (quantos dormitórios precisa, até quanto pretende investir, para morar ou investir),
   escolhendo a que mais destrava neste momento da conversa.
+- UM CAMINHO SÓ: se o problema é a mensagem oferecer ao cliente duas maneiras de continuar
+  ("prefere que eu te envie os valores ou quer mais detalhes?", "quer ver todas as possibilidades?"),
+  escolha VOCÊ o caminho mais forte e deixe um só. Pergunta sobre o que o CLIENTE precisa ("2 ou 3
+  dormitórios?") não é caminho, é qualificação, e pode ficar. Oferecer dois horários para marcar
+  também pode ficar.
 
 Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`).join(", ")}}`;
   const r = await chamarGPT4Json({
     openai,
-    systemPrompt: "Você reescreve mensagens de corretor de imóveis sem mudar o conteúdo comercial delas. Responda somente com JSON válido.",
+    systemPrompt: "Você reescreve mensagens de corretor de imóveis sem mudar o conteúdo comercial delas. O Cérebro Comercial do corretor, quando vier no pedido, manda no tom, nas regras e na condução. Responda somente com JSON válido.",
     prompt: pedido,
     model,
-    maxOutputTokens: 700,
+    maxOutputTokens: 900,
     timeout: timeoutMs
   });
   const saida = (r?.parsed && typeof r.parsed === "object") ? r.parsed : {};
@@ -4012,9 +4048,11 @@ Antes de devolver o JSON, confirme:
         const { aprovadas = {}, completion: cReescrita = null } = await reescreverSugestoesComFraseDeRobo({
           openai,
           itens: comFraseDeRobo,
-          timeoutMs: Math.min(15000, sobraReescritaMs),
+          timeoutMs: Math.min(20000, sobraReescritaMs),
           model: modeloReescrita,
-          contextoConhecido
+          contextoConhecido,
+          cerebroTexto: instrucoesCerebroTexto,
+          conversaTexto: timelineTextFull
         });
         if (typeof aprovadas.a === "string") { msgA = aprovadas.a; sugestoesReescritas++; }
         if (typeof aprovadas.b === "string") { msgB = aprovadas.b; sugestoesReescritas++; }
