@@ -13,6 +13,9 @@ assert.match(src, /MAIS DIRETA é objetiva, mas nunca força visita, proposta ou
   'a direta continua sendo objetiva sem forçar a barra');
 assert.match(src, /Escolha o menor próximo passo útil para ESTE lead/,
   'o fecho continua tendo que ser um passo concreto e proporcional');
-assert.match(src, /"nextAction":"menor próximo passo útil coerente com a leitura"/,
+// v1297 — a descrição do campo ganhou a régua "quando já dá pra entregar, entregue em vez de
+// perguntar de novo" (print do dono de 18/08/2026, 17h18). O campo continua existindo e continua
+// sendo o menor próximo passo útil — é só a descrição dele que ficou mais concreta.
+assert.match(src, /"nextAction":"menor próximo passo útil coerente com a leitura/,
   'e o próximo passo continua sendo pedido à IA em campo próprio');
 console.log('v1262-fecho-nao-pede-licenca: ok');

@@ -23,7 +23,9 @@ assert.match(pipeline, /As três nascem da mesma verdade factual e da mesma leit
 assert.match(pipeline, /RECOMENDADA é a que você enviaria se só pudesse enviar uma/, 'papel da "recomendada" precisa estar descrito');
 assert.match(pipeline, /MAIS SUAVE explora\/resolve o ponto mais importante com menor pressão/, 'papel da "maisSuave" (consultiva) precisa estar descrito');
 assert.match(pipeline, /MAIS DIRETA é objetiva/, 'papel da "maisDireta" precisa estar descrito');
-assert.match(pipeline, /"maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico"/, 'a suave precisa abrir um caminho diferente da recomendada');
+// v1297 — a descrição ganhou o rabicho "com um passo concreto dentro dela": suave não pode virar
+// sinônimo de mensagem que não faz nada (print do dono de 18/08/2026, 17h18).
+assert.match(pipeline, /"maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico/, 'a suave precisa abrir um caminho diferente da recomendada');
 // v1291 — a ordem de "reescrever quando as três repetirem a mesma pergunta" saiu na reescrita do
 // dono. No lugar dela ficaram duas linhas: não repetir pergunta já respondida e não transformar
 // falta de dado em interrogatório, que é o defeito que aquela ordem tentava impedir.
