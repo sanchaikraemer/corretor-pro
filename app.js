@@ -458,10 +458,6 @@ const LEGACY_RESTORE_KEY = "corretor_pro_restauracao_legado_v660";
 let _legacyRestoreInflight = null;
 async function restaurarLeadsAntigos(force = false){
   if(_legacyRestoreInflight) return _legacyRestoreInflight;
-  const statusEl = qs("#legacyRestoreStatus");
-  const btn = qs("#legacyRestoreBtn");
-  if(btn) btn.disabled = true;
-  if(statusEl) statusEl.textContent = "Conferindo a base anterior e restaurando os leads que faltam…";
   _legacyRestoreInflight = (async () => {
     try{
       const res = await fetchComTimeout("./api/restaurar-leads" + (force ? "?force=1" : ""), {
@@ -1854,20 +1850,6 @@ function _cortarFrase(s, max){
   return cut.replace(/[\s,;:.–—-]+$/,"") + "…";
 }
 
-function whatsappLink(phone, msg){
-  let p = String(phone || "").replace(/\D/g, "");
-  if(p && p.length <= 11 && !p.startsWith("55")) p = "55" + p;
-  const text = encodeURIComponent(msg || "");
-  return p ? `https://wa.me/${p}?text=${text}` : `https://wa.me/?text=${text}`;
-}
-// Link de WhatsApp do lead JÁ com a mensagem sugerida (a "direta", com saudação) preenchida.
-// Assim o corretor abre a conversa pronta pra enviar, sem perder a sugestão do Corretor Pro.
-function linkWhatsAppDireta(l){
-  if(!l || !l.phone) return "";
-  let msg = "";
-  try{ msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(l.analysis || {}).direta); }catch(_){ msg = ""; }
-  return whatsappLink(l.phone, msg);
-}
 
 // Reanálise em SEGUNDO PLANO: roda depois do salvar rápido pra atualizar as sugestões
 // considerando a observação nova. Não trava a tela; se o corretor ainda está no lead
@@ -2028,33 +2010,13 @@ function ehEsfriando(l){
   return dias >= 3 && dias <= 7 && (tipo === "quente-fechar" || interesse === "alto" || interesse === "quente");
 }
 
-// Detecta (SEM reanalisar — usa a análise já salva) leads que provavelmente sumiram
-// depois do preço: têm objeção de preço/valor e estão parados há alguns dias.
-function ehSumicoPosPreco(l){
-  const a = (l && l.analysis) || {};
-  let obj = Array.isArray(a.objections) ? a.objections.join(" · ") : String(a.objections || "");
-  obj = (obj + " " + String(a.risk || "")).toLowerCase();
-  const temObjPreco = /(pre[çc]o|valor|caro|percep|or[çc]amento|financ)/.test(obj);
-  const dias = Number(l.daysSinceLastInteraction) || 0;
-  return temObjPreco && dias >= 3 && !ehContatadoHoje(l);
-}
 // Badges agora são só ÍCONES (pedido do dono): 💸 sumiço após preço, ❄️ esfriando, 🏠 permuta.
 // O título (tooltip) explica o que cada um significa ao passar o mouse.
-function tagSumicoPrecoHTML(){
-  return `<span title="Provável sumiço após o preço — bom retomar com outras opções" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">💸</span>`;
-}
 function tagEsfriandoHTML(){
   return `<span title="Parando — sem resposta há alguns dias" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">⏳</span>`;
 }
 function tagPermutaHTML(){
   return `<span title="Envolve permuta/troca de imóvel" style="font-size:14px;line-height:1;vertical-align:1px;cursor:help">🏠</span>`;
-}
-// "Reaquecer urgente": qualquer lead com SCORE COMERCIAL alto (engajamento real,
-// keywords de compra, vários dias distintos) que ficou parado 5+ dias.
-function ehReaquecerUrgente(l){
-  const dias = Number(l.daysSinceLastInteraction) || 0;
-  if(dias < 5) return false;
-  return scorePrio(l) >= 80;
 }
 
 function ehPermuta(l){ return l.analysis?.permuta === true; }
@@ -2328,17 +2290,6 @@ function protegidoPosAtendimento(l){
   return dias != null && dias < cpDiasDescansoPosAtendimento();
 }
 
-// Última resposta do cliente registrada pelo corretor (fecha o ciclo: a mensagem funcionou?).
-// Retorna "sim" | "nao" | "aguardando" | null. Pega o registro mais recente (qualquer dia).
-function respostaClienteRegistrada(l){
-  const eventos = l?.analysis?.aprendizado?.eventos || [];
-  for(let i = eventos.length - 1; i >= 0; i--){
-    if(eventos[i].evento === "cliente_respondeu"){
-      return eventos[i].detalhes?.resposta || null;
-    }
-  }
-  return null;
-}
 
 // Identifica venda condicionada para ordenar a fila por fatos reais.
 // Não gera nem exibe probabilidade, percentual ou score comercial.
@@ -2407,17 +2358,6 @@ function cpUltimoContatoCorretorTs(l){
   return max;
 }
 window.cpUltimoContatoCorretorTs = cpUltimoContatoCorretorTs;
-function cpSemAtenderHaDias(l, dias){
-  const at = cpUltimoContatoCorretorTs(l);
-  if(!at) return true; // nenhum contato seu, nunca = com certeza "falta atender"
-  const d = diasCalendarioBR(at);
-  return d == null || d >= dias;
-}
-// v1246 — "Sem atender 30d+" saiu da Home a pedido do dono: "pode deletar tb, nao sera mais
-// necessario". Com o quadradinho fora, esta lista não tinha mais nenhuma porta de entrada — ficaria
-// só ocupando espaço e dando a impressão, pra quem lesse o código depois, de que a tela ainda
-// existe. A régua em si (cpSemAtenderHaDias) CONTINUA, porque a fila "Fazer agora" usa ela.
-window.cpSemAtenderHaDias = cpSemAtenderHaDias;
 const BUSINESS_RE = /(construtora|direciona|atendimento)/i;
 // Item de registro interno (cópia de mensagem sugerida, nota, atendimento marcado, ligação,
 // visita etc.) — NUNCA é uma fala real na conversa, mesmo tendo texto e data.
@@ -2537,88 +2477,6 @@ window.cpAgendaResumo = cpAgendaResumo;
 function cpAgendaContagem(items){ return cpAgendaResumo(items).total; }
 window.cpAgendaContagem = cpAgendaContagem;
 
-// scorePrio = ORDENAÇÃO/prioridade do funil (usa a sentinela do lembrete pra jogar pro topo/rodapé).
-// scoreSinais = só os sinais comerciais reais (SEM a sentinela) — usado no cálculo da PROBABILIDADE,
-// pra um lembrete vencido/futuro não estourar tudo pro teto (95%) ou piso (5%).
-function scorePrio(l){
-  const _lt = lembreteTs(l);
-  if(!isNaN(_lt)){
-    if(_lt <= Date.now()) return 100000;
-    return -100000;
-  }
-  return scoreSinais(l);
-}
-function scoreSinais(l){
-  const dias = Number(l.daysSinceLastInteraction);
-  const a = l.analysis || {};
-  const msgs = Array.isArray(l.recentMessages) ? l.recentMessages : [];
-  const primeiroNome = String(l.name || "").toLowerCase().trim().split(/\s+/)[0] || "";
-
-  // 1. SINAIS MACRO (sempre disponíveis, mesmo sem recentMessages)
-  let sMacro = 0;
-  if(Array.isArray(a.confirmedAppointments) && a.confirmedAppointments.length) sMacro += 25;
-  if(a.permuta) sMacro += 10;
-  switch(String(a.tipoRetomada||"").toLowerCase()){
-    case "quente-fechar":    sMacro += 25; break;
-    case "morno-confirmar":  sMacro += 10; break;
-    case "objecao-tratar":   sMacro += 8; break;
-    case "frio-reaquecer":   sMacro -= 5; break;
-    case "stand-by":         sMacro -= 10; break;
-    case "primeiro-contato": sMacro -= 15; break;
-    case "informacao-enviar":sMacro -= 8; break;
-  }
-
-  // 2. ENGAJAMENTO (só se há recentMessages com conteúdo real)
-  let sEng = 0;
-  if(msgs.length){
-    const msgsCli = msgs.filter(m => ehMsgDoCliente(m, primeiroNome));
-    if(msgsCli.length >= 10) sEng += 20;
-    else if(msgsCli.length >= 5) sEng += 10;
-    else if(msgsCli.length > 0) sEng -= 5;
-    const dSet = new Set();
-    for(const m of msgsCli){
-      const d = m.date || (m.iso ? String(m.iso).slice(0,10) : "");
-      if(d) dSet.add(d);
-    }
-    const dDist = dSet.size;
-    if(dDist === 1) sEng -= 15;       // fogo de palha
-    else if(dDist <= 3) sEng += 5;
-    else if(dDist <= 6) sEng += 15;
-    else if(dDist > 6) sEng += 25;    // engajamento forte
-  }
-
-  // 3. PALAVRAS-CHAVE de compra (+5 cada, máx +30) — só conta nas msgs do cliente
-  let sKw = 0;
-  if(msgs.length){
-    let hits = 0;
-    for(const m of msgs){
-      if(!ehMsgDoCliente(m, primeiroNome)) continue;
-      const txt = String(m.text || "");
-      if(!txt) continue;
-      for(const re of KEYWORDS_COMPRA){
-        if(re.test(txt)){ hits++; if(hits >= 6) break; }
-      }
-      if(hits >= 6) break;
-    }
-    sKw = Math.min(30, hits * 5);
-  }
-
-  // 4. TEMPORAL: recência do último contato
-  let sTemp = 0;
-  if(Number.isFinite(dias)){
-    if(dias <= 3) sTemp = 10;
-    else if(dias <= 7) sTemp = 0;
-    else if(dias <= 14) sTemp = -5;
-    else if(dias <= 30) sTemp = -10;
-    else if(dias <= 60) sTemp = -15;
-    else sTemp = -25;
-  }
-
-  // PARCEIRO/corretor: o volume de conversa é OPERACIONAL (planta, projeto, coordenação),
-  // não calor de compra — não deixa engajamento/keywords inflarem o score dele.
-  if(/parceir|corretor/i.test(String(a.tipoContato||""))){ sEng = 0; sKw = 0; }
-  return sMacro + sEng + sKw + sTemp;
-}
 
 // Lead SEM diálogo real: o cliente nunca engajou de verdade. Típico do caso "mandou só
 // 'oi/beleza/opa', recebeu material e sumiu — nunca respondeu, nunca negociou". Esses NÃO
@@ -2849,8 +2707,6 @@ function renderListasHome(ordenados){
 }
 
 // Home M1: chips de triagem + top 3 com motivo/WhatsApp + compromissos confirmados + KPI strip.
-// Ícone do WhatsApp (igual ao desenho — círculo verde com o glifo).
-const WA_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.6.8-.8 1-.1.1-.3.2-.5.1-.7-.3-1.5-.6-2.1-1.5-.5-.6-.8-1.3-.9-1.6-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3.2-.4 0-.1 0-.3 0-.4 0-.1-.6-1.5-.8-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.7 4.2 3.7.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1 .1-1.2z"/></svg>`;
 // v942 — barra de status das mensagens do cliente (Modelo A escolhido pelo dono: barra
 // horizontal + número, cor por nível). Mesma métrica do "Interesse do cliente" que já existe
 // dentro do lead (mensagensDoCliente). Cor: baixo = cinza, médio/alto = coral. v942.1 — a barra
@@ -3086,38 +2942,6 @@ async function registrarMensagemEnviada(id, msg){
   if(state.lead && String(state.lead.id) === String(id)) try{ recarregarLeadFoco(id); }catch(_){}
 }
 
-window.copiarMensagemLead = function(id){
-  const l = (state.itemsAtivos||[]).find(x => String(x.id) === String(id));
-  if(!l) return;
-  const a = l.analysis || {};
-  const msg = mensagemAprovadaSemAlteracao(mensagensDaAnalise(a).direta);
-  if(!msg){ toast("Sem mensagem pronta pra este lead. Abra o lead e reanalise pra gerar."); return; }
-  // v984 — antes chamava a função global de aprendizado, que sempre usa state.lead?.id (o lead
-  // ABERTO na tela de detalhe). Copiando direto do card da Home, nenhum lead está aberto, então
-  // o evento nunca era salvo (Desempenho > Mensagens copiadas ficava zerado mesmo com uso real).
-  // Aqui registra direto no lead do card (l.id).
-  // v1248 — ESTE CAMINHO AINDA DISPARAVA AS DUAS GRAVAÇÕES AO MESMO TEMPO, e as duas escrevem no
-  // MESMO campo do cliente lendo antes de escrever: uma apagava a outra. Quando a perdedora era o
-  // atendimento, o cliente voltava pra fila "Fazer agora" como se você nunca tivesse falado com
-  // ele — o velho "atendi e não marcou". Quando era o contador, o Desempenho mostrava "Mensagens
-  // copiadas: 0" mesmo com uso real. A ordem certa já estava em uso nos outros dois botões de
-  // copiar (v1097/v1142): ATENDIMENTO PRIMEIRO — se só uma sobreviver, que seja a que importa —,
-  // o contador depois, com keepalive (copiar é exatamente quando o app vai pro fundo, indo pro
-  // WhatsApp), e as duas EM SEQUÊNCIA, nunca em paralelo.
-  const done = async () => {
-    toast("Mensagem copiada");
-    try{ await registrarMensagemEnviada(l.id, msg); }catch(_){}
-    try{
-      const r = await fetch("./api/lead-update", {
-        method:"POST", headers:{"Content-Type":"application/json"}, keepalive:true,
-        body: JSON.stringify({ id:l.id, action:"aprendizado", evento:"mensagem_copiada", detalhes:{ de:"hero" } })
-      }).catch(()=>null);
-      if(r && r.ok){ invalidarLeadsCache(); loadRecentLeads(true); }
-    }catch(_){}
-  };
-  if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(msg).then(done).catch(()=>toast("Não consegui copiar")); }
-  else { toast("Não consegui copiar"); }
-};
 
 // v1095 — "Oportunidades esquecidas" REMOVIDA. Ordem do dono, repetida e sem margem: um cliente
 // só pode ser ATIVO ou ARQUIVADO, e nada mais pode dar outro nome a ele. Aquela seção da tela
@@ -3158,22 +2982,6 @@ function renderBotoesHome(){
     </button>`;
   };
 
-  // Card de lead do top 3 (motivo destacado + WhatsApp).
-  const cardTop = (l) => {
-    const idStr = String(l.id||"");
-    const idJs = JSON.stringify(idStr);
-    const dias = l.daysSinceLastInteraction != null ? l.daysSinceLastInteraction + "d parado" : "";
-    const etapa = normalizarEtapa(l.etapa);
-    const motivo = motivoCurto(l);
-    const tags = [];
-    if(lembreteVencido(l)) tags.push(`<span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:9px;font-weight:950;color:var(--on-accent);background:var(--lime);border:1px solid var(--lime);letter-spacing:.04em">⏰ LEMBRETE DE HOJE</span>`);
-    else if(ehReaquecerUrgente(l)) tags.push(`<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:950;color:var(--timing);background:rgba(86,199,242,.12);border:1px solid var(--timing);letter-spacing:.04em;white-space:nowrap">⚠ REATIVAR</span>`);
-    else if(ehEsfriando(l)) tags.push(tagEsfriandoHTML());
-    if(ehPermuta(l)) tags.push(tagPermutaHTML());
-    if(ehSumicoPosPreco(l)) tags.push(tagSumicoPrecoHTML());
-    const waLink = linkWhatsAppDireta(l);
-    return cardLeadHTML(l, { tagsHtml: tags.join(""), dias, acoesHtml: btnWhatsApp(waLink) });
-  };
 
   // v942 — a Home mostra SEMPRE os leads do dia, um embaixo do outro (lista compacta), SEM aquele
   // card amarelo que o dono mandou tirar. Se o balde estrito de urgentes está vazio, a gente puxa
@@ -3560,57 +3368,7 @@ function cp1251AbrirPainel(){
 }
 window.cp1251AbrirPainel = cp1251AbrirPainel;
 
-// Avatar com a(s) inicial(is) do lead.
-function avatarInicial(name, pctClass){
-  const n = String(name||"Cliente").trim();
-  const ini = (n.split(/\s+/).map(w=>w[0]).filter(Boolean).slice(0,2).join("") || "C").toUpperCase();
-  return `<div class="lead-avatar ${pctClass||""}">${escapeHtml(ini)}</div>`;
-}
-// Atalho: avatar a partir do objeto lead — só as iniciais (v1074: o suporte a foto salva saiu do app).
-function avatarLead(l, pctClass){ return avatarInicial(l?.name, pctClass); }
 // Botão WhatsApp padrão (mesmo em todas as telas).
-function btnWhatsApp(waLink){
-  // Bolinha verde só com o ícone (logo do WhatsApp) — não espreme o nome do cliente, que é o principal.
-  return waLink ? `<a href="${escapeHtml(waLink)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir WhatsApp" aria-label="Abrir WhatsApp" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#25D366;color:#06210f;text-decoration:none">${WA_SVG}</a>` : "";
-}
-// CARD DE LEAD ÚNICO — usado em Hoje, Todos e Pipeline pra manter o MESMO padrão.
-// opts: { tagsHtml, dias, acoesHtml }
-function cardLeadHTML(l, opts){
-  opts = opts || {};
-  const idStr = String(l.id||"");
-  const idJs = JSON.stringify(idStr);
-  const pctClass = "";
-  const etapa = normalizarEtapa(l.etapa);
-  const proxima = motivoCurto(l);
-  const prioridade = prioridadeAtendimento(l) || {};
-  const tagsHtml = opts.tagsHtml || "";
-  const acoesHtml = opts.acoesHtml || "";
-  // Duas medidas coloridas (igual ao card de prioridade): verde = último contato, vermelho = sem resposta.
-  const interDias = l.daysSinceLastInteraction;
-  let toque = l.daysSinceLastTouch; if(toque==null) toque = interDias;
-  let resposta = l.daysSinceClientReply; if(resposta==null) resposta = interDias;
-  const fmtDia = (n) => n==null ? "—" : n===0 ? "hoje" : n===1 ? "1 dia" : n+" dias";
-  // Uma linha: vermelho "sem resposta" (esquerda) + verde "de contato" (direita).
-  const diasHtml = (toque==null && resposta==null) ? "" :
-    `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;font-weight:800;line-height:1;flex-wrap:wrap">
-       <span style="white-space:nowrap"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--risco);margin-right:6px;vertical-align:middle"></span><span style="color:var(--risco)">${fmtDia(resposta)}</span> <span style="color:var(--muted);font-weight:600">sem resposta</span></span>
-       <span style="white-space:nowrap"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--acao);margin-right:6px;vertical-align:middle"></span><span style="color:var(--lime)">${fmtDia(toque)}</span> <span style="color:var(--muted);font-weight:600">de contato</span></span>
-     </div>`;
-  return `<div data-card-id="${escapeHtml(idStr)}" onclick='abrirLead(${idJs})' style="cursor:pointer;display:flex;flex-direction:column;gap:9px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03)">
-    <div style="display:flex;align-items:flex-start;gap:11px">
-      ${avatarLead(l, pctClass)}
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="font-weight:950;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(l.name||"Cliente")}</span>${tagsHtml}</div>
-        <div class="small" style="color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(produtosLabel(l))}${opts.msgCount != null ? ` · <span style="color:var(--soft);font-weight:800">💬 ${opts.msgCount} ${opts.msgCount===1?"mensagem":"mensagens"}</span>` : ""}</div>
-      </div>
-      <div style="flex-shrink:0;display:flex;align-items:center;gap:8px">
-        ${acoesHtml}
-        <span style="font-size:12px;font-weight:900;color:var(--lime);white-space:nowrap" title="Prioridade de atendimento">${escapeHtml(prioridade.titulo || "Prioridade")}</span>
-      </div>
-    </div>
-    ${diasHtml}
-  </div>`;
-}
 
 // Abre a lista de um grupo (clicou num dos botões).
 // Cards mostram: nome, etapa/produto/dias, tags (ESFRIANDO/PERMUTA), motivo curto e
@@ -4112,14 +3870,6 @@ async function _processarDashboard(data){
     // Total de leads ativos no pill do topo (mobile).
     const pillTotalD = qs("#pillTotalLeadsDesktop");
     if(pillTotalD) pillTotalD.textContent = `${items.length} lead${items.length===1?"":"s"}`;
-    // Onboarding: ensina o ritual diário pra quem ainda tem poucos leads (1-4) e
-    // não dispensou. Quem chamou pelo Menu (forceOnboarding) vê independente da contagem.
-    const onb = qs("#bannerOnboarding");
-    if(onb){
-      const visto = localStorage.getItem("direciona_onboarding_visto") === "1";
-      const mostrar = state.forceOnboarding || (!visto && items.length >= 1 && items.length < 5);
-      onb.style.display = mostrar ? "block" : "none";
-    }
     // v1149 — corretor NOVO (nenhum cliente ainda): o passo a passo de como mandar a conversa do
     // WhatsApp abre sozinho, uma única vez. É o momento em que ele não sabe o que fazer — e é
     // exatamente o que o dono pediu pra vender pra corretores de Android ("ele vai ter que ter uma
@@ -5414,9 +5164,6 @@ function cp704Css(){
     return `<div style="margin-top:8px;padding:8px 10px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5">${linhas.map(l=>escapeHtml(l)).join('<br>')}</div>`;
   }
   window.cp704SelectedMsg='a';
-  window.cp704SelectMsg=function(k){
-    window.cp704SelectedMsg = ['a','b','c'].includes(k)?k:'a';
-  };
   function cp704GetMessage(k){ const el=document.querySelector(`.cp704-msg-item[data-key="${k||window.cp704SelectedMsg}"] p`); return cp704Text(el?.innerText || el?.textContent); }
   window.cp704CopyMsg=async function(k){
     const msg=cp704GetMessage(k); if(!msg){toast('Mensagem não encontrada.');return;}
@@ -5475,12 +5222,6 @@ function cp704Css(){
         if(r && r.ok){ invalidarLeadsCache(); loadRecentLeads(true); }
       }catch(_){}
     }
-  };
-  window.cp704OpenWhats=function(){
-    const lead=state.lead||{}; const msg=cp704GetMessage(window.cp704SelectedMsg);
-    if(!lead.phone){ cp704CopyMsg(window.cp704SelectedMsg); toast('Telefone não identificado. Mensagem copiada.'); return; }
-    const url=(typeof whatsappLink==='function') ? whatsappLink(lead.phone,msg) : `https://wa.me/${String(lead.phone).replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
-    window.open(url,'_blank');
   };
   window.cp704HistoryToggle=async function(){
     try{
@@ -6101,16 +5842,6 @@ function toggleReagendar(id){
   box.style.display = (box.style.display === "flex") ? "none" : "flex";
 }
 window.toggleReagendar = toggleReagendar;
-// Reagenda por atalho (N dias a partir de hoje), salvando na hora.
-// v1208 — os chips do painel NÃO usam mais isto: lá eles só preenchem o dia, porque salvar na
-// hora fechava o painel antes do dono conseguir escolher o horário. Fica disponível pra quem
-// quiser um atalho de um toque só (window.reagendarDias) sem passar pelo painel.
-function reagendarDias(id, dias, horaStr){
-  const d = new Date(); d.setDate(d.getDate() + dias);
-  const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  reagendarLembrete(id, s, horaStr);
-}
-window.reagendarDias = reagendarDias;
 // Remarca o lembrete pra nova data (rápido, sem reanalisar). Valida o ano pra não sumir o lembrete.
 // horaStr é OPCIONAL (v1199, "hh:mm") — sem ela, comportamento idêntico a antes.
 async function reagendarLembrete(id, dateStr, horaStr){
@@ -7105,7 +6836,6 @@ document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !cpAp
 // é só uma rede de segurança; se não houver fila, termina em uma única consulta curta.
 setInterval(()=>{ if(!document.hidden && navigator.onLine && !cpAprendAutoRodando) iniciarAprendizadoContinuoAutomatico({ somentePendentes:true }).catch(()=>{}); }, 60000);
 
-qs("#aprendizadoRefresh")?.addEventListener("click", carregarAprendizado);
 
 function kpiMini(label, value, cor){
   return `<div style="padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:10px">
@@ -9233,7 +8963,6 @@ async function carregarMemoria(leadId){
     qs("#memoriaPessoasDecisao").value = m.pessoasDecisao || "";
     qs("#memoriaPontosSensiveis").value = m.pontosSensiveis || "";
     qs("#memoriaObservacoes").value = m.observacoes || "";
-    state.obsCarregada = m.observacoes || "";
     state.memoriaOriginal = {
       preferencias:m.preferencias || "",
       pessoasDecisao:m.pessoasDecisao || "",
@@ -9271,7 +9000,6 @@ async function salvarMemoria(){
       }
       // Memória manual ensina em segundo plano, mas não troca automaticamente as
       // sugestões atuais. Reanalisar continua sendo uma decisão explícita do corretor.
-      state.obsCarregada = body.observacoes || "";
       state.memoriaOriginal = { ...valores };
       if(camposAlterados.length){
         toast("Memória salva. Aprendizado atualizado em segundo plano.");
@@ -9540,61 +9268,6 @@ async function registrarAprendizado(evento, estilo, detalhes){
 // Copiar uma sugestão é apenas uma ação de interface. Não registra atendimento,
 // não cria mensagem no histórico e não altera data/status do lead.
 
-// ===== Fechar o ciclo: "o cliente respondeu?" =====
-// Depois que você manda a mensagem, registra se o cliente respondeu — isso alimenta o
-// aprendizado (qual abordagem funciona) sem depender de reimportar a conversa.
-function respostaClienteBotoesHTML(){
-  const b = (val, txt, cor, bg) => `<button type="button" onclick='registrarRespostaCliente("${val}")' style="flex:1;min-width:92px;padding:7px 10px;border-radius:8px;border:1px solid ${cor};background:${bg};color:${cor};font-size:12px;font-weight:950;cursor:pointer">${txt}</button>`;
-  return `<div class="small" style="color:var(--muted);margin-bottom:6px;text-align:center">O cliente respondeu sua última mensagem?</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      ${b("sim", "✓ Respondeu", "var(--acao)", "var(--acao-soft)")}
-      ${b("nao", "Não respondeu", "var(--risco)", "var(--risco-soft)")}
-      ${b("aguardando", "Ainda não", "var(--muted)", "transparent")}
-    </div>`;
-}
-function respostaClienteRecordedHTML(valor){
-  const labels = { sim: "Respondeu ✓", nao: "Não respondeu", aguardando: "Aguardando resposta" };
-  const cor = valor === "sim" ? "var(--acao)" : valor === "nao" ? "var(--risco)" : "var(--muted)";
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-    <span class="small" style="color:var(--soft)">Cliente respondeu? <b style="color:${cor}">${labels[valor] || valor}</b></span>
-    <button type="button" onclick='registrarRespostaCliente("")' style="background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted);font-size:10px;font-weight:950;cursor:pointer">mudar</button>
-  </div>`;
-}
-function renderRespostaCliente(lead){
-  const r = respostaClienteRegistrada(lead);
-  return r ? respostaClienteRecordedHTML(r) : respostaClienteBotoesHTML();
-}
-window.renderRespostaCliente = renderRespostaCliente;
-async function registrarRespostaCliente(valor){
-  const box = qs("#respostaClienteBox");
-  if(!valor){ if(box) box.innerHTML = respostaClienteBotoesHTML(); return; } // "mudar"
-  const id = state.lead?.id;
-  if(id){
-    // v1084 — só confirma na tela DEPOIS de o servidor confirmar. Antes o app pintava o estado
-    // e dizia "Boa! Registrei que ele respondeu." mesmo sem ter gravado nada (num momento sem
-    // sinal, por exemplo): o corretor seguia em frente achando que estava salvo e, na próxima
-    // vez que abrisse o lead, os botões estavam de volta. Pior, o recarregarLeadFoco logo abaixo
-    // relê do servidor e desfaz a tela na cara dele.
-    let gravou = false;
-    try{ gravou = await registrarAprendizado("cliente_respondeu", state.msgStyle, { resposta: valor }); }catch(_){ gravou = false; }
-    if(!gravou){
-      if(box) box.innerHTML = respostaClienteBotoesHTML();
-      toast("Não consegui registrar agora. Confira a internet e toque de novo.");
-      return;
-    }
-    try{
-      const a = state.analysis = state.analysis || {};
-      a.aprendizado = a.aprendizado || {}; a.aprendizado.eventos = a.aprendizado.eventos || [];
-      a.aprendizado.eventos.push({ evento: "cliente_respondeu", estilo: state.msgStyle, detalhes: { resposta: valor }, quando: new Date().toISOString() });
-    }catch(_){}
-  }
-  if(box) box.innerHTML = respostaClienteRecordedHTML(valor); // feedback imediato
-  toast(valor === "sim" ? "Boa! Registrei que ele respondeu." : valor === "nao" ? "Registrei: não respondeu." : "Ok, aguardando resposta.");
-  invalidarLeadsCache();
-  // Atualiza o lead inteiro na hora (atendimento, respostas e datas) — sem precisar de F5.
-  if(id) recarregarLeadFoco(id);
-}
-window.registrarRespostaCliente = registrarRespostaCliente;
 
 // v952: a renderização real de Arquivados (com paginação e busca) vive só dentro da IIFE
 // #724-2, exposta em window.carregarArquivados. Existia uma segunda função de mesmo nome aqui
@@ -9787,13 +9460,13 @@ addEventListener("resize",()=>{if(!isDesktop()){qsa(".screen").forEach(e=>e.clas
     if(!env.OPENAI_API_KEY) problemas.push("Transcrição de áudios indisponível no momento");
     if(!(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY)) problemas.push("Salvamento de conversas indisponível no momento");
     if(problemas.length){
-      stamp.textContent = "" + problemas.join(" · ");
-      stamp.style.color = "var(--risco)";
+      stamp.textContent = problemas.join(" · ");
+      stamp.hidden = false;
     } else {
-      stamp.textContent = ""; // tudo OK, nao polui
+      stamp.textContent = ""; stamp.hidden = true; // tudo certo: o aviso não ocupa espaço
     }
   }catch(_){
-    stamp.textContent = ""; // se a checagem falhar, melhor sumir do que mostrar erro
+    stamp.textContent = ""; stamp.hidden = true; // se a própria checagem falhar, melhor calar que assustar
   }
 })();
 
@@ -13149,10 +12822,6 @@ window.CORRETOR_PRO_VERSAO_IA_COMERCIAL = COMMERCIAL_SCHEMA_MINOR;
     cp788RenderAtendimentos(leads);
   };
   try{ carregarCarteira=window.carregarCarteira; }catch(_){ }
-  window.renderCarteiraTabela=function(){
-    const base=[state?.todosLeads,state?.carteiraLeads,state?.itemsAtivos].find(a=>Array.isArray(a)&&a.length)||[];
-    cp788RenderAtendimentos(base);
-  };
 
   function cp788Grupos(leads){
     const grupos={agora:[],programados:[],aguardando:[],todos:[]};

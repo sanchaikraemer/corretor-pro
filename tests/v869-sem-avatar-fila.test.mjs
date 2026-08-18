@@ -13,8 +13,10 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 // guardava código que não roda. A auditoria de 09/08/2026 removeu a função morta e trouxe a
 // guarda pro renderizador de verdade — a intenção do dono continua a mesma.
 
-assert.doesNotMatch(app, /\$\{avatarLead\(l, ""\)\}/, 'a fila não pode mais desenhar avatarLead');
-assert.doesNotMatch(app, /\$\{avatarInicial\(l\.name, ""\)\}/, 'a lista de grupo não pode mais desenhar avatarInicial');
+// v1293 — o pedido do dono ("tira o avatar da fila") virou definitivo: as duas funções de avatar
+// de lead foram removidas do app, porque nenhuma tela as chamava mais.
+assert.ok(!/avatarLead\(|avatarInicial\(/.test(app),
+  'nenhuma função de avatar de lead pode voltar sem uma tela que peça por ela');
 
 // A lista de hoje continua existindo, e é a VIVA (a que a Home realmente chama).
 assert.match(app, /function cpHomeLeadRow\(/, 'a linha da lista de hoje precisa continuar existindo');

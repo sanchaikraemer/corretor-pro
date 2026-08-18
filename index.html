@@ -183,6 +183,11 @@
           </div>
         </div>
         <div class="home-grid"><div class="home-center">
+          <!-- v1293 — AVISO DE SERVIÇO FORA DO AR. Fica escondido enquanto está tudo certo;
+               aparece quando o servidor responde que a transcrição de áudio ou o salvamento
+               de conversas não estão disponíveis. Antes essa checagem existia no código mas
+               escrevia num lugar que não existia mais na tela: o corretor nunca era avisado. -->
+          <div id="statusStamp" class="cp1293-aviso" role="status" aria-live="polite" hidden></div>
           <div id="resumoDia" class="resumo-dia"></div>
           <!-- v1251 — SEUS NÚMEROS DO MÊS. No celular fica só esta linha de resumo, que abre o
                painel ao toque (espaço aqui é caro: o painel aberto comeria 4 dos 5 clientes que
@@ -194,7 +199,6 @@
           <div id="leadFocoArea"><div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div></div>
         </div><aside class="home-right" id="homeRight" hidden></aside></div>
       </div>
-      <div id="bannerOnboarding" hidden></div>
     </section>
 
     <section id="zip" class="screen">

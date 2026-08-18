@@ -28,6 +28,10 @@ assert.match(grupo, /onclick='abrirLead\(\$\{idJs\}\)'/, 'a linha inteira abre o
 
 // 2. O que o dono vetou não pode voltar nas linhas: WhatsApp e etiquetas coloridas.
 assert.ok(!grupo.includes('btnWhatsApp'), 'sem botão de WhatsApp nas linhas da lista');
+// v1293 — btnWhatsApp e cardLeadHTML (a "grade antiga de cartões") foram REMOVIDAS do app.
+// Elas continuavam no arquivo, alcançáveis só pelo card do "top 3", que ninguém mais chamava.
+assert.ok(!/function btnWhatsApp\(|function cardLeadHTML\(/.test(app),
+  'a grade antiga de cartões saiu do código na v1293, não só das listas');
 assert.ok(!grupo.includes('tagEsfriandoHTML') && !grupo.includes('tagPermutaHTML'),
   'sem etiquetas coloridas nas linhas da lista');
 assert.ok(!grupo.includes('cardLeadHTML'), 'a grade antiga de cartões saiu das listas da Home');

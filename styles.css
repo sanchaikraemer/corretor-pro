@@ -163,7 +163,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .top3-mini .dias-mini{background:rgba(255,98,88,.14);color:var(--lime);padding:1px 8px;border-radius:999px;font-size:10px;font-weight:950}
 .top3-mini .motivo-mini{font-size:11px;color:var(--soft);line-height:1.4;opacity:.85}
 /* Redesign cards: avatar com inicial + barra de progresso (estilo do mock) */
-.lead-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:950;font-size:15px;color:var(--text);background:rgba(255,255,255,.07);border:1px solid var(--line)}
 @media(max-width:899px){
   .top3-mini{padding:10px;min-width:78vw;max-width:78vw;flex-shrink:0;scroll-snap-align:start}
 }
@@ -257,24 +256,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 /* Home: centro + coluna direita */
 .home-grid{display:block}
 .home-right{display:none}
-.dash-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-.dash-card .dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px}
-.dash-card .dh h4{font-family:var(--font-display);font-size:14px;font-weight:800;margin:0;display:flex;align-items:center;gap:7px}
-.dash-sub{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
-.dash-desemp{display:flex;align-items:center;gap:16px}
-.gauge{--p:0;width:84px;height:84px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) calc(var(--p)*3.6deg),rgba(255,255,255,.06) 0);display:grid;place-items:center;position:relative}
-.gauge::before{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--panel)}
-.gauge .gv{position:relative;text-align:center;line-height:1}
-.gauge .gv b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:23px;font-weight:700}
-.gauge .gv span{display:block;font-size:9px;color:var(--muted);margin-top:3px}
-.dash-stats{display:flex;flex-direction:column;gap:9px;flex:1;min-width:0}
-.dash-stats .st{display:flex;align-items:baseline;gap:8px}
-.dash-stats .st b{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--text);min-width:24px;text-align:right}
-.dash-stats .st span{font-size:11px;color:var(--soft);line-height:1.2}
-.dash-btn{width:100%;margin-top:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);border-radius:11px;padding:10px;font-weight:700;font-size:12px;cursor:pointer}
-.ins-item .it{font-size:13px;color:var(--soft);line-height:1.45}
-.ins-item a{display:inline-block;margin-top:6px;color:var(--soft);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer}
-.ins-item + .ins-item{border-top:1px solid var(--line);margin-top:13px;padding-top:13px}
 
 /* FAB central da barra de baixo (mobile) */
 .nav.fab{position:relative;overflow:visible}
@@ -333,9 +314,6 @@ details.cerebro-campo>summary .small{display:inline;margin-left:6px;font-weight:
 .sb-item .ic{display:grid;place-items:center}
 .sb-item .ic svg{width:18px;height:18px;display:block}
 .bottom-nav .nav .ic svg,.sb-item .ic svg{stroke:currentColor}
-/* Insights: ícone à esquerda de cada item */
-.ins-item{display:flex;gap:11px;align-items:flex-start}
-.ins-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;font-size:15px;background:rgba(255,98,88,.1);color:var(--lime);border:1px solid rgba(255,98,88,.25)}
 /* Barra de baixo (mobile): ícone + rótulo numa linha só, tudo alinhado e dentro da tela */
 .bottom-nav .nav{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 1px;min-width:0}
 .bottom-nav .nav .ic{display:block;line-height:0}
@@ -386,7 +364,7 @@ button:focus-visible,.btn:focus-visible,.sb-item:focus-visible,.nav:focus-visibl
 .tag{ color:var(--soft); background:rgba(255,255,255,.05); border-color:var(--line); }
 .tag.warn{ color:var(--morno); background:rgba(184,194,201,.12); border-color:rgba(184,194,201,.26); }
 .timeline{ border-left-color:var(--line2); }
-.lead,.mini,.notice,.empty,.agenda-item,.dash-card{ border-radius:var(--radius); }
+.lead,.mini,.notice,.empty,.agenda-item{ border-radius:var(--radius); }
 input,textarea{ border-radius:12px; border-color:var(--line); background:var(--input); }
 input:focus,textarea:focus{ border-color:var(--accent-line); }
 .sb-item.active{ box-shadow:inset 3px 0 0 var(--accent); }
@@ -518,7 +496,7 @@ html[data-theme="dark"] .logo{background-image:url("/logo-cp.png?v=__VERSION__")
 
 /* Estrutura geral */
 .app{max-width:1460px}
-.card,.dash-card{
+.card{
   background:var(--panel);
   border-color:var(--line);
   box-shadow:var(--shadow-soft);
@@ -527,7 +505,6 @@ html[data-theme="dark"] .logo{background-image:url("/logo-cp.png?v=__VERSION__")
 .mini,
 .lead,
 .top3-mini,
-.dash-btn,
 .empty,
 .resumo-dia,
 .menu-card{
@@ -562,7 +539,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent-line) !importa
 }
 .btn:hover{filter:brightness(1.035);box-shadow:0 12px 28px rgba(255,98,88,.25)}
 .btn:active{transform:translateY(1px)}
-.btn.secondary,.dash-btn{background:var(--surface-soft);color:var(--text);border-color:var(--line);box-shadow:none}
+.btn.secondary{background:var(--surface-soft);color:var(--text);border-color:var(--line);box-shadow:none}
 .btn.cyan{background:var(--accent);color:#fff}
 .tag.hot{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
 
@@ -1004,6 +981,7 @@ body.lead-foco-aberto #home .home-right{display:none!important}
    POR CIMA do cliente aberto, entre o topo do app e os botões do atendimento. O dono flagrou com
    print e a regra é clara — número do mês é da tela inicial, não é da tela do cliente. */
 body.lead-foco-aberto #home .home-page-heading,
+body.lead-foco-aberto #home #statusStamp,
 body.lead-foco-aberto #home #resumoDia,
 body.lead-foco-aberto #home #cpMesResumo,
 body.lead-foco-aberto #home #top3Area,
@@ -1086,7 +1064,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .cp-topbar{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(151,197,211,.10)}
 .cp-search input,.ui677-search-wrap>input{transition:border-color .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),background .16s var(--cp687-ease)}
 .cp-search input:focus,.ui677-search-wrap>input:focus{background:rgba(255,255,255,.045)!important;box-shadow:0 0 0 3px rgba(255,98,88,.14)!important}
-.home-page-heading h2,#home h1,#home h2,.screen>h1,.screen>h2{letter-spacing:-.04em}.home-center{gap:18px}.resumo-dia{border-radius:18px!important}.resumo-dia .item,.dash-card{border-radius:16px!important;transition:transform .16s var(--cp687-ease),box-shadow .16s var(--cp687-ease),border-color .16s var(--cp687-ease)}.resumo-dia .item:hover,.dash-card:hover{transform:translateY(-2px);box-shadow:var(--cp687-shadow)}
+.home-page-heading h2,#home h1,#home h2,.screen>h1,.screen>h2{letter-spacing:-.04em}.home-center{gap:18px}.resumo-dia{border-radius:18px!important}.resumo-dia .item,.resumo-dia .item:hover,
 #leadFocoArea .lead-ui670{max-width:100%}.btn,.btn.secondary{border-radius:13px!important}.btn:hover{box-shadow:var(--cp687-glow)}
 #carteira table{border-collapse:separate;border-spacing:0}tr{transition:background .14s var(--cp687-ease),transform .14s var(--cp687-ease)}
 #relatorio .card,#agenda .card,#arquivados .card,#menu .card,#propostas .card{border-radius:19px!important}#icTabCerebro[style*="255"]{box-shadow:var(--cp687-glow)}
@@ -1109,10 +1087,9 @@ body{overflow-x:hidden;}
 .menu-card:hover,
 .top3-mini:hover,
 .resumo-dia .item:hover,
-.dash-card:hover,
 button:hover,
 .sb-brand:hover{transform:none!important;}
-button,.card,.menu-card,.top3-mini,.resumo-dia .item,.dash-card,.sb-brand{
+button,.card,.menu-card,.top3-mini,.resumo-dia .item,.sb-brand{
   transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease,opacity .14s ease!important;
 }
 .cp-topbar{transform:none!important;will-change:auto!important;}
@@ -1665,3 +1642,8 @@ body.cpio-aberto{overflow:hidden}
 .resumo-dia{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:999px){.resumo-dia{grid-template-columns:repeat(3,minmax(92px,1fr))}}
 @media(max-width:620px){.resumo-dia{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* v1293 — aviso de serviço fora do ar (topo da Home). Só aparece quando o servidor diz que a
+   transcrição de áudio ou o salvamento de conversas estão indisponíveis. */
+.cp1293-aviso{display:block!important;margin:0 0 10px!important;padding:10px 12px!important;border:1px solid var(--risco)!important;border-radius:12px!important;background:rgba(255,98,88,.10)!important;color:var(--risco)!important;font-size:12.5px!important;font-weight:800!important;line-height:1.45!important}
+.cp1293-aviso[hidden]{display:none!important}

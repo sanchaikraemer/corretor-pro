@@ -12,16 +12,26 @@ const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 // outro lead estivesse aberto, era salvo no lead ERRADO). Corrigido pra registrar direto no
 // lead do card (l.id) via fetch ao lead-update.
 
-const ini = app.indexOf('window.copiarMensagemLead = function(id){');
-const fim = app.indexOf('\n};', ini) + 3;
-assert.ok(ini > -1, 'window.copiarMensagemLead não encontrada em app.js');
-const bloco = app.slice(ini, fim);
+// v1293 — O BOTÃO DE COPIAR DO CARD DA HOME NÃO EXISTE MAIS, E A FUNÇÃO SAIU COM ELE.
+//
+// A correção da v984 (registrar o evento no lead DO CARD, não no lead aberto) valeu enquanto a
+// Home desenhava cartões com botão de copiar. A v1076 trocou os cartões por linhas de tabela e o
+// botão sumiu; a função `window.copiarMensagemLead` ficou no arquivo mais de 200 versões sem
+// ninguém a chamar, e saiu na faxina da v1293.
+//
+// O que a v984 protegia continua protegido nos dois caminhos que EXISTEM: copiar dentro do
+// cliente (cp704CopyMsg) e copiar na tela de importação — os dois gravam o evento com o id certo,
+// conferido em v1142-copiar-sugestao-sempre-marca-atendimento e v1248-gravacoes-nao-se-atropelam.
+assert.ok(!app.includes('window.copiarMensagemLead'),
+  'o copiar do card da Home saiu na v1293 — se voltar, precisa voltar com botão e com esta checagem');
 
-assert.doesNotMatch(bloco, /registrarAprendizado\(/,
-  'não pode mais usar registrarAprendizado aqui — ela ignora o lead do card e usa state.lead?.id (o lead aberto, se houver)');
-assert.match(bloco, /action:\s*"aprendizado"/, 'precisa registrar o evento de aprendizado direto');
-assert.match(bloco, /evento:\s*"mensagem_copiada"/, 'precisa registrar o evento "mensagem_copiada"');
-assert.match(bloco, /id:\s*l\.id/, 'precisa usar o id do lead do CARD (l.id), não o lead aberto na tela');
+// O contador de "Mensagens copiadas" do Desempenho, que era o sintoma da v984, continua sendo
+// alimentado pelo caminho vivo, e com o id explícito do cliente.
+const copiar = app.slice(app.indexOf('window.cp704CopyMsg=async function'));
+const blocoCopiar = copiar.slice(0, copiar.indexOf('\n  };'));
+assert.match(blocoCopiar, /action:\s*"aprendizado"/, 'precisa registrar o evento de aprendizado direto');
+assert.match(blocoCopiar, /evento:\s*"mensagem_copiada"/, 'precisa registrar o evento "mensagem_copiada"');
+assert.match(blocoCopiar, /id:\s*leadId/, 'precisa gravar no cliente aberto, com o id explícito');
 
 // v984 — Desempenho passou de "últimos 7 dias corridos" pra "mês corrente" (dia 1 até hoje):
 // pedido do dono, que revisa uma vez por mês, não por dia.

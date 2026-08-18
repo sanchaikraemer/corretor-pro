@@ -31,10 +31,13 @@ assert.match(app, /cp694-loading/, 'spinner .cp694-loading da Home continua (hom
 assert.match(app, /__cp694HotfixMobile/, 'o embrulho vivo de carregarDashboard continua');
 // - o CSS vivo da lista da Condução/Atendimentos (classes emitidas pela geração final cp788);
 assert.match(app, /cp695-list/, 'CSS/markup .cp695-list continua (a lista viva usa essa classe)');
-// - a geração FINAL (cp788) é a única dona de renderCarteiraTabela/carregarPipeline/carregarCarteira;
+// - a geração FINAL (cp788) é a única dona de carregarCarteira;
 assert.match(app, /__cp788ConducaoHistorico/, 'a geração final cp788 continua');
-assert.equal((app.match(/window\.renderCarteiraTabela\s*=/g) || []).length, 1,
-  'só a geração final pode definir window.renderCarteiraTabela');
+// v1293 — renderCarteiraTabela saiu na faxina: era a última sobra da tela Condução (apagada na
+// v1075). Ninguém a chamava; quem desenha a lista de atendimentos hoje é carregarCarteira.
+assert.equal((app.match(/window\.renderCarteiraTabela\s*=/g) || []).length, 0,
+  'renderCarteiraTabela foi removida na v1293 — não pode voltar sem uma tela que a chame');
+assert.match(app, /window\.carregarCarteira\s*=/, 'quem desenha os atendimentos continua sendo carregarCarteira');
 // (v1075: a tela Condução foi deletada — ninguém mais pode definir esse render.)
 assert.equal((app.match(/window\.carregarPipeline\s*=/g) || []).length, 0,
   'a tela Condução saiu na v1075 — window.carregarPipeline não pode voltar');
