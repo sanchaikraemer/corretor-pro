@@ -726,6 +726,41 @@ function _ladoDaMensagem(m, corretorNome = "", lead = {}) {
 // `evals/` conseguir conferir, sem gastar IA, que os exemplos de voz do corretor não contêm fala
 // do cliente. Era exatamente esse bloco que recebia as mensagens do cliente quando o contato
 // estava salvo com "Corretor"/"Imobiliária" no nome (ver v1282).
+// v1297 — AS PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA.
+//
+// Print do dono de 18/08/2026, 17h18, com o Cérebro comprovadamente inteiro no pedido (26.459
+// caracteres) e o aprendizado aplicado. Mesmo assim a sugestão RECOMENDADA foi:
+//   "Tem algum ponto das condições de pagamento que você gostaria de ver com mais detalhes, ou
+//    alguma dúvida sobre o empreendimento que posso esclarecer?"
+// Que é, palavra por palavra, a MESMA pergunta que ele já tinha mandado 1h31 antes na conversa
+// ("Ficou alguma dúvida ou algum ponto que gostaria de conversar sobre o empreendimento?") — e que
+// o cliente JÁ RESPONDEU ("estamos analisando ainda, mas gostei da ideia").
+//
+// O pedido dizia "não repita pergunta já respondida", mas isso é uma ordem sem fato do lado dela: a
+// IA não tinha em lugar nenhum a LISTA do que já foi perguntado. Mesma lição da v1277, que resolveu
+// a oferta repetida mandando o texto das tentativas junto. Aqui o código só EXTRAI um fato da
+// conversa (as frases com "?" escritas pelo corretor) e diz se o cliente falou depois. Nenhuma
+// decisão comercial é tomada aqui.
+export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead = {}) {
+  if (!Array.isArray(timeline)) return [];
+  const achadas = [];
+  timeline.forEach((m, i) => {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") return;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (!texto.includes("?")) return;
+    const respondida = timeline.slice(i + 1).some(x => _ladoDaMensagem(x, corretorNome, lead) === "cliente");
+    for (const bruto of texto.match(/[^.!?]*\?/g) || []) {
+      const pergunta = bruto.replace(/^[\s\-–—,;:]+/, "").trim();
+      if (pergunta.length < 12 || pergunta.length > 220) continue;
+      achadas.push({ texto: pergunta, respondida });
+    }
+  });
+  // Mesma pergunta feita duas vezes conta uma vez só, e vale a marca da vez mais recente.
+  const porChave = new Map();
+  for (const p of achadas) porChave.set(_semAcento(p.texto).toLowerCase().replace(/[^a-z0-9 ]/g, ""), p);
+  return [...porChave.values()].slice(-6);
+}
+
 export function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
   if (!Array.isArray(timeline)) return "";
   const out = [];
@@ -3328,6 +3363,17 @@ TEXTOS DAS TENTATIVAS SEM RESPOSTA (fato histórico; não presuma o motivo do si
 ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
     : "TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: nenhuma (a última palavra da conversa é do cliente).";
 
+  // v1297 — a lista do que o corretor JÁ PERGUNTOU nesta conversa, e se o cliente falou depois.
+  // Sem esse fato, "não repita pergunta já respondida" era ordem sem material: a IA repetia a
+  // pergunta reescrita e o corretor recebia de volta o que ele mesmo já tinha mandado.
+  const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timelineArr, corretorNome, lead || {});
+  const blocoPerguntasJaFeitas = perguntasJaFeitas.length
+    ? `PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA (extraídas das mensagens dele):
+${perguntasJaFeitas.map(p => `- "${p.texto}"${p.respondida ? " — o cliente JÁ FALOU depois desta pergunta" : " — ainda sem resposta"}`).join("\n")}
+Nenhuma pergunta já respondida pode voltar nas três mensagens, nem reescrita com outras palavras. Se
+o que você faria com a resposta já dá para entregar, entregue em vez de perguntar de novo.`
+    : "PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA: nenhuma.";
+
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
@@ -3397,6 +3443,7 @@ Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
+${blocoPerguntasJaFeitas}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -3460,8 +3507,8 @@ Formato JSON obrigatório:
     "faltaDescobrir":["somente informações ainda abertas que realmente podem alterar estratégia/seleção/próximo passo"]
   },
   "mensagens":{
-    "recomendada":"melhor mensagem para este momento",
-    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico",
+    "recomendada":"melhor mensagem para este momento; precisa entregar algo, trazer o dado que destrava ou pedir uma resposta concreta, e não pode repetir pergunta que o cliente já respondeu",
+    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, com um passo concreto dentro dela",
     "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite"
   },
   "recomendacaoContato":{
@@ -3472,7 +3519,7 @@ Formato JSON obrigatório:
   "produtosInteresse":["produtos/unidades atuais realmente relevantes"],
   "etapaSugerida":"estágio comercial atual",
   "clientProfile":"perfil comercial factual e útil, sem diagnóstico psicológico",
-  "nextAction":"menor próximo passo útil coerente com a leitura"
+  "nextAction":"menor próximo passo útil coerente com a leitura, escrito como ação do CORRETOR; quando a informação que falta já dá para entregar, o passo é entregar, não perguntar de novo"
 }
 
 REGRAS PARA AS TRÊS MENSAGENS
