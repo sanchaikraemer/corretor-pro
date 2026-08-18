@@ -1067,6 +1067,9 @@ const FRASES_DE_ROBO = [
   { rotulo: "não hesite em", re: /n[ãa]o hesite em/i },
   { rotulo: "sinta-se à vontade", re: /sinta-?se [àa] vontade/i },
   { rotulo: "gostaria de saber se você teria interesse", re: /gostaria de saber se (voc[êe] )?teria interesse/i },
+  // v1298 — pedido do dono ("tira o sem compromisso"): o corretor não pede licença pra fazer o
+  // trabalho dele, e a frase ainda avisa o cliente de que dá pra ignorar a mensagem.
+  { rotulo: "sem compromisso", re: /sem (nenhum |qualquer )?compromisso/i },
   // Palavra em inglês com equivalente óbvio em português. Fora da lista de propósito: as palavras
   // que o mercado imobiliário brasileiro usa como nome da coisa (studio, loft, duplex, garden,
   // closet, playground, home office, coworking, hall, fitness) e "case", que colide com o verbo
@@ -3543,6 +3546,11 @@ REGRAS PARA AS TRÊS MENSAGENS
 - As três não podem ser a mesma espera escrita com outras palavras. Se as três terminam pedindo que
   o cliente avise, chame ou procure quando quiser, a leitura comercial não virou condução — refaça
   a partir do que o Cérebro manda fazer neste estágio.
+- UM CAMINHO SÓ, escolhido por você. Não devolva ao cliente a escolha do formato ("prefere que eu
+  explique por aqui ou envio um material?", "quer por áudio ou por escrito?", "prefere ver agora ou
+  depois?"): escolher é trabalho do corretor, e duas opções de caminho dão ao cliente uma chance a
+  mais de adiar. Proponha o caminho mais forte, um só, e ele responde sim ou pede outra coisa. A
+  ÚNICA exceção é marcar dia/hora, onde oferecer duas opções ajuda a fechar a agenda.
 - Quando o cliente conta que soube de algo por terceiro, "por alto" ou "mais ou menos" (condição,
   valor, material, informação), isso é uma abertura para ENTREGAR aquilo direito. Sem inventar o
   conteúdo: ofereça ou mande o que o Cérebro, a conversa ou os fatos ensinados pelo corretor
@@ -3553,7 +3561,9 @@ marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita
 que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
 "estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
 "não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
-saber se você teria interesse". Também não escreva no passado o que você quer agora ("quis saber
+saber se você teria interesse", "sem compromisso" / "sem nenhum compromisso" (o corretor não pede
+licença para fazer o trabalho dele: oferecer a informação já é normal, e dizer "sem compromisso"
+avisa o cliente de que ele pode ignorar). Também não escreva no passado o que você quer agora ("quis saber
 se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
 sem repetir em outras palavras o que a mensagem já disse.
 
