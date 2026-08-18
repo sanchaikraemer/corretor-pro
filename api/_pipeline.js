@@ -888,6 +888,44 @@ export function formatCerebroPrompt(cfg) {
   ].filter(Boolean).join("\n\n");
 }
 
+// v1296 — A PROVA DO QUE FOI ENVIADO À IA NESTA ANÁLISE.
+//
+// "cade as regras, o cerebro, o aprendizado????" (dono, 18/08/2026, com print das três sugestões).
+// A linha embaixo das sugestões já sabia mostrar isso desde a v1239, mas o servidor parou de mandar
+// o número junto na v1247 (a restauração do miolo do prompt levou o campo embutido) — então a tela
+// mostrava só "Análise feita com o seu Cérebro" e ele continuava sem poder conferir nada.
+//
+// Estas duas funções não mudam UMA VÍRGULA do que vai pra IA: só CONTAM o que já foi montado, pra
+// tela poder dizer, em números, o que entrou e o que estava vazio.
+export function contarCerebroEnviado(cfg) {
+  const c = sanitizeCerebroConfig(cfg || {});
+  const tam = v => String(v || "").trim().length;
+  const regras = tam(c.regrasTexto) || tam(_regrasLegadasParaTextoPipeline(c.regras));
+  const objecoes = tam(c.objecoesTexto) || tam(_objecoesLegadasParaTextoPipeline(c.objecoes));
+  const out = {
+    metodo: tam(c.metodo),
+    tom: tam(c.tom),
+    diferenciais: tam(c.diferenciais),
+    evitar: tam(c.evitar),
+    regras,
+    objecoes
+  };
+  out.total = Object.values(out).reduce((a, b) => a + b, 0);
+  return out;
+}
+
+// O aprendizado tem quatro fontes e cada uma pode estar vazia por motivo diferente. Contar cada uma
+// separadamente é o que permite dizer PRA QUAL delas olhar quando a sugestão vier fraca.
+export function contarAprendizadoEnviado({ jeitoAprendido = "", casosSemelhantes = "", conhecimentoCorretor = "", exemplosVozCorretor = "" } = {}) {
+  const linhas = t => String(t || "").split("\n").filter(l => l.trim().startsWith("- ")).length;
+  return {
+    jeito: String(jeitoAprendido || "").trim() ? linhas(jeitoAprendido) || 1 : 0,
+    casos: linhas(casosSemelhantes),
+    fatos: String(conhecimentoCorretor || "").trim().length,
+    voz: String(exemplosVozCorretor || "").trim() ? String(exemplosVozCorretor).trim().split("\n").filter(l => l.trim()).length : 0
+  };
+}
+
 function numeroDiaCivil(y, m, d) {
   if (![y, m, d].every(Number.isFinite)) return null;
   const dt = Date.UTC(y, m - 1, d);
@@ -3309,6 +3347,11 @@ ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
   // real no comentário de conhecimentoCorretorTexto).
   const conhecimentoCorretor = await conhecimentoCorretorTexto(organizationId);
 
+  // v1296 — só CONTA o que acabou de ser montado acima, pra tela poder mostrar a prova. Nada
+  // daqui volta pro pedido enviado à IA.
+  const cerebroEnviado = contarCerebroEnviado(configCerebro);
+  const aprendizadoEnviado = contarAprendizadoEnviado({ jeitoAprendido, casosSemelhantes, conhecimentoCorretor, exemplosVozCorretor });
+
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a autoridade máxima sobre método, análise, estratégia,
 tom, objeções e condução. Não crie um segundo playbook por fora dele.
@@ -3445,6 +3488,18 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
+- CADA UMA DAS TRÊS PRECISA FAZER ALGUMA COISA: entregar o que a conversa está pedindo, trazer o
+  dado que destrava a decisão, ou pedir uma resposta concreta. Terminar devolvendo a iniciativa ao
+  cliente ("me avise", "qualquer coisa me chama", "pode me chamar por aqui", "fico no aguardo", "se
+  quiser posso te explicar") NÃO é próximo passo: é continuar esperando, e o corretor já estava
+  esperando antes de abrir o aplicativo. Menor próximo passo útil não quer dizer passo nenhum.
+- As três não podem ser a mesma espera escrita com outras palavras. Se as três terminam pedindo que
+  o cliente avise, chame ou procure quando quiser, a leitura comercial não virou condução — refaça
+  a partir do que o Cérebro manda fazer neste estágio.
+- Quando o cliente conta que soube de algo por terceiro, "por alto" ou "mais ou menos" (condição,
+  valor, material, informação), isso é uma abertura para ENTREGAR aquilo direito. Sem inventar o
+  conteúdo: ofereça ou mande o que o Cérebro, a conversa ou os fatos ensinados pelo corretor
+  sustentam, e o que não estiver sustentado não é afirmado.
 
 LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
 marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
@@ -3488,7 +3543,11 @@ Antes de devolver o JSON, confirme:
 9. A análise considerou o começo, o meio e o fim do histórico fornecido?
 10. A resposta está fiel ao Cérebro Comercial atual?
 11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
-    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
+    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.
+12. Alguma das três termina jogando para o cliente a decisão de continuar ("me avise", "qualquer
+    dúvida", "pode me chamar", "fico no aguardo", "se quiser posso explicar")? Se sim, aquela
+    mensagem não tem próximo passo nenhum: reescreva entregando algo ou pedindo uma resposta
+    concreta, dentro do que o Cérebro manda fazer neste estágio.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
@@ -3733,6 +3792,10 @@ Antes de devolver o JSON, confirme:
       // a análise passa a carregar a resposta: o Cérebro entrou ou não, e quanto da conversa a IA
       // leu de verdade. A tela mostra isso numa linha discreta embaixo das sugestões.
       cerebroAplicado: !modoPrevia,
+      // v1296 — os números do que foi enviado: cada campo do Cérebro e cada fonte do aprendizado.
+      // A tela mostra isso na linha discreta embaixo das sugestões (ver cp1225LinhaDeOndeVeio).
+      cerebroEnviado,
+      aprendizadoEnviado,
       conversaLidaPelaIA: entradaIncremental
         ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas }
         : cortadaPorLimiteTecnico

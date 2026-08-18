@@ -5362,7 +5362,23 @@ function cp1225LinhaDeOndeVeio(a){
       .map(k => `${rot[k]} ${Number(env[k]).toLocaleString("pt-BR")}`);
     if(partes.length) detalhe = ` · seu Cérebro enviado: ${partes.join(", ")} (${Number(env.total).toLocaleString("pt-BR")} caracteres)`;
   }
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}${escapeHtml(detalhe)}</div>`;
+  // v1296 — "cade as regras, o cerebro, o aprendizado????" (dono, 18/08/2026). O Cérebro já tinha
+  // essa prova; o APRENDIZADO não tinha nenhuma. Agora a mesma linha diz, em número, o que cada
+  // fonte do aprendizado pôs nesta análise — e diz com todas as letras quando não pôs nada, que é
+  // a resposta que faltava pra saber onde olhar quando a sugestão vem fraca.
+  const ap = a.aprendizadoEnviado;
+  let linhaAprendizado = "";
+  if(ap && typeof ap === "object"){
+    const itens = [];
+    if(Number(ap.jeito) > 0) itens.push("seu jeito de escrever");
+    if(Number(ap.casos) > 0) itens.push(`${Number(ap.casos)} ${pl(Number(ap.casos), "caso seu", "casos seus")}`);
+    if(Number(ap.fatos) > 0) itens.push("fatos que você ensinou");
+    if(Number(ap.voz) > 0) itens.push(`${Number(ap.voz)} ${pl(Number(ap.voz), "mensagem sua desta conversa", "mensagens suas desta conversa")}`);
+    linhaAprendizado = itens.length
+      ? ` · aprendizado aplicado: ${itens.join(", ")}`
+      : " · aprendizado: nada entrou nesta análise";
+  }
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}${escapeHtml(detalhe)}${escapeHtml(linhaAprendizado)}</div>`;
 }
 
 function cp865UltimaAnaliseISO(lead, a){
