@@ -1139,9 +1139,14 @@ export function frasesDeRoboEmMensagem(texto) {
 // Só o FECHO conta. "Me avise qual horário prefere: quinta ou sábado?" é pergunta concreta e não
 // pode cair aqui — por isso o padrão exige a construção aberta (avise SE / CASO / QUANDO / QUALQUER
 // coisa), que é o que transforma o fim da mensagem em sala de espera.
+// v1302 — a lista de verbos era curta demais e o print de 18/08/2026, 20h14, passou por fora dela:
+// "Se tiver alguma preferência, tipo andar, tamanho ou valor, só me falar que já separo as melhores
+// opções para você." É a MESMA sala de espera de sempre — só que com "me falar" no lugar de "me
+// avisar", e a rede não conhecia esse verbo. Agora conhece falar/dizer/sinalizar/passar também.
+const _VERBOS_DEVOLVE_BOLA = "me avise|me avisa|me fale|me fala|me falar|me diga|me diz|me dizer|me sinalize|me sinaliza|me passe|me passa|s[óo] (me )?(avisar|falar|dizer|chamar)|[ée] s[óo] (me )?(avisar|falar|dizer|chamar)|me chame|me chama|pode me chamar|me procure|me procura";
 const FECHOS_QUE_DEVOLVEM_A_BOLA = [
-  { rotulo: "fecho que manda o cliente avisar", re: /\b(me avise|me avisa|s[óo] (me )?avisar|[ée] s[óo] (me )?avisar|me chame|me chama|pode me chamar|me procure|me procura)\b[^.?!]{0,80}\b(se|caso|quando|qualquer)\b/i },
-  { rotulo: "fecho que manda o cliente avisar", re: /\b(se|caso|quando|qualquer)\b[^.?!]{0,80}\b(me avise|me avisa|s[óo] (me )?avisar|[ée] s[óo] (me )?avisar|me chame|me chama|pode me chamar|me procure|me procura)\b/i },
+  { rotulo: "fecho que manda o cliente avisar", re: new RegExp(`\\b(${_VERBOS_DEVOLVE_BOLA})\\b[^.?!]{0,80}\\b(se|caso|quando|qualquer)\\b`, "i") },
+  { rotulo: "fecho que manda o cliente avisar", re: new RegExp(`\\b(se|caso|quando|qualquer)\\b[^.?!]{0,80}\\b(${_VERBOS_DEVOLVE_BOLA})\\b`, "i") },
   { rotulo: "fecho de sala de espera", re: /\b(fico no aguardo|aguardo (o )?(seu|teu) (retorno|contato)|fico (por )?aqui|estou (por )?aqui|estarei (por )?aqui|pode contar comigo|conte comigo)\b/i }
 ];
 
@@ -1149,7 +1154,14 @@ const FECHOS_QUE_DEVOLVEM_A_BOLA = [
 // tirar na v1298: "se quiser posso te detalhar" no lugar de "te detalho agora".
 const PEDIR_LICENCA = [
   { rotulo: "pede licença em vez de entregar", re: /\bse (voc[êe] |tu )?(quiser|quiseres|precisar|desejar|achar melhor|preferir)[^.?!]{0,30}\b(posso|poderia|consigo|eu posso)\b/i },
-  { rotulo: "pede licença em vez de entregar", re: /\b(posso|poderia|consigo)\b[^.?!]{0,40}\bse (voc[êe] |tu )?(quiser|precisar|desejar|preferir)\b/i }
+  { rotulo: "pede licença em vez de entregar", re: /\b(posso|poderia|consigo)\b[^.?!]{0,40}\bse (voc[êe] |tu )?(quiser|precisar|desejar|preferir)\b/i },
+  // v1302 — print de 18/08/2026, 20h14: "Te passo um resumo das opções disponíveis para te ajudar a
+  // entender melhor, pode ser?" O "pode ser?" no fim é a mesma licença de sempre, escrita mais curta:
+  // o corretor entrega o que é trabalho dele entregar, não pergunta se está autorizado.
+  // "tudo bem?" fica FORA de propósito: é saudação de WhatsApp ("Boa tarde, Ana Paula, tudo bem?"),
+  // não pedido de licença. Entrou aqui na primeira tentativa e derrubou mensagem boa no teste.
+  { rotulo: "pede licença em vez de entregar", re: /,?\s*(pode ser|posso)\s*\?/i },
+  { rotulo: "pede licença em vez de entregar", re: /\bposso (te |lhe )?(mandar|enviar|passar|detalhar|explicar|separar|adiantar)\b[^.?!]{0,60}\?/i }
 ];
 
 // A última frase da mensagem — é ela que decide se o fim devolve a bola pro cliente.
@@ -1158,22 +1170,150 @@ function _ultimaFrase(texto) {
   return partes.length ? partes[partes.length - 1] : "";
 }
 
+// v1302 — print do dono de 18/08/2026, 20h14. Conversa de DUAS linhas: a saudação automática do
+// anúncio ("temos o [empreendimento] com 3 suítes e box duplo") e o cliente perguntando "Posso ter
+// mais informações sobre isso?". A sugestão 1 voltou assim:
+//
+//   "O [empreendimento] conta com apartamentos de 3 suítes, box duplo de garagem e estrutura
+//    moderna. Vou te enviar as principais informações e diferenciais do empreendimento."
+//
+// Duas coisas erradas na mesma frase, e o dono apontou as duas:
+//
+// 1. "QUEM DISSE QUE TEM SÓ 3 SUÍTES? NINGUÉM." O anúncio ofereceu UMA unidade com 3 suítes. A
+//    mensagem transformou isso no catálogo do prédio ("conta com apartamentos de 3 suítes") — e o
+//    prédio também tem de 2 suítes. Mais o "estrutura moderna", que ninguém escreveu em lugar
+//    nenhum. É o mesmo salto do print das 19h36 (a v1301 tirou as fontes que alimentavam isso):
+//    pegar um pedaço e afirmar o todo. O aplicativo NÃO conhece o catálogo — quem conhece é o
+//    corretor.
+//
+// 2. "NÃO ESTÁ NEM RESPONDENDO O QUE O CARA PERGUNTOU." O cliente pediu informação e recebeu o
+//    aviso de que a informação vai chegar depois. Prometer mandar não é mandar, e a mensagem não
+//    pergunta nada: o cliente não tem o que responder e o corretor continua sem saber o que ele
+//    precisa.
+//
+// Estas checagens só LEEM a mensagem — nada é cortado nem costurado (proibição do dono, v1247).
+// Quem reescreve é a mesma IA, inteira, como nas v1295/v1299.
+
+// Gatilho de lugar + nome próprio logo depois: "disponível na X", "perto da Y", "no bairro Z".
+const GATILHOS_DE_LUGAR = new RegExp(
+  "(?:" + [
+    "no bairro", "bairro", "na rua", "rua", "avenida", "av\\.", "condom[íi]nio", "residencial",
+    "edif[íi]cio", "empreendimento", "loteamento", "torre",
+    "pr[óo]xim[oa]s? (?:a|ao|[àa]|de|da|do|dos|das)", "pert(?:o|inho) (?:de|da|do|dos|das)",
+    "ao lado (?:de|da|do)", "em frente (?:a|[àa]|ao)",
+    "fica(?:m)? (?:em|no|na|nos|nas)", "localizad[oa]s? (?:em|no|na)", "situad[oa]s? (?:em|no|na)",
+    "dispon[íi]ve(?:l|is) (?:em|no|na)", "regi[ãa]o d[oae]s?"
+  ].join("|") + ")\\s+",
+  "gi"
+);
+const NOME_PROPRIO_DE_LUGAR = /^([A-ZÁÂÃÀÉÊÍÓÔÕÚÜÇ][\p{L}\d'’-]*(?:\s+(?:d[aeo]s?|e)\s+[A-ZÁÂÃÀÉÊÍÓÔÕÚÜÇ][\p{L}\d'’-]*|\s+[A-ZÁÂÃÀÉÊÍÓÔÕÚÜÇ][\p{L}\d'’-]*|\s+(?:[IVXLC]{1,5}|\d{1,4})(?![\p{L}\d]))*)/u;
+
+// Vem com inicial maiúscula e não é lugar: canal de contato, dia da semana, mês. Sem isso,
+// "te mando no WhatsApp" viraria acusação de endereço inventado.
+const NAO_E_LUGAR = new Set([
+  "whatsapp", "whats", "zap", "facebook", "instagram", "telegram", "youtube", "gmail", "google",
+  "email", "e-mail", "pdf", "excel", "word", "link", "site", "segunda", "terca", "quarta", "quinta",
+  "sexta", "sabado", "domingo", "janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho",
+  "agosto", "setembro", "outubro", "novembro", "dezembro", "hoje", "amanha", "voce", "sim", "nao"
+]);
+
+// Adjetivo de vendedor colado no imóvel. Cada um destes é uma AFIRMAÇÃO sobre um prédio que o
+// aplicativo não conhece — e nenhum deles diz nada ao cliente que "ótimo" não dissesse.
+const ELOGIO_SEM_FONTE = [
+  /\b(?:[óo]tim[oa]|excelente|boa|privilegiad[oa]|melhor)\s+(?:localiza[çc][ãa]o|regi[ãa]o|ponto|estrutura|acabamento|padr[ãa]o)\b/i,
+  /\bbem\s+localizad[oa]\b/i,
+  /\blocaliza[çc][ãa]o\s+(?:[óo]tima|excelente|privilegiada|estrat[ée]gica|boa)\b/i,
+  /\bregi[ãa]o\s+(?:bem\s+localizada|valorizada|nobre|privilegiada|central)\b/i,
+  /\bestrutura\s+(?:moderna|completa|diferenciada|de primeira)\b/i,
+  /\b(?:muito|bem)\s+procurad[oa]\b/i,
+  /\bperfil\s+(?:bem\s+)?procurad[oa]\b/i,
+  /\balto\s+padr[ãa]o\b/i,
+  /\bacabamento\s+(?:de primeira|diferenciado|superior)\b/i,
+  /\b(?:sofisticad[oa]|imperd[íi]vel|exclusiv[oa]|impec[áa]vel)\b/i
+];
+
+// Descrever o CATÁLOGO do prédio ("conta com apartamentos de 3 suítes"). O aplicativo não sabe
+// quais unidades existem: sabe o que esta conversa disse. Estrutura de lazer não entra aqui de
+// propósito — o que não pode é afirmar a lista de unidades.
+// O verbo precisa vir COLADO no substantivo e o substantivo precisa vir seguido da especificação
+// ("de 3 suítes", "com 2 dormitórios"). Sem essa exigência, "passando pra saber se você tem
+// interesse nas unidades" caía aqui — e isso não descreve catálogo nenhum.
+const DESCREVE_CATALOGO = /\b(?:conta com|possui|disp[õo]e de|oferece|tem)\s+(apartamentos?|unidades?|op[çc][õo]es|plantas?|tipologias?)\s+(?:de|com|a partir)\b/i;
+const CATALOGO_NA_CONVERSA = /(apartamentos?|unidades?|op[çc][õo]es|plantas?|tipologias?)\s+(de|com|a partir)/i;
+
+// Prometer mandar "as informações" e não perguntar nada: a mensagem não entrega e não pede
+// resposta. O cliente fica sem ter o que responder.
+const PROMESSA_VAZIA = /\b(?:vou (?:te |lhe )?(?:enviar|mandar|passar)|te (?:envio|mando|passo)|j[áa] te (?:mando|envio|passo)|te enviarei|encaminho)\b[^.?!]{0,40}\b(?:informa[çc][õo]es|detalhes|dados|resumo|material)\b/i;
+
+const _semAcentoMinuscula = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// O que a mensagem afirma e a conversa não sustenta. O segundo argumento é TUDO que se sabe de
+// verdade deste lead: a conversa inteira + as observações que o corretor registrou nele. Sem esse
+// contexto a checagem nem roda — não dá pra julgar o que não se leu.
+export function fatosInventadosNaMensagem(texto, contextoConhecido = null) {
+  const t = String(texto || "");
+  if (!t.trim() || contextoConhecido == null) return [];
+  // Duas fontes diferentes, de propósito:
+  // - QUAL imóvel é este (nome de empreendimento, rua, ponto de referência) → só a CONVERSA e as
+  //   observações deste lead. O Cérebro tem a carteira inteira e não sabe qual unidade este cliente
+  //   viu no anúncio (foi assim que nasceu a v1301).
+  // - COMO é o produto (o que o prédio tem, como ele é) → conversa MAIS o Cérebro, porque a
+  //   descrição do empreendimento é texto que o próprio corretor escreveu e mantém.
+  const conversa = typeof contextoConhecido === "string" ? contextoConhecido : String(contextoConhecido?.conversa || "");
+  const cerebro = typeof contextoConhecido === "string" ? "" : String(contextoConhecido?.cerebro || "");
+  const base = " " + _semAcentoMinuscula(conversa).replace(/\s+/g, " ") + " ";
+  const baseProduto = base + _semAcentoMinuscula(cerebro).replace(/\s+/g, " ") + " ";
+  const achados = [];
+
+  GATILHOS_DE_LUGAR.lastIndex = 0;
+  let m;
+  while ((m = GATILHOS_DE_LUGAR.exec(t)) !== null) {
+    const resto = t.slice(m.index + m[0].length);
+    const nome = (NOME_PROPRIO_DE_LUGAR.exec(resto) || [])[1];
+    if (!nome) continue;
+    const chave = _semAcentoMinuscula(nome).replace(/\s+/g, " ").trim();
+    if (!chave || NAO_E_LUGAR.has(chave)) continue;
+    if (base.includes(chave)) continue;
+    achados.push("cita lugar que não está na conversa");
+    break;
+  }
+
+  for (const re of ELOGIO_SEM_FONTE) {
+    const achado = re.exec(t);
+    if (!achado) continue;
+    // Se o próprio cliente ou o corretor escreveu aquilo na conversa, é fato deste atendimento.
+    if (baseProduto.includes(_semAcentoMinuscula(achado[0]).replace(/\s+/g, " ").trim())) continue;
+    achados.push("elogia o imóvel com o que a conversa não disse");
+    break;
+  }
+
+  if (DESCREVE_CATALOGO.test(t) && !CATALOGO_NA_CONVERSA.test(baseProduto)) {
+    achados.push("descreve o empreendimento por conta própria");
+  }
+
+  return [...new Set(achados)];
+}
+
 // Tudo que precisa sair de uma sugestão, com o motivo de cada coisa. É o que decide se a mensagem
 // volta pra IA reescrever — e o que mede se a reescrita ficou melhor que o original.
-export function problemasNaMensagem(texto) {
+// O segundo argumento é o contexto conhecido do lead (ver fatosInventadosNaMensagem). Sem ele, só
+// rodam as checagens que dependem apenas do texto da mensagem.
+export function problemasNaMensagem(texto, contextoConhecido = null) {
   const t = String(texto || "");
   if (!t.trim()) return [];
   const achados = frasesDeRoboEmMensagem(t);
   const fecho = _ultimaFrase(t);
   for (const f of FECHOS_QUE_DEVOLVEM_A_BOLA) if (f.re.test(fecho)) { achados.push(f.rotulo); break; }
   for (const f of PEDIR_LICENCA) if (f.re.test(t)) { achados.push(f.rotulo); break; }
+  if (PROMESSA_VAZIA.test(t) && !t.includes("?")) achados.push("promete mandar informação e não pergunta nada");
+  achados.push(...fatosInventadosNaMensagem(t, contextoConhecido));
   return [...new Set(achados)];
 }
 
 // Uma única chamada à IA pedindo que ela mesma reescreva as sugestões em que a frase de robô
 // escapou. Devolve { a?, b?, c? } só com as mensagens que voltaram melhores; qualquer falha vira
 // objeto vazio e a análise segue com o texto original.
-async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model }) {
+async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model, contextoConhecido = null }) {
   const lista = (itens || []).filter(i => i?.texto);
   if (!lista.length || !openai) return {};
   const pedido = `Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
@@ -1196,9 +1336,20 @@ passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
   ("me avise se precisar", "qualquer coisa me chama", "fico no aguardo"), termine a mensagem na
   entrega ou na pergunta concreta que ela já tem, e não coloque outro fecho no lugar. O corretor já
   está esperando: dizer isso de novo não acrescenta nada.
-- PEDIR LICENÇA: se o problema é "se quiser posso te detalhar" / "se precisar posso mandar", escreva
-  a ação direto — "te detalho agora", "te mando agora" —, mantendo a mesma entrega. Oferecer a
-  informação é o trabalho do corretor; ele não pede autorização para fazê-lo.
+- PEDIR LICENÇA: se o problema é "se quiser posso te detalhar" / "se precisar posso mandar" / um
+  "pode ser?" no fim, escreva a ação direto — "te detalho agora", "te mando agora" —, mantendo a
+  mesma entrega. Oferecer a informação é o trabalho do corretor; ele não pede autorização.
+- AFIRMAÇÃO SOBRE O IMÓVEL QUE A CONVERSA NÃO TEM: se o problema é nome de empreendimento, bairro,
+  rua ou ponto de referência, um elogio ("estrutura moderna", "ótima localização", "bem procurado")
+  ou a descrição do que o prédio tem ("conta com apartamentos de 3 suítes"), TIRE isso e não ponha
+  outro no lugar. Quem conhece o catálogo e o endereço é o corretor, não você: um anúncio que
+  ofereceu uma unidade com 3 suítes não diz que o prédio só tem dessas. Fale do que o cliente
+  perguntou, sem descrever o produto.
+- PROMETER MANDAR NÃO É MANDAR: se o problema é "vou te enviar as informações" / "te passo um
+  resumo", a mensagem não entregou nada e não perguntou nada — o cliente fica sem ter o que
+  responder. Reescreva fazendo UMA pergunta concreta que permita ao corretor selecionar o que
+  mandar (quantos dormitórios precisa, até quanto pretende investir, para morar ou investir),
+  escolhendo a que mais destrava neste momento da conversa.
 
 Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`).join(", ")}}`;
   const r = await chamarGPT4Json({
@@ -1217,7 +1368,7 @@ Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`
     // original", e isso deixava passar troca ruim: uma mensagem com frase de robô + fecho de espera
     // podia ser substituída por outra que ainda tinha a frase de robô, só porque tinha um problema a
     // menos. Não conseguiu limpar de uma vez, fica o texto original da IA.
-    if (novo && problemasNaMensagem(novo).length === 0) aprovadas[item.chave] = novo;
+    if (novo && problemasNaMensagem(novo, contextoConhecido).length === 0) aprovadas[item.chave] = novo;
   }
   return { aprovadas, completion: r?.response || null };
 }
@@ -3681,6 +3832,18 @@ REGRAS PARA AS TRÊS MENSAGENS
   depois?"): escolher é trabalho do corretor, e duas opções de caminho dão ao cliente uma chance a
   mais de adiar. Proponha o caminho mais forte, um só, e ele responde sim ou pede outra coisa. A
   ÚNICA exceção é marcar dia/hora, onde oferecer duas opções ajuda a fechar a agenda.
+- VOCÊ NÃO CONHECE O IMÓVEL. Quem conhece é o corretor. Não descreva o empreendimento por conta
+  própria: nada de "conta com apartamentos de X", "possui unidades de Y", "estrutura moderna",
+  "perfil bem procurado", "ótima localização". Um anúncio que ofereceu UMA unidade com 3 suítes não
+  diz que o prédio só tem dessas — e afirmar isso ao cliente fecha a porta para as outras unidades
+  que o corretor tem. Só entra o que está escrito NESTA conversa, numa observação deste lead ou no
+  Cérebro; o resto não é dito.
+- PROMETER MANDAR NÃO É MANDAR. "Vou te enviar as informações", "te passo um resumo", "já te mando
+  os detalhes" não entregam nada e não pedem nada: o cliente fica sem ter o que responder e o
+  corretor continua sem saber o que ele precisa. Quando o cliente pede informação e a conversa não
+  tem o dado, a mensagem faz UMA pergunta concreta que permita selecionar o que mandar — quantos
+  dormitórios precisa, até quanto pretende investir, para morar ou investir —, escolhendo a que
+  mais destrava neste ponto da conversa.
 - Quando o cliente conta que soube de algo por terceiro, "por alto" ou "mais ou menos" (condição,
   valor, material, informação), isso é uma abertura para ENTREGAR aquilo direito. Sem inventar o
   conteúdo: ofereça ou mande o que o Cérebro, a conversa ou os fatos ensinados pelo corretor
@@ -3734,7 +3897,12 @@ Antes de devolver o JSON, confirme:
 12. Alguma das três termina jogando para o cliente a decisão de continuar ("me avise", "qualquer
     dúvida", "pode me chamar", "fico no aguardo", "se quiser posso explicar")? Se sim, aquela
     mensagem não tem próximo passo nenhum: reescreva entregando algo ou pedindo uma resposta
-    concreta, dentro do que o Cérebro manda fazer neste estágio.`;
+    concreta, dentro do que o Cérebro manda fazer neste estágio.
+13. Alguma das três descreve o imóvel ou o empreendimento com algo que não está nesta conversa, nas
+    observações nem no Cérebro — nome, endereço, elogio, ou a lista de unidades que o prédio tem? Se
+    sim, tire; não troque por outro.
+14. Alguma das três só avisa que vai mandar informação, sem entregar nada e sem perguntar nada? Se
+    sim, ela não respondeu o cliente: refaça com a pergunta que permite selecionar o que mandar.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
@@ -3820,8 +3988,16 @@ Antes de devolver o JSON, confirme:
     // sem tempo no orçamento, com erro, ou com reescrita não melhor, fica o texto original.
     let sugestoesReescritas = 0;
     try {
+      // v1302 — o que se sabe DE VERDADE deste lead, separado por fonte: a conversa inteira (não o
+      // trecho incremental) mais as observações do corretor dizem QUAL é o imóvel; o Cérebro, que é
+      // texto escrito pelo próprio corretor, descreve COMO o produto é. É contra isso que se confere
+      // se a sugestão está afirmando coisa que ninguém disse.
+      const contextoConhecido = {
+        conversa: [timelineTextFull, observacoesManuaisTexto].filter(Boolean).join("\n"),
+        cerebro: instrucoesCerebroTexto
+      };
       const comFraseDeRobo = [["a", msgA], ["b", msgB], ["c", msgC]]
-        .map(([chave, texto]) => ({ chave, texto, frases: problemasNaMensagem(texto) }))
+        .map(([chave, texto]) => ({ chave, texto, frases: problemasNaMensagem(texto, contextoConhecido) }))
         .filter(item => item.texto && item.frases.length);
       // 2s de folga pro resto da rota, igual à retentativa da análise logo acima.
       const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
@@ -3837,7 +4013,8 @@ Antes de devolver o JSON, confirme:
           openai,
           itens: comFraseDeRobo,
           timeoutMs: Math.min(15000, sobraReescritaMs),
-          model: modeloReescrita
+          model: modeloReescrita,
+          contextoConhecido
         });
         if (typeof aprovadas.a === "string") { msgA = aprovadas.a; sugestoesReescritas++; }
         if (typeof aprovadas.b === "string") { msgB = aprovadas.b; sugestoesReescritas++; }

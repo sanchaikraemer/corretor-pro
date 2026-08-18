@@ -142,6 +142,21 @@ se oferece pra confirmar. Guardas: `tests/v1301-nada-de-outro-cliente-na-mensage
 `tests/v1115-conhecimento-lido-e-fatos-nao-inventados.test.mjs` (seção 2, invertida).
 Ver `NOTAS-v1301.md`._
 
+_**v1302 — a sugestão não descreve mais o produto sozinha, e prometer mandar deixou de contar como
+resposta.** Print de 18/08/2026, 20h14, numa conversa de duas linhas (saudação automática do anúncio
++ "posso ter mais informações sobre isso?"): as três sugestões descreveram o catálogo do prédio a
+partir da única linha do anúncio ("conta com apartamentos de 3 suítes", quando há unidade de 2
+também), elogiaram o que ninguém disse ("estrutura moderna", "perfil bem procurado") e só anunciaram
+que iam enviar informação. Duas das três já eram proibidas desde a v1299 e escaparam por vocabulário:
+a rede conhecia "só me avisar" e não "só me falar", conhecia "se quiser posso" e não "pode ser?".
+Agora: lista de fechos ampliada (falar/dizer/sinalizar/passar), "pode ser?"/"posso?" entram como
+pedido de licença ("tudo bem?" fica fora — é saudação), afirmação sobre o produto passa a ser
+conferida contra **a conversa** (endereço, qual imóvel é) e contra **o Cérebro** (como o produto é), e
+mensagem que só promete enviar "informações/detalhes/resumo" sem perguntar nada volta pra IA
+reescrever como pergunta que permite selecionar. Mecanismo é o mesmo das v1295/v1299 — o código
+percebe, a IA reescreve inteira, nada é cortado nem descartado. Guarda:
+`tests/v1302-sugestao-que-nao-responde-e-inventa.test.mjs`. Ver `NOTAS-v1302.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
