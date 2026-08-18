@@ -2895,12 +2895,11 @@ export function jeitoAprendidoCompacto(config, contexto) {
     const top = _topRelevantes(tecs, e => e.texto, query, 3).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
     if (top.length) partes.push("Já funcionou com você: " + top.join(" / "));
   }
-  if (Array.isArray(ia.produtoVsPerfil) && ia.produtoVsPerfil.length) {
-    const mp = _topRelevantes(ia.produtoVsPerfil, m => `${m.perfilCliente || ""} ${m.produto || ""} ${m.reacao || ""}`, query, 2)
-      .map(m => `perfil "${String(m.perfilCliente || "").trim()}" → você ofereceu "${String(m.produto || "").trim()}" (${String(m.reacao || "").trim()})`)
-      .filter(l => l.length > 16);
-    if (mp.length) partes.push("Produto certo pro perfil: " + mp.join(" | "));
-  }
+  // v1301 — o bloco "produto × perfil" SAIU daqui pelo mesmo motivo dos casos e dos fatos
+  // ensinados: ele escrevia no pedido o NOME DO EMPREENDIMENTO que o corretor ofereceu a OUTRO
+  // cliente ("perfil X → você ofereceu Y"). É exatamente o material com que o modelo inventava o
+  // endereço do imóvel deste lead. O cruzamento continua sendo aprendido e continua aparecendo na
+  // tela de Aprendizado; só não entra mais na hora de escrever a mensagem.
   if (Array.isArray(ia.padroesFollowup) && ia.padroesFollowup.length) {
     const fu = _topRelevantes(ia.padroesFollowup, e => e.texto, query, 2).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
     if (fu.length) partes.push("Seu follow-up que dá resposta: " + fu.join(" / "));
@@ -3489,24 +3488,44 @@ Não trate isso como aceite, concordância, interesse confirmado, objeção supe
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
   // o prompt fica exatamente como era antes.
   const jeitoAprendido = jeitoAprendidoCompacto(configCerebro, timelineText);
-  // v1212 — os CASOS REAIS da carteira (banco de casos v2) entram no prompt. Eram 661 casos
-  // guardados na conta do dono, lidos só pela planilha de exportação e pelo contador da tela.
-  // Falha do cache: análise segue sem o bloco, como antes.
-  const memoriaCasos = await loadMemoriaComercialV2(false, organizationId).catch(() => null);
-  const casosSemelhantes = casosSemelhantesPrompt(memoriaCasos, timelineText, 4);
   // v1212 — as mensagens REAIS do corretor NESTA conversa. exemplosDoCorretor existia desde
   // sempre e não era chamada por ninguém: é a referência de voz mais fiel que existe (é ele
   // falando com este cliente), e custa zero — sai da timeline que já está na mão.
   const exemplosVozCorretor = exemplosDoCorretor(timelineArr, corretorNome, lead || {});
-  // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
-  // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
-  // real no comentário de conhecimentoCorretorTexto).
-  const conhecimentoCorretor = await conhecimentoCorretorTexto(organizationId);
+
+  // v1301 — DUAS FONTES SAÍRAM DAQUI, POR ORDEM DIRETA DO DONO ("tira as duas fontes").
+  //
+  // Print de 18/08/2026, 19h36, numa conversa de TRÊS linhas: o anúncio dizia só "apartamento com
+  // 2 dormitórios e box de garagem" com o preço, o cliente pediu para saber mais e mandou uma
+  // palavra ("móveis"). As três sugestões voltaram com ENDEREÇO — em que empreendimento o
+  // apartamento estava, um ponto de referência da cidade, "região bem localizada". Nada disso
+  // existia nessa conversa.
+  //
+  // A regra "nunca invente" já estava escrita em três lugares (proteções de integridade, piso da
+  // carteira, revisão final) e mesmo assim o endereço saiu. Não saiu porque a IA desobedeceu a
+  // regra: saiu porque o sistema ENTREGAVA a ela, em toda análise, fatos que não são deste lead —
+  //   1. CASOS SEMELHANTES: até 4 atendimentos de OUTROS clientes, com produto, condução e regra;
+  //   2. FATOS ENSINADOS: o bloco inteiro de conhecimento da carteira (endereços, empreendimentos,
+  //      referências), sem nenhum vínculo com a conversa que está sendo analisada.
+  // Com quase nada escrito na conversa, é dali que o modelo preenche o vazio — e o cliente recebe
+  // por escrito o endereço de outro imóvel. Somar uma quarta regra não muda isso: o que muda é
+  // não colocar mais essa informação na mão de quem escreve a mensagem.
+  //
+  // O que CONTINUA: o Cérebro Comercial inteiro (é o corretor que escreve e manda nele), o "SEU
+  // JEITO" (tom e condução aprendidos, sem nome de produto de outro lead) e as mensagens reais
+  // dele NESTA conversa. O banco de casos e os fatos ensinados continuam sendo gravados e
+  // aparecem na tela de Aprendizado — só não entram mais no pedido que escreve as três mensagens.
+  //
+  // NÃO RELIGUE ISSO. Já aconteceu de sessão futura reconectar bloco desligado achando que era
+  // esquecimento (foi assim que os casos voltaram na v1212). Aqui foi decisão do dono, com o
+  // print na mão, e tem teste que falha de propósito se voltar.
 
   // v1296 — só CONTA o que acabou de ser montado acima, pra tela poder mostrar a prova. Nada
   // daqui volta pro pedido enviado à IA.
   const cerebroEnviado = contarCerebroEnviado(configCerebro);
-  const aprendizadoEnviado = contarAprendizadoEnviado({ jeitoAprendido, casosSemelhantes, conhecimentoCorretor, exemplosVozCorretor });
+  // v1301 — casos de outro cliente e fatos da carteira não entram mais (ver acima), então a
+  // linha da tela também não pode dizer que entraram: contam zero e somem de lá sozinhos.
+  const aprendizadoEnviado = contarAprendizadoEnviado({ jeitoAprendido, exemplosVozCorretor });
 
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a autoridade máxima sobre método, análise, estratégia,
@@ -3533,9 +3552,9 @@ condições. Analise a conversa integralmente e gere uma condução útil e prop
   : instrucoesCerebroTexto}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" é referência auxiliar de escrita e condução. Nunca supera o Cérebro nem cria fatos.` : ""}
-${casosSemelhantes ? `\n${casosSemelhantes}\nOs casos semelhantes são referência auxiliar. Nunca transfira fatos, valores, produtos, condições ou conclusões de outro lead para este.` : ""}
+
 ${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE — EXEMPLOS REAIS DESTA CONVERSA ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nUse apenas a forma de escrever; não copie fatos ou promessas.` : ""}
-${conhecimentoCorretor ? `\n=== FATOS ENSINADOS PELO CORRETOR ===\n${conhecimentoCorretor}\n=== FIM DOS FATOS ===\nUse somente como fonte factual dentro dos limites do Cérebro e da atualidade da informação.` : ""}
+
 
 Faça primeiro a leitura comercial; só depois escreva as três sugestões. As mensagens devem ser
 consequência da mesma análise e do mesmo próximo passo lógico, podendo ter ângulos diferentes sem

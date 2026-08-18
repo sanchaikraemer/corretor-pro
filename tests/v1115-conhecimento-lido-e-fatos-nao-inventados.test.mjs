@@ -47,14 +47,24 @@ const leadUpdate = fs.readFileSync(new URL("../api/lead-update.js", import.meta.
   } finally { await new Promise(r => server.close(r)); }
 }
 
-// ── 2. O conhecimento entra de fato no prompt da análise ──────────────────────────────────────
+// ── 2. v1301 — O CONHECIMENTO NÃO ENTRA MAIS NO PEDIDO. ORDEM DIRETA DO DONO. ────────────────
+// Isto aqui era o contrário até a v1300: o bloco inteiro de fatos da carteira (endereços,
+// empreendimentos, pontos de referência) ia junto em TODA análise. Print de 18/08/2026, 19h36,
+// numa conversa de três linhas sobre um apartamento anunciado só com dormitórios, box e preço: as
+// três sugestões voltaram dizendo em que empreendimento ele estava e perto de que rua ficava —
+// tudo vindo desse bloco e dos casos de outros clientes, nada vindo da conversa.
+//
+// O preço desta decisão, assumido pelo dono: quando o cliente perguntar o endereço, o aplicativo
+// NÃO vai mais responder de cabeça. Ele se oferece pra confirmar — que é o que a regra do projeto
+// sempre mandou fazer na falta de informação. Melhor confirmar do que mandar o cliente pro
+// endereço errado.
 {
-  assert.match(pipeline, /const conhecimentoCorretor = await conhecimentoCorretorTexto\(organizationId\);/,
-    "a análise precisa CARREGAR o conhecimento (era gravado e nunca lido)");
-  assert.match(pipeline, /FATOS ENSINADOS PELO CORRETOR/,
-    "o bloco de fatos precisa aparecer no prompt de sistema");
+  assert.doesNotMatch(pipeline, /const conhecimentoCorretor = await conhecimentoCorretorTexto\(organizationId\);/,
+    "o bloco de fatos da carteira não pode voltar pro pedido da análise (v1301)");
+  assert.doesNotMatch(pipeline, /FATOS ENSINADOS PELO CORRETOR/,
+    "e o bloco não pode reaparecer no prompt de sistema");
   assert.match(pipeline, /invalidarConhecimentoCorretorCache\(organizationId\); \/\/ v1115/,
-    "gravar conhecimento novo invalida o cache (a próxima análise já enxerga)");
+    "gravar conhecimento novo continua invalidando o cache (o dado segue sendo aprendido e guardado)");
 }
 
 // ── 3. A regra anti-invenção cobre dados de fato (endereço, cidade, localização) ──────────────
