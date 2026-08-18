@@ -75,9 +75,13 @@ da análise.
 A tela de Desempenho monta, a cada carregamento, quatro números e um gráfico de rosca: *atendidos
 hoje*, *sem resposta há 3+ dias*, *lembretes*, *compromissos*, mais o *total de atendimentos*.
 
-Dos 12 lugares de tela que essa função preenche, **5 não existem**: `cpActivityDonut`,
-`cpActivityLegend`, `cpActivitiesDone`, `cpActivitiesTotal` e `cpTotalAtendimentos`. Os outros 7
-existem e funcionam.
+Dos 12 lugares de tela que essa função preenche, **4 não existem**: `cpActivityDonut`,
+`cpActivityLegend`, `cpActivitiesDone` e `cpActivitiesTotal`. Os outros 8 existem e funcionam.
+
+> **ERRO DESTA AUDITORIA, corrigido na v1294:** a versão original desta linha dizia "5 não existem"
+> e incluía `cpTotalAtendimentos`. Ele **existe** — é o número grande no meio da rosca "Prioridade
+> de atendimento", que aparece e funciona. Foi falha da varredura automática (comparou o nome com
+> uma aspa sobrando). Conferido antes de qualquer corte; ele não foi removido.
 
 Então esse pedaço — a rosca da atividade do dia com a legenda de quatro linhas e o total de
 atendimentos — é **contado sobre a carteira inteira toda vez que a tela desenha, e descartado**.
@@ -262,5 +266,9 @@ As duas redes furadas apontadas na PARTE 5 e no item E6 foram consertadas: a ré
 código morto agora enxerga o arquivo inteiro, e a conferência de digitação passou a incluir a
 importação (24 → 29 arquivos).
 
-**Continuam pendentes de decisão do dono:** o andamento do aprendizado da carteira (E1), a rosca
-"Atividade do dia" do Desempenho (E3), e `aprenderDaCarteira`/`importarTelefonesCSV`.
+Na sequência, a **v1294** fechou os dois últimos: a rosca "Atividade do dia" (E3) e o andamento do
+aprendizado (E1) foram apagados a pedido do dono — cinco varreduras da carteira a menos por desenho
+de tela, com o aprendizado em si intacto e trancado por teste.
+
+**Continua pendente, só isto:** `aprenderDaCarteira` e `importarTelefonesCSV`, esperando decisão
+desde a v1268.
