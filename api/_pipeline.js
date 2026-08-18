@@ -973,6 +973,80 @@ export function validarFormatoMensagens(mensagens) {
   return { ok: motivos.length === 0, motivos };
 }
 
+// v1295 — print do dono de 18/08/2026, 16h08: a sugestão
+// RECOMENDADA saiu com "Fico à disposição se quiser saber mais sobre alguma condição ou ponto do
+// imóvel". É a PRIMEIRA frase da lista "LINGUAGEM DE IA — PROIBIDO" — a mesma lista que ele mandou
+// recolocar no pedido um dia antes (v1292, "1 - entao recoloque").
+//
+// O pedido continua sendo a rede principal, e nada dele muda aqui. O que a v1295 acrescenta é o que
+// fazer QUANDO a frase escapa mesmo assim: o código percebe o furo e devolve aquela mensagem PARA A
+// PRÓPRIA IA reescrever inteira, com o mesmo conteúdo e o mesmo próximo passo.
+//
+// O que NÃO volta (regra do dono, v1247/v1292): cirurgia determinística no texto. O código não
+// corta frase, não emenda pedaço, não substitui por frase genérica e não descarta a análise. Se a
+// reescrita falhar, não couber no tempo ou vier pior, fica valendo o texto original da IA.
+const FRASES_DE_ROBO = [
+  { rotulo: "espero que esteja bem", re: /espero que (voc[êe] )?esteja (bem|indo bem|tudo bem)/i },
+  { rotulo: "faz sentido", re: /\b(faz|fizer|fa[çc]a) sentido\b/i },
+  { rotulo: "fico à disposição", re: /\b(fico|estou|estarei|sigo|seguimos|ficamos|estamos|permane[çc]o|me coloco|coloco-me)\s+(sempre\s+)?[àa]\s+(sua\s+|tua\s+)?disposi[çc][ãa]o/i },
+  { rotulo: "qualquer dúvida estou aqui", re: /qualquer d[úu]vida,?\s+(estou|estarei|fico)\s+(aqui|por aqui)/i },
+  { rotulo: "espero ter ajudado", re: /espero ter ajudado/i },
+  { rotulo: "não hesite em", re: /n[ãa]o hesite em/i },
+  { rotulo: "sinta-se à vontade", re: /sinta-?se [àa] vontade/i },
+  { rotulo: "gostaria de saber se você teria interesse", re: /gostaria de saber se (voc[êe] )?teria interesse/i },
+  // Palavra em inglês com equivalente óbvio em português. Fora da lista de propósito: as palavras
+  // que o mercado imobiliário brasileiro usa como nome da coisa (studio, loft, duplex, garden,
+  // closet, playground, home office, coworking, hall, fitness) e "case", que colide com o verbo
+  // casar em português.
+  { rotulo: "palavra em inglês", re: /\b(overview|insights?|feedback|budget|call|briefing|follow[-\s]?up|timing|mindset|expertise|know[-\s]?how|player|target|deal|lead|prospect|pipeline|background|update|board|meeting)\b/i }
+];
+
+// Diz QUAIS expressões proibidas apareceram numa sugestão. Só lê o texto — não altera nada.
+export function frasesDeRoboEmMensagem(texto) {
+  const t = String(texto || "");
+  if (!t.trim()) return [];
+  return FRASES_DE_ROBO.filter(f => f.re.test(t)).map(f => f.rotulo);
+}
+
+// Uma única chamada à IA pedindo que ela mesma reescreva as sugestões em que a frase de robô
+// escapou. Devolve { a?, b?, c? } só com as mensagens que voltaram melhores; qualquer falha vira
+// objeto vazio e a análise segue com o texto original.
+async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model }) {
+  const lista = (itens || []).filter(i => i?.texto);
+  if (!lista.length || !openai) return {};
+  const pedido = `Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
+e contêm expressões que ESTE corretor proíbe, porque denunciam que quem escreveu foi um robô.
+
+${lista.map(i => `MENSAGEM "${i.chave}" (proibido nela: ${i.frases.join(", ")}):\n"${i.texto}"`).join("\n\n")}
+
+Reescreva cada uma delas mantendo EXATAMENTE o mesmo conteúdo, a mesma intenção e o mesmo próximo
+passo. Só a expressão proibida sai; o resto continua dizendo a mesma coisa.
+- Não invente fato, valor, condição, prazo, novidade, urgência, promessa ou ação nova.
+- Não acrescente pergunta nova nem tire a pergunta que já existe.
+- Português de corretor no WhatsApp: sem palavra em inglês e sem jargão de escritório.
+- Termine curto, sem repetir com outras palavras o que a mensagem já disse.
+- Nada de "fico/estou à disposição", "faz sentido", "espero que esteja bem", "qualquer dúvida estou
+  aqui", "não hesite em", "sinta-se à vontade", "espero ter ajudado".
+
+Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`).join(", ")}}`;
+  const r = await chamarGPT4Json({
+    openai,
+    systemPrompt: "Você reescreve mensagens de corretor de imóveis sem mudar o conteúdo comercial delas. Responda somente com JSON válido.",
+    prompt: pedido,
+    model,
+    maxOutputTokens: 700,
+    timeout: timeoutMs
+  });
+  const saida = (r?.parsed && typeof r.parsed === "object") ? r.parsed : {};
+  const aprovadas = {};
+  for (const item of lista) {
+    const novo = typeof saida[item.chave] === "string" ? saida[item.chave].trim() : "";
+    // Só troca se a IA devolveu mensagem de verdade E com menos frase proibida que a original.
+    if (novo && frasesDeRoboEmMensagem(novo).length < item.frases.length) aprovadas[item.chave] = novo;
+  }
+  return { aprovadas, completion: r?.response || null };
+}
+
 async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
   // localStorage desatualizado não pode substituir silenciosamente o conteúdo
@@ -3489,9 +3563,36 @@ Antes de devolver o JSON, confirme:
     // O Cérebro Comercial é a autoridade sobre saudação, retomada e abertura. O código não acrescenta
     // nem reescreve texto comercial depois da IA, para não contrariar regras manuais como abertura
     // só pelo nome perto da virada de horário ou continuidade sem nova saudação.
-    const msgA = msgARaw;
-    const msgB = msgBRaw;
-    const msgC = msgCRaw;
+    let msgA = msgARaw;
+    let msgB = msgBRaw;
+    let msgC = msgCRaw;
+
+    // v1295 — a única exceção, e ela não é comercial: quando uma das três sugestões volta com uma
+    // frase da lista "LINGUAGEM DE IA — PROIBIDO" (o "Fico à disposição" do print de 18/08/2026),
+    // a mensagem vai de volta PRA IA reescrever inteira, com o mesmo conteúdo. O código não corta
+    // nem costura texto (a cirurgia determinística saiu na v1247 e não volta) e nada é descartado:
+    // sem tempo no orçamento, com erro, ou com reescrita não melhor, fica o texto original.
+    let sugestoesReescritas = 0;
+    try {
+      const comFraseDeRobo = [["a", msgA], ["b", msgB], ["c", msgC]]
+        .map(([chave, texto]) => ({ chave, texto, frases: frasesDeRoboEmMensagem(texto) }))
+        .filter(item => item.texto && item.frases.length);
+      // 2s de folga pro resto da rota, igual à retentativa da análise logo acima.
+      const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
+      if (comFraseDeRobo.length && sobraReescritaMs >= 8000) {
+        const modeloReescrita = modeloTarefasSimples();
+        const { aprovadas = {}, completion: cReescrita = null } = await reescreverSugestoesComFraseDeRobo({
+          openai,
+          itens: comFraseDeRobo,
+          timeoutMs: Math.min(15000, sobraReescritaMs),
+          model: modeloReescrita
+        });
+        if (typeof aprovadas.a === "string") { msgA = aprovadas.a; sugestoesReescritas++; }
+        if (typeof aprovadas.b === "string") { msgB = aprovadas.b; sugestoesReescritas++; }
+        if (typeof aprovadas.c === "string") { msgC = aprovadas.c; sugestoesReescritas++; }
+        if (cReescrita) await registrarUsoIA({ organizationId, kind: "chat", model: cReescrita?.model || modeloReescrita, rota: "analise", usage: cReescrita?.usage });
+      }
+    } catch (_) { /* reescrita é rede extra: falhou, valem as mensagens originais da IA */ }
     const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
 
     // Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo
@@ -3514,6 +3615,9 @@ Antes de devolver o JSON, confirme:
       // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
       // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
       ...(modeloFallbackUsado ? { modeloFallback: true } : {}),
+      // v1295 — quantas das três sugestões precisaram ser reescritas pela IA por terem saído com
+      // frase da lista proibida. Fica no registro pra dar pra medir se o pedido está segurando.
+      ...(sugestoesReescritas ? { reescritaAntiRobo: sugestoesReescritas } : {}),
       // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
       //
       // O JSON pedido à IA tinha 12 campos de diagnóstico e a tela mostra CINCO. Os outros sete só
