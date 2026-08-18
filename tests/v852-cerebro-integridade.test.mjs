@@ -43,7 +43,10 @@ const openaiPrevia = {
         summary: "Cliente pediu informações; ninguém respondeu ainda.",
         mensagens: {
           recomendada: "Oi! Vi sua mensagem por aqui, me conta o que você procura que eu já te ajudo.",
-          maisSuave: "Olá! Passando pra saber se você ainda tem interesse — fico à disposição.",
+          // v1295 — esta linha era "...— fico à disposição.". A frase entrou na lista proibida do
+          // dono e hoje dispara a reescrita pela IA (uma segunda chamada), o que quebrava a conta de
+          // chamadas deste teste, que é sobre o MODO PRÉVIA e não sobre linguagem de robô.
+          maisSuave: "Olá! Passando pra saber se você ainda tem interesse nas unidades.",
           maisDireta: "Oi! Consegue me dizer hoje o que procura pra eu te mandar as opções certas?"
         }
       }) } }],
