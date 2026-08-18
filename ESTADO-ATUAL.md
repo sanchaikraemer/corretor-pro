@@ -157,6 +157,23 @@ reescrever como pergunta que permite selecionar. Mecanismo é o mesmo das v1295/
 percebe, a IA reescreve inteira, nada é cortado nem descartado. Guarda:
 `tests/v1302-sugestao-que-nao-responde-e-inventa.test.mjs`. Ver `NOTAS-v1302.md`._
 
+<<<<<<< HEAD
+_**v1303 — o Cérebro passou a ir junto na reescrita da mensagem.** Print de 18/08/2026, 20h40 ("não
+sei pra que serve todas aquelas regras do cérebro se não são usadas"). Quando uma sugestão é barrada
+pela rede (v1295/v1299/v1302), ela volta pra IA reescrever — e é essa segunda escrita que aparece na
+tela. Essa chamada recebia **só a mensagem furada e regras genéricas**: sem Cérebro, sem tom, sem as
+regras do corretor e sem a conversa. Quanto mais a rede pegava, mais texto sem as regras dele chegava
+na tela. Agora a reescrita recebe o mesmo Cérebro da análise e o fim da conversa (4.000 caracteres),
+com janela de até 20s dentro do mesmo orçamento; falhou ou não coube, vale o texto original. Junto,
+três buracos fechados: "Posso te passar…" passa a cair sempre (antes exigia "?" logo depois), o
+catálogo afirmado por conta própria passou a cobrir "temos/dispomos de/trabalhamos com", e a regra
+**UM CAMINHO SÓ** (escrita no pedido desde a v1296, sem rede até aqui) ganhou rede: pergunta com "ou"
+sobre o que o CORRETOR faz cai; sobre o que o CLIENTE precisa ("2 ou 3 dormitórios?") e oferta de dois
+horários continuam livres. Guarda: `tests/v1303-cerebro-na-reescrita-e-um-caminho-so.test.mjs`. Ver
+`NOTAS-v1303.md`._
+
+=======
+>>>>>>> origin/main
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
