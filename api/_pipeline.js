@@ -761,6 +761,47 @@ export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead 
   return [...porChave.values()].slice(-6);
 }
 
+// v1300 — "JOIA." NÃO É RESPOSTA.
+//
+// Conversa real do dono (18/08/2026): às 16h06 ele mandou as condições de pagamento inteiras e
+// perguntou "Você já tem algo em mente?". Às 16h08 o cliente respondeu "Joia.". Só isso.
+//
+// Para o sistema aquilo passou como "o cliente falou", e as três sugestões seguintes voltaram a
+// oferecer mais informação e a fazer pergunta aberta ("tem algum critério que pesaria mais na sua
+// decisão hoje?"). Mas um "joia" solto não responde nada, não aceita nada e não supera objeção
+// nenhuma — é o cliente sendo educado enquanto continua parado.
+//
+// Aqui o código só CONSTATA o fato (a última fala do cliente é um reconhecimento curto, e qual
+// pergunta do corretor ficou sem resposta de verdade). O que fazer com isso é decisão da IA com o
+// Cérebro do corretor.
+const _RECONHECIMENTO_CURTO = /^(joia|j[óo]ia|ok|okay|okey|blz|beleza|certo|show|top|legal|bacana|massa|perfeito|isso|isso a[íi]|entendi|entendido|combinado|fechado|valeu|obrigad[oa]|de nada|t[áa] bom|ta bom|t[áa]|sim|uhum|aham|👍|👌|🙏|😊)[\s.!]*$/i;
+
+export function respostaCurtaDoCliente(timeline, corretorNome = "", lead = {}) {
+  if (!Array.isArray(timeline) || !timeline.length) return null;
+  // A última fala precisa ser do cliente; se o corretor falou por último, isto não se aplica.
+  let ultimaFalaCliente = -1;
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const lado = _ladoDaMensagem(timeline[i], corretorNome, lead);
+    if (!lado) continue;
+    if (lado === "corretor") return null;
+    ultimaFalaCliente = i;
+    break;
+  }
+  if (ultimaFalaCliente < 0) return null;
+  const texto = String(timeline[ultimaFalaCliente]?.text || "").replace(/\s+/g, " ").trim();
+  if (!texto || texto.length > 30 || !_RECONHECIMENTO_CURTO.test(texto)) return null;
+  // A última coisa que o corretor perguntou antes disso — é ela que ficou sem resposta.
+  let perguntaAberta = "";
+  for (let i = ultimaFalaCliente - 1; i >= 0; i--) {
+    if (_ladoDaMensagem(timeline[i], corretorNome, lead) !== "corretor") continue;
+    const t = String(timeline[i]?.text || "").replace(/\s+/g, " ").trim();
+    const perguntas = t.match(/[^.!?]*\?/g) || [];
+    if (perguntas.length) perguntaAberta = perguntas[perguntas.length - 1].replace(/^[\s\-–—,;:]+/, "").trim();
+    break;
+  }
+  return { texto, perguntaAberta };
+}
+
 export function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
   if (!Array.isArray(timeline)) return "";
   const out = [];
@@ -1146,6 +1187,9 @@ passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
 - Não acrescente pergunta nova nem tire a pergunta que já existe.
 - Português de corretor no WhatsApp: sem palavra em inglês e sem jargão de escritório.
 - Termine curto, sem repetir com outras palavras o que a mensagem já disse.
+- Devolva UMA MENSAGEM INTEIRA, escrita do começo ao fim em português natural de WhatsApp. Não
+  emende pedaços da frase antiga nem deixe frase pela metade: quem lê é um cliente, e texto
+  remendado entrega na hora que aquilo não foi escrito por uma pessoa.
 - Nada de "fico/estou à disposição", "faz sentido", "espero que esteja bem", "qualquer dúvida estou
   aqui", "não hesite em", "sinta-se à vontade", "espero ter ajudado", "sem compromisso".
 - FECHO QUE DEVOLVE A BOLA: se o problema apontado é o fim da mensagem mandando o cliente avisar
@@ -3432,6 +3476,14 @@ Nenhuma pergunta já respondida pode voltar nas três mensagens, nem reescrita c
 o que você faria com a resposta já dá para entregar, entregue em vez de perguntar de novo.`
     : "PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA: nenhuma.";
 
+  // v1300 — a última fala do cliente foi só um "joia"/"ok"? Isso vai como FATO pro pedido, porque
+  // sem isso a IA lê "o cliente falou" e escreve como se a conversa tivesse avançado.
+  const reconhecimentoCurto = respostaCurtaDoCliente(timelineArr, corretorNome, lead || {});
+  const blocoRespostaCurta = reconhecimentoCurto
+    ? `ÚLTIMA FALA DO CLIENTE: "${reconhecimentoCurto.texto}" — reconhecimento curto, não é resposta.${reconhecimentoCurto.perguntaAberta ? `\nA pergunta que o corretor tinha feito antes disso e continua sem resposta: "${reconhecimentoCurto.perguntaAberta}"` : ""}
+Não trate isso como aceite, concordância, interesse confirmado, objeção superada nem resposta à pergunta. Também não devolva a mesma pergunta com outras palavras: depois de um reconhecimento curto, o que move a conversa é o corretor propor algo concreto — uma ação dele, específica e pequena — em vez de mais uma pergunta aberta.`
+    : "";
+
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
@@ -3501,7 +3553,7 @@ Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
-${blocoPerguntasJaFeitas}
+${blocoPerguntasJaFeitas}${blocoRespostaCurta ? `\n${blocoRespostaCurta}` : ""}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -3755,7 +3807,13 @@ Antes de devolver o JSON, confirme:
       // 2s de folga pro resto da rota, igual à retentativa da análise logo acima.
       const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
       if (comFraseDeRobo.length && sobraReescritaMs >= 8000) {
-        const modeloReescrita = modeloTarefasSimples();
+        // v1300 — a reescrita passa a ser feita pelo MODELO PRINCIPAL sempre que o tempo permitir.
+        // Print do dono de 18/08/2026, 17h56: a sugestão 2 chegou emendada ("Posso conversar sobre
+        // algum detalhe do empreendimento ou se surgir alguma dúvida durante sua análise."). Quem
+        // reescreveu foi o modelo rápido, e português capenga na tela é pior que a frase que a
+        // reescrita tirou. Só cai pro modelo rápido quando sobrou pouco tempo — nesse caso uma
+        // reescrita simples ainda é melhor que devolver a frase proibida.
+        const modeloReescrita = sobraReescritaMs >= 12000 ? modeloAnalise() : modeloTarefasSimples();
         const { aprovadas = {}, completion: cReescrita = null } = await reescreverSugestoesComFraseDeRobo({
           openai,
           itens: comFraseDeRobo,
