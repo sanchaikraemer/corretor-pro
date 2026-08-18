@@ -140,8 +140,8 @@ Código que não faz nada e não quebra nada. Ocupa espaço e confunde quem lê 
 | `aprendizadoRefresh` — botão de recarregar a tela de aprendizado, que não existe | `app.js:7108` | 1 linha |
 | `legacyRestoreBtn` / `legacyRestoreStatus` — botão e status da restauração antiga; a restauração funciona, só esses dois pedaços de tela é que não existem | `app.js:461-462` | 2 linhas |
 | `state.obsCarregada` — gravado duas vezes, lido nunca | `app.js:9236` e `9274` | 2 linhas |
-| `cp-ja-entrou` — marca salva no aparelho no cadastro e nunca lida por ninguém | `cadastro.html` | 1 linha |
-| 12 classes de CSS sem nenhum uso: `dash-btn`, `dash-card`, `dash-desemp`, `dash-stats`, `dash-sub`, `gauge`, `gv`, `dh`, `home-saud-acoes`, `ins-ic`, `ins-item`, `seq-link` | `styles.css` | — |
+| ~~`cp-ja-entrou`~~ — **ERRO DESTA AUDITORIA, corrigido na v1293:** ela É lida pela tela de entrar, através de uma constante que a varredura automática não enxergou. É o que faz quem acabou de criar a conta ver o login em vez do convite. **Não foi removida.** | `cadastro.html` | — |
+| 12 classes de CSS sem nenhum uso (viraram 13 na execução): `dash-btn`, `dash-card`, `dash-desemp`, `dash-stats`, `dash-sub`, `gauge`, `gv`, `dh`, `home-saud-acoes`, `ins-ic`, `ins-item`, `seq-link` | `styles.css` | — |
 
 **Já documentadas pelo próprio projeto** (estão na lista de exceções do teste
 `v1186-nada-de-codigo-morto`, cada uma com o motivo): `aprenderDaCarteira`, `importarTelefonesCSV`,
@@ -248,3 +248,19 @@ Tradução: hoje, um erro de digitação em `js/importacao.js` passa pela suíte
 aparece no celular, na hora em que você for importar uma conversa. As rotas de `api/` já são
 descobertas sozinhas; os módulos de `js/` não. A correção é de uma linha (descobrir a pasta `js/`
 sozinha, como já se faz com `api/`), e recomendo fazer junto com o que você decidir acima.
+
+---
+
+# O QUE FOI FEITO DEPOIS DESTE LAUDO
+
+O dono respondeu item a item no mesmo dia. O resultado está em **`NOTAS-v1293.md`**: o aviso de
+serviço fora do ar voltou pra tela, a pergunta "o cliente respondeu?" e a rede de segurança da
+saudação foram removidas, e a faxina do peso morto tirou 429 linhas — revelando, no caminho, uma
+cadeia de nove funções que só estavam vivas por causa de uma décima (o card do "top 3" da Home).
+
+As duas redes furadas apontadas na PARTE 5 e no item E6 foram consertadas: a régua do teste de
+código morto agora enxerga o arquivo inteiro, e a conferência de digitação passou a incluir a
+importação (24 → 29 arquivos).
+
+**Continuam pendentes de decisão do dono:** o andamento do aprendizado da carteira (E1), a rosca
+"Atividade do dia" do Desempenho (E3), e `aprenderDaCarteira`/`importarTelefonesCSV`.

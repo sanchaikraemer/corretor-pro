@@ -18,7 +18,9 @@ const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
 const ini = app.indexOf("async function registrarMensagemEnviada(id, msg){");
 assert.ok(ini > -1, "registrarMensagemEnviada precisa existir");
-const fim = app.indexOf("\nwindow.copiarMensagemLead", ini);
+// v1293 — o marcador de fim era `window.copiarMensagemLead` (copiar do card da Home), removido
+// na faxina por estar sem botão nenhum. O bloco medido aqui continua o mesmo.
+const fim = app.indexOf('\n// v1095 — "Oportunidades esquecidas" REMOVIDA', ini);
 assert.ok(fim > ini, "sanidade: fim do bloco de registrarMensagemEnviada");
 const bloco = app.slice(ini, fim);
 
@@ -74,10 +76,11 @@ assert.match(servidor, /detalhes: \{ tipo: "Mensagem enviada", de: "copiar_msg" 
   const cp704 = app.slice(app.indexOf("window.cp704CopyMsg=async function(k){"));
   assert.match(cp704.slice(0, cp704.indexOf("\n  };")), /registrarMensagemEnviada\(leadId, msg\)/,
     "copiar dentro do cliente marca atendimento");
-  // (b) card da Home
-  const hero = app.slice(app.indexOf("window.copiarMensagemLead = function(id){"));
-  assert.match(hero.slice(0, hero.indexOf("\n};")), /registrarMensagemEnviada\(l\.id, msg\)/,
-    "copiar do card da Home marca atendimento");
+  // (b) v1293 — o copiar do CARD DA HOME saiu: a função existia, mas nenhum botão a chamava
+  // (conferido na revisão de 18/08/2026). Os dois caminhos que o corretor usa de verdade estão
+  // aqui em (a) e (c), e é neles que a regra "atendimento antes do contador" tem que valer.
+  assert.ok(!app.includes("window.copiarMensagemLead"),
+    "o copiar do card da Home foi removido na v1293; se voltar, precisa voltar com botão e com esta checagem");
   // (c) card "Resposta pronta pra enviar" da tela de importação — o furo desta versão
   const legado = app.slice(app.indexOf('qs("#copyMessage").addEventListener'));
   const blocoLegado = legado.slice(0, legado.indexOf("\n});") + 4);

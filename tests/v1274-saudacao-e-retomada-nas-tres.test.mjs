@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { analyzeWithBrain } from '../api/_pipeline.js';
-import { garantirSaudacaoAbertura, primeiroNomeDoCliente } from '../js/saudacao.js';
 
 // v1274 — "cadê a saudação? a retomada?" (dono, 14/08/2026, com print das três sugestões).
 //
@@ -37,47 +36,26 @@ const src = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'ut
     'quem manda na saudação e na retomada agora é o Cérebro do corretor');
 }
 
-// ── 3. A rede de segurança: só acrescenta a saudação, nunca reescreve ────────────────────────
+// ── 3. A REDE DE SEGURANÇA FOI REMOVIDA NA v1293 ─────────────────────────────────────────────
+//
+// Ordem do dono na revisão de 18/08/2026: *"foda-se saudação, se isso consome algo elimine, eu
+// quero otimização"*. A função `garantirSaudacaoAbertura` (e o `primeiroNomeDoCliente`, que só
+// existia pra ela) já estava DESLIGADA desde a v1291 — a reescrita das instruções entregue pelo
+// dono passou a deixar saudação e retomada por conta do Cérebro. Ou seja: era código correto,
+// testado e sem nenhum chamador, viajando pro celular a cada atualização. Saiu.
+//
+// Quem cuida da saudação hoje:
+//   • o CÉREBRO do corretor decide se cumprimenta e como (conferido no bloco 1 acima);
+//   • a FAIXA do dia (não escrever "boa noite" às 17h) continua sendo corrigida na hora de
+//     mostrar a mensagem, por corrigirSaudacaoAbertura — conferido no teste da v1218.
 {
-  const manha = new Date('2026-08-14T13:00:00Z');  // 10h no Brasil
-  const tarde = new Date('2026-08-14T17:00:00Z');  // 14h no Brasil
-
-  assert.equal(primeiroNomeDoCliente('Gabriel Quality Evolutti'), 'Gabriel',
-    'o rótulo do WhatsApp vem com sobrenome e nome de empreendimento — só o primeiro nome é usado');
-  assert.equal(primeiroNomeDoCliente('Não identificado'), '',
-    'sem nome de verdade, melhor cumprimentar sem nome do que errar o nome');
-  assert.equal(primeiroNomeDoCliente(''), '', 'nome vazio não vira saudação com nome');
-
-  const semSaudacao = 'Das opções e valores que você conferiu no material, ficou alguma dúvida?';
-  assert.equal(
-    garantirSaudacaoAbertura(semSaudacao, { nome: 'Gabriel Quality', agora: tarde }),
-    'Boa tarde, Gabriel! ' + semSaudacao,
-    'a mensagem do print precisa sair cumprimentando o Gabriel'
-  );
-  assert.equal(
-    garantirSaudacaoAbertura(semSaudacao, { nome: 'Gabriel Quality', agora: manha }),
-    'Bom dia, Gabriel! ' + semSaudacao,
-    'a faixa do dia é a do horário, como sempre'
-  );
-
-  // Já começa pelo nome: a saudação entra na frente e a frase continua igualzinha.
-  assert.equal(
-    garantirSaudacaoAbertura('Gabriel, consegui a simulação do apartamento.', { nome: 'Gabriel', agora: tarde }),
-    'Boa tarde Gabriel, consegui a simulação do apartamento.',
-    'quando a mensagem já chama pelo nome, o cumprimento entra antes do nome'
-  );
-
-  // Já cumprimenta: o código não encosta (acertar a faixa continua sendo trabalho da hora de mostrar).
-  const jaCumprimenta = 'Bom dia Gabriel, tudo bem? Separei as duas opções que você viu.';
-  assert.equal(garantirSaudacaoAbertura(jaCumprimenta, { nome: 'Gabriel', agora: tarde }), jaCumprimenta,
-    'mensagem que já cumprimenta sai intacta daqui');
-  const informal = 'Oi Gabriel, tudo certo?';
-  assert.equal(garantirSaudacaoAbertura(informal, { nome: 'Gabriel', agora: tarde }), informal,
-    '"oi" também é cumprimento — não pode virar "Boa tarde, Gabriel! Oi Gabriel"');
-
-  // E nenhuma palavra do conteúdo é apagada ou trocada: o texto original continua inteiro dentro.
-  const saida = garantirSaudacaoAbertura(semSaudacao, { nome: 'Gabriel', agora: tarde });
-  assert.ok(saida.includes(semSaudacao), 'o texto escrito pela IA continua inteiro, letra por letra');
+  const saudacaoJs = fs.readFileSync(new URL('../js/saudacao.js', import.meta.url), 'utf8');
+  assert.ok(!/garantirSaudacaoAbertura/.test(saudacaoJs),
+    'a rede de segurança da saudação saiu na v1293; se voltar, precisa voltar com alguém chamando');
+  assert.ok(!/primeiroNomeDoCliente/.test(saudacaoJs),
+    'primeiroNomeDoCliente existia só pra rede de segurança — saiu junto');
+  assert.match(saudacaoJs, /export function corrigirSaudacaoAbertura/,
+    'a correção da FAIXA do dia continua — é ela que impede "boa noite" às 17h');
 }
 
 // ── 4. ATENÇÃO, ISTO MUDOU DE COMPORTAMENTO NA v1291 ─────────────────────────────────────────

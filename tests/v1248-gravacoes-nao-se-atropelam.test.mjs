@@ -49,15 +49,23 @@ assert.match(reanalisar, /if \(freshErr\) \{[\s\S]{0,300}?Nada foi alterado/,
 // As duas escrevem no MESMO campo do cliente lendo antes de escrever. Em paralelo, uma apagava a
 // outra: ora sumia o atendimento (o cliente voltava pra fila "Fazer agora" como se você nunca
 // tivesse falado com ele), ora sumia o contador de "Mensagens copiadas" do Desempenho.
-const inicioHero = app.indexOf('window.copiarMensagemLead = function');
-assert.ok(inicioHero > 0, 'não achei copiarMensagemLead');
-const hero = app.slice(inicioHero, app.indexOf('\n};', inicioHero));
-const posAtendimento = hero.indexOf('await registrarMensagemEnviada');
-const posContador = hero.indexOf('evento:"mensagem_copiada"');
+// v1293 — esta checagem media o copiar do CARD DA HOME (window.copiarMensagemLead). Esse caminho
+// foi removido: a função existia, mas nenhum botão a chamava (conferido na revisão de
+// 18/08/2026 — a Home passou a desenhar linhas de tabela na v1076 e o card com o botão de copiar
+// deixou de existir). A REGRA continua valendo inteira onde o corretor copia de verdade: o botão
+// de copiar dentro do cliente, medido logo abaixo com o mesmo rigor.
+assert.ok(!app.includes('window.copiarMensagemLead'),
+  'o copiar do card da Home saiu na v1293; se voltar, tem que voltar com botão E com esta checagem');
+
+const inicioCopiar = app.indexOf('window.cp704CopyMsg=async function');
+assert.ok(inicioCopiar > 0, 'não achei o copiar da tela do cliente');
+const copiar = app.slice(inicioCopiar, app.indexOf('\n  };', inicioCopiar));
+const posAtendimento = copiar.indexOf('await registrarMensagemEnviada');
+const posContador = copiar.indexOf('evento:"mensagem_copiada"');
 assert.ok(posAtendimento > 0, 'o atendimento tem que ser aguardado (await)');
 assert.ok(posContador > posAtendimento,
   'o ATENDIMENTO vai primeiro: se só uma gravação sobreviver (o app vai pro fundo ao ir pro WhatsApp), que seja a que importa');
-assert.match(hero, /keepalive:true/,
+assert.match(copiar, /keepalive:true/,
   'a segunda gravação precisa de keepalive — copiar é exatamente quando o app sai da frente');
 
 // ── 4. Apagar cliente não baixa mais a carteira inteira ──────────────────────────────────────

@@ -33,25 +33,51 @@ const acompanhantes = ['index.html','share.html','admin-plataforma.html','cadast
 const arquivosApi = fs.readdirSync(new URL('api/', raiz)).filter(f => f.endsWith('.js'));
 const todaApi = arquivosApi.map(f => ler('api/' + f)).join('\n');
 
+// v1293 — A RÉGUA PASSOU A ENXERGAR O ARQUIVO INTEIRO, NÃO SÓ O TOPO.
+//
+// A revisão de 18/08/2026 rodou uma varredura mais funda que esta e achou OITO funções mortas que
+// este teste não via, por dois furos na régua antiga:
+//
+//   1. ela só olhava o TOPO do arquivo (ast.body), então nada dentro dos blocos `(function(){…})()`
+//      — que é onde mora boa parte do app — era conferido;
+//   2. ela não reconhecia `window.minhaFuncao = function(){…}`, a forma usada por metade das
+//      funções que as telas chamam.
+//
+// O caso mais caro que escapou: `cardTop` (o card do "top 3" da Home). Sozinho ele parecia 15
+// linhas de sobra — mas era o ÚNICO chamador de outras nove funções, e essas nove pareciam vivas
+// só por causa dele. Cadeia inteira morta, com comentários no código jurando que estava em uso.
+//
+// Agora a régua desce em qualquer profundidade e nas duas formas de declarar.
 function declaracoesDeTopo(src) {
   const ast = parse(src, { ecmaVersion: 'latest', sourceType: 'module' });
   const nomes = [];
-  for (const no of ast.body) {
-    const decl = no.type === 'ExportNamedDeclaration' ? no.declaration : no;
-    if (decl?.type === 'FunctionDeclaration' && decl.id) nomes.push(decl.id.name);
-    if (decl?.type === 'VariableDeclaration') {
-      for (const d of decl.declarations) {
-        if (d.id?.type === 'Identifier' && d.init && /Function|Arrow/.test(d.init.type)) nomes.push(d.id.name);
-      }
+  const visitar = (no) => {
+    if (!no || typeof no !== 'object') return;
+    if (Array.isArray(no)) return no.forEach(visitar);
+    if (no.type === 'FunctionDeclaration' && no.id) nomes.push(no.id.name);
+    if (no.type === 'VariableDeclarator' && no.id?.type === 'Identifier'
+        && no.init && /Function|Arrow/.test(no.init.type)) nomes.push(no.id.name);
+    if (no.type === 'AssignmentExpression' && no.left?.type === 'MemberExpression'
+        && no.left.object?.name === 'window' && no.left.property?.name
+        && /Function|Arrow/.test(no.right?.type || '')) nomes.push(no.left.property.name);
+    for (const chave of Object.keys(no)) {
+      if (chave === 'loc' || chave === 'range') continue;
+      const filho = no[chave];
+      if (filho && typeof filho === 'object') visitar(filho);
     }
-  }
-  return nomes;
+  };
+  visitar(ast.body);
+  return [...new Set(nomes)];
 }
 
 // Conta ocorrências no TEXTO (não só no AST): as telas montam HTML com onclick="minhaFuncao(...)"
 // dentro de string, e isso é uso de verdade — foi justamente o que a primeira varredura da
 // auditoria não enxergou, gerando 225 falsos positivos antes de ser corrigida.
-const vezes = (texto, nome) => (texto.match(new RegExp('\\b' + nome.replace(/\$/g, '\\$') + '\\b', 'g')) || []).length;
+// v1293 — a borda de palavra (\b) não serve pra nomes como `$` e `$$`: cifrão não conta como
+// letra, então `\b$\b` nunca casa e os dois atalhos do bloco de acabamento apareciam como mortos.
+// Esta borda olha o vizinho: nem letra, nem número, nem _, nem $.
+const borda = (nome) => '(?<![\\w$])' + nome.replace(/\$/g, '\\$') + '(?![\\w$])';
+const vezes = (texto, nome) => (texto.match(new RegExp(borda(nome), 'g')) || []).length;
 
 // ── Exceções documentadas (v1268) ────────────────────────────────────────────────────────────
 // Funções que existem, têm ponte pro HTML e NINGUÉM chama. Cada uma com o motivo de continuar
@@ -61,7 +87,11 @@ const SEM_PORTA_CONHECIDAS = {
   aprenderDaCarteira: 'v1268: só era alcançável pelo menu do "+" que saiu na faxina; aguarda decisão do dono (religar num botão ou apagar)',
   importarTelefonesCSV: 'v1268: idem — e a v905 registrou que esta importação deveria continuar existindo',
   reanalisarEmSegundoPlano: 'v1268: refinava as 3 sugestões em segundo plano; perdeu o chamador em alguma versão anterior',
-  renderRespostaCliente: 'v1268: a pergunta "o cliente respondeu?" (evento cliente_respondeu) perdeu a tela; a v1189 diz que ela continua valendo',
+  // v1293 — renderRespostaCliente saiu da lista porque saiu do app. Ordem direta do dono na
+  // revisão de 18/08/2026: "acaba com isso pq já disse q nunca tem como saber pq o sistema não é
+  // integrado ao whats. Sempre q o cliente responde no whats a conversa é exportada para o
+  // corretorpro e então ele dá continuidade, então 'cliente respondeu' é sem sentido algum
+  // existir". O recurso inteiro (botões, gravação e o evento cliente_respondeu) foi removido.
   auditarDadosV681: 'ferramenta de apoio, chamada pelo console quando o dono pede diagnóstico (como restaurarLeadsAntigos)',
   // ── Achadas quando a régua acima foi corrigida (v1268). Todas ANTERIORES à faxina. ──
   excluirLeadDefinitivo: 'era o botão discreto no fim da tela do cliente; a exclusão continua existindo pelo modal de editar ("Excluir este lead" → excluirLeadDoModal), então o recurso não sumiu — sumiu esta porta',
@@ -75,17 +105,28 @@ const SEM_PORTA_CONHECIDAS = {
 const mortas = [];
 
 // ── app.js ────────────────────────────────────────────────────────────────────────────────────
+//
+// v1293 — a contagem passou a ser por LINHA, não por total de ocorrências. Com a régua funda, o
+// limite antigo ("declaração + ponte = 3 citações") não servia mais: `window.x = function(){…}`
+// cita o nome UMA vez só, e comentário que fala da função contava como uso. Agora vale a
+// pergunta certa: existe alguma linha, que não seja a declaração nem comentário, citando o nome?
 {
   const src = ler('app.js');
+  const linhas = src.split('\n');
+  const linhaDe = (pos) => src.slice(0, pos).split('\n').length;
   for (const nome of declaracoesDeTopo(src)) {
-    const dentro = vezes(src, nome);
-    const temPonte = new RegExp('window\\.' + nome + '\\s*=').test(src);
-    const foraDoApp = new RegExp('\\b' + nome + '\\b').test(acompanhantes);
-    // 1 = só a declaração. Com ponte, a LINHA da ponte cita o nome duas vezes
-    // (`window.x = x`), então declaração + ponte = 3 — era aqui que a régua deixava passar:
-    // com o limite em 2, nenhuma função com ponte jamais era apontada (v1268).
-    const limite = temPonte ? 3 : 1;
-    if (!foraDoApp && dentro <= limite && !SEM_PORTA_CONHECIDAS[nome]) mortas.push(`app.js: ${nome}`);
+    const escapado = nome.replace(/\$/g, '\\$');
+    const declaradaEm = new Set();
+    for (const m of src.matchAll(new RegExp('(?:function\\s+' + escapado + '|(?:const|let|var)\\s+' + escapado + '|window\\.' + escapado + '\\s*=)(?![\\w$])', 'g')))
+      declaradaEm.add(linhaDe(m.index));
+    const usosReais = [...src.matchAll(new RegExp(borda(nome), 'g'))].filter((m) => {
+      const l = linhaDe(m.index);
+      if (declaradaEm.has(l)) return false;                 // a própria declaração/ponte
+      if (/^\s*\/\//.test(linhas[l - 1] || '')) return false;  // comentário não é uso
+      return true;
+    });
+    const foraDoApp = new RegExp(borda(nome)).test(acompanhantes);
+    if (!foraDoApp && !usosReais.length && !SEM_PORTA_CONHECIDAS[nome]) mortas.push(`app.js: ${nome}`);
   }
 }
 
@@ -93,9 +134,10 @@ const mortas = [];
 {
   const src = ler('app.js');
   for (const [nome, motivo] of Object.entries(SEM_PORTA_CONHECIDAS)) {
-    const existe = new RegExp('function\\s+' + nome + '\\s*\\(').test(src);
-    const temPonte = new RegExp('window\\.' + nome + '\\s*=').test(src);
-    const usada = vezes(src, nome) > (temPonte ? 3 : 1) || new RegExp('\\b' + nome + '\\b').test(acompanhantes);
+    const escapado = nome.replace(/\$/g, '\\$');
+    const existe = new RegExp('function\\s+' + escapado + '\\s*\\(|window\\.' + escapado + '\\s*=\\s*(?:async\\s*)?function').test(src);
+    const temPonte = new RegExp('window\\.' + escapado + '\\s*=').test(src);
+    const usada = vezes(src, nome) > (temPonte ? 3 : 1) || new RegExp(borda(nome)).test(acompanhantes);
     assert.ok(existe, `${nome} não existe mais — tire da lista de exceções deste teste.`);
     assert.ok(!usada, `${nome} voltou a ser chamada de algum lugar — tire da lista de exceções. Motivo que estava registrado: ${motivo}`);
   }
@@ -105,7 +147,7 @@ const mortas = [];
 // Funções exportadas são consumidas por outras rotas e pelos testes; a busca é no conjunto todo.
 for (const arq of arquivosApi) {
   const src = ler('api/' + arq);
-  const exportadas = new Set([...src.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g)].map(m => m[1])
+  const exportadas = new Set([...src.matchAll(/export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)/g)].map(m => m[1])
     .concat([...src.matchAll(/export\s*\{([^}]*)\}/g)].flatMap(m => m[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]))));
   for (const nome of declaracoesDeTopo(src)) {
     if (exportadas.has(nome)) continue;         // export é uso: quem consome está fora do arquivo

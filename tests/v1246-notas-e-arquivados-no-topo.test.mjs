@@ -61,9 +61,11 @@ assert.match(css, /#home \.resumo-dia\{display:grid!important;grid-template-colu
 for (const morto of ['cpAbrirSemAtender30Dias', '__semAtender30', 'cpContarSemAtender']) {
   assert.ok(!app.includes(morto), `"${morto}" não pode sobreviver à remoção da tela`);
 }
-// Mas a RÉGUA continua: a fila "Fazer agora" usa ela pra saber quem está esfriando.
-assert.ok(app.includes('function cpSemAtenderHaDias'),
-  'a régua de dias sem atendimento continua — quem saiu foi a tela, não o critério');
+// v1293 — aqui estava escrito que "a RÉGUA continua: a fila Fazer agora usa ela". A revisão de
+// 18/08/2026 leu a fila inteira e provou que não usava: cpSemAtenderHaDias não era chamada por
+// ninguém no app. A régua saiu junto com a tela, agora de verdade (ver v1071).
+assert.ok(!app.includes('function cpSemAtenderHaDias'),
+  'a régua saiu na v1293 — nenhuma tela ou fila a consultava');
 
 // ── 4. UM NÚMERO, UMA CONTA SÓ ─────────────────────────────────────────────────────────────────
 // Lição das v1215/v1227: dois lugares contando a mesma coisa sempre divergem.

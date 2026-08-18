@@ -14,15 +14,28 @@ assert.doesNotMatch(appJs, /function mostrarOpcoesInstalar\(/, "mostrarOpcoesIns
 assert.doesNotMatch(appJs, /function abrirOnboarding\(/, "abrirOnboarding não pode mais existir em app.js");
 assert.match(appJs, /import '\.\/js\/pwa-install\.js\?v=__VERSION__';/, "app.js precisa importar o módulo novo");
 
-for (const fn of ["mostrarOpcoesInstalar", "esconderOpcoesInstalar", "dispararInstalacao", "fecharOnboarding", "abrirOnboarding"]) {
+for (const fn of ["mostrarOpcoesInstalar", "esconderOpcoesInstalar", "dispararInstalacao"]) {
   assert.match(pwaInstall, new RegExp("function " + fn + "\\("), `js/pwa-install.js precisa definir ${fn}`);
 }
-// Só abrirOnboarding é chamada via onclick inline do HTML (index.html) — as outras 4
-// funções não têm nenhum chamador fora deste módulo, então não precisam de window.X.
-assert.match(pwaInstall, /window\.abrirOnboarding = abrirOnboarding;/, "abrirOnboarding precisa ficar em window (onclick inline do HTML depende disso)");
+
+// v1293 — O CONVITE DE BOAS-VINDAS ANTIGO SAIU, E ESTE TESTE ESTAVA DESATUALIZADO.
+//
+// Ele afirmava, desde a v849, que "abrirOnboarding é chamada via onclick inline do HTML
+// (index.html)". Na revisão do dia 18/08/2026 isso foi conferido: o nome `abrirOnboarding` NÃO
+// aparecia uma única vez no index.html — o botão do Menu que a chamava tinha sumido em alguma
+// faxina anterior, e ninguém percebeu porque o teste conferia só o texto do MÓDULO, nunca se
+// alguém chamava. Do outro lado, o `<div id="bannerOnboarding">` do index.html estava VAZIO: o
+// app calculava direitinho quando mostrá-lo e mostrava uma caixa sem nada dentro.
+//
+// As duas pontas foram removidas. O tutorial que ensina a mandar a conversa é o da v1149
+// (cp1149AbrirSePrimeiraVez), esse sim ligado e conferido em v1149-tutorial-como-enviar-conversa.
+for (const morta of ["fecharOnboarding", "abrirOnboarding"]) {
+  assert.doesNotMatch(pwaInstall, new RegExp("function " + morta + "\\("), `${morta} foi removida na v1293 — o convite antigo era uma caixa vazia sem porta de entrada`);
+}
+assert.doesNotMatch(fs.readFileSync(new URL("../index.html", import.meta.url), "utf8"), /bannerOnboarding/,
+  "a caixa vazia do convite antigo não pode voltar ao index.html");
 
 assert.match(pwaInstall, /import \{ qs, toast(?:, escapeHtml)? \} from '\.\/dom\.js\?v=__VERSION__';/, "js/pwa-install.js precisa importar os helpers de dom.js");
 assert.match(pwaInstall, /import \{ state \} from '\.\/state\.js\?v=__VERSION__';/, "js/pwa-install.js precisa importar o state compartilhado");
-assert.match(pwaInstall, /window\.show\("home"\)/, "abrirOnboarding precisa chamar window.show, não show direto — a função show continua em app.js");
 
 console.log("js-pwa-install-module: ok");

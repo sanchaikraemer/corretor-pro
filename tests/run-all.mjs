@@ -24,10 +24,25 @@ const dirTestes = path.join(raiz, "tests");
 // Arquivos que precisam ao menos compilar. As rotas de api/ são descobertas sozinhas — assim uma
 // rota nova entra na checagem sem ninguém precisar lembrar.
 function arquivosParaChecarSintaxe() {
+  // v1293 — A PASTA js/ PASSOU A SER DESCOBERTA SOZINHA, COMO api/ JÁ ERA.
+  //
+  // Esta lista era escrita à mão, e a revisão de 18/08/2026 mostrou os dois estragos disso:
+  //
+  //   • ela ainda citava "js/tema.js", apagado na v1268 — linha morta dentro da própria rede de
+  //     proteção (não quebrava nada porque o filtro abaixo pula arquivo que não existe, mas
+  //     também não protegia coisa nenhuma);
+  //   • e não citava "js/importacao.js" — as ~1.500 linhas da importação inteira, o segundo maior
+  //     arquivo do front. Os 50 testes que falam dele só LEEM o texto do arquivo; nenhum executa.
+  //     Resultado: um erro de digitação lá passava pela suíte toda verde e só aparecia no celular
+  //     do dono, na hora de importar uma conversa. Mesma coisa valia pra saudacao.js,
+  //     dados-locais.js, enxugar-zip.js e envio-retentativa.js.
+  //
+  // Agora todo arquivo .js de js/ entra sozinho — um módulo novo nunca mais nasce sem checagem.
+  const modulosJs = existsSync(path.join(raiz, "js"))
+    ? readdirSync(path.join(raiz, "js")).filter(f => f.endsWith(".js")).sort().map(f => `js/${f}`)
+    : [];
   const fixos = [
-    "app.js", "build.js", "service-worker.js",
-    "js/state.js", "js/commercial-schema.js", "js/dom.js", "js/tema.js",
-    "js/proposta.js", "js/pwa-install.js"
+    "app.js", "build.js", "service-worker.js", ...modulosJs
   ].filter(f => existsSync(path.join(raiz, f)));
   const api = existsSync(path.join(raiz, "api"))
     ? readdirSync(path.join(raiz, "api")).filter(f => f.endsWith(".js")).sort().map(f => `api/${f}`)

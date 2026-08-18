@@ -210,22 +210,6 @@ function fecharBannerInstalar(){
 qs("#bannerInstalarFechar")?.addEventListener("click", fecharBannerInstalar);
 qs("#bannerInstalarWeb")?.addEventListener("click", fecharBannerInstalar);
 
-// Onboarding: dispensar (lembra via localStorage) e abrir de novo pelo Menu.
-// Fica neste módulo porque estava fisicamente dentro do mesmo bloco no app.js original
-// (não é PWA install, mas o comentário de seção original cobria os dois).
-function fecharOnboarding(){
-  localStorage.setItem("direciona_onboarding_visto", "1");
-  state.forceOnboarding = false;
-  const onb = qs("#bannerOnboarding"); if(onb) onb.style.display = "none";
-}
-qs("#bannerOnboardingFechar")?.addEventListener("click", fecharOnboarding);
-qs("#bannerOnboardingOk")?.addEventListener("click", fecharOnboarding);
-function abrirOnboarding(){
-  state.forceOnboarding = true;
-  state.lead = null; state.focoLeadId = null; state.grupoAtivo = null;
-  window.show("home");
-}
-window.abrirOnboarding = abrirOnboarding;
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
   anotarQueEstaInstalado(); // v1157 — é daqui que o app passa a saber que ESTÁ instalado

@@ -24,21 +24,23 @@ const leadAtendidoHa = (id, diasAtendimento, diasUltimaMsg) => ({
 });
 const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction: diasUltimaMsg, analysis: {} });
 
-// ── 1. O FILTRO de "sem atender 30d+" está certo — é a régua do ATENDIMENTO ────────────────────
+// ── 1. O ÚLTIMO CONTATO REAL DO CORRETOR (a conta que alimenta as colunas) ────────────────────
+//
+// v1293 — esta seção testava a régua cpSemAtenderHaDias, removida na faxina: nenhuma tela e
+// nenhuma fila a consultava (a justificativa escrita no código de que "a fila Fazer agora usa
+// ela" foi conferida linha a linha e era falsa). O que continua valendo, e é o que de fato
+// aparece na tela, é a conta abaixo — o caso Jamil, que deu origem a tudo isto.
 {
-  // v1102 — caso Jamil ("nunca atendido jamil?????"): a régua virou o último CONTATO REAL do
-  // corretor — atendimento marcado OU última mensagem DELE na conversa do WhatsApp.
   const fonte = app.match(/function ultimoAtendimentoTs\(l\)\{[\s\S]*?\n\}/)[0]
-    + '\n' + app.match(/function cpUltimoContatoCorretorTs\(l\)\{[\s\S]*?\n\}/)[0]
-    + '\n' + app.match(/function cpSemAtenderHaDias\(l, dias\)\{[\s\S]*?\n\}/)[0];
-  const { cpSemAtenderHaDias, cpUltimoContatoCorretorTs } = eval(`
+    + '\n' + app.match(/function cpUltimoContatoCorretorTs\(l\)\{[\s\S]*?\n\}/)[0];
+  const { cpUltimoContatoCorretorTs } = eval(`
     const TIPOS_ATENDIMENTO_TIMELINE = new Set();
     const diasCalendarioBR = (ts) => Math.floor((Date.now() - ts) / ${DIA});
     const ehMsgManualTimeline = () => false;
     const ehMsgDoCliente = (m, pn) => String(m?.author||"").toLowerCase().startsWith(String(pn||"").toLowerCase());
     const window = {};
     ${fonte}
-    ({ cpSemAtenderHaDias, cpUltimoContatoCorretorTs });
+    ({ cpUltimoContatoCorretorTs });
   `);
 
   // O CASO JAMIL: nunca marcado no app, mas o corretor mandou mensagem na conversa há 53 dias.
@@ -50,24 +52,16 @@ const leadNuncaAtendido = (id, diasUltimaMsg) => ({ id, daysSinceLastInteraction
     ] };
   assert.ok(cpUltimoContatoCorretorTs(jamil) > 0,
     'mensagem que o CORRETOR mandou na conversa CONTA como contato — Jamil nunca mais é "nunca atendido"');
-  assert.equal(cpSemAtenderHaDias(jamil, 30), true,
-    'e como o último contato dele foi há 53 dias, o Jamil continua na lista de 30d+ — só que com a data certa');
 
-  // Corretor respondeu ONTEM na conversa (sem marcar nada no app): NÃO pode entrar na lista.
-  const respondidoOntem = { id: 'r', name: 'Cliente Novo', analysis: {},
-    recentMessages: [{ author: 'Construtora Senger', text: 'segue a tabela', iso: hojeMenos(1) }] };
-  assert.equal(cpSemAtenderHaDias(respondidoOntem, 30), false,
-    'quem o corretor respondeu ontem pelo WhatsApp não está "sem atender"');
+  // Fala só do cliente não conta como contato do corretor.
+  const soCliente = { id: 'c', name: 'Ana Paula', analysis: {},
+    recentMessages: [{ author: 'Ana Paula', text: 'ainda estou pensando', iso: hojeMenos(2) }] };
+  assert.ok(!cpUltimoContatoCorretorTs(soCliente),
+    'mensagem do cliente não pode virar "contato seu" — senão a coluna mente a favor do corretor');
 
-  // Cliente que MANDOU MENSAGEM ONTEM mas nunca foi atendido: entra na lista, e está certo.
-  assert.equal(cpSemAtenderHaDias(leadNuncaAtendido('novo', 1), 30), true,
-    'nunca atendido entra em "sem atender 30d+", mesmo tendo mandado mensagem ontem');
-  // Atendido há 40 dias, mensagem há 12: entra (a régua é o atendimento).
-  assert.equal(cpSemAtenderHaDias(leadAtendidoHa('velho', 40, 12), 30), true,
-    'atendido há 40 dias entra, mesmo com mensagem recente');
-  // Atendido há 5 dias: NÃO entra.
-  assert.equal(cpSemAtenderHaDias(leadAtendidoHa('recente', 5, 90), 30), false,
-    'atendido há 5 dias não pode entrar, mesmo sem mensagem há 90 dias');
+  // Atendimento marcado no app conta, mesmo sem mensagem nenhuma na conversa.
+  assert.ok(cpUltimoContatoCorretorTs(leadAtendidoHa('marcado', 40, 12)) > 0,
+    'atendimento marcado no app conta como contato real');
 }
 
 // ── 2. A COLUNA de cada lista mostra o número que a define ────────────────────────────────────

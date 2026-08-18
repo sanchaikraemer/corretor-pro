@@ -27,10 +27,16 @@ for (const [nome, src] of [
   assert.ok(!src.includes('has-foto'), `${nome} não pode mais ter a classe/estilo da foto no avatar`);
 }
 // O avatar por iniciais continua vivo e sem parâmetro de foto.
-assert.match(app, /function avatarInicial\(name, pctClass\)\{/, 'avatarInicial fica, sem parâmetro de foto');
-assert.match(app, /function avatarLead\(l, pctClass\)\{ return avatarInicial\(l\?\.name, pctClass\); \}/,
-  'avatarLead agora só desenha as iniciais');
-assert.match(css, /\.lead-avatar\{/, 'o círculo de iniciais continua estilizado');
+// v1293 — avatarInicial/avatarLead e o CSS .lead-avatar SAÍRAM. A v869 tirou o avatar da fila,
+// a v1076 trocou os cartões da Home por linhas de tabela, e o único caminho que ainda desenhava
+// esse círculo (o card do "top 3") já estava sem chamador. Ou seja: as funções continuavam no
+// arquivo desenhando para ninguém. O avatar que APARECE hoje é o do Desempenho (cp-lead-avatar,
+// com cpInitials/cpAvatarStyle), e é ele que este teste passa a proteger.
+assert.ok(!/function avatarInicial\(/.test(app), 'avatarInicial saiu na v1293 (nenhuma tela a desenhava)');
+assert.ok(!/function avatarLead\(/.test(app), 'avatarLead saiu na v1293 (era só o embrulho de avatarInicial)');
+assert.ok(!/^\.lead-avatar\{/m.test(css), 'o CSS do círculo antigo saiu junto');
+assert.match(css, /\.cp-lead-avatar\{/, 'o avatar que o Desempenho desenha de verdade continua estilizado');
+assert.match(app, /cpInitials\(l\.name\)/, 'e continua sendo desenhado com as iniciais do cliente');
 // O servidor valida a edição sem oferecer "foto" como opção.
 assert.match(leadUpdate, /Informe nome, telefone ou produto pra editar\./,
   'a mensagem de validação do editar não fala mais em foto');

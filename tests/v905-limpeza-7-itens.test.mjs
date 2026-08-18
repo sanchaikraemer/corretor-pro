@@ -51,7 +51,9 @@ assert.match(app, /id="editLeadProduto"/, 'Produto fica');
 // v1074 — a foto salva saiu por inteiro (o dono autorizou perder as gravadas); o círculo de
 // INICIAIS (avatarLead) é o que continua vivo nas listas.
 assert.doesNotMatch(app, /function imagemQuadradaParaAvatar\(/, 'fluxo morto de editar avatar não volta');
-assert.match(app, /function avatarLead\(/, 'o avatar por iniciais continua vivo');
+// v1293 — avatarLead saiu: a v1076 trocou os cartões por linhas de tabela e ninguém mais o
+// desenhava. Quem mostra iniciais hoje é o Desempenho (cp-lead-avatar).
+assert.ok(!/function avatarLead\(/.test(app), 'avatarLead saiu na v1293 (sem nenhuma tela chamando)');
 
 // 7. Card "Registrar observação": caixa de texto maior.
 assert.match(app, /id="cp7ObsTexto"[^>]*min-height:120px/, 'textarea da observação ficou maior');

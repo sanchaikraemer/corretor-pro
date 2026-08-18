@@ -20,7 +20,11 @@ assert.match(fn, /Ver análise/, '"Ver análise" continua no card');
 assert.match(fn, /reagendarControlHTML/, 'Reagendar continua no card');
 assert.match(fn, /removerLembrete/, 'Excluir continua no card');
 
-// linkWhatsAppDireta segue usada em outro lugar do app (lead aberto) — não deve ser removida.
-assert.match(app, /function linkWhatsAppDireta\(l\)\{/, 'linkWhatsAppDireta continua existindo (usada na tela do lead)');
+// v1293 — ATENÇÃO, ISTO ESTAVA ERRADO DESDE A v1076. Aqui estava escrito que "linkWhatsAppDireta
+// segue usada em outro lugar do app (lead aberto)". Não seguia: o único chamador era o card do
+// "top 3" da Home, que já estava sem porta de entrada. A tela do lead monta o link do WhatsApp
+// por conta própria. A função saiu na faxina da v1293, junto com whatsappLink.
+assert.ok(!/function linkWhatsAppDireta\(/.test(app),
+  'linkWhatsAppDireta saiu na v1293 — se voltar, precisa voltar com uma tela chamando');
 
 console.log('v932-agenda-sem-whatsapp: ok');
