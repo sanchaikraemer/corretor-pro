@@ -1084,6 +1084,51 @@ export function frasesDeRoboEmMensagem(texto) {
   return FRASES_DE_ROBO.filter(f => f.re.test(t)).map(f => f.rotulo);
 }
 
+// v1299 — print do dono de 18/08/2026, 17h40, já na v1298. As três sugestões finalmente ENTREGAM
+// ("vou te passar agora as condições"), mas duas terminam assim:
+//   1. "Se quiser comentar algum ponto específico ou ajustar algo, me avise, certo?"
+//   3. "Me avise se precisar de algum ajuste ou simulação diferente."
+// e a segunda pede licença pra entregar: "se quiser posso te detalhar as principais condições".
+//
+// A regra escrita (v1296) proíbe as duas coisas e mesmo assim elas voltaram — regra sozinha não
+// segurou. O que segura, e já está provado nesta base desde a v1295, é a rede: o código PERCEBE e
+// a IA REESCREVE. Continua valendo a proibição do dono: o código não corta frase, não emenda
+// pedaço e não substitui por texto genérico.
+//
+// Só o FECHO conta. "Me avise qual horário prefere: quinta ou sábado?" é pergunta concreta e não
+// pode cair aqui — por isso o padrão exige a construção aberta (avise SE / CASO / QUANDO / QUALQUER
+// coisa), que é o que transforma o fim da mensagem em sala de espera.
+const FECHOS_QUE_DEVOLVEM_A_BOLA = [
+  { rotulo: "fecho que manda o cliente avisar", re: /\b(me avise|me avisa|s[óo] (me )?avisar|[ée] s[óo] (me )?avisar|me chame|me chama|pode me chamar|me procure|me procura)\b[^.?!]{0,80}\b(se|caso|quando|qualquer)\b/i },
+  { rotulo: "fecho que manda o cliente avisar", re: /\b(se|caso|quando|qualquer)\b[^.?!]{0,80}\b(me avise|me avisa|s[óo] (me )?avisar|[ée] s[óo] (me )?avisar|me chame|me chama|pode me chamar|me procure|me procura)\b/i },
+  { rotulo: "fecho de sala de espera", re: /\b(fico no aguardo|aguardo (o )?(seu|teu) (retorno|contato)|fico (por )?aqui|estou (por )?aqui|estarei (por )?aqui|pode contar comigo|conte comigo)\b/i }
+];
+
+// Pedir licença pra fazer o próprio trabalho. Mesma família do "sem compromisso" que o dono mandou
+// tirar na v1298: "se quiser posso te detalhar" no lugar de "te detalho agora".
+const PEDIR_LICENCA = [
+  { rotulo: "pede licença em vez de entregar", re: /\bse (voc[êe] |tu )?(quiser|quiseres|precisar|desejar|achar melhor|preferir)[^.?!]{0,30}\b(posso|poderia|consigo|eu posso)\b/i },
+  { rotulo: "pede licença em vez de entregar", re: /\b(posso|poderia|consigo)\b[^.?!]{0,40}\bse (voc[êe] |tu )?(quiser|precisar|desejar|preferir)\b/i }
+];
+
+// A última frase da mensagem — é ela que decide se o fim devolve a bola pro cliente.
+function _ultimaFrase(texto) {
+  const partes = String(texto || "").trim().split(/(?<=[.!?…])\s+/).map(t => t.trim()).filter(Boolean);
+  return partes.length ? partes[partes.length - 1] : "";
+}
+
+// Tudo que precisa sair de uma sugestão, com o motivo de cada coisa. É o que decide se a mensagem
+// volta pra IA reescrever — e o que mede se a reescrita ficou melhor que o original.
+export function problemasNaMensagem(texto) {
+  const t = String(texto || "");
+  if (!t.trim()) return [];
+  const achados = frasesDeRoboEmMensagem(t);
+  const fecho = _ultimaFrase(t);
+  for (const f of FECHOS_QUE_DEVOLVEM_A_BOLA) if (f.re.test(fecho)) { achados.push(f.rotulo); break; }
+  for (const f of PEDIR_LICENCA) if (f.re.test(t)) { achados.push(f.rotulo); break; }
+  return [...new Set(achados)];
+}
+
 // Uma única chamada à IA pedindo que ela mesma reescreva as sugestões em que a frase de robô
 // escapou. Devolve { a?, b?, c? } só com as mensagens que voltaram melhores; qualquer falha vira
 // objeto vazio e a análise segue com o texto original.
@@ -1091,18 +1136,25 @@ async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, mod
   const lista = (itens || []).filter(i => i?.texto);
   if (!lista.length || !openai) return {};
   const pedido = `Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
-e contêm expressões que ESTE corretor proíbe, porque denunciam que quem escreveu foi um robô.
+e têm dentro delas alguma coisa que ESTE corretor proíbe.
 
-${lista.map(i => `MENSAGEM "${i.chave}" (proibido nela: ${i.frases.join(", ")}):\n"${i.texto}"`).join("\n\n")}
+${lista.map(i => `MENSAGEM "${i.chave}" (o que precisa sair: ${i.frases.join(", ")}):\n"${i.texto}"`).join("\n\n")}
 
 Reescreva cada uma delas mantendo EXATAMENTE o mesmo conteúdo, a mesma intenção e o mesmo próximo
-passo. Só a expressão proibida sai; o resto continua dizendo a mesma coisa.
+passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
 - Não invente fato, valor, condição, prazo, novidade, urgência, promessa ou ação nova.
 - Não acrescente pergunta nova nem tire a pergunta que já existe.
 - Português de corretor no WhatsApp: sem palavra em inglês e sem jargão de escritório.
 - Termine curto, sem repetir com outras palavras o que a mensagem já disse.
 - Nada de "fico/estou à disposição", "faz sentido", "espero que esteja bem", "qualquer dúvida estou
-  aqui", "não hesite em", "sinta-se à vontade", "espero ter ajudado".
+  aqui", "não hesite em", "sinta-se à vontade", "espero ter ajudado", "sem compromisso".
+- FECHO QUE DEVOLVE A BOLA: se o problema apontado é o fim da mensagem mandando o cliente avisar
+  ("me avise se precisar", "qualquer coisa me chama", "fico no aguardo"), termine a mensagem na
+  entrega ou na pergunta concreta que ela já tem, e não coloque outro fecho no lugar. O corretor já
+  está esperando: dizer isso de novo não acrescenta nada.
+- PEDIR LICENÇA: se o problema é "se quiser posso te detalhar" / "se precisar posso mandar", escreva
+  a ação direto — "te detalho agora", "te mando agora" —, mantendo a mesma entrega. Oferecer a
+  informação é o trabalho do corretor; ele não pede autorização para fazê-lo.
 
 Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`).join(", ")}}`;
   const r = await chamarGPT4Json({
@@ -1117,8 +1169,11 @@ Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`
   const aprovadas = {};
   for (const item of lista) {
     const novo = typeof saida[item.chave] === "string" ? saida[item.chave].trim() : "";
-    // Só troca se a IA devolveu mensagem de verdade E com menos frase proibida que a original.
-    if (novo && frasesDeRoboEmMensagem(novo).length < item.frases.length) aprovadas[item.chave] = novo;
+    // v1299 — a troca só vale se a reescrita voltar LIMPA. Antes bastava ter "menos problema que a
+    // original", e isso deixava passar troca ruim: uma mensagem com frase de robô + fecho de espera
+    // podia ser substituída por outra que ainda tinha a frase de robô, só porque tinha um problema a
+    // menos. Não conseguiu limpar de uma vez, fica o texto original da IA.
+    if (novo && problemasNaMensagem(novo).length === 0) aprovadas[item.chave] = novo;
   }
   return { aprovadas, completion: r?.response || null };
 }
@@ -3546,6 +3601,10 @@ REGRAS PARA AS TRÊS MENSAGENS
 - As três não podem ser a mesma espera escrita com outras palavras. Se as três terminam pedindo que
   o cliente avise, chame ou procure quando quiser, a leitura comercial não virou condução — refaça
   a partir do que o Cérebro manda fazer neste estágio.
+- NÃO PEÇA LICENÇA PARA ENTREGAR o que já dá para entregar: "se quiser posso te detalhar as
+  condições" vira "te detalho as condições agora"; "se precisar posso mandar o material" vira "te
+  mando o material agora". Oferecer a informação é o trabalho do corretor, não um favor que precisa
+  de autorização.
 - UM CAMINHO SÓ, escolhido por você. Não devolva ao cliente a escolha do formato ("prefere que eu
   explique por aqui ou envio um material?", "quer por áudio ou por escrito?", "prefere ver agora ou
   depois?"): escolher é trabalho do corretor, e duas opções de caminho dão ao cliente uma chance a
@@ -3691,7 +3750,7 @@ Antes de devolver o JSON, confirme:
     let sugestoesReescritas = 0;
     try {
       const comFraseDeRobo = [["a", msgA], ["b", msgB], ["c", msgC]]
-        .map(([chave, texto]) => ({ chave, texto, frases: frasesDeRoboEmMensagem(texto) }))
+        .map(([chave, texto]) => ({ chave, texto, frases: problemasNaMensagem(texto) }))
         .filter(item => item.texto && item.frases.length);
       // 2s de folga pro resto da rota, igual à retentativa da análise logo acima.
       const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
