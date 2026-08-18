@@ -1,0 +1,38 @@
+{
+  "id": "cliente-soube-por-terceiro",
+  "titulo": "O cliente diz que já ouviu as condições \"mais ou menos\" por outra pessoa",
+  "veioDe": "NOTAS-v1296.md — prints do dono de 18/08/2026 (\"q lixo de sugestões, não está sendo feito o que deve\")",
+  "porQueImporta": "As três sugestões daquele print terminavam devolvendo a bola pro cliente (\"me avise\", \"pode me chamar por aqui\", \"posso te explicar\"). O cliente tinha acabado de dizer que gostou e que soube das condições por alto, por um terceiro — ou seja, entregou uma abertura para o corretor mandar a informação direito. Mensagem que só espera não é próximo passo: o corretor já estava esperando antes de abrir o aplicativo.",
+  "corretorNome": "Sanchai",
+  "nomeArquivo": "Conversa do WhatsApp com Alceu Barreto.txt",
+  "conversa": [
+    { "date": "18/08/2026", "time": "15:38", "author": "Sanchai", "text": "Boa tarde, Alceu! Tudo bem? O Rodrigo me passou seu contato e comentou que vocês conversaram sobre as oportunidades de investimento por aqui. Cheguei a encaminhar alguns materiais pra ele te mostrar: você conseguiu dar uma olhada?" },
+    { "date": "18/08/2026", "time": "15:45", "author": "Alceu Barreto", "text": "Opa" },
+    { "date": "18/08/2026", "time": "15:45", "author": "Alceu Barreto", "text": "Tudo certo" },
+    { "date": "18/08/2026", "time": "15:46", "author": "Alceu Barreto", "text": "Dei uma olhada sim" },
+    { "date": "18/08/2026", "time": "15:47", "author": "Sanchai", "text": "Que bom que conseguiu analisar o material. Ficou alguma dúvida ou algum ponto que gostaria de conversar sobre o empreendimento?" },
+    { "date": "18/08/2026", "time": "15:48", "author": "Alceu Barreto", "text": "Estamos analisando ainda, mas gostei da ideia" },
+    { "date": "18/08/2026", "time": "15:48", "author": "Alceu Barreto", "text": "O Rodrigo me falou mais ou menos as condições de pagamento" }
+  ],
+  "esperado": {
+    "clienteChamaSe": "Alceu Barreto",
+    "quemFalouPorUltimo": "cliente",
+    "tentativasSemResposta": 0,
+    "vozDoCorretorNaoPodeConter": ["gostei da ideia", "Estamos analisando ainda"],
+    "aIaPrecisaPerceber": [
+      "o cliente está analisando junto com outras pessoas — a decisão não é só dele",
+      "ele só conhece as condições de pagamento por alto, e por um terceiro, não pelo corretor",
+      "ninguém apresentou as condições direito ainda: essa é a lacuna aberta desta conversa"
+    ],
+    "asMensagensNaoPodem": [
+      "terminar devolvendo a iniciativa pro cliente (\"me avise\", \"pode me chamar\", \"qualquer dúvida estou aqui\", \"fico no aguardo\")",
+      "afirmar valor, condição, prazo ou desconto que não esteja no Cérebro nem na conversa",
+      "repetir a pergunta \"ficou alguma dúvida?\", que o corretor já fez e o cliente já respondeu",
+      "as três serem a mesma espera escrita de três jeitos diferentes"
+    ],
+    "asMensagensPrecisam": [
+      "oferecer ou entregar as condições de pagamento de forma organizada, já que ele só as ouviu por alto",
+      "pedir uma resposta concreta do cliente (aceitar receber o material, marcar uma conversa, dizer o que falta pra decisão)"
+    ]
+  }
+}
