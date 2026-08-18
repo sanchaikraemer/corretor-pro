@@ -1,10 +1,19 @@
-// v1212 — o banco de casos reais da carteira precisa CHEGAR no pedido da análise.
+// v1212 — o banco de casos reais da carteira e o formato do bloco que ele monta.
 //
-// Caso real do dono (11/08/2026): a tela do Aprendizado mostrava 661 casos comerciais reais e 316
-// históricos lidos, e a planilha exportada trazia tudo isso detalhado — situação, sinal do cliente,
-// condução real dele, resultado e regra. Nada disso entrava na hora de gerar as três mensagens: o
-// banco de casos só alimentava a exportação e o contador. Este teste existe pra isso não voltar a
-// acontecer silenciosamente (é a terceira vez do mesmo padrão no projeto — ver v1084 e v1115).
+// ATENÇÃO, ISTO MUDOU DE LADO NA v1301. Até a v1300 este arquivo garantia que os casos de outros
+// clientes CHEGASSEM no pedido da análise. Por ordem direta do dono ("tira as duas fontes",
+// 18/08/2026, depois do print das 19h36), eles NÃO chegam mais: numa conversa de três linhas sobre
+// um apartamento anunciado só com dormitórios, box e preço, as três sugestões voltaram afirmando em
+// que empreendimento ele estava e perto de que rua ficava. Esse material vinha dos casos de outros
+// clientes e do bloco de fatos da carteira — não da conversa. O cliente recebia endereço de outro
+// imóvel por escrito.
+//
+// O que continua valendo deste arquivo: a função que monta o bloco segue existindo e sendo testada
+// (o banco de casos continua sendo aprendido, exportado e mostrado na tela de Aprendizado). O que
+// mudou é a ligação com a análise, e a seção final guarda justamente a DESLIGAÇÃO — porque já
+// aconteceu de sessão futura religar bloco desligado achando que era esquecimento (foi assim que os
+// casos voltaram na v1212, depois de a v1092 tê-los apagado por "sem chamador").
+import fs from "node:fs";
 import assert from "node:assert/strict";
 import { casosSemelhantesPrompt } from "../api/_pipeline.js";
 
@@ -74,5 +83,16 @@ const muitos = Array.from({ length: 40 }, (_, i) => ({
 const blocoLimitado = casosSemelhantesPrompt({ casos: muitos }, "apartamento tabela cliente", 4);
 assert.equal((blocoLimitado.match(/^- /gm) || []).length, 4, "só os N casos pedidos podem entrar");
 assert.ok(blocoLimitado.length < 3200, "o bloco de casos não pode estourar o teto de tamanho");
+
+// ── v1301 — a DESLIGAÇÃO da análise, guardada aqui pra não ser refeita sem querer ────────────
+{
+  const pipeline = fs.readFileSync(new URL("../api/_pipeline.js", import.meta.url), "utf8");
+  assert.doesNotMatch(pipeline, /const casosSemelhantes = casosSemelhantesPrompt\(/,
+    "caso de OUTRO cliente não pode voltar pro pedido que escreve as três mensagens (v1301)");
+  assert.doesNotMatch(pipeline, /Os casos semelhantes são referência auxiliar/,
+    "e o bloco de casos não pode reaparecer no prompt de sistema");
+  assert.match(pipeline, /NÃO RELIGUE ISSO/,
+    "o motivo precisa estar escrito no código, no lugar onde a religação aconteceria");
+}
 
 console.log("v1212-casos-reais-entram-na-analise: ok");

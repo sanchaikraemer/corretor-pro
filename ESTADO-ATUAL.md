@@ -124,6 +124,24 @@ das opções chega mais perto do que o cliente pediu, a mensagem diz qual e por 
 ou três empatadas devolve pro cliente a escolha que ele procurou um corretor pra fazer. Guarda:
 `tests/v1289-historico-antigo-nao-manda.test.mjs`. Ver `NOTAS-v1289.md`._
 
+_**v1301 — a análise parou de receber informação de OUTRO cliente.** Ordem direta do dono, com o
+print das 19h36 de 18/08/2026 na mão: numa conversa de três linhas (anúncio com dormitórios, box e
+preço; o cliente pedindo para saber mais e escrevendo "móveis"), as três sugestões voltaram
+afirmando **em que empreendimento** o apartamento estava e **perto de que rua** ficava. Nada disso
+existia na conversa. A regra "nunca invente" já estava escrita em três lugares do pedido e não
+segurou — porque o próprio sistema entregava à IA, em toda análise, material que não é do lead:
+(1) até 4 **casos de outros clientes** (`casosSemelhantesPrompt`, ligado na v1212), (2) o bloco
+inteiro de **fatos ensinados da carteira** (`conhecimentoCorretorTexto`, ligado na v1115) e (3) o
+cruzamento **produto × perfil** dentro do "SEU JEITO", que escrevia o nome do empreendimento
+oferecido a outro cliente. Os três saíram do pedido. Continuam sendo aprendidos, guardados e
+mostrados na tela de Aprendizado — só não entram mais na hora de escrever as três mensagens. O que
+continua indo: o **Cérebro inteiro**, o **jeito de escrever** do corretor e as **mensagens reais
+dele nesta conversa**. Preço assumido: perguntado o endereço, o aplicativo não responde de cabeça —
+se oferece pra confirmar. Guardas: `tests/v1301-nada-de-outro-cliente-na-mensagem.test.mjs`,
+`tests/v1212-casos-reais-entram-na-analise.test.mjs` (seção final) e
+`tests/v1115-conhecimento-lido-e-fatos-nao-inventados.test.mjs` (seção 2, invertida).
+Ver `NOTAS-v1301.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,

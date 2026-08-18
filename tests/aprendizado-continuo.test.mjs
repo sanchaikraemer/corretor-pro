@@ -73,7 +73,13 @@ const appSrc = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(bloco, /custo por metro/, "a resposta de objeção que funcionou precisa chegar na IA");
   assert.match(bloco, /café na construtora/, "a técnica aprendida precisa chegar na IA");
   assert.match(bloco, /senhor\/senhora/, "o tom de voz aprendido precisa chegar na IA");
-  assert.match(bloco, /Boulevard/, "o casamento produto × perfil precisa chegar na IA");
+  // v1301 — INVERTIDO POR ORDEM DO DONO ("tira as duas fontes", 18/08/2026). O cruzamento
+  // produto × perfil escrevia no pedido o NOME DO EMPREENDIMENTO oferecido a OUTRO cliente, e era
+  // desse material que saía o endereço inventado nas sugestões (print das 19h36: um apartamento de
+  // 3 linhas de conversa voltou com empreendimento e ponto de referência que ninguém citou). Ele
+  // continua sendo aprendido e continua na tela de Aprendizado; só não entra mais no pedido.
+  assert.doesNotMatch(bloco, /Boulevard/,
+    "nome de produto oferecido a OUTRO cliente não pode chegar na hora de escrever a mensagem");
   assert.match(bloco, /vender o bem/, "o padrão de follow-up precisa chegar na IA");
 
   assert.doesNotMatch(bloco, /insisto pra fechar na hora/,
