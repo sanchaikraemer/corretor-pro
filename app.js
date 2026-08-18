@@ -6642,10 +6642,6 @@ function cpAprendLerPendentes(){
 function cpAprendSalvarPendentes(arr){
   try{ localStorage.setItem(CP_APREND_AUTO_PENDENTES_KEY, JSON.stringify([...new Set(arr)].sort((a,b)=>a-b))); }catch(_){}
 }
-function cpAprendAtualizarStatus(texto, erro=false){
-  const el = qs("#cerebroCarteiraStatus");
-  if(el) el.innerHTML = `<span style="color:${erro?'var(--risco)':'var(--cerebro)'}">${escapeHtml(texto)}</span>`;
-}
 function cpAprendAdquirirLock(){
   const agora = Date.now();
   try{
@@ -6707,13 +6703,11 @@ async function cpAprendProcessarFilaPendente(maximo=12){
       }, 50000);
       data = await res.json().catch(()=>({ok:false,error:`Resposta inválida (${res.status})`}));
     }catch(e){
-      cpAprendAtualizarStatus(`Aprendizado de uma nova conversa ficou pendente: ${String(e?.message||e)}. Vou tentar novamente.`, true);
       cpAprendAgendarRetomada(60000);
       return { ok:false, processados, error:e?.message || String(e), status:ultimoStatus };
     }
     if(data?.vazio){ ultimoStatus = data.aprendizadoAutomatico || ultimoStatus; break; }
     if(!data?.ok){
-      cpAprendAtualizarStatus(`Não consegui aprender o histórico ${data?.leadId || ""}: ${data?.error || "erro"}. Vou tentar novamente.`, true);
       cpAprendAgendarRetomada(90000);
       return { ok:false, processados, error:data?.error || "erro", status:ultimoStatus };
     }
@@ -6744,16 +6738,13 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
     let pendentes = cpAprendLerPendentes();
     if(somentePendentes || (!forcar && status?.bootstrapConcluidoEm && !pendentes.length)){
       const fila = await cpAprendProcessarFilaPendente(somentePendentes ? 6 : 12);
-      const st = fila.status || status || {};
       cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, status?.bootstrapConcluidoEm ? 0 : cpAprendLerNumero(CP_APREND_AUTO_OFFSET_KEY, 0));
-      cpAprendAtualizarStatus(`Aprendizado contínuo ativo: ${Number(st.historicosProcessados||0)} históricos e ${Number(st.totalCasos||0)} casos reais já aprendidos${Number(st.aprendizadosPendentes||0)>0?` · ${Number(st.aprendizadosPendentes)} na fila`:""}.`);
       return fila.ok;
     }
 
     let offset = forcar ? 0 : cpAprendLerNumero(CP_APREND_AUTO_OFFSET_KEY, 0);
     if(forcar){ pendentes = []; cpAprendSalvarPendentes([]); cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, 0); }
     totalCarteira = Number(status?.totalCarteiraNoBootstrap || 0);
-    cpAprendAtualizarStatus(forcar ? "Reprocessando toda a carteira em segundo plano…" : "Aprendendo automaticamente com os históricos já importados…");
 
     for(let loops=0; loops<10000; loops++){
       cpAprendRenovarLock();
@@ -6761,7 +6752,6 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
       let data;
       try{ data = await cpAprendChamarLote(atualOffset, forcar); }
       catch(e){
-        cpAprendAtualizarStatus(`Aprendizado pausado na conversa ${atualOffset+1}: ${String(e?.message||e)}. Vou tentar novamente.`, true);
         cpAprendAgendarRetomada(60000);
         return false;
       }
@@ -6778,8 +6768,6 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
       }
       offset = Number(proximo);
       cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, offset);
-      const totalTxt = totalCarteira ? `/${totalCarteira}` : "";
-      cpAprendAtualizarStatus(`Aprendizado automático em andamento: ${offset}${totalTxt} históricos verificados${pendentes.length?` · ${pendentes.length} para recuperar`:""}.`);
       await new Promise(r=>setTimeout(r, 450));
     }
 
@@ -6789,7 +6777,6 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
     for(let i=0; i<pendentes.length; i++){
       const off = pendentes[i];
       cpAprendRenovarLock();
-      cpAprendAtualizarStatus(`Recuperando histórico ${i+1}/${pendentes.length} que não foi aprendido na primeira tentativa…`);
       try{
         const d = await cpAprendChamarLote(off, true);
         if(Number(d.errosIA||0)>0 || Number(d.falhasSalvar||0)>0) aindaPendentes.push(off);
@@ -6799,7 +6786,6 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
     }
     cpAprendSalvarPendentes(aindaPendentes);
     if(aindaPendentes.length){
-      cpAprendAtualizarStatus(`${aindaPendentes.length} ${pl(aindaPendentes.length, "histórico ainda não foi aprendido", "históricos ainda não foram aprendidos")}. O sistema tentará novamente sem bloquear seu uso.`, true);
       cpAprendAgendarRetomada(90000);
       return false;
     }
@@ -6810,9 +6796,6 @@ async function iniciarAprendizadoContinuoAutomatico(opcoes={}){
     const fim = await cpAprendFinalizar(totalConfirmado);
     cpAprendSalvarNumero(CP_APREND_AUTO_OFFSET_KEY, 0);
     cpAprendSalvarPendentes([]);
-    const st = fim?.aprendizadoAutomatico || {};
-    const msg = `Aprendizado contínuo ativo: ${Number(st.historicosProcessados||totalConfirmado)} históricos e ${Number(st.totalCasos||0)} casos comerciais reais disponíveis para as sugestões.`;
-    cpAprendAtualizarStatus(msg);
     if(mostrarToast) toast("✓ Carteira aprendida. As próximas sugestões já consultam suas conduções reais.");
     try{ if(state.active === "cerebro"){ carregarAprendizado(); carregarEstadoIA(); } }catch(_){}
     return true;
@@ -11391,23 +11374,6 @@ function renderCorretorProDashboard(items, all){
     }).join(""):`<div class="cp-empty cp-empty-table"><strong>Nenhum atendimento em andamento</strong><span>Importe uma conversa para começar.</span></div>`;
   }
 
-  // v1084 — mesmo bug que a v980 corrigiu na Home, vivo aqui: "items" são só os ATIVOS, então
-  // quem foi atendido e arquivado no mesmo dia sumia da conta. A Home dizia 12 e o Desempenho 11.
-  // cpAtendidosHojeTotal olha a carteira inteira (inclusive arquivados), que é a conta certa.
-  const atendidosHoje=(typeof cpAtendidosHojeTotal==='function')?cpAtendidosHojeTotal(items):items.filter(ehContatadoHoje).length;
-  const semResposta=items.filter(l=>!ehContatadoHoje(l)&&!lembreteFuturo(l)&&Number(l.daysSinceLastInteraction||0)>=3).length;
-  const lembretes=items.filter(l=>!!l?.analysis?.lembrete?.quando).length;
-  const confirmados=items.filter(l=>Array.isArray(l?.analysis?.confirmedAppointments)&&l.analysis.confirmedAppointments.length>0).length;
-  const donePct=cpPct(atendidosHoje,Math.max(1,items.length));
-  const ad=qs("#cpActivityDonut"); if(ad) ad.style.background=`conic-gradient(var(--cp-green) 0 ${donePct}%,var(--cp-slate) ${donePct}% 100%)`;
-  cpSetText("cpActivitiesDone",atendidosHoje); cpSetText("cpActivitiesTotal",items.length);
-  const al=qs("#cpActivityLegend");
-  if(al) al.innerHTML=[
-    ["Atendidos hoje",atendidosHoje,"var(--cp-green)"],
-    ["Sem resposta 3+ dias",semResposta,"var(--cp-coral)"],
-    ["Lembretes",lembretes,"var(--cp-blue)"],
-    ["Compromissos",confirmados,"var(--cp-slate)"]
-  ].map(x=>`<div class="cp-legend-row"><i class="cp-dot" style="background:${x[2]}"></i><span>${x[0]}</span><b>${x[1]}</b></div>`).join("");
 }
 window.cpOpenLead=cpOpenLead;
 window.renderCorretorProDashboard=renderCorretorProDashboard;
