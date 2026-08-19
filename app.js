@@ -5423,18 +5423,19 @@ function cp1225LinhaDeOndeVeio(a){
   // v1309 — e o MOTIVO de a nova não ter saído vem junto do servidor (teto do dia, Cérebro sem
   // instruções, IA fora do ar, tempo estourado). Sem ele, o aviso mandava "reanalisar" numa
   // situação em que reanalisar ia falhar igual.
-  const motivoReuso = cp704Text(a.analiseReutilizadaMotivo);
+  const motivoBruto = cp704Text(a.analiseReutilizadaMotivo);
+  // v1314 — o texto técnico em inglês vira português AQUI também: análise que falhou antes da
+  // v1310 guardou o erro cru, e era ele que estava aparecendo na tela (print de 19/08, 17h38).
+  const motivoReuso = cpErroDaIAEmPortugues(motivoBruto) || motivoBruto;
   const reuso = a.analiseReutilizadaDeImportacaoAnterior === true
-    ? `<div class="notice error" style="margin:0 0 10px"><b>Estas três mensagens são da análise ANTERIOR deste cliente.</b><br>`+
-      `A análise nova não foi concluída agora, então as antigas voltaram pra você não ficar sem nada — `+
-      `mas provavelmente você já enviou essas mensagens.` +
-      (motivoReuso ? `<br><br><b>Por que a nova não saiu:</b> ${escapeHtml(motivoReuso)}` : "") +
+    ? `<div class="notice error" style="margin:0 0 10px"><b>Estas três mensagens são da análise ANTERIOR deste cliente</b> — a nova não foi concluída, então provavelmente você já enviou essas mensagens.` +
+      (motivoReuso ? `<br><br><b>Motivo:</b> ${escapeHtml(motivoReuso)}` : "") +
       // v1310 — quando o motivo é falta de crédito na OpenAI, o botão leva direto pra página que
       // resolve. Sem ele, sobrava um endereço escrito no meio do texto pra digitar na mão.
-      (/SEM CRÉDITOS|sem cr[ée]ditos/i.test(motivoReuso)
-        ? `<div style="margin-top:12px"><a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener" class="btn" style="display:inline-block;text-decoration:none;padding:11px 18px;font-size:14px">Abrir a página de créditos da OpenAI</a></div>`
+      (/sem cr[ée]ditos/i.test(motivoReuso)
+        ? `<div style="margin-top:10px"><a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener" class="btn" style="display:inline-block;text-decoration:none;padding:10px 16px;font-size:13px">Página de créditos da OpenAI</a></div>`
         : "") +
-      `<br><br>Toque em <b>↻ Reanalisar</b> aqui em cima para gerar as novas.</div>`
+      `<br>Toque em <b>↻ Reanalisar</b> pra gerar as novas.</div>`
     : "";
   const lida = a.conversaLidaPelaIA;
   if(a.cerebroAplicado == null && !lida) return reuso; // análise antiga, de antes deste registro
@@ -7751,6 +7752,27 @@ export function renderEtapas(idxAtual, sub, opts){
 
 
 
+
+// v1314 — O ERRO DA IA TRADUZIDO NA HORA DE MOSTRAR, NÃO SÓ NA HORA DE ACONTECER.
+//
+// Print do dono (19/08/2026, 17h38): o aviso vermelho voltou a exibir o texto cru da OpenAI
+// ("[HTTP 429 · code=credit_balance_exhausted ...] You have no credits remaining..."). A tradução
+// da v1310 acontece no servidor, quando a falha ocorre — mas o motivo fica GRAVADO junto da análise
+// do cliente, e as análises que falharam ANTES daquela versão continuam guardando o texto em inglês.
+// Traduzindo também na hora de desenhar, análise velha e análise nova saem iguais na tela.
+export function cpErroDaIAEmPortugues(texto){
+  const t = String(texto || "");
+  if(!t.trim()) return "";
+  if(/credit_balance_exhausted|insufficient_quota|no credits remaining|exceeded your current quota|billing/i.test(t)){
+    return "A conta da OpenAI (a inteligência que escreve as análises) estava sem créditos neste momento. Depois de recarregar, é só reanalisar — a conversa continua guardada.";
+  }
+  if(/rate limit|rate_limit|429/i.test(t)) return "A OpenAI recusou o pedido por excesso de chamadas em pouco tempo. Espere um ou dois minutos e reanalise.";
+  if(/invalid[_ ]api[_ ]key|incorrect api key|unauthorized|401/i.test(t)) return "A chave de acesso da OpenAI não foi aceita. Isso é configuração do servidor — avise o suporte.";
+  if(/unsupported[_ ]parameter|invalid_request_error/i.test(t)) return "O pedido saiu num formato que o modelo de IA não aceita. Isso é problema do sistema — avise o suporte.";
+  if(/timeout|timed out|ETIMEDOUT|aborted/i.test(t)) return "A IA não respondeu a tempo nesta tentativa. Toque em Reanalisar.";
+  if(/model.*(not found|does not exist|no access)/i.test(t)) return "O modelo de IA configurado não está liberado nesta conta da OpenAI. Avise o suporte.";
+  return "";
+}
 
 export function userFriendlyError(err,file){
   const raw=String(err?.message||err||"");

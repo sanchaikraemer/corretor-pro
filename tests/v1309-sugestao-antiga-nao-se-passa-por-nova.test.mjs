@@ -67,11 +67,15 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
   assert.match(motivo({ mode: 'erro_api' }), /não respondeu/i);
   assert.ok(motivo(null).length > 0, 'sem nada em mãos, ainda sai uma frase em português');
 
-  assert.match(app, /Estas três mensagens são da análise ANTERIOR deste cliente\./,
+  assert.match(app, /Estas três mensagens são da análise ANTERIOR deste cliente<\/b>/,
     'o aviso precisa vir colado nas sugestões, não num quadro pequeno longe delas');
-  assert.match(app, /Por que a nova não saiu:/, 'com o motivo real do servidor');
-  assert.match(app, /const motivoReuso = cp704Text\(a\.analiseReutilizadaMotivo\);/,
+  assert.match(app, /<b>Motivo:<\/b>/, 'com o motivo real do servidor');
+  assert.match(app, /const motivoBruto = cp704Text\(a\.analiseReutilizadaMotivo\);/,
     'lido da própria análise devolvida');
+  // v1314 — e traduzido na hora de mostrar: análise que falhou antes da v1310 guardou o erro cru
+  // em inglês, e era ele que aparecia na tela.
+  assert.match(app, /const motivoReuso = cpErroDaIAEmPortugues\(motivoBruto\) \|\| motivoBruto;/,
+    'o texto técnico da OpenAI não pode chegar assim na tela do corretor');
 }
 
 console.log('v1309-sugestao-antiga-nao-se-passa-por-nova: ok');

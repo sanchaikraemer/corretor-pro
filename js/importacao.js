@@ -36,6 +36,7 @@ import {
 } from './conferir-conversa.js?v=__VERSION__';
 import {
   CP_IMPORT_PENDENTE_KEY,
+  cpErroDaIAEmPortugues,
   CP_IMPORT_PENDENTE_VALIDADE_MS,
   KEEP_RE,
   abrirLead,
@@ -173,7 +174,9 @@ function openAIErrorBlock(data){
     blocks.push(
       '<div class="notice error" style="margin-top:10px">' +
       '<b>Análise (Cérebro Comercial) falhou:</b><br>' +
-      escapeHtml(data.analysis.error) +
+      // v1314 — em português quando o erro do provedor é conhecido; o texto técnico continua
+      // disponível no Diagnóstico, que é onde ele serve.
+      escapeHtml(cpErroDaIAEmPortugues(data.analysis.error) || data.analysis.error) +
       '<br><br><b>O que fazer:</b> ' + escapeHtml(data.analysis.nextAction || "Abra o Diagnóstico.") +
       '</div>'
     );
