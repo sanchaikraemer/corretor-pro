@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { mensagensJaEnviadasPeloCorretor } from '../api/_pipeline.js';
+import { mensagensJaEnviadasPeloCorretor, motivoDaAnaliseNovaNaoTerValido } from '../api/_pipeline.js';
 
 // v1309 — "De novo, as sugestões estão sendo as mesmas coisas já enviadas. Você não está lendo o
 // histórico do cliente." (dono, 19/08/2026, com o print da conversa da cliente do apartamento
@@ -53,15 +53,14 @@ const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url)
 
 // ── 3. Quando a análise nova não sai, a tela DIZ que as sugestões são as antigas — e por quê ──
 {
-  assert.match(pipeline, /function motivoDaAnaliseNovaNaoTerValido\(analiseNova\)/,
+  assert.match(pipeline, /export function motivoDaAnaliseNovaNaoTerValido\(analiseNova\)/,
     'o motivo da falha da análise nova precisa ser calculado');
   assert.match(pipeline, /analiseReutilizadaMotivo: motivoDaAnaliseNovaNaoTerValido\(analiseNova\)/,
     'e viajar junto da análise reaproveitada');
   assert.match(pipeline, /const salva = manterAnaliseSalva\(previousAnalysis, analysis\);/,
     'a análise que falhou precisa ser passada, senão não há motivo nenhum a informar');
 
-  const fonte = pipeline.match(/function motivoDaAnaliseNovaNaoTerValido\(analiseNova\) \{[\s\S]*?\n\}/);
-  const motivo = new Function(`${fonte[0]}; return motivoDaAnaliseNovaNaoTerValido;`)();
+  const motivo = motivoDaAnaliseNovaNaoTerValido;
   assert.match(motivo({ validacaoSugestoes: ['Limite diário de 5 análises atingido.'] }), /Limite diário de 5/,
     'quando o servidor sabe o motivo, é ele que aparece');
   assert.match(motivo({ mode: 'limite_diario_excedido' }), /teto de análises do dia/i);
