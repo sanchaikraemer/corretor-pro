@@ -9,6 +9,7 @@ import {
   verificarLimiteTranscricaoImport,
   registrarConsumoTranscricaoImport,
   lerArquivosVisuais,
+  lerLinksDaConversa,
   verificarLimiteLeituraVisual,
   registrarConsumoLeituraVisual
 } from "./_pipeline.js";
@@ -419,6 +420,27 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   } catch (erroVisual) {
     console.warn("[direciona] leitura de imagem/PDF da importação falhou:", erroVisual?.message || erroVisual);
   }
+  // v1307 — os links que o corretor mandou na conversa são abertos aqui, na mesma etapa e com as
+  // mesmas travas (tempo, teto do dia, fail-open). Link de cliente nunca é aberto — a seleção é
+  // feita em linksDoCorretorNaConversa, no _pipeline.
+  const leiturasLinks = {};
+  try {
+    const links = Array.isArray(prep.linksParaLer) ? prep.linksParaLer : [];
+    if (links.length) {
+      const limiteLink = await verificarLimiteLeituraVisual(organizationId);
+      const cabem = Number.isFinite(limiteLink.restante) ? links.slice(0, Math.max(0, limiteLink.restante)) : links;
+      if (cabem.length) {
+        const { leituras } = await lerLinksDaConversa(cabem, organizationId, { deadlineTs: Date.now() + 20000 });
+        Object.assign(leiturasLinks, leituras || {});
+        const lidos = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
+        if (lidos) await registrarConsumoLeituraVisual(organizationId, lidos);
+      }
+    }
+  } catch (erroLink) {
+    console.warn("[direciona] leitura de link da importação falhou:", erroLink?.message || erroLink);
+  }
+  prep.leiturasLinks = leiturasLinks;
+  prep.linksLidos = Object.values(leiturasLinks).filter(l => l?.status === "lido").length;
   prep.leiturasVisuais = leiturasVisuais;
   prep.visuaisLidos = Object.values(leiturasVisuais).filter(l => l?.status === "lido").length;
   prep.leituraVisualLimiteAtingido = leituraVisualLimiteAtingido;
@@ -733,6 +755,7 @@ export default async function handler(req, res) {
         // v1306 — o texto lido das imagens/PDFs volta do navegador junto com as transcrições e
         // entra na linha do tempo dentro de finalizarAnaliseDaConversa.
         leiturasVisuais: body?.leiturasVisuais,
+        leiturasLinks: body?.leiturasLinks,
         ignoredFilesCount: body?.ignoredFilesCount, ignoredFiles: body?.ignoredFiles,
         audiosTotalNoZip: body?.audiosTotalNoZip, audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
         metricsBase: body?.metricsBase, existingTimeline, previousAnalysis, existingLeadId,
