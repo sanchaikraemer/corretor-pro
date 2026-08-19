@@ -39,13 +39,19 @@ function marcadorDeMidiaOculta(linha) {
 
 // Modelos IA do Direciona — configuração central por etapa.
 // A chave API só autoriza a conta/projeto; quem define a qualidade/custo é o modelo abaixo.
+// v1308 — o modelo da ANÁLISE subiu para a linha atual da OpenAI (escolha do dono, 19/08/2026,
+// depois de ver os três níveis do GPT-5.6): "terra" é o equilibrado da família — melhor que o
+// gpt-4.1 que estava aqui e rápido o bastante pra caber na janela da rota. Continua trocável sem
+// publicar código, pela variável DIRECIONA_MAIN_MODEL na hospedagem.
+// Os demais níveis, se um dia forem preciso: "gpt-5.6-sol" (o mais forte e o mais lento) e
+// "gpt-5.6-luna" (o mais barato).
 const MODELOS_PADRAO = {
   transcricao: "whisper-1",
-  analise: "gpt-4.1",
-  mensagens: "gpt-4.1",
+  analise: "gpt-5.6-terra",
+  mensagens: "gpt-5.6-terra",
   visao: "gpt-4o",
   tarefasSimples: "gpt-4o-mini",
-  orquestrador: "gpt-4.1"
+  orquestrador: "gpt-5.6-terra"
 };
 
 export const ARQUITETURA_MENSAGENS_ATUAL = "v852-cerebro-unico-obrigatorio";
@@ -4370,9 +4376,33 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     //   2ª tentativa: O MESMO MODELO, com o tempo que sobrou — repetição conserta erro passageiro
     //      da OpenAI, que é o único caso em que tentar de novo faz sentido;
     //   falhou as duas: a rota devolve erro e a tela manda tocar em Reanalisar.
+    //
+    // v1308 (2ª parte) — POR QUE A ANÁLISE SÓ TINHA 34 SEGUNDOS, E POR QUE AGORA TEM 48.
+    //
+    // Pergunta do dono: "e se não couber em 34 segundos, por que não aumenta esse prazo?". Estava
+    // certo — o número era desperdício, não limite. O teto REAL é da hospedagem: a rota é morta aos
+    // 60s (maxDuration no vercel.json), e passar disso não devolve nada pro corretor. Dentro desse
+    // teto o app reservava ~16s ociosos "por garantia", pra caso precisasse de uma 2ª tentativa.
+    //
+    // Só que 2ª tentativa não conserta LENTIDÃO — isso a v1140 já tinha medido. Ela serve pra erro
+    // passageiro da OpenAI (429, 5xx, queda de rede), e esse tipo de erro volta RÁPIDO, deixando o
+    // tempo todo de sobra sozinho. Ou seja: guardar 16 segundos parados só encurtava a única
+    // tentativa que interessa.
+    //
+    // Agora a 1ª tentativa leva quase o orçamento inteiro (48s por padrão, +41%). Se ela morrer de
+    // tempo, não há repetição — repetir uma chamada lenta falha de novo e queima o que sobrou; a
+    // tela avisa e o corretor toca em Reanalisar. Se ela morrer por erro passageiro (volta em
+    // segundos), o que sobrou do orçamento vira uma 2ª tentativa NO MESMO MODELO.
+    //
+    // Pra ir além de 60s é preciso subir o maxDuration no vercel.json (planos pagos da Vercel
+    // aceitam até 300s). Se isso mudar, basta acompanhar aqui pela DIRECIONA_ANALYSIS_BUDGET_MS —
+    // o teste v947 trava a conta pra ninguém estourar o teto por engano.
     const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 52000);
     const inicioAnaliseTs = Date.now();
-    const janelaPrincipalMs = Math.min(Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || 34000), Math.max(15000, orcamentoAnaliseMs - 14000));
+    const janelaPrincipalMs = Math.min(
+      Number(process.env.DIRECIONA_ANALYSIS_TIMEOUT_MS || (orcamentoAnaliseMs - 4000)),
+      Math.max(15000, orcamentoAnaliseMs - 4000)
+    );
     const maxTokensAnalise = Number(process.env.DIRECIONA_ANALYSIS_MAX_TOKENS || 3600);
     let r = null, erroPrincipal = null;
     try {
@@ -4388,7 +4418,9 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     if (!r) {
       // 2s de folga pra resposta ainda ser serializada/gravada antes do teto da Vercel.
       const sobraMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
-      if (sobraMs >= 10000) {
+      // Estourou o tempo? Não repete: repetir chamada lenta falha igual e ainda gasta dinheiro.
+      const morreuDeTempo = String(erroPrincipal?.code || "") === "ETIMEDOUT";
+      if (!morreuDeTempo && sobraMs >= 10000) {
         try {
           r = await chamarGPT4Json({
             openai,

@@ -39,6 +39,33 @@ sempre.
 **O nome do modelo continua trocável na configuração da hospedagem, sem publicar código nenhum** —
 nada foi cravado aqui.
 
+### E o modelo passou a ser o GPT-5.6 Terra
+
+O app analisava no **gpt-4.1**, duas gerações atrás. Passou para o **GPT-5.6 Terra**, o nível
+equilibrado da linha atual da OpenAI — mais forte que o anterior e rápido o bastante pra caber no
+tempo da rota. Os outros dois níveis, se um dia fizer falta, são o **Sol** (o mais inteligente e o
+mais lento) e o **Luna** (o mais barato). Trocar é uma linha na configuração da hospedagem, sem
+publicar nada.
+
+### A análise ganhou 41% mais tempo pra pensar
+
+Pergunta do dono: *"e se não couber em 34 segundos, por que não aumenta esse prazo?"*. Ele estava
+certo — os 34 segundos eram desperdício, não limite.
+
+O teto de verdade é da hospedagem: a rota é morta aos **60 segundos**, e passar disso não devolve
+nada. Dentro desse teto, o app reservava uns 16 segundos **parados**, guardados para uma segunda
+tentativa. Só que segunda tentativa não conserta lentidão — serve para erro passageiro da OpenAI
+(fora do ar, fila cheia, queda de rede), e esse tipo de erro volta em segundos, deixando o tempo
+sobrando sozinho. Ou seja: os 16 segundos guardados só encurtavam a única tentativa que interessa.
+
+Agora a análise tem **48 segundos** em vez de 34. Se estourar o tempo, o app não repete (repetir uma
+chamada lenta falha igual e ainda custa dinheiro): a tela avisa e você toca em Reanalisar. Se o erro
+for passageiro, o que sobrou do tempo vira a segunda tentativa, no mesmo modelo.
+
+Para passar dos 60 segundos seria preciso subir o limite da hospedagem (os planos pagos da Vercel
+aceitam até 5 minutos). Se um dia isso for necessário, é uma linha de configuração e o teste da
+suíte trava a conta pra ninguém estourar o teto por engano.
+
 ---
 
 ## 2. "Boa viagem" nunca mais conta como cobrança sua ignorada

@@ -52,13 +52,22 @@ assert.match(analyzeSrc, /falhaAmigavel/,
 // analyzeWithBrain (reanalisar-lead.js e processar-storage.js, via finalizarAnaliseDaConversa).
 // Se algum dia subirem DIRECIONA_ANALYSIS_TIMEOUT_MS/BUDGET_MS sem refazer essa conta, a função
 // estoura o teto da Vercel e vira 504 no meio da execução.
+// v1308 — a janela da 1ª tentativa deixou de reservar 16s ociosos "por garantia": ela leva quase o
+// orçamento inteiro, e a 2ª tentativa só acontece quando o erro foi PASSAGEIRO (volta em segundos e
+// deixa o tempo de sobra sozinho). Timeout não é repetido — repetir chamada lenta falha igual.
 const budgetMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_BUDGET_MS \|\| (\d+)/);
-const timeoutMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_TIMEOUT_MS \|\| (\d+)/);
-assert.ok(budgetMatch && timeoutMatch, 'orçamento/janela default da análise não encontrados');
+const folgaMatch = analyzeSrc.match(/DIRECIONA_ANALYSIS_TIMEOUT_MS \|\| \(orcamentoAnaliseMs - (\d+)\)/);
+assert.ok(budgetMatch && folgaMatch, 'orçamento/janela default da análise não encontrados');
 const orcamentoMs = Number(budgetMatch[1]);
-const janelaMs = Number(timeoutMatch[1]);
-assert.ok(janelaMs + 14000 <= orcamentoMs,
-  `a janela principal (${janelaMs}ms) precisa deixar >=14s pra segunda tentativa dentro do orçamento (${orcamentoMs}ms)`);
+const janelaMs = orcamentoMs - Number(folgaMatch[1]);
+assert.ok(janelaMs < orcamentoMs,
+  `a janela principal (${janelaMs}ms) precisa caber dentro do orçamento (${orcamentoMs}ms)`);
+assert.ok(janelaMs >= 40000,
+  `a janela principal (${janelaMs}ms) não pode encolher: era 34s e o dono pediu mais tempo pra análise`);
+assert.match(analyzeSrc, /const morreuDeTempo = String\(erroPrincipal\?\.code \|\| ""\) === "ETIMEDOUT";/,
+  'timeout não pode virar segunda tentativa — repetir chamada lenta só gasta dinheiro e falha igual');
+assert.match(analyzeSrc, /if \(!morreuDeTempo && sobraMs >= 10000\)/,
+  'a segunda tentativa é só pra erro passageiro, e só se sobrar tempo de verdade');
 for (const rota of ['api/processar-storage.js', 'api/reanalisar-lead.js']) {
   const maxDurationMs = Number(vercelConfig.functions?.[rota]?.maxDuration || 0) * 1000;
   assert.ok(maxDurationMs > 0, `maxDuration de ${rota} não encontrado no vercel.json`);

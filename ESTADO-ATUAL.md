@@ -226,6 +226,10 @@ real. (1) A 2ª tentativa da análise deixou de trocar o modelo principal pelo `
 — roda no MESMO modelo, e a reescrita anti-robô também; falhando as duas, a análise devolve
 `falhaAmigavel` ("Não deu pra analisar esta conversa agora — a IA não respondeu a tempo. Toque em
 Reanalisar.") e a tela mostra isso no lugar do texto técnico. `modeloFallback` não existe mais.
+Junto: `MODELOS_PADRAO.analise/mensagens/orquestrador` passaram de `gpt-4.1` para `gpt-5.6-terra`
+(trocável por `DIRECIONA_MAIN_MODEL`), e a janela da 1ª tentativa deixou de reservar ~16s ociosos —
+vale `orçamento - 4s` (48s por padrão, era 34s), com a 2ª tentativa só para erro PASSAGEIRO
+(timeout não é repetido: `morreuDeTempo`).
 (2) `mensagemEhSoCortesia` tira do cálculo de `tentativasSemRespostaDoCorretor` a mensagem do
 corretor que é só concordância/agradecimento/despedida — era ela que fazia "Certo, boa viagem e até
 semana que vem" chegar à IA como cobrança ignorada. (3) `prazoMarcadoPeloCliente` transforma o prazo
