@@ -203,6 +203,20 @@ conseguiu limpar. Guarda: `tests/v1305-endereco-inventado-e-aviso-na-tela.test.m
 
 =======
 >>>>>>> origin/main
+_**v1306 — a importação lê imagem e PDF (vídeo não).** Pedido do dono em 19/08/2026, depois do caso
+em que o preço atual estava na ARTE do anúncio e a IA respondeu com o preço em texto de dez meses
+antes. A importação passa a ler JPG/PNG/WEBP e PDF citados na conversa (`lerArquivosVisuais`, modelo
+de visão; PDF vai pelo canal de arquivo do OpenAI, não como imagem) e o texto lido entra na linha do
+tempo na própria mensagem do anexo, com rótulo "[Imagem lida pela IA]" / "[Documento lido pela IA]".
+Travas: no máximo 6 arquivos por importação (`DIRECIONA_MAX_VISUAIS_IMPORT`) e sempre os mais
+recentes, só os citados por alguma mensagem, teto diário por conta
+(`DIRECIONA_LIMITE_LEITURA_VISUAL_DIA`, padrão 120; teste 8) conferido antes de gastar, corte por
+tempo (`deadlineTs`) e fail-open em qualquer erro. A leitura acontece na etapa "preparar" (os
+arquivos já estão descompactados) e viaja para a análise em `leiturasVisuais`. Junto: o NOME do
+arquivo anexado passou a ser preservado (campo `anexos` da mensagem) — sem ele não havia como ligar a
+imagem lida à mensagem. Guarda: `tests/v1306-importacao-le-imagem-e-pdf.test.mjs`. Ver
+`NOTAS-v1306.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
@@ -355,6 +369,7 @@ rota já existente (o padrão já usado em `lead-update.js`, `diagnostico.js`, `
 `OPENAI_PROJECT_ID`/`OPENAI_PROJECT` (conta/projeto da OpenAI, não confundir com organização do
 Corretor Pro), `DIRECIONA_ANALYSIS_MAX_TOKENS`, `DIRECIONA_ANALYSIS_TIMEOUT_MS`,
 `DIRECIONA_MAX_CONTEXT_CHARS`, `DIRECIONA_LIMITAR_HISTORICO`, `DIRECIONA_USAR_APRENDIZADO_AUTO`,
+`DIRECIONA_MAX_VISUAIS_IMPORT`, `DIRECIONA_LIMITE_LEITURA_VISUAL_DIA`, `DIRECIONA_LIMITE_LEITURA_VISUAL_DIA_TESTE`,
 `DIRECIONA_USAR_CONHECIMENTO_AUTO`, `DIRECIONA_USAR_ESTILO_AUTO`.
 
 ## 4. Banco de dados — migrações

@@ -248,6 +248,11 @@ export function parseWhatsappTxt(txt) {
       if (!text.trim()) return m;
       const lines = text.split(/\r?\n/);
       const kept = [];
+      // v1306 — o NOME do arquivo anexado precisa sobreviver. A linha "ARTE-PROMO.jpg (arquivo
+      // anexado)" era trocada por um marcador genérico e o nome sumia: sem ele não dá pra ligar a
+      // imagem lida à mensagem em que ela foi enviada. O texto que a IA lê continua igual — o nome
+      // fica guardado ao lado, num campo próprio.
+      const anexos = [];
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
@@ -261,9 +266,10 @@ export function parseWhatsappTxt(txt) {
           // v1058: antes a linha inteira era descartada — a IA perdia até o FATO de que um
           // arquivo foi enviado ali (não só o conteúdo, que já era certo não inventar). Mantém
           // um marcador factual, sem tentar descrever o que tem na imagem/vídeo/documento.
-          if (IMAGE_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
+          const nomeAnexo = trimmed.replace(ATTACHED_SUFFIX_RE, "").trim();
+          if (IMAGE_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado pela IA]"); continue; }
           if (VIDEO_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]"); continue; }
-          if (DOC_INLINE_RE.test(trimmed)) { kept.push("[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]"); continue; }
+          if (DOC_INLINE_RE.test(trimmed)) { anexos.push(nomeAnexo); kept.push("[Arquivo enviado nesta mensagem: documento/PDF — conteúdo não analisado pela IA]"); continue; }
           continue;
         }
         if (HIDDEN_MEDIA_TAG_RE.test(trimmed)) {
@@ -276,7 +282,7 @@ export function parseWhatsappTxt(txt) {
         }
         kept.push(trimmed);
       }
-      return { ...m, text: kept.join("\n") };
+      return anexos.length ? { ...m, text: kept.join("\n"), anexos } : { ...m, text: kept.join("\n") };
     })
     .filter(m => {
       const text = String(m.text || "").trim();
@@ -285,6 +291,21 @@ export function parseWhatsappTxt(txt) {
       return true;
     })
     .map((m, index) => ({ ...m, id: index + 1, order: index + 1 }));
+}
+
+// v1306 — igual ao findReferencedAudio, mas sem depender da extensão de áudio: serve pra achar
+// a imagem ou o PDF citado na linha do WhatsApp ("IMG-20251030-WA0001.jpg (arquivo anexado)").
+export function encontrarArquivoCitado(messageText, nomes) {
+  const normalizedText = normalizeComparable(messageText);
+  if (!normalizedText) return null;
+  for (const original of (nomes || [])) {
+    const base = normalizeName(original);
+    if (!base) continue;
+    const normalizedBase = normalizeComparable(base);
+    const semExt = normalizeComparable(base.replace(/\.[a-z0-9]{1,5}$/i, ""));
+    if (normalizedText.includes(normalizedBase) || (semExt.length >= 6 && normalizedText.includes(semExt))) return base;
+  }
+  return null;
 }
 
 export function findReferencedAudio(messageText, audioNames) {
@@ -4521,6 +4542,23 @@ function coletarAudiosReferenciados(messages, audioFiles) {
   return encontrados;
 }
 
+// v1306 — quais imagens/PDFs desta conversa serão lidos. Regra simples e barata: só os que uma
+// mensagem realmente cita, e só os MAIS RECENTES até o teto da importação — numa conversa longa, a
+// peça que vale comercialmente é a última, não a de dois anos atrás (e material velho é justamente
+// o que traz preço vencido, ver v1305).
+export function montarPlanoVisuais(messagesAll, visualFiles, maxArquivos = 6) {
+  const nomes = (Array.isArray(visualFiles) ? visualFiles : []).map(normalizeName).filter(arquivoVisualLegivel);
+  if (!nomes.length || maxArquivos <= 0) return { citados: [], paraLer: [] };
+  const citadosEmOrdem = [];
+  for (const msg of (Array.isArray(messagesAll) ? messagesAll : [])) {
+    // O nome vem do campo `anexos` (guardado na leitura do TXT) e, como reserva, do próprio texto
+    // — conversa antiga, já salva antes desta versão, ainda pode ter o nome escrito na linha.
+    const ref = encontrarArquivoCitado((msg?.anexos || []).join(" "), nomes) || encontrarArquivoCitado(msg?.text, nomes);
+    if (ref && !citadosEmOrdem.includes(ref)) citadosEmOrdem.push(ref);
+  }
+  return { citados: citadosEmOrdem, paraLer: citadosEmOrdem.slice(-maxArquivos) };
+}
+
 function montarPlanoJanelaAudios(messagesAll, audioFiles, audioWindowDays) {
   const diasAudio = normalizarDiasJanelaAudio(audioWindowDays);
   const recorteAudio = diasAudio == null
@@ -4574,7 +4612,10 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   if (allNames.length > MAX_ZIP_ENTRIES) throw new Error(`ZIP com arquivos demais (${allNames.length}; máximo ${MAX_ZIP_ENTRIES}).`);
   const txtName = allNames.find(name => name.toLowerCase().endsWith(".txt"));
   const audioFiles = allNames.filter(name => AUDIO_EXT.test(name));
-  const ignoredFiles = allNames.filter(name => IMAGE_EXT.test(name) || VIDEO_EXT.test(name) || DOC_EXT.test(name) || (!AUDIO_EXT.test(name) && !name.toLowerCase().endsWith(".txt")));
+  // v1306 — imagem (jpg/png/webp) e PDF deixam de ser descartados: viram material de leitura.
+  // Vídeo continua fora, por decisão do dono.
+  const visualFiles = allNames.filter(name => arquivoVisualLegivel(name));
+  const ignoredFiles = allNames.filter(name => !visualFiles.includes(name) && (IMAGE_EXT.test(name) || VIDEO_EXT.test(name) || DOC_EXT.test(name) || (!AUDIO_EXT.test(name) && !name.toLowerCase().endsWith(".txt"))));
 
   if (!txtName) {
     const err = new Error("Não encontrei o arquivo .txt da conversa dentro do ZIP.");
@@ -4597,10 +4638,12 @@ export async function prepararConversaDoZip(buffer, options = {}) {
   const midiasOcultas = (txt.match(/<[^>]*(oculta|omitida|omitido|ocultado|omitted|hidden)[^>]*>/gi) || []).length;
   const exportadoSemMidia = midiasOcultas > 0 && audioFiles.length === 0;
 
+  const planoVisuais = montarPlanoVisuais(messagesAll, visualFiles, options.maxVisuais ?? maxVisuaisPorImportacao());
   const audioFilesRelevantes = planoAudio.audioFilesTimeline;
   const audiosParaTranscrever = planoAudio.audiosParaTranscrever;
   const audioFilesForaDaJanela = planoAudio.audioFilesForaDaJanela;
   const extractedFiles = {};
+  const extractedVisuals = {};
   if (options.includeExtractedFiles === true) {
     // v827-4 (ZIP grande): extrai SOMENTE os áudios que serão transcritos na janela
     // escolhida. Os demais ficam registrados como fora da janela, sem ocupar memória
@@ -4620,6 +4663,18 @@ export async function prepararConversaDoZip(buffer, options = {}) {
       const entry = zip.files[fullName];
       if (!entry || entry.dir) continue;
       extractedFiles[base] = await entry.async("nodebuffer");
+    }
+    // v1306 — os arquivos visuais escolhidos saem do ZIP na mesma descompactação. Eles NÃO vão pro
+    // Storage: são lidos na hora e o que fica guardado é o texto, não o arquivo. Mesma proteção do
+    // áudio (v979): o tamanho DECLARADO é conferido antes de qualquer .async, pra um PDF-bomba não
+    // estourar a memória da função.
+    for (const fullName of visualFiles) {
+      const base = normalizeName(fullName);
+      if (!planoVisuais.paraLer.includes(base)) continue;
+      const entry = zip.files[fullName];
+      if (!entry || entry.dir) continue;
+      if (zipEntrySize(entry) > MAX_BYTES_PDF_LEITURA) continue;
+      extractedVisuals[base] = await entry.async("nodebuffer");
     }
   }
 
@@ -4641,13 +4696,20 @@ export async function prepararConversaDoZip(buffer, options = {}) {
     audiosDescartadosPorJanela: audioFilesForaDaJanela.length,
     midiasOcultas,
     exportadoSemMidia,
+    // v1306 — imagens e PDFs citados na conversa, e quais deles esta importação vai ler.
+    visuaisCitados: planoVisuais.citados,
+    visuaisParaLer: planoVisuais.paraLer,
+    visuaisTotalNoZip: visualFiles.length,
     _extractedFiles: extractedFiles,
+    _extractedVisuals: extractedVisuals,
     metricsBase: {
       totalFiles: allNames.length,
       totalMensagensOriginais: messagesAll.length,
       totalMessagesParsed: messages.length,
       audiosParaTranscrever: audiosParaTranscrever.length,
       audiosForaDoPeriodo: audioFilesForaDaJanela.length,
+      visuaisCitados: planoVisuais.citados.length,
+      visuaisParaLer: planoVisuais.paraLer.length,
       midiasOcultas,
       exportadoSemMidia
     }
@@ -4681,6 +4743,181 @@ async function mapComLimiteConcorrencia(itens, limite, fn) {
   await Promise.all(Array.from({ length: Math.max(1, Math.min(limite, lista.length)) }, trabalhador));
 }
 
+// v1306 — A IMPORTAÇÃO PASSA A LER IMAGEM E PDF DA CONVERSA.
+//
+// Até aqui o ZIP do WhatsApp entrava só com o texto e os áudios: imagem, vídeo e documento eram
+// separados numa lista chamada "ignorados" e nada do conteúdo deles era lido. Na conversa que ia
+// pra IA sobrava uma linha "[Arquivo enviado nesta mensagem: imagem — conteúdo não analisado]".
+//
+// O custo disso apareceu inteiro em 19/08/2026: numa conversa em que o corretor tinha mandado a
+// ARTE do anúncio com o preço atual, a IA não viu a arte e respondeu com o único número que
+// enxergava — um preço de dez meses antes, escrito em texto. O ChatGPT, com a mesma conversa
+// exportada (com as imagens), acertou o preço de hoje. Não era esperteza do outro lado: era o
+// nosso app estando cego para o material comercial que o próprio corretor manda todo dia.
+//
+// Vídeo continua fora, por decisão do dono ("vamos testar importar pra análise junto pdf e imagem
+// — vídeo não").
+//
+// O que é lido vira TEXTO na linha do tempo, no lugar da mensagem que tinha o anexo, e a partir
+// daí é conversa como qualquer outra: entra na análise, aparece no histórico e pode ser conferido.
+// O pedido de leitura é o mesmo de sempre neste projeto — copie o que está escrito, não invente.
+const IMAGEM_LEGIVEL_EXT = /\.(jpe?g|png|webp)$/i;
+const PDF_EXT = /\.pdf$/i;
+const MAX_BYTES_IMAGEM_LEITURA = 5 * 1024 * 1024;
+const MAX_BYTES_PDF_LEITURA = 8 * 1024 * 1024;
+
+export function arquivoVisualLegivel(nome) {
+  const n = String(nome || "");
+  return IMAGEM_LEGIVEL_EXT.test(n) || PDF_EXT.test(n);
+}
+
+export function tipoDoArquivoVisual(nome) {
+  return PDF_EXT.test(String(nome || "")) ? "documento" : "imagem";
+}
+
+function mimeDaImagem(nome) {
+  const n = String(nome || "").toLowerCase();
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
+const PEDIDO_LEITURA_IMAGEM = [
+  "Esta imagem foi enviada dentro de uma conversa de WhatsApp entre um corretor de imóveis e um cliente.",
+  "Escreva SOMENTE o que está visível nela, em português, em no máximo 6 linhas curtas:",
+  "valores e condições exatamente como aparecem (preço, entrada, parcela, desconto, prazo, financiamento);",
+  "nome do empreendimento ou edifício; endereço, bairro ou ponto de referência;",
+  "características (dormitórios, suítes, metragem, garagem, lazer, mobília);",
+  "e, na primeira linha, o que é a peça (anúncio, tabela de valores, planta, foto do imóvel, print de conversa, documento).",
+  "Copie números e nomes exatamente como estão escritos, sem arredondar, corrigir ou completar.",
+  "Não interprete, não deduza, não descreva decoração nem estilo, e não invente nada que não esteja escrito.",
+  "Se não houver nenhuma informação comercial (foto pessoal, figurinha, meme, imagem sem texto), responda exatamente: SEM CONTEUDO COMERCIAL"
+].join(" ");
+
+const PEDIDO_LEITURA_PDF = [
+  "Este PDF foi enviado dentro de uma conversa de WhatsApp entre um corretor de imóveis e um cliente.",
+  "Liste SOMENTE o que está escrito nele, em português, em no máximo 12 linhas curtas:",
+  "valores e condições exatamente como aparecem (preço por unidade, entrada, parcelas, reforço, desconto, prazo);",
+  "nome do empreendimento; endereço ou localização; tipologias (dormitórios, suítes, metragem, garagem);",
+  "e, na primeira linha, o que é o documento (folder, tabela de valores, contrato, planta, proposta).",
+  "Copie números e nomes exatamente como estão, sem arredondar, resumir por cima nem completar.",
+  "Não interprete, não deduza e não invente nada que não esteja escrito.",
+  "Se não houver informação comercial legível, responda exatamente: SEM CONTEUDO COMERCIAL"
+].join(" ");
+
+// Lê UM arquivo visual. Devolve "" quando não há conteúdo comercial. Nunca lança pra fora: erro
+// vira status, e a importação segue sem aquele arquivo (a leitura é ganho extra, não pré-requisito).
+async function lerUmArquivoVisual(nome, buffer, openai, organizationId) {
+  const ehPdf = PDF_EXT.test(nome);
+  const limite = ehPdf ? MAX_BYTES_PDF_LEITURA : MAX_BYTES_IMAGEM_LEITURA;
+  if (buffer.length > limite) return { status: "arquivo_grande_demais", text: "" };
+  const modeloUsado = modeloVisao();
+  const base64 = buffer.toString("base64");
+  const conteudo = ehPdf
+    ? [
+        { type: "text", text: PEDIDO_LEITURA_PDF },
+        { type: "file", file: { filename: nome, file_data: `data:application/pdf;base64,${base64}` } }
+      ]
+    : [
+        { type: "text", text: PEDIDO_LEITURA_IMAGEM },
+        { type: "image_url", image_url: { url: `data:${mimeDaImagem(nome)};base64,${base64}`, detail: "high" } }
+      ];
+  // Sem "temperature": o projeto proíbe fixar isso nas chamadas de IA desde a v855.
+  const completion = await withRetries(() => openai.chat.completions.create({
+    model: modeloUsado,
+    max_tokens: ehPdf ? 900 : 500,
+    messages: [{ role: "user", content: conteudo }]
+  }), { tries: 2 });
+  await registrarUsoIA({ organizationId, kind: "chat", model: completion?.model || modeloUsado, rota: "leitura-visual-import", usage: completion?.usage });
+  const texto = String(completion?.choices?.[0]?.message?.content || "").replace(/\s+$/, "").trim();
+  if (!texto || /^SEM CONTEUDO COMERCIAL$/i.test(texto)) return { status: "sem_conteudo_comercial", text: "" };
+  return { status: "lido", text: texto };
+}
+
+// Lê a lista de arquivos visuais escolhidos pela importação. `deadlineTs` (timestamp) corta a
+// leitura quando o tempo da função está acabando — o que não coube fica sem leitura e a conversa
+// segue como era antes, sem quebrar nada.
+export async function lerArquivosVisuais(arquivos = [], organizationId = ORGANIZACAO_PADRAO_LEGADA, { deadlineTs = 0, openai = null } = {}) {
+  const oa = openai || getOpenAI();
+  const leituras = {};
+  const entradas = (Array.isArray(arquivos) ? arquivos : []).filter(a => a?.name && a?.buffer);
+  if (!entradas.length) return { leituras, leituraHabilitada: !!oa };
+  if (!oa) {
+    for (const item of entradas) leituras[normalizeName(item.name)] = { status: "api_nao_configurada", text: "" };
+    return { leituras, leituraHabilitada: false };
+  }
+  await mapComLimiteConcorrencia(entradas, 3, async item => {
+    const base = normalizeName(item.name);
+    if (!base) return;
+    if (deadlineTs && Date.now() > deadlineTs) { leituras[base] = { status: "sem_tempo_nesta_importacao", text: "" }; return; }
+    const buffer = Buffer.isBuffer(item.buffer) ? item.buffer : Buffer.from(item.buffer || []);
+    if (!buffer.length) { leituras[base] = { status: "arquivo_vazio", text: "" }; return; }
+    try {
+      leituras[base] = await lerUmArquivoVisual(base, buffer, oa, organizationId);
+    } catch (error) {
+      leituras[base] = { status: "erro_leitura", text: "", error: describeOpenAIError(error) };
+    }
+  });
+  return { leituras, leituraHabilitada: true };
+}
+
+// Teto diário de leitura de imagem/PDF na importação — a parte nova do custo. Mesma ideia do teto
+// de transcrição de áudio (v1119): corta o excedente ANTES de gastar, e o que não couber hoje fica
+// sem leitura (a conversa continua funcionando, como funcionava antes desta versão).
+export function limiteLeituraVisualDoDia() {
+  const n = Number(process.env.DIRECIONA_LIMITE_LEITURA_VISUAL_DIA);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 120;
+}
+export function limiteLeituraVisualDoDiaTeste() {
+  const n = Number(process.env.DIRECIONA_LIMITE_LEITURA_VISUAL_DIA_TESTE);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 8;
+}
+// Quantos arquivos visuais uma única importação pode ler. Teto baixo de propósito: numa conversa
+// longa, o que interessa comercialmente são as peças recentes.
+export function maxVisuaisPorImportacao() {
+  const n = Number(process.env.DIRECIONA_MAX_VISUAIS_IMPORT);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 6;
+}
+
+// Mesmo par do teto de transcrição (v1119), agora pra leitura de imagem/PDF: conferir quanto ainda
+// cabe hoje ANTES de gastar, e registrar depois só o que virou texto de verdade. Fail-open: erro na
+// checagem nunca bloqueia uma importação.
+const LEITURA_VISUAL_IMPORT_KEY = "limite-leitura-visual-import";
+
+export async function verificarLimiteLeituraVisual(organizationId) {
+  const aberto = { permitido: true, usado: 0, limite: Infinity, emTeste: false, restante: Infinity };
+  try {
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return aberto;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return aberto;
+    const hojeStr = diaCalendarioSP();
+    const { data: cfg } = await supabase.from("direciona_config").select("valor").eq("chave", LEITURA_VISUAL_IMPORT_KEY).eq("organization_id", organizationId).maybeSingle();
+    const atual = cfg?.valor && typeof cfg.valor === "object" ? cfg.valor : {};
+    const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
+    const { data: org } = await supabase.from("organizations").select("status").eq("id", organizationId).maybeSingle();
+    const emTeste = org?.status === "teste";
+    const limite = emTeste ? limiteLeituraVisualDoDiaTeste() : limiteLeituraVisualDoDia();
+    return { permitido: usado < limite, usado, limite, emTeste, restante: Math.max(0, limite - usado) };
+  } catch (_) { return aberto; }
+}
+
+export async function registrarConsumoLeituraVisual(organizationId, quantidade = 0) {
+  try {
+    const qtd = Number(quantidade) || 0;
+    if (qtd <= 0) return;
+    const { getSupabaseAdmin, EMPRESA_PRINCIPAL_ID } = await import("./_persistence.js");
+    const supabase = getSupabaseAdmin();
+    if (!supabase || !organizationId) return;
+    if (String(organizationId) === String(EMPRESA_PRINCIPAL_ID)) return;
+    const hojeStr = diaCalendarioSP();
+    const { data: cfg } = await supabase.from("direciona_config").select("valor").eq("chave", LEITURA_VISUAL_IMPORT_KEY).eq("organization_id", organizationId).maybeSingle();
+    const atual = cfg?.valor && typeof cfg.valor === "object" ? cfg.valor : {};
+    const usado = atual.dia === hojeStr ? (Number(atual.contagem) || 0) : 0;
+    await upsertConfigComOrganizacao(supabase, organizationId, { chave: LEITURA_VISUAL_IMPORT_KEY, valor: { dia: hojeStr, contagem: usado + qtd }, atualizado_em: new Date().toISOString() }).catch(() => ({}));
+  } catch (_) {}
+}
+
 export async function transcreverArquivosExtraidos(arquivos = [], organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   const openai = getOpenAI();
   const resultado = {};
@@ -4705,9 +4942,13 @@ export async function transcreverArquivosExtraidos(arquivos = [], organizationId
 
 // Monta a timeline a partir de mensagens já filtradas + transcrições já prontas
 // (não chama OpenAI). transcriptionMap: { nomeBaseDoAudio: {status, text} }
-function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = []) {
+function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcriptionMap, audioFilesForaDaJanela = [], leiturasVisuais = {}) {
   const audioNames = (audioFilesRelevantes || []).map(normalizeName);
   const foraDaJanela = new Set((audioFilesForaDaJanela || []).map(normalizeName));
+  // v1306 — o que a IA leu das imagens e dos PDFs entra AQUI, na mensagem que trouxe o anexo, e
+  // vira texto normal da conversa daí pra frente (análise, histórico, reanálise).
+  const leituras = (leiturasVisuais && typeof leiturasVisuais === "object") ? leiturasVisuais : {};
+  const nomesVisuais = Object.keys(leituras);
   const timeline = [];
   const usedAudio = new Set();
   for (const msg of messages) {
@@ -4730,6 +4971,22 @@ function montarTimelineComTranscricoes(messages, audioFilesRelevantes, transcrip
         audioStatus: t.status,
         text: textoAudio,
         source: "audio"
+      });
+      continue;
+    }
+    const visualRef = nomesVisuais.length
+      ? (encontrarArquivoCitado((msg.anexos || []).join(" "), nomesVisuais) || encontrarArquivoCitado(msg.text, nomesVisuais))
+      : null;
+    const leitura = visualRef ? leituras[visualRef] : null;
+    if (visualRef && leitura?.text) {
+      const rotulo = tipoDoArquivoVisual(visualRef) === "documento" ? "Documento lido pela IA" : "Imagem lida pela IA";
+      timeline.push({
+        ...msg,
+        type: tipoDoArquivoVisual(visualRef),
+        mediaFile: visualRef,
+        visualStatus: leitura.status || "lido",
+        text: `[${rotulo}] ${String(leitura.text).replace(/\s*\n\s*/g, " · ").trim()}`,
+        source: "visual"
       });
       continue;
     }
@@ -4876,10 +5133,11 @@ export async function finalizarAnaliseDaConversa(payload) {
     ignoredFilesCount, ignoredFiles, audiosTotalNoZip, audiosDescartadosPorJanela,
     metricsBase, existingTimeline, previousAnalysis, existingLeadId,
     audiosReaproveitados = 0, audiosNovosSolicitados = 0, cerebroConfig = null,
+    leiturasVisuais = {},
     organizationId = ORGANIZACAO_PADRAO_LEGADA
   } = payload;
 
-  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || []);
+  const timelineDoArquivo = montarTimelineComTranscricoes(messages || [], audioFilesRelevantes || [], transcriptionMap || {}, audioFilesForaDaJanela || [], leiturasVisuais || {});
   const timelineAntiga = Array.isArray(existingTimeline) ? existingTimeline : [];
   const reimportacao = !!(existingLeadId && timelineAntiga.length);
   const chavesAntigas = new Set(timelineAntiga.map(assinaturaTimelineIncremental).filter(Boolean));
@@ -4972,7 +5230,10 @@ export async function finalizarAnaliseDaConversa(payload) {
     rawText: rawTextParaCliente,
     ignoredFilesCount: ignoredFilesCount || 0,
     ignoredFiles: ignoredFiles || [],
-    ignoredRule: "Imagens, vídeos, documentos, emojis e figurinhas não alimentam a análise. O Corretor Pro usa texto e áudios transcritos.",
+    // v1306 — a frase mudou porque o comportamento mudou: imagem e PDF passaram a ser lidos.
+    ignoredRule: "Vídeos, emojis e figurinhas não alimentam a análise. O Corretor Pro usa o texto, os áudios transcritos e o que está escrito nas imagens e nos PDFs da conversa.",
+    // v1306 — quantos arquivos visuais viraram texto nesta importação (0 quando não havia nenhum).
+    visuaisLidos: timeline.filter(m => m?.source === "visual").length,
     audioFiles: (audioFilesRelevantes || []),
     audiosEncontrados: timeline.filter(m => m?.mediaFile).length,
     audiosTotalNoZip: audiosTotalNoZip || 0,
@@ -5026,12 +5287,29 @@ export async function processZipBuffer(buffer, { audioWindowDays = "90", cerebro
   const lote = arquivos.length
     ? await transcreverArquivosExtraidos(arquivos, organizationId)
     : { transcriptions: {}, transcriptionEnabled: true };
+  // v1306 — este caminho (atalho/compartilhar) lê imagem e PDF igual à importação normal, senão a
+  // mesma conversa entra rica por um lado e cega pelo outro.
+  const visuais = Object.entries(prep._extractedVisuals || {}).map(([name, buf]) => ({ name, buffer: buf }));
+  let leiturasVisuais = {};
+  if (visuais.length) {
+    try {
+      const limite = await verificarLimiteLeituraVisual(organizationId);
+      const cabem = Number.isFinite(limite.restante) ? visuais.slice(0, Math.max(0, limite.restante)) : visuais;
+      if (cabem.length) {
+        const r = await lerArquivosVisuais(cabem, organizationId, { deadlineTs: Date.now() + 22000 });
+        leiturasVisuais = r.leituras || {};
+        const lidos = Object.values(leiturasVisuais).filter(l => l?.status === "lido").length;
+        if (lidos) await registrarConsumoLeituraVisual(organizationId, lidos);
+      }
+    } catch (_) { /* leitura é ganho extra: falhou, a conversa segue como antes */ }
+  }
   return finalizarAnaliseDaConversa({
     txtFile: prep.txtFile,
     messages: prep.messages,
     audioFilesRelevantes: prep.audioFilesRelevantes,
     audioFilesForaDaJanela: prep.audioFilesForaDaJanela,
     transcriptionMap: lote.transcriptions,
+    leiturasVisuais,
     janelaConversa: prep.janelaConversa,
     ignoredFilesCount: prep.ignoredFilesCount,
     ignoredFiles: prep.ignoredFiles,

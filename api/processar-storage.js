@@ -7,7 +7,10 @@ import {
   finalizarAnaliseDaConversa,
   normalizeName,
   verificarLimiteTranscricaoImport,
-  registrarConsumoTranscricaoImport
+  registrarConsumoTranscricaoImport,
+  lerArquivosVisuais,
+  verificarLimiteLeituraVisual,
+  registrarConsumoLeituraVisual
 } from "./_pipeline.js";
 
 function json(res, status, payload) {
@@ -387,6 +390,38 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   const prep = await prepararConversaDoZip(buffer, { audioWindowDays, includeExtractedFiles: true, organizationId, audiosJaTranscritos: cacheDoLead }); // única extração
   const extracted = prep._extractedFiles || {};
   delete prep._extractedFiles;
+  // v1306 — IMAGEM E PDF DA CONVERSA VIRAM TEXTO AQUI.
+  //
+  // A leitura acontece nesta etapa (e não numa ida e volta separada, como a transcrição de áudio)
+  // porque os arquivos já estão descompactados na memória: subir imagem pro Storage só pra baixar
+  // de novo seria fila pura. Em troca, ela é a primeira coisa a ser cortada quando o tempo aperta:
+  // `deadlineTs` interrompe o que não couber, o teto do dia corta o excedente antes de gastar, e
+  // qualquer falha deixa a conversa exatamente como era antes desta versão.
+  const visuaisExtraidos = prep._extractedVisuals || {};
+  delete prep._extractedVisuals;
+  const leiturasVisuais = {};
+  let leituraVisualLimiteAtingido = false;
+  try {
+    let candidatos = Object.entries(visuaisExtraidos).map(([name, buf]) => ({ name, buffer: buf }));
+    if (candidatos.length) {
+      const limite = await verificarLimiteLeituraVisual(organizationId);
+      if (Number.isFinite(limite.restante) && candidatos.length > limite.restante) {
+        candidatos = candidatos.slice(0, Math.max(0, limite.restante));
+        leituraVisualLimiteAtingido = true;
+      }
+      if (candidatos.length) {
+        const { leituras } = await lerArquivosVisuais(candidatos, organizationId, { deadlineTs: Date.now() + 22000 });
+        Object.assign(leiturasVisuais, leituras || {});
+        const lidosAgora = Object.values(leituras || {}).filter(l => l?.status === "lido").length;
+        if (lidosAgora) await registrarConsumoLeituraVisual(organizationId, lidosAgora);
+      }
+    }
+  } catch (erroVisual) {
+    console.warn("[direciona] leitura de imagem/PDF da importação falhou:", erroVisual?.message || erroVisual);
+  }
+  prep.leiturasVisuais = leiturasVisuais;
+  prep.visuaisLidos = Object.values(leiturasVisuais).filter(l => l?.status === "lido").length;
+  prep.leituraVisualLimiteAtingido = leituraVisualLimiteAtingido;
 
   const audioStorage = {};
   const audioHashes = {};
@@ -695,6 +730,9 @@ export default async function handler(req, res) {
         txtFile: body?.txtFile, rawText: body?.rawText, messages: body?.messages,
         audioFilesRelevantes: body?.audioFilesRelevantes, audioFilesForaDaJanela: body?.audioFilesForaDaJanela,
         transcriptionMap: body?.transcriptionMap, janelaConversa: body?.janelaConversa,
+        // v1306 — o texto lido das imagens/PDFs volta do navegador junto com as transcrições e
+        // entra na linha do tempo dentro de finalizarAnaliseDaConversa.
+        leiturasVisuais: body?.leiturasVisuais,
         ignoredFilesCount: body?.ignoredFilesCount, ignoredFiles: body?.ignoredFiles,
         audiosTotalNoZip: body?.audiosTotalNoZip, audiosDescartadosPorJanela: body?.audiosDescartadosPorJanela,
         metricsBase: body?.metricsBase, existingTimeline, previousAnalysis, existingLeadId,
