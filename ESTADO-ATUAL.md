@@ -157,7 +157,6 @@ reescrever como pergunta que permite selecionar. Mecanismo é o mesmo das v1295/
 percebe, a IA reescreve inteira, nada é cortado nem descartado. Guarda:
 `tests/v1302-sugestao-que-nao-responde-e-inventa.test.mjs`. Ver `NOTAS-v1302.md`._
 
-<<<<<<< HEAD
 _**v1303 — o Cérebro passou a ir junto na reescrita da mensagem.** Print de 18/08/2026, 20h40 ("não
 sei pra que serve todas aquelas regras do cérebro se não são usadas"). Quando uma sugestão é barrada
 pela rede (v1295/v1299/v1302), ela volta pra IA reescrever — e é essa segunda escrita que aparece na
@@ -172,9 +171,6 @@ sobre o que o CORRETOR faz cai; sobre o que o CLIENTE precisa ("2 ou 3 dormitór
 horários continuam livres. Guarda: `tests/v1303-cerebro-na-reescrita-e-um-caminho-so.test.mjs`. Ver
 `NOTAS-v1303.md`._
 
-=======
->>>>>>> origin/main
-<<<<<<< HEAD
 _**v1304 — a prova embaixo das sugestões virou porcentagem.** Pedido do dono: "mude esses números
 para percentual, verde 100% e quando não conclui vermelho". As seis contagens de caracteres do
 Cérebro ("método 6.577, tom 1.892…") viraram uma porcentagem só — quanto do Cérebro SALVO chegou na
@@ -185,9 +181,6 @@ conversa inteira" virou "leu 100% da conversa". Verde só no 100% (`--green`); a
 412 px sobre o CSS publicado. Guarda: `tests/v1304-cerebro-em-porcentagem.test.mjs`. Ver
 `NOTAS-v1304.md`._
 
-=======
->>>>>>> origin/main
-<<<<<<< HEAD
 _**v1305 — endereço inventado, preço vencido e aviso na tela.** Dois prints de 19/08/2026. (1) À
 pergunta "Onde fica? Endereço", as três sugestões responderam com rua, número e ponto de referência
 inexistentes na conversa; a checagem da v1301 falhava com conectivo no meio ("Rua **das** Flores") e
@@ -201,8 +194,6 @@ mostra em vermelho "N sugestões saíram com problema (confira antes de enviar)"
 conseguiu limpar. Guarda: `tests/v1305-endereco-inventado-e-aviso-na-tela.test.mjs`. Ver
 `NOTAS-v1305.md`._
 
-=======
->>>>>>> origin/main
 _**v1306 — a importação lê imagem e PDF (vídeo não).** Pedido do dono em 19/08/2026, depois do caso
 em que o preço atual estava na ARTE do anúncio e a IA respondeu com o preço em texto de dez meses
 antes. A importação passa a ler JPG/PNG/WEBP e PDF citados na conversa (`lerArquivosVisuais`, modelo
