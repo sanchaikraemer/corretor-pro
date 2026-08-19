@@ -143,7 +143,10 @@ assert.ok(appSrc.includes('a.aprendizadoEnviado'), 'a tela precisa ler o que o a
 assert.ok(appSrc.includes('aprendizado aplicado:'), 'quando entrou aprendizado, a linha precisa dizer o que entrou');
 assert.ok(appSrc.includes('aprendizado: nada entrou nesta análise'),
   'quando NÃO entrou nada, a linha precisa dizer isso com todas as letras — é a resposta do "cadê o aprendizado?"');
-assert.ok(appSrc.includes('seu Cérebro enviado:'), 'a prova do Cérebro continua na tela');
+// v1304 — a prova continua, em porcentagem: "seu Cérebro enviado: método 6.577, tom 1.892..."
+// virou "seu Cérebro: 100%" (verde) / "68%" (vermelho, quando parte do texto não coube). Pedido do
+// dono; o que este teste guarda é que a prova NÃO some da tela.
+assert.ok(appSrc.includes('` · seu Cérebro: ${cp1304Pct(pct)}`'), 'a prova do Cérebro continua na tela');
 assert.ok(/"cerebroAplicado", "cerebroEnviado", "aprendizadoEnviado", "conversaLidaPelaIA"/.test(persistSrc),
   'as duas provas precisam viajar junto com a análise, senão a linha pisca ao abrir o lead pela lista');
 

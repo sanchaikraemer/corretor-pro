@@ -52,7 +52,10 @@ assert.match(pipeline, /cerebroAplicado: !modoPrevia,/, 'a análise registra se 
 assert.match(pipeline, /conversaLidaPelaIA: entradaIncremental/, 'e quanto da conversa a IA leu');
 const linha = app.slice(app.indexOf('function cp1225LinhaDeOndeVeio(a){'), app.indexOf('function cp865UltimaAnaliseISO'));
 assert.match(linha, /sem o seu Cérebro/, 'a tela avisa quando a análise saiu SEM o Cérebro');
-assert.match(linha, /leu a conversa inteira/, 'e diz quando leu a conversa inteira');
+// v1304 — o texto virou porcentagem a pedido do dono ("verde 100%, vermelho quando não conclui"):
+// "leu a conversa inteira (3 mensagens)" virou "leu 100% da conversa (3 mensagens)". O que este
+// teste guarda continua sendo o mesmo: a tela precisa dizer quanto da conversa a IA leu.
+assert.match(linha, /leu \$\{cp1304Pct\(100\)\} da conversa/, 'e diz quando leu a conversa inteira');
 assert.match(linha, /resumo de \$\{Number\(lida\.mensagensResumidas\)\|\|0\} antigas/, 'ou quanto entrou como resumo');
 assert.match(app, /\$\{cp1225LinhaDeOndeVeio\(a\)\}/, 'a linha aparece embaixo das sugestões, no cliente');
 // Análise antiga (sem esses campos) não pode mostrar linha nenhuma.
