@@ -40,9 +40,12 @@ assert.match(
   /const etapasVisiveis = idxAtual === 7\s*\? ETAPAS_PROCESSAMENTO\s*:\s*ETAPAS_PROCESSAMENTO\.slice\(0, 7\)/,
   'Falha recuperável só deve entrar na lista quando o estado real for de falha'
 );
+// v1309 — a frase continua, agora como a alternativa: quando o problema é do próprio ARQUIVO
+// (veio vazio, não abre, não tem o texto da conversa), o que aparece é o motivo, porque repetir o
+// envio do mesmo arquivo daria exatamente a mesma recusa.
 assert.match(
   app,
-  /renderEtapas\(7, ["']a importação pode ser retomada sem perder o ZIP["']\)/,
+  /renderEtapas\(7, arquivoInvalido \? \(err\.tituloCurto \|\| "confira o arquivo escolhido"\) : ["']a importação pode ser retomada sem perder o ZIP["']\)/,
   'o estado de falha recuperável deve continuar disponível quando houver erro real'
 );
 

@@ -28,6 +28,13 @@ import {
   planejarConteudoDoZip
 } from './enxugar-zip.js?v=__VERSION__';
 import {
+  formatarTamanhoArquivo,
+  problemaAoAbrirOZip,
+  problemaDoArquivoRecebido,
+  problemaDoConteudoDoZip,
+  tituloCurtoDaFalha
+} from './conferir-conversa.js?v=__VERSION__';
+import {
   CP_IMPORT_PENDENTE_KEY,
   CP_IMPORT_PENDENTE_VALIDADE_MS,
   KEEP_RE,
@@ -68,9 +75,29 @@ function tamanhoDaEntrada(entry){
   return Number(entry?._data?.uncompressedSize || entry?._data?.compressedSize || 0);
 }
 
+// v1309 — problema que o APARELHO já consegue ver no arquivo (veio vazio, não abre, não tem o
+// texto da conversa dentro). Vira um erro marcado: quem chama para na hora, em vez de gastar o
+// envio inteiro para o servidor recusar no fim com uma frase genérica.
+function erroDaConversa(problema){
+  const err = new Error(problema.mensagem);
+  err.conversaInvalida = problema.motivo;
+  err.tituloCurto = problema.titulo;
+  return err;
+}
+
 async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
   const JSZip = await ensureJSZip();
-  const zip = await JSZip.loadAsync(file);
+  let zip;
+  try{
+    zip = await JSZip.loadAsync(file);
+  }catch(err){
+    // Só quando a falha é reconhecidamente de arquivo (não é ZIP, veio pela metade, tem senha) é
+    // que a importação para aqui. Qualquer outro tropeço continua caindo no plano B de sempre —
+    // mandar o arquivo original e deixar o servidor decidir.
+    const problema = problemaAoAbrirOZip(err);
+    if(problema) throw erroDaConversa(problema);
+    throw err;
+  }
 
   const entries = [];
   zip.forEach((path, entry)=>{ if(!entry.dir) entries.push([path, entry]); });
@@ -83,6 +110,11 @@ async function slimZipKeepingTextAndAudio(file, onProgress, opcoes = {}){
 
   let txt = "";
   try{ if(textos[0]) txt = await textos[0][1].async("string"); }catch(_){ }
+
+  // v1309 — mesma exigência do servidor (ele procura o .txt dentro do ZIP e recusa sem ele),
+  // conferida aqui, antes do envio: sem o texto da conversa não há análise nenhuma a fazer.
+  const problemaConteudo = problemaDoConteudoDoZip({ nomes: entries.map(([caminho]) => caminho), texto: txt });
+  if(problemaConteudo) throw erroDaConversa(problemaConteudo);
 
   const plano = planejarConteudoDoZip({
     txt,
@@ -431,17 +463,24 @@ async function uploadLargeZipToSupabase(file, options = {}){
     // em vez do antigo "Não foi possível analisar", que não dava nenhuma pista do que fazer.
     const pendente = err?.analisePendente?.analysis || null;
     const acao = pendente ? cpAcaoAnalisePendente(pendente) : null;
+    // v1309 — o motivo sobe pro título. A explicação de verdade é desenhada no card "Resultado",
+    // que num celular nasce abaixo da dobra: o print do dono (19/08/2026) mostrava só a frase
+    // genérica "Não foi possível analisar." e nada mais, com o motivo esperando um rolar de tela.
     qs("#processingText").textContent = pendente
       ? "Falta um passo pra IA conseguir sugerir."
-      : (ehTimeout ? "Demorou demais — servidor não respondeu." : "Não foi possível analisar.");
+      : tituloCurtoDaFalha(err?.message, ehTimeout);
+    showCard("resultCard", true);
     qs("#resultBox").className = pendente ? "notice" : "notice error";
     qs("#resultBox").innerHTML =
       (pendente ? "<b>A conversa foi lida, mas a IA ainda não pode sugerir as mensagens.</b><br><br>"
-                : "<b>Não foi possível analisar a conversa agora.</b><br><br>") +
+                : `<b>${escapeHtml(tituloCurtoDaFalha(err?.message, ehTimeout))}</b><br><br>`) +
       escapeHtml(pendente ? cpMotivoAnalisePendente(pendente) : userFriendlyError(err, file)) +
       `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">${
         acao ? `<button type="button" class="btn" id="btnIrConfigurarCerebro" style="flex:1;min-width:200px">${escapeHtml(acao.rotulo)}</button>` : ""
       }<button type="button" class="btn${acao ? " secondary" : ""}" id="btnRetomarAnalise" style="flex:1;min-width:180px">Tentar analisar novamente</button><button type="button" class="btn secondary" id="btnDescartarUpload" style="flex:1;min-width:140px">Descartar importação</button></div>`;
+    // v1309 — e a tela vai até a explicação: ela mora no card de baixo e, num celular, nasce
+    // fora do campo de visão (foi o que o print do dono mostrou).
+    try{ requestAnimationFrame(() => { qs("#resultCard")?.scrollIntoView({ block:"start" }); }); }catch(_){ }
     if(acao){
       qs("#btnIrConfigurarCerebro")?.addEventListener("click", () => {
         // A importação NÃO é descartada: fica guardada, e o botão "Tentar analisar novamente"
@@ -1391,7 +1430,9 @@ async function processFile(file, options = {}){
   state.processing=true;
   show("zip");
   qs("#importCard")?.classList.add("cp-import-rodando");
-  qs("#fileName").textContent="Arquivo selecionado: "+file.name+" ("+(file.size/1024/1024).toFixed(1)+" MB)";
+  // v1309 — o tamanho sai em KB quando é pequeno: "0.0 MB" aparecia tanto pra uma conversa de
+  // texto inteira quanto pra um arquivo vazio, e o print do dono ficava impossível de ler.
+  qs("#fileName").textContent="Arquivo selecionado: "+file.name+" ("+formatarTamanhoArquivo(file.size)+")";
   qs("#fileName").classList.add("show");
   qs("#processingBox").classList.add("show");
   renderEtapas(0, "validando o arquivo recebido");
@@ -1407,6 +1448,11 @@ async function processFile(file, options = {}){
   }
 
   try{
+    // v1309 — arquivo de zero byte (acontece quando o seletor do Android devolve a exportação
+    // antes de o WhatsApp terminar de prepará-la): não há o que enviar nem o que analisar.
+    const problemaArquivo = problemaDoArquivoRecebido(file);
+    if(problemaArquivo) throw erroDaConversa(problemaArquivo);
+
     const audioWindowDays = janelaAudioDaImportacao();
     renderEtapas(0, "áudios: " + rotuloJanelaAudio(audioWindowDays) + "; textos completos");
 
@@ -1426,6 +1472,9 @@ async function processFile(file, options = {}){
       const sMb = (slimInfo.slimSize/1024/1024).toFixed(1);
       renderEtapas(0, "ZIP preparado: "+oMb+" MB → "+sMb+" MB");
     }catch(err){
+      // v1309 — problema que o aparelho JÁ identificou no arquivo não vira "usando o ZIP
+      // original": enviar de novo daria exatamente a mesma recusa, um minuto depois.
+      if(err?.conversaInvalida) throw err;
       renderEtapas(0, "usando o ZIP original");
       working = file;
     }
@@ -1465,13 +1514,30 @@ async function processFile(file, options = {}){
       window.__cpShareImportActive=false;
       try{ history.replaceState(null,'',location.pathname); }catch(_){ }
     }
-    renderEtapas(7, "a importação pode ser retomada sem perder o ZIP");
+    // v1309 — quando o problema é do próprio arquivo, "Tentar novamente" com ELE MESMO daria
+    // sempre o mesmo resultado (o beco sem saída que este projeto já corrigiu duas vezes). Nesse
+    // caso o botão principal abre o seletor pra escolher OUTRO arquivo, e o título de cima já diz
+    // o que houve — em vez de deixar a explicação embaixo da dobra, fora da tela do celular.
+    const arquivoInvalido = !!err?.conversaInvalida;
+    renderEtapas(7, arquivoInvalido ? (err.tituloCurto || "confira o arquivo escolhido") : "a importação pode ser retomada sem perder o ZIP");
     showCard("resultCard", true);
     qs("#resultBox").className="notice error";
     state.ultimoArquivo = file;
     qs("#resultBox").innerHTML =
-      escapeHtml(userFriendlyError(err,file)).replace(/\n/g,"<br>") +
-      `<div style="margin-top:14px;display:flex;gap:10px"><button type="button" class="btn" id="btnTentarNovamente" style="flex:1">Tentar novamente</button><button type="button" class="btn secondary" id="btnDescartarTentativa" style="flex:1">Descartar</button></div>`;
+      (arquivoInvalido ? `<b>${escapeHtml(err.tituloCurto || "Confira o arquivo escolhido.")}</b><br><br>` : "") +
+      escapeHtml(arquivoInvalido ? err.message : userFriendlyError(err,file)).replace(/\n/g,"<br>") +
+      `<div style="margin-top:14px;display:flex;gap:10px">${
+        arquivoInvalido
+          ? `<button type="button" class="btn" id="btnEscolherOutroArquivo" style="flex:1">Escolher outro arquivo</button>`
+          : `<button type="button" class="btn" id="btnTentarNovamente" style="flex:1">Tentar novamente</button>`
+      }<button type="button" class="btn secondary" id="btnDescartarTentativa" style="flex:1">Descartar</button></div>`;
+    // A explicação mora num card abaixo do card da importação: num celular ela nasce fora da
+    // tela. Trazer a tela até ela é parte de mostrar o motivo.
+    try{ requestAnimationFrame(() => { qs("#resultCard")?.scrollIntoView({ block:"start" }); }); }catch(_){ }
+    qs("#btnEscolherOutroArquivo")?.addEventListener("click", () => {
+      try{ qs("#zipFileInput").value = ""; }catch(_){ }
+      qs("#zipFileInput")?.click();
+    });
     qs("#btnTentarNovamente")?.addEventListener("click", async () => {
       if(state.ultimoArquivo){ state.processing = false; await processFile(state.ultimoArquivo, { shareId: pendingShareId, importId }); }
     });
@@ -1484,7 +1550,7 @@ async function processFile(file, options = {}){
       state.ultimoArquivo = null;
       showCard("resultCard", false);
     });
-    toast("Erro ao processar. O ZIP ficou guardado para tentar novamente.");
+    toast(arquivoInvalido ? (err.tituloCurto || "Confira o arquivo escolhido.") : "Erro ao processar. O ZIP ficou guardado para tentar novamente.");
     return false;
   }finally{
     state.processing=false;
