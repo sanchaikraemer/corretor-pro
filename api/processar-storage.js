@@ -357,6 +357,49 @@ export function transcricoesDoLeadAnterior(timelineJson) {
   return mapa;
 }
 
+// v1312 — O QUE JÁ FOI LIDO UMA VEZ NÃO É LIDO DE NOVO.
+//
+// "demorando demais pra analisar, sendo que já tem histórico de monte e acho que nada de novo"
+// (dono, 19/08/2026). Ele está certo, e a conta é grande: o áudio já transcrito deste cliente é
+// reaproveitado desde a v1141, mas a IMAGEM, o PDF (v1306) e o LINK (v1307) eram lidos de novo,
+// do zero, em TODA importação — até 22 segundos de leitura de imagem mais 20 de leitura de link,
+// repetidos numa reimportação que não trouxe uma única mensagem nova. Fora o custo: cada leitura
+// dessas é uma chamada paga à IA, gasta pra produzir exatamente o texto que já estava salvo.
+//
+// A leitura antiga vem da conversa salva deste cliente, do mesmo jeito que a transcrição de áudio:
+// o texto está guardado na própria linha do tempo, com o rótulo que o app escreveu nele.
+const VISUAL_PREFIXOS = ["[Imagem lida pela IA] ", "[Documento lido pela IA] "];
+const LINK_PREFIXO = "[Link lido pela IA] ";
+
+export function leiturasVisuaisDoLeadAnterior(timelineJson) {
+  const mapa = {};
+  for (const m of (Array.isArray(timelineJson) ? timelineJson : [])) {
+    if (!m || m.source !== "visual" || !m.mediaFile) continue;
+    const texto = String(m.text || "");
+    const prefixo = VISUAL_PREFIXOS.find(p => texto.startsWith(p));
+    if (!prefixo) continue;
+    const conteudo = texto.slice(prefixo.length).trim();
+    if (!conteudo) continue;
+    const registro = { status: "lido", text: conteudo };
+    mapa[String(m.mediaFile)] = registro;
+    mapa[normalizeName(m.mediaFile)] = registro;
+  }
+  return mapa;
+}
+
+export function leiturasDeLinksDoLeadAnterior(timelineJson) {
+  const mapa = {};
+  for (const m of (Array.isArray(timelineJson) ? timelineJson : [])) {
+    if (!m || !m.linkLido) continue;
+    const texto = String(m.text || "");
+    const corte = texto.indexOf(LINK_PREFIXO);
+    if (corte < 0) continue;
+    const conteudo = texto.slice(corte + LINK_PREFIXO.length).trim();
+    if (conteudo) mapa[String(m.linkLido)] = { status: "lido", text: conteudo };
+  }
+  return mapa;
+}
+
 async function salvarManifesto(storage, manifestPath, manifest) {
   const buffer = Buffer.from(JSON.stringify(manifest), "utf8");
   const { error } = await storage.upload(manifestPath, buffer, {
@@ -367,7 +410,7 @@ async function salvarManifesto(storage, manifestPath, manifest) {
   if (error) throw new Error(`Não consegui salvar o manifesto da importação: ${error.message}`);
 }
 
-export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {}, organizationId }) {
+export async function prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays, cacheDoLead = {}, cacheVisualDoLead = {}, cacheLinksDoLead = {}, organizationId }) {
   if (!organizationId) throw new Error("organizationId é obrigatório para preparar a extração.");
   // organizationId no prefixo isola manifesto e áudios extraídos de cada conta no bucket
   // compartilhado — sem isso, uma conta conseguiria ler/sobrescrever dados de outra só
@@ -402,8 +445,18 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   delete prep._extractedVisuals;
   const leiturasVisuais = {};
   let leituraVisualLimiteAtingido = false;
+  let visuaisReaproveitados = 0;
   try {
+    // v1312 — o que este cliente já teve lido numa importação anterior entra pronto e nem vira
+    // candidato: não desce pra IA, não custa nada e não gasta segundo nenhum da janela.
     let candidatos = Object.entries(visuaisExtraidos).map(([name, buf]) => ({ name, buffer: buf }));
+    candidatos = candidatos.filter(({ name }) => {
+      const jaLido = cacheVisualDoLead[name] || cacheVisualDoLead[normalizeName(name)];
+      if (!jaLido?.text) return true;
+      leiturasVisuais[name] = { status: "lido", text: jaLido.text, reaproveitado: true };
+      visuaisReaproveitados++;
+      return false;
+    });
     if (candidatos.length) {
       const limite = await verificarLimiteLeituraVisual(organizationId);
       if (Number.isFinite(limite.restante) && candidatos.length > limite.restante) {
@@ -424,8 +477,18 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   // mesmas travas (tempo, teto do dia, fail-open). Link de cliente nunca é aberto — a seleção é
   // feita em linksDoCorretorNaConversa, no _pipeline.
   const leiturasLinks = {};
+  let linksReaproveitados = 0;
   try {
-    const links = Array.isArray(prep.linksParaLer) ? prep.linksParaLer : [];
+    const todosOsLinks = Array.isArray(prep.linksParaLer) ? prep.linksParaLer : [];
+    // v1312 — link já lido deste cliente também volta pronto (a página não foi buscada de novo,
+    // e a IA não foi chamada pra resumir de novo o mesmo endereço).
+    const links = todosOsLinks.filter((url) => {
+      const jaLido = cacheLinksDoLead[String(url)];
+      if (!jaLido?.text) return true;
+      leiturasLinks[url] = { status: "lido", text: jaLido.text, reaproveitado: true };
+      linksReaproveitados++;
+      return false;
+    });
     if (links.length) {
       const limiteLink = await verificarLimiteLeituraVisual(organizationId);
       const cabem = Number.isFinite(limiteLink.restante) ? links.slice(0, Math.max(0, limiteLink.restante)) : links;
@@ -444,6 +507,8 @@ export async function prepararExtracaoPersistente({ storage, storagePath, import
   prep.leiturasVisuais = leiturasVisuais;
   prep.visuaisLidos = Object.values(leiturasVisuais).filter(l => l?.status === "lido").length;
   prep.leituraVisualLimiteAtingido = leituraVisualLimiteAtingido;
+  prep.visuaisReaproveitados = visuaisReaproveitados;
+  prep.linksReaproveitados = linksReaproveitados;
 
   const audioStorage = {};
   const audioHashes = {};
@@ -571,7 +636,12 @@ export default async function handler(req, res) {
       const matchAnterior = await _buscarProcessamentoExistenteV681(supabase, { result: {}, fileName: nomeArquivoZip, path: storagePath, organizationId })
         .catch((e) => { avisoCacheAudio = e?.message || String(e); return null; });
       const cacheDoLead = matchAnterior?.row ? transcricoesDoLeadAnterior(matchAnterior.row.timeline_json) : {};
-      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, organizationId });
+      // v1312 — imagem, PDF e link já lidos deste cliente entram prontos, como já acontecia com o
+      // áudio transcrito. É o que fazia uma reimportação sem novidade gastar quase um minuto (e
+      // uma pilha de chamadas pagas) refazendo leitura idêntica.
+      const cacheVisualDoLead = matchAnterior?.row ? leiturasVisuaisDoLeadAnterior(matchAnterior.row.timeline_json) : {};
+      const cacheLinksDoLead = matchAnterior?.row ? leiturasDeLinksDoLeadAnterior(matchAnterior.row.timeline_json) : {};
+      const { manifest, reusedPreparation } = await prepararExtracaoPersistente({ storage, storagePath, importId, audioWindowDays: body?.audioWindowDays, cacheDoLead, cacheVisualDoLead, cacheLinksDoLead, organizationId });
       // v1141 — o cliente já salvo é descoberto AQUI (por telefone/arquivo/nome) e essa descoberta
       // era jogada no lixo: só servia pra pegar o cache de áudio. A etapa de análise não recebia o
       // id, então o servidor tratava TODA importação como conversa nova — reanalisava (e cobrava) a
