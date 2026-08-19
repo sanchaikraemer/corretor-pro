@@ -115,10 +115,15 @@ const CONVERSA_DO_DONO = [
     'quando o cliente respondeu de verdade, o bloco não pode aparecer e sugerir que ele não disse nada');
 }
 
-// ── 5. A reescrita passou a usar o modelo principal quando há tempo ─────────────────────────
+// ── 5. A reescrita usa o modelo principal — e agora SÓ ele ──────────────────────────────────
+// v1308 — a v1300 ainda deixava a reescrita cair no modelo rápido quando sobrava pouco tempo. O
+// dono mandou tirar toda queda pra modelo mais fraco: agora, sem tempo pro modelo bom, a reescrita
+// simplesmente não acontece e a sugestão vai pra tela com a marca de problema.
 {
-  assert.ok(src.includes('sobraReescritaMs >= 12000 ? modeloAnalise() : modeloTarefasSimples()'),
-    'com tempo no orçamento, quem reescreve é o modelo principal — português capenga na tela é pior que a frase tirada');
+  assert.ok(src.includes('const modeloReescrita = modeloAnalise();'),
+    'quem reescreve é o modelo principal, sempre');
+  assert.ok(!src.includes('sobraReescritaMs >= 12000 ? modeloAnalise() : modeloTarefasSimples()'),
+    'a queda da reescrita pro modelo rápido não pode voltar');
   assert.ok(src.includes('Devolva UMA MENSAGEM INTEIRA'),
     'a instrução precisa exigir mensagem inteira, pra reescrita não voltar emendada');
 }

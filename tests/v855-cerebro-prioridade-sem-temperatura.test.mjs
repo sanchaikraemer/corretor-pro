@@ -27,10 +27,12 @@ assert.match(
   /const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:[\s\S]*=== INÍCIO DO CÉREBRO COMERCIAL ===[\s\S]*instrucoesCerebroTexto[\s\S]*=== FIM DO CÉREBRO COMERCIAL ===/,
   'O conteúdo atual do Cérebro deve compor a instrução de maior prioridade'
 );
+// v1308 — o mesmo lugar agora tem TRÊS estados: Cérebro enviado, Cérebro vazio (modo prévia) e
+// Cérebro desligado pela chave da tela. Nenhum deles pode deixar o bloco vazio e solto.
 assert.match(
   pipeline,
-  /=== INÍCIO DO CÉREBRO COMERCIAL ===\s*\$\{modoPrevia[\s\S]*?MODO PRÉVIA[\s\S]*?:\s*instrucoesCerebroTexto\}/,
-  'sem Cérebro, o mesmo lugar precisa receber as instruções de modo prévia — nunca ficar vazio e solto'
+  /=== INÍCIO DO CÉREBRO COMERCIAL ===\s*\$\{cerebroNoPedido\s*\?\s*instrucoesCerebroTexto[\s\S]*?MODO PRÉVIA[\s\S]*?DESLIGADO NESTA ANÁLISE/,
+  'sem Cérebro (vazio ou desligado na chave), o mesmo lugar precisa receber instruções — nunca ficar vazio e solto'
 );
 // v1263 — este trecho exigia que o prompt TERMINASSE exatamente em ${timelineText}. A conferência
 // final (7 itens, criada na v1263) entrou DEPOIS da conversa de propósito: ela é a última coisa que

@@ -1465,6 +1465,25 @@ body.cpio-aberto{overflow:hidden}
 .cp-dias-semana input{accent-color:var(--cp-coral,#FF6258);margin:0;width:15px;height:15px}
 .cp-dias-semana label:focus-within{outline:2px solid var(--cp-coral,#FF6258);outline-offset:2px}
 
+/* v1308 — as três chaves da análise (Cérebro / aprendizado / regras de escrita), na tela do
+   Cérebro. Cartões empilhados, com o texto explicando o que acontece quando a chave desliga:
+   quem lê é corretor, e "usarAprendizado" não diz nada pra ninguém. */
+.cp-chaves{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.cp-chaves label{
+  display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none;
+  border:1px solid var(--line);border-radius:12px;padding:11px 13px;transition:all .16s;
+}
+.cp-chaves label:has(input:checked){
+  border-color:var(--cp-coral,#FF6258);
+  background:color-mix(in srgb, var(--cp-coral,#FF6258) 9%, transparent);
+}
+.cp-chaves input{accent-color:var(--cp-coral,#FF6258);margin:2px 0 0;width:16px;height:16px;flex:0 0 auto}
+.cp-chaves span{display:block;min-width:0}
+.cp-chaves b{display:block;font-size:13px;font-weight:900;color:var(--text)}
+.cp-chaves small{display:block;font-size:11.5px;line-height:1.4;color:var(--muted);margin-top:2px}
+.cp-chaves label:not(:has(input:checked)) b{color:var(--muted)}
+.cp-chaves label:focus-within{outline:2px solid var(--cp-coral,#FF6258);outline-offset:2px}
+
 /* v1106 — seletor "Este mês / mês passado" do Desempenho. */
 .cp-met-mes-chips{display:flex;gap:8px;margin:2px 0 12px}
 .cp-met-mes-chip{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--soft);font:inherit;font-size:12px;font-weight:950;cursor:pointer}

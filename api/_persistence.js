@@ -1579,7 +1579,13 @@ export async function listRecentProcessings(limit = 12, options = {}) {
       // v1305 — "sugestoesComProblema" viaja junto pelo mesmo motivo: é o aviso de que uma das três
       // saiu com coisa que a rede conhece e não conseguiu limpar. Sem isso a tela mostraria o aviso
       // ao reanalisar e o perderia ao reabrir o lead pela lista.
+      // v1308 — "problemasPorSugestao" diz QUAL das três saiu com problema e o quê (o aviso agora
+      // aparece dentro da própria sugestão); "modoAnalise" é o estado das três chaves (Cérebro,
+      // aprendizado, regras de escrita) com que esta análise foi feita; "falhaAmigavel" é o aviso
+      // em português de quando a IA não respondeu. Os três precisam viajar com a lista, senão a
+      // marca aparece ao reanalisar e some ao reabrir o lead pela carteira.
       "cerebroAplicado", "cerebroEnviado", "aprendizadoEnviado", "conversaLidaPelaIA", "sugestoesComProblema",
+      "problemasPorSugestao", "modoAnalise", "falhaAmigavel", "modeloIndisponivel",
       // v936 — carimbos de quando a análise foi gerada/reanalisada ("Última análise" no
       // cabeçalho do lead). Sem eles aqui, a lista carrega uma análise sem data e, ao reabrir
       // o lead a partir dela, "Última análise" some mesmo pra quem acabou de reanalisar.

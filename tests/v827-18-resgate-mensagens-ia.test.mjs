@@ -14,10 +14,14 @@ const bloco = pipeline.slice(inicio, fim);
 // (timeout/429/5xx), UMA segunda roda com o MESMO prompt no modelo rápido, dentro do orçamento de
 // tempo (ver v947/v1140). Continua não existindo reprompt de conteúdo: nenhuma das duas chamadas
 // reinterpreta ou "corrige" resposta — são no máximo 2 tentativas de conseguir UMA análise.
-assert.equal((bloco.match(/chamarGPT4Json\(/g) || []).length, 2,
-  "exatamente 2 pontos de chamada: a principal e o fallback de transporte — nunca um laço de correção");
-assert.equal((bloco.match(/systemPrompt: systemPromptAnalise,[\s\S]{0,40}prompt,/g) || []).length, 2,
-  "as duas tentativas usam o MESMO prompt (fallback de transporte, não reprompt de conteúdo)");
+// v1308: viraram TRÊS pontos de chamada, e nenhum deles é reprompt de conteúdo — que é o que este
+// teste sempre protegeu. São, na ordem: (1) a chamada principal; (2) a repetição no MESMO modelo,
+// só para erro passageiro da OpenAI; (3) a única troca de modelo que sobrou, para quando o modelo
+// configurado NÃO EXISTE nesta conta — e mesmo essa aparece em vermelho na tela.
+assert.equal((bloco.match(/chamarGPT4Json\(/g) || []).length, 3,
+  "exatamente 3 pontos de chamada: principal, repetição por erro passageiro e o caso de modelo indisponível — nunca um laço de correção");
+assert.equal((bloco.match(/systemPrompt: systemPromptAnalise,[\s\S]{0,40}prompt,/g) || []).length, 3,
+  "as três tentativas usam o MESMO prompt (transporte/disponibilidade, nunca reprompt de conteúdo)");
 assert.match(bloco, /if \(!r\) \{/, "o fallback só roda quando a 1ª tentativa falhou por inteiro");
 assert.doesNotMatch(bloco, /while\s*\(!validacaoMensagens/);
 assert.doesNotMatch(bloco, /promptRetry|modeloAnaliseRapida|correção automática/i);

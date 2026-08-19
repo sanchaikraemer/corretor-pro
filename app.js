@@ -4753,7 +4753,7 @@ function cp704Css(){
       .cp704-last{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:center;color:rgba(237,246,248,.95);font-size:13px}.cp704-last b{font-weight:950}.cp704-last span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
       .cp704-ai ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}.cp704-ai li{display:grid;grid-template-columns:20px 1fr;gap:8px;line-height:1.35;color:rgba(237,246,248,.92);font-size:14px}.cp704-ai i{font-style:normal;color:var(--acao);font-weight:950}
       .cp704-step{margin:0}.cp704-step p{margin:0;font-size:14px;line-height:1.45;color:rgba(237,246,248,.94)}.cp704-metaline{margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);color:var(--soft);font-size:12px;line-height:1.4;font-weight:700}.cp704-metaline+.cp704-metaline{margin-top:2px;padding-top:0;border-top:0}.cp704-msg-sub{margin:15px 0 9px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:950}
-      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
+      .cp704-msg-list{display:flex;flex-direction:column;gap:10px}.cp704-msg-item{display:grid;grid-template-columns:1fr auto;gap:9px 12px;align-items:start;padding:12px;border:1px solid rgba(255,255,255,.085);border-radius:14px;background:rgba(255,255,255,.025)}.cp704-msg-head{grid-column:1/-1;display:flex;align-items:center;gap:8px}.cp704-msg-head b{font-size:12px;font-weight:950;color:rgba(237,246,248,.96)}.cp704-num{width:22px;height:22px;border-radius:999px;background:var(--lime);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:950;flex:0 0 auto}.cp704-msg-item:nth-child(2) .cp704-num{background:#ff8f88}.cp704-msg-item:nth-child(3) .cp704-num{background:#ff5e52}.cp704-msg-item p{margin:0;font-size:13px;line-height:1.45;color:rgba(237,246,248,.93)}.cp704-copy{align-self:center;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--text);border-radius:10px;padding:8px 12px;font-size:11px;font-weight:900;cursor:pointer;min-width:72px}.cp704-copy:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.08)}.cp704-msg-item.cp704-msg-copiada{border-color:rgba(255,98,88,.75);background:rgba(255,98,88,.12)}.cp704-msg-item.cp704-msg-copiada .cp704-copy{border-color:transparent;background:var(--lime);color:#fff}.cp704-msg-alerta{grid-column:1/-1;border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.45;color:var(--risco)}.cp704-msg-alerta b{font-weight:950}.cp704-msg-item.cp704-msg-suja{border-color:var(--risco-line,rgba(255,98,88,.45))}.cp704-empty-analysis{border:1px solid rgba(184,194,201,.35);background:rgba(184,194,201,.07);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}.cp704-empty-analysis b{color:var(--soft)}.cp704-empty-analysis span{color:var(--muted);font-size:13px}.cp704-empty-analysis button{border:1px solid rgba(184,194,201,.45);background:rgba(255,255,255,.04);color:var(--soft);border-radius:12px;padding:11px;font-weight:950;margin-top:4px}
       .cp704-accordions{display:flex;flex-direction:column;gap:9px}.cp704-details{border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(7,52,64,.58);overflow:hidden}.cp704-details summary{list-style:none;cursor:pointer;padding:13px 14px;font-size:14px;font-weight:950;display:flex;align-items:center;justify-content:space-between;gap:10px}.cp704-details summary::-webkit-details-marker{display:none}.cp704-details summary:after{content:"⌄";color:var(--muted);flex:0 0 auto}.cp704-details[open] summary:after{content:"⌃"}.cp704-summary-left{display:inline-flex;align-items:center;gap:8px;min-width:0}.cp704-summary-actions{display:inline-flex;align-items:center;gap:10px;margin-left:auto}.cp704-copy-history{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.045);color:var(--text);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:950;cursor:pointer;white-space:nowrap}.cp704-copy-history:hover{border-color:rgba(255,98,88,.55);background:rgba(255,98,88,.10)}.cp704-body{padding:0 14px 14px;color:rgba(237,246,248,.92);font-size:13px;line-height:1.45}.cp704-timeline{display:flex;flex-direction:column;gap:0}.cp704-tmsg{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-tmsg-comundo{grid-template-columns:14px 1fr auto;align-items:start}.cp704-tmsg-undo{flex:0 0 auto;align-self:start;margin-top:2px;width:26px;height:26px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--muted);font-size:13px;font-weight:900;line-height:1;cursor:pointer;padding:0}.cp704-tmsg-undo:hover{border-color:rgba(255,98,88,.6);background:rgba(255,98,88,.14);color:var(--lime)}.cp704-dot{width:8px;height:8px;border-radius:50%;background:#8aa1ad;margin-top:6px}.cp704-dot.you{background:var(--lime)}.cp704-dot.obs{background:var(--cyan)}.cp704-dot.sys{background:#8aa1ad;opacity:.45}.cp704-dot.prop{background:var(--accent)}.cp704-tmsg-obs b{color:var(--cyan)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-tmsg-obs p{color:rgba(210,239,255,.92)}.cp704-tmsg-sys b{color:var(--muted)!important}.cp704-tmsg-prop{cursor:pointer}.cp704-tmsg-prop b{color:var(--accent)!important;text-transform:uppercase;letter-spacing:.06em;font-size:10px!important}.cp704-prop-hint{display:block;color:var(--accent)!important;font-weight:800!important;margin-top:2px}.cp704-tmsg b{font-size:12px}.cp704-tmsg p{margin:2px 0 3px}.cp704-tmsg small{color:var(--muted);font-size:11px}.cp704-full-btn{width:100%;border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.03);color:var(--text);border-radius:10px;padding:10px;margin-top:10px;font-weight:900;cursor:pointer}.cp704-conducao{margin-top:12px}.cp704-conducao-txt{margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--text);font-weight:700}.cp704-rows{display:flex;flex-direction:column}.cp704-row{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.075)}.cp704-row small{display:block;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-size:9px;font-weight:950;margin-bottom:3px}.cp704-row div{font-size:13px;color:rgba(237,246,248,.94)}
       .cp704-actions-group{margin-top:10px}.cp704-actions-group h3{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:0 0 7px}.cp704-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-actions-grid button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-actions-grid button.good{border-color:var(--acao-line);color:var(--acao)}.cp704-actions-grid button.warn{border-color:rgba(184,194,201,.35);color:var(--soft)}.cp704-actions-grid button.bad{border-color:rgba(255,98,88,.42);color:var(--risco)}.cp704-danger{width:100%;border:1px solid rgba(255,98,88,.55)!important;color:var(--risco)!important;background:rgba(255,98,88,.06)!important}.cp704-quickbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cp704-quickbar button{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);border-radius:11px;padding:10px 8px;font-size:12px;font-weight:900;cursor:pointer}.cp704-quickbar button.good{color:var(--acao);border-color:var(--acao-line)}
       .cp704-stale{border-color:rgba(184,194,201,.28);background:rgba(184,194,201,.06);border-left:3px solid var(--morno);padding:12px 13px 13px}.cp704-stale .cp704-card-title{margin-bottom:6px}.cp704-stale .cp704-card-title h2{font-size:14px}.cp704-stale p{font-size:13px;line-height:1.4;margin:0}.cp704-stale button{margin-top:10px;width:100%;border:1px solid rgba(184,194,201,.45);border-radius:12px;background:rgba(255,255,255,.04);color:var(--soft);padding:10px;font-weight:900}
@@ -5118,6 +5118,11 @@ function cp704Css(){
       // faltou. Cada linha só aparece quando tem conteúdo (o filtro logo abaixo).
       ['Faixa de valor que a conversa já indica',cp704Semvalor(a?.diagnostico?.faixaDeValor)],
       ['Imóvel do cliente na negociação',cp704Semvalor(a?.diagnostico?.imovelDoCliente)],
+      // v1308 — A CONTA DO OBSTÁCULO. Quando o negócio depende de um imóvel entrando na troca, a
+      // análise passa a fazer a conta (quanto o imóvel do cliente representa do negócio, contra o
+      // limite que o corretor aceita) e o número aparece aqui. É a diferença entre "ele quer dar um
+      // imóvel" e "ele quer dar 83% do negócio num limite de 50%".
+      ['A conta da troca',/^(não se aplica|não identificado)$/i.test(cp704Text(a?.diagnostico?.contaDoObstaculo))?'':a?.diagnostico?.contaDoObstaculo],
       ['Por que ele quer mudar',cp704Semvalor(a?.diagnostico?.motivoDaMudanca)],
       ['Quem decide junto',cp704Semvalor(a?.diagnostico?.quemDecide)],
       ['O cliente já contou',Array.isArray(a?.diagnostico?.jaSabemos)?a.diagnostico.jaSabemos.filter(Boolean).join(' · '):''],
@@ -5163,6 +5168,24 @@ function cp704Css(){
     if(!linhas.length) return '';
     return `<div style="margin-top:8px;padding:8px 10px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5">${linhas.map(l=>escapeHtml(l)).join('<br>')}</div>`;
   }
+  // v1308 — O AVISO VAI DENTRO DA SUGESTÃO ERRADA.
+  //
+  // A linha da v1305 dizia "1 sugestão saiu com problema" e não dizia qual — o dono tinha que
+  // adivinhar em qual das três olhar. Agora cada sugestão com problema conhecido carrega, embaixo
+  // do texto dela, o que há de errado: o app tentou refazer e não conseguiu, então ele DIZ, em vez
+  // de deixar a mensagem furada parecendo normal.
+  function cp1308ProblemasDaSugestao(a,chave){
+    const mapa=(a&&typeof a.problemasPorSugestao==='object'&&a.problemasPorSugestao)?a.problemasPorSugestao:null;
+    if(!mapa) return [];
+    const lista=mapa[chave];
+    return Array.isArray(lista)?lista.filter(Boolean).map(x=>cp704Text(x)).filter(Boolean):[];
+  }
+  function cp1308AvisoSugestaoHtml(a,chave){
+    const probs=cp1308ProblemasDaSugestao(a,chave);
+    if(!probs.length) return '';
+    return `<div class="cp704-msg-alerta"><b>Confira antes de enviar:</b> ${escapeHtml(probs.join(' · '))}. O app tentou refazer esta mensagem e não conseguiu tirar isso.</div>`;
+  }
+  function cp1308ClasseSuja(a,chave){ return cp1308ProblemasDaSugestao(a,chave).length?' cp704-msg-suja':''; }
   window.cp704SelectedMsg='a';
   function cp704GetMessage(k){ const el=document.querySelector(`.cp704-msg-item[data-key="${k||window.cp704SelectedMsg}"] p`); return cp704Text(el?.innerText || el?.textContent); }
   window.cp704CopyMsg=async function(k){
@@ -5387,13 +5410,48 @@ function cp1225LinhaDeOndeVeio(a){
   // v1305 — quando alguma das três sai com problema que o app CONHECE (endereço que a conversa não
   // tem, pedido de licença, fecho de espera) e não conseguiu refazer, a linha DIZ. Antes isso ficava
   // invisível e a sugestão furada parecia normal na tela.
+  // v1308 — o modelo configurado não existe nesta conta da OpenAI: a análise saiu no anterior e a
+  // tela avisa, com o que fazer. Sem isto, o corretor receberia uma leitura de qualidade diferente
+  // sem nenhuma pista — que é justamente o que esta versão veio acabar.
+  const trocaModelo = cp704Text(a.modeloIndisponivel);
+  const avisoModelo = trocaModelo
+    ? ` · <b style="color:var(--risco)">o modelo novo não está liberado na sua conta da OpenAI</b> (esta análise saiu no modelo anterior — libere o modelo no painel da OpenAI ou avise o suporte)`
+    : "";
   const comProblema = Number(a.sugestoesComProblema) || 0;
+  // v1308 — e diz QUAIS, por número: "sugestão 3 saiu com problema" em vez de "1 sugestão saiu com
+  // problema". O detalhe do que há de errado aparece dentro da própria sugestão.
+  const numerosComProblema = (a.problemasPorSugestao && typeof a.problemasPorSugestao === "object")
+    ? ["a","b","c"].map((k,i)=>(Array.isArray(a.problemasPorSugestao[k]) && a.problemasPorSugestao[k].length) ? String(i+1) : "").filter(Boolean)
+    : [];
   const aviso = comProblema > 0
-    ? ` · <b style="color:var(--risco)">${comProblema} ${pl(comProblema, "sugestão saiu com problema", "sugestões saíram com problema")}</b> (confira antes de enviar)`
+    ? ` · <b style="color:var(--risco)">${numerosComProblema.length
+        ? `${pl(numerosComProblema.length, "sugestão", "sugestões")} ${numerosComProblema.join(" e ")} ${pl(numerosComProblema.length, "saiu", "saíram")} com problema`
+        : `${comProblema} ${pl(comProblema, "sugestão saiu com problema", "sugestões saíram com problema")}`}</b> (confira antes de enviar)`
     : "";
   // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
   // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${aviso}</div>`;
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${avisoModelo}${aviso}</div>`;
+}
+
+// v1308 — EM QUE MODO ESTA ANÁLISE FOI FEITA (as três chaves da tela do Cérebro).
+//
+// O dono quer rodar a MESMA conversa com cada peça ligada e desligada pra comparar. Se a tela não
+// disser em que modo cada análise saiu, ele compara duas telas sem saber qual era qual — e a
+// experiência não vale nada. Com tudo ligado (o normal) esta faixa não aparece: ela só existe pra
+// avisar que a análise à frente está rodando com alguma peça desligada.
+function cp1308FaixaModoHtml(a){
+  const modo = (a && typeof a.modoAnalise === "object" && a.modoAnalise) ? a.modoAnalise : null;
+  if(!modo) return "";
+  const desligadas = [
+    modo.cerebro === false ? "o seu Cérebro" : "",
+    modo.aprendizado === false ? "o aprendizado" : "",
+    modo.regrasEscrita === false ? "as regras de escrita" : ""
+  ].filter(Boolean);
+  if(!desligadas.length) return "";
+  const lista = desligadas.length === 1
+    ? desligadas[0]
+    : desligadas.slice(0, -1).join(", ") + " e " + desligadas[desligadas.length - 1];
+  return `<div style="border:1px solid var(--risco-line,rgba(255,98,88,.45));background:var(--risco-soft,rgba(255,98,88,.10));border-radius:12px;padding:10px 12px;margin:0 0 10px"><b style="color:var(--risco);font-size:12.5px">Análise de teste: ${escapeHtml(lista)} ${desligadas.length === 1 ? "estava desligado" : "estavam desligados"}.</b><div class="small" style="color:var(--muted);margin-top:3px">Você desligou essa chave em Cérebro → Chaves da análise. Religue e reanalise para voltar ao normal.</div></div>`;
 }
 
 // v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando
@@ -5549,10 +5607,11 @@ function renderLeadFoco(lead){
             <div class="cp704-card-title"><h2>Fazer agora</h2></div>
             <div class="cp704-step"><p>${escapeHtml(next)}</p></div>
             <div class="cp704-msg-sub">Sugestões de mensagem · copie a melhor opção</div>
+            ${cp1308FaixaModoHtml(a)}
             ${cp1225LinhaDeOndeVeio(a)}
             ${aguardarContato&&messagesReady?`<div class="cp704-empty-analysis" style="margin-bottom:10px"><b>Recomendação agora: aguardar, sem mandar mensagem.</b><span>${escapeHtml(motivoAguardar)}</span></div>`:''}
-            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis"><b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
-            <div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button></div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button></div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button></div>`:''}</div>`}
+            ${!messagesReady?(semAcaoUrgente?`<div class="cp704-empty-analysis"><b>Sem mensagem necessária agora.</b><span>Não há ação comercial pendente identificada para este lead no momento.</span></div>`:`<div class="cp704-empty-analysis">${cp704Text(a.falhaAmigavel)?`<b style="color:var(--risco)">${escapeHtml(cp704Text(a.falhaAmigavel))}</b><span>Preferimos avisar a te entregar uma leitura pior sem você saber.</span>`:`<b>Mensagem ainda não gerada.</b><span>${needsAnalysis?'Atualize a análise comercial acima para criar a sugestão correta.':'Toque em "Reanalisar" no topo para criar a sugestão correta.'}</span>`}${cp724DiagRecusaHtml(a,msgs)}${needsAnalysis?'':'<button type="button" onclick="ui670Reanalisar(this)">Atualizar análise comercial</button>'}</div>`):`
+            <div class="cp704-msg-list"><div class="cp704-msg-item${cp704MarcaCopiada(lead,'a',msgs.a)}${cp1308ClasseSuja(a,'a')}" data-key="a"><div class="cp704-msg-head"><span class="cp704-num">1</span><b>${escapeHtml(msgs.aLabel||'Recomendada')}</b></div><p>${escapeHtml(msgs.a)}</p><button class="cp704-copy" onclick="cp704CopyMsg('a')">${cp704RotuloCopiar(lead,'a',msgs.a)}</button>${cp1308AvisoSugestaoHtml(a,'a')}</div>${msgs.b?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'b',msgs.b)}${cp1308ClasseSuja(a,'b')}" data-key="b"><div class="cp704-msg-head"><span class="cp704-num">2</span><b>${escapeHtml(msgs.bLabel||'Facilitar decisão')}</b></div><p>${escapeHtml(msgs.b)}</p><button class="cp704-copy" onclick="cp704CopyMsg('b')">${cp704RotuloCopiar(lead,'b',msgs.b)}</button>${cp1308AvisoSugestaoHtml(a,'b')}</div>`:''}${msgs.c?`<div class="cp704-msg-item${cp704MarcaCopiada(lead,'c',msgs.c)}${cp1308ClasseSuja(a,'c')}" data-key="c"><div class="cp704-msg-head"><span class="cp704-num">3</span><b>${escapeHtml(msgs.cLabel||'Direta ao ponto')}</b></div><p>${escapeHtml(msgs.c)}</p><button class="cp704-copy" onclick="cp704CopyMsg('c')">${cp704RotuloCopiar(lead,'c',msgs.c)}</button>${cp1308AvisoSugestaoHtml(a,'c')}</div>`:''}</div>`}
           </section>
           ${cp717MudancasHtml(a)}
         </main>
@@ -6198,6 +6257,14 @@ function cpNormalizarDiasAtendimento(valor){
   return limpos.length ? limpos : [...CP_DIAS_ATENDIMENTO_PADRAO];
 }
 
+// v1308 — chave da análise: desligada só quando está EXPLICITAMENTE desligada.
+function cpChaveLigada(v){ return (v === false || v === "false" || v === 0 || v === "0") ? false : true; }
+function cpLerChaveDoFormulario(id, cfg, campo){
+  const el = qs("#" + id);
+  if(!el) return cpChaveLigada(cfg?.[campo]);
+  return !!el.checked;
+}
+
 function sanitizeCerebroConfigV762(cfg) {
   const c = cfg && typeof cfg === "object" ? cfg : {};
   const temRegrasTexto = Object.prototype.hasOwnProperty.call(c, "regrasTexto");
@@ -6219,6 +6286,11 @@ function sanitizeCerebroConfigV762(cfg) {
     // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Lista vazia ou
     // inválida cai no padrão de sempre (segunda a sexta), pra ninguém ficar sem fila por engano.
     diasAtendimento: cpNormalizarDiasAtendimento(c.diasAtendimento),
+    // v1308 — as três chaves da análise. Só ficam desligadas quando o corretor desligou de
+    // verdade: campo ausente (todo Cérebro salvo antes desta versão) vale como ligado.
+    usarCerebro: cpChaveLigada(c.usarCerebro),
+    usarAprendizado: cpChaveLigada(c.usarAprendizado),
+    usarRegrasEscrita: cpChaveLigada(c.usarRegrasEscrita),
     regrasTexto: temRegrasTexto && typeof c.regrasTexto === "string" ? c.regrasTexto : regrasLegadasParaTexto(c.regras),
     objecoesTexto: temObjecoesTexto && typeof c.objecoesTexto === "string" ? c.objecoesTexto : objecoesLegadasParaTexto(c.objecoes),
     regras: Array.isArray(c.regras) ? c.regras : [],
@@ -6262,6 +6334,9 @@ export function obterCerebroConfigParaAnalise() {
       regrasTexto: qs("#cerebroRegrasTexto")?.value ?? cfg?.regrasTexto ?? "",
       objecoesTexto: qs("#cerebroObjecoesTexto")?.value ?? cfg?.objecoesTexto ?? "",
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? cpNormalizarDiasAtendimento(cfg?.diasAtendimento),
+      usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", cfg, "usarCerebro"),
+      usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", cfg, "usarAprendizado"),
+      usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", cfg, "usarRegrasEscrita"),
       regras: [],
       objecoes: []
     };
@@ -7027,6 +7102,10 @@ async function carregarCerebro(){
   if(inpResg) inpResg.value = Number.isFinite(Number(config.resgatesPorDia)) ? config.resgatesPorDia : 2;
   const inpDescanso = qs("#cerebroDiasDescanso");
   if(inpDescanso) inpDescanso.value = (Number(config.diasDescansoPosAtendimento) >= 1) ? config.diasDescansoPosAtendimento : 5;
+  // v1308 — as três chaves da análise.
+  const chaveCer = qs("#cerebroUsarCerebro"); if(chaveCer) chaveCer.checked = cpChaveLigada(config.usarCerebro);
+  const chaveApr = qs("#cerebroUsarAprendizado"); if(chaveApr) chaveApr.checked = cpChaveLigada(config.usarAprendizado);
+  const chaveReg = qs("#cerebroUsarRegrasEscrita"); if(chaveReg) chaveReg.checked = cpChaveLigada(config.usarRegrasEscrita);
   // v1091 — marca os dias em que ele atende.
   const diasSalvos = cpNormalizarDiasAtendimento(config.diasAtendimento);
   qsa('#cerebroDiasSemana input[type="checkbox"]').forEach(c => { c.checked = diasSalvos.includes(Number(c.dataset.dia)); });
@@ -7111,6 +7190,9 @@ async function salvarCerebro(){
     resgatesPorDia: (Number.isFinite(resgN) && resgN >= 0 && resgN <= 20) ? Math.round(resgN) : 2,
     diasDescansoPosAtendimento: (Number.isFinite(descansoN) && descansoN >= 1 && descansoN <= 60) ? Math.round(descansoN) : 5,
     diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
+    usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", null, "usarCerebro"),
+    usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
+    usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
     regrasTexto: qs("#cerebroRegrasTexto")?.value || "",
     objecoesTexto: qs("#cerebroObjecoesTexto")?.value || "",
     regras: [],
@@ -7187,6 +7269,11 @@ async function zerarCerebroTudo(){
       resgatesPorDia: cpLerResgatesDiaDoFormulario(null),
       diasDescansoPosAtendimento: Number(qs("#cerebroDiasDescanso")?.value) || 5,
       diasAtendimento: cpLerDiasAtendimentoDoFormulario() ?? [...CP_DIAS_ATENDIMENTO_PADRAO],
+      // v1308 — as chaves são preferência de teste, como a meta diária: zerar o Cérebro não mexe
+      // nelas.
+      usarCerebro: cpLerChaveDoFormulario("cerebroUsarCerebro", null, "usarCerebro"),
+      usarAprendizado: cpLerChaveDoFormulario("cerebroUsarAprendizado", null, "usarAprendizado"),
+      usarRegrasEscrita: cpLerChaveDoFormulario("cerebroUsarRegrasEscrita", null, "usarRegrasEscrita"),
       regrasTexto: "", objecoesTexto: "", regras: [], objecoes: []
     };
     await fetch("./api/cerebro-config", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(cfg) });

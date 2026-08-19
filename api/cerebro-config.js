@@ -29,6 +29,11 @@ const DEFAULTS = {
   // v1091 — dias da semana em que o corretor atende (0=domingo … 6=sábado). Padrão segunda a
   // sexta, que era o comportamento cravado no código antes desta versão.
   diasAtendimento: [1, 2, 3, 4, 5],
+  // v1308 — as três chaves de experiência do dono (Cérebro, aprendizado, regras de escrita).
+  // Padrão LIGADO nas três: quem nunca mexeu continua exatamente como estava.
+  usarCerebro: true,
+  usarAprendizado: true,
+  usarRegrasEscrita: true,
   regrasTexto: "",
   objecoesTexto: "",
   regras: [],
@@ -99,6 +104,12 @@ function objecoesLegadasParaTexto(arr) {
   }).filter(Boolean).join("\n\n");
 }
 
+// v1308 — chave só está desligada quando ela está EXPLICITAMENTE desligada. Campo ausente (todo
+// Cérebro salvo antes desta versão) vale como ligado.
+function chaveLigada(v) {
+  return v === false || v === "false" || v === 0 || v === "0" ? false : true;
+}
+
 function sanitizeCerebroConfig(valor = {}) {
   const v = valor && typeof valor === "object" ? valor : {};
   return {
@@ -112,6 +123,9 @@ function sanitizeCerebroConfig(valor = {}) {
     resgatesPorDia: clampResgatesDia(v.resgatesPorDia),
     diasDescansoPosAtendimento: clampDiasDescanso(v.diasDescansoPosAtendimento),
     diasAtendimento: normalizarDiasAtendimento(v.diasAtendimento),
+    usarCerebro: chaveLigada(v.usarCerebro),
+    usarAprendizado: chaveLigada(v.usarAprendizado),
+    usarRegrasEscrita: chaveLigada(v.usarRegrasEscrita),
     regrasTexto: Object.prototype.hasOwnProperty.call(v, "regrasTexto") && typeof v.regrasTexto === "string" ? capTexto(v.regrasTexto, MAX_BLOCO_REGRAS) : capTexto(regrasLegadasParaTexto(v.regras), MAX_BLOCO_REGRAS),
     objecoesTexto: Object.prototype.hasOwnProperty.call(v, "objecoesTexto") && typeof v.objecoesTexto === "string" ? capTexto(v.objecoesTexto, MAX_BLOCO_REGRAS) : capTexto(objecoesLegadasParaTexto(v.objecoes), MAX_BLOCO_REGRAS),
     regras: Array.isArray(v.regras) ? v.regras : [],
@@ -533,6 +547,9 @@ export default async function handler(req, res) {
       resgatesPorDia: clampResgatesDia(body.resgatesPorDia),
       diasDescansoPosAtendimento: clampDiasDescanso(body.diasDescansoPosAtendimento),
       diasAtendimento: normalizarDiasAtendimento(body.diasAtendimento),
+      usarCerebro: chaveLigada(body.usarCerebro),
+      usarAprendizado: chaveLigada(body.usarAprendizado),
+      usarRegrasEscrita: chaveLigada(body.usarRegrasEscrita),
       regrasTexto: sanitizarBloco(regrasTextoEntrada),
       objecoesTexto: sanitizarBloco(objecoesTextoEntrada),
       regras: [],
