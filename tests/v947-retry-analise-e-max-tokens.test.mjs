@@ -25,11 +25,12 @@ const withRetriesSrc = extrai('withRetries');
 const chamarGPT4JsonSrc = extrai('chamarGPT4Json');
 assert.match(chamarGPT4JsonSrc, /err\.code = "ETIMEDOUT"/, 'o timeout da chamada principal é marcado como retentável');
 
-// 3. v1140 — o desenho mudou (caso real: análise que PRECISA de mais de 26s falhava sempre, nas
-// duas tentativas iguais, e a importação morria aos 92%). A 1ª tentativa (modelo principal) ganha
-// a janela grande; se ela falhar (timeout/429/5xx), a 2ª roda no modelo RÁPIDO com o tempo que
-// sobrou do orçamento. A intenção original deste teste continua travada: erro passageiro não
-// descarta a análise (sempre existe uma segunda chance) e o envelope cabe no maxDuration.
+// 3. v1140 dava a 2ª tentativa ao modelo RÁPIDO. v1308 tirou isso por ordem do dono ("nunca mais
+// cair para um modelo mais fraco"): entregar uma análise pior sem avisar na tela é pior que
+// falhar, porque o corretor age em cima dela achando que é a de sempre. As duas tentativas rodam
+// no MESMO modelo — a 2ª existe pra erro passageiro da OpenAI — e, falhando as duas, a rota
+// devolve erro com um aviso em português mandando tocar em Reanalisar. A intenção original deste
+// teste continua travada: sempre existe uma segunda chance e o envelope cabe no maxDuration.
 const inicio = pipeline.indexOf('export async function analyzeWithBrain');
 // v1194 — o marcador de fim era compararEvolucao, removida por não ter chamador; o vizinho
 // seguinte de analyzeWithBrain agora é getOpenAIRaw.
@@ -37,10 +38,14 @@ const fim = pipeline.indexOf('export function getOpenAIRaw', inicio);
 const analyzeSrc = pipeline.slice(inicio, fim);
 assert.match(analyzeSrc, /model: modeloAnalise\(\),[\s\S]*?timeout: janelaPrincipalMs/,
   '1ª tentativa: modelo principal com a janela grande');
-assert.match(analyzeSrc, /model: modeloTarefasSimples\(\),[\s\S]*?timeout: sobraMs/,
-  '2ª tentativa: modelo rápido com o tempo restante do orçamento');
-assert.match(analyzeSrc, /modeloFallbackUsado = true/,
-  'quando o modelo rápido salva a análise, o resultado registra isso (modeloFallback)');
+assert.match(analyzeSrc, /model: modeloAnalise\(\),[\s\S]*?timeout: sobraMs/,
+  '2ª tentativa: o MESMO modelo, com o tempo restante do orçamento');
+assert.ok(!/modeloTarefasSimples\(\),[\s\S]{0,200}timeout: sobraMs/.test(analyzeSrc),
+  'a queda pro modelo rápido não pode voltar — nem na análise, nem na reescrita');
+assert.ok(!analyzeSrc.includes('modeloFallbackUsado'),
+  'não existe mais "análise entregue por modelo mais fraco"');
+assert.match(analyzeSrc, /falhaAmigavel/,
+  'falhando as duas, a análise carrega o aviso em português pra tela');
 
 // 4. Restrição de tempo (refeita na v1140): a janela da 1ª tentativa deixa espaço pro fallback
 // dentro do orçamento, e o orçamento cabe com folga dentro do maxDuration:60 das rotas que chamam
@@ -53,7 +58,7 @@ assert.ok(budgetMatch && timeoutMatch, 'orçamento/janela default da análise n�
 const orcamentoMs = Number(budgetMatch[1]);
 const janelaMs = Number(timeoutMatch[1]);
 assert.ok(janelaMs + 14000 <= orcamentoMs,
-  `a janela principal (${janelaMs}ms) precisa deixar >=14s pro fallback dentro do orçamento (${orcamentoMs}ms)`);
+  `a janela principal (${janelaMs}ms) precisa deixar >=14s pra segunda tentativa dentro do orçamento (${orcamentoMs}ms)`);
 for (const rota of ['api/processar-storage.js', 'api/reanalisar-lead.js']) {
   const maxDurationMs = Number(vercelConfig.functions?.[rota]?.maxDuration || 0) * 1000;
   assert.ok(maxDurationMs > 0, `maxDuration de ${rota} não encontrado no vercel.json`);

@@ -12,7 +12,8 @@
   "esperado": {
     "clienteChamaSe": "Fernando Klein",
     "quemFalouPorUltimo": "corretor",
-    "tentativasSemResposta": 1,
+    "_notaTentativas": "v1308 — era 1 e passou a ser 0 de propósito. A última mensagem do corretor (\"Perfeito, Fernando! Fico à disposição...\") é resposta educada ao que o cliente acabou de dizer, não uma cobrança que ficou sem resposta. Contar isso como tentativa era o que fazia a IA ler despedida como silêncio — o mesmo erro da conversa que o dono trouxe em 19/08/2026.",
+    "tentativasSemResposta": 0,
     "vozDoCorretorNaoPodeConter": ["Vou conversar com minha esposa"],
     "aIaPrecisaPerceber": [
       "quem decide não é só o cliente: a esposa participa da decisão",

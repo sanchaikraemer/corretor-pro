@@ -466,6 +466,18 @@
             <label><input type="checkbox" data-dia="0"><span>Dom</span></label>
           </div>
           <div class="small" style="color:var(--muted);margin-top:4px">Nos dias desmarcados o "Fazer agora" fica pausado — o resto do app continua funcionando normal. Padrão: de segunda a sexta.</div>
+
+          <!-- v1308 — AS TRÊS CHAVES DA ANÁLISE (pedido do dono, 19/08/2026). Servem pra ele rodar
+               a MESMA conversa com cada peça ligada e desligada e ver com os próprios olhos o que
+               melhora e o que piora. Desligar não apaga NADA: o texto continua salvo e voltar é um
+               toque. Toda análise passa a dizer, em destaque, em que modo ela foi feita. -->
+          <label style="margin-top:16px">Chaves da análise <span class="small" style="color:var(--muted);font-weight:400">(pra você testar o que cada peça faz)</span></label>
+          <div id="cerebroChaves" class="cp-chaves">
+            <label><input type="checkbox" id="cerebroUsarCerebro" checked><span><b>Usar o meu Cérebro</b><small>Desligado, a IA analisa a conversa sem o seu método, tom, diferenciais, regras e objeções.</small></span></label>
+            <label><input type="checkbox" id="cerebroUsarAprendizado" checked><span><b>Usar o aprendizado</b><small>Desligado, a IA não recebe o seu jeito de escrever aprendido nem as suas mensagens desta conversa.</small></span></label>
+            <label><input type="checkbox" id="cerebroUsarRegrasEscrita" checked><span><b>Usar as regras de escrita</b><small>Desligado, some a lista de frases de robô e de palavra em inglês proibidas, e o app deixa de refazer a sugestão que sair com uma delas.</small></span></label>
+          </div>
+          <div class="small" style="color:var(--muted);margin-top:6px">O normal é as três ligadas. Nada é apagado quando você desliga — é só uma análise sem aquela peça, e religar é um toque. Cada análise mostra na tela em que modo ela foi feita.</div>
         </div>
 
         <div class="btns btns-row" style="margin-top:14px">

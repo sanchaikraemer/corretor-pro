@@ -48,7 +48,10 @@ assert.match(pipeline, /DIRECIONA_INCREMENTAL_MIN_CHARS \|\| Infinity/, 'toda co
 assert.match(pipeline, /DIRECIONA_INCREMENTAL_CAUDA_CHARS \|\| 9000/, 'e a conversa longa vai com bem mais material real');
 
 // ── 4. O corretor para de adivinhar se o Cérebro entrou ────────────────────────────────────────
-assert.match(pipeline, /cerebroAplicado: !modoPrevia,/, 'a análise registra se o Cérebro entrou');
+// v1308 — a marca continua existindo, só passou a considerar TAMBÉM a chave "Usar o meu Cérebro"
+// da tela de Configurações: sem Cérebro configurado OU com a chave desligada, ela vem falsa.
+assert.match(pipeline, /cerebroAplicado: cerebroNoPedido,/, 'a análise registra se o Cérebro entrou');
+assert.match(pipeline, /const cerebroNoPedido = chaveCerebro && !modoPrevia;/, 'e a chave da tela manda nisso');
 assert.match(pipeline, /conversaLidaPelaIA: entradaIncremental/, 'e quanto da conversa a IA leu');
 const linha = app.slice(app.indexOf('function cp1225LinhaDeOndeVeio(a){'), app.indexOf('function cp865UltimaAnaliseISO'));
 assert.match(linha, /sem o seu Cérebro/, 'a tela avisa quando a análise saiu SEM o Cérebro');

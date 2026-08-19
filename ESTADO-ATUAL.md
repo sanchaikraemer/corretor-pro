@@ -220,6 +220,30 @@ conversa, numa linha própria abaixo de "Último atendimento" (a v1266 tinha tro
 data da conversa sumia quando havia atendimento registrado). Guarda:
 `tests/v1307-link-do-corretor-e-ultima-mensagem.test.mjs`. Ver `NOTAS-v1307.md`._
 
+_**v1308 — fim do plano B silencioso, prazo marcado pelo cliente, e as três chaves da análise.**
+Auditoria trazida pelo dono em 19/08/2026, medida executando o próprio código contra uma conversa
+real. (1) A 2ª tentativa da análise deixou de trocar o modelo principal pelo `modeloTarefasSimples`
+— roda no MESMO modelo, e a reescrita anti-robô também; falhando as duas, a análise devolve
+`falhaAmigavel` ("Não deu pra analisar esta conversa agora — a IA não respondeu a tempo. Toque em
+Reanalisar.") e a tela mostra isso no lugar do texto técnico. `modeloFallback` não existe mais.
+(2) `mensagemEhSoCortesia` tira do cálculo de `tentativasSemRespostaDoCorretor` a mensagem do
+corretor que é só concordância/agradecimento/despedida — era ela que fazia "Certo, boa viagem e até
+semana que vem" chegar à IA como cobrança ignorada. (3) `prazoMarcadoPeloCliente` transforma o prazo
+que o PRÓPRIO cliente marcou ("semana que vem", "mês que vem", "depois do dia 20", "daqui a N dias",
+"amanhã", "quando eu voltar") em data de calendário e manda como fato (`PRAZO MARCADO PELO PRÓPRIO
+CLIENTE`), dizendo se ainda está correndo — sem criar lembrete: agendamento continua só por ação do
+corretor. (4) `exemplosDoCorretor` deixou de incluir a saudação automática de anúncio e a despedida
+de uma linha. (5) `problemasPorSugestao` diz QUAL das três saiu com problema e o quê; o aviso aparece
+dentro da própria sugestão e a linha de prova passa a citar o número dela. (6) Bloco novo no prompt
+"MEDIR O TAMANHO DO OBSTÁCULO — FAÇA A CONTA" + campo `contaDoObstaculo` no diagnóstico (linha "A
+conta da troca" nos detalhes comerciais): quando o negócio depende de um imóvel na troca, a IA
+calcula a porcentagem e compara com o limite que o Cérebro declara. (7) Três chaves em Cérebro →
+Chaves da análise (`usarCerebro`, `usarAprendizado`, `usarRegrasEscrita`, padrão LIGADO e ausente =
+ligado) pausam, separadamente, o Cérebro, o aprendizado e as duas listas "PROIBIDO" de escrita; nada
+é apagado do prompt e `modoAnalise` viaja com a análise pra tela avisar em destaque quando alguma
+está desligada. Guarda: `tests/v1308-sem-plano-b-prazo-do-cliente-e-chaves.test.mjs`. Ver
+`NOTAS-v1308.md`._
+
 ## 1. Arquitetura
 
 - **Front-end**: JavaScript puro (sem framework), servido como PWA (Service Worker,
@@ -442,9 +466,11 @@ versão, com a régua do que se espera escrita em português (`aIaPrecisaPercebe
 
 **O uso que importa é o antes/depois** (`--salvar=antes` … `--comparar=antes`): é a regra do
 `CLAUDE.md` ("alteração de prompt entra com antes e depois na mesma conversa real") virada em
-ferramenta. **Pendência conhecida: a camada 2 nunca foi executada** — falta a rodada de referência,
-que depende da chave da OpenAI do dono. Enquanto ela não existir, toda mexida em prompt continua
-sem rede.
+ferramenta. **v1308 — a camada 2 está sendo executada pela primeira vez** (antes e depois da
+mudança), assim que a chave da OpenAI do dono for liberada nesta sessão. Junto, uma expectativa da
+camada 1 mudou de propósito: em
+`evals/conversas/08-corretor-falou-por-ultimo.json`, `tentativasSemResposta` passou de 1 para 0 (a
+despedida do corretor deixou de contar como cobrança ignorada — ver v1308).
 
 ## 5. Processo de publicação
 
