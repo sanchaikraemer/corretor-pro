@@ -987,6 +987,18 @@ export function contarCerebroEnviado(cfg) {
     objecoes
   };
   out.total = Object.values(out).reduce((a, b) => a + b, 0);
+  // v1304 — QUANTO DO CÉREBRO SALVO CHEGOU NA IA, em porcentagem (pedido do dono: "mude esses
+  // números para percentual, verde 100% e quando não conclui vermelho").
+  //
+  // Os campos livres do Cérebro têm teto defensivo (MAX_CAMPO_CEREBRO_LIVRE / MAX_BLOCO_CEREBRO,
+  // ver sanitizeCerebroConfig): texto acima do teto é cortado antes de virar prompt. Enquanto o
+  // corretor não passar do teto isso dá 100%; se um campo estourar, a tela avisa em vermelho em vez
+  // de deixar o corte invisível — que é justamente o tipo de coisa que ele descobria tarde demais.
+  const bruto = cfg && typeof cfg === "object" ? cfg : {};
+  const regrasBrutas = tam(bruto.regrasTexto) || tam(_regrasLegadasParaTextoPipeline(bruto.regras));
+  const objecoesBrutas = tam(bruto.objecoesTexto) || tam(_objecoesLegadasParaTextoPipeline(bruto.objecoes));
+  out.salvo = tam(bruto.metodo) + tam(bruto.tom) + tam(bruto.diferenciais) + tam(bruto.evitar) + regrasBrutas + objecoesBrutas;
+  out.percentual = out.salvo > 0 ? Math.min(100, Math.round((out.total / out.salvo) * 100)) : (out.total > 0 ? 100 : 0);
   return out;
 }
 

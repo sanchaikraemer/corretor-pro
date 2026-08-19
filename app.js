@@ -5341,12 +5341,14 @@ function cp1225LinhaDeOndeVeio(a){
   if(a.cerebroAplicado == null && !lida) return ""; // análise antiga, de antes deste registro
   const semCerebro = a.cerebroAplicado === false;
   // v1241 — quando o teto técnico corta conversa gigante, a tela DIZ quantas de quantas foram.
+  // v1304 — e agora diz em PORCENTAGEM, no verde/vermelho combinados com o dono: 100% verde quando
+  // a IA leu tudo, vermelho quando ficou pedaço de fora.
   const quanto = lida?.modo === "parte da conversa"
-    ? `leu ${Number(lida.mensagensEnviadas) || 0} de ${Number(lida.totalDaConversa) || 0} mensagens (conversa longa demais)`
+    ? `leu ${cp1304Pct(Math.round(((Number(lida.mensagensEnviadas)||0) / Math.max(1, Number(lida.totalDaConversa)||0)) * 100))} da conversa (${Number(lida.mensagensEnviadas) || 0} de ${Number(lida.totalDaConversa) || 0} mensagens — conversa longa demais)`
     : lida?.modo === "resumo+novidade"
     ? `leu ${Number(lida.mensagensEnviadas)||0} ${pl(Number(lida.mensagensEnviadas)||0, "mensagem", "mensagens")} + resumo de ${Number(lida.mensagensResumidas)||0} antigas`
     : (Number(lida?.mensagensEnviadas) > 0
-        ? `leu a conversa inteira (${Number(lida.mensagensEnviadas)} ${pl(Number(lida.mensagensEnviadas), "mensagem", "mensagens")})`
+        ? `leu ${cp1304Pct(100)} da conversa (${Number(lida.mensagensEnviadas)} ${pl(Number(lida.mensagensEnviadas), "mensagem", "mensagens")})`
         : "");
   const cerebro = semCerebro
     ? '<b style="color:var(--risco)">sem o seu Cérebro</b>'
@@ -5354,13 +5356,17 @@ function cp1225LinhaDeOndeVeio(a){
   // v1239 — quanto de cada campo do Cérebro foi junto. O dono cravou "leia as regras do cerebro!
   // ou ele nao esta sendo usado" e não tinha como conferir sozinho. Agora tem: se um campo
   // aparecer aqui, o texto dele foi enviado; se não aparecer, está vazio no cadastro.
+  // v1304 — PEDIDO DO DONO: "mude esses números para percentual, verde 100% e quando não conclui
+  // vermelho". A linha mostrava seis contagens de caracteres ("método 6.577, tom 1.892...") e ele
+  // tinha que somar de cabeça pra saber se estava tudo lá. Agora é uma porcentagem só: quanto do
+  // Cérebro salvo chegou na IA nesta análise. 100% verde = foi tudo; menos que isso, vermelho, com
+  // a lista do que ficou pela metade (o corte por tamanho era invisível até aqui).
   const env = a.cerebroEnviado;
   let detalhe = "";
   if(env && Number(env.total) > 0){
-    const rot = { metodo:"método", tom:"tom", diferenciais:"diferenciais", evitar:"o que evitar", regras:"regras", objecoes:"objeções" };
-    const partes = Object.keys(rot).filter(k => Number(env[k]) > 0)
-      .map(k => `${rot[k]} ${Number(env[k]).toLocaleString("pt-BR")}`);
-    if(partes.length) detalhe = ` · seu Cérebro enviado: ${partes.join(", ")} (${Number(env.total).toLocaleString("pt-BR")} caracteres)`;
+    const pct = Number.isFinite(Number(env.percentual)) ? Number(env.percentual) : 100;
+    detalhe = ` · seu Cérebro: ${cp1304Pct(pct)}`;
+    if(pct < 100) detalhe += ` (parte do texto não coube e ficou de fora)`;
   }
   // v1296 — "cade as regras, o cerebro, o aprendizado????" (dono, 18/08/2026). O Cérebro já tinha
   // essa prova; o APRENDIZADO não tinha nenhuma. Agora a mesma linha diz, em número, o que cada
@@ -5378,7 +5384,17 @@ function cp1225LinhaDeOndeVeio(a){
       ? ` · aprendizado aplicado: ${itens.join(", ")}`
       : " · aprendizado: nada entrou nesta análise";
   }
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + escapeHtml(quanto) : ""}${escapeHtml(detalhe)}${escapeHtml(linhaAprendizado)}</div>`;
+  // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
+  // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
+  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}</div>`;
+}
+
+// v1304 — a porcentagem colorida da linha de prova: verde quando fechou 100%, vermelho quando
+// faltou pedaço. Uma cor só decide, sem meio-termo — foi o pedido do dono.
+function cp1304Pct(valor){
+  const n = Math.max(0, Math.min(100, Math.round(Number(valor) || 0)));
+  const cor = n >= 100 ? "var(--green)" : "var(--risco)";
+  return `<b style="color:${cor}">${n}%</b>`;
 }
 
 function cp865UltimaAnaliseISO(lead, a){
