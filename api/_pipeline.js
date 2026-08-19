@@ -812,89 +812,7 @@ function _ladoDaMensagem(m, corretorNome = "", lead = {}) {
   return "";
 }
 
-// Junta as mensagens REAIS que o corretor já mandou nesta conversa pra usar como exemplo de VOZ —
-// o gerador copia o tom/jeito dele em vez de escrever robótico. "" se não houver exemplo bom.
-// v1283 — exportada (só isso: nenhuma linha do corpo mudou) pra a bateria de conversas de
-// `evals/` conseguir conferir, sem gastar IA, que os exemplos de voz do corretor não contêm fala
-// do cliente. Era exatamente esse bloco que recebia as mensagens do cliente quando o contato
-// estava salvo com "Corretor"/"Imobiliária" no nome (ver v1282).
-// v1297 — AS PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA.
-//
-// Print do dono de 18/08/2026, 17h18, com o Cérebro comprovadamente inteiro no pedido (26.459
-// caracteres) e o aprendizado aplicado. Mesmo assim a sugestão RECOMENDADA foi:
-//   "Tem algum ponto das condições de pagamento que você gostaria de ver com mais detalhes, ou
-//    alguma dúvida sobre o empreendimento que posso esclarecer?"
-// Que é, palavra por palavra, a MESMA pergunta que ele já tinha mandado 1h31 antes na conversa
-// ("Ficou alguma dúvida ou algum ponto que gostaria de conversar sobre o empreendimento?") — e que
-// o cliente JÁ RESPONDEU ("estamos analisando ainda, mas gostei da ideia").
-//
-// O pedido dizia "não repita pergunta já respondida", mas isso é uma ordem sem fato do lado dela: a
-// IA não tinha em lugar nenhum a LISTA do que já foi perguntado. Mesma lição da v1277, que resolveu
-// a oferta repetida mandando o texto das tentativas junto. Aqui o código só EXTRAI um fato da
-// conversa (as frases com "?" escritas pelo corretor) e diz se o cliente falou depois. Nenhuma
-// decisão comercial é tomada aqui.
-export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead = {}) {
-  if (!Array.isArray(timeline)) return [];
-  const achadas = [];
-  timeline.forEach((m, i) => {
-    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") return;
-    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
-    if (!texto.includes("?")) return;
-    const respondida = timeline.slice(i + 1).some(x => _ladoDaMensagem(x, corretorNome, lead) === "cliente");
-    for (const bruto of texto.match(/[^.!?]*\?/g) || []) {
-      const pergunta = bruto.replace(/^[\s\-–—,;:]+/, "").trim();
-      if (pergunta.length < 12 || pergunta.length > 220) continue;
-      achadas.push({ texto: pergunta, respondida });
-    }
-  });
-  // Mesma pergunta feita duas vezes conta uma vez só, e vale a marca da vez mais recente.
-  const porChave = new Map();
-  for (const p of achadas) porChave.set(_semAcento(p.texto).toLowerCase().replace(/[^a-z0-9 ]/g, ""), p);
-  const todas = [...porChave.values()];
-  // v1313 — O TETO DE 6 PERGUNTAS ESTAVA DEIXANDO A MAIS IMPORTANTE DE FORA.
-  //
-  // Print do dono (19/08/2026, 17h22, conversa da Noemi, Cérebro 100%): as TRÊS sugestões
-  // perguntavam "é para morar ou investir?" — pergunta que ele já tinha feito na PRIMEIRA mensagem
-  // dele, em 19/01, e depois da qual a cliente falou várias vezes. A regra "não repita pergunta já
-  // respondida" existe no pedido; o que faltou foi o FATO: numa conversa de sete meses ele fez umas
-  // dez perguntas, e o corte pelas 6 mais recentes jogou fora justamente a de abertura.
-  //
-  // Agora o corte é maior E as perguntas de ABERTURA nunca caem: numa conversa longa, são elas que
-  // a IA mais tende a refazer, porque estão longe do fim que ela está lendo.
-  const TETO_PERGUNTAS = 14;
-  if (todas.length <= TETO_PERGUNTAS) return todas;
-  const abertura = todas.slice(0, 4);
-  const recentes = todas.slice(-(TETO_PERGUNTAS - abertura.length));
-  return [...abertura, ...recentes];
-}
 
-// v1309 — O QUE O CORRETOR JÁ ESCREVEU, NA ÍNTEGRA.
-//
-// Print do dono (19/08/2026, 14:57), conversa com a cliente do apartamento anunciado por R$ 430
-// mil: a sugestão RECOMENDADA voltou praticamente palavra por palavra a mensagem que ele já tinha
-// mandado às 11h04 daquele mesmo dia ("Te passo as informações atualizadas do apartamento
-// anunciado por R$ 430 mil: são 2 dormitórios e box de garagem, apartamento novo, pronto para
-// morar..."). Entre uma coisa e outra a conversa tinha andado: ela pediu a localização, ele mandou
-// vídeos, o mapa e ainda apresentou uma segunda opção de 3 dormitórios. "As sugestões estão sendo
-// as mesmas coisas já enviadas. Você não está lendo o histórico do cliente."
-//
-// A lista de perguntas já feitas (v1297) não pegava este caso: o que se repetiu foi a INFORMAÇÃO,
-// não a pergunta. Aqui o código só EXTRAI um fato — o texto das últimas mensagens escritas pelo
-// corretor nesta conversa — e manda junto do pedido. Nada é reescrito, cortado ou censurado no que
-// a IA devolve (isso foi desfeito na v1247 por ordem do dono): o que muda é a IA saber o que ele
-// já disse antes de escrever a próxima.
-export function mensagensJaEnviadasPeloCorretor(timeline, corretorNome = "", lead = {}, limite = 6) {
-  if (!Array.isArray(timeline)) return [];
-  const out = [];
-  for (const m of timeline) {
-    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
-    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
-    if (texto.length < 25) continue;                       // "ok", "certo", saudação solta
-    if (/^\[Arquivo enviado|<M[íi]dia oculta|arquivo anexado/i.test(texto)) continue;
-    out.push(texto.slice(0, 400));
-  }
-  return [...new Set(out)].slice(-Math.max(1, Number(limite) || 6));
-}
 
 // v1300 — "JOIA." NÃO É RESPOSTA.
 //
@@ -911,31 +829,6 @@ export function mensagensJaEnviadasPeloCorretor(timeline, corretorNome = "", lea
 // Cérebro do corretor.
 const _RECONHECIMENTO_CURTO = /^(joia|j[óo]ia|ok|okay|okey|blz|beleza|certo|show|top|legal|bacana|massa|perfeito|isso|isso a[íi]|entendi|entendido|combinado|fechado|valeu|obrigad[oa]|de nada|t[áa] bom|ta bom|t[áa]|sim|uhum|aham|👍|👌|🙏|😊)[\s.!]*$/i;
 
-export function respostaCurtaDoCliente(timeline, corretorNome = "", lead = {}) {
-  if (!Array.isArray(timeline) || !timeline.length) return null;
-  // A última fala precisa ser do cliente; se o corretor falou por último, isto não se aplica.
-  let ultimaFalaCliente = -1;
-  for (let i = timeline.length - 1; i >= 0; i--) {
-    const lado = _ladoDaMensagem(timeline[i], corretorNome, lead);
-    if (!lado) continue;
-    if (lado === "corretor") return null;
-    ultimaFalaCliente = i;
-    break;
-  }
-  if (ultimaFalaCliente < 0) return null;
-  const texto = String(timeline[ultimaFalaCliente]?.text || "").replace(/\s+/g, " ").trim();
-  if (!texto || texto.length > 30 || !_RECONHECIMENTO_CURTO.test(texto)) return null;
-  // A última coisa que o corretor perguntou antes disso — é ela que ficou sem resposta.
-  let perguntaAberta = "";
-  for (let i = ultimaFalaCliente - 1; i >= 0; i--) {
-    if (_ladoDaMensagem(timeline[i], corretorNome, lead) !== "corretor") continue;
-    const t = String(timeline[i]?.text || "").replace(/\s+/g, " ").trim();
-    const perguntas = t.match(/[^.!?]*\?/g) || [];
-    if (perguntas.length) perguntaAberta = perguntas[perguntas.length - 1].replace(/^[\s\-–—,;:]+/, "").trim();
-    break;
-  }
-  return { texto, perguntaAberta };
-}
 
 // v1308 — O QUE NÃO ENSINA NADA SOBRE COMO ESTE CORRETOR ESCREVE.
 //
@@ -963,6 +856,10 @@ export function exemplosDoCorretor(timeline, corretorNome = "", lead = {}) {
   }
   return [...new Set(out)].slice(-8).map(t => `- ${t}`).join("\n");
 }
+
+// v1315 — as peças de análise criadas entre 18 e 19/08 (perguntas já feitas, "joia não é
+// resposta", mensagens já enviadas, prazo do cliente, valores antigos e a conferência de frase
+// proibida por fora do pedido) saíram junto com a volta ao estado de 17/08. Ver NOTAS-v1315.md.
 
 // v1277 — AS TENTATIVAS DO CORRETOR QUE O CLIENTE NÃO RESPONDEU.
 //
@@ -1315,78 +1212,9 @@ const _PRAZO_DO_CLIENTE = [
   { re: /\b(depois do feriado|passando o feriado|depois das f[ée]rias)\b/i, tipo: "sem-data" }
 ];
 
-// Domingo da semana SEGUINTE à do dia informado (a "semana que vem" acaba no domingo dela).
-function _fimDaSemanaQueVem(diaCivil) {
-  // 1970-01-01 (dia civil 0) foi uma quinta-feira.
-  const diaDaSemana = ((diaCivil % 7) + 7 + 4) % 7; // 0 = domingo
-  const domingoDestaSemana = diaCivil + (7 - diaDaSemana) % 7;
-  return domingoDestaSemana + 7;
-}
 
-function _fimDoMesQueVem(y, m) {
-  const proxM = m === 12 ? 1 : m + 1;
-  const proxY = m === 12 ? y + 1 : y;
-  const ultimo = new Date(Date.UTC(proxY, proxM, 0)).getUTCDate();
-  return numeroDiaCivil(proxY, proxM, ultimo);
-}
 
-function _textoDaData(diaCivil) {
-  if (diaCivil == null) return "";
-  const dt = new Date(diaCivil * 86400000);
-  return `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
-}
 
-export function prazoMarcadoPeloCliente(timeline, corretorNome = "", lead = {}, agora = new Date()) {
-  const arr = Array.isArray(timeline) ? timeline : [];
-  // Só a ÚLTIMA fala do cliente vale: prazo antigo, já cumprido ou já superado, não segura nada.
-  let ultima = null;
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (_ladoDaMensagem(arr[i], corretorNome, lead) !== "cliente") continue;
-    ultima = arr[i];
-    break;
-  }
-  if (!ultima) return null;
-  const texto = String(ultima.text || "").replace(/\s+/g, " ").trim();
-  if (!texto) return null;
-  const achado = _PRAZO_DO_CLIENTE.map(r => ({ r, m: texto.match(r.re) })).find(x => x.m);
-  if (!achado) return null;
-
-  const base = dataCivilDeMensagem(ultima);
-  const hojeP = partesDataBR(agora);
-  const hojeDia = hojeP ? numeroDiaCivil(hojeP.y, hojeP.m, hojeP.d) : null;
-  let venceDia = null;
-  if (base?.dia != null) {
-    const tipo = achado.r.tipo;
-    if (tipo === "semana-que-vem") venceDia = _fimDaSemanaQueVem(base.dia);
-    else if (tipo === "mes-que-vem") venceDia = _fimDoMesQueVem(base.y, base.m);
-    else if (tipo === "amanha") venceDia = base.dia + 1;
-    else if (tipo === "depois-de-amanha") venceDia = base.dia + 2;
-    else if (tipo === "daqui-dias") venceDia = base.dia + Math.min(120, Number(achado.m[1]) || 0);
-    else if (tipo === "daqui-semanas") venceDia = base.dia + Math.min(52, Number(achado.m[1]) || 0) * 7;
-    else if (tipo === "depois-do-dia") {
-      const n = Number(achado.m[1]);
-      if (n >= 1 && n <= 31) {
-        // O dia N deste mês se ainda estiver à frente; senão, o dia N do mês seguinte.
-        let alvo = numeroDiaCivil(base.y, base.m, n);
-        if (alvo == null || alvo < base.dia) {
-          const proxM = base.m === 12 ? 1 : base.m + 1;
-          const proxY = base.m === 12 ? base.y + 1 : base.y;
-          alvo = numeroDiaCivil(proxY, proxM, n);
-        }
-        venceDia = alvo;
-      }
-    }
-  }
-  const correndo = venceDia != null && hojeDia != null ? hojeDia <= venceDia : null;
-  return {
-    trecho: texto.slice(0, 300),
-    expressao: String(achado.m[0]),
-    ditoEm: base?.texto || "",
-    venceEm: _textoDaData(venceDia),
-    diasAteVencer: venceDia != null && hojeDia != null ? venceDia - hojeDia : null,
-    correndo
-  };
-}
 
 // v1305 — A IDADE DO PREÇO. Pedido do dono, 19/08/2026: "está pegando informações antigas, preços
 // antigos que não existem mais... está puxando dados velhos e deixando de lado o contexto."
@@ -1421,33 +1249,6 @@ function _valorNormalizado(bruto) {
   return Math.round(num);
 }
 
-// Devolve os valores citados na conversa que já passaram do prazo de validade combinado, com a
-// idade de cada um. Valor repetido numa mensagem recente NÃO entra (ele foi reconfirmado).
-export function valoresAntigosDaConversa(timeline, agora = new Date(), diasLimite = 60) {
-  const hoje = partesDataBR(agora);
-  const hojeDia = hoje ? numeroDiaCivil(hoje.y, hoje.m, hoje.d) : null;
-  if (hojeDia == null) return [];
-  const maisRecente = new Map();
-  for (const m of (Array.isArray(timeline) ? timeline : [])) {
-    const p = dataCivilDeMensagem(m);
-    if (p?.dia == null) continue;
-    const texto = String(m?.text || "");
-    _VALOR_NA_FRASE.lastIndex = 0;
-    let achado;
-    while ((achado = _VALOR_NA_FRASE.exec(texto)) !== null) {
-      const valor = _valorNormalizado(achado[1]);
-      if (valor == null) continue;
-      const anterior = maisRecente.get(valor);
-      if (anterior == null || p.dia > anterior) maisRecente.set(valor, p.dia);
-    }
-  }
-  const antigos = [];
-  for (const [valor, dia] of maisRecente) {
-    const dias = hojeDia - dia;
-    if (dias > diasLimite) antigos.push({ valor, dias });
-  }
-  return antigos.sort((a, b) => b.valor - a.valor);
-}
 
 // Os valores que a MENSAGEM afirma, já normalizados — pra cruzar com os antigos da conversa.
 export function valoresNaMensagem(texto) {
@@ -1553,11 +1354,6 @@ const PEDIR_LICENCA = [
   { rotulo: "pede licença em vez de entregar", re: /\bposso (te |lhe )?(mandar|enviar|passar|detalhar|explicar|separar|adiantar|mostrar)\b/i }
 ];
 
-// A última frase da mensagem — é ela que decide se o fim devolve a bola pro cliente.
-function _ultimaFrase(texto) {
-  const partes = String(texto || "").trim().split(/(?<=[.!?…])\s+/).map(t => t.trim()).filter(Boolean);
-  return partes.length ? partes[partes.length - 1] : "";
-}
 
 // v1302 — print do dono de 18/08/2026, 20h14. Conversa de DUAS linhas: a saudação automática do
 // anúncio ("temos o [empreendimento] com 3 suítes e box duplo") e o cliente perguntando "Posso ter
@@ -1739,106 +1535,9 @@ export function fatosInventadosNaMensagem(texto, contextoConhecido = null) {
   return [...new Set(achados)];
 }
 
-// Tudo que precisa sair de uma sugestão, com o motivo de cada coisa. É o que decide se a mensagem
-// volta pra IA reescrever — e o que mede se a reescrita ficou melhor que o original.
-// O segundo argumento é o contexto conhecido do lead (ver fatosInventadosNaMensagem). Sem ele, só
-// rodam as checagens que dependem apenas do texto da mensagem.
-export function problemasNaMensagem(texto, contextoConhecido = null) {
-  const t = String(texto || "");
-  if (!t.trim()) return [];
-  const achados = frasesDeRoboEmMensagem(t);
-  const fecho = _ultimaFrase(t);
-  for (const f of FECHOS_QUE_DEVOLVEM_A_BOLA) if (f.re.test(fecho)) { achados.push(f.rotulo); break; }
-  for (const f of PEDIR_LICENCA) if (f.re.test(t)) { achados.push(f.rotulo); break; }
-  if (PROMESSA_VAZIA.test(t) && !t.includes("?")) achados.push("promete mandar informação e não pergunta nada");
-  for (const frase of t.split(/(?<=[.!?…])\s+/)) {
-    if (!frase.includes("?") || !/\bou\b/i.test(frase)) continue;
-    if (TEM_DIA_OU_HORA.test(frase)) continue;
-    if (!CAMINHO_DO_CORRETOR.test(frase)) continue;
-    achados.push("manda o cliente escolher o caminho");
-    break;
-  }
-  achados.push(...fatosInventadosNaMensagem(t, contextoConhecido));
-  return [...new Set(achados)];
-}
+// v1315 — a rede que REESCREVIA a sugestão por fora do pedido saiu junto com a volta da análise
+// ao estado de 17/08: quem segura clichê agora é a lista de frases proibidas dentro do prompt.
 
-// Uma única chamada à IA pedindo que ela mesma reescreva as sugestões em que a frase de robô
-// escapou. Devolve { a?, b?, c? } só com as mensagens que voltaram melhores; qualquer falha vira
-// objeto vazio e a análise segue com o texto original.
-async function reescreverSugestoesComFraseDeRobo({ openai, itens, timeoutMs, model, contextoConhecido = null, cerebroTexto = "", conversaTexto = "" }) {
-  const lista = (itens || []).filter(i => i?.texto);
-  if (!lista.length || !openai) return {};
-  // v1303 — O CÉREBRO ENTRA NA REESCRITA. Buraco encontrado depois do print de 18/08/2026, 20h40
-  // ("não sei pra que serve todas aquelas regras do cérebro se não são usadas"): esta segunda
-  // chamada — a que escreve o texto FINAL que aparece na tela — não recebia o Cérebro nem a
-  // conversa. Recebia só a mensagem furada e regras genéricas. Ou seja: quanto mais a rede pegava,
-  // mais o corretor lia mensagem escrita SEM as regras dele. Agora a reescrita recebe o mesmo
-  // Cérebro da análise e o fim da conversa, pra não trocar o assunto nem o tom.
-  const fimDaConversa = String(conversaTexto || "").slice(-4000);
-  const pedido = `${cerebroTexto ? `=== CÉREBRO COMERCIAL DESTE CORRETOR (autoridade sobre tom, método e regras) ===\n${cerebroTexto}\n=== FIM DO CÉREBRO ===\n\n` : ""}${fimDaConversa ? `CONVERSA COM ESTE CLIENTE (fim do histórico, só para você não mudar o assunto):\n${fimDaConversa}\n\n` : ""}Estas mensagens de WhatsApp foram escritas por um corretor de imóveis para um cliente
-e têm dentro delas alguma coisa que ESTE corretor proíbe.
-
-${lista.map(i => `MENSAGEM "${i.chave}" (o que precisa sair: ${i.frases.join(", ")}):\n"${i.texto}"`).join("\n\n")}
-
-Reescreva cada uma delas mantendo EXATAMENTE o mesmo conteúdo, a mesma intenção e o mesmo próximo
-passo. Só o problema apontado sai; o resto continua dizendo a mesma coisa.
-- Não invente fato, valor, condição, prazo, novidade, urgência, promessa ou ação nova.
-- Não acrescente pergunta nova nem tire a pergunta que já existe.
-- Português de corretor no WhatsApp: sem palavra em inglês e sem jargão de escritório.
-- Termine curto, sem repetir com outras palavras o que a mensagem já disse.
-- Devolva UMA MENSAGEM INTEIRA, escrita do começo ao fim em português natural de WhatsApp. Não
-  emende pedaços da frase antiga nem deixe frase pela metade: quem lê é um cliente, e texto
-  remendado entrega na hora que aquilo não foi escrito por uma pessoa.
-- Nada de "fico/estou à disposição", "faz sentido", "espero que esteja bem", "qualquer dúvida estou
-  aqui", "não hesite em", "sinta-se à vontade", "espero ter ajudado", "sem compromisso".
-- FECHO QUE DEVOLVE A BOLA: se o problema apontado é o fim da mensagem mandando o cliente avisar
-  ("me avise se precisar", "qualquer coisa me chama", "fico no aguardo"), termine a mensagem na
-  entrega ou na pergunta concreta que ela já tem, e não coloque outro fecho no lugar. O corretor já
-  está esperando: dizer isso de novo não acrescenta nada.
-- PEDIR LICENÇA: se o problema é "se quiser posso te detalhar" / "se precisar posso mandar" / um
-  "pode ser?" no fim, escreva a ação direto — "te detalho agora", "te mando agora" —, mantendo a
-  mesma entrega. Oferecer a informação é o trabalho do corretor; ele não pede autorização.
-- AFIRMAÇÃO SOBRE O IMÓVEL QUE A CONVERSA NÃO TEM: se o problema é nome de empreendimento, bairro,
-  rua ou ponto de referência, um elogio ("estrutura moderna", "ótima localização", "bem procurado")
-  ou a descrição do que o prédio tem ("conta com apartamentos de 3 suítes"), TIRE isso e não ponha
-  outro no lugar. Quem conhece o catálogo e o endereço é o corretor, não você: um anúncio que
-  ofereceu uma unidade com 3 suítes não diz que o prédio só tem dessas. Fale do que o cliente
-  perguntou, sem descrever o produto.
-- PROMETER MANDAR NÃO É MANDAR: se o problema é "vou te enviar as informações" / "te passo um
-  resumo", a mensagem não entregou nada e não perguntou nada — o cliente fica sem ter o que
-  responder. Reescreva fazendo UMA pergunta concreta que permita ao corretor selecionar o que
-  mandar (quantos dormitórios precisa, até quanto pretende investir, para morar ou investir),
-  escolhendo a que mais destrava neste momento da conversa.
-- PREÇO ANTIGO: se o problema é a mensagem repetir um valor que só foi dito há muito tempo, tire o
-  número. Não invente outro e não prometa desconto: escreva que vai confirmar o valor atualizado —
-  e, se couber, aproveite para perguntar o que a pessoa procura hoje.
-- UM CAMINHO SÓ: se o problema é a mensagem oferecer ao cliente duas maneiras de continuar
-  ("prefere que eu te envie os valores ou quer mais detalhes?", "quer ver todas as possibilidades?"),
-  escolha VOCÊ o caminho mais forte e deixe um só. Pergunta sobre o que o CLIENTE precisa ("2 ou 3
-  dormitórios?") não é caminho, é qualificação, e pode ficar. Oferecer dois horários para marcar
-  também pode ficar.
-
-Responda somente com JSON: {${lista.map(i => `"${i.chave}":"mensagem reescrita"`).join(", ")}}`;
-  const r = await chamarGPT4Json({
-    openai,
-    systemPrompt: "Você reescreve mensagens de corretor de imóveis sem mudar o conteúdo comercial delas. O Cérebro Comercial do corretor, quando vier no pedido, manda no tom, nas regras e na condução. Responda somente com JSON válido.",
-    prompt: pedido,
-    model,
-    maxOutputTokens: 900,
-    timeout: timeoutMs
-  });
-  const saida = (r?.parsed && typeof r.parsed === "object") ? r.parsed : {};
-  const aprovadas = {};
-  for (const item of lista) {
-    const novo = typeof saida[item.chave] === "string" ? saida[item.chave].trim() : "";
-    // v1299 — a troca só vale se a reescrita voltar LIMPA. Antes bastava ter "menos problema que a
-    // original", e isso deixava passar troca ruim: uma mensagem com frase de robô + fecho de espera
-    // podia ser substituída por outra que ainda tinha a frase de robô, só porque tinha um problema a
-    // menos. Não conseguiu limpar de uma vez, fica o texto original da IA.
-    if (novo && problemasNaMensagem(novo, contextoConhecido).length === 0) aprovadas[item.chave] = novo;
-  }
-  return { aprovadas, completion: r?.response || null };
-}
 
 async function loadCerebroConfig(frontendConfig = null, organizationId = ORGANIZACAO_PADRAO_LEGADA) {
   // O banco é a fonte principal do Cérebro salvo. Um payload parcial ou um
@@ -3433,6 +3132,30 @@ function _topRelevantes(arr, textOf, querySet, n) {
 // INTELIGÊNCIA COMERCIAL BASE — destilada da leitura das conversas reais da carteira do corretor.
 // É o "piso" do Cérebro: vale SEMPRE, mesmo sem config salva e antes de qualquer aprendizado.
 // O que o sistema aprende sozinho (tom/técnicas/objeções) SOMA a isto, nunca substitui.
+// ============================================================================================
+// v1315 — ANÁLISE RESTAURADA AO ESTADO DE 17/08/2026 (v1292), POR ORDEM DIRETA DO DONO.
+//
+// "volte essa análise a 48h antes... porque de lá pra cá ficou uma merda" (19/08/2026, 18h).
+//
+// Tudo que foi mexido no MIOLO DA ANÁLISE entre 18/08 16h44 (v1296) e 19/08 17h35 (v1313) saiu:
+// prova na tela virando regra, "um caminho só", rede de reescrita anti-robô por fora do pedido,
+// "joia não é resposta", valores antigos, endereço inventado, prazo do cliente, perguntas já
+// feitas, mensagens já enviadas, cliente que volta. O pedido volta a ser o que o PRÓPRIO DONO
+// escreveu na v1291 e publicou sem alteração — com a lista de frases proibidas dentro dele
+// (v1292), que é a rede contra clichê que este projeto adota (ver CLAUDE.md).
+//
+// O QUE NÃO VOLTOU ATRÁS (não é análise, é encanamento — e sem isso o app não funciona):
+//   • o parâmetro de tamanho que o modelo novo exige (v1311) — sem ele, NENHUMA análise sai;
+//   • o erro da IA escrito em português na tela (v1310/v1314);
+//   • a leitura de imagem, PDF e link, e o reaproveitamento do que já foi lido (v1306/07/12);
+//   • as quatro chaves da análise (Cérebro, aprendizado, regras de escrita, manual do app);
+//   • a carteira que travava, o arquivo conferido no aparelho e o aviso de análise reaproveitada.
+//
+// É a segunda vez que este projeto faz esta operação (a primeira foi a v1247, restaurando ao dia
+// 11/08). A lição está registrada: mexer no miolo da análise em várias camadas seguidas, no mesmo
+// dia, sem medir cada uma contra conversa real, piora o resultado.
+// ============================================================================================
+
 const INTELIGENCIA_CARTEIRA = `INTELIGÊNCIA COMERCIAL BASE — REDE DE SEGURANÇA GERAL:
 
 Este bloco existe para contas sem Cérebro configurado e como proteção factual mínima. Quando houver
@@ -3513,11 +3236,9 @@ export function jeitoAprendidoCompacto(config, contexto) {
     const top = _topRelevantes(tecs, e => e.texto, query, 3).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
     if (top.length) partes.push("Já funcionou com você: " + top.join(" / "));
   }
-  // v1301 — o bloco "produto × perfil" SAIU daqui pelo mesmo motivo dos casos e dos fatos
-  // ensinados: ele escrevia no pedido o NOME DO EMPREENDIMENTO que o corretor ofereceu a OUTRO
-  // cliente ("perfil X → você ofereceu Y"). É exatamente o material com que o modelo inventava o
-  // endereço do imóvel deste lead. O cruzamento continua sendo aprendido e continua aparecendo na
-  // tela de Aprendizado; só não entra mais na hora de escrever a mensagem.
+  // v1315 — "Produto certo pro perfil" NÃO volta: era nome de empreendimento oferecido a OUTRO
+  // cliente entrando no pedido desta conversa. Saiu na v1301 por ordem do dono (print do endereço
+  // inventado) e continua fora. O dado segue gravado e visível na tela de Aprendizado.
   if (Array.isArray(ia.padroesFollowup) && ia.padroesFollowup.length) {
     const fu = _topRelevantes(ia.padroesFollowup, e => e.texto, query, 2).map(e => String(e.texto || "").trim()).filter(t => t.length > 8);
     if (fu.length) partes.push("Seu follow-up que dá resposta: " + fu.join(" / "));
@@ -3786,7 +3507,7 @@ async function chamarGPT4Json({ openai, prompt, systemPrompt = "", maxOutputToke
         ...(String(systemPrompt || "").trim() ? [{ role: "system", content: String(systemPrompt).trim() }] : []),
         { role: "user", content: prompt }
       ],
-      // v1311 — nome do parâmetro conforme o modelo (ver limiteDeSaida).
+      // v1311 — o nome do parâmetro conforme o modelo (a linha GPT-5 recusa "max_tokens").
       ...limiteDeSaida(model, maxOutputTokens),
       response_format: { type: "json_object" }
       // v1086 — maxRetries:0. O SDK da OpenAI tenta sozinho até 3 vezes por chamada em 429/5xx,
@@ -3982,39 +3703,13 @@ export async function analyzeWithBrain({ lead, timeline, openai, leadId, forcarV
   // O que a prévia NÃO tem: o jeito de falar dele, as condições da construtora dele, as regras e
   // objeções que ele ensina. É exatamente isso que o Cérebro acrescenta — e é muito mais fácil ele
   // querer configurar DEPOIS de ver a análise da própria conversa funcionando.
-  // v1308 — AS TRÊS CHAVES DA TELA DE CONFIGURAÇÕES, aplicadas aqui.
-  //
-  // O dono quer rodar a MESMA conversa com cada peça ligada e desligada pra ver com os próprios
-  // olhos o que melhora e o que piora. Desligar não apaga nada: é só deixar de mandar aquele
-  // pedaço no pedido desta análise, e religar é um toque na tela.
-  //   • Cérebro desligado      → o texto do Cérebro (método, tom, diferenciais, o que evitar,
-  //                              regras, objeções) não vai. O piso comercial da carteira continua,
-  //                              como já acontece com quem ainda não configurou o Cérebro.
-  //   • Aprendizado desligado  → o "SEU JEITO" aprendido e os exemplos de voz desta conversa não
-  //                              vão.
-  //   • Regras de escrita off  → as listas "LINGUAGEM DE IA — PROIBIDO" e "PALAVRA EM INGLÊS E
-  //                              JARGÃO" não vão, e a rede que reescreve sugestão com frase de robô
-  //                              não roda. A marca de "saiu com problema" CONTINUA aparecendo: é
-  //                              justamente assim que ele vê o que a chave desligada custou.
+  // v1315 — AS QUATRO CHAVES DA TELA CONTINUAM VALENDO (não são análise, são interruptores do
+  // dono pra comparar). Cérebro, aprendizado, regras de escrita e o manual de vendas do app.
   const chaveCerebro = configCerebro?.usarCerebro !== false;
   const chaveAprendizado = configCerebro?.usarAprendizado !== false;
   const chaveRegrasEscrita = configCerebro?.usarRegrasEscrita !== false;
-  // v1310 — QUARTA CHAVE: o piso comercial do próprio app (INTELIGENCIA_CARTEIRA).
-  //
-  // Pedido do dono (19/08/2026): com as três chaves desligadas ele queria "analisar puramente o
-  // histórico, como no ChatGPT" — e ainda não era, porque este bloco, que é um manual de condução
-  // que vem de fábrica no app (sem nada dele: sem preço, sem empreendimento, sem regra dele),
-  // continuava indo em toda análise. Com as quatro desligadas, o que sai daqui é só a conversa.
-  //
-  // O que NÃO sai nunca, nem com tudo desligado: as proteções de integridade (não inventar fato,
-  // valor, data ou promessa; não transformar silêncio em aceite). Elas não são método comercial —
-  // são o que impede o app de escrever um preço que ninguém disse. Regra do projeto desde a v827.
   const chavePisoComercial = configCerebro?.usarPisoComercial !== false;
   const modoAnalise = { cerebro: chaveCerebro, aprendizado: chaveAprendizado, regrasEscrita: chaveRegrasEscrita, pisoComercial: chavePisoComercial };
-  // "Prévia" continua querendo dizer só uma coisa: conta nova, Cérebro ainda vazio (é o que a tela
-  // usa pra convidar o corretor a configurar). Chave desligada é outra coisa — foi ELE que
-  // desligou, então não cabe convite nenhum; o que cabe é a tela dizer, em destaque, em que modo
-  // a análise foi feita.
   const modoPrevia = !hasCerebroInstructions(configCerebro);
   const cerebroNoPedido = chaveCerebro && !modoPrevia;
   // v1013 — rede de segurança contra consumo descontrolado (ver verificarLimiteDiario acima):
@@ -4117,111 +3812,33 @@ TEXTOS DAS TENTATIVAS SEM RESPOSTA (fato histórico; não presuma o motivo do si
 ${semResposta.textos.map(t => `- "${t}"`).join("\n")}`
     : "TENTATIVAS DO CORRETOR AINDA SEM RESPOSTA: nenhuma (a última palavra da conversa é do cliente).";
 
-  // v1308 — O PRAZO QUE O PRÓPRIO CLIENTE MARCOU, como FATO de calendário (ver
-  // prazoMarcadoPeloCliente). Sem isto, "Falamos semana que vem" não virava data em lugar nenhum e
-  // a análise cobrava resposta dentro do prazo que o cliente pediu. Nenhum lembrete é criado.
-  const prazoCliente = prazoMarcadoPeloCliente(timelineArr, corretorNome, lead || {}, _agoraDt);
-  const blocoPrazoCliente = prazoCliente
-    ? `PRAZO MARCADO PELO PRÓPRIO CLIENTE: na última mensagem dele (${prazoCliente.ditoEm || "data não identificada"}) ele escreveu "${prazoCliente.trecho}" — o retorno ficou combinado para "${prazoCliente.expressao}".${prazoCliente.venceEm ? `\nEsse prazo vai até ${prazoCliente.venceEm}.` : "\nEsse prazo não tem data fechada."} ${
-        prazoCliente.correndo === true
-          ? `Hoje ainda está DENTRO do prazo (faltam ${prazoCliente.diasAteVencer} dia(s)). Isto NÃO é silêncio, NÃO é sumiço e NÃO é tentativa ignorada: o cliente está cumprindo o que combinou. Não escreva que ele "não retornou", não cobre a resposta e não trate o intervalo como abandono.`
-          : prazoCliente.correndo === false
-          ? `Esse prazo JÁ VENCEU (há ${Math.abs(Number(prazoCliente.diasAteVencer) || 0)} dia(s)). A retomada é legítima e pode se apoiar no que ele mesmo combinou.`
-          : `Não dá pra fechar a data desse prazo. Trate como compromisso aberto do cliente, não como silêncio.`
-      }
-Isto é leitura de contexto, não agenda: NÃO proponha lembrete, alarme ou agendamento automático por causa deste prazo.`
-    : "";
-
-  // v1297 — a lista do que o corretor JÁ PERGUNTOU nesta conversa, e se o cliente falou depois.
-  // Sem esse fato, "não repita pergunta já respondida" era ordem sem material: a IA repetia a
-  // pergunta reescrita e o corretor recebia de volta o que ele mesmo já tinha mandado.
-  const perguntasJaFeitas = perguntasJaFeitasPeloCorretor(timelineArr, corretorNome, lead || {});
-  // v1305 — A IDADE DE CADA VALOR CITADO, como FATO no pedido (não como mais uma regra). Sem isso a
-  // IA lê a promoção de dez meses atrás com a mesma cara da mensagem de ontem — foi o que fez as
-  // três sugestões devolverem o preço da promoção pra uma cliente que voltou dez meses depois.
-  const valoresVelhos = valoresAntigosDaConversa(timelineArr);
-  const blocoValoresVelhos = valoresVelhos.length
-    ? `VALORES CITADOS HÁ MUITO TEMPO NESTA CONVERSA (idade contada até hoje):\n${valoresVelhos
-        .map(v => `- R$ ${v.valor.toLocaleString("pt-BR")} — dito há ${v.dias} dias`).join("\n")}
-Preço, desconto, promoção e condição de pagamento mudam. Nenhum desses valores pode ser repetido
-como se fosse o de hoje, nem servir de base para conta, comparação ou oferta. Se o assunto voltar,
-o caminho é confirmar o valor atualizado antes de afirmar qualquer coisa — sem prometer desconto
-que ninguém confirmou e sem fingir que a oferta antiga continua de pé.`
-    : "";
-
-  // v1309 — o texto do que ele JÁ MANDOU nesta conversa (ver mensagensJaEnviadasPeloCorretor).
-  const jaEnviadas = mensagensJaEnviadasPeloCorretor(timelineArr, corretorNome, lead || {});
-  const blocoJaEnviadas = jaEnviadas.length
-    ? `MENSAGENS QUE O CORRETOR JÁ ENVIOU NESTA CONVERSA (as mais recentes, no texto original):
-${jaEnviadas.map(t => `- "${t}"`).join("\n")}
-Nenhuma das três mensagens pode repetir o que está aí em cima — nem com as mesmas palavras, nem
-reescrita com outras. Informação já entregue não se entrega de novo, apresentação já feita não se
-refaz e oferta já mandada não volta como novidade. Se o assunto já foi dito, o que move a conversa
-é o passo seguinte a partir do que o cliente respondeu depois dele.`
-    : "";
-
-  const blocoPerguntasJaFeitas = perguntasJaFeitas.length
-    ? `PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA (extraídas das mensagens dele):
-${perguntasJaFeitas.map(p => `- "${p.texto}"${p.respondida ? " — o cliente JÁ FALOU depois desta pergunta" : " — ainda sem resposta"}`).join("\n")}
-Nenhuma pergunta já respondida pode voltar nas três mensagens, nem reescrita com outras palavras. Se
-o que você faria com a resposta já dá para entregar, entregue em vez de perguntar de novo.`
-    : "PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA: nenhuma.";
-
-  // v1300 — a última fala do cliente foi só um "joia"/"ok"? Isso vai como FATO pro pedido, porque
-  // sem isso a IA lê "o cliente falou" e escreve como se a conversa tivesse avançado.
-  const reconhecimentoCurto = respostaCurtaDoCliente(timelineArr, corretorNome, lead || {});
-  const blocoRespostaCurta = reconhecimentoCurto
-    ? `ÚLTIMA FALA DO CLIENTE: "${reconhecimentoCurto.texto}" — reconhecimento curto, não é resposta.${reconhecimentoCurto.perguntaAberta ? `\nA pergunta que o corretor tinha feito antes disso e continua sem resposta: "${reconhecimentoCurto.perguntaAberta}"` : ""}
-Não trate isso como aceite, concordância, interesse confirmado, objeção superada nem resposta à pergunta. Também não devolva a mesma pergunta com outras palavras: depois de um reconhecimento curto, o que move a conversa é o corretor propor algo concreto — uma ação dele, específica e pequena — em vez de mais uma pergunta aberta.`
-    : "";
-
   // v1084 — o que o Cérebro aprendeu das conversas reais deste corretor entra no prompt aqui.
   // A seleção é feita contra o texto DESTA conversa, então cada análise recebe só o pedaço do
   // aprendizado que tem a ver com ela. String vazia quando não há aprendizado nenhum — nesse caso
   // o prompt fica exatamente como era antes.
-  // v1308 — chave do APRENDIZADO: desligada, o "SEU JEITO" e os exemplos de voz não entram no
-  // pedido. Nada é apagado do banco — só não vai nesta análise.
   const jeitoAprendido = chaveAprendizado ? jeitoAprendidoCompacto(configCerebro, timelineText) : "";
+  // v1212 — os CASOS REAIS da carteira (banco de casos v2) entram no prompt. Eram 661 casos
+  // guardados na conta do dono, lidos só pela planilha de exportação e pelo contador da tela.
+  // Falha do cache: análise segue sem o bloco, como antes.
+  const memoriaCasos = await loadMemoriaComercialV2(false, organizationId).catch(() => null);
+  // v1301 — DUAS FONTES SAÍRAM DAQUI, POR ORDEM DIRETA DO DONO ("tira as duas fontes", 18/08):
+  // os CASOS de outros clientes e os FATOS ensinados da carteira. Com pouca coisa escrita na
+  // conversa, era dali que o modelo preenchia o vazio — e o cliente recebia por escrito o endereço
+  // de outro imóvel. A v1315 devolveu a análise ao estado de 17/08, MAS estas duas continuam fora:
+  // é ordem do dono, com print na mão, e tem teste que falha de propósito se voltarem.
+  // v1315 — NÃO RELIGUE ISSO. Caso de OUTRO cliente não entra no pedido que escreve as três
+  // mensagens: foi essa fonte que fez a IA escrever endereço de outro imóvel pra um cliente
+  // ("tira as duas fontes", ordem do dono na v1301). O banco de casos continua sendo gravado e
+  // aparece na tela de Aprendizado — só não alimenta quem escreve a mensagem.
+  const casosSemelhantes = "";
   // v1212 — as mensagens REAIS do corretor NESTA conversa. exemplosDoCorretor existia desde
   // sempre e não era chamada por ninguém: é a referência de voz mais fiel que existe (é ele
   // falando com este cliente), e custa zero — sai da timeline que já está na mão.
   const exemplosVozCorretor = chaveAprendizado ? exemplosDoCorretor(timelineArr, corretorNome, lead || {}) : "";
-
-  // v1301 — DUAS FONTES SAÍRAM DAQUI, POR ORDEM DIRETA DO DONO ("tira as duas fontes").
-  //
-  // Print de 18/08/2026, 19h36, numa conversa de TRÊS linhas: o anúncio dizia só "apartamento com
-  // 2 dormitórios e box de garagem" com o preço, o cliente pediu para saber mais e mandou uma
-  // palavra ("móveis"). As três sugestões voltaram com ENDEREÇO — em que empreendimento o
-  // apartamento estava, um ponto de referência da cidade, "região bem localizada". Nada disso
-  // existia nessa conversa.
-  //
-  // A regra "nunca invente" já estava escrita em três lugares (proteções de integridade, piso da
-  // carteira, revisão final) e mesmo assim o endereço saiu. Não saiu porque a IA desobedeceu a
-  // regra: saiu porque o sistema ENTREGAVA a ela, em toda análise, fatos que não são deste lead —
-  //   1. CASOS SEMELHANTES: até 4 atendimentos de OUTROS clientes, com produto, condução e regra;
-  //   2. FATOS ENSINADOS: o bloco inteiro de conhecimento da carteira (endereços, empreendimentos,
-  //      referências), sem nenhum vínculo com a conversa que está sendo analisada.
-  // Com quase nada escrito na conversa, é dali que o modelo preenche o vazio — e o cliente recebe
-  // por escrito o endereço de outro imóvel. Somar uma quarta regra não muda isso: o que muda é
-  // não colocar mais essa informação na mão de quem escreve a mensagem.
-  //
-  // O que CONTINUA: o Cérebro Comercial inteiro (é o corretor que escreve e manda nele), o "SEU
-  // JEITO" (tom e condução aprendidos, sem nome de produto de outro lead) e as mensagens reais
-  // dele NESTA conversa. O banco de casos e os fatos ensinados continuam sendo gravados e
-  // aparecem na tela de Aprendizado — só não entram mais no pedido que escreve as três mensagens.
-  //
-  // NÃO RELIGUE ISSO. Já aconteceu de sessão futura reconectar bloco desligado achando que era
-  // esquecimento (foi assim que os casos voltaram na v1212). Aqui foi decisão do dono, com o
-  // print na mão, e tem teste que falha de propósito se voltar.
-
-  // v1296 — só CONTA o que acabou de ser montado acima, pra tela poder mostrar a prova. Nada
-  // daqui volta pro pedido enviado à IA.
-  // v1308 — com a chave do Cérebro desligada, nada dele foi enviado: a prova na tela tem que dizer
-  // isso, e não a porcentagem do que está salvo.
-  const cerebroEnviado = cerebroNoPedido ? contarCerebroEnviado(configCerebro) : { total: 0, percentual: 0 };
-  // v1301 — casos de outro cliente e fatos da carteira não entram mais (ver acima), então a
-  // linha da tela também não pode dizer que entraram: contam zero e somem de lá sozinhos.
-  const aprendizadoEnviado = contarAprendizadoEnviado({ jeitoAprendido, exemplosVozCorretor });
+  // v1115 — os FATOS acumulados das conversas reais (endereços, condições, regras que o corretor
+  // ensinou) voltam a entrar no prompt — eram gravados a cada análise e nunca lidos (ver o caso
+  // real no comentário de conhecimentoCorretorTexto).
+  const conhecimentoCorretor = ""; // v1315 — idem: fora do pedido desde a v1301.
 
   const systemPromptAnalise = `INSTRUÇÕES DE MAIOR PRIORIDADE:
 O conteúdo atual do Cérebro Comercial abaixo é a autoridade máxima sobre método, análise, estratégia,
@@ -4239,70 +3856,34 @@ ${chavePisoComercial
   ? `${INTELIGENCIA_CARTEIRA}
 O bloco acima é apenas uma rede de segurança geral. Havendo Cérebro Comercial configurado, qualquer
 regra comercial dele prevalece e este piso NÃO deve virar checklist ou roteiro automático.`
-  : `(A Inteligência Comercial Base foi DESLIGADA nesta análise pelo próprio corretor, que está
-comparando o resultado com e sem ela. Não há manual de condução nesta execução: leia a conversa e
-conduza pelo que ela mostra, mantendo as proteções de integridade acima.)`}
+  : `(A Inteligência Comercial Base foi DESLIGADA nesta análise pelo próprio corretor. Leia a
+conversa e conduza pelo que ela mostra, mantendo as proteções de integridade acima.)`}
 
 === INÍCIO DO CÉREBRO COMERCIAL ===
 ${cerebroNoPedido
   ? instrucoesCerebroTexto
-  : chaveCerebro
+  : modoPrevia
   ? `(VAZIO — este corretor ainda não configurou o Cérebro Comercial.)
 
 MODO PRÉVIA. Use a Inteligência Comercial Base acima como ponto de partida, sem inventar fatos nem
 condições. Analise a conversa integralmente e gere uma condução útil e proporcional ao estágio real.`
-  : `(DESLIGADO NESTA ANÁLISE pelo próprio corretor — ele está comparando o resultado com e sem as
-regras dele. O texto do Cérebro existe e continua salvo; só não foi enviado desta vez.)
-
-${chavePisoComercial
-  ? "Sem o Cérebro, use a Inteligência Comercial Base acima como ponto de partida, sem inventar fatos nem condições."
-  : "Sem o Cérebro e sem a Inteligência Comercial Base, trabalhe apenas com o que a conversa mostra, sem inventar fatos nem condições."}
-Analise a conversa integralmente e gere uma condução útil e proporcional ao estágio real.`}
+  : `(DESLIGADO NESTA ANÁLISE pelo próprio corretor — o texto do Cérebro existe e continua salvo, só
+não foi enviado desta vez. Analise a conversa integralmente, sem inventar fatos nem condições.)`}
 === FIM DO CÉREBRO COMERCIAL ===
 ${jeitoAprendido ? `\n${jeitoAprendido}\nO bloco "SEU JEITO" é referência auxiliar de escrita e condução. Nunca supera o Cérebro nem cria fatos.` : ""}
-
+${/* v1315 — ORDEM DO DONO NA v1301, QUE NÃO É DESFEITA AQUI: casos de OUTRO cliente não entram no
+     pedido. Foi essa fonte que fez a IA escrever endereço de outro imóvel pra um cliente
+     ("tira as duas fontes", 18/08). O banco de casos continua sendo gravado e aparece na tela de
+     Aprendizado — só não alimenta quem escreve as três mensagens. */ ""}
 ${exemplosVozCorretor ? `\n=== COMO ESTE CORRETOR ESCREVE — EXEMPLOS REAIS DESTA CONVERSA ===\n${exemplosVozCorretor}\n=== FIM DOS EXEMPLOS ===\nUse apenas a forma de escrever; não copie fatos ou promessas.` : ""}
-
+${/* v1315 — a outra fonte que saiu na v1301, pelo mesmo motivo: fatos da carteira inteira, sem
+     vínculo com esta conversa, viravam endereço e condição inventados. */ ""}
 
 Faça primeiro a leitura comercial; só depois escreva as três sugestões. As mensagens devem ser
 consequência da mesma análise e do mesmo próximo passo lógico, podendo ter ângulos diferentes sem
 inventar diferenças artificiais.
 
 Responda somente com JSON válido no formato solicitado.`;
-
-  // v1308 — CHAVE DAS REGRAS DE ESCRITA. Estas duas listas ("LINGUAGEM DE IA" e "PALAVRA EM INGLÊS
-  // E JARGÃO") são a rede contra clichê de robô — a mesma que o CLAUDE.md manda manter no pedido de
-  // quem TEM Cérebro (lição da v1240/v1247). Elas continuam inteiras aqui: a chave só decide se
-  // entram NESTA análise, porque o dono quer ver com os próprios olhos o que elas seguram.
-  const REGRAS_DE_ESCRITA = `LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
-marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
-que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
-"estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
-"não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
-saber se você teria interesse", "sem compromisso" / "sem nenhum compromisso" (o corretor não pede
-licença para fazer o trabalho dele: oferecer a informação já é normal, e dizer "sem compromisso"
-avisa o cliente de que ele pode ignorar). Também não escreva no passado o que você quer agora ("quis saber
-se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
-sem repetir em outras palavras o que a mensagem já disse.
-
-PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
-com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
-elas. É PROIBIDO escrever "overview", "insight", "feedback", "budget", "call", "briefing",
-"follow-up", "case", "timing", "mindset", "expertise", "know-how", "player", "target", "deal",
-"lead", "prospect", "pipeline", "background", "update", "board", "meeting" — e qualquer outra
-palavra em inglês que tenha equivalente óbvio em português. Escreva em português: overview = uma
-ideia geral / um resumo; feedback = retorno; call = ligação; budget = quanto pretende investir;
-follow-up = retomar o contato; timing = momento; update = novidade; meeting = reunião. Jargão
-corporativo em português cai na mesma regra: "alinhar expectativas", "validar com você",
-"estruturar o processo", "mapear as possibilidades", "de forma assertiva", "agregar valor",
-"solução personalizada", "análise detalhada do seu perfil". Palavra que o cliente teria que
-traduzir na cabeça denuncia na hora que quem escreveu não foi o corretor.
-A EXCEÇÃO, e só ela: nome próprio (empreendimento, construtora, bairro, rua) e o vocabulário que
-já é assim no mercado imobiliário brasileiro — studio, loft, duplex, garden, closet, playground,
-home office, coworking, hall, fitness — continuam escritos como são, quando a conversa ou o Cérebro
-usarem essas palavras. Isso não abre a porta pro resto do inglês.
-`;
-  const blocoRegrasDeEscrita = chaveRegrasEscrita ? REGRAS_DE_ESCRITA : "";
 
   const prompt = `Execute a análise usando o Cérebro Comercial e TODO o contexto fornecido abaixo.
 
@@ -4314,9 +3895,6 @@ Data da última mensagem identificada: ${contextoTemporal.ultimaData}
 Dias corridos desde a última mensagem identificada: ${contextoTemporal.dias == null ? "não identificados" : contextoTemporal.dias}
 Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
-${blocoPrazoCliente ? `\n${blocoPrazoCliente}\n` : ""}
-${blocoValoresVelhos ? `\n${blocoValoresVelhos}\n` : ""}
-${blocoPerguntasJaFeitas}${blocoRespostaCurta ? `\n${blocoRespostaCurta}` : ""}${blocoJaEnviadas ? `\n\n${blocoJaEnviadas}` : ""}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -4374,15 +3952,14 @@ Formato JSON obrigatório:
     "jaSabemos":["fatos confirmados e ainda válidos sobre o cliente/negociação"],
     "faixaDeValor":"somente faixa sustentada por declaração ou reação inequívoca do cliente; silêncio não conta",
     "imovelDoCliente":"fatos confirmados sobre imóvel que participe da negociação, ou Não identificado",
-    "contaDoObstaculo":"a conta feita com os números da conversa quando o negócio depende de um imóvel na troca (ver MEDIR O TAMANHO DO OBSTÁCULO), ou Não se aplica",
     "motivoDaMudanca":"motivo declarado pelo cliente, ou Não identificado",
     "quemDecide":"decisores citados, ou Não identificado",
     "pedidoEspontaneo":"pedido/critério que partiu do cliente por iniciativa própria, ou Não identificado",
     "faltaDescobrir":["somente informações ainda abertas que realmente podem alterar estratégia/seleção/próximo passo"]
   },
   "mensagens":{
-    "recomendada":"melhor mensagem para este momento; precisa entregar algo, trazer o dado que destrava ou pedir uma resposta concreta, e não pode repetir pergunta que o cliente já respondeu",
-    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico, com um passo concreto dentro dela",
+    "recomendada":"melhor mensagem para este momento",
+    "maisSuave":"abordagem consultiva coerente com o mesmo diagnóstico",
     "maisDireta":"versão mais objetiva do próximo passo que a maturidade permite"
   },
   "recomendacaoContato":{
@@ -4393,55 +3970,14 @@ Formato JSON obrigatório:
   "produtosInteresse":["produtos/unidades atuais realmente relevantes"],
   "etapaSugerida":"estágio comercial atual",
   "clientProfile":"perfil comercial factual e útil, sem diagnóstico psicológico",
-  "nextAction":"menor próximo passo útil coerente com a leitura, escrito como ação do CORRETOR; quando a informação que falta já dá para entregar, o passo é entregar, não perguntar de novo"
+  "nextAction":"menor próximo passo útil coerente com a leitura"
 }
-
-MEDIR O TAMANHO DO OBSTÁCULO — FAÇA A CONTA (v1308)
-Quando o negócio depende de um imóvel entrando na troca (permuta, dação, "dar o meu apartamento",
-"entrar com a minha cobertura"), FAÇA A CONTA antes de escrever qualquer coisa, com os números que
-estão nesta conversa:
-1. o valor do imóvel que o cliente quer dar;
-2. o valor do negócio (o imóvel que ele quer comprar);
-3. quanto o imóvel dele representa do negócio, em porcentagem — divida o primeiro pelo segundo;
-4. compare com o limite de permuta que o Cérebro deste corretor declara. Se o Cérebro não declarar
-   limite nenhum, compare com o que o próprio corretor disse nesta conversa.
-Escreva o resultado no campo "contaDoObstaculo" com os números à vista (ex.: "imóvel do cliente
-R$ X dentro de um negócio de R$ Y = Z% — o corretor aceita até W%"), e trate a diferença como O
-obstáculo central do negócio, não como um detalhe.
-As três mensagens têm que ATACAR esse obstáculo, e não contorná-lo: o caminho é mexer no que faz a
-conta fechar — vender o imóvel do cliente antes, reduzir a parte dada na troca, entrar com dinheiro
-na diferença, ou procurar um negócio de valor compatível. Faça a pergunta que abre esse caminho.
-Não repita o limite como se fosse recado de escritório e não devolva a conversa para "ficou alguma
-dúvida?": um cliente com um obstáculo de tamanho conhecido merece que o corretor mostre a saída.
-Se faltar um dos dois valores, DIGA o que falta em "contaDoObstaculo" e peça exatamente esse número
-— não estime, não arredonde e não invente valor nenhum.
-A mesma disciplina vale para qualquer distância que a conversa já permita medir (o que ele tem de
-entrada contra o preço, por exemplo): número na mão vale mais que adjetivo.
-
-O QUE JÁ ESTÁ ESCRITO NA CONVERSA É FATO — ENTREGUE.
-Confirmar antes de afirmar vale para o que NÃO está na conversa (o que só existe na sua suposição).
-O que o cliente JÁ LEU nesta conversa — porque o corretor escreveu, ou porque veio no anúncio que
-abriu o atendimento — não precisa de confirmação nenhuma para ser repetido: é o material que a
-conversa te deu para trabalhar. Travar a entrega desse material e devolver uma pergunta de
-qualificação é o pior resultado possível: o cliente pediu informação, recebeu formulário.
-Cada fato continua valendo só para o imóvel em que ele foi dito: característica de um empreendimento
-não se empresta a outro, e o que ninguém disse continua não existindo.
-
-CLIENTE QUE VOLTA NÃO SE QUALIFICA DE NOVO DO ZERO.
-Quando alguém que já foi atendido reaparece pedindo informação sobre um imóvel — ainda que meses
-depois, ainda que por um anúncio novo — ele já se qualificou pelo comportamento: voltou, e voltou
-por um produto específico. O próximo passo é entregar o que ele pediu, ligar com o que ele já dizia
-procurar (bairro, número de dormitórios, garagem, o que ele já perguntou antes) e propor a ação
-concreta que faz a conversa avançar. Recomeçar pela pergunta de abertura — para morar ou investir,
-o que você procura — desperdiça o retorno dele e faz o atendimento andar para trás.
 
 REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
 - RECOMENDADA é a que você enviaria se só pudesse enviar uma.
 - MAIS SUAVE explora/resolve o ponto mais importante com menor pressão.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Cliente
-  que volta por conta própria pedindo informação de um imóvel específico já passou dessa fase:
-  aí propor conhecer o imóvel é o passo natural, não pressão.
+- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade.
 - Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
 - Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
 - Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
@@ -4450,48 +3986,32 @@ REGRAS PARA AS TRÊS MENSAGENS
 - Quando o cliente pediu diretamente um material ou uma resposta e isso é o próximo passo natural, priorize atender o pedido.
 - Não despeje catálogo quando os critérios já permitem curadoria.
 - Mensagem curta é preferência, não prisão: dê contexto suficiente para a pessoa entender e responder.
-- CADA UMA DAS TRÊS PRECISA FAZER ALGUMA COISA: entregar o que a conversa está pedindo, trazer o
-  dado que destrava a decisão, ou pedir uma resposta concreta. Terminar devolvendo a iniciativa ao
-  cliente ("me avise", "qualquer coisa me chama", "pode me chamar por aqui", "fico no aguardo", "se
-  quiser posso te explicar") NÃO é próximo passo: é continuar esperando, e o corretor já estava
-  esperando antes de abrir o aplicativo. Menor próximo passo útil não quer dizer passo nenhum.
-- As três não podem ser a mesma espera escrita com outras palavras. Se as três terminam pedindo que
-  o cliente avise, chame ou procure quando quiser, a leitura comercial não virou condução — refaça
-  a partir do que o Cérebro manda fazer neste estágio.
-- Pelo mesmo motivo, as três não podem ser A MESMA PERGUNTA em três roupas. Elas podem convergir
-  para o mesmo próximo passo, mas cada uma tem que ENTREGAR algo diferente: uma responde o que o
-  cliente acabou de pedir com o que já se sabe, outra traz o dado que destrava, outra propõe a ação
-  concreta. Se as três só perguntam a mesma coisa, o corretor recebeu uma opção, não três.
-- NÃO PEÇA LICENÇA PARA ENTREGAR o que já dá para entregar: "se quiser posso te detalhar as
-  condições" vira "te detalho as condições agora"; "se precisar posso mandar o material" vira "te
-  mando o material agora". Oferecer a informação é o trabalho do corretor, não um favor que precisa
-  de autorização.
-- UM CAMINHO SÓ, escolhido por você. Não devolva ao cliente a escolha do formato ("prefere que eu
-  explique por aqui ou envio um material?", "quer por áudio ou por escrito?", "prefere ver agora ou
-  depois?"): escolher é trabalho do corretor, e duas opções de caminho dão ao cliente uma chance a
-  mais de adiar. Proponha o caminho mais forte, um só, e ele responde sim ou pede outra coisa. A
-  ÚNICA exceção é marcar dia/hora, onde oferecer duas opções ajuda a fechar a agenda.
-- PREÇO, DESCONTO E CONDIÇÃO TÊM VALIDADE. Valor dito há meses não é o valor de hoje. Se o cliente
-  sumiu e voltou, o que ele viu pode não existir mais: a mensagem confirma antes de afirmar, em vez
-  de repetir o número antigo (e nunca promete de novo um desconto que ninguém confirmou).
-- VOCÊ NÃO CONHECE O IMÓVEL. Quem conhece é o corretor. Não descreva o empreendimento por conta
-  própria: nada de "conta com apartamentos de X", "possui unidades de Y", "estrutura moderna",
-  "perfil bem procurado", "ótima localização". Um anúncio que ofereceu UMA unidade com 3 suítes não
-  diz que o prédio só tem dessas — e afirmar isso ao cliente fecha a porta para as outras unidades
-  que o corretor tem. Só entra o que está escrito NESTA conversa, numa observação deste lead ou no
-  Cérebro; o resto não é dito.
-- PROMETER MANDAR NÃO É MANDAR. "Vou te enviar as informações", "te passo um resumo", "já te mando
-  os detalhes" não entregam nada e não pedem nada: o cliente fica sem ter o que responder e o
-  corretor continua sem saber o que ele precisa. Quando o cliente pede informação e a conversa não
-  tem o dado, a mensagem faz UMA pergunta concreta que permita selecionar o que mandar — quantos
-  dormitórios precisa, até quanto pretende investir, para morar ou investir —, escolhendo a que
-  mais destrava neste ponto da conversa.
-- Quando o cliente conta que soube de algo por terceiro, "por alto" ou "mais ou menos" (condição,
-  valor, material, informação), isso é uma abertura para ENTREGAR aquilo direito. Sem inventar o
-  conteúdo: ofereça ou mande o que o Cérebro, a conversa ou os fatos ensinados pelo corretor
-  sustentam, e o que não estiver sustentado não é afirmado.
 
-${blocoRegrasDeEscrita}
+${chaveRegrasEscrita ? `LINGUAGEM DE IA — PROIBIDO. O Cérebro define o tom; estas construções, porém, não são tom, são a
+marca de que a mensagem não foi escrita por uma pessoa, e o corretor as rejeita uma a uma: "espero
+que esteja bem/indo bem", "faz sentido", "se fizer sentido", "faça sentido", "fico à disposição",
+"estou à disposição", "me coloco à disposição", "qualquer dúvida estou aqui", "espero ter ajudado",
+"não hesite em", "sinta-se à vontade para", "conforme conversamos" sem conversa real, "gostaria de
+saber se você teria interesse". Também não escreva no passado o que você quer agora ("quis saber
+se...") — no WhatsApp se pergunta direto. E fecho longo e explicativo é marca de IA: termine curto,
+sem repetir em outras palavras o que a mensagem já disse.
+
+PALAVRA EM INGLÊS E JARGÃO DE ESCRITÓRIO — PROIBIDO. Quem escreve é um corretor no WhatsApp, falando
+com uma pessoa que está comprando um imóvel: valem as palavras que ele usaria no telefone, e só
+elas. É PROIBIDO escrever "overview", "insight", "feedback", "budget", "call", "briefing",
+"follow-up", "case", "timing", "mindset", "expertise", "know-how", "player", "target", "deal",
+"lead", "prospect", "pipeline", "background", "update", "board", "meeting" — e qualquer outra
+palavra em inglês que tenha equivalente óbvio em português. Escreva em português: overview = uma
+ideia geral / um resumo; feedback = retorno; call = ligação; budget = quanto pretende investir;
+follow-up = retomar o contato; timing = momento; update = novidade; meeting = reunião. Jargão
+corporativo em português cai na mesma regra: "alinhar expectativas", "validar com você",
+"estruturar o processo", "mapear as possibilidades", "de forma assertiva", "agregar valor",
+"solução personalizada", "análise detalhada do seu perfil". Palavra que o cliente teria que
+traduzir na cabeça denuncia na hora que quem escreveu não foi o corretor.
+A EXCEÇÃO, e só ela: nome próprio (empreendimento, construtora, bairro, rua) e o vocabulário que
+já é assim no mercado imobiliário brasileiro — studio, loft, duplex, garden, closet, playground,
+home office, coworking, hall, fitness — continuam escritos como são, quando a conversa ou o Cérebro
+usarem essas palavras. Isso não abre a porta pro resto do inglês.` : ""}
 
 CONVERSA ${entradaIncremental ? "— RESUMO ANTERIOR + NOVIDADE" : cortadaPorLimiteTecnico ? "— TRECHO DISPONÍVEL APÓS LIMITE TÉCNICO" : "COMPLETA"}:
 ${timelineText}
@@ -4508,56 +4028,19 @@ Antes de devolver o JSON, confirme:
 8. Alguma mensagem inventa novidade, urgência ou ação do corretor?
 9. A análise considerou o começo, o meio e o fim do histórico fornecido?
 10. A resposta está fiel ao Cérebro Comercial atual?
-${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
-    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.` : "11. (Item desligado nesta análise pelo corretor.)"}
-12. Alguma das três termina jogando para o cliente a decisão de continuar ("me avise", "qualquer
-    dúvida", "pode me chamar", "fico no aguardo", "se quiser posso explicar")? Se sim, aquela
-    mensagem não tem próximo passo nenhum: reescreva entregando algo ou pedindo uma resposta
-    concreta, dentro do que o Cérebro manda fazer neste estágio.
-13. Alguma das três descreve o imóvel ou o empreendimento com algo que não está nesta conversa, nas
-    observações nem no Cérebro — nome, endereço, elogio, ou a lista de unidades que o prédio tem? Se
-    sim, tire; não troque por outro.
-14. Alguma das três só avisa que vai mandar informação, sem entregar nada e sem perguntar nada? Se
-    sim, ela não respondeu o cliente: refaça com a pergunta que permite selecionar o que mandar.
-15. Tem imóvel do cliente entrando na troca? Então a conta do item MEDIR O TAMANHO DO OBSTÁCULO foi
-    feita, está em "contaDoObstaculo" com os números, e as três mensagens atacam essa diferença?`;
+11. Sobrou alguma frase da lista LINGUAGEM DE IA ou alguma palavra em inglês/jargão de escritório em
+    alguma das três? Se sobrou, reescreva aquela frase em português de corretor antes de devolver.`;
 
   try {
     // v946 pôs retry na chamada principal; v947 travou o envelope de tempo (2 × 26s < 60s).
-    // v1140 pôs uma SEGUNDA tentativa no modelo rápido quando a primeira estourava.
     //
-    // v1308 — O PLANO B SILENCIOSO ACABOU (ordem do dono, 19/08/2026: "nunca mais cair para um
-    // modelo mais fraco"). A segunda tentativa trocava o modelo principal pelo modelo barato e
-    // entregava a análise SEM DIZER NADA na tela: o corretor recebia uma leitura pior achando que
-    // era a de sempre, e não tinha como saber que precisava mandar refazer. Análise pior sem aviso
-    // é pior que análise nenhuma — porque ele age em cima dela.
-    //
-    // Como ficou, no mesmo orçamento de tempo (~52s, folga sob o maxDuration:60 das rotas):
-    //   1ª tentativa: modelo principal, janela grande (34s por padrão);
-    //   2ª tentativa: O MESMO MODELO, com o tempo que sobrou — repetição conserta erro passageiro
-    //      da OpenAI, que é o único caso em que tentar de novo faz sentido;
-    //   falhou as duas: a rota devolve erro e a tela manda tocar em Reanalisar.
-    //
-    // v1308 (2ª parte) — POR QUE A ANÁLISE SÓ TINHA 34 SEGUNDOS, E POR QUE AGORA TEM 48.
-    //
-    // Pergunta do dono: "e se não couber em 34 segundos, por que não aumenta esse prazo?". Estava
-    // certo — o número era desperdício, não limite. O teto REAL é da hospedagem: a rota é morta aos
-    // 60s (maxDuration no vercel.json), e passar disso não devolve nada pro corretor. Dentro desse
-    // teto o app reservava ~16s ociosos "por garantia", pra caso precisasse de uma 2ª tentativa.
-    //
-    // Só que 2ª tentativa não conserta LENTIDÃO — isso a v1140 já tinha medido. Ela serve pra erro
-    // passageiro da OpenAI (429, 5xx, queda de rede), e esse tipo de erro volta RÁPIDO, deixando o
-    // tempo todo de sobra sozinho. Ou seja: guardar 16 segundos parados só encurtava a única
-    // tentativa que interessa.
-    //
-    // Agora a 1ª tentativa leva quase o orçamento inteiro (48s por padrão, +41%). Se ela morrer de
-    // tempo, não há repetição — repetir uma chamada lenta falha de novo e queima o que sobrou; a
-    // tela avisa e o corretor toca em Reanalisar. Se ela morrer por erro passageiro (volta em
-    // segundos), o que sobrou do orçamento vira uma 2ª tentativa NO MESMO MODELO.
-    //
-    // Pra ir além de 60s é preciso subir o maxDuration no vercel.json (planos pagos da Vercel
-    // aceitam até 300s). Se isso mudar, basta acompanhar aqui pela DIRECIONA_ANALYSIS_BUDGET_MS —
-    // o teste v947 trava a conta pra ninguém estourar o teto por engano.
+    // v1315 — O PLANO B SILENCIOSO CONTINUA PROIBIDO. Esta parte NÃO voltou ao estado de 17/08:
+    // "nunca mais cair para um modelo mais fraco" foi ordem do dono na v1308, e cair de modelo sem
+    // avisar entrega uma leitura pior com cara de leitura normal. Então:
+    //   1ª tentativa: modelo principal, janela grande (48s por padrão);
+    //   2ª tentativa: O MESMO MODELO, com o tempo que sobrou, e só quando a falha foi passageira
+    //      (erro da OpenAI que volta rápido) — repetir chamada lenta falha igual;
+    //   modelo que a conta não tem: aí, e só aí, usa o anterior conhecido, com aviso em vermelho.
     const orcamentoAnaliseMs = Number(process.env.DIRECIONA_ANALYSIS_BUDGET_MS || 52000);
     const inicioAnaliseTs = Date.now();
     const janelaPrincipalMs = Math.min(
@@ -4579,10 +4062,7 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     if (!r) {
       // 2s de folga pra resposta ainda ser serializada/gravada antes do teto da Vercel.
       const sobraMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
-      // Estourou o tempo? Não repete: repetir chamada lenta falha igual e ainda gasta dinheiro.
       const morreuDeTempo = String(erroPrincipal?.code || "") === "ETIMEDOUT";
-      // Modelo que a conta não tem: repetir nele falharia igual. Aqui, e só aqui, vale usar o
-      // modelo anterior — com aviso em vermelho na tela dizendo exatamente isso.
       const modeloNaoExiste = modeloIndisponivelParaAConta(erroPrincipal);
       if (modeloNaoExiste && sobraMs >= 10000) {
         try {
@@ -4636,83 +4116,9 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     // O Cérebro Comercial é a autoridade sobre saudação, retomada e abertura. O código não acrescenta
     // nem reescreve texto comercial depois da IA, para não contrariar regras manuais como abertura
     // só pelo nome perto da virada de horário ou continuidade sem nova saudação.
-    let msgA = msgARaw;
-    let msgB = msgBRaw;
-    let msgC = msgCRaw;
-
-    // v1295 — a única exceção, e ela não é comercial: quando uma das três sugestões volta com uma
-    // frase da lista "LINGUAGEM DE IA — PROIBIDO" (o "Fico à disposição" do print de 18/08/2026),
-    // a mensagem vai de volta PRA IA reescrever inteira, com o mesmo conteúdo. O código não corta
-    // nem costura texto (a cirurgia determinística saiu na v1247 e não volta) e nada é descartado:
-    // sem tempo no orçamento, com erro, ou com reescrita não melhor, fica o texto original.
-    let sugestoesReescritas = 0;
-    // v1305 — declarado FORA do try porque a contagem final (abaixo) precisa dele mesmo quando a
-    // reescrita nem chega a rodar.
-    const contextoConhecido = {
-      conversa: [timelineTextFull, observacoesManuaisTexto].filter(Boolean).join("\n"),
-      // v1308 — o texto do Cérebro segue entrando AQUI mesmo com a chave desligada: isto não é
-      // regra, é a lista do que se sabe de verdade sobre o produto. Sem ela, desligar a chave faria
-      // o app acusar de "fato inventado" coisa que o corretor escreveu com as próprias mãos.
-      cerebro: instrucoesCerebroTexto,
-      valoresAntigos: valoresAntigosDaConversa(timelineArr)
-    };
-    try {
-      // O que se sabe DE VERDADE deste lead, separado por fonte (v1302): a conversa inteira (não o
-      // trecho incremental) mais as observações do corretor dizem QUAL é o imóvel; o Cérebro, que é
-      // texto escrito pelo próprio corretor, descreve COMO o produto é. É contra isso que se confere
-      // se a sugestão está afirmando coisa que ninguém disse.
-      const comFraseDeRobo = [["a", msgA], ["b", msgB], ["c", msgC]]
-        .map(([chave, texto]) => ({ chave, texto, frases: problemasNaMensagem(texto, contextoConhecido) }))
-        .filter(item => item.texto && item.frases.length);
-      // 2s de folga pro resto da rota, igual à retentativa da análise logo acima.
-      const sobraReescritaMs = orcamentoAnaliseMs - (Date.now() - inicioAnaliseTs) - 2000;
-      if (chaveRegrasEscrita && comFraseDeRobo.length && sobraReescritaMs >= 12000) {
-        // v1300 — a reescrita passa a ser feita pelo MODELO PRINCIPAL sempre que o tempo permitir.
-        // Print do dono de 18/08/2026, 17h56: a sugestão 2 chegou emendada ("Posso conversar sobre
-        // algum detalhe do empreendimento ou se surgir alguma dúvida durante sua análise."). Quem
-        // reescreveu foi o modelo rápido, e português capenga na tela é pior que a frase que a
-        // reescrita tirou.
-        //
-        // v1308 — e agora é o modelo principal SEMPRE, sem exceção (mesma ordem que tirou o plano
-        // B da análise). Quando não sobra tempo nem pra isso, a reescrita simplesmente não
-        // acontece: fica o texto original da IA boa, e a marca de problema aparece na própria
-        // sugestão (ver problemasPorSugestao). Texto reescrito pelo modelo fraco não vai mais
-        // parar na tela.
-        const modeloReescrita = modeloAnalise();
-        const { aprovadas = {}, completion: cReescrita = null } = await reescreverSugestoesComFraseDeRobo({
-          openai,
-          itens: comFraseDeRobo,
-          timeoutMs: Math.min(20000, sobraReescritaMs),
-          model: modeloReescrita,
-          contextoConhecido,
-          cerebroTexto: cerebroNoPedido ? instrucoesCerebroTexto : "",
-          conversaTexto: timelineTextFull
-        });
-        if (typeof aprovadas.a === "string") { msgA = aprovadas.a; sugestoesReescritas++; }
-        if (typeof aprovadas.b === "string") { msgB = aprovadas.b; sugestoesReescritas++; }
-        if (typeof aprovadas.c === "string") { msgC = aprovadas.c; sugestoesReescritas++; }
-        if (cReescrita) await registrarUsoIA({ organizationId, kind: "chat", model: cReescrita?.model || modeloReescrita, rota: "analise", usage: cReescrita?.usage });
-      }
-    } catch (_) { /* reescrita é rede extra: falhou, valem as mensagens originais da IA */ }
-    // v1305 — QUANTAS DAS TRÊS AINDA SAEM COM PROBLEMA CONHECIDO.
-    //
-    // Print do dono de 19/08/2026, 07h38: duas sugestões chegaram na tela com coisa que a rede
-    // conhece (pedido de licença, fecho de espera, endereço inventado). Da tela não dava pra saber
-    // se a rede tinha rodado e falhado, se não tinha tido tempo, ou se o problema era outro. Agora
-    // a análise carrega esse número e a tela mostra — mesma ideia da linha de prova do Cérebro:
-    // quando o app não consegue entregar limpo, ele DIZ, em vez de deixar parecendo normal.
-    // v1308 — E QUAL DELAS. A linha da v1305 dizia "1 sugestão saiu com problema" e não dizia
-    // qual: rodando problemasNaMensagem nas três da conversa que o dono trouxe, a acusada era
-    // a de número 3, pelo fecho "só me chamar que sigo aqui pra ajudar no que precisar". O corretor
-    // tinha que adivinhar em qual das três olhar. Agora o aviso vai DENTRO da sugestão, com o que
-    // há de errado nela.
-    const problemasPorSugestao = {};
-    for (const [chave, texto] of [["a", msgA], ["b", msgB], ["c", msgC]]) {
-      if (!String(texto || "").trim()) continue;
-      const achados = problemasNaMensagem(texto, contextoConhecido);
-      if (achados.length) problemasPorSugestao[chave] = achados;
-    }
-    const sugestoesComProblema = Object.keys(problemasPorSugestao).length;
+    const msgA = msgARaw;
+    const msgB = msgBRaw;
+    const msgC = msgCRaw;
     const validacaoMensagens = validarFormatoMensagens({ a: msgA, b: msgB, c: msgC });
 
     // Nenhuma sugestão de mensagem é reinterpretada nem tem conteúdo comercial reescrito pelo
@@ -4732,15 +4138,10 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
       // v1179 — quem a IA reconheceu como CLIENTE nesta conversa, já conferido contra os autores
       // reais dela ("" quando não deu pra confirmar). É o que conserta cartão com o nome trocado.
       clienteConfirmado,
-      // v1295 — quantas das três sugestões precisaram ser reescritas pela IA por terem saído com
-      // frase da lista proibida. Fica no registro pra dar pra medir se o pedido está segurando.
-      ...(sugestoesReescritas ? { reescritaAntiRobo: sugestoesReescritas } : {}),
-      // v1305 — quantas das três ainda têm problema conhecido depois de tudo (0 = saiu limpo).
-      sugestoesComProblema,
-      // v1308 — e QUAL delas, com o que há de errado em cada uma: { a: ["..."], c: ["..."] }.
-      problemasPorSugestao,
-      // v1308 — o modelo configurado não existe para esta conta da OpenAI; a análise saiu no
-      // anterior e a tela precisa dizer isso em vermelho, com o que fazer.
+      // v1140 — registro honesto de que esta análise saiu do modelo rápido (a 1ª tentativa, no
+      // modelo principal, falhou e o tempo restante foi usado pra entregar em vez de fracassar).
+      // v1315 — a marca diz QUAL troca houve (a tela mostra em vermelho: "o modelo novo não está
+      // liberado na sua conta da OpenAI"). Nunca existe queda silenciosa pra modelo mais fraco.
       ...(modeloTrocadoPorIndisponibilidade ? { modeloIndisponivel: modeloTrocadoPorIndisponibilidade } : {}),
       // v1145 — REGRA DO DONO: "se não aparece na tela, não precisa existir".
       //
@@ -4779,10 +4180,6 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
         jaSabemos: arr(d.jaSabemos),
         faixaDeValor: clean(d.faixaDeValor, "Não identificado"),
         imovelDoCliente: clean(d.imovelDoCliente, "Não identificado"),
-        // v1308 — a conta do obstáculo quando o negócio depende de um imóvel na troca. Aparece no
-        // bloco "Detalhes comerciais" do cliente (regra da v1145: campo que não vai pra tela não
-        // é pedido à IA).
-        contaDoObstaculo: clean(d.contaDoObstaculo, "Não se aplica"),
         motivoDaMudanca: clean(d.motivoDaMudanca, "Não identificado"),
         quemDecide: clean(d.quemDecide, "Não identificado"),
         // v1271 — o pedido que partiu do próprio cliente e a pauta que ainda falta levantar.
@@ -4861,14 +4258,11 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
       // a análise passa a carregar a resposta: o Cérebro entrou ou não, e quanto da conversa a IA
       // leu de verdade. A tela mostra isso numa linha discreta embaixo das sugestões.
       cerebroAplicado: cerebroNoPedido,
-      // v1308 — EM QUE MODO ESTA ANÁLISE FOI FEITA. É o estado das três chaves na hora em que ela
-      // rodou: a tela mostra isso em destaque, senão o dono compara duas análises sem saber qual
-      // era qual.
       modoAnalise,
-      // v1296 — os números do que foi enviado: cada campo do Cérebro e cada fonte do aprendizado.
-      // A tela mostra isso na linha discreta embaixo das sugestões (ver cp1225LinhaDeOndeVeio).
-      cerebroEnviado,
-      aprendizadoEnviado,
+      // v1315 — a PROVA na tela continua (v1239/v1296/v1304): quanto do Cérebro e do aprendizado
+      // entrou nesta análise. É transparência, não regra de análise — por isso não voltou atrás.
+      cerebroEnviado: cerebroNoPedido ? contarCerebroEnviado(configCerebro) : { total: 0, percentual: 0 },
+      aprendizadoEnviado: contarAprendizadoEnviado({ jeitoAprendido, exemplosVozCorretor }),
       conversaLidaPelaIA: entradaIncremental
         ? { modo: "resumo+novidade", mensagensEnviadas: entradaIncremental.enviadas, mensagensResumidas: entradaIncremental.poupadas, mensagensNovas: entradaIncremental.novas }
         : cortadaPorLimiteTecnico
@@ -4889,21 +4283,15 @@ ${chaveRegrasEscrita ? `11. Sobrou alguma frase da lista LINGUAGEM DE IA ou algu
     // a unidade reservada lá em cima volta pro teto do dia. Era exatamente daqui que vinha o
     // sumiço das 50 análises da conta do dono num único dia de testes.
     await devolverReservaSeAberta();
-    // v1308 — O AVISO EM PORTUGUÊS, junto com o detalhe técnico.
-    //
-    // Desde que o plano B silencioso saiu (ver acima), falhar é uma saída possível e legítima: o
-    // corretor prefere saber que não deu a receber uma leitura pior sem aviso. Então a análise
-    // carrega uma frase escrita pra ele — a tela mostra essa, e guarda o texto técnico só no
-    // detalhe de diagnóstico.
-    // v1310 — quando o provedor DISSE o motivo (sem créditos, limite de chamadas, chave recusada),
-    // é esse motivo que aparece, em português. Só na falta dele fica a frase geral de tempo.
+    // v1315 — o aviso em português continua (v1308/v1310/v1314): falhar é uma saída legítima, mas
+    // o corretor tem que ler o motivo na língua dele, não o texto técnico do provedor.
     const avisoParaOCorretor = erroDaIAEmPortugues(detail)
       || "Não deu pra analisar esta conversa agora — a IA não respondeu a tempo. Toque em Reanalisar.";
     return {
       mode: "erro_api",
       error: detail,
       falhaAmigavel: avisoParaOCorretor,
-      summary: avisoParaOCorretor,
+      summary: "Conversa importada, mas a análise comercial não pôde ser gerada agora.",
       clientProfile: "—",
       bestTime: "—",
       objections: [],

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { mensagensJaEnviadasPeloCorretor, motivoDaAnaliseNovaNaoTerValido } from '../api/_pipeline.js';
+import { motivoDaAnaliseNovaNaoTerValido } from '../api/_pipeline.js';
 
 // v1309 — "De novo, as sugestões estão sendo as mesmas coisas já enviadas. Você não está lendo o
 // histórico do cliente." (dono, 19/08/2026, com o print da conversa da cliente do apartamento
@@ -19,37 +19,10 @@ import { mensagensJaEnviadasPeloCorretor, motivoDaAnaliseNovaNaoTerValido } from
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const pipeline = fs.readFileSync(new URL('../api/_pipeline.js', import.meta.url), 'utf8');
 
-// ── 1. O que o corretor já mandou vira FATO no pedido (executado, não lido) ───────────────────
-{
-  const timeline = [
-    { author: 'Construtora Senger', text: 'Anúncio do Facebook Olá, temos um apartamento com 2 dormitórios e box de garagem por R$ 430.000. Quer agendar uma visita?' },
-    { author: 'Rose Groders Quality', text: 'Olá! Quero saber mais sobre o apartamento de R$ 430 mil.' },
-    { author: 'Construtora Senger', text: 'Bom dia Rose, obrigado pelo interesse! Te passo as informações atualizadas do apartamento anunciado por R$ 430 mil: são 2 dormitórios e box de garagem, apartamento novo, pronto para morar.' },
-    { author: 'Rose Groders Quality', text: 'Oi, gostaria de saber mais detalhes, inclusive a localização!' },
-    { author: 'Construtora Senger', text: 'ok' },
-    { author: 'Construtora Senger', text: '[Arquivo enviado nesta mensagem: vídeo — conteúdo não analisado pela IA]' }
-  ];
-  const jaEnviadas = mensagensJaEnviadasPeloCorretor(timeline, 'Construtora Senger', {});
-
-  assert.ok(
-    jaEnviadas.some(t => t.includes('são 2 dormitórios e box de garagem, apartamento novo, pronto para morar')),
-    'a mensagem que o corretor já mandou precisa chegar à IA — é a que voltou como "sugestão"'
-  );
-  assert.ok(!jaEnviadas.some(t => t.includes('Quero saber mais')), 'mensagem do CLIENTE não entra nesta lista');
-  assert.ok(!jaEnviadas.includes('ok'), 'concordância de uma palavra não ensina nada e só ocupa espaço');
-  assert.ok(!jaEnviadas.some(t => /Arquivo enviado/.test(t)), 'anexo não é texto escrito por ele');
-  assert.ok(jaEnviadas.length <= 6, 'a lista é das mais recentes, não da conversa inteira');
-}
-
-// ── 2. E entra no pedido com a regra de não repetir ───────────────────────────────────────────
-{
-  assert.match(pipeline, /MENSAGENS QUE O CORRETOR JÁ ENVIOU NESTA CONVERSA/,
-    'o bloco precisa existir no pedido enviado à IA');
-  assert.match(pipeline, /Nenhuma das três mensagens pode repetir o que está aí em cima/,
-    'com a regra de não repetir — nem reescrito com outras palavras');
-  assert.match(pipeline, /\$\{blocoJaEnviadas \? `\\n\\n\$\{blocoJaEnviadas\}` : ""\}/,
-    'e precisa estar realmente colado no prompt (não só declarado)');
-}
+// v1315 — a parte que checava "as mensagens que o corretor já enviou entram no pedido" saiu:
+// aquilo era uma das camadas empilhadas no miolo da análise entre 18 e 19/08, e o dono mandou
+// voltar tudo ao estado de 17/08. O que este teste guarda hoje é o aviso da análise reaproveitada,
+// que é tela, não análise.
 
 // ── 3. Quando a análise nova não sai, a tela DIZ que as sugestões são as antigas — e por quê ──
 {
