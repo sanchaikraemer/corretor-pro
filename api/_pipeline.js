@@ -850,7 +850,22 @@ export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead 
   // Mesma pergunta feita duas vezes conta uma vez só, e vale a marca da vez mais recente.
   const porChave = new Map();
   for (const p of achadas) porChave.set(_semAcento(p.texto).toLowerCase().replace(/[^a-z0-9 ]/g, ""), p);
-  return [...porChave.values()].slice(-6);
+  const todas = [...porChave.values()];
+  // v1313 — O TETO DE 6 PERGUNTAS ESTAVA DEIXANDO A MAIS IMPORTANTE DE FORA.
+  //
+  // Print do dono (19/08/2026, 17h22, conversa da Noemi, Cérebro 100%): as TRÊS sugestões
+  // perguntavam "é para morar ou investir?" — pergunta que ele já tinha feito na PRIMEIRA mensagem
+  // dele, em 19/01, e depois da qual a cliente falou várias vezes. A regra "não repita pergunta já
+  // respondida" existe no pedido; o que faltou foi o FATO: numa conversa de sete meses ele fez umas
+  // dez perguntas, e o corte pelas 6 mais recentes jogou fora justamente a de abertura.
+  //
+  // Agora o corte é maior E as perguntas de ABERTURA nunca caem: numa conversa longa, são elas que
+  // a IA mais tende a refazer, porque estão longe do fim que ela está lendo.
+  const TETO_PERGUNTAS = 14;
+  if (todas.length <= TETO_PERGUNTAS) return todas;
+  const abertura = todas.slice(0, 4);
+  const recentes = todas.slice(-(TETO_PERGUNTAS - abertura.length));
+  return [...abertura, ...recentes];
 }
 
 // v1309 — O QUE O CORRETOR JÁ ESCREVEU, NA ÍNTEGRA.
@@ -4403,11 +4418,30 @@ Se faltar um dos dois valores, DIGA o que falta em "contaDoObstaculo" e peça ex
 A mesma disciplina vale para qualquer distância que a conversa já permita medir (o que ele tem de
 entrada contra o preço, por exemplo): número na mão vale mais que adjetivo.
 
+O QUE JÁ ESTÁ ESCRITO NA CONVERSA É FATO — ENTREGUE.
+Confirmar antes de afirmar vale para o que NÃO está na conversa (o que só existe na sua suposição).
+O que o cliente JÁ LEU nesta conversa — porque o corretor escreveu, ou porque veio no anúncio que
+abriu o atendimento — não precisa de confirmação nenhuma para ser repetido: é o material que a
+conversa te deu para trabalhar. Travar a entrega desse material e devolver uma pergunta de
+qualificação é o pior resultado possível: o cliente pediu informação, recebeu formulário.
+Cada fato continua valendo só para o imóvel em que ele foi dito: característica de um empreendimento
+não se empresta a outro, e o que ninguém disse continua não existindo.
+
+CLIENTE QUE VOLTA NÃO SE QUALIFICA DE NOVO DO ZERO.
+Quando alguém que já foi atendido reaparece pedindo informação sobre um imóvel — ainda que meses
+depois, ainda que por um anúncio novo — ele já se qualificou pelo comportamento: voltou, e voltou
+por um produto específico. O próximo passo é entregar o que ele pediu, ligar com o que ele já dizia
+procurar (bairro, número de dormitórios, garagem, o que ele já perguntou antes) e propor a ação
+concreta que faz a conversa avançar. Recomeçar pela pergunta de abertura — para morar ou investir,
+o que você procura — desperdiça o retorno dele e faz o atendimento andar para trás.
+
 REGRAS PARA AS TRÊS MENSAGENS
 - As três nascem da mesma verdade factual e da mesma leitura comercial.
 - RECOMENDADA é a que você enviaria se só pudesse enviar uma.
 - MAIS SUAVE explora/resolve o ponto mais importante com menor pressão.
-- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade.
+- MAIS DIRETA é objetiva, mas nunca força visita, proposta ou decisão antes da maturidade. Cliente
+  que volta por conta própria pedindo informação de um imóvel específico já passou dessa fase:
+  aí propor conhecer o imóvel é o passo natural, não pressão.
 - Se houver um único próximo passo adequado, as três podem convergir para ele por abordagens diferentes.
 - Não repita pergunta já respondida nem transforme falta de dado em interrogatório.
 - Não repita automaticamente uma tentativa ignorada; use o Cérebro e o contexto para decidir outro caminho quando isso for útil.
@@ -4424,6 +4458,10 @@ REGRAS PARA AS TRÊS MENSAGENS
 - As três não podem ser a mesma espera escrita com outras palavras. Se as três terminam pedindo que
   o cliente avise, chame ou procure quando quiser, a leitura comercial não virou condução — refaça
   a partir do que o Cérebro manda fazer neste estágio.
+- Pelo mesmo motivo, as três não podem ser A MESMA PERGUNTA em três roupas. Elas podem convergir
+  para o mesmo próximo passo, mas cada uma tem que ENTREGAR algo diferente: uma responde o que o
+  cliente acabou de pedir com o que já se sabe, outra traz o dado que destrava, outra propõe a ação
+  concreta. Se as três só perguntam a mesma coisa, o corretor recebeu uma opção, não três.
 - NÃO PEÇA LICENÇA PARA ENTREGAR o que já dá para entregar: "se quiser posso te detalhar as
   condições" vira "te detalho as condições agora"; "se precisar posso mandar o material" vira "te
   mando o material agora". Oferecer a informação é o trabalho do corretor, não um favor que precisa
