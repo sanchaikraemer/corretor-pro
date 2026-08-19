@@ -810,6 +810,34 @@ export function perguntasJaFeitasPeloCorretor(timeline, corretorNome = "", lead 
   return [...porChave.values()].slice(-6);
 }
 
+// v1309 — O QUE O CORRETOR JÁ ESCREVEU, NA ÍNTEGRA.
+//
+// Print do dono (19/08/2026, 14:57), conversa com a cliente do apartamento anunciado por R$ 430
+// mil: a sugestão RECOMENDADA voltou praticamente palavra por palavra a mensagem que ele já tinha
+// mandado às 11h04 daquele mesmo dia ("Te passo as informações atualizadas do apartamento
+// anunciado por R$ 430 mil: são 2 dormitórios e box de garagem, apartamento novo, pronto para
+// morar..."). Entre uma coisa e outra a conversa tinha andado: ela pediu a localização, ele mandou
+// vídeos, o mapa e ainda apresentou uma segunda opção de 3 dormitórios. "As sugestões estão sendo
+// as mesmas coisas já enviadas. Você não está lendo o histórico do cliente."
+//
+// A lista de perguntas já feitas (v1297) não pegava este caso: o que se repetiu foi a INFORMAÇÃO,
+// não a pergunta. Aqui o código só EXTRAI um fato — o texto das últimas mensagens escritas pelo
+// corretor nesta conversa — e manda junto do pedido. Nada é reescrito, cortado ou censurado no que
+// a IA devolve (isso foi desfeito na v1247 por ordem do dono): o que muda é a IA saber o que ele
+// já disse antes de escrever a próxima.
+export function mensagensJaEnviadasPeloCorretor(timeline, corretorNome = "", lead = {}, limite = 6) {
+  if (!Array.isArray(timeline)) return [];
+  const out = [];
+  for (const m of timeline) {
+    if (_ladoDaMensagem(m, corretorNome, lead) !== "corretor") continue;
+    const texto = String(m?.text || "").replace(/\s+/g, " ").trim();
+    if (texto.length < 25) continue;                       // "ok", "certo", saudação solta
+    if (/^\[Arquivo enviado|<M[íi]dia oculta|arquivo anexado/i.test(texto)) continue;
+    out.push(texto.slice(0, 400));
+  }
+  return [...new Set(out)].slice(-Math.max(1, Number(limite) || 6));
+}
+
 // v1300 — "JOIA." NÃO É RESPOSTA.
 //
 // Conversa real do dono (18/08/2026): às 16h06 ele mandou as condições de pagamento inteiras e
@@ -4050,6 +4078,17 @@ o caminho é confirmar o valor atualizado antes de afirmar qualquer coisa — se
 que ninguém confirmou e sem fingir que a oferta antiga continua de pé.`
     : "";
 
+  // v1309 — o texto do que ele JÁ MANDOU nesta conversa (ver mensagensJaEnviadasPeloCorretor).
+  const jaEnviadas = mensagensJaEnviadasPeloCorretor(timelineArr, corretorNome, lead || {});
+  const blocoJaEnviadas = jaEnviadas.length
+    ? `MENSAGENS QUE O CORRETOR JÁ ENVIOU NESTA CONVERSA (as mais recentes, no texto original):
+${jaEnviadas.map(t => `- "${t}"`).join("\n")}
+Nenhuma das três mensagens pode repetir o que está aí em cima — nem com as mesmas palavras, nem
+reescrita com outras. Informação já entregue não se entrega de novo, apresentação já feita não se
+refaz e oferta já mandada não volta como novidade. Se o assunto já foi dito, o que move a conversa
+é o passo seguinte a partir do que o cliente respondeu depois dele.`
+    : "";
+
   const blocoPerguntasJaFeitas = perguntasJaFeitas.length
     ? `PERGUNTAS QUE O CORRETOR JÁ FEZ NESTA CONVERSA (extraídas das mensagens dele):
 ${perguntasJaFeitas.map(p => `- "${p.texto}"${p.respondida ? " — o cliente JÁ FALOU depois desta pergunta" : " — ainda sem resposta"}`).join("\n")}
@@ -4200,7 +4239,7 @@ Prazo de retomada configurado pelo corretor: ${diasParaRetomada} dias corridos
 ${blocoTentativasSemResposta}
 ${blocoPrazoCliente ? `\n${blocoPrazoCliente}\n` : ""}
 ${blocoValoresVelhos ? `\n${blocoValoresVelhos}\n` : ""}
-${blocoPerguntasJaFeitas}${blocoRespostaCurta ? `\n${blocoRespostaCurta}` : ""}
+${blocoPerguntasJaFeitas}${blocoRespostaCurta ? `\n${blocoRespostaCurta}` : ""}${blocoJaEnviadas ? `\n\n${blocoJaEnviadas}` : ""}
 Corretor: ${corretorNome}
 Lead: ${JSON.stringify(leadIA)}
 
@@ -5609,10 +5648,38 @@ function analiseUtilizavel(analise) {
 
 // A análise salva volta pra tela quando a nova não deu certo. Carimba que é isso que aconteceu —
 // nada aqui pode se passar por análise recém-feita (foi a data mentirosa que confundiu o dono).
-function manterAnaliseSalva(previousAnalysis) {
+// v1309 — E POR QUE A NOVA NÃO SAIU.
+//
+// "as sugestões estão sendo as mesmas coisas já enviadas" (dono, 19/08/2026). Eram: a análise nova
+// falhou, a salva voltou pra tela e as três mensagens dela são as que ele JÁ tinha copiado e
+// mandado. Só que o motivo da falha (teto de análises do dia, Cérebro sem instruções, IA fora do
+// ar, tempo estourado) ficava só do lado do servidor — na tela sobrava "análise nova não
+// concluída", sem dizer o que fazer. Agora o motivo viaja junto e aparece.
+function motivoDaAnaliseNovaNaoTerValido(analiseNova) {
+  const a = analiseNova && typeof analiseNova === "object" ? analiseNova : null;
+  if (!a) return "A IA não devolveu nada nesta tentativa.";
+  const validacao = Array.isArray(a.validacaoSugestoes) ? a.validacaoSugestoes.filter(Boolean) : [];
+  if (validacao.length) return String(validacao[0]);
+  if (a.error) return String(a.error);
+  const porModo = {
+    limite_diario_excedido: "O teto de análises do dia desta conta foi atingido.",
+    erro_api: "A IA não respondeu nesta tentativa.",
+    sem_api: "A IA não está configurada no servidor.",
+    reanalise_pendente: "A análise ficou pendente.",
+    reconciliacao_local: "A análise não foi feita pela IA nesta importação."
+  };
+  return porModo[String(a.mode || "")] || "A IA não devolveu as três mensagens nesta tentativa.";
+}
+
+function manterAnaliseSalva(previousAnalysis, analiseNova = null) {
   const a = analiseUtilizavel(previousAnalysis);
   if (!a) return null;
-  const copia = { ...a, analiseReutilizadaDeImportacaoAnterior: true, analiseReutilizadaEm: new Date().toISOString() };
+  const copia = {
+    ...a,
+    analiseReutilizadaDeImportacaoAnterior: true,
+    analiseReutilizadaEm: new Date().toISOString(),
+    analiseReutilizadaMotivo: motivoDaAnaliseNovaNaoTerValido(analiseNova)
+  };
   // Estado intermediário de uma importação anterior não pode ser ressuscitado como se fosse atual.
   delete copia._importacaoPendente;
   return copia;
@@ -5685,7 +5752,7 @@ export async function finalizarAnaliseDaConversa(payload) {
   // já tinha análise boa. Nesse caso a salva volta pra tela, carimbada como o que é — mantida, não
   // recém-feita. Sem isto, a regra nova transformaria um dia de teto atingido em cadastro vazio.
   if (!analiseUtilizavel(analysis)) {
-    const salva = manterAnaliseSalva(previousAnalysis);
+    const salva = manterAnaliseSalva(previousAnalysis, analysis);
     if (salva) {
       analysis = salva;
       analiseReutilizada = true;

@@ -526,9 +526,27 @@ export async function getLeadDetail(id, force){
   const _perfStart = cpPerfNow();
   const geracaoNoInicio = _geracaoLeadDetail(key);
   const inflight = (async () => {
-    const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
-    const data = await res.json().catch(()=>({ok:false}));
-    if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "Não foi possível carregar o histórico completo.");
+    // v1309 — UMA SEGUNDA TENTATIVA, SOZINHA (print do dono, 19/08/2026, 15:00: "O lead abriu, mas
+    // o histórico completo não carregou. Tente novamente."). Um tropeço de rede no celular deixava
+    // o cliente aberto sem histórico e sem análise, e a única saída era o corretor perceber o
+    // aviso e repetir na mão. A carteira já tinha essa rede desde a v1140; o cliente, não.
+    const buscar = async () => {
+      const res = await fetchComTimeout(`./api/lead-update?action=detalhe&id=${encodeURIComponent(key)}`, { cache:"no-store" });
+      const data = await res.json().catch(()=>({ok:false}));
+      if(!res.ok || !data?.ok || !data?.item) throw new Error(data?.error || "Não foi possível carregar o histórico completo.");
+      return data;
+    };
+    let data;
+    try{
+      data = await buscar();
+    }catch(err1){
+      const gastou = cpPerfNow() - _perfStart;
+      // Falhou RÁPIDO = tropeço de rede, vale repetir. Falhou depois de muito tempo = o servidor
+      // está no limite, e repetir só dobra a espera (mesma régua da carteira).
+      if(gastou > 20000) throw err1;
+      await new Promise(r => setTimeout(r, 1200));
+      data = await buscar();
+    }
     const item = limparLead(data.item);
     cpPerfMark("leadDetail", _perfStart, { mensagens: totalMensagensLead(item) });
     // Se alguém invalidou este lead enquanto a resposta vinha (apagou uma observação, por
@@ -2700,7 +2718,11 @@ function renderListasHome(ordenados){
   // senão o auto-refresh do dashboard derruba ele de qualquer subtela. Os contadores
   // serão atualizados quando ele clicar "Voltar". focoLeadId é um marcador durável do lead
   // em foco — protege mesmo se state.lead ficar momentaneamente inconsistente (reanálise/import).
-  if(state.grupoAtivo || state.focoLeadId || state.lead?.id) return;
+  // v1309 — ...MAS só quando o cliente está mesmo na tela. Se o que está na área é o aviso de
+  // "Carregando os leads…", não há cliente nenhum a proteger: desistir aqui era o que deixava a
+  // carteira do dono presa no aviso pra sempre (print de 19/08/2026, 15:00).
+  if(state.grupoAtivo || ((state.focoLeadId || state.lead?.id) && !homeEsperandoCarteira())) return;
+  if(state.focoLeadId || state.lead?.id) cpClearLeadState();
 
   // Tela inicial = 4 botões de ação (Prioritários, Stand by, Sem evolução, Importar conversa).
   renderBotoesHome();
@@ -3745,6 +3767,32 @@ async function atualizarSinoAgenda(leadsAll){
 }
 window.atualizarSinoAgenda = atualizarSinoAgenda;
 
+// v1309 — A CARTEIRA QUE NUNCA CHEGAVA (print do dono, 19/08/2026, 15:00).
+//
+// A tela ficava em "Carregando os leads…" pra sempre — com os números do topo JÁ PREENCHIDOS
+// (128 arquivados, 10 na agenda), ou seja: a carteira TINHA chegado. O que não acontecia era o
+// desenho dela. A sequência é esta:
+//
+//   1. a importação abre o cliente sozinho no fim (é o comportamento normal), e isso deixa uma
+//      marca de "tem lead aberto" (state.focoLeadId);
+//   2. a busca da carteira, encontrando a memória vazia, escreve "Carregando os leads…" NA MESMA
+//      ÁREA onde o cliente aberto mora;
+//   3. os dados chegam — e as duas funções que desenhariam a carteira (a lista e o modo de
+//      segurança) desistem na primeira linha, porque existe "lead aberto" e elas não podem
+//      apagar o cliente que o corretor está lendo.
+//
+// Só que, nessa hora, não tem cliente nenhum na área: tem o aviso de carregamento por cima dele.
+// A proteção protegia uma tela que já não estava lá, e o corretor ficava sem carteira e sem
+// cliente. Esta função separa as duas coisas — esperar a carteira NÃO é ter um cliente aberto.
+function homeEsperandoCarteira(){
+  const area = qs("#leadFocoArea");
+  if(!area) return false;
+  // Só os marcadores da espera DA CARTEIRA. O esqueleto de quando um cliente está abrindo
+  // (.skel-loading) fica de fora de propósito: ali existe, sim, um cliente a proteger.
+  return !!area.querySelector(".cp-loading-leads,.cp694-loading") ||
+    /Carregando os leads|Sua carteira está demorando|Ainda buscando sua carteira/i.test(area.textContent || "");
+}
+
 function homeAindaEmSkeleton(){
   const area = qs("#leadFocoArea");
   if(!area) return false;
@@ -3755,7 +3803,10 @@ function homeAindaEmSkeleton(){
 
 function renderHomeFallbackSeguro(items){
   // v818: nunca sobrescrever a área quando um lead está aberto (o detalhe vive aqui dentro).
-  if(state.focoLeadId || state.lead?.id) return;
+  // v1309: a não ser que o que esteja na área seja o aviso de carregamento da carteira — aí o
+  // detalhe do lead já foi coberto por ele, e recusar desenhar deixa a tela presa pra sempre.
+  if((state.focoLeadId || state.lead?.id) && !homeEsperandoCarteira()) return;
+  if(state.focoLeadId || state.lead?.id) cpClearLeadState();
   const area = qs("#leadFocoArea");
   if(!area) return;
   // O fallback também precisa encerrar qualquer placeholder lateral.
@@ -3802,7 +3853,9 @@ async function carregarDashboard(force){
 
     // Só mostra o esqueleto quando a tela está mesmo vazia — uma sincronização de fundo forçada
     // com a lista já visível não pode apagar o que o corretor já está vendo enquanto busca.
-    if(!state.itemsAtivos?.length && !state.grupoAtivo){
+    // v1309 — e nunca por cima de um cliente aberto: o aviso cobria o detalhe do lead e, quando
+    // os dados chegavam, ninguém podia redesenhar por causa da própria marca de "lead aberto".
+    if(!state.itemsAtivos?.length && !state.grupoAtivo && !state.focoLeadId && !state.lead?.id){
       const focoSkel = qs("#leadFocoArea");
       if(focoSkel) focoSkel.innerHTML = `<div class="cp-loading-leads"><div class="cp-loading-spinner"></div><b>Carregando os leads…</b><span>Buscando sua carteira atualizada.</span></div>`;
     }
@@ -5360,8 +5413,26 @@ function cp717MudancasHtml(a){
 // o Cérebro entrou ou não, e quanto da conversa a IA leu de verdade.
 function cp1225LinhaDeOndeVeio(a){
   if(!a || typeof a !== "object") return "";
+  // v1309 — "AS SUGESTÕES SÃO AS MESMAS COISAS QUE EU JÁ ENVIEI" (dono, 19/08/2026).
+  //
+  // Ele estava certo, e o motivo não era a IA repetindo: quando a análise NOVA não sai (IA fora do
+  // ar, tempo estourado, teto do dia), o app devolve a análise ANTERIOR pra ele não ficar sem
+  // nada. Só que as três mensagens dessa análise anterior são exatamente as que ele já copiou e
+  // mandou da última vez — e na tela elas apareciam iguais a mensagens novas. O aviso existia num
+  // quadro pequeno, longe das sugestões. Agora ele vem colado nelas, em vermelho.
+  // v1309 — e o MOTIVO de a nova não ter saído vem junto do servidor (teto do dia, Cérebro sem
+  // instruções, IA fora do ar, tempo estourado). Sem ele, o aviso mandava "reanalisar" numa
+  // situação em que reanalisar ia falhar igual.
+  const motivoReuso = cp704Text(a.analiseReutilizadaMotivo);
+  const reuso = a.analiseReutilizadaDeImportacaoAnterior === true
+    ? `<div class="notice error" style="margin:0 0 10px"><b>Estas três mensagens são da análise ANTERIOR deste cliente.</b><br>`+
+      `A análise nova não foi concluída agora, então as antigas voltaram pra você não ficar sem nada — `+
+      `mas provavelmente você já enviou essas mensagens.` +
+      (motivoReuso ? `<br><br><b>Por que a nova não saiu:</b> ${escapeHtml(motivoReuso)}` : "") +
+      `<br><br>Toque em <b>↻ Reanalisar</b> aqui em cima para gerar as novas.</div>`
+    : "";
   const lida = a.conversaLidaPelaIA;
-  if(a.cerebroAplicado == null && !lida) return ""; // análise antiga, de antes deste registro
+  if(a.cerebroAplicado == null && !lida) return reuso; // análise antiga, de antes deste registro
   const semCerebro = a.cerebroAplicado === false;
   // v1241 — quando o teto técnico corta conversa gigante, a tela DIZ quantas de quantas foram.
   // v1304 — e agora diz em PORCENTAGEM, no verde/vermelho combinados com o dono: 100% verde quando
@@ -5430,7 +5501,7 @@ function cp1225LinhaDeOndeVeio(a){
     : "";
   // As porcentagens já vêm como HTML colorido de cp1304Pct (o resto do texto é gerado aqui, não
   // vem do usuário), então esta linha não passa por escapeHtml — senão a cor viraria texto na tela.
-  return `<div class="small" style="color:var(--muted);margin:-4px 0 10px">Análise feita ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${avisoModelo}${aviso}</div>`;
+  return reuso + `<div class="small" style="color:var(--muted);margin:-4px 0 10px">${reuso ? "Leitura da análise anterior" : "Análise feita"} ${cerebro}${quanto ? " · " + quanto : ""}${detalhe}${escapeHtml(linhaAprendizado)}${avisoModelo}${aviso}</div>`;
 }
 
 // v1308 — EM QUE MODO ESTA ANÁLISE FOI FEITA (as três chaves da tela do Cérebro).

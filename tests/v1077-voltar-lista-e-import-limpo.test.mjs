@@ -38,8 +38,11 @@ assert.match(app, /if\(!cpReabrirGrupoEspecial\(state\.grupoAtivo\)\) abrirGrupo
 // v1078 — o pintor do "carregando"/erro da Home não pode cobrir uma lista de grupo aberta
 // (flagrado em verificação de navegador real: o voltar reconstruía a lista e o loader
 // pintava por cima quando os dados ainda não estavam em memória).
-assert.match(app, /if\(!state\.itemsAtivos\?\.length && !state\.grupoAtivo\)\{\s*\n\s*const focoSkel/,
-  'o loader da Home respeita uma lista de grupo aberta');
+// v1309 — a mesma regra passou a valer pro CLIENTE aberto: o aviso "Carregando os leads…" cobria
+// o detalhe do lead e, quando os dados chegavam, ninguém redesenhava (as duas funções desistem
+// quando existe lead aberto) — a carteira ficava presa no aviso pra sempre.
+assert.match(app, /if\(!state\.itemsAtivos\?\.length && !state\.grupoAtivo && !state\.focoLeadId && !state\.lead\?\.id\)\{\s*\n\s*const focoSkel/,
+  'o loader da Home respeita uma lista de grupo aberta E um cliente aberto');
 assert.match(app, /if\(foco && !state\.itemsAtivos\?\.length && !state\.grupoAtivo\)/,
   'o erro de carga da Home respeita uma lista de grupo aberta');
 // E se algum grupo desconhecido escapar, o título nunca mostra o nome interno cru.

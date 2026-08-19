@@ -62,6 +62,10 @@ assert.match(linha, /leu \$\{cp1304Pct\(100\)\} da conversa/, 'e diz quando leu 
 assert.match(linha, /resumo de \$\{Number\(lida\.mensagensResumidas\)\|\|0\} antigas/, 'ou quanto entrou como resumo');
 assert.match(app, /\$\{cp1225LinhaDeOndeVeio\(a\)\}/, 'a linha aparece embaixo das sugestões, no cliente');
 // Análise antiga (sem esses campos) não pode mostrar linha nenhuma.
-assert.match(linha, /if\(a\.cerebroAplicado == null && !lida\) return "";/, 'análise antiga não inventa informação');
+// v1309 — a única coisa que passou a sair mesmo numa análise antiga é o aviso de que as três
+// mensagens são as da análise ANTERIOR (quando a nova não foi concluída): sem ele, o corretor
+// recebia de volta, com cara de novidade, as mensagens que ele já tinha mandado.
+assert.match(linha, /if\(a\.cerebroAplicado == null && !lida\) return reuso;/, 'análise antiga não inventa informação');
+assert.match(linha, /a\.analiseReutilizadaDeImportacaoAnterior === true/, 'e o aviso de análise reaproveitada existe');
 
 console.log('v1225-retomada-de-verdade: ok');
