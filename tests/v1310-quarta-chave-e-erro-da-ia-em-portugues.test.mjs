@@ -45,8 +45,11 @@ const cerebroRota = fs.readFileSync(new URL('api/cerebro-config.js', raiz), 'utf
     'e o aviso da análise que falhou também');
   assert.match(app, /credit_balance_exhausted\|insufficient_quota\|no credits remaining\|quota\|billing/,
     'o app traduz o mesmo erro quando ele chega pela importação');
-  assert.match(app, /Abrir a página de créditos da OpenAI/,
+  // v1314 — o rótulo do botão encurtou (o aviso inteiro foi enxugado a pedido do dono), mas ele
+  // continua existindo e apontando pra mesma página.
+  assert.match(app, /Página de créditos da OpenAI/,
     'e oferece o botão que leva direto pra página que resolve');
+  assert.match(app, /https:\/\/platform\.openai\.com\/settings\/organization\/billing/);
 }
 
 // ── 3. A quarta chave existe da tela ao pedido enviado à IA ──────────────────────────────────
